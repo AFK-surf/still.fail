@@ -1172,8 +1172,18 @@ fn copy_not(id : @view.NodeId, why : String) -> Bool {
   if scene.copy_why == "" {
     scene.copy_why = "\{id.at}: \{why}"
   }
+  // (a Tester recording its frames as a host gets them: each why counted, Tester_host's drawn_why)
+  if host_record.val is Some(_) && !scene_checking() {
+    scene_drawn_whys[why] = scene_drawn_whys.get_or_default(why, 0) + 1
+  }
   false
 }
+
+///|
+/// Why each layer drawn again in the frame being recorded was not put together of what is kept, how many by each (a
+/// Tester's, HostFrame::drawn_why).
+// kept across runs: cleared as each recorded frame begins (tester_host.mbt)
+let scene_drawn_whys : Map[String, Int] = {}
 
 ///|
 /// Layer `id` kept as it was drawn last frame and copied into this one where it is put now, all it holds with it, at
@@ -1198,9 +1208,6 @@ fn Ctx::scene_copied(
   guard !l.own_only else { return copy_not(id, "own only") }
   guard !l.each else { return copy_not(id, "drawn each frame") }
   guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked or told") }
-  // (drawn from a place of its own: put together of what is kept where nothing of what it holds changed nor moved in it,
-  // all of it in its own terms, Ctx::scene_emitted)
-  guard !l.has_origin || scene_still(l) else { return copy_not(id, "drawn from its own place, holding what changed") }
   // (what it was drawn in, as it is drawn in now, but where: its key; another, drawn anew)
   guard scene_began_same(l, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
   // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
@@ -1216,10 +1223,11 @@ fn Ctx::scene_copied(
   let mx = held.0 - (lx + sx)
   let my = held.1 - (ly + sy)
   if mx != 0.0 || my != 0.0 || held.2 != la || held.3 != ls || held.4 != lux + sx || held.5 != luy + sy {
-    guard scene_still(l) && self.scene_offset_ok(l, held) else { return copy_not(id, if scene_still(l) { "placed otherwise, not moved by an offset" } else { "placed otherwise, holding what changed" }) }
+    // (drawn from a place of its own: what it holds unmoved in its terms, each as it is, Ctx::scene_emitted)
+    guard (l.has_origin || scene_still(l)) && self.scene_offset_ok(l, held) else { return copy_not(id, if l.has_origin || scene_still(l) { "placed otherwise, not moved by an offset" } else { "placed otherwise, holding what changed" }) }
     self.scene_emitted(p, l, moved=(mx, my), origin_at=Some((held.0, held.1)))
   } else {
-    guard l.shown == (0.0, 0.0) || scene_still(l) else { return copy_not(id, "put moved, holding what changed") }
+    guard l.shown == (0.0, 0.0) || l.has_origin || scene_still(l) else { return copy_not(id, "put moved, holding what changed") }
     self.scene_emitted(p, l, origin_at=Some((held.0, held.1)))
   }
   // (what it cuts and fades by its own, told what it is drawn in)
@@ -2182,6 +2190,7 @@ fn Ctx::scene_emitted(
   let (fx, fy) = scene_frame_origin.val
   if l.has_origin {
     scene_frame_origin.val = (fx + l.origin_now.0, fy + l.origin_now.1)
+    scene_put_in_own.val = scene_put_in_own.val + 1
   }
   // (its own pieces in the frame as they were in it as it was drawn: the same in between what it holds)
   let dseg = (seg0 - l.block_seg_base).to_double()
@@ -2239,6 +2248,8 @@ fn Ctx::scene_emitted(
               }
             None => {
               let (k, s) = (self.ninst, self.segs.length() / 4)
+              // (why, told a Tester as the walk tells why one is not copied)
+              copy_not(c.id, if c.told || scene.marked.contains(c.id) { "marked or told" } else { "drawn again where its reference is" }) |> ignore
               self.scene_redrawn_in(p, l, c)
               self.scene_put_then_out(c, k, s, true)
             }
@@ -2251,6 +2262,7 @@ fn Ctx::scene_emitted(
   // (drawn from a place of its own: put there, in what holds it's terms; the clip it began in as that has it now, moved
   // with it where what moved began outside it, as insts_moved_by moves it)
   if l.has_origin {
+    scene_put_in_own.val = scene_put_in_own.val - 1
     scene_frame_origin.val = (fx, fy)
     let clip = l.clip.copy()
     let (sx, sy) = l.shown
@@ -2410,6 +2422,11 @@ fn Ctx::scene_offset_ok(
     l.entries is Some(_) else {
     return false
   }
+  // (drawn from a place of its own: what it pushes cut by what it began in, and that one its outer, as it is put,
+  // wherever that is: scene_origin_put)
+  if l.has_origin {
+    return true
+  }
   let c = l.clip
   let rmax = fn(at : Int) { dmax(dmax(c[at], c[at + 1]), dmax(c[at + 2], c[at + 3])) }
   let r = rmax(4)
@@ -2454,7 +2471,10 @@ fn scene_kept_but_place(l : SceneLayer) -> Bool {
 /// its block moved so comes to it (Ctx::scene_offset_ok), what it holds still; the place of it `l`'s drawing keeps
 /// told where it is now. None: drawn anew.
 fn Ctx::scene_moved_by(self : Ctx, tree : @view.Tree, l : SceneLayer, c : SceneLayer) -> (Double, Double)? {
-  guard scene_kept_but_place(c) && scene_still(c) && l.shown == (0.0, 0.0) && scene_own_place_same(tree, c) else { return None }
+  // (what holds it drawn from a place of its own: where it is in that one's terms, however far that one moved)
+  guard scene_kept_but_place(c) && scene_still(c) && (l.shown == (0.0, 0.0) || l.has_origin) && scene_own_place_same(tree, c) else {
+    return None
+  }
   let (ox, oy, oa, os, oux, ouy) = l.held
   // (what holds it drawn from a place of its own: where it is in that one's terms, as the walk draws it there)
   let (ox, oy, oux, ouy) = if l.has_origin { (0.0, 0.0, oux - ox, ouy - oy) } else { (ox, oy, oux, ouy) }
@@ -2532,6 +2552,12 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
     scene_left_out(c, None, self.ninst, self.segs.length() / 4)
     return
   }
+  // (in a layer put together from a place of its own: begun below the level what holds it began in there, in no clip,
+  // as it is drawn there, so the clip it began in is one of that one's own, scene_origin_put)
+  let own_place = scene_put_in_own.val > 0
+  if own_place {
+    scene_origin_push()
+  }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
   // (its outer from where it was, as far below it as it was: insts_moved_by)
   clip_say_from(if c.from_rel == scene_no_level { -1 } else { clip_top() / clip_n + c.from_rel })
@@ -2563,6 +2589,9 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
   }
   scene.drawing = was
   pop_clip()
+  if own_place {
+    pop_clip()
+  }
   // (what it cuts and fades by its own, what holds it's too)
   l.inner_cuts.take(c.inner_cuts)
   if c.fades_inside {
@@ -3033,6 +3062,12 @@ let own_reach_checked : @damage.Rect = @damage.Rect::none()
 /// being drawn, added (Ctx::tree_walk). What is told the window (where a node reaches) is told in its terms.
 // kept across runs: put back as each layer drawn from its own place is closed
 let scene_frame_origin : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// How many layers drawn from a place of their own are being put together now, one in another (Ctx::scene_emitted): what
+/// is drawn again in one is drawn in its terms (Ctx::scene_redrawn_in).
+// kept across runs: put back as each such is put together
+let scene_put_in_own : Ref[Int] = Ref(0)
 
 ///|
 /// Whether layer `l`, its node where `at` says in what holds it, is drawn from a place of its own there: its place on

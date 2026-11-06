@@ -27,6 +27,9 @@ pub(all) struct HostFrame {
   layers_drawn : Int
   insts_recorded : Int
   insts_moved : Int
+  /// why each layer it drew again was not put together of what is kept (Ctx::scene_copied's copy_not), how many by
+  /// each why
+  drawn_why : Array[(String, Int)]
   /// the parts of the window drawn again (x, y, w, h; w < 0: all of it), their share of the window (1: all) and why
   /// it was whole (@damage.Parts::why: 0 it was not)
   damage : Array[(Double, Double, Double, Double)]
@@ -142,6 +145,7 @@ fn host_frame_begin() -> Unit {
     }
     (c.0, c.1 - before)
   })
+  scene_drawn_whys.clear()
   host_scene_began.val = host_scene_now()
   // (the frame's own laying out counted from here: what came before it is `between`'s)
   host_tree_laid.val = match view_tree() {
@@ -159,6 +163,7 @@ pub fn Tester::record_host(self : Tester) -> Unit {
     Some(t) => t.work().laid
     None => 0
   }
+  scene_drawn_whys.clear()
   host_scene_began.val = host_scene_now()
   host_hash_last.val = drawn_hash()
   host_work_end.val = host_work_now()
@@ -214,6 +219,7 @@ fn host_frame_drawn(at : Double) -> Unit {
     layers_drawn: scene_work.layers - host_scene_began.val.0,
     insts_recorded: scene_work.recorded - host_scene_began.val.1,
     insts_moved: scene_moved_insts.val - host_scene_began.val.2,
+    drawn_why: scene_drawn_whys.iter().map(fn(w) { (w.0, w.1) }).collect(),
     damage: parts,
     damage_share: share,
     whole_why: scene.parts.why(),

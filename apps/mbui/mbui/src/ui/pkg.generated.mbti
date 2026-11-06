@@ -1722,6 +1722,7 @@ pub(all) struct HostFrame {
   layers_drawn : Int32
   insts_recorded : Int32
   insts_moved : Int32
+  drawn_why : Array[(String, Int32)]
   damage : Array[(Double, Double, Double, Double)]
   damage_share : Double
   whole_why : Int32
