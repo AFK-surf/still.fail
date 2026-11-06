@@ -61,6 +61,7 @@ import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } 
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { hasLegacySaid, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
+import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK } from "./legacy-login-cards.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -372,6 +373,7 @@ export class Store {
   readonly #effortsIndex: boolean;
   readonly #legacySaid: boolean;
   readonly #legacyAgent: boolean;
+  readonly #legacyLoginCards: boolean;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -399,6 +401,7 @@ export class Store {
     this.#effortsIndex = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
     this.#legacySaid = hasLegacySaid(db);
     this.#legacyAgent = hasLegacyAgent(db);
+    this.#legacyLoginCards = hasLegacyLoginCards(db);
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -2297,7 +2300,10 @@ export class Store {
   /// the agent itself). The sessions whose cards they were.
   closeLoginCards(login: string): string[] {
     return this.#with((changes) => {
-      const rows = this.#all(LOGIN_CARDS, `%"login":${JSON.stringify(login)}%`);
+      const pattern = `%"login":${JSON.stringify(login)}%`;
+      const rows = !this.#legacyLoginCards ? this.#all(LOGIN_CARDS, pattern)
+        : /^[0-9a-z]{1,40}$/i.test(login) ? this.#all(LEGACY_LOGIN_CARDS, login.toLowerCase(), pattern)
+        : this.#all(LEGACY_LOGIN_CARDS_FALLBACK, pattern);
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
         changes.push({ type: "thread", id: r.thread, entries: [], closed: r.n });

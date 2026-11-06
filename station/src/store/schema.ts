@@ -3,6 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { hasLegacySaid, installLegacySaid } from "./legacy-said-build.ts";
 import { hasLegacyAgent, installLegacyAgent } from "./legacy-agent-build.ts";
+import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-cards.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
@@ -516,7 +517,7 @@ export function addClientColumn(db: DatabaseSync): void {
   // A message's card; an options card is kept in `options` too, which stations from before cards read.
   if (!has(db, "entries", "card")) db.exec("ALTER TABLE entries ADD COLUMN card TEXT");
   // A database from before cards has no card column when SCHEMA runs. Make the login lookup only after adding it.
-  db.exec(`CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%'`);
+  addLoginCardIndex(db);
   // A chat's latest card is looked for on every list of chats: only its posts with one are read.
   db.exec("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");
@@ -524,6 +525,23 @@ export function addClientColumn(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
   // A prior upgrade may have added the table column without rebuilding this view.
   if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity") || !has(db, "merged", "letter")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
+}
+
+/// A new or small store can build the native lookup at once. An older large store prepares it in bounded batches.
+function addLoginCardIndex(db: DatabaseSync): void {
+  const native = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'").get() !== undefined;
+  if (hasLegacyLoginCards(db) || native()) return;
+  let prepare = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!hasLegacyLoginCards(db) && !native()) {
+      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+        db.exec(`CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%'`);
+      else prepare = true;
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  if (prepare) installLegacyLoginCards(db,true);
 }
 
 /// The column letters came with (entries.letter, rows.ts Letter): what two chats' agents write each other, kept apart
