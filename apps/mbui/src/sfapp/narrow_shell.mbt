@@ -645,9 +645,9 @@ fn narrow_made_as(
         chat_root_node(outer, src, r, entry, system_frame, stint)
       }))
     // the chats' lists under Home's top bar (home_node); a device waiting to be confirmed in the workspace's safe mode
-    // sees that instead (lock_gate, its old view)
+    // sees the waiting page instead
     Home =>
-      made("home", fn(p, core, _here, _frame, stint, _acts) {
+      made("home", fn(p, core, here, _frame, stint, _acts) {
         let tips = @sf.TipLayer::new(fn() { None })
         p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
         // (the bar's first place: coming in as a place switched to does, all of it but its ground, told built then:
@@ -664,14 +664,7 @@ fn narrow_made_as(
           // (all of the page's room, the lock's page and Home alike)
           q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
           if waiting {
-            @ui.old(q, fn(c) {
-              match workspace_in_view(src).0 {
-                Some(w) => lock_gate(c, src, w, bar=workspace_in_view(src).3) |> ignore
-                None => ()
-              }
-            })
-            .grow(Is(1.0))
-            |> ignore
+            lock_wait_home_node(q, src, core, here, tips)
           } else {
             home_node(q, src, tips, stint)
           }

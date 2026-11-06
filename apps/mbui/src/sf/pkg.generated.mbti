@@ -2600,6 +2600,8 @@ pub fn waiting_node(@view.View, (@view.View) -> Unit, error? : () -> String, not
 
 pub fn waiting_page(@ui.Ctx, String, String, String, () -> Unit) -> Unit
 
+pub fn waiting_page_node(@view.View, String, () -> String, () -> String, (@view.View) -> Unit) -> Unit
+
 pub let wake_ms : Double
 
 pub fn way_in(@ui.Ctx, String, String, String, String, String, busy? : Bool, said? : String, bad? : Bool) -> Bool

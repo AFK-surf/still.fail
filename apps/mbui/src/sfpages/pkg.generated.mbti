@@ -350,6 +350,8 @@ pub fn local_stopped_words(@json.Json?) -> String
 
 pub fn lock_wait_page(@ui.Ctx, @settings.Core, @settings.Here) -> Unit
 
+pub fn lock_wait_page_node(@view.View, @settings.Core, () -> @settings.Here) -> Unit
+
 pub fn login_card(@ui.Ctx, @settings.Core, String, String, marked? : Bool) -> Unit
 
 pub fn login_card_node(@view.View, @settings.Core, String, String) -> Unit
@@ -445,6 +447,8 @@ pub fn opened_items(Array[@sfbase.OpenedChat], then? : () -> Unit) -> Array[@sf.
 pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.Emits, String, Double)?, share? : (() -> Unit)?, share_link? : String, share_words? : String, () -> Unit, () -> Unit, (() -> Unit)?, () -> Unit) -> Unit
 
 pub fn pair_steps(@ui.Ctx, @settings.Core, String, in_card? : Bool) -> Unit
+
+pub fn pair_steps_node(@view.View, () -> @settings.Core, () -> String, in_card? : Bool) -> Unit
 
 pub fn permissions_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
