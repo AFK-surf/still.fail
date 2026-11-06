@@ -19,12 +19,12 @@ import { log } from "../ops/log.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { readArchive, threadFile } from "./archive.ts";
 import {
-  type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
+  type Attachment, type AutoTitle, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STATION_AUTHOR, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdits, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -205,11 +205,11 @@ export const DELETE_KEPT_CHAT = KEPT_MARKS.indexed;
 export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
 
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
-// an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
+// an index of its own (and rows.ts CARD_BEFORE and OPTIONS_BEFORE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
 // The login cards are read by their own index, named: with no statistics to go by, SQLite took the index of every
 // agent's message by time (schema.ts entries_agent_at) for them once there was one.
-export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
+export { CARD_BEFORE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
 const LATEST_DECISIONS_SCOPED_FALLBACK = `WITH latest AS MATERIALIZED (
@@ -2214,43 +2214,6 @@ export class Store {
     const messages = this.messagesBefore(thread, n + 1, 3);
     const m = messages.pop();
     return m && m.n === n && m.authorKind === "agent" ? [m, messages] : null;
-  }
-
-  /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card (the
-  /// thread's latest card then), or a choice that closed it (closed_cards, by a person: not its agent withdrawing it).
-  answersSince(since: number): CardAnswer[] {
-    const out: CardAnswer[] = [];
-    const said = this.#all("SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
-    const askedBefore = (thread: number, n: number): number | null => this.#previousCard(thread, n);
-    const cardAt = (thread: number, n: number): [MessageRow, Json] | null => {
-      const row = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
-      const card = row ? cardOf(row.card, row.options) : undefined;
-      if (card === undefined) return null;
-      const m = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-      return m ? [toMessage(m), card] : null;
-    };
-    for (const { thread, n } of said) {
-      const asked = askedBefore(thread, n);
-      if (asked === null) continue;
-      // Only the first word after it answers it; one closed (by a choice or withdrawn) was answered then.
-      const earlier = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n) !== undefined;
-      const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked) !== undefined;
-      if (earlier || closed) continue;
-      const found = cardAt(thread, asked);
-      if (!found) continue;
-      const answer = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-      if (!answer) continue;
-      const a = toMessage(answer);
-      out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
-    }
-    for (const { thread, n, viewer: by, at } of this.#all(CLOSED_SINCE, since)) {
-      const found = cardAt(thread, n);
-      if (!found) continue;
-      // Withdrawn by its own agent: no one answered it.
-      if (found[0].author === by) continue;
-      out.push({ question: found[0], card: found[1], by, at, answer: null });
-    }
-    return out;
   }
 
   /// The cards a viewer dismissed, as "thread:n" (read/store.ts's key for the Rust's (thread, n)).

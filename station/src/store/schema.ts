@@ -288,8 +288,7 @@ CREATE TABLE IF NOT EXISTS closed_cards (
   at INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 );
--- The cards closed lately (store.ts answersSince, at each list of chats).
-CREATE INDEX IF NOT EXISTS closed_cards_at ON closed_cards (at);
+-- The cards closed lately in each requested chat.
 CREATE INDEX IF NOT EXISTS closed_cards_thread_at ON closed_cards (thread, at);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same. The one record
@@ -538,8 +537,6 @@ export function addClientColumn(db: DatabaseSync): void {
   // A chat's latest card is looked for on every list of chats: only its posts with one are read.
   db.exec("CREATE INDEX IF NOT EXISTS entries_options ON entries (thread, n) WHERE options IS NOT NULL");
   db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");
-  // What people said lately is looked for on every list of chats (the cards they answered: `answersSince`).
-  db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
   // A prior upgrade may have added the table column without rebuilding this view. Older stores use their prepared
   // lookup once ready, while a store that acquired the native index goes back to the native view.
   const legacyEdits = usesLegacyEdits(db);

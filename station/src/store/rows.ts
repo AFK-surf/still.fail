@@ -615,10 +615,9 @@ export const SESSION_OF_RUNTIME = `SELECT key FROM (
 
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the
 /// latest card, or post with options, before a person's message (schema.ts addClientColumn's entries_cards and
-/// entries_options), and the cards closed since (closed_cards_at).
+/// entries_options), and the cards closed since in each requested thread.
 export const CARD_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL";
 export const OPTIONS_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL";
-export const CLOSED_SINCE = "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?";
 /// The same cards for one thread, by thread and time, with insertion order for ties across threads.
 export const CLOSED_THREAD_SINCE = "SELECT thread, n, viewer, at, rowid AS ordering FROM closed_cards WHERE thread = ? AND at >= ?";
 /// A thread's people's messages since `?2` (the items of a sidebar a change touched), by schema.ts entries_people_since.

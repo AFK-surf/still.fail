@@ -25,7 +25,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  CLOSED_SINCE, CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  CLOSED_THREAD_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -865,24 +865,15 @@ function answersOf(s: Store, thread: number, since: number): { thread: number; n
 
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
-export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
+export function answersSince(s: Store, since: number, threads: number[]): CardAnswer[] {
   const out: CardAnswer[] = [];
-  // Of some threads alone (the items of a sidebar a change touched), each by its cards (a few) and the first person's
-  // message after each: looking up every recent message in every thread would need work unrelated to the changed items.
-  let said: Json[];
-  if (threads === null) {
-    const people = all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
-    const carded = new Set(threadsWithCards(s, [...new Set(people.map((row) => row.thread as number))]));
-    requireCardPosts(s, [...carded]);
-    said = people.filter((row) => carded.has(row.thread as number));
-  } else {
-    const withPeople = threads.filter((thread) => one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) !== undefined);
-    const carded = new Set(threadsWithCards(s, withPeople));
-    const relevant = withPeople.filter((thread) => carded.has(thread));
-    requireCardPosts(s, relevant);
-    said = relevant.flatMap((thread) => answersOf(s, thread, since));
-  }
-  const of = threads === null ? null : new Set(threads);
+  // Only the requested chats (the items a sidebar change touched) are read.
+  const scope = [...new Set(threads)];
+  const withPeople = scope.filter((thread) => one(s, HAS_ANSWER_PEOPLE_SINCE, thread, since) !== undefined);
+  const carded = new Set(threadsWithCards(s, withPeople));
+  const relevant = withPeople.filter((thread) => carded.has(thread));
+  requireCardPosts(s, relevant);
+  const said = relevant.flatMap((thread) => answersOf(s, thread, since));
   const askedBefore = (thread: number, n: number): number | null => {
     return one(s, CARD_POST_BEFORE, thread, n).n as number | null;
   };
@@ -907,12 +898,9 @@ export function answersSince(s: Store, since: number, threads: number[] | null =
     const a = toMessage(answer);
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
-  const closedRows = threads === null
-    ? all(s, CLOSED_SINCE, since)
-    : [...new Set(threads)].flatMap((thread) => all(s, CLOSED_THREAD_SINCE, thread, since))
-      .sort((a, b) => a.at - b.at || a.ordering - b.ordering);
+  const closedRows = scope.flatMap((thread) => all(s, CLOSED_THREAD_SINCE, thread, since))
+    .sort((a, b) => a.at - b.at || a.ordering - b.ordering);
   for (const { thread, n, viewer: by, at } of closedRows) {
-    if (of !== null && !of.has(thread)) continue;
     const found = cardAt(thread, n);
     if (!found) continue;
     // Withdrawn by its own agent: no one answered it.
