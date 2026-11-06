@@ -112,6 +112,24 @@ test "model triple node: narrow room drops the account first and restores it whe
 }
 
 ///|
+test "model triple node: intermediate room keeps the effort after dropping lesser parts" {
+  @sffixture.fixture_reset()
+  @sffixture.new_fix.crowded = true
+  @sffixture.new_fix.tall = true
+  @sffixture.new_fix.model = "deepseek-v4-1-flash"
+  @sffixture.new_fix.d_model = "deepseek-v4-1-flash"
+  let state : @signals.Signal[Json?] = @signals.signal(Some(@sffixture.fix_session_pick()), same=fn(_, _) { false })
+  let room = @signals.signal(300.0)
+  let t = triple_node_tester(state, room, [], 0)
+  assert_true(t.find("DeepSeek V4.1 Flash") is Some(_), msg="the model stays visible")
+  assert_true(t.find(effort_text("high")) is Some(_), msg="the effort stays visible while the account gives way")
+  assert_true(t.find("自动分配") is None, msg="the account is dropped first")
+  room.set(600.0)
+  t.draw()
+  assert_true(t.find("自动分配") is Some(_), msg="the account returns when room returns")
+}
+
+///|
 test "model triple node: keyboard and screen reader open the pick for the control's station and session" {
   let state : @signals.Signal[Json?] = @signals.signal(Some(triple_test_pick("Alpha", "high", "Account A")), same=fn(_, _) { false })
   let calls : Array[(String, Json)] = []
