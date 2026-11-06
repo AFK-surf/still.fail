@@ -74,6 +74,10 @@ for k in matte-fill matte-fill-reference matte-contain matte-contain-reference m
   MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./_build/native/release/build/render/render.exe
 done
 render_matte mac "$O"
+# A retained field's text, caret and clipped/glass drawing: the regions actually passed to h_present, including
+# an empty region, must render to the same pixels as the whole frame.
+MBUI_PAINT_DAMAGE_RENDERER="$PWD/_build/native/release/build/render/render.exe" \
+  bash "$D/render_paint_damage.sh" "$O/paint-damage"
 if cmp -s $O/render.png $O/host.png; then
   echo "render_check: the draw list drawn offscreen is the host's picture, to the byte ($(md5 -q $O/render.png))"
 else

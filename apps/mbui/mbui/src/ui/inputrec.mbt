@@ -44,6 +44,10 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   // for them, typed_in_tree; nor the frame after the next built for what they changed late in it, inputs_taken: they
   // change nothing that is no signal)
   let typed = kind == "text" && typed_in_tree(args[0].to_int())
+  // (an input of the old frame's, said of the frame that takes it where a run's frames are recorded: tester_host.mbt)
+  if !typed {
+    host_old_input(kind, t, args)
+  }
   if !moved && !wheel && !typed {
     inputs_taken.val = true
   }

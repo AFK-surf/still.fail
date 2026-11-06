@@ -34,7 +34,100 @@ let frame_told_at : Ref[String] = Ref("")
 fn watch_told_at() -> Unit {
   if frame_told_at.val == "" {
     frame_told_at.val = @signals.last_set_at()
+    if causes_counted.val {
+      frame_told_taking.val = old_input_taking.val
+      frame_told_outside.val = changes_outside_input()
+    }
   }
+}
+
+///|
+/// Whether the frames' watch was first told (frame_told_at) as an input was handed to the old frame (old_input_taking),
+/// and how many changes had been told outside such inputs then (changes_outside_input): with built_for_old_input, said
+/// of a run's frames (tester_host.mbt).
+// kept across runs: put back as each frame is decided
+let frame_told_taking : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: put back as each frame is decided
+let frame_told_outside : Ref[Int] = Ref(0)
+
+///|
+/// The changes told outside inputs handed to the old frame (changes_outside_input) as the frame drawing now began
+/// (on_frame, before anything of it).
+// kept across runs: said as each frame begins
+let frame_outside_began : Ref[Int] = Ref(0)
+
+///|
+/// Whether the frame built last was built for the inputs handed to the old frame alone: its why the watch's, first told
+/// as one was taken, nothing changed since but as they were taken (no other change told between frames, nothing come
+/// from outside or of a timer as it began, no clock read, nothing it is built in, no test's step). Without them it
+/// would not have been built.
+// kept across runs: said as each frame is decided
+let built_for_old_input : Ref[String] = Ref("")
+
+///|
+/// Whether an input handed to the old frame is being taken now (old_input_begin: from before it is taken to after the
+/// old frame and the tree are told it), the changes told so far (@signals.sets_made) as it began, and all those told as
+/// such inputs were taken.
+// kept across runs: set and put back round each input
+let old_input_taking : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: set as each input begins
+let old_input_began : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: only counts on
+let old_input_changes : Ref[Int] = Ref(0)
+
+///|
+/// An input handed to the old frame begins to be taken (pointer_in_now), and is taken (old_input_end, as the event it
+/// came as is over: what it set told what follows it, a batch's end included): what it changes between
+/// counted as its own.
+fn old_input_begin() -> Unit {
+  guard causes_counted.val else { return }
+  old_input_taking.val = true
+  old_input_began.val = @signals.sets_made()
+}
+
+///|
+fn old_input_end() -> Unit {
+  guard causes_counted.val && old_input_taking.val else { return }
+  old_input_changes.val = old_input_changes.val + @signals.sets_made() - old_input_began.val
+  old_input_taking.val = false
+}
+
+///|
+/// Whether what each frame is built for is counted (causes_count: a check's, where a run's frames are recorded,
+/// tester_host.mbt): built_for_old_input and what it is worked out of. Nothing of it done otherwise.
+// kept across runs: set by a check (causes_count)
+let causes_counted : Ref[Bool] = Ref(false)
+
+///|
+/// What each frame is built for counted from nothing from now on, or no longer (`on` false).
+fn causes_count(on : Bool) -> Unit {
+  // (said as true or false: what reset leaves is the let's, no wire, detlint's reset-wire)
+  if on {
+    causes_counted.val = true
+  } else {
+    causes_counted.val = false
+  }
+  @signals.count_changes(on)
+  frame_told_taking.val = false
+  frame_told_outside.val = 0
+  frame_outside_began.val = 0
+  built_for_old_input.val = ""
+  old_input_taking.val = false
+  old_input_began.val = 0
+  old_input_changes.val = 0
+}
+
+///|
+/// The changes told so far but those told as an input handed to the old frame was taken.
+fn changes_outside_input() -> Int {
+  let now = @signals.sets_made()
+  now - old_input_changes.val - (if old_input_taking.val { now - old_input_began.val } else { 0 })
 }
 
 ///|
@@ -888,6 +981,16 @@ fn looks_told(after : Array[Int], told : Array[Int]) -> Unit {
 }
 
 ///|
+/// What the frame last over left for the next to build (looks_left: as it says it), "" nothing; and whether that frame
+/// took inputs that left it more to come (on_frame's inputs_taken): said of a run's frames (tester_host.mbt).
+// kept across runs: said by each frame as it ends
+let looks_left_by : Ref[String] = Ref("")
+
+///|
+// kept across runs: said by each frame as it begins
+let frame_inputs_taken : Ref[Bool] = Ref(false)
+
+///|
 /// The frame is over (on_frame), but for asking the next: whether the next may be built from nothing it did not read,
 /// it left nothing to come of its own (no frame asked for, no fiber stepping a frame at a time, no layout read back
 /// that moved; not the replay of parts kept, kept_part.mbt, which keeps its own; not on a host that tells nothing). A
@@ -903,6 +1006,20 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
     // built whole there)
     (fake.val is Some(_) || outside_told.val)
   looks_base.left = left
+  // (said only where a run's frames are recorded: nothing made for it otherwise)
+  if host_record.val is Some(_) {
+    looks_left_by.val = [
+      if c.wants_frame && frame_inputs_taken.val { "the inputs it took (inputs_taken)" } else { "" },
+      match c.frame_by {
+        Some(loc) if c.wants_frame => "a frame asked at \{loc}"
+        _ => if c.wants_frame && !frame_inputs_taken.val { "a frame owed" } else { "" }
+      },
+      if c.read_back_moved { "a layout read back that moved (\{c.read_back_key})" } else { "" },
+      if held { "a hold" } else { "" },
+      if bench.mode != 0 { "a bench" } else { "" },
+      if fake.val is None && !outside_told.val { "a host that tells nothing" } else { "" },
+    ].filter(fn(s) { s != "" }).join(", ")
+  }
   if looks_drawn.val || painted_alone.val {
     looks_base.ok = looks_base.ok && left
   } else {
@@ -1084,6 +1201,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   let paint_told = paint_said.val
   paint_said.val = ""
   // (what was posted since the last frame taken: come from outside, it is handed on as the frame is built)
+  let arriving = if causes_counted.val { @signals.sets_made() } else { 0 }
   messages_arrive()
   // (a Tester's fake host's answers come by the frame, told as it begins: what waits on them reads them)
   answers_by_the_frame()
@@ -1092,6 +1210,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   views_arrive()
   // (what the host has for the app once, taken and handed to the node that holds it: host_said.mbt)
   host_said_arrive()
+  let arrived = if causes_counted.val { @signals.sets_made() - arriving } else { 0 }
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()
@@ -1132,10 +1251,12 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // decided: what they change built again where it is read, the old frame built whole for none of it; what came from
   // outside handed on as it is built, read by what reads it there)
   fx_early.val = false
+  let early = if causes_counted.val { @signals.sets_made() } else { 0 }
   if fx_due(t) {
     c.clock = t
     fx_frame_early(t)
   }
+  let early = if causes_counted.val { @signals.sets_made() - early } else { 0 }
   let why = if said != "" {
     said
   } else if bench_whole.val && bench_measuring.val {
@@ -1184,7 +1305,28 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     ""
   }
   built_why.val = if why != "" { why } else { laid_why }
+  if causes_counted.val {
+    built_for_old_input.val = if said != "" || (bench_whole.val && bench_measuring.val) || !watch.is_stale() {
+      "built for no change told"
+    } else if !frame_told_taking.val {
+      "first told as no input of the old frame's was taken"
+    } else {
+      [
+        if clock_read_at.val != "" { "the clock read" } else { "" },
+        if env_changed.val != "" { "what it is built in changed" } else { "" },
+        if test_step_came.val { "a test's step" } else { "" },
+        if frame_outside_began.val != frame_told_outside.val {
+          "\{frame_outside_began.val - frame_told_outside.val} changes told since between frames, as none was taken"
+        } else {
+          ""
+        },
+        if arrived > 0 { "\{arrived} changes of what came from outside as it began" } else { "" },
+        if early > 0 { "\{early} changes of timers due as it began" } else { "" },
+      ].filter(fn(s) { s != "" }).join(", ")
+    }
+  }
   frame_told_at.val = ""
+  frame_told_taking.val = false
   frame_built.val = true
   // (the layers of the window's tree's scene whose moments came: drawn again, scene_layers.mbt)
   c.scene_wakes(t)

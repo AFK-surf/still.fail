@@ -34,6 +34,7 @@ case "${1:-run}" in
     "$D/chk" contained $O/contained.png
     MBUI_DL_FROM="$PWD/$O/partial-a.dl" MBUI_DL="$PWD/$O/partial-b.dl" MBUI_DL_PNG="$PWD/$O/partial.png" ./$EXE
     render_partial linux
+    MBUI_PAINT_DAMAGE_RENDERER="$PWD/$EXE" bash "$D/render_paint_damage.sh" "$O/paint-damage"
     for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
       MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./$EXE
     done

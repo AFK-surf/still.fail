@@ -17,6 +17,8 @@ on:
       - "apps/mbui/mbui/src/damage/**"
       - "apps/mbui/mbui/src/ui/drawlist.mbt"
       - "apps/mbui/mbui/src/ui/scene.mbt"
+      - "apps/mbui/mbui/src/ui/scene_layers.mbt"
+      - "apps/mbui/mbui/src/ui/field_present_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/line.mbt"
       - "apps/mbui/mbui/tools/chk/pictures.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
@@ -27,6 +29,7 @@ on:
       - "apps/mbui/mbui/goldens/render/controls.dl"
       - "apps/mbui/mbui/scripts/render_dl.sh"
       - "apps/mbui/mbui/scripts/render_linux.sh"
+      - "apps/mbui/mbui/scripts/render_paint_damage.sh"
       - ".github/workflows/mbui-render-linux.yml"
   push:
     branches: [main]
