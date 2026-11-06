@@ -2022,6 +2022,10 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     }
     return
   }
+  // (marked while it is being laid out: which node, and what set what it read, for a fault to say)
+  if self.laying > 0 {
+    self.laid_marked_at = "node \{at}, last set at \{@signals.last_set_at()}"
+  }
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
   self.measured_gen = -1
@@ -7026,6 +7030,10 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
 }
 
 ///|
+/// What a layout pass says where its layout was marked again in it and not laid out in it (Tree::laid_pass).
+let laid_marked_in_own : String = "\u{0}marked in its own layout"
+
+///|
 /// A layout more in this frame, for `why` (what is owed: Tree::owed_passes), counted where it lays anything out again.
 fn Tree::owed_again(self : Tree, why : String) -> Unit {
   if self.layout_due {
@@ -7130,6 +7138,15 @@ fn Tree::laid_pass(self : Tree, upto : Double) -> (Bool, Bool, String) {
     self.work.orders = self.work.orders + 1
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
+  // (its layout marked again while it was laid out, placed or painted, outside a layout box's own: laid out in it all
+  // the same where that came before it was reached (what holds it no longer to be laid out: nothing left), else marked
+  // in its own layout and not laid out in it, said so, its `due` kept)
+  if self.layout_due {
+    if self.nodes.length() > 0 && self.nodes[0].flex.dirty {
+      return (placing, ordered, laid_marked_in_own)
+    }
+    self.layout_due = false
+  }
   self.due = false
   // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
   // same pass: one result, the frame drawing all of it)
@@ -7257,7 +7274,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     // counted by what it is, the count only ever smaller; anything else that marks the tree's layout in its own layout
     // is a fault, saying where it marked it)
     if self.due && self.layout_due {
-      if why == "" {
+      if why == "" || why == laid_marked_in_own {
         // (a fault: what marked it read the layout to change what is laid out, the defect itself. In a test's run it
         // stops there. In a host's it is told once, and this moment is drawn and hit as its one layout, all of it done,
         // has it: what was marked is laid out as the tree is next laid out, at whatever moment that is (an input's or a
