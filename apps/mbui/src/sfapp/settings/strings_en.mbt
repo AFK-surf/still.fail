@@ -1444,7 +1444,7 @@ let en : Map[String, String] = {
   "web-pages.security.openLead": "These members, devices and stations become trusted; any later change needs approval from a trusted device. Uncheck anything you don't recognize.",
   "web-pages.security.openTitle": "Turn on security mode",
   "web-pages.security.ownerOnly": "Only the owner can turn it on",
-  "web-pages.security.pairBody": "{device}. Type the security code below on the new device to approve it. If you didn't start this, deny it.",
+  "web-pages.security.pairBody": "{device}. Confirm the person and the device, then enter the security code below on the new device. If you can't confirm them, deny the request.",
   "web-pages.security.pairAgain": "Get a new code",
   "web-pages.security.pairChecking": "Verifying",
   "web-pages.security.pairDeny": "Deny",
