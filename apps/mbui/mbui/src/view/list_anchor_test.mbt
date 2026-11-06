@@ -383,3 +383,52 @@ test "scrolls_anchored: flung from its end, it goes as far among 3000 rows as am
   }
   assert_eq(gone(3000), gone(300))
 }
+
+///|
+/// Row 10 of 100 rows 40 tall put 80 over the window's top (100 tall), from its end or from its start: frame by frame
+/// till 200 ms on, the rows in sight and where row 12 is.
+fn put_over_its_height(from_end : Bool) -> Array[(Array[Int], Double?)] {
+  let c = anchored_case(100, from_end~)
+  c.put.set(Some((10, -80.0)))
+  let seen = []
+  let mut at = 0.0
+  while at < 200.0 {
+    at = at + 16.0
+    c.tree.frame(390.0, 844.0, now=at) |> ignore
+    seen.push((c.shown.get(), c.top(12)))
+  }
+  seen
+}
+
+///|
+test "scrolls_anchored: a row put at further over the window's top than it is tall, from its end and from its start: the rows under it where that puts them, from the first frame on" {
+  // (row 10 at -80, 11 at -40: 12, 13 and 14 in sight at 0, 40 and 80)
+  let (from_end, from_start) = (put_over_its_height(true), put_over_its_height(false))
+  let want = Array::make(from_end.length(), ([12, 13, 14], Some(0.0)))
+  assert_eq((from_end, from_start), (want, want))
+}
+
+///|
+test "scrolls_anchored from its end: a row put at out of sight over the window, measured taller after it was put (as one that says how tall it is only after it is first laid out does, an old view's island): its top where it was put" {
+  let c = anchored_case(100)
+  c.put.set(Some((10, -80.0)))
+  c.tree.frame(390.0, 844.0, now=16.0) |> ignore
+  c.heights[10].set(200.0)
+  c.tree.frame(390.0, 844.0, now=32.0) |> ignore
+  assert_eq((c.shown.get(), c.top(10)), ([10], Some(-80.0)))
+}
+
+///|
+test "scrolls_anchored: its first keys gone through none of them, 30 or 30000; one gone once rows are named and measured: all gone through, it forgotten, named anew as it comes back" {
+  let first = fn(n : Int) { anchored_case(n).tree.work.keys_swept }
+  assert_eq((first(30), first(30000)), (0, 0))
+  let c = anchored_case(30)
+  let was = c.live[29].row_place().0
+  c.keys.set(Array::makei(29, fn(i) { i }))
+  c.tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_eq(c.tree.work.keys_swept, 29)
+  c.keys.set(Array::makei(30, fn(i) { i }))
+  c.tree.frame(390.0, 844.0, now=32.0) |> ignore
+  assert_eq(c.tree.work.keys_swept, 29 + 30)
+  assert_true(c.live[29].row_place().0 != was, msg="row 29 known as it was before it was gone")
+}

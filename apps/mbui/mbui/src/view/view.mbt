@@ -441,8 +441,21 @@ pub(all) struct Work {
   mut pulled : Int
   /// the boxes round what a node and what it holds draw worked out afresh (View::scale's Drawn: Tree::drawn_box_of)
   mut drawn_boxes : Int
-  /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes)
+  /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes),
+  /// or at a moment come due before what is due then is done (Tree::laid_before_due_at: View::laid_before_due)
   mut settles : Int
+  /// what asks to be laid out before what is done at a moment asked whether it went on by itself up to it (a moment come
+  /// due, an input's, an event's: View::laid_before_due): once a moment, each of them; none while none asks
+  mut due_asked : Int
+  /// the keys of a list laid out from its anchor gone through, all of them, as they changed or its rows were measured
+  /// otherwise (View::scrolls_anchored: those gone forgotten, the rows measured counted again): none while none of its
+  /// rows is named or measured, as its first keys are
+  mut keys_swept : Int
+  /// the rows a list that tells seen went through past those it laid out, to find what was in sight at the logic's
+  /// moment and what it went across since it last told (View::scrolls_window's `seen`), and of those the ones measured
+  /// for it, never measured before (the rest as tall as they were measured)
+  mut seen_walked : Int
+  mut seen_measured : Int
 } derive(Eq, Debug)
 
 ///|
@@ -757,6 +770,12 @@ pub struct Tree {
   /// what is told once the frame is painted (Tree::take_after_paint: the host's side runs it then): a list's rows
   /// sighted, a node first drawn
   after_paint : Array[() -> Unit]
+  /// what a layout found to tell of its moment, told as it is done (Tree::said_after_laid): a windowed list's blocks
+  /// come in sight
+  after_laid : Array[() -> Unit]
+  /// how deep in Tree::laid_out it is (0: not laying out), and whether what layouts found is being told
+  mut laying : Int
+  mut telling_laid : Bool
   /// the nodes waiting to be first drawn (View::on_first_drawn): node, making, what is then told
   first_drawn : Array[(Int, Int, () -> Unit)]
   /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
@@ -960,6 +979,12 @@ pub struct Tree {
   /// how many ask for where things stand as each change comes, before it is taken (View::laid_before_causes): what is
   /// laid out otherwise by a change before it laid out and placed as that one comes, whether a frame came or not
   mut before_causes : Int
+  /// what asks to be laid out where it is at a moment before what is done then (what is due, an input, an event), where
+  /// it says it has gone on by itself up to that moment since it was last laid out (View::laid_before_due), by the
+  /// number it was said with; how many were ever said; and the last moment they were asked at
+  before_due : Map[Int, (Double) -> Bool]
+  mut before_due_told : Int
+  mut due_asked_at : Double
   /// laying out where things stand before a change (Tree::stand_before_cause): not again inside it
   mut standing : Bool
   /// asked to be laid out and placed once the change under way is told whole (Tree::settle_after_change)
@@ -1069,6 +1094,9 @@ pub fn Tree::new(
     places_due: [],
     painted: [],
     after_paint: [],
+    after_laid: [],
+    laying: 0,
+    telling_laid: false,
     first_drawn: [],
     bindings_due: [],
     pulls_held: 0,
@@ -1151,6 +1179,9 @@ pub fn Tree::new(
     ordered_pending: [],
     drawn_due: false,
     before_causes: 0,
+    before_due: {},
+    before_due_told: 0,
+    due_asked_at: -1.0,
     standing: false,
     settle_asked: false,
     settle_at: 0.0,
@@ -1183,6 +1214,10 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      due_asked: 0,
+      keys_swept: 0,
+      seen_walked: 0,
+      seen_measured: 0,
     },
   }
   let root = t.made(-1)
@@ -1781,6 +1816,8 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.timeline.clear()
   self.changed.clear()
   self.composed.clear()
+  self.after_laid.clear()
+  self.before_due.clear()
   self.hosting = -1
   self.modals.clear()
   self.back_said_at.clear()
@@ -6221,6 +6258,12 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
     return
   }
   self.settle(at)
+  // (what went on by itself laid out where it is at the event's moment before it is taken, where it says so, as before
+  // what is due then: what the event does (lets go of it, reads what it told) finds it as of then, a frame drawn on the
+  // way or none)
+  if self.moves_before_due(at) {
+    self.laid_before_due_at(at)
+  }
   let was = self.cause_at
   self.cause_at = at
   self.committing += 1
@@ -6316,6 +6359,74 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = false
   self.withins_restored()
+}
+
+///|
+/// Laid out as of `at`, a moment come on the timeline or an event's, before what is due then or the event is done
+/// (Tree::advance_loop, Tree::event_said), where asked (View::laid_before_due): what moves by the clock (a fling)
+/// placed where it is then and what that layout found told (Tree::tell_laid), what is done then (a page's leaving
+/// over, what is done once, what the event does) letting go of none of it first; a frame drawn at that moment or none.
+/// The clock put back where it was drawn at.
+fn Tree::laid_before_due_at(self : Tree, at : Double) -> Unit {
+  if self.standing || self.last_w <= 0.0 {
+    return
+  }
+  let shown = @signals.untracked(fn() { self.clock.get() })
+  self.standing = true
+  self.work.settles = self.work.settles + 1
+  let cause = self.cause_at
+  self.cause_at = at
+  @signals.untracked(fn() {
+    self.clock_to(at)
+    self.beat.set(at)
+    self.pull()
+    self.laid_out(at)
+  })
+  self.cause_at = cause
+  if shown != at {
+    @signals.untracked(fn() {
+      self.clock_to(shown)
+      self.beat.set(shown)
+    })
+  }
+  self.standing = false
+}
+
+///|
+/// Whether anything asking to be laid out before what is done at a moment (View::laid_before_due) says it has gone on by
+/// itself up to `at` since it was last laid out: each asked (each that says so marked to be laid out then), once a
+/// moment, none while none asks, none in a change under way (laid out as of its moment as it began).
+fn Tree::moves_before_due(self : Tree, at : Double) -> Bool {
+  if self.cause_at >= 0.0 || at <= self.due_asked_at || self.before_due.length() == 0 {
+    return false
+  }
+  self.due_asked_at = at
+  let mut moved = false
+  for _, moves in self.before_due {
+    self.work.due_asked = self.work.due_asked + 1
+    if moves(at) {
+      moved = true
+    }
+  }
+  moved
+}
+
+///|
+/// Each moment something is done at laid out as of it before that is done, a frame drawn at it or none: a moment come
+/// on the timeline (a node's leaving over, what is done once, a step: Tree::laid_before_due_at), an event's (the same),
+/// an input's (as an input brings the tree to its moment: Tree::bring_to), where `moves` says it has gone on by itself
+/// up to that moment since it was last laid out (a list's fling, its notches easing in, going back from past its end:
+/// Scroll::glides_till): where it is at that moment as what is done then is done, which may let go of what tells what
+/// came in sight or read what it told (View::scrolls_window's `seen`); at rest, or laid out at that moment or past it
+/// already, no moment laid out for it. What says so is to take anew what it reads of that moment as it is laid out
+/// then, the clock where it was or not (a frame drawn ahead for that very moment: Tree::at). As long as this node lives.
+fn View::laid_before_due(self : View, moves : (Double) -> Bool) -> Unit {
+  guard self.live() is Some(_) else { return }
+  let tree = self.tree
+  let k = tree.before_due_told
+  tree.before_due_told = k + 1
+  tree.before_due[k] = moves
+  self.owns(fn() { tree.before_due.remove(k) }) |> ignore
 }
 
 ///|
@@ -6488,6 +6599,13 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if next < 0 {
       return
     }
+    // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
+    // (View::laid_before_due): asked once a moment, however many are due then or are said at it as it comes, and not
+    // at all while none asks; what that layout said is due chosen among the rest again)
+    if self.moves_before_due(next_at) {
+      self.laid_before_due_at(next_at)
+      continue
+    }
     let d = self.timeline[next]
     let was = self.cause_at
     self.cause_at = next_at
@@ -6649,6 +6767,10 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   // drawn again as of now, for where a press finds things), then what it marked)
   self.advance(at)
   self.clock_to(at)
+  // (what went on by itself and says so asked as of the input's moment, as before what is due (View::laid_before_due):
+  // laid out where it is then as the tree is brought below, what it reads of that moment taken anew, the clock where it
+  // was drawn or not)
+  self.moves_before_due(at) |> ignore
   // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
   // finds things where they are then, nothing else told before the change ends)
   self.pull()
@@ -6860,6 +6982,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if !self.due {
     return
   }
+  self.laying += 1
   let mut placing = false
   let mut ordered = false
   let mut passes = 0
@@ -6899,6 +7022,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.laid_out(upto)
     }
     self.withins_passing = false
+  }
+  self.laying -= 1
+  // (what it found to tell, told as it is done, of its moment, whatever laid it out (a frame, an input's moment, an
+  // event finding where things are, a change settled): once, by the outermost)
+  if self.laying == 0 {
+    self.tell_laid()
   }
 }
 
@@ -9183,6 +9312,36 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
   let out = self.after_paint.copy()
   self.after_paint.clear()
   out
+}
+
+///|
+/// `f` told as the layout being done is done, of its moment (Tree::laid_out, whatever lays it out: a frame, an input's
+/// moment, an event finding where things are, a change settled), before anything after it is handled, whether a frame
+/// is painted between or not: what starts a page's own work (a windowed list's blocks come in sight,
+/// View::scrolls_window's `seen`), never what asks the host for something only once it is drawn (Tree::said_after_paint).
+/// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
+/// those said before it are told, of the same moment (Tree::tell_laid).
+fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
+  self.after_laid.push(f)
+}
+
+///|
+/// What layouts said to tell of their moments (Tree::said_after_laid), told, one after another in the order said; what
+/// a telling lays out at once (an event reading where things are) said after those said before it and told in its
+/// turn, never within another's telling: so how deep it goes is not how many follow one another.
+fn Tree::tell_laid(self : Tree) -> Unit {
+  if self.telling_laid {
+    return
+  }
+  self.telling_laid = true
+  while !self.after_laid.is_empty() {
+    let now = self.after_laid.copy()
+    self.after_laid.clear()
+    for f in now {
+      f()
+    }
+  }
+  self.telling_laid = false
 }
 
 ///|

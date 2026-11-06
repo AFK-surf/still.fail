@@ -11,7 +11,7 @@ test "an old view measured in a retained row is drawn where the list places its 
     root.laid_before_causes()
     let items = Array::makei(10, fn(i) { i })
     let rows = ListRows::new().in_node(root, fn() { items }, fn(i) { i.to_string() }, fn(_) { "1" })
-    root.height(Is(Some(300.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
+    root.height(Is(Some(300.0))).scrolls_window_rooms(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
       room=rows.room, fn(row, k) {
         if k == "8" {
           row.box(fn(b) { b.height(Is(Some(24.0))) |> ignore }) |> ignore

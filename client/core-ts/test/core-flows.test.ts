@@ -2705,6 +2705,39 @@ test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", asyn
   core.close();
 });
 
+test("a_draft_opened_and_dropped_at_once_as_the_webs_worker_hands_them_over_is_changed_as_each_is_taken", async () => {
+  const { host, core } = await started();
+  const ui = core.connect();
+  // (a station nothing else of the core reads: what holds its overview, the draft alone)
+  const form = { station: "ws/away", form: "ws/away" };
+  const topic = { topic: "decisionForm", ...form };
+  const overviewTopic = { topic: "overview", station: "ws/away" };
+  // (each change of a draft as the core makes it, and as it is done)
+  const forms = core.inner.forms.decisions;
+  const changes: string[] = [];
+  const change = forms.change.bind(forms);
+  forms.change = (t, owner, action, patch) => {
+    changes.push(action);
+    const out = change(t, owner, action, patch);
+    changes.push(`${action} done`);
+    return out;
+  };
+  // (each message as the worker takes it from its page, src/hosts/web.ts startWeb's receive: one after the other, as
+  // they come, nothing waited for between)
+  core.receiveRaw(ui, { id: 2, call: "automaticDecisions.form.open", params: form });
+  // made and done as it was taken, before the next comes
+  assert.deepEqual(changes, ["open", "open done"]);
+  assert.equal(core.inner.store.inUse(overviewTopic), true);
+  core.receiveRaw(ui, { id: 3, call: "automaticDecisions.form.drop", params: form });
+  assert.deepEqual(changes, ["open", "open done", "drop", "drop done"]);
+  await host.settle();
+  const answered = host.takeEmitted().map(([, m]) => m as J).filter((m) => "ok" in m || "error" in m);
+  assert.deepEqual(answered.map((m) => [m.id, "ok" in m]), [[2, true], [3, true]]);
+  assert.equal(forms.value(topic), null);
+  assert.equal(core.inner.store.inUse(overviewTopic), false);
+  core.close();
+});
+
 test("the_spans_a_core_sends_say_which_build_of_its_app_it_is_once_its_ui_has_said", async () => {
   const { host, core } = await started(base(), 1);
   const ui = core.connect();
