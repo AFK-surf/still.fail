@@ -1316,6 +1316,12 @@ let inner_even : Double = 0.5
 /// distances keeps it too, said so.
 fn Ctx::corners_after_layout(self : Ctx) -> Unit {
   self.inner_faults.clear()
+  // (what is worked out here is the old frame's boxes' corners alone: the window's tree's nodes are among them only as
+  // what holds those, each drawn with the corner it says, what this works out of them let go after. With no box of the
+  // old frame's to work out, nothing: the tree's nodes not gone through, as a frame of the tree alone is)
+  if !self.corners_to_work() {
+    return
+  }
   // (among the window's tree's nodes where they are laid out, each old view's box held by the one it is drawn in: what
   // holds an old view's box a container of it as the corner rule finds it, Ctx::with_tree_nodes)
   self.with_tree_nodes(laid=true, fn() {
@@ -1326,6 +1332,23 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
     // what is in it, as the window's corner makes a panel's)
     self.corners_in_corners(grounds)
   })
+}
+
+///|
+/// Whether a box of the old frame's has a corner worked out once laid out: one said `Inner`, `InnerOr` or `Around`, or
+/// one with a corner of its own that corners_in_corners may set concentric with its container's (the same boxes it
+/// goes through).
+fn Ctx::corners_to_work(self : Ctx) -> Bool {
+  if !self.inners.is_empty() || !self.arounds.is_empty() {
+    return true
+  }
+  for i in 0..<self.count {
+    let b = self.nodes[i]
+    if b.kind == kind_box && !b.layer && b.radius >= 0.5 && b.fw > 0.0 && b.fh > 0.0 && b.links is None {
+      return true
+    }
+  }
+  false
 }
 
 ///|
