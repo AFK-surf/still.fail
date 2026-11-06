@@ -16,8 +16,7 @@
 pub(all) enum DataSource {
   /// A person's account, its core's own: nothing of it written down.
   RealAccount
-  /// Made up (a fixture's chats, a Tester's, a test run's own account against its own cloud): a run's tape and text
-  /// kept as the environment asks.
+  /// Made up (a fixture's chats, a gallery's words, a Tester's): a run's tape and text kept as the environment asks.
   MadeUp
 } derive(Eq, Show)
 

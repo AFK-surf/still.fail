@@ -28,8 +28,8 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
 }
 
 ///|
-/// MBUI_CORE_DUMP=1: what each topic the app follows holds, on the log (DUMP …): of a test run's account alone
-/// (@ui.content_kept, said by main), never a person's. Read once, after main said where the data comes from.
+/// MBUI_CORE_DUMP=1: what each topic the app follows holds, on the log (DUMP …): of made-up data alone
+/// (@ui.content_kept), never this app's, a person's account. Read once, as the app runs.
 fn dump_on() -> Bool {
   if dump_said.val < 0 {
     dump_said.val = if @ui.env("MBUI_CORE_DUMP") == "1" && @ui.content_kept() { 1 } else { 0 }
@@ -41,8 +41,8 @@ fn dump_on() -> Bool {
 let dump_said : Ref[Int] = Ref::new(-1)
 
 ///|
-/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs: of a
-/// test run's account alone (@ui.content_kept, said by main), never a person's. Read once, after main said it.
+/// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs: of
+/// made-up data alone (@ui.content_kept), never this app's, a person's account. Read once, as the app runs.
 fn call_log_on() -> Bool {
   if call_log_said.val < 0 {
     call_log_said.val = if @ui.env("MBUI_CALL_LOG") == "1" && @ui.content_kept() { 1 } else { 0 }
@@ -379,12 +379,8 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
-  // where its data comes from (@ui.set_data_source): a test run's own, an account it hands in against its own cloud
-  // (MBUI_CLOUD with MBUI_CORE_ACCOUNT: src/sfcore/signin.mbt, e2e/'s runs; an environment a phone's app takes only from
-  // its shell, MainActivity.testHooks), made up; anything else a person's, nothing of it kept
-  if @ui.env("MBUI_CLOUD") != "" && (@ui.env("MBUI_CORE_ACCOUNT") != "" || @ui.env("MBUI_CORE_ACCOUNT_B64") != "") {
-    @ui.set_data_source(MadeUp)
-  }
+  // (a person's account, whatever the environment says: nothing it shows, is typed or is told kept, @ui.content_kept;
+  // no variable or device makes a run's data made up)
   // the app as the system's keyboard (mbui's Keyboard.java, in a process of its own): the keyboard alone
   if @ui.env("MBUI_KEYBOARD") == "1" {
     @keyboard.run()

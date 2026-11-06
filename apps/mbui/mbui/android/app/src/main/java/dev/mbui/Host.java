@@ -485,50 +485,26 @@ final class Host {
     }
 
     /**
-     * Whether what the log says of what a person gave or was shown (a link, a file's name, a notice's words, what was
-     * typed, an error's message) is said as it is: on the emulator (made-up and test accounts alone; e2e/ reads its
-     * logs), unless it is told to be taken as a phone (debug.mbui.as_phone 1). On a phone none of it: its shape alone
-     * (shown, urlShown, errShown), the log being read by more than the app.
+     * What the log says of what a person gave or was shown (a link, a file's name, a notice's words, what was typed, an
+     * error's message): its shape alone, on every device and with any data. The log (logcat, MBUI_LOG_FILE) is read
+     * by more than the app, and neither the device (an emulator may hold a real account) nor the environment says the
+     * data is made up.
      */
-    static boolean contentSaid() {
-        if (contentSaid == 0) {
-            boolean emulator = android.os.Build.HARDWARE.equals("ranchu") || android.os.Build.HARDWARE.equals("goldfish");
-            boolean asPhone = false;
-            try {
-                Process p = new ProcessBuilder("getprop", "debug.mbui.as_phone").start();
-                String v = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream())).readLine();
-                p.waitFor();
-                asPhone = v != null && v.trim().equals("1");
-            } catch (Exception e) {}
-            contentSaid = emulator && !asPhone ? 1 : -1;
-        }
-        return contentSaid == 1;
-    }
-    private static volatile int contentSaid;
-
-    /** Words a person gave or was shown, as the log may say them: themselves on the emulator, how many on a phone. */
     static String shown(CharSequence s) {
-        if (s == null) return "null";
-        return contentSaid() ? s.toString() : "(" + s.length() + " characters)";
+        return s == null ? "null" : "(" + s.length() + " characters)";
     }
 
-    /** A link as the log may say it: whole on the emulator, its scheme and host alone on a phone. */
+    /** A link as the log may say it: its scheme and how long it is (a host can say as much as a path). */
     static String urlShown(String url) {
         if (url == null) return "null";
-        if (contentSaid()) return url;
-        try {
-            android.net.Uri u = android.net.Uri.parse(url);
-            String host = u.getHost();
-            return (u.getScheme() == null ? "" : u.getScheme() + "://") + (host == null ? "" : host) + " (" + url.length() + " characters)";
-        } catch (Exception e) {
-            return "(" + url.length() + " characters)";
-        }
+        int colon = url.indexOf(':');
+        String scheme = colon > 0 && colon < 16 && url.substring(0, colon).matches("[A-Za-z][A-Za-z0-9+.-]*") ? url.substring(0, colon) + ":" : "";
+        return scheme + "(" + url.length() + " characters)";
     }
 
-    /** An error as the log may say it: whole on the emulator, its kind alone on a phone (its message may hold a path). */
+    /** An error as the log may say it: its kind alone (its message may hold a path or a link). */
     static String errShown(Throwable e) {
-        if (e == null) return "null";
-        return contentSaid() ? e.toString() : e.getClass().getName();
+        return e == null ? "null" : e.getClass().getName();
     }
 
     static void log(String s) {
