@@ -265,6 +265,8 @@ jobs:
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/wasm-test.log" | sed 's/^\[[^]]*\] test //; s/ failed.*//' | sort -u)
           [ -n "$failed" ] || exit 0
           printf '%s\n' "$failed"
+          # Keep the original assertion or abort detail alongside the test names.
+          grep -a -A8 'test .* failed' "$RUNNER_TEMP/wasm-test.log"
           subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
           echo "::error title=check-mbui (wasm-gc ${{ matrix.part }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s\n' "$failed" | wc -l) tests failed, all named in the log and the summary"
           {
