@@ -326,6 +326,8 @@ priv struct Scene {
   /// whether who drew each instance was kept as the last frame was drawn (inst_owners_kept): kept from this frame on
   /// and not then, nothing kept has it, every layer drawn anew once
   mut owners_were : Bool
+  /// what a layer being kept holds, gone through as its block is kept (Ctx::scene_block_kept): one made once
+  held_scratch : Array[SceneLayer]
   /// the frame drawn again as a check (Ctx::scene_check): the tree drawn as it is, not brought on
   mut checking : Bool
   /// the layer being drawn now, and whether something of it is drawn otherwise than by the tree alone
@@ -393,6 +395,7 @@ let scene : Scene = {
   old_due: true,
   fresh: false,
   owners_were: false,
+  held_scratch: [],
   checking: false,
   drawing: None,
   owners: None,
@@ -562,14 +565,14 @@ fn scene_layer_gone(l : SceneLayer) -> Unit {
 /// draws from said drawn from in this frame (Atlas::drawn: never emptied for another while it is), as the glyphs an
 /// old view draws are as it draws them; a layer copied draws from them still.
 fn scene_plots_drawn() -> Unit {
-  for _, l in scene.layers {
+  scene.layers.each(fn(_, l) {
     for p in l.plots {
       let (a, _) = atlas_for(p.0)
       if a.sized() {
         a.drawn(p.1)
       }
     }
-  }
+  })
 }
 
 ///|
@@ -1084,16 +1087,14 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
     k - before
   }
   // (the bands the layers being drawn drew, where they are now)
-  for _, l in scene.layers {
+  scene.layers.each(fn(_, l) {
     for i, k in l.bands_at {
       l.bands_at[i] = moved_to(k)
     }
     l.bands_at.sort()
-  }
-  for _, l in scene.layers {
-    if l.seen != scene.frame || l.start < 0 || l.count == 0 {
-      continue
-    }
+  })
+  scene.layers.each(fn(_, l) {
+    guard l.seen == scene.frame && l.start >= 0 && l.count > 0 else { return }
     let s = moved_to(l.start)
     let e = moved_to(l.start + l.count - 1)
     if e - s == l.count - 1 {
@@ -1101,7 +1102,7 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
     } else {
       l.start = -1
     }
-  }
+  })
 }
 
 ///|
@@ -1661,14 +1662,12 @@ fn scene_over_scrim(now : (Double, Double, Double, Double)) -> Unit {
 /// over it, Ctx::tree_over_scrim_clear): the layers drawn in them kept as moved, never copied nor drawn alone as kept (they
 /// would be moved again), drawn each frame.
 fn scene_shifted(ranges : Array[(Int, Int)]) -> Unit {
-  for _, l in scene.layers {
-    if l.seen != scene.frame || l.start < 0 || l.count == 0 {
-      continue
-    }
+  scene.layers.each(fn(_, l) {
+    guard l.seen == scene.frame && l.start >= 0 && l.count > 0 else { return }
     if ranges.iter().any(fn(r) { l.start < r.1 && r.0 < l.start + l.count }) {
       l.each = true
     }
-  }
+  })
 }
 
 ///|
@@ -1896,11 +1895,19 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
 /// that one drew (Flutter's PaintingContext appending a child's layer, Android's drawRenderNode of a child's). Its bands
 /// (kind 11) among its own instances, by where they are in the block, and who drew each of its own where that is kept.
 fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit {
-  // (the layers it holds, as this frame has them in it, in the order drawn)
-  let held : Array[SceneLayer] = []
+  // (the layers it holds, as this frame has them in it, in the order drawn: as each was drawn in it, but where what is
+  // over all was moved after it, Ctx::raise_ranges)
+  let held = scene.held_scratch
+  held.clear()
+  let mut sorted = true
   for i in l.inner {
     match scene.layers.get(i) {
-      Some(c) if c.seen == scene.frame && c.start >= k0 && c.start + c.count <= self.ninst => held.push(c)
+      Some(c) if c.seen == scene.frame && c.start >= k0 && c.start + c.count <= self.ninst => {
+        if held.length() > 0 && held[held.length() - 1].start > c.start {
+          sorted = false
+        }
+        held.push(c)
+      }
       // (what it holds is what was drawn into it this frame, its inner cleared as it began: one not so is a fault,
       // never its instances taken for the holder's own)
       Some(c) =>
@@ -1910,8 +1917,16 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
       None => @view.fault("layer \{l.id.at} holds \{i.at}, no layer kept")
     }
   }
-  held.sort_by(fn(a, b) { a.start.compare(b.start) })
-  let own = self.ninst - k0 - held.fold(init=0, fn(n, c) { n + c.count }) - l.tops_put.fold(init=0, fn(n, t) { n + t.3 })
+  if !sorted {
+    held.sort_by(fn(a, b) { a.start.compare(b.start) })
+  }
+  let mut own = self.ninst - k0
+  for c in held {
+    own = own - c.count
+  }
+  for t in l.tops_put {
+    own = own - t.3
+  }
   if l.block.length() < own * inst_size {
     l.block = FixedArray::make(own * inst_size * 2 + inst_size, 0.0)
   }
@@ -1921,7 +1936,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   l.block_from.clear()
   l.block_refs.clear()
   l.bands.clear()
-  let owners : OwnersRun? = if inst_owners_kept() {
+  l.block_owners = if inst_owners_kept() {
     Some({ owner: [], cell: [], tree: [], mark: [], bone: [] })
   } else {
     None
@@ -1929,59 +1944,72 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
   // (each once, in order: a node's block made where it is drawn, then put there, tells its bands twice)
   l.bands_at.sort()
   l.bands_at.dedup()
-  let band = Ref(0)
-  let take = fn(from : Int, to : Int, sfrom : Int, sto : Int) {
-    if to > from {
-      self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
-      // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
-      while band.val < l.bands_at.length() && l.bands_at[band.val] < to {
-        if l.bands_at[band.val] >= from {
-          l.bands.push(l.block_n + l.bands_at[band.val] - from)
-        }
-        band.val = band.val + 1
-      }
-      for k in from..<to {
-        l.block_own.push(if k < inst_levels.length() { inst_levels[k] } else { l.clip_lvl })
-        l.block_from.push(if k < inst_froms.length() { inst_froms[k] } else { -1 })
-      }
-      match owners {
-        Some(o) => {
-          let r = owners_run(from, to)
-          o.owner.append(r.owner)
-          o.cell.append(r.cell)
-          o.tree.append(r.tree)
-          o.mark.append(r.mark)
-          o.bone.append(r.bone)
-        }
-        None => ()
-      }
-      l.block_n = l.block_n + to - from
-    }
-    for q in (sfrom * 4)..<(sto * 4) {
-      l.block_segs.push(self.segs[q])
-    }
-  }
-  // (and where it put what is over everything of others', each a reference to their tops)
-  let refs : Array[(Int, Int, Int, Int, @view.NodeId, Bool)] = held.map(fn(c) {
-    (c.start, c.count, c.seg_from, c.seg_count, c.id, false)
-  })
-  for t in l.tops_put {
-    refs.push((t.0, t.3, t.1, 0, t.2, true))
-  }
-  refs.sort_by(fn(a, b) { a.0.compare(b.0) })
+  let mut band = 0
   let mut at = k0
   let mut sat = s0
-  for r in refs {
-    let (start, count, seg_from, seg_count, id, tops) = r
-    take(at, start, sat, seg_from)
-    l.block_refs.push((l.block_n, l.block_segs.length() / 4, id, tops))
-    at = start + count
-    sat = seg_from + seg_count
+  // (what it holds and where it put what is over everything of others', each a reference, in the order they are in it)
+  let mut hi = 0
+  let mut ti = 0
+  while hi < held.length() || ti < l.tops_put.length() {
+    let tops = hi >= held.length() || (ti < l.tops_put.length() && l.tops_put[ti].0 < held[hi].start)
+    if tops {
+      let (start, seg_from, id, count) = l.tops_put[ti]
+      band = self.scene_block_take(l, at, start, sat, seg_from, band)
+      l.block_refs.push((l.block_n, l.block_segs.length() / 4, id, true))
+      at = start + count
+      sat = seg_from
+      ti = ti + 1
+    } else {
+      let c = held[hi]
+      band = self.scene_block_take(l, at, c.start, sat, c.seg_from, band)
+      l.block_refs.push((l.block_n, l.block_segs.length() / 4, c.id, false))
+      at = c.start + c.count
+      sat = c.seg_from + c.seg_count
+      hi = hi + 1
+    }
   }
-  take(at, self.ninst, sat, self.segs.length() / 4)
+  self.scene_block_take(l, at, self.ninst, sat, self.segs.length() / 4, band) |> ignore
+  held.clear()
   l.block_seg_base = s0
   l.bands_at.clear()
-  l.block_owners = owners
+}
+
+///|
+/// Layer `l`'s own instances `from` to `to` of the frame and its pieces `sfrom` to `sto` kept next in its block: its
+/// bands among them (from `band` of those it drew), each instance's levels as drawn, who drew each where that is kept.
+/// The band next after them.
+fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom : Int, sto : Int, band : Int) -> Int {
+  let mut band = band
+  if to > from {
+    self.inst.blit_to(l.block, len=(to - from) * inst_size, src_offset=from * inst_size, dst_offset=l.block_n * inst_size)
+    // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
+    while band < l.bands_at.length() && l.bands_at[band] < to {
+      if l.bands_at[band] >= from {
+        l.bands.push(l.block_n + l.bands_at[band] - from)
+      }
+      band = band + 1
+    }
+    for k in from..<to {
+      l.block_own.push(if k < inst_levels.length() { inst_levels[k] } else { l.clip_lvl })
+      l.block_from.push(if k < inst_froms.length() { inst_froms[k] } else { -1 })
+    }
+    match l.block_owners {
+      Some(o) => {
+        let r = owners_run(from, to)
+        o.owner.append(r.owner)
+        o.cell.append(r.cell)
+        o.tree.append(r.tree)
+        o.mark.append(r.mark)
+        o.bone.append(r.bone)
+      }
+      None => ()
+    }
+    l.block_n = l.block_n + to - from
+  }
+  for q in (sfrom * 4)..<(sto * 4) {
+    l.block_segs.push(self.segs[q])
+  }
+  band
 }
 
 ///|
