@@ -1943,7 +1943,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     return
   }
   if g().press_key_now(code, mods) {
-    took_input("key", h_now(), [code.to_double(), mods.to_double()])
     hand_event()
     h_request_frame()
     return

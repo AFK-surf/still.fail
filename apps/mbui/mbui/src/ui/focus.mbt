@@ -456,12 +456,15 @@ fn Ctx::roved_to(self : Ctx, code : Int) -> Int? {
 
 ///|
 /// Enter or Space (`key`: press_enter, press_space) on what has the focus: pressed, if it takes that key.
-fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
+fn Ctx::press_focused(self : Ctx, key : Int, taken? : () -> Unit) -> Bool {
   if self.focus == 0 {
     return false
   }
   for f in self.last_focusables {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
+      // Record a newly delivered key once its route is known, before its application callback can stop the run.
+      // A key already queued by the old frame's input path was recorded on arrival and needs nothing here.
+      match taken { Some(tell) => tell(); None => () }
       self.clicked.push(f.id)
       made_pressed(f.id)
       self.focus_moved(self.focus, visible=true)
@@ -479,7 +482,8 @@ fn Ctx::press_key_now(self : Ctx, code : Int, mods : Int) -> Bool {
   guard mods == 0 && (code == key_enter || code == key_space) && focus != 0 else { return false }
   guard !self.editors.contains(focus) && !self.dev.catchers.contains(focus) &&
     self.keys_reach(focus) && made_presses.contains(focus) else { return false }
-  self.press_focused(if code == key_enter { press_enter } else { press_space })
+  self.press_focused(if code == key_enter { press_enter } else { press_space },
+    taken=fn() { took_input("key", h_event_time(), [code.to_double(), mods.to_double()]) })
 }
 
 ///|
