@@ -7084,6 +7084,12 @@ fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
 
 ///|
 fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
+  // A fault stops layouts for this whole advance, including its enclosing frame or bring. The pass count, unlike
+  // that stop flag, belongs to each separate deadline.
+  let stopped = match self.brought_budget {
+    Some((_, stopped)) => stopped
+    None => Ref(false)
+  }
   // A before-due layout belongs to the selected deadline even if that layout changes the timeline and makes the
   // loop choose again. Keep its budget until an item at that moment actually runs.
   let mut before_due_budget : (Double, (Ref[Int], Ref[Bool]))? = None
@@ -7119,7 +7125,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     let was_budget = self.brought_budget
     let budget = match before_due_budget {
       Some((at, b)) if at == next_at => b
-      _ => (Ref(0), Ref(false))
+      _ => (Ref(0), stopped)
     }
     self.brought_budget = Some(budget)
     // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
