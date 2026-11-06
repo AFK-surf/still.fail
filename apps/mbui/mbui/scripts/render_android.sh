@@ -79,6 +79,8 @@ case "${1:-run}" in
     $ADB exec-out run-as $APP_ID cat files/partial.png > $O/partial.png
     $ADB exec-out run-as $APP_ID cat files/partial.whole.png > $O/partial.whole.png
     render_partial android
+    ADB="$ADB" MBUI_PAINT_DAMAGE_RENDERER="$D/render_paint_damage_android.sh" \
+      bash "$D/render_paint_damage.sh" "$O/paint-damage"
     $ADB shell am force-stop $APP_ID
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then

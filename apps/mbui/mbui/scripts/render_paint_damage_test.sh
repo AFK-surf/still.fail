@@ -9,13 +9,14 @@ trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/scripts"
 cp "${1:-$D/render_paint_damage.sh}" "$T/scripts/render_paint_damage.sh"
 cat > "$T/scripts/env.sh" <<'PRODUCER'
-moon_tests() {
+moon() {
   for name in typing-before typing-after caret-before caret-hidden caret-shown \
     regions-before regions-moved regions-shrunk regions-gone regions-new clips-before clips-after glass-before glass-after; do
     [ "$name" != "${PAINT_FRAME_OMIT:-}" ] || continue
     printf 'DLBEGIN %s\nthis run: %s\nDLEND\n' "$name" "$name"
   done
 }
+moon_tests() { moon "$@"; }
 PRODUCER
 cat > "$T/renderer" <<'RENDERER'
 #!/bin/bash

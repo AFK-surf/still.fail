@@ -100,7 +100,7 @@ Without a window (mbui-render, the bench) the offscreen target is the canvas: it
 - **On a device, by hand**: `MBUI_PARTIAL_CHECK=1` (Metal) reads back each frame drawn in parts and the same frame
   drawn whole, and says on the log where they differ (slow: for a run by hand, not for use).
 - **Paint changes without a tree property changing** (`src/ui/field_present_wbtest.mbt`,
-  `scripts/render_paint_damage.sh`, also run by `render_check.sh`): typing into an existing line and a timed caret,
+  `scripts/render_paint_damage.sh`, run by `render_check.sh`, `render_linux.sh` and `render_android.sh`): typing into an existing line and a timed caret,
   then moving, shrinking, removing and newly showing a field, nested rounded clips and glass over changed text.
   Each pair uses the parts actually handed to `h_present`, even when empty, and real host text records. The native
   host renders the partial frame over its predecessor and the same frame whole; both pictures must match to the
@@ -109,6 +109,18 @@ Without a window (mbui-render, the bench) the offscreen target is the canvas: it
   does; asking for another recording alone does not repaint the host's retained canvas.
   Each run removes its expected outputs first: a frame missing this run cannot come from an earlier run in the
   same directory (`scripts/render_paint_damage_test.sh` checks both default and supplied output directories).
+  The producer runs as Wasm GC on every machine; each real renderer receives the same recorded input and compares
+  its own partial and whole output. The nine pairs cover Metal on macOS, Mesa/GLES on Linux and the synthetic
+  Android/SwiftShader renderer. Android keeps its manual/daily workflow, not a PR gate. These pairs are not yet wired
+  into Windows or WebGL, whose existing checks cover the spinner case above. iOS shares the Metal implementation,
+  but these field cases have no separate iOS rendering run. No result
+  from these synthetic environments establishes behavior or frame times on a user's device.
+- **Glyph availability and frame paths** (`src/ui/paint_retry_wbtest.mbt`): deliberately large fake glyph metrics
+  fill the real atlas allocator beyond its first reset; the first frame with room must put the newly drawable
+  glyphs in the actual host damage while preserving a distant region. This checks allocation and presentation,
+  not font pixels. The same text input is also drawn through 60 Hz, 120 Hz and direct-jump paths to three identical
+  target moments; the test records every actual frame and compares the target drawings. A field moved twice before
+  its caret wakes checks old and new positions during the moves and the current position when the wake fires.
 - `MBUI_PROBE=1` says every 2 s how many frames were drawn whole, in parts or not at all, why the whole ones were
   (`whole_why`, by @damage.Parts::why: 1 none before, 3 another window, 4 the atlas anew, 5 more than half, 6 an old
   frame with no tree),

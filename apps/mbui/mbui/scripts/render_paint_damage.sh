@@ -20,7 +20,9 @@ for pair in $pairs; do
   done
 done
 code=0
-MBUI_PAINT_DAMAGE_PRINT=1 moon_tests src/ui/field_present_wbtest.mbt > "$O/frames.log" 2>&1 || code=1
+# The producer has no host: use the same Wasm test program on every rendering machine. Native UI tests run in the
+# test jobs already; compiling them again here needlessly spends the renderer job's build budget.
+MBUI_PAINT_DAMAGE_PRINT=1 moon test --target wasm-gc --release src/ui/field_present_wbtest.mbt > "$O/frames.log" 2>&1 || code=1
 awk -v out="$O" '/^DLEND/{p=0; close(file)} p{print > file} /^DLBEGIN /{file=out "/" $2 ".dl"; p=1}' "$O/frames.log"
 renderer=${MBUI_PAINT_DAMAGE_RENDERER:-}
 if [ -z "$renderer" ]; then
@@ -36,7 +38,11 @@ for pair in $pairs; do
     continue
   fi
   MBUI_DL_FROM="$O/$before.dl" MBUI_DL="$O/$after.dl" MBUI_DL_PNG="$O/$after.png" \
-    "$renderer" > "$O/$after.render.log" 2>&1
+    "$renderer" > "$O/$after.render.log" 2>&1 || {
+      echo "paint damage: $after renderer failed (see $O/$after.render.log)"
+      code=1
+      continue
+    }
   if grep -Eq '[1-9][0-9]* not known here' "$O/$after.render.log"; then
     echo "paint damage: $after has glyphs the host could not render (see $O/$after.render.log)"
     code=1
