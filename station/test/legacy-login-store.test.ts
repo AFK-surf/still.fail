@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import { installLegacyLoginCards, LEGACY_LOGIN_CARDS, legacyLoginCardsStep } from "../src/store/legacy-login-cards.ts";
 import { buildLegacyEntryLookups } from "../src/store/legacy-said-builder.ts";
 import { Store } from "../src/store/store.ts";
+import { withoutLoginKeys } from "./legacy-login-fixture.ts";
 import { withoutSaidState } from "./legacy-message-fixture.ts";
 
 function populate(store: Store, count: number): number {
@@ -41,6 +42,7 @@ test("an old store closes the same cards before and after bounded preparation wh
   const old = new DatabaseSync(path,{ timeout:5000 });
   let station: Store | null = null;
   try {
+    withoutLoginKeys(old);
     old.exec("DROP INDEX entries_login_cards");
     station = Store.open(path);
     assert.equal(station.db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'").get(),undefined);
@@ -69,6 +71,7 @@ test("the login lookup reads only the active branch before and after preparation
     const store=Store.open(":memory:"), db=store.db;
     try {
       populate(store,count);
+      withoutLoginKeys(db);
       db.exec("DROP INDEX entries_login_cards");
       // The two arms are instrumented here to count actual row visits.
       installLegacyLoginCards(db);
@@ -98,6 +101,7 @@ test("the old login-card worker waits for handover and resumes saved batches", a
   const old=new DatabaseSync(path,{timeout:5000});
   let station: Store | null=null,builder: ReturnType<typeof buildLegacyEntryLookups> | null=null;
   try {
+    withoutLoginKeys(old);
     old.exec("DROP INDEX entries_login_cards");
     station=Store.open(path);
     assert.equal(legacyLoginCardsStep(station.db,8).ready,false);
@@ -159,6 +163,7 @@ test("a stopped login-card worker settles handover and retries saved work", asyn
   const old=new DatabaseSync(path,{timeout:5000});
   let store: Store | null=null,builder: ReturnType<typeof buildLegacyEntryLookups> | null=null;
   try {
+    withoutLoginKeys(old);
     old.exec("DROP INDEX entries_login_cards");
     store=Store.open(path);
     assert.equal(legacyLoginCardsStep(store.db,1).ready,false);
@@ -186,6 +191,7 @@ test("a completed login-card worker does not recheck its finished scan on later 
   let builder: ReturnType<typeof buildLegacyEntryLookups> | null=null;
   try {
     populate(store,80);
+    withoutLoginKeys(store.db);
     store.db.exec("DROP INDEX entries_login_cards");
     installLegacyLoginCards(store.db);
     let checks=0;
@@ -218,6 +224,7 @@ test("the three old entry lookups share preparation after handover", async () =>
   let store: Store | null=null,builder: ReturnType<typeof buildLegacyEntryLookups> | null=null;
   try {
     withoutSaidState(old);
+    withoutLoginKeys(old);
     old.exec("DROP INDEX entries_agent_at; DROP INDEX entries_login_cards");
     store=Store.open(path);
     store.db.exec(`CREATE TABLE build_order(kind TEXT);

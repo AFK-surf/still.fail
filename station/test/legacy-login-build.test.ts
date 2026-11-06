@@ -192,3 +192,53 @@ test("a store without the old card index scans only bounded entry ranges", () =>
     assert.deepEqual(actual(db),expected(db));
   } finally { db.close(); }
 });
+
+test("a store with the native card index prepares without walking ordinary messages", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(schema);
+    const put = db.prepare("INSERT INTO entries VALUES(?,?,NULL,'message','agent','agent',?)");
+    for (let n=1;n<=400;n++) {
+      put.run(1,n,n%100===0 ? card(`a${n}`) : null);
+      put.run(2,n,n%100===0 ? card(`b${n}`) : null);
+    }
+    installLegacyLoginCards(db);
+    let visited=0,queries=0;
+    db.function("visit_native_card", () => { visited++; return 1; });
+    const counted=new Proxy(db,{ get(target,property) {
+      if (property === "prepare") return (sql: string) => {
+        const source = `FROM entries INDEXED BY entries_login_cards WHERE card LIKE '%"login"%'`;
+        if (sql.includes(source)) { queries++; sql=sql.replace(source,`${source} AND visit_native_card()`); }
+        return target.prepare(sql);
+      };
+      const value=Reflect.get(target,property,target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    let step, total=0;
+    do {
+      visited=0;
+      step=legacyLoginCardsStep(counted,3);
+      assert.ok(visited<=3,`one batch visited ${visited} cards`);
+      total+=visited;
+    } while (!step.ready);
+    assert.ok(queries>0);
+    assert.equal(total,8);
+    assert.deepEqual(actual(db),expected(db));
+  } finally { db.close(); }
+});
+
+test("preparation remains correct if the native card index changes between batches", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(schema);
+    const put=db.prepare("INSERT INTO entries VALUES(1,?,NULL,'message','agent','agent',?)");
+    for (let n=1;n<=12;n++) put.run(n,n%2===0 ? card(`id${n}`) : null);
+    installLegacyLoginCards(db);
+    assert.equal(legacyLoginCardsStep(db,2).ready,false);
+    db.exec("DROP INDEX entries_login_cards");
+    assert.equal(legacyLoginCardsStep(db,2).ready,false);
+    db.exec(`CREATE INDEX entries_login_cards ON entries(thread,n) WHERE card LIKE '%"login"%'`);
+    finish(db,2);
+    assert.deepEqual(actual(db),expected(db));
+  } finally { db.close(); }
+});

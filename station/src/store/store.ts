@@ -61,7 +61,7 @@ import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } 
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
 import { hasLegacySaid, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
-import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK } from "./legacy-login-cards.ts";
+import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
 import { legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
@@ -2309,9 +2309,21 @@ export class Store {
   closeLoginCards(login: string): string[] {
     return this.#with((changes) => {
       const pattern = `%"login":${JSON.stringify(login)}%`;
-      const rows = !this.#legacyLoginCards ? this.#all(LOGIN_CARDS, pattern)
-        : /^[0-9a-z]{1,40}$/i.test(login) ? this.#all(LEGACY_LOGIN_CARDS, login.toLowerCase(), pattern)
-        : this.#all(LEGACY_LOGIN_CARDS_FALLBACK, pattern);
+      let rows: Json[];
+      if (!this.#legacyLoginCards) rows = this.#all(LOGIN_CARDS, pattern);
+      else {
+        const native = this.#one("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'") !== undefined;
+        const keyed = /^[0-9a-z]{1,40}$/i.test(login);
+        const read = (useNative: boolean) => keyed
+          ? this.#all(useNative ? LEGACY_LOGIN_CARDS_NATIVE : LEGACY_LOGIN_CARDS, login.toLowerCase(), pattern)
+          : this.#all(useNative ? LOGIN_CARDS : LEGACY_LOGIN_CARDS_FALLBACK, pattern);
+        try { rows = read(native); }
+        catch (error) {
+          // Another connection can remove the older index between the check and preparing the statement.
+          if (!native || !(error instanceof Error) || !error.message.includes("no such index: entries_login_cards")) throw error;
+          rows = read(false);
+        }
+      }
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
         changes.push({ type: "thread", id: r.thread, entries: [], closed: r.n });
