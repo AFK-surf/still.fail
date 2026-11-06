@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { hasLegacySaid, installLegacySaid } from "./legacy-said-build.ts";
 import { hasLegacyAgent, installLegacyAgent } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-cards.ts";
+import { hasLegacyEdits, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
@@ -134,11 +135,6 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
--- A message's latest edit (the merged view, at each message any list or page reads): by the thread, the message and
--- the edit's own number, found at once. With (thread, target) alone, node's SQLite (3.53) took the latest from the
--- primary key instead, going back over the whole thread for a message never edited: every message read had a long
--- chat's every page read with it, 5 to 8 s on a station with its pages put out (2026-10-25).
-CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
 -- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
 -- touched): without it each went over the thread's every entry.
 CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
@@ -434,6 +430,27 @@ export const MERGED = `CREATE VIEW merged AS
 const has = (db: DatabaseSync, table: string, column: string): boolean =>
   db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column) !== undefined;
 
+const hasEditIndex = (db: DatabaseSync) =>
+  db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits'").get() !== undefined;
+
+export const usesLegacyEdits = (db: DatabaseSync): boolean => !hasEditIndex(db) && hasLegacyEdits(db);
+
+/// A small store can build the native lookup under one writer. Prepare a larger older store in bounded steps.
+export function addEditIndex(db: DatabaseSync): void {
+  if (hasEditIndex(db) || hasLegacyEdits(db)) return;
+  let prepare = false;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!hasEditIndex(db) && !hasLegacyEdits(db)) {
+      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+        db.exec("CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL");
+      else prepare = true;
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  if (prepare) installLegacyEdits(db,true);
+}
+
 /// Older records with no runtime belong to the session's original runtime. Remember it on the session when it first
 /// changes, instead of rewriting every old transcript record while opening the database.
 export function addRuntimeSessionRuntime(db: DatabaseSync): void {
@@ -523,8 +540,17 @@ export function addClientColumn(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");
   // What people said lately is looked for on every list of chats (the cards they answered: `answersSince`).
   db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
-  // A prior upgrade may have added the table column without rebuilding this view.
-  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity") || !has(db, "merged", "letter")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
+  // A prior upgrade may have added the table column without rebuilding this view. Older stores use their prepared
+  // lookup once ready, while a store that acquired the native index goes back to the native view.
+  const legacyEdits = usesLegacyEdits(db);
+  const view = (db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get() as { sql: string } | undefined)?.sql ?? "";
+  const usesLegacy = view.includes("legacy_edit_meta");
+  const obsoleteOldView = !usesLegacy && view.includes("INDEXED BY entries_target");
+  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity") || !has(db, "merged", "letter") || legacyEdits !== usesLegacy || obsoleteOldView) {
+    const original = "SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n";
+    const merged = legacyEdits ? MERGED.replace(original,legacyEditLatest("m.thread","m.n","1",legacyEditsUseOldIndex(db))) : MERGED;
+    db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${merged} COMMIT;`);
+  }
 }
 
 /// A new or small store can build the native lookup at once. An older large store prepares it in bounded batches.

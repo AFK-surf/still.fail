@@ -5,9 +5,10 @@ import { releaseStoppedBackfill } from "./backfill.ts";
 import { hasLegacySaid, legacySaidMaintenanceStep, legacySaidNeedsWork } from "./legacy-said-build.ts";
 import { hasLegacyAgent, legacyAgentMaintenanceStep, legacyAgentNeedsWork } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsNeedsWork } from "./legacy-login-cards.ts";
+import { hasLegacyEdits, legacyEditsMaintenanceStep, legacyEditsNeedsWork } from "./legacy-edits-build.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent" | "legacy-login";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
@@ -23,6 +24,8 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     needsWork: () => legacyAgentNeedsWork(store.db), step: () => legacyAgentMaintenanceStep(store.db) });
   if (kinds.includes("legacy-login") && hasLegacyLoginCards(store.db) && legacyLoginCardsNeedsWork(store.db)) lookups.push({ kind: "legacy-login",
     needsWork: () => legacyLoginCardsNeedsWork(store.db), step: () => legacyLoginCardsMaintenanceStep(store.db) });
+  if (kinds.includes("legacy-edits") && hasLegacyEdits(store.db)) lookups.push({ kind: "legacy-edits",
+    needsWork: () => legacyEditsNeedsWork(store.db), step: () => legacyEditsMaintenanceStep(store.db) });
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
   let worker: Worker | null = null;
@@ -164,5 +167,5 @@ export function buildLegacySaid(store: Store, previous: Promise<void>, workerFil
 
 /// Prepare all entry lookups a store needs after the old station has handed over.
 export function buildLegacyEntryLookups(store: Store, previous: Promise<void>, workerFile?: URL): ReturnType<typeof buildLookups> {
-  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login"],workerFile);
+  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits"],workerFile);
 }
