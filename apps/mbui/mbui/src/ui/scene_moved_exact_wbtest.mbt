@@ -1,9 +1,9 @@
 // A layer put elsewhere than it was drawn (a list's rows scrolled) and copied as kept comes to what drawing it anew
-// there comes to, number for number (the Tester's check of every frame, Ctx::scene_check): whatever the fractions of
-// where what it holds lies in it, at a scale whose pixels are thirds.
+// there comes to, number for number (the Tester's check of every frame, Ctx::scene_check): what it holds lying between
+// its pixels (a tenth of a point, three tenths of a pixel at scale 3), it moved by whole pixels.
 
 ///|
-test "rows scrolled by whole pixels, what they hold at thirds of a pixel: copied as kept, the same as drawn anew, number for number" {
+test "rows scrolled by whole pixels, what they hold between pixels: copied as kept, the same as drawn anew, number for number" {
   let t = Tester::new(fn(_) {  }, w=390.0, h=600.0, scale=3.0)
   set_view_app(fn(root) {
     root
@@ -11,14 +11,14 @@ test "rows scrolled by whole pixels, what they hold at thirds of a pixel: copied
     .height(Is(Some(600.0)))
     .scrolls_window(@view.Scroll::list(), fn() { Array::makei(200, fn(i) { i }) }, est=66.0, fn(row, k) {
       row.height(Is(Some(66.0))).ground(Is(if k % 2 == 0 { 0xF2F2F2FFL } else { 0xFFFFFFFFL })) |> ignore
-      // (a badge at a third of a pixel down its row, a line of words a third further, each drawn at fractions)
+      // (a badge three tenths of a pixel off its row's pixels, a line of words seven tenths off)
       row.box(fn(b) {
-        b.offset(Is((22.0, 18.0 + 1.0 / 3.0))).width(Is(Some(30.0))).height(Is(Some(30.0))).radius(Is(15.0))
+        b.offset(Is((22.0, 18.1))).width(Is(Some(30.0))).height(Is(Some(30.0))).radius(Is(15.0))
         .ground(Is(0x3366CCFFL)) |> ignore
       })
       |> ignore
       row.box(fn(w) {
-        w.padding(Is((0.0, 8.0 / 3.0, 0.0, 0.0))).words(Is("message \{k}")) |> ignore
+        w.padding(Is((0.0, 2.9, 0.0, 0.0))).words(Is("message \{k}")) |> ignore
       })
       |> ignore
     })
@@ -33,5 +33,9 @@ test "rows scrolled by whole pixels, what they hold at thirds of a pixel: copied
     t.touch_at(1, 195.0, 500.0 - 37.0 * i.to_double(), t.time())
     t.clock_frame()
   }
+  // (what is checked lies between pixels as drawn: some instance's place, in pixels, no whole number)
+  let c = g()
+  let between = Array::makei(c.ninst, fn(k) { c.inst[k * inst_size + 1] * 3.0 }).any(fn(v) { v != v.round() })
+  assert_true(between, msg="every instance on whole pixels")
   assert_true(scene_done().copied > 0, msg="\{scene_done()}: \{scene_alone_why()}")
 }
