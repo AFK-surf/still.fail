@@ -1293,6 +1293,35 @@ test "build-effect: inputs it knows by shape" {
 }
 
 ///|
+test "build-effect: old input callbacks, forwarding and tracked work" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      "fn forwarded(c : @ui.Ctx, go : () -> Unit) -> Unit { c.on_press(1, go) }\n" +
+      "fn mixed(c : @ui.Ctx, go : () -> Unit) -> Unit { c.on_press(1, go); go() }\n" +
+      "fn view(c : @ui.Ctx, v : @view.View, fake : @other.Ctx, src : Source) -> Unit {\n" +
+      "  c.on_press(1, fn() { (src.call)(\"direct\") })\n" +
+      "  forwarded(c, fn() { (src.call)(\"forwarded\") })\n" +
+      "  mixed(c, fn() { (src.call)(\"mixed\") })\n" +
+      "  c.on_press(2, fn() { v.width(By(fn() { (src.call)(\"binding\"); None })) })\n" +
+      "  c.on_press(3, fn() { v.layout_box(Is(()), fn(_, _) { (src.call)(\"layout\") }) })\n" +
+      "  c.on_press(4, fn() { v.reacts(fn() { (src.call)(\"read\"); 0 }, fn(_) { () }) })\n" +
+      "  c.on_press(6, fn() { fake.layout_box(Is(()), fn(_, _) { (src.call)(\"unknown layout\") }) })\n" +
+      "  fake.on_press(5, fn() { (src.call)(\"fake\") })\n" +
+      "  c.box(fn() { (src.call)(\"build\") })\n" +
+      "}\n" +
+      "fn shadow(c : @ui.Ctx, fake : @other.Ctx, src : Source) -> Unit {\n" +
+      "  let c = fake\n" +
+      "  c.on_press(1, fn() { (src.call)(\"shadow\") })\n" +
+      "}\n",
+    ),
+  ]
+  // A direct Ctx handler and one handed to it whole run on input. A helper that also calls it during build, tracked
+  // work made by an input, an unrelated same-named method, a build and a shadowed receiver remain findings.
+  assert_eq(lines(found(files, "build-effect", 8)), [6, 7, 8, 9, 10, 11, 12, 16])
+}
+
+///|
 test "build-effect: what a presenter keeps runs later, and so does what is handed on to one" {
   let files = [
     (

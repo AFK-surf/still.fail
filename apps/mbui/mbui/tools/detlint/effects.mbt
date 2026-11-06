@@ -61,6 +61,36 @@ fn positional(f : MbtFile, args : Array[(String?, Array[Int])]) -> Array[Array[I
 }
 
 ///|
+/// The second positional argument of a real Ctx::on_press is delivered at input, outside the old build. A method
+/// with the same spelling on another or unknown receiver is not evidence of an input boundary.
+fn ctx_press_callback(f : MbtFile, c : Call, k : Int) -> Bool {
+  if c.is_def || c.name != "on_press" || !typed_receiver(f, c, "@ui", "Ctx") {
+    return false
+  }
+  let args = positional(f, c.args)
+  args.length() == 2 && args[1].length() > 0 && args[1][0] == k
+}
+
+///|
+/// These closures are evaluated as layout or a tracked read, even if their binding was made by an input callback.
+fn Eff::tracked_closure(self : Eff, f : MbtFile, k : Int) -> Bool {
+  let toks = f.toks
+  let mut p = k - 1
+  while p >= 0 {
+    if toks[p].text == "(" && toks[p].end >= k { break }
+    p -= 1
+  }
+  if p < 1 { return false }
+  guard self.calls_at.get(at_key(f.rel, p - 1)) is Some(c) && !c.is_def else { return false }
+  // For a barrier, an inferred or unrelated receiver must stay counted too: only the exception needs proof of type.
+  let tracked = (c.kind == "bare" && c.name == "By") || (c.kind == "method" && c.name == "layout_box")
+  let read = c.kind == "method" && c.name == "reacts"
+  let args = positional(f, c.args)
+  (tracked && args.iter().any(fn(a) { a.length() > 0 && a[0] == k })) ||
+    (read && args.length() > 0 && args[0].length() > 0 && args[0][0] == k)
+}
+
+///|
 /// Whether function key calls its i-th positional parameter only as an input is taken (a button's answer:
 /// dv_empty(c, …, fn() { … }) whose `on_tap()` is under its `clicked`)
 fn Eff::handler_param(self : Eff, key : String, i : Int) -> Bool {
@@ -116,9 +146,8 @@ fn Eff::handler_param(self : Eff, key : String, i : Int) -> Bool {
 /// (build_effect.later).
 fn Eff::given_later(self : Eff, f : MbtFile, item : Int, k : Int) -> Bool {
   f.calls.iter().any(fn(c) {
-    c.item == item &&
-    c.kind == "pkg" &&
-    self.cfg.effect_later.contains("\{c.qual}.\{c.name}") &&
+    c.item == item && (ctx_press_callback(f, c, k) ||
+      (c.kind == "pkg" && self.cfg.effect_later.contains("\{c.qual}.\{c.name}"))) &&
     c.args.iter().any(fn(a) { a.1.length() == 1 && a.1[0] == k })
   })
 }
@@ -182,6 +211,7 @@ fn Eff::later(self : Eff, f : MbtFile, o : Int) -> Bool {
   }
   // given to what runs it later (build_effect.later: an app's presenters)
   match self.calls_at.get(at_key(f.rel, p - 1)) {
+    Some(call) if ctx_press_callback(f, call, o) => return true
     Some(call) if call.kind == "pkg" && self.cfg.effect_later.contains("\{call.qual}.\{call.name}") => return true
     _ => ()
   }
@@ -317,6 +347,7 @@ fn Eff::exempt(self : Eff, f : MbtFile, k : Int) -> Bool {
       if j >= 0 && toks[j].kind == "op" && toks[j].text == ")" {
         let ob = f.open_of(j)
         if ob > 0 && toks[ob - 1].kind == "ident" && toks[ob - 1].text == "fn" {
+          if self.tracked_closure(f, ob - 1) { return false }
           // given what happened (fn(d) { … }: a stepper's change, an answer): a handler; fn() { … }: a box's
           // children, the build, unless what it is given to runs it later
           if (ob > 1 && toks[ob - 2].text == "async") || self.later(f, ob - 1) {

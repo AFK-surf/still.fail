@@ -131,9 +131,9 @@ fn last_name(name : String) -> String {
 }
 
 ///|
-/// Whether the simple receiver is explicitly typed as the retained tree's View, not another package's View. Unknown
-/// receivers stay counted: this is an exception for a known event API, not a guess from a method or type's short name.
-fn event_view_receiver(f : MbtFile, c : Call) -> Bool {
+/// Whether the simple receiver is explicitly typed as the requested package's type. Unknown or shadowed receivers
+/// stay counted: event exceptions must not be guessed from a method or a type's short name.
+fn typed_receiver(f : MbtFile, c : Call, pkg : String, typ : String) -> Bool {
   let toks = f.toks
   let receiver = c.at - 2
   if c.kind != "method" || receiver < 0 || toks[receiver].kind != "ident" {
@@ -144,15 +144,30 @@ fn event_view_receiver(f : MbtFile, c : Call) -> Bool {
   for j = receiver - 1; j >= lo; j = j - 1 {
     if toks[j].kind == "ident" && toks[j].text == name && j + 4 < toks.length() &&
       toks[j + 1].text == ":" && (j == 0 || toks[j - 1].text != ".") {
-      return toks[j + 2].text == "@view" && toks[j + 3].text == "." && toks[j + 4].text == "View"
+      return toks[j + 2].text == pkg && toks[j + 3].text == "." && toks[j + 4].text == typ
     }
     if toks[j].kind == "ident" && toks[j].text == name && j > 0 &&
       (toks[j - 1].text == "let" || toks[j - 1].text == "mut") &&
       j + 1 < toks.length() && toks[j + 1].text == "=" {
       return false
     }
+    // An inferred parameter of a nested closure shadows a typed outer variable. Do not attribute its methods to
+    // the outer type merely because both names are spelled alike.
+    if toks[j].kind == "ident" && toks[j].text == name && j > 0 &&
+      (toks[j - 1].text == "(" || toks[j - 1].text == ",") {
+      for p = j - 1; p >= lo; p = p - 1 {
+        if toks[p].text == "(" && toks[p].end >= j && p > 0 && toks[p - 1].text == "fn" {
+          return false
+        }
+      }
+    }
   }
   false
+}
+
+///|
+fn event_view_receiver(f : MbtFile, c : Call) -> Bool {
+  typed_receiver(f, c, "@view", "View")
 }
 
 ///|
