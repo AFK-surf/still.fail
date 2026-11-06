@@ -45,7 +45,9 @@ pub fn tools_row_node(
   label : () -> String,
   tips? : TipLayer,
 ) -> @view.View {
-  let slots : Map[String, @view.View] = {}
+  // A pane is a construction context; window-owned keys can change while this row stays alive.
+  let in_panel = in_pane()
+  let slots : Map[String, @view.View] = Map([])
   let opened = @signals.signal(false, same=fn(a, b) { a == b })
   let by_key = @signals.signal(false, same=fn(a, b) { a == b })
   let trigger : Ref[@view.View?] = Ref(None)
@@ -91,11 +93,11 @@ pub fn tools_row_node(
           opened.set(!@signals.untracked(fn() { opened.get() }))
         },
         tips?=tips,
-        linked=fn() { bar_keys_link() },
+        linked=fn() { if in_panel || @ui.window_keys_own_now() { None } else { Some(window_corner_key()) } },
       )
       trigger.val = Some(button)
       button
-      .says(By(fn() { Some(@view.said(Button, label=label(), expanded=opened.get())) }))
+      .says(By(fn() { Some(@view.said(Button, label=label(), expanded=opened.get(), pressed=opened.get())) }))
       .on_key(fn(k) {
         if button.focused() && k.code == @ui.key_code_down && k.mods == 0 && !@signals.untracked(fn() { opened.get() }) {
           by_key.set(true)
