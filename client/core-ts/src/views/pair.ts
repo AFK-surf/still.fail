@@ -384,8 +384,8 @@ export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number 
 /// `approvedIn`, once `done`: the workspaces it was signed in to (of those it waited in, the others still wait).
 /// `approvers`: in each workspace, the trusted devices it dials (its page names them: the person opens one of those).
 /// `credentialErrors`: workspaces for which this try could not obtain the credential needed to ask for approval.
-/// `searching`: other devices or newer locks are still being sought; `lastEnd`: why the last code went away then.
-export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnd?: CoreError };
+/// `searching`: other devices or newer locks are still being sought; `lastEnds`: why the last codes went away then.
+export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; lost?: boolean; approvedIn?: string[]; workspaces: string[]; met: Map<string, Met>; run: number; approvers?: Map<string, string[]>; credentialErrors?: Map<string, string>; lockMoved?: (ws: string) => void; lockReading?: (ws: string) => void; searching?: boolean; lastEnds?: CoreError[] };
 
 const tryings = new WeakMap<Inner, Trying>();
 let runs = 0;
@@ -594,9 +594,9 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
         // others were still being sought, say why it ended once none of the remaining devices can show one.
         if (tryings.get(inner) !== y || y.state !== "finding") return;
         if (y.met.size > 0) y.state = "code";
-        else if (y.lastEnd) {
+        else if (y.lastEnds) {
           y.state = "failed";
-          y.error = endedText([y.lastEnd]);
+          y.error = endedText(y.lastEnds);
         } else y.state = "none";
         changed(inner, y);
       }),
@@ -672,7 +672,7 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
     if (y.met.size === 0) {
       if (y.searching) {
         y.state = "finding";
-        y.lastEnd = why;
+        y.lastEnds = [why];
         y.lost = true;
         delete y.error;
       } else {
@@ -722,7 +722,10 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     const base = (yield* inner.mesh()).deviceId();
     y.state = "checking";
     changed(inner, y);
-    const results = yield* Effect.forEach([...y.met.values()], (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
+    // A device can show its code while these are being checked. It did not receive this code and must not be reported
+    // as having rejected it.
+    const checked = [...y.met.values()];
+    const results = yield* Effect.forEach(checked, (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
     let approved: J | null = null;
     let left = 0;
     const ends: CoreError[] = [];
@@ -752,18 +755,31 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
       y.state = "done";
       y.approvedIn = arr(get(approved, "workspaces")).filter((w): w is string => typeof w === "string");
       for (const ws of y.approvedIn) yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "pairing workspace read" });
-    } else if (y.met.size > 0) {
+    } else if (checked.some((m) => y.met.get(m.id) === m)) {
       y.state = "wrong";
       y.left = left;
       // Wrong at those still showing a code, while another ended as it was proved to: the code may well have been that
       // one's (its line gone, its app put away), not wrong at all.
       y.error = t(ends.length > 0 || y.lost ? "core-misc.lock.pairWrongOrGone" : "core-misc.lock.pairWrong", { n: left });
+    } else if (y.met.size > 0) {
+      // A new code arrived while the previous one was checked and lost. Leave it ready to be entered.
+      y.state = "code";
+      y.lost = true;
+      delete y.left;
+      delete y.error;
+    } else if (y.searching) {
+      // The checked code is gone, but other trusted devices or newer lock entries are still being sought.
+      y.state = "finding";
+      y.lastEnds = ends;
+      y.lost = true;
+      delete y.left;
+      delete y.error;
     } else {
       y.state = "failed";
       y.error = endedText(ends);
     }
     changed(inner, y);
-    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", y.error ?? "") : new CoreError("pair_ended", y.error ?? ""));
+    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", y.error ?? "") : new CoreError("pair_ended", endedText(ends)));
     return approved;
   });
 }
