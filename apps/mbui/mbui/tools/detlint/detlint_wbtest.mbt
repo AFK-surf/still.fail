@@ -2035,3 +2035,28 @@ test "layout-read-back" {
   )
   assert_eq(lines(fs), [2, 3, 4, 6, 7, 8])
 }
+
+///|
+test "layout-read-back allows an event's size, but not a binding made by an event" {
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/sheet.mbt",
+        "fn sheet(v : @view.View, c : @ui.Ctx) -> Unit {\n" +
+        "  v.on_press(fn() { let h = v.laid_size().1 })\n" +
+        "  v.show(open, leave_by=fn(_) { v.laid_size().1 }, fn(_) { () })\n" +
+        "  v.on_drag(fn(_) { v.laid_size() |> ignore })\n" +
+        "  v.on_press(fn() { v.height(By(fn() { Some(v.laid_size().1) })) })\n" +
+        "  v.on_press(fn() { v.reacts(fn() { v.laid_size_told() }, fn(_) { () }) })\n" +
+        "  v.reacts(fn() { v.laid_size_told() }, fn(_) { () })\n" +
+        "  v.on_press(fn() { c.laid_size(id) |> ignore })\n" +
+        "}\n",
+      ),
+    ],
+    "layout-read-back",
+    4,
+    cfg~,
+  )
+  assert_eq(lines(fs), [5, 6, 7, 8])
+}

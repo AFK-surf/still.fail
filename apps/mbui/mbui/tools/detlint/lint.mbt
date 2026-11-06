@@ -131,6 +131,41 @@ fn last_name(name : String) -> String {
 }
 
 ///|
+/// A one-time size read directly in an input or leaving handler is at that event's moment, not a layout binding.
+/// Inspect the innermost closure: an event handler can itself create a binding which must still be counted.
+fn event_layout_read(f : MbtFile, c : Call, returns : Map[String, String]) -> Bool {
+  if c.name != "laid_size" || c.kind != "method" || f.recv_type(c.at, returns) != Some("View") {
+    return false
+  }
+  let toks = f.toks
+  let mut closure = -1
+  for o = c.at - 1; o >= 0; o = o - 1 {
+    if toks[o].kind != "op" || toks[o].text != "{" || toks[o].end < c.at || o == 0 || toks[o - 1].text != ")" {
+      continue
+    }
+    let params = f.open_of(o - 1)
+    if params > 0 && toks[params - 1].text == "fn" {
+      closure = params - 1
+      break
+    }
+  }
+  if closure < 0 {
+    return false
+  }
+  f.calls.iter().any(fn(outer) {
+    if outer.kind != "method" || outer.is_def || f.recv_type(outer.at, returns) != Some("View") {
+      return false
+    }
+    outer.args.iter().any(fn(arg) {
+      let direct = arg.1.length() > 0 && arg.1[0] == closure && arg.1.contains(c.at)
+      direct &&
+      (outer.name == "on_press" || outer.name == "on_drag" || outer.name == "on_key" ||
+        outer.name == "takes_back" || (outer.name == "show" && arg.0 == Some("leave_by")))
+    })
+  })
+}
+
+///|
 fn lint_mbt(
   f : MbtFile,
   cfg : Config,
@@ -332,7 +367,7 @@ fn lint_mbt(
     }
     // where or how large something was laid out, read back by what builds (a first frame has none, a change lays the
     // frame out twice): said as layout instead; the framework's own not counted
-    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t {
+    if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t && !event_layout_read(f, c, returns) {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
