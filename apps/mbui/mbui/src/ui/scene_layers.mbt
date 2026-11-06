@@ -1139,6 +1139,7 @@ fn clip_put_back(level : FixedArray[Double], window : Bool, apart : Bool) -> Uni
 ///|
 /// Layer `id` not copied, for `why` (the first of the frame's said: scene_alone_why).
 fn copy_not(id : @view.NodeId, why : String) -> Bool {
+  copy_not_count(why)
   if scene.copy_why == "" {
     scene.copy_why = "\{id.at}: \{why}"
   }
@@ -1176,7 +1177,7 @@ fn Ctx::scene_copied(
   // shown, asked again. Put elsewhere (scrolled, slid, its page moved), its block moved by how far, where that is all
   // moving it changes (Ctx::scene_offset_ok); put where it was put but drawn elsewhere, what it holds moved with it)
   if held != now {
-    guard scene_still(l) && self.scene_offset_ok(l, held) else { return copy_not(id, "placed otherwise") }
+    guard scene_still(l) && self.scene_offset_ok(l, held) else { return copy_not(id, if scene_still(l) { "placed otherwise, not moved by an offset" } else { "placed otherwise, holding what changed" }) }
     self.scene_emitted(p, l, moved=(held.0 - now.0, held.1 - now.1))
   } else {
     guard l.shown == (0.0, 0.0) || scene_still(l) else { return copy_not(id, "put moved, holding what changed") }
@@ -1193,6 +1194,7 @@ fn Ctx::scene_copied(
     }
     None => ()
   }
+  copy_not_count(if held != now { "(put moved by an offset)" } else { "(copied)" })
   let n = l.count
   scene_work.copied = scene_work.copied + 1
   scene_work.copied_insts = scene_work.copied_insts + n
@@ -2304,6 +2306,7 @@ fn scene_copyable(l : SceneLayer) -> Bool {
 /// kept), as it keeps how it is drawn where that stands, else by a walk of the tree from it. Where the tree no longer
 /// has it in its holder, nothing (as the walk leaves out what is out of its row).
 fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLayer) -> Unit {
+  copy_not_count("drawn anew at its reference")
   let tree = by.tree
   guard scene_place_now(tree, c) is Some(place) else { return }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
@@ -2451,4 +2454,22 @@ fn scene_fades_inside() -> Unit {
     Some(l) => l.fades_inside = true
     None => ()
   }
+}
+
+///|
+/// Why layers were not copied, each why as often as it was (digits taken out), since a test cleared it: what a frame
+/// drew again, said by cause (scene_copy_nots).
+// kept across runs: a test's to read and clear
+let copy_nots : Map[String, Int] = {}
+
+///|
+/// Why layers were not copied, and how often (copy_nots), since the last clear.
+pub fn scene_copy_nots() -> Map[String, Int] {
+  copy_nots
+}
+
+///|
+fn copy_not_count(why : String) -> Unit {
+  let key = why.iter().filter(fn(c) { !(c >= '0' && c <= '9') }).collect() |> String::from_array
+  copy_nots[key] = copy_nots.get_or_default(key, 0) + 1
 }
