@@ -252,6 +252,8 @@ describe("jobs", { concurrency: true }, () => {
 
   test("stillfail-job screen: one job's command has the screen at a time; the next waits, and has it once it is given back", { skip: WINDOWS && "a fifo for the gate" }, async () => {
     const r = new Rig();
+    sessionActive(r.store, "s1", 0);
+    sessionActive(r.store, "s2", 0);
     // The agents' door, as the station's: /jobs/screen to these jobs, asked by the real script and curl.
     const door = await openAgentsDoor(
       { port: 0 }, new McpEndpoint(() => undefined, []), (auth, body) => notifyEndpoint(r.jobs, auth, body), () => null, () => [],
@@ -265,8 +267,10 @@ describe("jobs", { concurrency: true }, () => {
       const next = r.jobs.start("s2", "more shots", `stillfail-job screen sh -c '[ -e first.out ] && touch next.after; exit 3'; echo "next $?"`, r.work, null, false);
       await until("the next waits for it", () => tail(r.store.getJob(next.id)!.log, 5).includes("waiting for the screen"));
       assert.equal(r.state(next.id), "running");
+      assert.deepEqual(r.said(), [], "neither running job is reported ended while the second waits for the screen");
       await go.open();
       await until("both end", () => r.state(first.id) !== "running" && r.state(next.id) !== "running");
+      await until("both ends are told", () => r.said().length === 2);
       assert.ok(existsSync(join(r.work, "next.after")), "the next's command ran once the first's had ended");
       assert.match(tail(r.store.getJob(first.id)!.log, 5), /first 0$/);
       assert.match(tail(r.store.getJob(next.id)!.log, 5), /next 3$/, "the command's own exit code");

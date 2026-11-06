@@ -1010,6 +1010,53 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(readJson(a.remote.outgoing("ws", "s1", "B", "k")).delivered, true);
   });
 
+  test("a task waiting for the screen is not reported ended before it actually runs", async () => {
+    for (const older of [false, true]) {
+      const jobsClock = testClock();
+      let ticks = 0;
+      const machine: Machine = { cpus: () => 8, ticks: () => [0, ticks += 1000], pressure: async () => "normal" };
+      const { a, b, use, clock } = pair(undefined, { jobsClock, machine });
+      let polls = 0;
+      if (older) a.remote.attach(async (target, workspace, request) => {
+        if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
+        if (request.method === "task.gets") polls++;
+        const sent = overWire(request);
+        if (sent.method === "task.start") delete sent.push;
+        const answer = await answerPeer(b.remote, workspace ?? "ws", "A", sent);
+        if ("error" in answer) throw new Refused(answer.error);
+        return answer.result;
+      });
+      const first = { station: "B", key: "first" };
+      const second = { station: "B", key: "second" };
+      await use("station_task", { ...first, action: "prepare", screen: true, command: "while [ ! -e proceed ]; do sleep 0.05; done" });
+      const running = (await use("station_task", { ...first, action: "start" })).job;
+      await use("station_task", { ...second, action: "prepare", screen: true, command: "echo ran > second-ran" });
+      const waiting = await use("station_task", { ...second, action: "start" });
+      assert.equal(waiting.job.queued, true);
+      assert.equal(waiting.queue.why, "screen");
+      for (let i = 0; i < 12; i++) {
+        await Effect.runPromise(jobsClock.adjust("5 seconds"));
+        await Effect.runPromise(clock.adjust("5 seconds"));
+        await turn();
+        const got = await use("station_task", { ...second, action: "get" });
+        assert.equal(got.job.state, "running");
+        assert.equal(got.job.queued, true);
+        assert.equal(got.queue.why, "screen");
+        assert.equal(a.told.some(([, text]) => text.startsWith("Remote task second on ")), false);
+      }
+      assert.equal(existsSync(join(running.cwd, "second-ran")), false);
+      if (older) assert.ok(polls > 1, "a station without push was polled repeatedly while it waited");
+      writeFileSync(join(running.cwd, "proceed"), "go");
+      await until("the first task ends", () => b.store.getJob(running.id)!.state === "exited");
+      await rounds("the second task runs", jobsClock, "5 seconds", () => b.store.getJob(waiting.job.id)!.state === "exited");
+      await rounds("the second task's completion is told", clock, "5 seconds", () => a.told.some(([, text]) => text.startsWith("Remote task second on ")));
+      const notices = a.told.filter(([, text]) => text.startsWith("Remote task second on "));
+      assert.equal(notices.length, 1);
+      assert.match(notices[0]![1], /"state":"exited".*"exitCode":0/);
+      assert.equal(readFileSync(join(running.cwd, "second-ran"), "utf8"), "ran\n");
+    }
+  });
+
   test("a change the source was not reached for is told again until it is, and after the target restarts", async () => {
     const { a, b, use, clock, back } = pair();
     await use("station_task", { station: "B", key: "k", action: "prepare", command: FOREVER });
