@@ -446,6 +446,8 @@ pub fn others_message(@ui.Ctx, Bool, String, @sfbase.Stamp?, emits? : (@sfbase.E
 
 pub fn pair_steps(@ui.Ctx, @settings.Core, String, in_card? : Bool) -> Unit
 
+pub fn permissions_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
+
 pub fn permissions_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn person_avatar(@ui.Ctx, @sfbase.Source, String, String, String) -> Unit
