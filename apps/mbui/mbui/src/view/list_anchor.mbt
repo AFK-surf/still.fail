@@ -349,7 +349,34 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let keys_laid : Ref[Array[K]?] = Ref(None)
   // (whether a fling is under way, as last set: what its layout reads, not the signal)
   let flinging = Ref(false)
-  self.reacts(fn() { s.fling.get() is Some(_) }, fn(now) { flinging.val = now })
+  // (flung, each change told the tree laid out as it is told whole, at its moment (View::laid_before_causes): what it
+  // holds changed in an event is laid out and its foot measured then, a frame drawn after or none; at rest, not)
+  let causes_held = Ref(false)
+  let tree = self.tree
+  self.reacts(fn() { s.fling.get() is Some(_) }, fn(now) {
+    flinging.val = now
+    if now != causes_held.val {
+      causes_held.val = now
+      tree.before_causes = tree.before_causes + (if now { 1 } else { -1 })
+    }
+  })
+  self.owns(fn() {
+    if causes_held.val {
+      causes_held.val = false
+      tree.before_causes = tree.before_causes - 1
+    }
+  })
+  |> ignore
+  // (gone on by itself since it was last laid out (a fling, going back from past its end): laid out where it is at each
+  // moment something is done at, before it is done (View::laid_before_due): a moment come due (its own rest), an
+  // event's, an input's; the foot it meets measured then, a frame drawn on the way or none)
+  let due_laid_at = Ref(-1.0)
+  self.laid_before_due(fn(at) {
+    match s.glides_till() {
+      Some(end) => at > due_laid_at.val && end > due_laid_at.val
+      None => false
+    }
+  })
   s.reads_free = true
   s.rebase = fn() {
     let d = bar_off.val
@@ -444,8 +471,9 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
       }),
       fn(l, c) {
         let all = c.keys.v
+        due_laid_at.val = self.tree.logic_at()
         match keys_laid.val {
-          Some(was) if !physical_equal(was, all) && was != all => held_since.val = self.tree.logic
+          Some(was) if !physical_equal(was, all) && was != all => held_since.val = self.tree.logic_at()
           _ => ()
         }
         keys_laid.val = Some(all)
@@ -587,7 +615,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
             Some(was) => {
               // (measured otherwise than it was: what it holds changed, now)
               if (was - natural).abs() > 0.001 {
-                held_since.val = self.tree.logic
+                held_since.val = self.tree.logic_at()
               }
               known_sum.val = known_sum.val - was + natural
             }

@@ -6236,6 +6236,8 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   // way or none)
   if self.moves_before_due(at) {
     self.laid_before_due_at(at)
+    // (and what that layout found was due before the event's moment done before it, in the order it was due)
+    self.advance_logic(at)
   }
   let was = self.cause_at
   self.cause_at = at
@@ -6750,6 +6752,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.last_w >= 0.0 {
     self.brought(at)
   }
+  // (what that layout found was due before the input's moment (a fling found to have met its foot before now, its
+  // going back over by then: at rest then) done before the input is taken, in the order it was due)
+  self.advance_logic(at)
 }
 
 ///|
