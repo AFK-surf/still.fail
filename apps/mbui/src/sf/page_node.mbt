@@ -630,7 +630,7 @@ fn[T] page_node_build(
       Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips, wait, seen)
     }
     if focus.pending.val is Some(_) {
-      p.once_laid_out(fn() {
+      p.owed_once_laid_out(fn() {
         let pending = focus.pending.val
         focus.pending.val = None
         match pending {

@@ -418,6 +418,7 @@
     "layout-read-back": {
       "src/sf/markdown.mbt": 1,
       "src/sf/markdown_node.mbt": 1,
+      "src/sf/page_node.mbt": 1,
       "src/sf/parts.mbt": 5,
       "src/sf/player.mbt": 2,
       "src/sf/presenters.mbt": 9,

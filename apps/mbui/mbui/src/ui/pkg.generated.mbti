@@ -1121,6 +1121,7 @@ pub struct Ctx {
   window_corners : FixedArray[Double]
   mut direction : Direction
   sems : Array[Sem]
+  sem_ids : Map[Int32, Int32]
   mut sem_hide : Int32
   asked_actions : Array[(Int32, @view.Action)]
   actions : Array[(Int32, @view.Action)]
@@ -1130,6 +1131,7 @@ pub struct Ctx {
   mut focus_before : Int32
   mut focusables : Array[Focusable]
   mut last_focusables : Array[Focusable]
+  last_focus_ids : Map[Int32, Focusable]
   groups : Map[Int32, Group]
   mut group_cur : Int32
   mut layers : Array[Layer]
