@@ -3223,7 +3223,7 @@ pub(all) struct Placed {
 
 pub(all) struct PlacedNode {
   draw : (@view.View) -> Unit
-  image : (Double, (@view.View, () -> Double) -> Unit)?
+  image : (Double, (@view.View) -> Unit)?
 }
 
 pub(all) struct Playing {

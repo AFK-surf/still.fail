@@ -205,7 +205,7 @@ fn mn_live(text : () -> String, tree : () -> Json?, size : () -> Double, ratio? 
         } else if name.has_suffix(".jpg") {
           Some({
             draw: fn(v) { said(v, fn() { "file:" + name }) },
-            image: Some((ratio(), fn(v, width) { said(v, fn() { "img:" + name + ":" + width().to_string() }) })),
+            image: Some((ratio(), fn(v) { said(v, fn() { "img:" + name }) })),
           })
         } else {
           None
@@ -289,31 +289,32 @@ test "Markdown as nodes: its words' size changed, its paragraphs and headings se
 }
 
 ///|
-test "Markdown as nodes: a row of images, one of them twice, each drawn at the width it has as the window and their widths change" {
+test "Markdown as nodes: a row of images, one of them twice, each as wide as its row gives it as the window and their widths change, in the same layout" {
   let ratio = @signals.signal(1.0)
   let img = fn(src : String) { Json::array([Json::string("img"), Json::array([]), Json::object({ "src": Json::string(src), "alt": Json::string("") })]) }
   let tree = fn() { Some(Json::array([Json::array([Json::string("p"), Json::array([img("a.jpg"), img("a.jpg"), img("b.jpg")])])])) }
   let t = mn_live(fn() { "images" }, tree, fn() { 15.0 }, ratio=fn() { ratio.get() })
-  // (each image's words and the width it says, with the width it is drawn at)
+  let view = @ui.view_tree().unwrap()
+  // (each image's words with the width and height it is drawn at)
   let images = fn() {
-    @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words.has_prefix("img:") }).map(fn(d) { (d.words, d.w) })
+    view.drawn().filter(fn(d) { d.words.has_prefix("img:") }).map(fn(d) { (d.words, d.w, d.h) })
   }
-  let said_as_drawn = fn() {
-    images().iter().all(fn(d) { d.0.has_suffix(":" + d.1.to_string()) })
+  // (the window's layouts it took: one)
+  let laid_once = fn(change : () -> Unit) {
+    let was = view.work().computes
+    change()
+    t.draw()
+    view.work().computes - was
   }
   let first = images()
-  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:a.jpg:") }).length(), 2, msg="\{first}")
-  assert_eq(first.filter(fn(d) { d.0.has_prefix("img:b.jpg:") }).length(), 1, msg="\{first}")
-  assert_true(said_as_drawn(), msg="\{first}")
-  t.resize(600.0, 900.0)
-  t.draw()
+  assert_eq(first.map(fn(d) { d.0 }), ["img:a.jpg", "img:a.jpg", "img:b.jpg"])
+  // (three on a row, alike, as the row's room gives them: 8 apart)
+  assert_true(first.iter().all(fn(d) { d.1 == first[0].1 && d.1 > 100.0 }), msg="\{first}")
+  assert_eq(laid_once(fn() { t.resize(600.0, 900.0) }), 1)
   let wider = images()
-  assert_true(said_as_drawn(), msg="\{wider}")
   assert_true(wider[0].1 > first[0].1, msg="\{first} \{wider}")
-  ratio.set(0.5)
-  t.draw()
+  assert_eq(laid_once(fn() { ratio.set(0.5) }), 1)
   let narrower = images()
   assert_eq(narrower.length(), 3, msg="\{narrower}")
-  assert_true(said_as_drawn(), msg="\{narrower}")
   assert_true(narrower[0].1 < wider[0].1, msg="\{wider} \{narrower}")
 }

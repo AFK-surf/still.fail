@@ -390,8 +390,8 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
           Some({
             draw: fn(v) { message_files_node(v, src, here, fn() { [a] }, false, at~, by~) },
             image: image_ratio(a).map(fn(r) {
-              (r, fn(v : @view.View, w : () -> Double) {
-                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { Some(w()) }, at, @sf.message_file_corner, by, fills=true))
+              (r, fn(v : @view.View) {
+                ignore(media_file_node(v, src, here, fn() { a }, "image", fn() { None }, at, @sf.message_file_corner, by, fills=true))
               })
             }),
           })
