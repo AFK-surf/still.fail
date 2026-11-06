@@ -597,7 +597,7 @@ fn update_ask_now(src : Source) -> Unit {
 /// in its place).
 fn update_dialog_words() -> (String, String) {
   let current = @sf.t("web-pages.changelog.build", args=[("build", this_version().to_string())])
-  match update_now() {
+  match update_dialog_now() {
     Quiet | Checking => (@sf.t("android-misc.updates.checking"), current)
     Latest => (@sf.t("desktop.update.latest"), current)
     CouldNot(why) => (@sf.t("desktop.update.checkFailed"), why)
@@ -607,15 +607,28 @@ fn update_dialog_words() -> (String, String) {
 }
 
 ///|
+/// How the update stands as the dialog shows it: the person's check of a build known said as that build stands (its
+/// title, what it brings, its bar), the check only in the line under the bar (update_stands), not in a dialog of
+/// other words for the while it takes: the dialog as tall all the way.
+fn update_dialog_now() -> UpdateNow {
+  match update_now() {
+    Checking if update.available.get() is Some(_) => update_known()
+    now => now
+  }
+}
+
+///|
 /// How many of what a newer build brings the dialog says before 还有 n 项 (the changelog page has them all).
 let update_news_most : Int = 5
 
 ///|
 /// What the dialog holds: while still.fail cloud is asked, a bar going to and fro; for a newer build, what it brings
-/// (its first few, 还有 n 项), then how it stands as 关于's row says it (update_stands: its line, a bar while it is under
-/// way; what went wrong in red), each whole on its line: the bar there from the first, the dialog as tall all the way.
+/// (its first few, 还有 n 项), then how it stands as 关于's row says it (update_stands: its line; what went wrong in red)
+/// under its bar, each whole on its line: the bar there in every stage (empty offered, full ready, how far while it
+/// comes, sweeping while it is under way unknown how far), the dialog as tall all the way (2026-11-06 the user,
+/// 「这玩意儿为啥老抖动」「高度抖动」: the bar came and went with each stage, the dialog shorter and taller again).
 fn update_dialog_body(c : @ui.Ctx) -> Unit {
-  match update_now() {
+  match update_dialog_now() {
     Quiet | Checking =>
       c.box(style=update_body.then(@sf.panel_words_in()), fn() { @sf.progress(c, "update/asking", None) }) |> ignore
     Latest | CouldNot(_) => ()
@@ -636,19 +649,14 @@ fn update_dialog_body(c : @ui.Ctx) -> Unit {
           c.text(line, style=update_news_line) |> ignore
         }
         c.box(style=update_going, fn() {
-          // (the bar coming and going with what is under way, what is under it moving with it: not in a frame)
-          let open = @motion.anim(c, "update/bar", if stands.going { 1.0 } else { 0.0 })
-          open.follow(
-            if stands.going { 1.0 } else { 0.0 },
-            @motion.move().per_unit(@motion.reveal_height("update/bar")),
-          )
-          let share = open.get()
-          if stands.going || share > 0.0 {
-            // (the room between it and the words under it its own: none left when it has gone)
-            @motion.reveal(c, "update/bar", share, middle=true, fn() {
-              c.box(style=update_bar_room, fn() { @sf.progress(c, "update/part", stands.part) }) |> ignore
-            })
+          let part = if stands.going {
+            stands.part
+          } else if now is (Ready(_, ..) | Allow(_)) {
+            Some(1.0)
+          } else {
+            Some(0.0)
           }
+          c.box(style=update_bar_room, fn() { @sf.progress(c, "update/part", part) }) |> ignore
           let said = match now {
             Coming(_, _) | Installing(_) => stands.label + (if stands.note == "" { "" } else { " · " + stands.note })
             _ => stands.note
@@ -669,7 +677,7 @@ fn update_dialog_body(c : @ui.Ctx) -> Unit {
 /// ask; for a newer build 稍后 (关闭 once it comes by itself) and what is the person's to do: 下载 (offered), 重启更新
 /// (turning while it comes or is put in place), the leave to install apps, 重试 (failed).
 fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
-  match update_now() {
+  match update_dialog_now() {
     Quiet | Checking =>
       if @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost) {
         close()
@@ -697,7 +705,8 @@ fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
         Failed(_, _) => @sf.t("common.retry")
         _ => @sf.t("desktop.update.restart")
       }
-      if @sf.button(c, label, key="update/go", tone=Primary, busy=going) {
+      // (the person's check under way: the key turning, as it does while the build comes)
+      if @sf.button(c, label, key="update/go", tone=Primary, busy=going || update.checking.get()) {
         update_go(src)
       }
     }

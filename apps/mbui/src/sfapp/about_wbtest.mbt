@@ -118,6 +118,52 @@ test "the update dialog with a newer build: what it brings (its first five, 还�
 }
 
 ///|
+test "the update dialog as tall in every stage of a newer build: offered, the person's check, coming (how far unknown, then known), ready, being put in place, failed" {
+  let t = one_page_tester(@settings.Route::About, 1280.0)
+  let asked : Array[(Result[Json, String]) -> Unit] = []
+  update_version.val = 2
+  set_update_source(Some({ check: fn(_, now, done) { if now { asked.push(done) } }, url: fn(f) { f } }))
+  update.available.set(Some({
+    "versionCode": 3,
+    "versionName": "0.1.3",
+    "file": "mac/stillfail-3.zip",
+    "size": 24012345,
+    "news": ["修复：一", "修复：二"],
+  }))
+  t.draw()
+  t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
+  t.draw()
+  t.run_for(@kit.dialog_ms)
+  // (the dialog in the window's middle: as tall, its head where it was)
+  let head = fn() { t.find("当前版本 0.1.2").unwrap().1 }
+  let first = head()
+  let same = fn(stage : String) raise {
+    t.draw()
+    assert_eq(head(), first, msg="\{stage}, as it changed")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(head(), first, msg="\{stage}")
+  }
+  t.click(Button, label="下载")
+  same("the person's check")
+  assert_true(t.find("有新版本 0.1.3") is Some(_))
+  assert_true(t.find("正在检查最新版本") is Some(_))
+  (asked[0])(Ok(update.available.get().unwrap()))
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+  same("coming, how far unknown")
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":13,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+  same("coming")
+  t.tells_update("{\"phase\":\"retrying\",\"percent\":13,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+  same("coming again")
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+  same("ready")
+  t.tells_update("{\"phase\":\"installing\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+  same("being put in place")
+  t.tells_update("{\"phase\":\"failed\",\"percent\":-1,\"error\":\"incomplete\",\"file\":\"stillfail-3.zip\"}")
+  same("failed")
+  update_reset()
+}
+
+///|
 test "关于 on a phone: back goes to settings" {
   let t = one_page_tester(@settings.Route::About, 390.0, platform=2)
   t.tap_text("设置")
