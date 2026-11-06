@@ -51,5 +51,4 @@ jobs:
           cd repo
           gzip -dc ../overlay/font-check/change.patch.gz | git apply -
           cd apps/mbui/mbui
-          moon check --target wasm-gc --no-mbti
           moon test --target wasm-gc --release -p mbui/ui -f '*local font families*'

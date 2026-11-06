@@ -40,6 +40,15 @@ int main(int argc, char **argv) {
   g_assert_true(FcConfigAppFontAddFile(config, (const FcChar8 *)argv[1]));
   g_assert_true(FcConfigSetCurrent(config));
   FcConfigDestroy(config);
+  // fontconfig must retain the configured root even if it does not exist at startup.
+  FcStrList *roots = FcConfigGetFontDirs(NULL);
+  gboolean has_root = FALSE;
+  FcChar8 *name;
+  while (roots && (name = FcStrListNext(roots))) {
+    if (!strcmp((const char *)name, root)) has_root = TRUE;
+  }
+  if (roots) FcStrListDone(roots);
+  g_assert_true(has_root);
   g_assert_true(mb_font_watch_start(changed));
   g_assert_cmpint(system_fonts(), ==, 0);
   FcFontSet *app = FcConfigGetFonts(NULL, FcSetApplication);

@@ -96,6 +96,12 @@ static gboolean mb_font_watch_install(mb_font_watch *w) {
     while ((root = FcStrListNext(roots))) mb_font_watch_root(w, (const char *)root);
     FcStrListDone(roots);
   }
+  roots = FcConfigGetFontDirs(NULL);
+  if (roots) {
+    FcChar8 *root;
+    while ((root = FcStrListNext(roots))) mb_font_watch_root(w, (const char *)root);
+    FcStrListDone(roots);
+  }
   g_unix_fd_add(fd, G_IO_IN | G_IO_ERR | G_IO_HUP, mb_font_watch_event, w);
   if (old_fd >= 0) close(old_fd);
   if (old_dirs) g_hash_table_unref(old_dirs);
