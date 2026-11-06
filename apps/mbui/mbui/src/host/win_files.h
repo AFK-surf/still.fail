@@ -393,7 +393,8 @@ static HRESULT STDMETHODCALLTYPE dt_drop(IDropTarget *t, IDataObject *data, DWOR
   STGMEDIUM m;
   int pid = 0;
   if (drop_has_files && data && data->lpVtbl->GetData(data, &drop_files_format, &m) == S_OK) {
-    HDROP h = (HDROP)GlobalLock(m.hGlobal);
+    // DragQueryFile takes the global memory handle itself, not the pointer returned by GlobalLock.
+    HDROP h = (HDROP)m.hGlobal;
     UINT n = h ? DragQueryFileW(h, 0xFFFFFFFF, NULL, 0) : 0;
     WCHAR **paths = (WCHAR **)calloc(n ? n : 1, sizeof(WCHAR *));
     UINT got = 0;
@@ -403,7 +404,6 @@ static HRESULT STDMETHODCALLTYPE dt_drop(IDropTarget *t, IDataObject *data, DWOR
       if (p && DragQueryFileW(h, i, p, len + 1)) paths[got++] = p;
       else free(p);
     }
-    if (h) GlobalUnlock(m.hGlobal);
     ReleaseStgMedium(&m);
     if (got) pid = drop_pick(paths, (int)got);
     for (UINT i = 0; i < got; i++) free(paths[i]);

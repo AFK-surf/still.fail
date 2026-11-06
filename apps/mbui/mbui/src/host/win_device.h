@@ -157,7 +157,8 @@ int32_t mb_host_clip_read(void) {
     }
     // its files: their paths, read after (a folder left out there)
     HANDLE hd = GetClipboardData(CF_HDROP);
-    HDROP drop = hd ? (HDROP)GlobalLock(hd) : NULL;
+    // DragQueryFile reads the global handle; its paths are copied while the clipboard is open.
+    HDROP drop = (HDROP)hd;
     if (drop) {
       UINT n = DragQueryFileW(drop, 0xFFFFFFFF, NULL, 0);
       r->paths = (WCHAR **)calloc(n ? n : 1, sizeof(WCHAR *));
@@ -167,7 +168,6 @@ int32_t mb_host_clip_read(void) {
         if (p && DragQueryFileW(drop, k, p, len + 1)) r->paths[r->npaths++] = p;
         else free(p);
       }
-      GlobalUnlock(hd);
     }
     // a picture, where there are no files (Explorer's copied picture files are the files, not their icon)
     UINT png_format = RegisterClipboardFormatW(L"PNG");
