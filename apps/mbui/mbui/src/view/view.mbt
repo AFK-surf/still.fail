@@ -9207,6 +9207,8 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// moment, an event finding where things are, a change settled), before anything after it is handled, whether a frame
 /// is painted between or not: what starts a page's own work (a windowed list's blocks come in sight,
 /// View::scrolls_window's `seen`), never what asks the host for something only once it is drawn (Tree::said_after_paint).
+/// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
+/// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
   self.after_laid.push(f)
 }

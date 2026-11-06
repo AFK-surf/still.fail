@@ -1001,7 +1001,8 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
               seen_last.add(k)
             }
             if !came.is_empty() {
-              // (to the list still there)
+              // (to the list still there: one let go before its turn (by a telling before it, laying out at once and
+              // letting it go) tells nothing)
               self.tree.said_after_laid(fn() { if held.live() is Some(_) { tell(came) } })
             }
           }
