@@ -933,9 +933,12 @@ pub struct Tree {
   /// (View::returns_focus_to)
   focus_backs : Map[NodeId, NodeId]
   /// the room under what it holds and its foot covered, given each node measured so (Layout::measure's `foot`), and
-  /// the box that reads it under it (Layout::given_foot)
+  /// the boxes that read it under it as their last layouts did (Layout::given_foot: a list's rows, what floats over
+  /// its foot), each by who it is, and the foot each box read in its last layout (one at most: what it read before
+  /// dropped as it is laid out again, as its place is made again)
   feet : Map[Int, (Double, Double)]
-  foot_readers : Map[Int, Int]
+  foot_readers : Map[Int, Array[NodeId]]
+  foot_read : Map[Int, Int]
   /// what each box's layout reported of what it laid out, by name (Layout::report)
   reports : Map[Int, Map[String, (Double, Double)]]
   /// what each node works out of how big a node holding it is laid out, by that node (Live's Roomed)
@@ -1158,6 +1161,7 @@ pub fn Tree::new(
     focus_backs: {},
     feet: {},
     foot_readers: {},
+    foot_read: {},
     reports: {},
     roomed: {},
     on_layers_focus: fn(_, _) {  },
@@ -1250,6 +1254,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       // (what was given the one at this place before (Layout::measure's `foot`), none of its own)
       self.feet.remove(i)
       self.foot_readers.remove(i)
+      self.foot_unread(i)
       self.reports.remove(i)
       self.roomed.remove(i)
       n.flex = @flex.Node::new()
@@ -5519,6 +5524,8 @@ fn View::let_go(self : View) -> Unit {
     k.let_go()
   }
   n.live = false
+  // (no reader of a foot it read: Layout::given_foot)
+  self.tree.foot_unread(self.at)
   match self.tree.modals.search(self.at) {
     Some(i) => self.tree.modals.remove(i) |> ignore
     None => ()

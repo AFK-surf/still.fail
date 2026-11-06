@@ -130,3 +130,205 @@ test "scrolls_anchored: a part of a row asked to the window's middle: put there 
   // (its middle at 70: the row at the window's top, left there)
   assert_eq(case((60.0, 80.0)), [50])
 }
+
+///|
+test "scrolls_anchored: a node kept in sight clear of what covers its foot, in the layout that cover grows in; not moved as it shrinks, nor as the hand has it, till kept again" {
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
+  let cover = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let keeping = @signals.signal(false, same=fn(a, b) { a == b })
+  let fields : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page
+      .width(Is(Some(300.0)))
+      .height(Is(Some(300.0)))
+      .layout_box(By(fn() { cover.get() }), fn(l, cover) {
+        let list = l.child("list", fn(o) {
+          o.scrolls_anchored(scroll, fn() { keys.get() }, est=40.0, ahead=0.0, fn(b, k) {
+            b.height(Is(Some(40.0))) |> ignore
+            b.box(fn(f) {
+              f.height(Is(Some(20.0))) |> ignore
+              fields[k] = f
+            })
+            |> ignore
+          }, keep=fn() {
+            if keeping.get() {
+              fields.get(88).map(fn(f) { (f.id(), None, 16.0) })
+            } else {
+              None
+            }
+          })
+          |> ignore
+        })
+        // (a composer over the list's foot: none of its rows laid out by it, only covered)
+        l.measure(list, l.width, height=l.height, foot=(0.0, cover)) |> ignore
+        l.place(list, 0.0, 0.0)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  // (400 toward its start: row 88's field at 220..240, over the cover by 16 and more)
+  tree.wheel_at(150.0, 50.0, 0.0, -400.0, 0, 16.0) |> ignore
+  tree.frame(390.0, 844.0, now=32.0) |> ignore
+  let field_y = fn() { fields[88].rect().1 }
+  assert_eq(field_y(), 220.0)
+  keeping.set(true)
+  tree.frame(390.0, 844.0, now=48.0) |> ignore
+  assert_eq(field_y(), 220.0, msg="between the covers: not moved")
+  // (the cover grows to 100: the field's foot 16 over it, in that layout, laid out once)
+  let computes = tree.work().computes
+  cover.set(100.0)
+  tree.frame(390.0, 844.0, now=64.0) |> ignore
+  assert_eq(field_y(), 164.0)
+  assert_eq(tree.work().computes - computes, 1, msg="one layout")
+  // (it shrinks: not moved back)
+  cover.set(20.0)
+  tree.frame(390.0, 844.0, now=80.0) |> ignore
+  assert_eq(field_y(), 164.0)
+  // (the hand scrolls it 60 toward its start: the hand's, the cover growing again moves it no more)
+  tree.wheel_at(150.0, 50.0, 0.0, -60.0, 0, 96.0) |> ignore
+  tree.frame(390.0, 844.0, now=112.0) |> ignore
+  assert_eq(field_y(), 224.0)
+  cover.set(100.0)
+  tree.frame(390.0, 844.0, now=128.0) |> ignore
+  assert_eq(field_y(), 224.0, msg="the hand's: let go")
+  // (let go and kept again: kept clear in that layout)
+  keeping.set(false)
+  tree.frame(390.0, 844.0, now=144.0) |> ignore
+  keeping.set(true)
+  tree.frame(390.0, 844.0, now=160.0) |> ignore
+  assert_eq(field_y(), 164.0)
+  // (a cover so tall the field fits under the top's room alone: its top first, 16 under the window's top)
+  cover.set(290.0)
+  tree.frame(390.0, 844.0, now=176.0) |> ignore
+  assert_eq(field_y(), 16.0)
+  tree.dispose()
+}
+
+///|
+test "scrolls_anchored from its start: a node kept in sight clear of what covers its foot, in the layout that cover grows in; not moved back as it shrinks" {
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
+  let cover = @signals.signal(20.0, same=fn(a, b) { a == b })
+  let keeping = @signals.signal(false, same=fn(a, b) { a == b })
+  let fields : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page
+      .width(Is(Some(300.0)))
+      .height(Is(Some(300.0)))
+      .layout_box(By(fn() { cover.get() }), fn(l, cover) {
+        let list = l.child("list", fn(o) {
+          o.scrolls_anchored(scroll, fn() { keys.get() }, est=40.0, ahead=0.0, from_end=false, fn(b, k) {
+            b.height(Is(Some(40.0))) |> ignore
+            b.box(fn(f) {
+              f.height(Is(Some(20.0))) |> ignore
+              fields[k] = f
+            })
+            |> ignore
+          }, keep=fn() {
+            if keeping.get() { fields.get(5).map(fn(f) { (f.id(), None, 16.0) }) } else { None }
+          })
+          |> ignore
+        })
+        l.measure(list, l.width, height=l.height, foot=(0.0, cover)) |> ignore
+        l.place(list, 0.0, 0.0)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  // (row 5's field at 200..220, over the cover by 16 and more: not moved)
+  let field_y = fn() { fields[5].rect().1 }
+  assert_eq(field_y(), 200.0)
+  keeping.set(true)
+  tree.frame(390.0, 844.0, now=8.0) |> ignore
+  assert_eq(field_y(), 200.0, msg="between the covers: not moved")
+  // (the cover grows to 100: the field's foot 16 over it, in that layout, laid out once)
+  let computes = tree.work().computes
+  cover.set(100.0)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_eq(field_y(), 164.0)
+  assert_eq(tree.work().computes - computes, 1, msg="one layout")
+  // (it shrinks: not moved back)
+  cover.set(20.0)
+  tree.frame(390.0, 844.0, now=32.0) |> ignore
+  assert_eq(field_y(), 164.0)
+  tree.dispose()
+}
+
+///|
+test "scrolls_anchored: keeping a field above the top cover stops following the end" {
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
+  let following = @signals.signal(true, same=fn(a, b) { a == b })
+  let keeping = @signals.signal(false, same=fn(a, b) { a == b })
+  let fields : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(list) {
+      list.width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore
+      list.scrolls_anchored(scroll, fn() { keys.get() }, est=40.0, ahead=0.0,
+        follows=following, cover=fn() { 70.0 }, fn(b, k) {
+          b.height(Is(Some(40.0))) |> ignore
+          b.box(fn(f) {
+            f.height(Is(Some(20.0))) |> ignore
+            fields[k] = f
+          }) |> ignore
+        }, keep=fn() {
+          if keeping.get() { fields.get(93).map(fn(f) { (f.id(), None, 16.0) }) } else { None }
+        }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  assert_true(following.get(), msg="the list starts at its end")
+  assert_eq(fields[93].rect().1, 20.0)
+  keeping.set(true)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_eq(fields[93].rect().1, 86.0, msg="the field is brought below the bar")
+  assert_false(following.get(), msg="the moved list is no longer at its end")
+  tree.dispose()
+}
+
+///|
+test "scrolls_anchored: a kept field stops following after its parent measures twice" {
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(100, fn(i) { i }), same=fn(a, b) { physical_equal(a, b) })
+  let following = @signals.signal(true, same=fn(a, b) { a == b })
+  let keeping = @signals.signal(false, same=fn(a, b) { a == b })
+  let probing = @signals.signal(false, same=fn(a, b) { a == b })
+  let fields : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(page) {
+      page.width(Is(Some(300.0))).height(Is(Some(301.0))) |> ignore
+      page.layout_box(By(fn() { probing.get() }), fn(l, probe) {
+        let list = l.child("list", fn(list) {
+          list.scrolls_anchored(scroll, fn() { keys.get() }, est=40.0, ahead=0.0,
+            follows=following, cover=fn() { 70.0 }, fn(b, k) {
+              b.height(Is(Some(40.0))) |> ignore
+              b.box(fn(f) {
+                f.height(Is(Some(20.0))) |> ignore
+                fields[k] = f
+              }) |> ignore
+            }, keep=fn() {
+              if keeping.get() { fields.get(93).map(fn(f) { (f.id(), None, 16.0) }) } else { None }
+            }) |> ignore
+        })
+        if probe { l.measure(list, l.width, height=300.0) |> ignore }
+        l.measure(list, l.width, height=301.0) |> ignore
+        l.place(list, 0.0, 0.0)
+      }) |> ignore
+    }) |> ignore
+  })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  assert_true(following.get())
+  keeping.set(true)
+  probing.set(true)
+  tree.frame(390.0, 844.0, now=16.0) |> ignore
+  assert_true(fields[93].rect().1 >= 86.0, msg="the field is clear of the bar")
+  assert_false(following.get(), msg="the final layout is short of its end")
+  tree.dispose()
+}

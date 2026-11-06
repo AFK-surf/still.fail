@@ -1328,7 +1328,6 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     rk,
     row,
     words,
-    room,
     flying,
     field=field_key,
     hold=fn(ms) { composer_hold(chat, room, ms) },
