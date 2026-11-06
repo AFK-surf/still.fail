@@ -251,7 +251,6 @@ step    = loopback | device | open | terminal          // 现在要人做的那�
 能力和兼容：
 
 - 旧 station 对 `GET /machine-logins` 回 404：core 记这台不支持，station 页不显示「登录」区（或显示「需要更新 station」），卡片里的登录链接说这台要更新。不另加版本号字段，和 screens 一样靠 404 判断。
-- 旧客户端 + 新 station：不认识 `login` 卡片（下面），只显示消息正文；正文里一定有登录链接 `<cloud>/w/<ws>/s/<station>/login/<id>`，点开走网页版（网页总是最新的）。
 - 字段都按「可选」处理：新 station 以后加的 `step` 种类，老 core 当成「打开网址 + 终端」显示。
 - 不升数据库版本：`<data>/logins/` 是新目录，没有就建。
 
@@ -271,7 +270,7 @@ login {id, cancel: true}            // 结束它
 
 - 工具回的屏幕里网址写成 `<link>`、设备码写成 `<code>`：agent 用不着，也就不会把它们贴进 Slack 或 chat。
 - 用法（写进 instructions 和工具说明）：命令失败、输出说没登录（not logged in、401、token 过期），或者人在 chat 里要登录时，用工具自己的登录命令调 `login`（有浏览器或设备码选项的带上）。命令问问题就自己答（工具的默认，或任务需要的），实在定不了在 chat 里问人。从不叫人去跑命令。
-- 卡片只在有浏览器那一步（设备码或要打开的网页）之后发：`chat_post` 带 `card: {"type": "login", "login": "<id>"}`，正文一句话说要谁在哪台登录什么、为什么，加登录链接，`kind: "need_human"` 结束这一轮。工具回的话会说「人那一步好了，现在发卡片」。
+- 卡片只在有浏览器那一步（设备码或要打开的网页）之后发：`chat_post` 带 `card: {"type": "login", "login": "<id>"}`，正文一句话说要谁在哪台登录什么、为什么，不贴登录链接（卡片就能打开登录页，贴了只多出一长串网址），`kind: "need_human"` 结束这一轮。工具回的话会说「人那一步好了，现在发卡片」。
 - 人在 chat 里说话会关闭这张卡片，不代表登录结束；仍需登录时 agent 用 `login {id}` 查进度，再为同一个登录重新发卡片。
 - 密码：不问、不输；不回显的提示 station 拒绝输入，工具回的话会说换浏览器或设备码方式，或者告诉人不能这样登录。
 - 登录结束（完成、失败、超时、取消）时，station 给发起它和发过它卡片的会话各一条通知，卡片自动算答了（从待处理里撤掉）。人那一步之后命令又问问题（az 选订阅这类）时，也给发起它的会话一条通知，agent 接着答；agent 正在用 `login` 等它停下时不发，那次调用的回答里已经有了。
@@ -283,7 +282,7 @@ login {id, cancel: true}            // 结束它
 - 新卡片类型 `{"type": "login", "login": "<id>", "station"?: "<id>", "assignee"?}`（`station/src/sessions/args.ts` 的 `cardArg` 加一种；`station` 是登录在别的 station 上时）。登录结束时 station 把带这个 id 的卡片记进 `closed_cards`（像 agent 自己撤回，不算谁答了，也不叫醒谁：叫醒它的是那条 station 通知）。
 - 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、待处理都不会带它们走 still.fail cloud 或 Slack。
 - 推送通知只说「需要在 test-a 上登录 gh」这类话（agent 写的正文）。
-- Slack 里的 chat 没有卡片：agent 只贴登录链接，链接在客户端里打开。
+- Slack 和飞书里的 chat：agent 只贴登录链接，链接在客户端里打开（Slack 要输入码时发卡片，见上）。
 
 ## 界面（web、桌面、安卓，文字）
 
