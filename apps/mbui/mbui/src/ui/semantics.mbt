@@ -115,12 +115,83 @@ pub fn Ctx::hidden_from_semantics(self : Ctx, body : () -> Unit) -> Unit {
 /// What the nodes say they are in the tree read out (Node's `sem`), in the order they were made: the frame's `sems`.
 fn Ctx::sems_found(self : Ctx) -> Unit {
   self.sems.clear()
+  self.sem_ids.clear()
   for i in 0..<self.count {
     match self.nodes[i].sem {
-      Some(s) => self.sems.push({ ..s, node: i })
+      Some(s) => {
+        self.sems.push({ ..s, node: i })
+        if s.id != 0 { self.sem_ids[s.id] = i }
+      }
       None => ()
     }
   }
+}
+
+///|
+/// The last build's node for an old semantic id: an explicit declaration, else a box taking presses by that id.
+fn Ctx::said_node(self : Ctx, id : Int) -> Int? {
+  if id == 0 { return None }
+  match self.sem_ids.get(id) {
+    Some(i) if i >= 0 && i < self.count && self.nodes[i].sem is Some(s) && s.id == id => Some(i)
+    _ => match self.built_ids.get(id) {
+      Some(i) if i >= 0 && i < self.count && self.nodes[i].id == id => Some(i)
+      _ => None
+    }
+  }
+}
+
+///|
+/// Focus is declared by the same registration the keyboard uses, with its layer and host judged at the input.
+fn Ctx::said_focusable(self : Ctx, id : Int) -> Bool {
+  match self.last_focus_ids.get(id) {
+    Some(f) => !self.layer_inert(f.layer) && island_allows(f.island)
+    None => false
+  }
+}
+
+///|
+/// An immediate old action uses the last build's declaration and the current host/layer state. Walking only its
+/// ancestors applies the visibility rules of semantics_old without allocating labels, rectangles or a whole tree.
+/// A business condition inside an old build closure is still that build's; this does not re-run it for input.
+fn Ctx::said_action_allowed(self : Ctx, id : Int, action : Action) -> Bool {
+  let node = match self.said_node(id) {
+    Some(i) => i
+    None => return false
+  }
+  let n = self.nodes[node]
+  let declared = match n.sem {
+    Some(s) => {
+      if s.id != id || s.disabled { return false }
+      s.actions.contains(action)
+    }
+    None => {
+      if !self.press_target(node) { return false }
+      action == Activate
+    }
+  }
+  if !declared && !(action == Focus && self.said_focusable(id)) { return false }
+  let modal = self.modal_node()
+  let modal_id = if modal >= 0 { self.layer_of(modal) } else { 0 }
+  let mut in_modal = modal < 0
+  let mut i = node
+  while i >= 0 {
+    let n = self.nodes[i]
+    let p = n.parent
+    if n.sem_hid || n.bones != 0L ||
+      (p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits) ||
+      (n.portal && n.portal_id != 0 && self.layer_inert(n.portal_id)) {
+      return false
+    }
+    match n.sem {
+      Some(s) if s.hidden || !island_allows(n.island) => return false
+      _ => ()
+    }
+    if i == modal || (n.portal && modal_id != 0 && self.layer_within(n.portal_id, modal_id)) {
+      in_modal = true
+    }
+    i = p
+  }
+  in_modal
 }
 
 ///|
@@ -166,12 +237,10 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   if !old_said_allowed(self, id) {
     return
   }
-  // Current semantics are the authority for immediate actions, as for the window tree. A remembered id alone
-  // neither takes focus nor revives a callback from a hidden, disabled or no longer built control.
+  // The retained declaration and its current host/layer state are the authority, as for the window tree. A
+  // remembered id alone cannot take focus or revive a hidden, disabled or no longer built control's callback.
   if (action == Focus || (action == Activate && made_presses.contains(id))) &&
-    !self.semantics_tree().iter().any(fn(s) {
-      id != 0 && s.id == id && !s.hidden && !s.disabled && s.actions.contains(action)
-    }) {
+    !self.said_action_allowed(id, action) {
     return
   }
   if action == Focus {
@@ -234,14 +303,10 @@ fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
   let count = self.count
   // Focus is exposed from the same registration used by the keyboard, as it is for retained nodes. Pages do not
   // need a second declaration of a focusable control's capability for accessibility.
-  let focusable : Set[Int] = Set::new()
-  for f in self.last_focusables {
-    if !self.layer_inert(f.layer) && island_allows(f.island) { focusable.add(f.id) }
-  }
   let actions_for = fn(id : Int, declared : Array[Action], disabled : Bool) {
     if disabled { return [] }
     let actions = declared.copy()
-    if focusable.contains(id) && !actions.contains(Focus) { actions.push(Focus) }
+    if self.said_focusable(id) && !actions.contains(Focus) { actions.push(Focus) }
     actions
   }
   // by node: what said something of it (the last to say wins), -1 none
@@ -458,11 +523,7 @@ fn Ctx::press_target(self : Ctx, i : Int) -> Bool {
     return false
   }
   // (nor one whose id a widget said itself by on another node: the widget is the node)
-  for s in self.sems {
-    if s.node == i || s.id == n.id {
-      return false
-    }
-  }
+  if n.sem is Some(_) || self.sem_ids.contains(n.id) { return false }
   n.fw * n.fh < 0.9 * self.width * self.height
 }
 

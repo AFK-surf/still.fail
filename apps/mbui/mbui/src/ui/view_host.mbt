@@ -4982,21 +4982,9 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
     None => return true
   }
   // (what said it of its node, else the node it is: a box taking presses read out by its id)
-  let node = match c.sems.iter().find_first(fn(s) { s.id == id }) {
-    Some(s) => s.node
-    None => {
-      let mut found = -1
-      for i in 0..<c.count {
-        if c.nodes[i].id == id {
-          found = i
-          break
-        }
-      }
-      if found < 0 {
-        return true
-      }
-      found
-    }
+  let node = match c.said_node(id) {
+    Some(i) => i
+    None => return true
   }
   let host = match c.said_owner(node) {
     // (of a layer the old frame put over all of it: where none over it in the window's stack of layers is modal, the
@@ -5010,8 +4998,8 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
     at => old_boxes.keys().find_first(fn(k) { k.at == at })
   }
   match host {
-    Some(h) => tree.acts_on(h)
-    None => true
+    Some(h) => tree.hosted_takes_action(h)
+    None => false
   }
 }
 

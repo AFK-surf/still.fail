@@ -543,6 +543,10 @@ fn Ctx::focus_frame_end(self : Ctx) -> Unit {
   self.last_focusables = self.focusables
   last.clear()
   self.focusables = last
+  self.last_focus_ids.clear()
+  for f in self.last_focusables {
+    self.last_focus_ids[f.id] = f
+  }
   // groups not built for a while are forgotten
   if self.frame_no % 120 == 0 {
     let old : Array[Int] = []
