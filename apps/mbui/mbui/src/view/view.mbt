@@ -148,7 +148,26 @@ fn Tree::roomed_drop(self : Tree, of : Int, at : Int, gen : Int) -> Unit {
 pub(all) struct NodeId {
   at : Int
   gen : Int
-} derive(Eq, Hash, Debug)
+} derive(Eq, Debug)
+
+///|
+/// A node's id hashed as maps of them hash it (the scene's layers by node, each frame many times): from its two numbers
+/// alone, nothing made for it (the derived way makes a hasher each time).
+pub impl Hash for NodeId with hash_combine(self, hasher) {
+  hasher.combine_int(self.at)
+  hasher.combine_int(self.gen)
+}
+
+///|
+pub impl Hash for NodeId with hash(self) {
+  // (each number spread over all the bits, then the two mixed: murmur3's finaliser)
+  let mut h = self.at * -1640531535 + self.gen
+  h = h ^ (h.reinterpret_as_uint() >> 16).reinterpret_as_int()
+  h = h * -2048144789
+  h = h ^ (h.reinterpret_as_uint() >> 13).reinterpret_as_int()
+  h = h * -1028477387
+  h ^ (h.reinterpret_as_uint() >> 16).reinterpret_as_int()
+}
 
 ///|
 /// What a node is drawn as, kept by the node: its ground (0: none), its words and their ink, how opaque, and how far it

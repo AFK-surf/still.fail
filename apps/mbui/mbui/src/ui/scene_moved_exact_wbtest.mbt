@@ -25,9 +25,12 @@ test "rows scrolled by whole pixels, what they hold at thirds of a pixel: copied
     |> ignore
   })
   t.draw()
-  // (wheeled by whole pixels of its own (37 points, 111 of its pixels), each frame checked against one drawn anew)
-  for _ in 0..<8 {
-    t.wheel(195.0, 300.0, 37.0)
+  // (dragged up by whole pixels of its own, a step a frame (37 points, 111 of its pixels), each frame checked against
+  // one drawn anew)
+  t.touch_at(0, 195.0, 500.0, t.time())
+  t.clock_frame()
+  for i in 1..=8 {
+    t.touch_at(1, 195.0, 500.0 - 37.0 * i.to_double(), t.time())
     t.clock_frame()
   }
   assert_true(scene_done().copied > 0, msg="\{scene_done()}: \{scene_alone_why()}")

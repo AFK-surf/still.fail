@@ -1030,11 +1030,8 @@ fn Ctx::scene_end(self : Ctx) -> Unit {
   scene.old_insts_now.clear()
   // (what is no longer drawn let go)
   let gone = []
-  for id, l in scene.layers {
-    if l.seen != scene.frame {
-      gone.push(id)
-    }
-  }
+  // (gone through by each: a for over a map makes something for each it goes past)
+  scene.layers.each(fn(id, l) { if l.seen != scene.frame { gone.push(id) } })
   for id in gone {
     match scene.layers.get(id) {
       Some(l) => scene_layer_gone(l)
@@ -1181,13 +1178,12 @@ fn Ctx::scene_copied(
   // is drawn in now, its key, say what that changes of it; `forced` no more than that)
   ignore(forced)
   guard scene.layers.get(id) is Some(l) else { return copy_not(id, "not kept") }
-  guard l.seen >= 0 && l.seen >= scene.frame - 1 else { return copy_not(id, "seen \{l.seen}, of \{scene.frame}") }
+  guard l.seen >= 0 && l.seen >= scene.frame - 1 else { return copy_not(id, "not drawn the frame before") }
   guard !l.own_only else { return copy_not(id, "own only") }
   guard !l.each else { return copy_not(id, "drawn each frame") }
-  guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked, told \{l.told}") }
+  guard !l.told && !scene.marked.contains(id) else { return copy_not(id, "marked or told") }
   // (what it was drawn in, as it is drawn in now, but where: its key; another, drawn anew)
-  let now = scene_held_now(l)
-  guard scene_began_same(l, now, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
+  guard scene_began_same(l, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
   // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
   // shown, asked again. Put elsewhere (scrolled, slid, its page moved), its block moved by how far, where that is all
   // moving it changes (Ctx::scene_offset_ok); put where it was put but drawn elsewhere, what it holds moved with it)
@@ -1195,9 +1191,14 @@ fn Ctx::scene_copied(
   guard !scene.moved_layers.contains(id) || scene_own_place_same(p.tree, l) else {
     return copy_not(id, "placed otherwise")
   }
-  if held != now {
+  // (how far from where it is put now: where it was drawn, moved as far as it is put from there)
+  let (lx, ly, la, ls, lux, luy) = l.held
+  let (sx, sy) = l.shown
+  let mx = held.0 - (lx + sx)
+  let my = held.1 - (ly + sy)
+  if mx != 0.0 || my != 0.0 || held.2 != la || held.3 != ls || held.4 != lux + sx || held.5 != luy + sy {
     guard scene_still(l) && self.scene_offset_ok(l, held) else { return copy_not(id, if scene_still(l) { "placed otherwise, not moved by an offset" } else { "placed otherwise, holding what changed" }) }
-    self.scene_emitted(p, l, moved=(held.0 - now.0, held.1 - now.1))
+    self.scene_emitted(p, l, moved=(mx, my))
   } else {
     guard l.shown == (0.0, 0.0) || scene_still(l) else { return copy_not(id, "put moved, holding what changed") }
     self.scene_emitted(p, l)
@@ -1225,12 +1226,11 @@ fn Ctx::scene_copied(
 /// by.
 fn scene_began_same(
   l : SceneLayer,
-  held : (Double, Double, Double, Double, Double, Double),
   fading : Array[(@view.NodeId, (Double, Double, Double, Double), (Double, Double, Double, Double))],
   stretching : Array[(@view.NodeId, Double, Double, Double, Double, Double)],
   glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))],
 ) -> Bool {
-  if scene_held_now(l) != held || l.scrim != !dr.scrims.is_empty() || l.fading != fading || l.stretching != stretching || l.glyphing.length() != glyphing.length() {
+  if l.scrim != !dr.scrims.is_empty() || l.fading != fading || l.stretching != stretching || l.glyphing.length() != glyphing.length() {
     return false
   }
   for i, g in glyphing {
@@ -1835,11 +1835,11 @@ fn owners_put(run : OwnersRun, at : Int, from? : Int = 0, to? : Int = run.owner.
 /// otherwise), the outermost, in order: what the old frame's paint does not draw (frame_watch.mbt's looks_keep).
 fn scene_tree_spans() -> Array[(Int, Int)] {
   let all : Array[(Int, Int)] = []
-  for _, l in scene.layers {
+  scene.layers.each(fn(_, l) {
     if l.seen == scene.frame && l.start >= 0 && l.count > 0 && !l.own_only {
       all.push((l.start, l.start + l.count))
     }
-  }
+  })
   all.sort_by(fn(a, b) { a.0.compare(b.0) })
   let out : Array[(Int, Int)] = []
   for r in all {
@@ -2413,14 +2413,6 @@ fn Ctx::scene_tops_raised(self : Ctx) -> Unit {
     }
   }
   scene.tops_now.clear()
-}
-
-///|
-/// Where layer `l` is put now as the frame before put it: where it was drawn, moved as far as it is put from there.
-fn scene_held_now(l : SceneLayer) -> (Double, Double, Double, Double, Double, Double) {
-  let (x, y, a, s, ux, uy) = l.held
-  let (dx, dy) = l.shown
-  (x + dx, y + dy, a, s, ux + dx, uy + dy)
 }
 
 ///|
