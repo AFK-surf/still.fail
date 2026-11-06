@@ -114,6 +114,7 @@ priv struct PanelOf {
   description : String
   body : (@ui.Ctx, () -> Unit) -> Unit
   foot : ((@ui.Ctx, () -> Unit) -> Unit)?
+  nodes : PanelNodes?
   w : Double
   fits : Bool
   wide : Bool
@@ -147,6 +148,14 @@ priv struct PanelOf {
   steps : Bool
   /// what back does on its first step where its steps follow a flow kept elsewhere (panel's `back`: panel_go's)
   on_back : (() -> Unit)?
+}
+
+///|
+/// A panel whose contents are built once in the window's tree.
+priv struct PanelNodes {
+  body : (@view.View, () -> Unit) -> Unit
+  foot : ((@view.View, () -> Unit) -> Unit)?
+  scrolls : Bool
 }
 
 ///|
@@ -439,6 +448,7 @@ pub fn panel(
       description,
       body,
       foot,
+      nodes: None,
       w,
       fits,
       wide,
@@ -461,6 +471,47 @@ pub fn panel(
       offset,
       steps,
       on_back: back,
+    }),
+    from,
+    gone~,
+  )
+}
+
+///|
+/// Present a panel whose body and optional foot are nodes of the window's tree. `title` and `description` are read as
+/// they change without rebuilding its body. `from` may name the node that opened it (`beside_node(v).anchor()`), an
+/// old view's id, a rectangle, or nothing. A panel's contents normally scroll when they do not fit; set `scrolls=false`
+/// when the body manages its own scrolling. `tall` and `grows` have the same meaning as on `panel`.
+/// `close` given to the contents is a successful close; `gone` is called only on dismissal.
+pub fn present_panel_node(
+  title : () -> String,
+  body : (@view.View, () -> Unit) -> Unit,
+  from~ : Anchor,
+  w? : Double = panel_w,
+  wide? : Bool = false,
+  description? : () -> String = fn() { "" },
+  foot? : (@view.View, () -> Unit) -> Unit,
+  gone? : () -> Unit = fn() {  },
+  tall? : Double = 0.0,
+  grows? : Bool = false,
+  focus? : Bool = true,
+  scrolls? : Bool = true,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
+  offset? : Double = panel_offset,
+) -> Unit {
+  present(
+    Panel({
+      title: @signals.untracked(title),
+      description: @signals.untracked(description),
+      body: fn(_, _) {  },
+      foot: None,
+      nodes: Some({ body, foot, scrolls }),
+      w, fits: false, wide,
+      live: Some(fn() { (title(), "", description()) }),
+      tall, grows, focus, ruled: false, lists: false, fade_out_together: false,
+      form: false, field: "", stage: false, above: None, head_end: None, title_row: None, heads_itself: false,
+      side, along, offset, steps: false, on_back: None,
     }),
     from,
     gone~,

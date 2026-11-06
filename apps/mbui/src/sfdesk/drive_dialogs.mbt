@@ -66,33 +66,14 @@ pub fn add_favorite_folder(src : Source, ws : String, stations : Array[DvStation
     [s] => picker_open(src, ws, s.station, picked)
     [] => ()
     _ =>
-      @sf.panel(
-        @sf.t("web-pages.files.addFavorite"),
-        fn(c, close) {
-          let t = @sf.theme()
-          // (in a dialog, round rows out to its corners, the last concentric with them: @sf.dialog_rows)
-          let (list, row) = @sf.dialog_rows(pick_row_h)
-          c.box(style=roots_list.then(list), fn() {
-            for s in stations {
-              let id = c.id("drive/which/" + s.station)
-              if c.clicked(id) {
-                close()
-                picker_open(src, ws, s.station, picked)
-              }
-              let b = c.box(style=pick_row.then(row), id~, fn() {
-                @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
-                c.text(s.name, style=pick_name) |> ignore
-                if !s.online {
-                  c.text(@sf.t("web-pages.stations.offline"), style=pick_meta) |> ignore
-                }
-              })
-              c.semantics(b, Button, id~, label=s.name)
-            }
-          })
-          |> ignore
-        },
+      @sf.present_panel_node(
+        fn() { @sf.t("web-pages.files.addFavorite") },
+        fn(body, close) { picker_stations_node(body, stations, fn(s) {
+          close()
+          picker_open(src, ws, s.station, picked)
+        }) },
         from=Unanchored,
-        description=@sf.t("web-pages.files.whichFavoriteStation"),
+        description=fn() { @sf.t("web-pages.files.whichFavoriteStation") },
       )
   }
 }
@@ -142,34 +123,36 @@ fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Uni
 fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) -> Unit) -> Unit {
   picker_close()
   dialogs.picking.set(station)
-  @sf.panel(
-    @sf.t("web-pages.files.addFavorite"),
-    fn(c, _) { picker(c, src, station) },
+  @sf.present_panel_node(
+    fn() { @sf.t("web-pages.files.addFavorite") },
+    fn(body, _) { folder_browse_node(body, src, station) },
     from=Unanchored,
-    description=@sf.t("web-pages.files.pickFavoriteNote"),
+    description=fn() { @sf.t("web-pages.files.pickFavoriteNote") },
     wide=true,
-    foot=fn(c, close) {
-      let v = dialogs.value.get()
-      let path = text(v, "path")
-      let taken = v is Some(_) && favorite_has(favorites(src, ws), station, path, "")
-      if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
+    foot=fn(foot, close) {
+      let taken = fn() {
+        let v = dialogs.value.get()
+        v is Some(_) && favorite_has(favorites(src, ws), station, text(v, "path"), "")
+      }
+      @sf.button_node(foot, fn() { @sf.t("common.cancel") }, fn() {
         close()
         picker_close()
-      }
-      if @sf.button(
-          c,
-          @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
-          key="drive/picker/pick",
+      }, tone=Ghost) |> ignore
+      @sf.button_node(
+          foot,
+          fn() { @sf.t(if taken() { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }) },
+          fn() {
+            let path = text(dialogs.value.get(), "path")
+            let name = dv_root_label([], path)
+            close()
+            picker_close()
+            let f : Favorite = { station, root: path, path: "", name }
+            favorite_add(src, ws, f)
+            picked(f)
+          },
           tone=Primary,
-          disabled=v is None || taken || dialogs.denied.get(),
-        ) {
-        let name = dv_root_label([], path)
-        close()
-        picker_close()
-        let f : Favorite = { station, root: path, path: "", name }
-        favorite_add(src, ws, f)
-        picked(f)
-      }
+          disabled=fn() { dialogs.value.get() is None || taken() || dialogs.denied.get() },
+        ) |> ignore
     },
     gone=picker_close,
   )

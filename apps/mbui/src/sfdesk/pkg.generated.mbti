@@ -124,6 +124,8 @@ pub fn folder_browse_close() -> Unit
 
 pub fn folder_browse_here() -> String
 
+pub fn folder_browse_node(@view.View, @sfbase.Source, String) -> Unit
+
 pub fn folder_browse_open(String) -> Unit
 
 pub fn folder_name(@sfbase.DvStation, @sfbase.DriveAt) -> String

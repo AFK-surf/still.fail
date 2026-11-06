@@ -1748,6 +1748,8 @@ pub fn popover_arrow(@ui.Ctx, Int64) -> Int32
 
 pub fn popup_root_node(@view.View) -> @view.View
 
+pub fn present_panel_node(() -> String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, wide? : Bool, description? : () -> String, foot? : (@view.View, () -> Unit) -> Unit, gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, scrolls? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
+
 pub fn presented(@ui.Ctx, alone? : Bool) -> Unit
 
 pub fn presented_changed() -> Unit
@@ -2627,6 +2629,8 @@ pub fn way_in_title(@ui.Ctx, String) -> Unit
 pub fn way_in_title_node(@view.View, () -> String) -> @view.View
 
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit, last_link? : Bool) -> Unit
+
+pub fn way_line_node(@view.View, () -> Array[String], () -> WayLook, (Int32) -> Unit, last_link? : Bool, in_row? : Bool, width? : () -> Double?) -> @view.View
 
 pub let way_more : String
 

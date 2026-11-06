@@ -23,7 +23,7 @@ pub fn panel_by_node(
   along? : @ui.Along = End,
 ) -> Unit {
   let x : PanelOf = {
-    title: "", description: "", body, foot: None, w, fits: false, wide: false, live: None,
+    title: "", description: "", body, foot: None, nodes: None, w, fits: false, wide: false, live: None,
     tall: 0.0, grows: false, focus: true, ruled: false, lists: false, fade_out_together: false,
     form: false, field: "", stage: false, above: None, head_end: None, title_row: None, heads_itself: true,
     side, along, offset: panel_offset, steps: false, on_back: None,
@@ -150,7 +150,12 @@ fn panel_node(
         .clips(Is(true))
         .alpha(By(fn() { look().alpha }))
         .scale(By(fn() { look().sx }), about=FromBeside)
-        .says(Is(Some(@view.said(Dialog, label=x.title))))
+        .says(By(fn() {
+          let title = if x.nodes is Some(_) {
+            match x.live { Some(f) => f().0; None => x.title }
+          } else { x.title }
+          Some(@view.said(Dialog, label=title))
+        }))
         // (a press on it its own: not outside it)
         .presses(Is(true))
         .on_press(fn() {  })
@@ -200,7 +205,7 @@ fn panel_node(
           same=fn(a, b) { a == b },
         )
         let headed = fn() { headed_now.get() }
-        let footed = x.foot is Some(_)
+        let footed = x.foot is Some(_) || (x.nodes is Some(n) && n.foot is Some(_))
         // (ruled, the room over the line its body's, not the foot's: a line of what it holds going down to meet it reaches
         // it, its body cutting nothing of it: panel_rule_over)
         let ruled_foot = x.ruled && footed
@@ -230,7 +235,37 @@ fn panel_node(
             }
         }
         // (`tall`: what it holds fills the room it is given, laid out in it, scrolling as it does itself: panel_grows)
-        if x.tall > 0.0 {
+        if x.nodes is Some(n) {
+          p.box(fn(b) {
+            b.shrink(Is(1.0)).min_height(Is(Some(0.0)))
+            .margin(Is((-panel_pad, 0.0, -panel_pad, 0.0)))
+            .focusable(Is(x.focus), keys=0, tab=false) |> ignore
+            if x.tall > 0.0 { b.grow(Is(1.0)) |> ignore }
+            body_box.val = Some(b)
+            let contents = fn(s : @view.View) {
+              s.box(fn(held) {
+                held
+                .padding(By(fn() { (panel_pad, over(), panel_pad, under) }))
+                .margin(By(fn() { (0.0, -over(), 0.0, -out_under) }))
+                .alpha(By(fn() { look().words })) |> ignore
+                if x.tall > 0.0 && !n.scrolls { held.grow(Is(1.0)) |> ignore }
+                held.box(fn(content) {
+                  if x.tall > 0.0 && !n.scrolls { content.grow(Is(1.0)) |> ignore }
+                  look_lent(content, Wide)
+                  (n.body)(content, close)
+                }) |> ignore
+              }) |> ignore
+            }
+            if n.scrolls {
+              let scroll = @view.Scroll::new()
+              b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), contents)
+              .clips(By(fn() { scroll.goes() }))
+              .bounds_input(By(fn() { scroll.goes() })) |> ignore
+            } else {
+              contents(b)
+            }
+          }) |> ignore
+        } else if x.tall > 0.0 {
           p.box(fn(b) {
             b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
@@ -316,6 +351,24 @@ fn panel_node(
             })
             .margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad)))
             |> ignore
+          None => ()
+        }
+        match x.nodes {
+          Some(n) => match n.foot {
+            Some(f) => p.box(fn(foot) {
+              let at = capsule_in(r_menu, button_height())
+              foot.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2)))
+              .margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad)))
+              .padding(Is((at, 8.0, at, at))).alpha(By(fn() { look().words })) |> ignore
+              foot.box(fn(spacer) { spacer.grow(Is(1.0)) |> ignore }) |> ignore
+              foot.box(fn(content) {
+                content.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))) |> ignore
+                look_lent(content, Wide)
+                f(content, close)
+              }) |> ignore
+            }) |> ignore
+            None => ()
+          }
           None => ()
         }
         // (the focus what holds its body's as it opens where it takes it, else where it was; back to what had it as it

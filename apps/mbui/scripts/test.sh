@@ -97,7 +97,8 @@ for t in $targets; do
   s=$(date +%s)
   # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
   if [ -z "${APP_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
-    grep -v "$F" "$out.build" | tail -40
+    # Temporary integration diagnostics: include Moon's source lines and error explanations in CI.
+    awk '/^Error:/ { n=20 } n>0 { print substr($0,1,1000); n-- }' "$out.build"
     rm -f "$out.build"
     exit 1
   fi
@@ -309,7 +310,12 @@ for t in $targets; do
   done
   for p in "${pids[@]}"; do wait $p || code=1; done
   for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
-  grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  if [ "$code" != 0 ]; then
+    # Temporary integration diagnostics: retain a crashing replay's output before other files' verbose traces.
+    tail -2000 "$out" | cut -c1-1000
+  else
+    grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  fi
   # (and every test that failed named, whatever that tail cut off: what failed is never left to how long another
   # failure's message is)
   grep -a '^\[[^]]*\] test .* failed' "$out" | sed 's/ failed: .*/ failed/'
