@@ -43,9 +43,9 @@ pub fn Cursor::code(self : Cursor) -> Int {
 pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(Cursor) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Cursor)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -64,7 +64,7 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Cursor] = stop
+        n.props[Cursor] = { stop, remake: None }
       })
   }
   self

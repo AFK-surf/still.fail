@@ -459,6 +459,19 @@ pub(all) struct Work {
 } derive(Eq, Debug)
 
 ///|
+/// A property's running binding and, for a regular property, how to install it again after a temporary style releases it.
+priv struct PropBinding {
+  stop : () -> Unit
+  remake : (() -> Unit)?
+}
+
+///|
+priv struct StyleBinding {
+  stop : () -> Unit
+  restore : () -> Unit
+}
+
+///|
 /// A node of the pool.
 struct Node {
   /// which making of this index it is (a handle on an earlier one finds it let go)
@@ -478,7 +491,10 @@ struct Node {
   /// the key the next of them is kept by
   mut drop_next : Int
   /// its properties' bindings, by property: what stops each
-  props : Map[Prop, () -> Unit]
+  props : Map[Prop, PropBinding]
+  /// Optional style bindings; a later explicit property takes its place, not the other way around.
+  mut style_props : Map[Prop, StyleBinding]?
+  mut style_watch : (() -> Unit)?
   mut on_press : (() -> Unit)?
   /// what a declared accessibility action does (View::on_action)
   mut on_action : ((Action) -> Unit)?
@@ -1508,6 +1524,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drops: {},
         drop_next: 0,
         props: {},
+        style_props: None,
+        style_watch: None,
         on_press: None,
         on_action: None,
         top_row: false,
@@ -2538,6 +2556,25 @@ priv enum Prop {
 /// marking what its phase does again.
 fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
+  // A property said after a style belongs to the caller from then on.
+  match n.style_props {
+    Some(styles) =>
+      match styles.get(prop) {
+        Some(style) => {
+          styles.remove(prop)
+          (style.stop)()
+        }
+        None => ()
+      }
+    None => ()
+  }
+  self.bind_base(prop, live, phase, apply)
+}
+
+///|
+/// Install a property's own binding without removing a style layered over it.
+fn[T : Eq] View::bind_base(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
+  guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
   let marked = fn() {
@@ -2553,9 +2590,9 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     }
   }
   match n.props.get(prop) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(prop)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -2584,7 +2621,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         apply(v)
         marked()
       })
-      n.props[prop] = stop
+      n.props[prop] = { stop, remake: Some(fn() { self.bind_base(prop, live, phase, apply) }) }
     }
     Roomed(of, f) => {
       match phase {
@@ -2631,9 +2668,12 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       }
       tree.roomed_add(of.at, at, gen, run)
       tree.layout_marked_at(at)
-      n.props[prop] = fn() {
-        watch.stop()
-        tree.roomed_drop(of.at, at, gen)
+      n.props[prop] = {
+        stop: fn() {
+          watch.stop()
+          tree.roomed_drop(of.at, at, gen)
+        },
+        remake: Some(fn() { self.bind_base(prop, live, phase, apply) }),
       }
     }
     Painted(f) => {
@@ -2660,12 +2700,15 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
       // (first worked out as the frame it is said in is painted, after its layout: Tree::painted_now; a frame owed)
       tree.painted.push((at, gen, run))
       marked()
-      n.props[prop] = fn() {
-        watch.stop()
-        match tree.painted.search_by(fn(e) { e.0 == at && e.1 == gen }) {
-          Some(i) => tree.painted.remove(i) |> ignore
-          None => ()
-        }
+      n.props[prop] = {
+        stop: fn() {
+          watch.stop()
+          match tree.painted.search_by(fn(e) { e.0 == at && e.1 == gen }) {
+            Some(i) => tree.painted.remove(i) |> ignore
+            None => ()
+          }
+        },
+        remake: Some(fn() { self.bind_base(prop, live, phase, apply) }),
       }
     }
   }
@@ -3862,9 +3905,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   // it or in it let go of then; said anew, what was said before let go of, as any property's binding is)
   guard self.live() is Some(n) else { return self }
   match n.props.get(Presses) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Presses)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -3887,7 +3930,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Presses] = stop
+        n.props[Presses] = { stop, remake: None }
       })
   }
   self
@@ -3903,9 +3946,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
 pub fn View::over_all(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(OverAll) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(OverAll)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -3924,7 +3967,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[OverAll] = stop
+        n.props[OverAll] = { stop, remake: None }
       })
   }
   self
@@ -4092,9 +4135,9 @@ pub fn Tree::over_all_takes(self : Tree, x : Double, y : Double) -> Bool {
 pub fn View::modal(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   match n.props.get(Modal) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(Modal)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -4116,7 +4159,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Modal] = stop
+        n.props[Modal] = { stop, remake: None }
       })
   }
   self
@@ -4997,9 +5040,9 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   n.top_row = true
   self.tree.hits = self.tree.hits + 1
   match n.props.get(MovesWindow) {
-    Some(stop) => {
+    Some(binding) => {
       n.props.remove(MovesWindow)
-      stop()
+      (binding.stop)()
     }
     None => ()
   }
@@ -5014,7 +5057,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[MovesWindow] = stop
+        n.props[MovesWindow] = { stop, remake: None }
       })
   }
   self
@@ -5914,9 +5957,25 @@ fn View::let_go(self : View) -> Unit {
   n.takes_ver = None
   let props = n.props.values().collect()
   n.props.clear()
-  for stop in props {
-    stop()
+  for binding in props {
+    (binding.stop)()
   }
+  match n.style_props {
+    Some(styles) => {
+      let bindings = styles.values().collect()
+      styles.clear()
+      for binding in bindings {
+        (binding.stop)()
+      }
+    }
+    None => ()
+  }
+  n.style_props = None
+  match n.style_watch {
+    Some(stop) => stop()
+    None => ()
+  }
+  n.style_watch = None
   let drops = n.drops.values().collect()
   n.drops.clear()
   for f in drops {

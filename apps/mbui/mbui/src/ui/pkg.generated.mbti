@@ -704,6 +704,8 @@ pub fn tree_corner_roots_now() -> @paint.CornerRoots
 
 pub fn tree_corners_linked(@view.View, () -> FixedArray[@paint.CornerOf]?) -> Unit
 
+pub fn tree_narrow() -> Bool
+
 pub let tree_menu_own : @ref.Ref[(Array[@view.NodeId]) -> Bool]
 
 pub fn tree_picked(dragged? : Bool) -> TreePicked?
@@ -2552,6 +2554,7 @@ pub(all) enum Stroke {
   B4
   B8
 }
+pub fn Stroke::px(Self) -> Double
 
 #derive(Eq)
 pub(all) struct Style {
@@ -2564,6 +2567,7 @@ pub(all) struct Style {
   pressed : Patch?
   disabled : Patch?
 }
+pub fn Style::resolve(Self, Bool, Bool, Bool, Bool, Bool, Bool, Bool) -> Patch
 pub fn Style::then(Self, Self) -> Self
 
 #derive(Eq, Show)

@@ -508,6 +508,7 @@ pub fn Ctx::set_theme(self : Ctx, t : Theme, narrow? : Theme, narrow_below? : Do
   self.theme_narrow = narrow
   self.narrow_below = narrow_below
   self.pick_theme()
+  tree_narrow_said.set(Some(self.narrow))
 }
 
 ///|

@@ -48,6 +48,18 @@ let tree_theme_said : @signals.Signal[Theme?] = @signals.signal(None, same=fn(a,
 })
 
 ///|
+/// The window's narrow-theme choice as the frame begins, followed independently of the theme's identity: the same
+/// theme may be used for both widths while a style still has a `narrow` block.
+// kept across runs: set as each frame begins and forgotten with the window's tree
+let tree_narrow_said : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
+
+///|
+/// Whether the window's tree is drawn under the narrow-theme rule, followed as its width or theme selection changes.
+pub fn tree_narrow() -> Bool {
+  tree_narrow_said.get().unwrap_or(g().narrow)
+}
+
+///|
 /// The theme a node of the window's tree is drawn in now: the app's, as it tells it (set_tree_theme: what its old
 /// views are built in, read as it changes); an app that tells none, the window's as each frame begins (tree_theme_said;
 /// before the first frame, the window's).
