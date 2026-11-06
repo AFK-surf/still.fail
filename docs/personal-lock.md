@@ -17,8 +17,20 @@
 |---|---|
 | 个人锁本身、面对面加设备 | 已做 |
 | 手机授权签名、手机验签 | 已做 |
-| 名单钉个人锁、station 按个人锁验设备、迁移已开锁的 workspace | 没做，现有 workspace 锁（`docs/workspace-lock.md`）不变 |
-| 密钥库迁到个人锁 | 没做，密钥库仍依赖 workspace 锁 |
+| A：个人锁进 `rules/` 和 Tamarin；workspace 锁认识 `person` 条目；station 按个人锁放行（hello 的 `lock.person`） | 已做，还没有设备写 `person` 条目 |
+| B：stable 带上 A 后，app 自动绑定，个人锁加设备后各 workspace 都放行 | 没做 |
+| C：绑定的人不再接受设备条目，新成员由 admin 面对面钉个人锁 ID | 没做 |
+| D：密钥库迁到个人锁 | 没做，密钥库仍依赖 workspace 锁 |
+
+旧 station 拒收不认识的条目类型（`unknown entry kind`），之后整条链都接不上，所以 B 必须等 stable 的 station 都带上 A。
+
+## 绑定（`person` 条目）
+
+现有成员的设备已经在 workspace 锁里，也已经是本人的。它签一条 `person {sub, person}`（`person` 是个人锁 genesis 的哈希），就等于说「这个人的个人锁是这条」。只有本人的设备或 passkey 签的才生效（`role.binds`）：admin 代签不算。成员被移除时绑定也一起清掉。
+
+绑定之后，这个人的设备不在 workspace 锁里，只要在绑定的个人锁里也放行。还没绑定的人继续按设备条目，所以没有所有人同时切换的时刻。
+
+station 记着每条个人锁听到过的最长链：拿旧链来的设备（已经被移除的）按记着的长链判断，和记着的对不上就拒绝。这份只在内存里，重启后只认下一次带来的；要防重启后的旧链，得让个人锁的更新也推给 station，放在 B 做。
 
 ## 记录
 

@@ -50,6 +50,8 @@ export type LockState = {
   signed: Set<string>;
   stations: Map<string, Station>;
   gateways: Set<string>;
+  /// The person's own lock each member bound themselves to (`person` entries, docs/personal-lock.md): its genesis's hash.
+  persons: Map<string, string>;
   disabled: boolean;
 };
 
@@ -162,8 +164,8 @@ const held = new WeakMap<LockState, unknown>();
 const people = new WeakMap<LockState, { emails: Map<string, Member[]>; devices: Map<string, string[]> }>();
 
 type Pairs<T> = [string, T][];
-type Told = Omit<LockState, "members" | "devices" | "signKeys" | "passkeys" | "signed" | "stations" | "gateways"> & {
-  members: Pairs<Member>; devices: Pairs<Device>; signKeys: Pairs<string[]>; passkeys: Pairs<Passkey>; signed: string[]; stations: Pairs<Station>; gateways: string[];
+type Told = Omit<LockState, "members" | "devices" | "signKeys" | "passkeys" | "signed" | "stations" | "gateways" | "persons"> & {
+  members: Pairs<Member>; devices: Pairs<Device>; signKeys: Pairs<string[]>; passkeys: Pairs<Passkey>; signed: string[]; stations: Pairs<Station>; gateways: string[]; persons: Pairs<string>;
 };
 
 function taken(out: { state: Told; rules: unknown } | { error: string }): LockState {
@@ -186,7 +188,7 @@ function taken(out: { state: Told; rules: unknown } | { error: string }): LockSt
   }
   const s: LockState = {
     ...t, members, devices, signKeys: new Map(t.signKeys), passkeys: new Map(t.passkeys),
-    signed: new Set(t.signed), stations: new Map(t.stations), gateways: new Set(t.gateways),
+    signed: new Set(t.signed), stations: new Map(t.stations), gateways: new Set(t.gateways), persons: new Map(t.persons),
   };
   held.set(s, out.rules);
   people.set(s, { emails, devices: byPerson });
@@ -250,6 +252,25 @@ export function admit(s: LockState, who: { sub: string; endpoint: string; base?:
   const out = rules.admit_one_js(rulesOf(s), who, now, crypto);
   if ("refusal" in out) throw new LockRefusal(out.refusal);
   return { device: s.devices.get(out.device)!, role: out.role };
+}
+
+/// A person's own lock as its chain says it (docs/personal-lock.md, rules/src/lock/person.mbt).
+export type PersonDevice = { key: string; id: string; label: string };
+export type Person = { sub: string; genesis: string; head: string; seq: number; devices: PersonDevice[] };
+
+/// What a person's chain says, each entry checked. Throws why it does not hold.
+export function personFold(entries: unknown[], sub: string): Person {
+  const out = rules.person_fold_js(entries, sub, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return out;
+}
+
+/// The device a connection is by a person's own lock (`entries`, the chain it brought), and that member's role in the
+/// workspace's lock. Throws a LockRefusal why it may not connect.
+export function admitPerson(s: LockState, who: { sub: string; endpoint: string; base?: string; proof?: string }, entries: unknown[]): { device: string; role: Role; person: Person } {
+  const out = rules.admit_person_js(rulesOf(s), who, entries, crypto);
+  if ("refusal" in out) throw new LockRefusal(out.refusal);
+  return out;
 }
 
 /// A refusal by the lock (the client asks to be confirmed), not a bad credential.

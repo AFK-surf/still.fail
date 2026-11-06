@@ -250,3 +250,45 @@ pub fn key_ok(seen : Bool, member : Bool) -> Bool where {
     member
   }
 }
+
+///|
+/// Whether a `person` entry binds a member to a lock of their own: signed by that member (`mine`), from a device or
+/// passkey that is their own (`own`). Proved: only then. A manager's signature binds no one, so no one but the person
+/// says which lock is theirs.
+pub fn binds(mine : Bool, own : Bool) -> Bool where {
+  proof_ensure: result => binds_post(mine, own, result),
+} {
+  if !mine {
+    false
+  } else {
+    own
+  }
+}
+
+///|
+/// Whether an entry of a person's own lock may change it: signed by a key on it (`on`), and not taking away its last
+/// (`last`: a lock with no device is no one's). Proved: only then.
+pub fn person_changes(on : Bool, last : Bool) -> Bool where {
+  proof_ensure: result => person_changes_post(on, last, result),
+} {
+  if !on {
+    false
+  } else {
+    !last
+  }
+}
+
+///|
+/// Whether a connection is let in by a person's own lock: the lock it brought is the one its member bound (`pinned`),
+/// the device's proof holds for its endpoint (`proved`), and the device is on that lock (`on`). Proved: only then.
+pub fn person_admits(pinned : Bool, proved : Bool, on : Bool) -> Bool where {
+  proof_ensure: result => person_admits_post(pinned, proved, on, result),
+} {
+  if !pinned {
+    false
+  } else if !proved {
+    false
+  } else {
+    on
+  }
+}

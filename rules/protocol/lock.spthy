@@ -18,6 +18,8 @@
  * for the key whose code it was shown (approved_only_as_shown), a device's own; or the adversary took a device. So
  * with no device taken every key in the lock is a device's own, and a vault's key sealed to one is learned by no one
  * else (sealed_to_certified, vault_key_secret).
+ * A person's own lock (docs/personal-lock.md) is modelled beside it: a member's own device binds a lock to them in the
+ * workspace's, and a station lets a device in on that lock only as the chain from its genesis says.
  * What is not: roles and who may sign which entry (proved in rules/src/role), entries taking devices or members out,
  * versions and epochs (rules/src/history), passkeys, the cryptography itself (perfect here).
  *
@@ -78,6 +80,38 @@ rule Reveal_Signer:
 rule Reveal_Box:
     [ !BoxKey(~k, ~b) ] --[ Reveal(pk(~k)) ]-> [ Out(~b) ]
 
+// ── a person's own lock ──
+
+// A device begins a lock of its own: its key the lock's first, the lock going by it.
+rule Person_Begin:
+    [ Fr(~k) ]
+  --[ PersonBegun(pk(~k)), Made(pk(~k)), Honest(pk(~k)) ]->
+    [ !Signer(~k), !OnPerson(pk(~k), pk(~k)), Out(pk(~k)) ]
+
+// A device on a lock, given the code face to face, signs a key in.
+rule Person_Approve:
+    [ !Signer(~a), !OnPerson(root, pk(~a)), In(pkNew), !Shown(h(pkNew)) ]
+  --[ PersonApproved(root, pk(~a), pkNew) ]->
+    [ !OnPerson(root, pkNew), Out(<'pdevice', root, pkNew, pk(~a), sign(<'pdevice', root, pkNew>, ~a)>) ]
+
+// A member's own device, in the workspace's lock, says which lock is its person's.
+rule Bind:
+    [ !Signer(~d), !InLock(st, pk(~d)), !OnPerson(root, pk(~d)) ]
+  --[ Binds(pk(~d), root) ]->
+    [ Out(<'person', root, pk(~d), sign(<'person', root>, ~d)>) ]
+
+// A station takes that from a device its lock has.
+rule Station_Binds:
+    [ !InLock(st, pk(d)), In(<'person', root, pk(d), sign(<'person', root>, d)>) ]
+  --[ Bound(st, root, pk(d)) ]->
+    [ !PersonOn(st, root, root) ]
+
+// A station goes along a bound lock's chain: a key on it signed the next in. What it lets in is what is on it here.
+rule Station_Person_Takes:
+    [ !PersonOn(st, root, pk(s)), In(<'pdevice', root, pkNew, pk(s), sign(<'pdevice', root, pkNew>, s)>) ]
+  --[ PersonAdmits(st, root, pkNew, pk(s)) ]->
+    [ !PersonOn(st, root, pkNew) ]
+
 // ── what runs at all ─────────────────────────────────────────────────────────────────────────────────────────────
 
 lemma a_device_can_be_approved_in: exists-trace
@@ -85,6 +119,9 @@ lemma a_device_can_be_approved_in: exists-trace
 
 lemma a_vault_key_can_be_sealed: exists-trace
   "Ex st key pk b #i. Sealed(st, key, pk, b) @ i & not (Ex d #r. Reveal(d) @ r)"
+
+lemma a_device_can_join_by_a_personal_lock: exists-trace
+  "Ex st root pk by #i. PersonAdmits(st, root, pk, by) @ i & not (Ex d #r. Reveal(d) @ r)"
 
 // ── what holds ───────────────────────────────────────────────────────────────────────────────────────────────────
 // Each step of the lock's chain on its own (a chain of them follows by induction, outside the tool: Tamarin does not
@@ -101,6 +138,20 @@ lemma each_key_taken_as_its_signer_approved:
 // A key approved in is a device's that showed its code: no one in the middle of the approval swaps in their own.
 lemma approved_only_as_shown:
   "All st a pk #i. Approved(st, a, pk) @ i ==> Ex #j. Made(pk) @ j & j < i"
+
+// A lock is bound to a person in the workspace's only as a device's own key said so, or the adversary took it.
+lemma bound_as_its_device_said:
+  "All st root d #i. Bound(st, root, d) @ i & (Ex #h. Honest(d) @ h) ==>
+      (Ex #j. Binds(d, root) @ j & j < i) | (Ex #r. Reveal(d) @ r & r < i)"
+
+// On a bound lock, a key signed in by a device's own key is one that device approved, or the adversary took it.
+lemma each_person_key_as_its_signer_approved:
+  "All st root pk by #i. PersonAdmits(st, root, pk, by) @ i & (Ex #h. Honest(by) @ h) ==>
+      (Ex #j. PersonApproved(root, by, pk) @ j & j < i) | (Ex #r. Reveal(by) @ r & r < i)"
+
+// A key approved onto a person's lock is a device's that showed its code.
+lemma person_approved_only_as_shown:
+  "All root a pk #i. PersonApproved(root, a, pk) @ i ==> Ex #j. Made(pk) @ j & j < i"
 
 // A box key sealed to under a device's own key is one that device certified, unless the adversary took it.
 lemma sealed_to_certified:

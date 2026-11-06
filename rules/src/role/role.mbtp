@@ -234,3 +234,15 @@ predicate key_complete(seen : Bool, member : Bool, result : Bool) {
 predicate key_post(seen : Bool, member : Bool, result : Bool) {
   key_sound(seen, member, result) && key_complete(seen, member, result)
 }
+
+predicate binds_post(mine : Bool, own : Bool, result : Bool) {
+  result ↔ (mine && own)
+}
+
+predicate person_changes_post(on : Bool, last : Bool, result : Bool) {
+  result ↔ (on && !last)
+}
+
+predicate person_admits_post(pinned : Bool, proved : Bool, on : Bool, result : Bool) {
+  result ↔ (pinned && proved && on)
+}

@@ -7,6 +7,8 @@
 // their code is the cloud's.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
@@ -39,34 +41,19 @@ const verifies = (id: string, sig: string, bytes: Uint8Array) => {
 export type Device = { key: string; id: string; label: string };
 export type Chain = { devices: Map<string, Device>; hash: string | null };
 
-/// What a chain says, each entry checked: signed by a device on it then, following the last. Null when it does not hold.
+const crypto = {
+  sha256Hex: (text: string) => hex(sha256(utf8(text))),
+  sigValid: (sig: J, hash: string) => sig?.alg === "Ed25519" && typeof sig.key === "string" && typeof sig.sig === "string" && verifies(sig.key, sig.sig, signedBytes(hash)),
+  validKeyId: (id: string) => /^ed25519:[0-9a-f]{64}$/.test(id),
+  endpointProof: () => false,
+};
+
+/// What a chain says, by the rules every side goes by (rules/src/lock/person.mbt); no chain says none. Null when it does
+/// not hold.
 export function checkChain(entries: readonly Entry[], sub: string): Chain | null {
-  const devices = new Map<string, Device>();
-  let hash: string | null = null;
-  const device = (v: J): Device | null =>
-    typeof v?.key === "string" && typeof v?.id === "string" && typeof v?.label === "string" ? { key: v.key, id: v.id, label: v.label } : null;
-  for (const [i, e] of entries.entries()) {
-    if (e.v !== 1 || e.ws !== personOf(sub) || e.seq !== i || e.prev !== hash || e.sig?.alg !== "Ed25519") return null;
-    const body = e.body as J;
-    if (i === 0) {
-      const first = device(body?.device);
-      if (e.kind !== "genesis" || body?.sub !== sub || first === null || first.key !== e.sig.key) return null;
-      devices.set(first.key, first);
-    } else if (!devices.has(e.sig.key)) return null;
-    else if (e.kind === "device") {
-      const added = device(body);
-      if (added === null) return null;
-      devices.set(added.key, added);
-    } else if (e.kind === "device.remove" && typeof body?.key === "string" && devices.size > 1) devices.delete(body.key);
-    else return null;
-    try {
-      hash = entryHash(e);
-    } catch {
-      return null;
-    }
-    if (!verifies(e.sig.key, e.sig.sig, signedBytes(hash))) return null;
-  }
-  return { devices, hash };
+  if (entries.length === 0) return { devices: new Map(), hash: null };
+  const out = rules.person_fold_js(entries, sub, crypto) as J;
+  return "error" in out ? null : { devices: new Map((out.devices as Device[]).map((d) => [d.key, d])), hash: out.head };
 }
 
 /// What a person's device signs for a chat's grant of their phone.

@@ -26,5 +26,11 @@ plant "a device approves a key it was shown no code of" approved_only_as_shown \
   "In(pkNew), !Shown(h(pkNew)) ]" "In(pkNew) ]"
 plant "a vault's key sealed to a box key no device certified" sealed_to_certified \
   "In(<'box', boxPub, pk(d), sign(<'box', boxPub>, d)>)" "In(<'box', boxPub, pk(d)>)"
+plant "a station takes a binding unsigned" bound_as_its_device_said \
+  "In(<'person', root, pk(d), sign(<'person', root>, d)>)" "In(<'person', root, pk(d)>)"
+plant "a station goes along a personal lock's chain unsigned" each_person_key_as_its_signer_approved \
+  "In(<'pdevice', root, pkNew, pk(s), sign(<'pdevice', root, pkNew>, s)>)" "In(<'pdevice', root, pkNew, pk(s)>)"
+plant "a device approves onto a personal lock a key it was shown no code of" person_approved_only_as_shown \
+  "!OnPerson(root, pk(~a)), In(pkNew), !Shown(h(pkNew)) ]" "!OnPerson(root, pk(~a)), In(pkNew) ]"
 rm -rf "$work"
 exit $bad
