@@ -632,6 +632,8 @@ pub fn feishu_mark(@ui.Ctx, Double) -> Int32
 
 pub fn field(@ui.Ctx, String, () -> Unit, hint? : String, error? : String, aside? : () -> Unit) -> Unit
 
+pub fn field_node(@view.View, () -> String, (@view.View) -> Unit, hint? : () -> String, error? : () -> String, aside? : (@view.View) -> Unit) -> @view.View
+
 pub fn field_look(@ui.Ctx, @kit.FieldState, () -> Unit) -> Unit
 
 pub fn field_round() -> Double
