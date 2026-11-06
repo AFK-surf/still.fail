@@ -886,10 +886,10 @@ pub struct Tree {
   /// then put in its place) never seen half done
   mut committing : Int
   // what is to be done once the event being taken is committed whole (Tree::after_event), in order
-  afters : Array[() -> Unit]
+  afters : Array[(Double, () -> Unit)]
   /// what waits for a change said in a layout (a followed point's, Tree::follow_point) committed whole, by that change's
   /// moment: done once the outermost layout is over, before it returns (Tree::laid_out)
-  afters_laid : Array[(Double, Array[() -> Unit])]
+  afters_laid : Array[(Double, () -> Unit)]
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
@@ -2235,7 +2235,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     // at this change's moment: nothing done inside a layout)
     if was < 0.0 && self.cause_at >= 0.0 && self.afters.length() > 0 {
       if self.laying > 0 {
-        self.afters_laid.push((self.cause_at, self.afters.copy()))
+        self.afters_laid.append(self.afters)
         self.afters.clear()
       } else {
         self.afters_done()
@@ -6677,6 +6677,11 @@ fn Tree::settled_at(self : Tree, at : Double) -> Bool {
   }
   self.standing = false
   self.withins_restored()
+  // (what a change worked out in it waits for (a followed point's, Tree::follow_point), where no change round it takes
+  // it: done once it is over, out of its standing, at its moment)
+  if cause < 0.0 {
+    self.afters_done()
+  }
   true
 }
 
@@ -6754,21 +6759,25 @@ fn View::laid_before_due(self : View, moves : (Double) -> Bool) -> Unit {
 fn Tree::afters_done(self : Tree) -> Unit {
   // (what waits for the change under way committed whole, each a change of its own of its moment, in order: an
   // event's, a moment's come on the timeline, a signal's change: whichever change it was said in, as that one ends)
+  // (each at the moment of the change it was said in: Tree::after_event keeps it with it)
   while self.afters.length() > 0 {
-    let next = self.afters.remove(0)
+    let (at, next) = self.afters.remove(0)
+    let was = self.cause_at
+    self.cause_at = at
     self.committing += 1
     @signals.start_batch()
     @signals.untracked(next)
     @signals.end_batch()
     self.committing -= 1
     self.modals_settled()
+    self.cause_at = was
   }
 }
 
 ///|
 fn Tree::after_event(self : Tree, f : () -> Unit) -> Unit {
   if self.cause_at >= 0.0 {
-    self.afters.push(f)
+    self.afters.push((self.cause_at, f))
   } else {
     f()
   }
@@ -7457,13 +7466,10 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if self.laying == 0 {
     self.tell_laid()
     // (what waits for a change said in it committed whole, at that change's moment, the layout over: Tree::afters_done)
-    while self.afters_laid.length() > 0 {
-      let (at, fs) = self.afters_laid.remove(0)
-      let was = self.cause_at
-      self.cause_at = at
-      self.afters.append(fs)
+    if self.afters_laid.length() > 0 {
+      self.afters.append(self.afters_laid)
+      self.afters_laid.clear()
       self.afters_done()
-      self.cause_at = was
     }
   }
 }
