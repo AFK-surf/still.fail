@@ -86,15 +86,13 @@ jobs:
       - name: Build retained node probe
         run: APP=drop_probe bash scripts/win.sh build
       - name: Drag from Explorer into the app
+        timeout-minutes: 2
         run: |
           printf 'hello from Explorer\n' > out/host/explorer/mbui-drag-source
-          env MBUI_BENCH=-1 MBUI_WIN=560x400 ./out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe > out/host/explorer/probe.log 2>&1 &
-          proc=$!
-          pid=$(cat /proc/$proc/winpid)
           code=0
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$PWD/test/host/explorer-drop-probe.ps1")" -AppId "$pid" -FilePath "$(cygpath -w "$PWD/out/host/explorer/mbui-drag-source")" -LogPath "$(cygpath -w "$PWD/out/host/explorer/probe.log")" -ShotPath "$(cygpath -w "$PWD/out/host/explorer/hover.png")" || { code=$?; kill "$proc" 2>/dev/null || :; }
-          wait "$proc" || :
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$PWD/test/host/explorer-drop-probe.ps1")" -Executable "$(cygpath -w "$PWD/out/win/mod/_build/native/release/build/drop_probe/drop_probe.exe")" -FilePath "$(cygpath -w "$PWD/out/host/explorer/mbui-drag-source")" -LogPath "$(cygpath -w "$PWD/out/host/explorer/probe.log")" -ShotPath "$(cygpath -w "$PWD/out/host/explorer/hover.png")" || code=$?
           cat out/host/explorer/probe.log
+          cat out/host/explorer/probe.log.err
           exit "$code"
       - uses: actions/upload-artifact@v4
         if: always()

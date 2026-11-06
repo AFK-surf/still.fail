@@ -1,5 +1,5 @@
 # Scratch experiment: a real Explorer file dragged into the actual retained-node probe on a Windows runner.
-param([int]$AppId, [string]$FilePath, [string]$LogPath, [string]$ShotPath, [int]$Seconds = 60)
+param([string]$Executable, [string]$FilePath, [string]$LogPath, [string]$ShotPath, [int]$Seconds = 60)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing
 Add-Type -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing -TypeDefinition @'
@@ -113,9 +113,13 @@ public static class ExplorerDropProbe {
     } finally {
       if (held) mouse_event(MouseUp, 0, 0, 0, UIntPtr.Zero);
       if (explorer != null) try { ((WindowPattern)explorer.GetCurrentPattern(WindowPattern.Pattern)).Close(); } catch {}
-      if (!app.HasExited) { app.CloseMainWindow(); if (!app.WaitForExit(5000)) app.Kill(); }
+      if (!app.HasExited) app.Kill();
     }
   }
 }
 '@
-exit [ExplorerDropProbe]::Run($AppId, $FilePath, $LogPath, $ShotPath, $Seconds)
+$env:MBUI_BENCH = '-1'
+$env:MBUI_WIN = '560x400'
+$probe = Start-Process -FilePath $Executable -PassThru -RedirectStandardOutput $LogPath -RedirectStandardError ($LogPath + '.err')
+Write-Output "EXPLORER probe PID $($probe.Id), executable $Executable"
+exit [ExplorerDropProbe]::Run($probe.Id, $FilePath, $LogPath, $ShotPath, $Seconds)
