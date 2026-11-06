@@ -105,6 +105,8 @@ pub fn Layout::measure(
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child(child.tree.nodes[child.at].flex, width, height?, containing_height=self.height)
   self.measured.add(child.at)
+  child.tree.box_measured.add(child.at)
+  child.tree.box_stale.remove(child.at)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
@@ -116,6 +118,8 @@ pub fn Layout::fit(self : Layout, child : View, most : Double) -> (Double, Doubl
   let guard_before = @signals.set_access_guard(@signals.phase_guard(Layout))
   let size = @flex.layout_child_fitted(child.tree.nodes[child.at].flex, most, containing_height=self.height)
   self.measured.add(child.at)
+  child.tree.box_measured.add(child.at)
+  child.tree.box_stale.remove(child.at)
   @signals.set_access_guard(guard_before) |> ignore
   size
 }
@@ -155,6 +159,12 @@ pub fn[K : Eq] View::layout_box(
   n.flex.layout_children = Some(fn(width, height, x, y) {
     let was_owner = self.tree.layout_owner
     self.tree.layout_owner = self.at
+    // (the children measured in this layout, and those of them changed after and not measured since: its own, apart
+    // from those of a box it lays out inside it)
+    let was_measured = self.tree.box_measured
+    let was_stale = self.tree.box_stale
+    self.tree.box_measured = Set::new()
+    self.tree.box_stale = Set::new()
     // (sized by what it holds, given no height: as tall as `place` says)
     let unbounded = height != height
     let ctx : Layout = {
@@ -183,6 +193,14 @@ pub fn[K : Eq] View::layout_box(
       }
       None => ()
     }
+    // (a child measured, then changed in this same layout (what it is laid out by set after), and not measured again:
+    // what was placed by is not what it is; a fault, saying which)
+    if !self.tree.box_stale.is_empty() {
+      let stale = self.tree.box_stale.iter().collect()
+      fault("layout_box node \{self.at}: children \{stale} changed after they were measured in its layout, not measured again")
+    }
+    self.tree.box_measured = was_measured
+    self.tree.box_stale = was_stale
     let gone = []
     for k, child in keyed {
       if !ctx.seen.contains(k) { gone.push((k, child)) }

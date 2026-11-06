@@ -781,6 +781,10 @@ pub struct Tree {
   owed_passes : Map[String, Int]
   /// the layout passes taken for the moment being laid out, all of them (Tree::laid_out): bounded together
   mut moment_passes : Int
+  /// the children the layout box being laid out measured in it, and those of them changed since and not measured
+  /// again (View::layout_box)
+  mut box_measured : Set[Int]
+  mut box_stale : Set[Int]
   // where what marked it to be laid out again came from, in the layout pass under way: said with passes that never stop
   mut laid_marked_at : String
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
@@ -1121,6 +1125,8 @@ pub fn Tree::new(
     laid_passes: 0,
     owed_passes: {},
     moment_passes: 0,
+    box_measured: Set::new(),
+    box_stale: Set::new(),
     laid_marked_at: "",
     told_otherwise: [],
     measure,
@@ -2010,6 +2016,15 @@ fn Tree::marked(self : Tree, loc~ : SourceLoc) -> Unit {
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   if self.layout_owner >= 0 {
     // A layout callback is building its own children before measuring them. Nothing outside that layout is dirty.
+    // (one it measured already in this layout, changed now: to be measured again in it, else a fault as it ends,
+    // View::layout_box)
+    let mut c = at
+    while c >= 0 && self.nodes[c].parent != self.layout_owner {
+      c = self.nodes[c].parent
+    }
+    if c >= 0 && self.box_measured.contains(c) {
+      self.box_stale.add(c)
+    }
     let mut i = at
     while i >= 0 && i != self.layout_owner {
       let flex = self.nodes[i].flex
