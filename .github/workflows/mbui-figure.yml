@@ -33,7 +33,7 @@ jobs:
   # pipeline's check waited 6-20 minutes for one (2026-11-03, as asked: "分支只在改到渲染器时跑"). Main runs them on
   # every change above, and publishes what it built.
   what:
-    if: github.repository == 'AFK-surf/still.fail'
+    if: github.repository == 'AFK-surf/still.fail' && github.ref != 'refs/heads/codex/fonts-evidence-cf8ab5ce'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -97,3 +97,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/native.ts ensure --publish mbui-film:darwin-arm64 mbui-film-wasm:darwin-arm64
+
+  fonts-baseline-evidence:
+    if: github.ref == 'refs/heads/codex/fonts-evidence-cf8ab5ce'
+    runs-on: [self-hosted, macos-ci]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 5876fa3066a681094b4b3295daefd15e87c19891
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Collect the exact baseline renderer
+        run: |
+          bash apps/mbui/scripts/media-dev-build.sh 12565dd27e8b7ef2eea2f64b apps/mbui/out/media-inbox 5876fa3066a681094b4b3295daefd15e87c19891 mbui-film-wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fonts-baseline-renderer
+          path: apps/mbui/out/media-inbox/mbui-film-wasm-darwin-arm64-12565dd27e8b7ef2eea2f64b.tar.gz
+          if-no-files-found: error
+          retention-days: 1
