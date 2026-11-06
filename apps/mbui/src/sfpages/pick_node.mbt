@@ -92,20 +92,24 @@ fn pick_rows_said() -> Unit {
 /// its moment, never inside it, once for all of them (what reads which message is picked laid out elsewhere: the chat's bar).
 fn pick_rows_said_in(tree : @view.Tree) -> Unit {
   // (told once for all of a layout's rows)
-  if pick_rows_due.val is Some(t) && physical_equal(t, tree) {
+  // (a tree let go before its layout was over told nothing: none of it due)
+  pick_rows_due.retain(fn(t) { t.root().alive() })
+  if pick_rows_due.iter().any(fn(t) { physical_equal(t, tree) }) {
     return
   }
-  pick_rows_due.val = Some(tree)
+  // (told now where it is laid out by none: none left due)
+  guard tree.root().laying_out() else { return pick_rows_said() }
+  pick_rows_due.push(tree)
   tree.root().made_after_layout(fn() {
-    pick_rows_due.val = None
+    pick_rows_due.retain(fn(t) { !physical_equal(t, tree) })
     pick_rows_said()
   })
 }
 
 ///|
-/// The tree whose layout's rows made or let go are to be told as it is over (pick_rows_said_in's).
-// kept across runs: none between layouts, another tree's not this one's
-let pick_rows_due : Ref[@view.Tree?] = Ref(None)
+/// The trees whose layout's rows made or let go are to be told as it is over (pick_rows_said_in's).
+// kept across runs: none between layouts (a tree let go in one, gone as the next is told)
+let pick_rows_due : Array[@view.Tree] = []
 
 ///|
 /// The tree the messages' words picked are in (pick_row_node's), once one is.
@@ -434,5 +438,6 @@ let pick_pop_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium,
 /// What holds the messages' words let go of, as their rows are once scrolled far off: what of them was picked goes.
 pub fn pick_rows_let_go() -> Unit {
   pick_rows.clear()
+  pick_rows_due.clear()
   pick_rows_said()
 }

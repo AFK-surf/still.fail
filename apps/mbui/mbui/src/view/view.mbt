@@ -6267,6 +6267,12 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
 }
 
 ///|
+/// The moment of the change being made now (an event's, a moment's come on the timeline: Tree::cause_at), -1 none.
+pub fn Tree::change_at(self : Tree) -> Double {
+  self.cause_at
+}
+
+///|
 /// The moment the change being made now was told (Tree::queued: as its cause set it, whatever frame takes it), else
 /// the clock's now: where what it sets going starts.
 fn Tree::cause_now(self : Tree) -> Double {

@@ -483,13 +483,18 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
   let quotes : Map[String, @sf.QuoteCardNode] = {}
   let files : Map[String, @sfbase.FileLandingNode] = {}
   let said : Ref[(String, MineLanding)?] = Ref(None)
+  // (said once the layout the row is made or let go in is over (a list's, as it comes into it), never in it: what
+  // flies to it is in the chat's layer, no part of what that layout lays out)
+  let root = col.tree.root()
   let unsay = fn() {
     match said.val {
       Some((at, l)) =>
-        match @signals.untracked(fn() { mine_landings.get(at) }) {
-          Some(now) if physical_equal(now, l) => mine_landings.remove(at)
-          _ => ()
-        }
+        root.made_after_layout(fn() {
+          match @signals.untracked(fn() { mine_landings.get(at) }) {
+            Some(now) if physical_equal(now, l) => mine_landings.remove(at)
+            _ => ()
+          }
+        })
       None => ()
     }
     said.val = None
@@ -507,7 +512,12 @@ fn mine_row_node(col : @view.View, src : Source, here : () -> MessageHere, row :
     guard anchor is Some(anchor) else { return }
     let l = { anchor, text: text.val, files: files.copy(), quotes: quotes.copy() }
     said.val = Some((place, l))
-    mine_landings[place] = l
+    root.made_after_layout(fn() {
+      // (unless let go or said again since)
+      if said.val is Some((_, now)) && physical_equal(now, l) {
+        mine_landings[place] = l
+      }
+    })
   }
   let place = fn() { @signals.untracked(row.place) }
   col.owns(unsay) |> ignore

@@ -2481,6 +2481,12 @@ pub fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
 /// handler, a fiber, a test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt):
 /// for a stamp, or a moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
 pub fn Ctx::moment(self : Ctx) -> Double {
+  // (in a change of the window's tree being made at its moment (a moment come on its timeline, done as a frame
+  // advances to it): that moment, the frame's time not yet there)
+  match view_tree() {
+    Some(t) if t.change_at() >= 0.0 => return t.change_at()
+    _ => ()
+  }
   if self.in_frame() {
     self.clock
   } else {
