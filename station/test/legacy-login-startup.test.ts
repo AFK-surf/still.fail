@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { addClientColumn } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
+import { withoutLoginKeys } from "./legacy-login-fixture.ts";
 
 test("an older store does not build the login-card index over all entries under one writer", () => {
   const counts: number[] = [];
@@ -15,6 +16,7 @@ test("an older store does not build the login-card index over all entries under 
       const thread = store.openThread("ember","CHAT",`legacy-login-${size}`,null,null).id;
       const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at,card) VALUES(?,?,'message','agent','a',?,?)");
       for (let n=1;n<=size;n++) put.run(thread,n,n,n%10 === 0 ? JSON.stringify({type:"login",login:`old${n}`}) : null);
+      withoutLoginKeys(db);
       db.exec("DROP INDEX entries_login_cards");
       const visited = new Set<string>();
       db.function("visit_login_install", { deterministic: true }, (n) => { visited.add(String(n)); return 1; });
@@ -23,7 +25,9 @@ test("an older store does not build the login-card index over all entries under 
           if (sql.includes("CREATE INDEX IF NOT EXISTS entries_login_cards")) {
             const traced = sql.replace("WHERE card LIKE", "WHERE visit_login_install(n) AND card LIKE");
             assert.notEqual(traced,sql);
-            sql = traced;
+            // Count the index build, then leave the original predicate in place for the preparation's indexed reads.
+            target.exec(traced);
+            target.exec("DROP INDEX entries_login_cards");
           }
           return target.exec(sql);
         };
@@ -45,6 +49,7 @@ for (const winner of ["old writes","native index"]) test(`login-card installatio
   const thread=store.openThread("ember","CHAT","legacy-login-race",null,null).id;
   const put=db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,at) VALUES(?,?,'message','agent','a',?)");
   for (let n=1;n<=(winner === "old writes" ? 40 : 100);n++) put.run(thread,n,n);
+  withoutLoginKeys(db);
   db.exec("DROP INDEX entries_login_cards");
   const old=new DatabaseSync(path,{timeout:5000});
   try {
@@ -72,6 +77,6 @@ for (const winner of ["old writes","native index"]) test(`login-card installatio
     const native=db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'").get();
     const staged=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='login_card_meta'").get();
     assert.equal(native !== undefined,winner === "native index");
-    assert.equal(staged !== undefined,winner === "old writes");
+    assert.ok(staged, "the per-login lookup is installed after either race");
   } finally { old.close(); store.close(); rmSync(dir,{recursive:true,force:true}); }
 });

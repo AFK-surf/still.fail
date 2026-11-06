@@ -91,6 +91,9 @@ export const LEGACY_LOGIN_CARDS = `SELECT e.thread,e.n,e.author FROM login_card_
     AND e.kind='message' AND e.author_kind='agent' AND e.card LIKE '%"login"%' AND e.card LIKE ?2
     AND NOT EXISTS(SELECT 1 FROM closed_cards c WHERE c.thread=e.thread AND c.n=e.n)`;
 
+// An existing native index is a smaller fallback while its per-login keys are being prepared.
+export const LEGACY_LOGIN_CARDS_NATIVE = LEGACY_LOGIN_CARDS.replace("e INDEXED BY entries_cards", "e INDEXED BY entries_login_cards");
+
 // SQLite LIKE gives %, _, and quoted characters their usual meaning. Keep the former query for such inputs.
 export const LEGACY_LOGIN_CARDS_FALLBACK = `SELECT thread,n,author FROM entries INDEXED BY entries_cards
   WHERE card IS NOT NULL AND kind='message' AND author_kind='agent' AND card LIKE '%"login"%' AND card LIKE ?
@@ -107,18 +110,20 @@ const readMeta = (db: DatabaseSync) => db.prepare(`SELECT version,scanned,CAST(e
   CAST(end_n AS TEXT) end_n,CAST(cursor_thread AS TEXT) cursor_thread,CAST(cursor_n AS TEXT) cursor_n,offset
   FROM login_card_meta WHERE id=1`).get() as Meta;
 
-export function installLegacyLoginCards(db: DatabaseSync, preferNative = false): boolean {
+export function installLegacyLoginCards(db: DatabaseSync): boolean {
   if (hasLegacyLoginCards(db)) return true;
   db.exec("BEGIN IMMEDIATE");
   try {
     const indexed = exists(db,"index","entries_login_cards");
-    if (!hasLegacyLoginCards(db) && !(preferNative && indexed)) {
+    if (!hasLegacyLoginCards(db)) {
+      // The native partial index, when present, locates the last old login card without walking ordinary messages.
+      const from = indexed ? `FROM entries INDEXED BY entries_login_cards WHERE card LIKE '%"login"%'` : "FROM entries WHERE 1";
       db.exec(LEGACY_LOGIN_CARD_SCHEMA);
       db.exec(`CREATE TABLE login_card_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL,scanned INTEGER NOT NULL,
         end_thread INTEGER,end_n INTEGER,cursor_thread INTEGER,cursor_n INTEGER,offset INTEGER) WITHOUT ROWID;
-        INSERT INTO login_card_meta VALUES(1,${VERSION},NOT EXISTS(SELECT 1 FROM entries LIMIT 1),
-          (SELECT thread FROM entries ORDER BY thread DESC,n DESC LIMIT 1),
-          (SELECT n FROM entries ORDER BY thread DESC,n DESC LIMIT 1),NULL,NULL,NULL);`);
+        INSERT INTO login_card_meta VALUES(1,${VERSION},NOT EXISTS(SELECT 1 ${from} LIMIT 1),
+          (SELECT thread ${from} ORDER BY thread DESC,n DESC LIMIT 1),
+          (SELECT n ${from} ORDER BY thread DESC,n DESC LIMIT 1),NULL,NULL,NULL);`);
     }
     db.exec("COMMIT");
     return hasLegacyLoginCards(db);
@@ -136,11 +141,15 @@ export function legacyLoginCardsStep(db: DatabaseSync, limit = 64): { ready: boo
     }
     if (m.scanned) { db.exec("COMMIT"); return { ready: true, visited: 0, tokens: 0 }; }
     // Qualify the sort keys: the selected aliases are text for lossless JS transport, but SQLite must sort integers.
-    const from = "FROM entries WHERE 1";
+    // Recheck under the writer lock: an older connection may have installed or removed the native index since the last
+    // batch. Its partial predicate is a superset of the cards we need; triggers keep newer writes current.
+    const from = exists(db,"index","entries_login_cards")
+      ? `FROM entries INDEXED BY entries_login_cards WHERE card LIKE '%"login"%'` : "FROM entries WHERE 1";
     const first = db.prepare(`SELECT ${fields} ${from} AND thread<=CAST(?1 AS INTEGER) ORDER BY entries.thread,entries.n LIMIT 1`);
     const same = db.prepare(`SELECT ${fields} ${from} AND thread=CAST(?1 AS INTEGER) AND n>CAST(?2 AS INTEGER) ORDER BY entries.n LIMIT 1`);
     const later = db.prepare(`SELECT ${fields} ${from} AND thread>CAST(?1 AS INTEGER) AND thread<=CAST(?2 AS INTEGER) ORDER BY entries.thread,entries.n LIMIT 1`);
-    const exact = db.prepare(`SELECT ${fields} ${from} AND thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER)`);
+    // A partially scanned card can have changed since the previous batch, even so it no longer matches the index.
+    const exact = db.prepare(`SELECT ${fields} FROM entries WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER)`);
     const put = db.prepare(`INSERT INTO login_card_keys(login,thread,n,entry_rowid,ts)
       SELECT ?1,CAST(?2 AS INTEGER),CAST(?3 AS INTEGER),CAST(?4 AS INTEGER),?5
       WHERE NOT EXISTS (SELECT 1 FROM login_card_keys WHERE login=?1 AND thread=CAST(?2 AS INTEGER) AND n=CAST(?3 AS INTEGER))`);

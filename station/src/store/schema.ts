@@ -557,21 +557,19 @@ export function addClientColumn(db: DatabaseSync): void {
   }
 }
 
-/// A new or small store can build the native lookup at once. An older large store prepares it in bounded batches.
+/// Keep the native index for older connections and prepare a per-login lookup in bounded batches.
 function addLoginCardIndex(db: DatabaseSync): void {
   const native = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'").get() !== undefined;
-  if (hasLegacyLoginCards(db) || native()) return;
-  let prepare = false;
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    if (!hasLegacyLoginCards(db) && !native()) {
-      if (db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
+  if (hasLegacyLoginCards(db)) return;
+  if (!native()) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      if (!hasLegacyLoginCards(db) && !native() && db.prepare("SELECT 1 FROM entries LIMIT 1 OFFSET 63").get() === undefined)
         db.exec(`CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%'`);
-      else prepare = true;
-    }
-    db.exec("COMMIT");
-  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
-  if (prepare) installLegacyLoginCards(db,true);
+      db.exec("COMMIT");
+    } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  }
+  installLegacyLoginCards(db);
 }
 
 /// The column letters came with (entries.letter, rows.ts Letter): what two chats' agents write each other, kept apart
