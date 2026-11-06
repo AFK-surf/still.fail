@@ -3092,6 +3092,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_thumbs.clear()
   pv_tree_thumbs.clear()
   pv_tree_lists.clear()
+  pv_thumb_nodes.clear()
   pv_lists.clear()
   pv_frames.clear()
   pv_frames_n.val = 0

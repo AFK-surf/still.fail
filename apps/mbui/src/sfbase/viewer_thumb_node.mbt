@@ -44,6 +44,12 @@ pub fn thumb_pressed(node : @view.View, id : String) -> Unit {
 }
 
 ///|
+/// Whether the viewer (open, or on its way back) flies from or back into the thumbnail of `id`.
+fn viewer_on(id : String) -> Bool {
+  pv_hidden.get() == id || [viewer.get(), pv_leaving.get()].iter().any(fn(v) { v.map(fn(v) { v.thumb_id() }) == Some(id) })
+}
+
+///|
 /// How much of the thumbnail `node` of `id` shows: none while the viewer has its picture and it is the showing the
 /// viewer flies from and back into, else all of it (another showing of the same place stays).
 pub fn thumb_node_shows(node : @view.View, id : String) -> Double {
@@ -93,10 +99,26 @@ pub fn note_thumb_node(
     let k = id()
     if held.val != Some(k) {
       @signals.untracked(fn() {
-        tree_thumb_owner(k).set(Some((node, look)))
+        // (another showing of the same place, living, that the viewer flies from or back into keeps it: the one pressed)
+        let owner = tree_thumb_owner(k)
+        let kept = match owner.get() {
+          Some((n, _)) => n.id() != node.id() && n.alive() && viewer_on(k)
+          None => false
+        }
+        if !kept {
+          owner.set(Some((node, look)))
+        }
         if held.val is Some(was) {
+          // (the viewer follows the showing it flies from and back into only, before that is let go: letting go runs
+          // what waits, another showing moving too among it, which must find the viewer on the new id)
+          let owned = match pv_tree_thumbs.get(was) {
+            Some(o) => o.get() is Some((n, _)) && n.id() == node.id()
+            None => false
+          }
+          if owned {
+            thumb_moved(was, k)
+          }
           let_go(was)
-          thumb_moved(was, k)
         }
       })
       held.val = Some(k)
