@@ -321,9 +321,8 @@ test("notices signed wrong, or by a station not enrolled, are refused", async ()
     assert.equal((await notify(h, station, to, { tag: "stillfail-station-telemetry-v1" })).status, 401, "a trace's signature");
     assert.equal((await notify(h, await key(), to)).status, 401, "not enrolled");
     assert.equal((await h.fetch("/v1/stations/notify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notices: to }) })).status, 401, "not signed");
+    assert.equal((await notify(h, station, to, { tag: "ember-station-notify-v1" })).status, 401, "the old name's tag");
     assert.equal(services.got.length, 0);
-    // Stations from before the rename sign with the old prefix.
-    assert.deepEqual(await (await notify(h, station, to, { tag: "ember-station-notify-v1" })).json(), { sent: 1 });
     assert.equal((await notify(h, station, [], {})).status, 200);
   } finally {
     await h.close();
