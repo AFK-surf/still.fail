@@ -137,9 +137,13 @@ test "scrolls_window flung: every block it glides across told seen (each in sigh
 ///|
 /// A column 300 by 100 holding, while `there` says so, a list of `0..<400` 40 tall from its top: windowed (what it told
 /// seen pushed to `told`) or anchored (what it told sighted as come, there): its tree, and its frame `at` drawn with what
-/// it said to tell once it is painted told.
-fn gone_case(windowed : Bool, there : @signals.Signal[Bool], told : Array[Int]) -> (@view.Tree, (Double) -> Unit) {
-  let scroll = @view.Scroll::list()
+/// it said to tell once it is painted told. `scroll`: what it scrolls by.
+fn gone_case(
+  windowed : Bool,
+  there : @signals.Signal[Bool],
+  told : Array[Int],
+  scroll? : @view.Scroll = @view.Scroll::list(),
+) -> (@view.Tree, (Double) -> Unit) {
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
@@ -215,5 +219,39 @@ test "scrolls_anchored: a list let go after it was laid out at an input's moment
       assert_true(after.contains(10), msg="\{after}")
     }
     tree.dispose()
+  }
+}
+
+///|
+test "scrolls_window: put where rows 10 to 12 show in an event and laid out there at once, as an event finds where things are: told seen of them as that layout is done, in the event; let go in that same event or a later one, what it told the same whether a frame was painted between or not" {
+  for same_event in [true, false] {
+    let runs : Array[(Array[Int], Array[Int])] = []
+    for painted in [false, true] {
+      let there = @signals.signal(true)
+      let told : Array[Int] = []
+      let scroll = @view.Scroll::list()
+      let (tree, frame) = gone_case(true, there, told, scroll~)
+      frame(0.0)
+      let first = told.length()
+      tree.event_said(5.0, fn() {  }, fn() {
+        scroll.put(400.0)
+        tree.laid_as_now()
+        if same_event {
+          there.set(false)
+        }
+      })
+      let in_event = told[first:].to_array()
+      if painted {
+        frame(8.0)
+      }
+      if !same_event {
+        tree.event_said(10.0, fn() {  }, fn() { there.set(false) })
+      }
+      frame(16.0)
+      runs.push((in_event, told[first:].to_array()))
+      tree.dispose()
+    }
+    assert_true(runs[0].0.contains(10), msg="same event \{same_event}: \{runs[0].0}")
+    assert_eq(runs[1], runs[0], msg="same event \{same_event}")
   }
 }
