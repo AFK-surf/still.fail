@@ -215,10 +215,19 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   hand_presses_read()
   hand.focus_id.get() |> ignore
   self.actions.clear()
-  for a in self.asked_actions {
-    self.actions.push(a)
+  if !self.asked_actions.is_empty() {
+    let asked = self.asked_actions.copy()
+    self.asked_actions.clear()
+    for a in asked {
+      // Only a request from inside the preceding legacy build waits here. Its target is now published; use the
+      // same declaration, host and modal checks as an external request, not an unconditional focus move.
+      if a.1 == Focus {
+        self.ask_action(a.0, Focus)
+      } else {
+        self.actions.push(a)
+      }
+    }
   }
-  self.asked_actions.clear()
   // a layer's own keys first (Escape: overlay.mbt)
   self.layer_keys()
 }

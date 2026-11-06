@@ -206,6 +206,15 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 /// `action` asked of widget `id` by a test or the host's accessibility. Activate runs its press callback in this
 /// event, as a pointer release does; a widget still reading actions in its build sees those in the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
+  // A legacy label may ask for a field built after it. The build's indices are incomplete until published;
+  // keep this forward request for the next frame's input phase, where the complete declaration is validated.
+  // Host requests outside a build still act now and never gain this deferred path.
+  if building.val && action == Focus {
+    self.asked_actions.push((id, action))
+    hand_event()
+    input_came()
+    return
+  }
   // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
   // one already, that one's, nothing done ahead of it: what it is asked of found and judged as things are then)
   match view_app.val {
@@ -245,6 +254,7 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   }
   if action == Focus {
     self.focus_moved(id)
+    return
   }
   if action == Activate && made_presses.contains(id) {
     self.clicked.push(id)
