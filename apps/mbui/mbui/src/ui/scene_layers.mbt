@@ -2516,3 +2516,10 @@ fn scene_band_drawn(k : Int) -> Unit {
     None => ()
   }
 }
+
+///|
+/// Whether who drew each instance is wanted from this frame on and the last frame kept none (scene's `owners_were`): a
+/// frame of its looks alone would carry the last frame's instances with nobody's, so the scene is drawn, all of it anew.
+fn scene_owners_wanted() -> Bool {
+  inst_owners_kept() && !scene.owners_were
+}

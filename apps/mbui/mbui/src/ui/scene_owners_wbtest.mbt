@@ -64,3 +64,25 @@ test "who drew each instance, kept or not, changes nothing of what the scene doe
   // (asked for once none was kept: as if it had been kept all along, nobody's where somebody drew)
   assert_eq(owners, kept_owners)
 }
+
+///|
+test "words held seen whole asked for after nobody's was kept: the next frame draws everything anew, and finds what covers them" {
+  let t = Tester::new(fn(_) {  }, w=200.0, h=100.0)
+  inst_owners.track = false
+  set_view_app(fn(root) {
+    root.box(fn(w) { w.words(Is("hello")) |> ignore }) |> ignore
+    // (a fill over the words, drawn after them)
+    root.box(fn(cover) {
+      cover.width(Is(Some(200.0))).height(Is(Some(30.0))).offset(Is((0.0, -30.0))).ground(Is(0x336699FFL)) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.clock_frame()
+  t.clock_frame()
+  // (asked as hold_seen_whole asks it, nothing else changed: a frame of the looks alone would keep nobody's)
+  inst_owners.track = true
+  t.clock_frame()
+  assert_true(frame_drawn_as.val != Looks, msg="\{frame_drawn_as.val}")
+  assert_true(g().seen_whole_faults("hello") is Some(_), msg="the fill over the words not found")
+}

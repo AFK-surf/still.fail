@@ -1177,9 +1177,10 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     scene_full_for(fn() { "painted: " + paint_why })
     scene.old_due = true
     paint_frame(c, t)
-  } else if scene_wanted() {
+  } else if scene_wanted() || scene_owners_wanted() {
     // (the scene drawn as it is kept: what changed drawn again in each layer's block, the rest copied from theirs; the
-    // old frame painted alone, as kept)
+    // old frame painted alone, as kept; who drew each instance wanted from this frame on, none of it kept: every layer
+    // drawn anew, never the last frame's instances as they were, scene_owners_wanted)
     scene.old_due = false
     paint_frame(c, t)
   } else {
