@@ -1692,11 +1692,15 @@ pub fn this_machine() -> String
 
 pub fn thumb_moved(String, String) -> Unit
 
+pub fn thumb_node_shows(@view.View, String) -> Double
+
 pub fn thumb_occurrence(String, String, String) -> String
 
 pub fn thumb_of(@ui.Ctx, String) -> Thumb?
 
 pub fn thumb_place(String, String, String, String) -> String
+
+pub fn thumb_pressed(@view.View, String) -> Unit
 
 pub fn thumb_shows(String) -> Double
 

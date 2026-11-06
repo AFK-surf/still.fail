@@ -27,6 +27,36 @@ fn tree_thumb_owner(id : String) -> @signals.Signal[(@view.View, () -> ThumbLook
 }
 
 ///|
+/// Each living thumbnail's node and how it looks, by its node: one pressed takes its place's id (thumb_pressed).
+let pv_thumb_nodes : Map[@view.NodeId, (@view.View, () -> ThumbLook)] = {}
+
+///|
+/// `node` (a thumbnail, note_thumb_node's) pressed: the thumbnail of `id` the viewer flies from and back into. One file
+/// shown more than once in the same place (placed twice in a message's words) is one id, each showing its node: the
+/// one pressed is the one that opens, hidden alone while the viewer has its picture.
+pub fn thumb_pressed(node : @view.View, id : String) -> Unit {
+  guard pv_thumb_nodes.get(node.id()) is Some(held) else { return }
+  let owner = tree_thumb_owner(id)
+  match @signals.untracked(fn() { owner.get() }) {
+    Some((n, _)) if n.id() == node.id() => ()
+    _ => owner.set(Some(held))
+  }
+}
+
+///|
+/// How much of the thumbnail `node` of `id` shows: none while the viewer has its picture and it is the showing the
+/// viewer flies from and back into, else all of it (another showing of the same place stays).
+pub fn thumb_node_shows(node : @view.View, id : String) -> Double {
+  if pv_hidden.get() != id {
+    return 1.0
+  }
+  match tree_thumb_owner(id).get() {
+    Some((n, _)) if n.id() != node.id() => 1.0
+    _ => 0.0
+  }
+}
+
+///|
 let pv_tree_lists : Map[String, (@view.View, () -> Double, () -> Double)] = {}
 
 ///|
@@ -80,7 +110,11 @@ pub fn note_thumb_node(
     pv_thumbs[k] = { radius: r, letterbox: l, top_crop: crop, picture: p, id: 0, list, over, said: s }
     if changed { thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1) }
   })) |> ignore
-  node.owns(fn() { if held.val is Some(k) { let_go(k) } }) |> ignore
+  pv_thumb_nodes[node.id()] = (node, look)
+  node.owns(fn() {
+    pv_thumb_nodes.remove(node.id())
+    if held.val is Some(k) { let_go(k) }
+  }) |> ignore
 }
 
 ///|
