@@ -403,10 +403,11 @@ pub fn View::drawn_scale(self : View) -> Double {
 ///|
 /// A finger or a button went down in the window at `at`, wherever it lands (the host's, before it goes to
 /// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
-pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0) -> Unit {
+/// `owner` is its logical target, including the host of a portal drawn outside its box.
+pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0, owner? : NodeId) -> Unit {
   self.event(at, fn() {
-    let (count, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
-    self.pressed_anywhere.set((count + 1, x, y))
+    let (count, _, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
+    self.pressed_anywhere.set((count + 1, x, y, owner))
   })
 }
 
@@ -420,7 +421,7 @@ pub fn View::window_downs(self : View) -> Int {
 ///|
 /// Where the most recent window press went down, in window coordinates, as the host told it.
 pub fn View::window_down_point(self : View) -> (Double, Double) {
-  let (_, x, y) = self.tree.pressed_anywhere.get()
+  let (_, x, y, _) = self.tree.pressed_anywhere.get()
   (x, y)
 }
 
@@ -429,11 +430,21 @@ pub fn View::window_down_point(self : View) -> (Double, Double) {
 /// position too. Read as window_downs changes to dismiss a popup only when that press is outside it.
 pub fn View::window_down_here(self : View) -> (Double, Double)? {
   guard self.alive() && self.tree.last_w > 0.0 else { return None }
-  let (count, px, py) = self.tree.pressed_anywhere.get()
+  let (count, px, py, _) = self.tree.pressed_anywhere.get()
   guard count > 0 else { return None }
   let (x, y, s) = self.tree.placed(self.at)
   let scale = if s > 0.0 { s } else { 1.0 }
   Some(((px - x) / scale, (py - y) / scale))
+}
+
+///|
+/// Whether the latest window press belongs to this node or what it holds. A hosted portal belongs to its host
+/// even when drawn outside the host's box; an outside-press handler need not treat that portal as outside.
+pub fn View::window_down_within(self : View) -> Bool {
+  match self.tree.pressed_anywhere.get().3 {
+    Some(owner) => self.tree.holds(self.id(), owner)
+    None => false
+  }
 }
 
 ///|

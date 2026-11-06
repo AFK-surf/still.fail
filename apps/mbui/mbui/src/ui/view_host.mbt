@@ -2767,7 +2767,19 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   old_hits_place(g(), Some(tree))
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
-    tree.went_down(at, x~, y~)
+    // Resolve its logical owner before outside-press reactions can close a panel and its hosted portals.
+    let k = old_root_target(g(), x, y)
+    let owner = if k >= 0 {
+      layer_hits.iter().find_first(fn(h) { k >= h.0 && k < h.1 })
+        .bind(fn(h) { g().last_layer(h.3).bind(fn(l) { l.owner }) })
+    } else {
+      match tree.target_at(x, y) {
+        Hosted(id) => old_press_owner(g(), x, y, id)
+        Pressed(id) | Dragged(id) | TopRow(id) | Off(id) => Some(id)
+        Nothing => None
+      }
+    }
+    tree.went_down(at, x~, y~, owner?)
   }
   // (a press on nothing a tap no more: another press, a second finger, moved past a gesture's slop from where it went
   // down, come back or not)
@@ -3336,13 +3348,20 @@ fn view_input_taken() -> Int {
 /// view's (what it put over all of it at its root: its overlays, a modal's ground among them), as a press finds one, and
 /// nothing of the window's tree over that layer in the window's stack of layers takes it there first (old_layer_takes).
 fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool {
+  old_root_target(c, x, y, pressed~) >= 0
+}
+
+///|
+/// The old root target that takes this input, or -1. Its portal supplies the logical owner when the window press
+/// is announced, while routing still respects the same hit, reach and layer order as old_root_hit.
+fn old_root_target(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Int {
   let k = if pressed {
     let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
     press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
   } else {
     hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
   }
-  k >= 0 && old_hit_owner(k) is None && old_layer_takes(old_hit_stack(k), x, y)
+  if k >= 0 && old_hit_owner(k) is None && old_layer_takes(old_hit_stack(k), x, y) { k } else { -1 }
 }
 
 ///|
@@ -4204,15 +4223,6 @@ fn view_key(code : Int, mods : Int) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return false
-  }
-  let c = g()
-  // (Tab and Shift+Tab, at the key's moment, among what can take the focus as the tree is then (Ctx::tab_stops), the
-  // old views' as their last build said: where a field with the focus does not leave them to the app, a key catcher
-  // with it takes none)
-  if code == key_tab && (mods | mod_shift_key) == mod_shift_key && view_tab_ours(c, mods) {
-    tree.event(view_moment(), fn() { c.tab((mods & mod_shift_key) != 0) })
-    h_frame_owed()
-    return true
   }
   let c = g()
   let focus = c.focus_allowed()
@@ -5460,20 +5470,6 @@ fn view_focus_lost(n : @view.NodeId) -> Unit {
       h_frame_owed()
     }
     _ => ()
-  }
-}
-
-///|
-/// Whether Tab is the focus's to move, at a key's moment (view_key): not where a field with the focus leaves it to the
-/// app with none held (it picks from what it offers there), nor a key catcher with the focus (it takes every key).
-fn view_tab_ours(c : Ctx, mods : Int) -> Bool {
-  let focus = c.focus_allowed()
-  if c.dev.catchers.contains(focus) {
-    return false
-  }
-  match c.editors.get(focus) {
-    Some(st) => !(mods == 0 && st.leaves.contains(key_tab))
-    None => true
   }
 }
 

@@ -1933,6 +1933,10 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     h_request_frame()
     return
   }
+  if g().focus_key_now(code, mods) {
+    h_request_frame()
+    return
+  }
   // (taken by a node of the window's tree, at its moment: no input of the old views', taped alone: view_host.mbt)
   if view_key(code, mods) {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
@@ -1942,11 +1946,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   // key_in_tree_field)
   if key_in_tree_field(code, mods) {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
-    return
-  }
-  if g().press_key_now(code, mods) {
-    hand_event()
-    h_request_frame()
     return
   }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])

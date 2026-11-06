@@ -166,6 +166,9 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   if !old_said_allowed(self, id) {
     return
   }
+  if action == Focus {
+    self.focus_moved(id)
+  }
   if action == Activate && made_presses.contains(id) {
     // The callback may outlive the last box that registered it. Only a currently exposed semantic action may
     // invoke it: a retired, hidden, disabled or covered row cannot be revived by an old accessibility id.
