@@ -21,6 +21,14 @@ const LAPTOP_APP = "e2".repeat(32);
 /// code shown, that it approves this one nowhere it asks, or nothing (reached, its answer lost).
 type Way = "away" | "silent" | "code" | "code-ends-on-proof" | "code-ends-after-another" | "credential" | "no" | "mute";
 
+// Several fixtures can still be alive after a test stops waiting. Route each dial to the fixture for that core.
+const fixtureDials = new WeakMap<Parameters<typeof dialer.open>[0], (id: string) => Effect.Effect<Duplex, CoreError>>();
+dialer.open = (inner, id) => {
+  const open = fixtureDials.get(inner);
+  if (open === undefined) throw new Error("pairing fixture has no dialer for this core");
+  return open(id);
+};
+
 /// A core waiting in `ws` (its device not in the lock, the owner's two apps in it), its mesh's base key ME, and the
 /// trusted devices' ends as `ways` says now: each dial of each counted.
 async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
@@ -68,7 +76,7 @@ async function waiting(ways: Record<string, Way>, secondWorkspace = false) {
           return here;
         }));
     });
-  dialer.open = (_inner, id) => open(id);
+  fixtureDials.set(r.core.inner, open);
   const lock = await r.watch({ topic: "lock", workspace: "ws" });
   const secondLock = secondWorkspace ? await r.watch({ topic: "lock", workspace: "w2" }) : null;
   const pair = async () => (await lock()).me.pair;
@@ -364,6 +372,31 @@ test("a trusted device reached is not dialled again, whatever it answered: it sh
   await mute.host.time.pass(2 * 60_000);
   assert.deepEqual([mute.dials[PHONE_APP], mute.dials[LAPTOP_APP]], [1, PAIR_DIAL_TRIES]);
   assert.equal((await mute.pair()).state, "none");
+});
+
+test("a resumed search in one core cannot count dials in another core's fixture", async () => {
+  const earlier = await waiting({});
+  let later: Awaited<ReturnType<typeof waiting>> | null = null;
+  try {
+    await earlier.ask("lock.pair", { workspace: "ws" });
+    await earlier.host.time.pass((PAIR_DIAL_TRIES - 1) * PAIR_REDIAL_MS + 2_000, 100);
+    assert.equal((await earlier.pair()).state, "none");
+    assert.deepEqual([earlier.dials[PHONE_APP], earlier.dials[LAPTOP_APP]], [PAIR_DIAL_TRIES, PAIR_DIAL_TRIES]);
+
+    later = await waiting({ [PHONE_APP]: "mute", [LAPTOP_APP]: "away" });
+    await later.ask("lock.pair", { workspace: "ws" });
+    await later.host.time.pass(2 * 60_000, 100);
+    assert.deepEqual([later.dials[PHONE_APP], later.dials[LAPTOP_APP]], [1, PAIR_DIAL_TRIES]);
+
+    // An earlier test may resume after its caller timed out. Its later retry still belongs to its own core.
+    await earlier.ask("lock.pair", { workspace: "ws" });
+    await earlier.host.time.pass(1_000);
+    assert.deepEqual([later.dials[PHONE_APP], later.dials[LAPTOP_APP]], [1, PAIR_DIAL_TRIES], "earlier retries do not reach the later fixture");
+    assert.deepEqual([earlier.dials[PHONE_APP], earlier.dials[LAPTOP_APP]], [PAIR_DIAL_TRIES + 1, PAIR_DIAL_TRIES + 1]);
+  } finally {
+    await earlier.core.close();
+    await later?.core.close();
+  }
 });
 
 test("asked again, the try before stops dialling", async () => {
