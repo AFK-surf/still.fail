@@ -97,6 +97,23 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
   return { data, path, config, store, accounts, call, profile, view, close: () => accounts.close() };
 }
 
+/// The sign-in as its page reads it, once in `state`: read again each time the accounts say something changed.
+async function waitFor(t: Rig, id: string, state: string): Promise<any> {
+  let last: any;
+  try {
+    return await upon(
+      (wake) => t.accounts.onChange(wake),
+      async () => {
+        [, last] = await t.call("GET", `/profiles/${id}/login`);
+        return last.job?.state === state ? last.job : undefined;
+      },
+      `${id} ${state}`,
+    );
+  } catch {
+    throw new Error(`login of ${id} never reached ${state}: ${JSON.stringify(last)}`);
+  }
+}
+
 describe("the accounts routes", { concurrency: true }, () => {
   test("a profile serves every workspace the station joined but those withheld from it; a joined workspace's members do all its own do", async () => {
     const t = await rig({ workspaces: ["W1", "W2", "W3"] });
@@ -265,23 +282,6 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("DELETE", "/profiles/sub/login"))[1].job.state, "cancelled");
     await t.close();
   });
-
-  /// The sign-in as its page reads it, once in `state`: read again each time the accounts say something changed.
-  async function waitFor(t: Rig, id: string, state: string): Promise<any> {
-    let last: any;
-    try {
-      return await upon(
-        (wake) => t.accounts.onChange(wake),
-        async () => {
-          [, last] = await t.call("GET", `/profiles/${id}/login`);
-          return last.job?.state === state ? last.job : undefined;
-        },
-        `${id} ${state}`,
-      );
-    } catch {
-      throw new Error(`login of ${id} never reached ${state}: ${JSON.stringify(last)}`);
-    }
-  }
 
   test("a sign-in after its profile was deleted makes a profile beside the home left behind", async () => {
     const t = await rig();
