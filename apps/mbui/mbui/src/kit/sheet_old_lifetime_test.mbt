@@ -1,6 +1,26 @@
 // A sheet can hold an old view while callers move their content to the retained tree.
 
 ///|
+test "a natural old island avoids an extra body build in the first sheet frame" {
+  let open = @signals.signal(false)
+  let built = Ref(0)
+  let told = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, time=0.0, tree=fn(root : @view.View) {
+    @kit.sheet_node(root, fn() { open.get() }, fn() { open.set(false) }, fn(sheet) {
+      @ui.old(sheet, natural=true, fn(c) {
+        built.val += 1
+        c.tell("first old sheet body", fn() { told.val += 1 })
+        c.box(h=Px(100.0), fn() { c.text("First old content") |> ignore }) |> ignore
+      }) |> ignore
+    })
+  })
+  t.draw()
+  open.set(true)
+  t.frame_at(t.time())
+  assert_eq((built.val, told.val), (2, 1))
+}
+
+///|
 test "a tree sheet closed before its first frame does not build its old island" {
   let open = @signals.signal(false)
   let built = Ref(0)

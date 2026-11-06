@@ -5236,6 +5236,7 @@ fn old_content_overflows(c : Ctx, root : Int, x : Double, y : Double, w : Double
 /// What it holds is built again only as what it read changes, never for its height (made_island's key: its width).
 fn old_natural_after_layout(c : Ctx) -> Unit {
   for o in old_islands {
+    let mut host_size_changed = false
     match o.natural {
       Some(s) if o.held_box >= 0 && o.held_box < c.count => {
         // (one that gives way: as tall as what it holds is laid out with no bound on its height, not the height it was
@@ -5243,6 +5244,7 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
         if @signals.untracked(fn() { s.get() }) != Some(h) {
           s.set(Some(h))
+          host_size_changed = true
           c.read_changed("an old view's height, what it holds laid out")
         }
         match o.fits {
@@ -5254,6 +5256,7 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
               let w = c.nodes[o.held_box].fw
               if @signals.untracked(fn() { f.get() }) != Some(w) {
                 f.set(Some(w))
+                host_size_changed = true
                 c.read_changed("an old view's width, what it holds laid out")
               }
               if o.fit_probe.val {
@@ -5267,6 +5270,9 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
       }
       _ => ()
     }
+    // The host is still placed at its previous size in this pass. The next readback pass places it with the new
+    // natural size; deciding its clip against the old size would publish a temporary overflow and build twice more.
+    if host_size_changed { continue }
     // (the host clips only when the content, as laid out, exceeds it; shadows may extend without being cut)
     let overflow = match (old_boxes.get(o.id), old_placed.iter().find_first(fn(p) { p.0 == o.id })) {
       (Some(box), Some((_, _, _, w, h, _, _, _, _))) if box >= 0 && box < c.count => {
