@@ -1956,6 +1956,8 @@ pub fn row_least_h() -> @ui.Style
 
 pub fn row_lines(@ui.Ctx, () -> Unit, () -> Unit, spaced? : Bool) -> Unit
 
+pub fn row_lines_node(@view.View, (@view.View) -> Unit, (@view.View) -> Unit, spaced? : Bool) -> @view.View
+
 pub let row_mark : Double
 
 pub let row_radius : @ui.Radius
