@@ -864,7 +864,7 @@ pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
 
-pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, linked? : () -> @paint.CornerOf?) -> @view.View
+pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, linked? : () -> @paint.CornerOf?, disabled? : () -> Bool, on? : () -> Bool, ink? : () -> Int64, quiet? : () -> Int64, shortcut? : () -> String, selected_alpha? : Double, hover_alpha? : Double, drag_through? : Bool) -> @view.View
 
 pub let icon_button_side : Double
 
