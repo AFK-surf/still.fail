@@ -10018,6 +10018,10 @@ pub fn View::shown_size(self : View) -> (Double, Double)? {
 ///|
 /// `f` told once the frame being made is painted (Tree::take_after_paint).
 fn Tree::said_after_paint(self : Tree, f : () -> Unit) -> Unit {
+  // (said by a look's layouts (Tree::settled_at): of a sample, nothing to tell)
+  if self.look_laying {
+    return
+  }
   self.after_paint.push(f)
 }
 
@@ -10039,6 +10043,10 @@ pub fn Tree::take_after_paint(self : Tree) -> Array[() -> Unit] {
 /// Said within another's telling (that telling laying the tree out at once): told in its turn, once that telling and
 /// those said before it are told, of the same moment (Tree::tell_laid).
 fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
+  // (said by a look's layouts (Tree::settled_at): of a sample, nothing to tell)
+  if self.look_laying {
+    return
+  }
   self.after_laid.push(f)
 }
 
@@ -10047,7 +10055,8 @@ fn Tree::said_after_laid(self : Tree, f : () -> Unit) -> Unit {
 /// a telling lays out at once (an event reading where things are) said after those said before it and told in its
 /// turn, never within another's telling: so how deep it goes is not how many follow one another.
 fn Tree::tell_laid(self : Tree) -> Unit {
-  if self.telling_laid {
+  // (in a look's layouts: what was said before it told by the layout that would have told it)
+  if self.telling_laid || self.look_laying {
     return
   }
   self.telling_laid = true

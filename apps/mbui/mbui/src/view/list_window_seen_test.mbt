@@ -607,3 +607,50 @@ test "scrolls_window: two lists, the first flung, the second at rest: laid out b
   // (at 100, at 150 and at its end: three; all seven done)
   assert_eq(runs, [(3, 7), (3, 7)])
 }
+
+///|
+/// Flung as above, a frame shown at 100 sampled ahead for 300, then an event at 150 asking where the first block in
+/// sight is drawn now or not, then a frame every 16 ms till 6 s: what it told seen after the event, by the event's end
+/// and in all; what was said to tell once painted, by the next frame; the blocks in sight at the end.
+fn flung_then_looked(asks : Bool) -> (Array[Int], Array[Int], Int, Array[(Int, Double)]) {
+  let c = seen_case()
+  guard c.tree.claimer_of(c.tree.claimers_at(150.0, 90.0), 0.0, -80.0) is Some(id) else {
+    abort("nothing takes the finger")
+  }
+  let t = c.now + 1.0
+  c.tree.drag_at(id, Down, 150.0, 90.0, t) |> ignore
+  c.tree.drag_at(id, Moved, 150.0, 50.0, t + 5.0) |> ignore
+  c.tree.drag_at(id, Moved, 150.0, 10.0, t + 10.0) |> ignore
+  c.tree.drag_at(id, Up, 150.0, 10.0, t + 10.0) |> ignore
+  c.now = 100.0
+  c.tree.at(300.0)
+  c.tree.frame(300.0, 100.0, now=100.0) |> ignore
+  for f in c.tree.take_after_paint() {
+    f()
+  }
+  let before = c.seen.length()
+  c.tree.event(150.0, fn() {
+    if asks {
+      match c.in_sight().get(0) {
+        Some((k, _)) => c.live.get(k).map(fn(v) { v.drawn_now() }) |> ignore
+        None => ()
+      }
+    }
+  })
+  let by_event = c.seen[before:].to_array()
+  let painted = c.tree.take_after_paint()
+  let said = painted.length()
+  for f in painted {
+    f()
+  }
+  c.now = 150.0
+  while c.now < 6000.0 {
+    c.frame(16.0)
+  }
+  (by_event, c.seen.copy(), said, c.in_sight())
+}
+
+///|
+test "scrolls_window flung and drawn ahead: a look at an event's moment tells seen, sighted and scrolled as without it" {
+  assert_eq(flung_then_looked(true), flung_then_looked(false))
+}
