@@ -85,6 +85,8 @@ priv struct RowNodes {
   lists : Array[Int]
   layers : Array[Layer]
   layer_scrims : Array[Int]
+  staged_native : Array[(Int, NativeView, (Double, Double, Double, Double)?, FixedArray[Double])]
+  staged_streams : Array[(Int, Stream, (Double, Double, Double, Double)?)]
   mut causal_layer : Bool
   mut fragment : Bool
   /// a part's: what its caller builds it from (Ctx::kept_part's `key`), and whether it is read out
@@ -601,6 +603,8 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     lists: [],
     layers: [],
     layer_scrims: [],
+    staged_native: [],
+    staged_streams: [],
     causal_layer: false,
     fragment: false,
     key: "",
@@ -880,6 +884,8 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   self.kept_census(census_after)
   rn.layers.clear()
   rn.layer_scrims.clear()
+  rn.staged_native.clear()
+  rn.staged_streams.clear()
   if part && rn.own && rn.causal_layer {
     for k in b.census[0]..<self.layers.length() {
       let l = self.layers[k]
@@ -889,13 +895,26 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
       let i = dr.scrims[k]
       if i >= r && i < r + rn.n { rn.layer_scrims.push(i - r) }
     }
+    for i in r..<(r + rn.n) {
+      match native_nodes.get(i) {
+        Some((v, content, corners)) => rn.staged_native.push((i - r, v, content, corners))
+        None => ()
+      }
+      match stream_nodes.get(i) {
+        Some((stream, at)) => rn.staged_streams.push((i - r, stream, at))
+        None => ()
+      }
+    }
   }
   rn.why = ""
   for j in 0..<census_after.length() {
     let layer_kept = part && rn.own && rn.causal_layer && !rn.layers.is_empty() &&
       (j == 0 || j == 13 ||
         (j == 24 && rn.layer_scrims.length() == census_after[24] - b.census[24]))
-    let staged_once = part && rn.causal_layer && (j == 10 || j == 15 || j == 16)
+    let staged_once = part && rn.causal_layer &&
+      (j == 10 || j == 15 || j == 16 ||
+        (j == 20 && rn.staged_native.length() >= census_after[20] - b.census[20]) ||
+        (j == 21 && rn.staged_streams.length() >= census_after[21] - b.census[21]))
     if rn.why == "" && census_after[j] != b.census[j] &&
       !(part && kept_census_names[j] == "a list of its own") && !layer_kept && !staged_once {
       rn.why = if kept_census_names[j] == "what a package keeps of it" && aside_why.val != "" {
@@ -909,7 +928,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
     rn.why = "back said otherwise than over what was said before it"
   }
   if rn.why == "" {
-    rn.why = self.row_nodes_why(r, rn.n, part~, layers=rn.own && rn.causal_layer && !rn.layers.is_empty(), fragment_parent=if rn.fragment { b.parent } else { -1 })
+    rn.why = self.row_nodes_why(r, rn.n, part~, layers=part && rn.own && rn.causal_layer && !rn.layers.is_empty(), native=part && rn.own && rn.causal_layer, fragment_parent=if rn.fragment { b.parent } else { -1 })
   }
   // (an entry of draw.mbt's of a node not its own: what holds it drawn otherwise for it)
   for j in b.drawn..<dr.entries.length() {
@@ -956,7 +975,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
 /// shot); "" none. (What is placed by the clock (Ctx::moved_by: a page sliding) is kept with what moves it, its node's
 /// own, placed again as each frame is laid out and painted. A field is kept as the rest: what changes what it holds is
 /// an event, which builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
-fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool, layers? : Bool = false, fragment_parent? : Int = -1) -> String {
+fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool, layers? : Bool = false, native? : Bool = false, fragment_parent? : Int = -1) -> String {
   for j in 0..<n {
     let nd = self.nodes[r + j]
     if j > 0 && (nd.parent < r || nd.parent >= r + n) && !(layers && nd.portal && nd.parent == 0) &&
@@ -969,7 +988,7 @@ fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool, layers? : Bool
     if nd.kind == kind_scroll {
       return "what scrolls in it"
     }
-    if nd.kind == kind_native {
+    if nd.kind == kind_native && !native {
       return "a native view"
     }
     if nd.pager != 0 || nd.kind == kind_page {
@@ -1061,6 +1080,8 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   self.say_again(rn.said, { ..unmoved, by: by })
   for l in rn.layers { self.layers.push({ ..l, node: rn.base + l.node }) }
   for i in rn.layer_scrims { dr.scrims.push(rn.base + i) }
+  for (i, v, content, corners) in rn.staged_native { native_nodes[rn.base + i] = (v, content, corners) }
+  for (i, stream, at) in rn.staged_streams { stream_nodes[rn.base + i] = (stream, at) }
   for f in rn.used {
     f()
   }

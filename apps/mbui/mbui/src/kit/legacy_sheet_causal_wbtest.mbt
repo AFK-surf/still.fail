@@ -575,3 +575,422 @@ test "a staged legacy sheet preserves a navigation body on its first frame" {
   assert_eq(builds.val, built_at_event, msg="the body containing navigation was built a second time")
   assert_true(t.query(Text, label="Page 0") is Some(_))
 }
+
+///|
+test "a staged legacy sheet keeps its virtual list interactive" {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let builds = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, tree=fn(root) {
+    window.val = Some(root)
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        sheet(c, "real-sheet", true, h=240.0, fn() {
+          builds.val += 1
+          c.list("items", 100, 30.0, h=Px(160.0), fn(i) {
+            c.box(w=Fill(1.0), h=Px(30.0), fn() { c.text("Row \{i}") |> ignore }) |> ignore
+          }) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  let built_at_event = builds.val
+  t.advance(staged_change_ms)
+  root.event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  t.frame_at(t.time())
+  assert_eq(builds.val, built_at_event, msg="sampling the shell must not duplicate the list body")
+  t.scroll_to(50)
+  t.draw()
+  let (first, last) = t.visible()
+  assert_true(first <= 50 && last >= 50, msg="scroll to row 50 produced \{first}..\{last}")
+}
+
+///|
+test "a staged legacy sheet reuses and places its native body on the first frame" {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let cell : Ref[@ui.NativeView?] = Ref(None)
+  let builds = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, finish=false, tree=fn(root) {
+    window.val = Some(root)
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        sheet(c, "real-sheet", true, h=180.0, fn() {
+          builds.val += 1
+          let native = match cell.val {
+            Some(v) => v
+            None => {
+              let v = @ui.NativeView::page("<p>native</p>")
+              cell.val = Some(v)
+              v
+            }
+          }
+          c.native(native, w=Px(100.0), h=Px(80.0)) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  let built_at_event = builds.val
+  t.advance(@ui.move_most_ms)
+  root.event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  t.frame_at(t.time())
+  assert_eq(builds.val, built_at_event, msg="sampling the shell must not rebuild the native body")
+  assert_eq(t.holes(), [(0.0, 689.0, 100.0, 80.0)])
+  t.finish_all()
+  t.frame_at(t.time())
+  assert_eq(builds.val, built_at_event + 1, msg="a real native-ready event rebuilds the body once")
+  assert_eq(t.holes(), [(0.0, 689.0, 100.0, 80.0)])
+  cell.val.unwrap().close()
+}
+
+///|
+test "a staged legacy sheet keeps its stream on the first frame" {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let cell : Ref[@ui.Stream?] = Ref(None)
+  let builds = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, tree=fn(root) {
+    window.val = Some(root)
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        sheet(c, "real-sheet", true, h=180.0, fn() {
+          builds.val += 1
+          c.stream(cell.val.unwrap(), w=Px(100.0), h=Px(80.0)) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let stream = @ui.Stream::new(shown=fn(_) {  }, broken=fn() {  })
+  cell.val = Some(stream)
+  stream.jpeg(b"\xff\xd8", 7.0)
+  t.stream_shows(stream.id(), 7.0, 320, 200)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  let built_at_event = builds.val
+  t.advance(@ui.move_most_ms)
+  root.event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  t.frame_at(t.time())
+  assert_eq(builds.val, built_at_event, msg="sampling the shell must not rebuild the stream body")
+  assert_true(t.drawlist().contains("stream 320x200 ts=7"), msg=t.drawlist())
+  stream.close()
+}
+
+///|
+test "a settled staged legacy sheet takes input without rebuilding its shell" {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let id = Ref(0)
+  let shells = Ref(0)
+  let taps = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, tree=fn(root) {
+    window.val = Some(root)
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        shells.val += 1
+        sheet(c, "real-sheet", true, h=180.0, fn() {
+          id.val = c.id("button")
+          c.box(w=Px(100.0), h=Px(40.0), id=id.val, fn() {  }) |> ignore
+          c.on_press(id.val, fn() { taps.val += 1 })
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  t.advance(@ui.move_most_ms)
+  t.frame_at(t.time())
+  let before = shells.val
+  let rect = t.ctx().rect_of(id.val).unwrap()
+  t.advance(@ui.input_step_ms)
+  t.touch(0, rect.0 + 10.0, rect.1 + 10.0)
+  t.advance(@ui.input_step_ms)
+  t.touch(2, rect.0 + 10.0, rect.1 + 10.0)
+  assert_eq(taps.val, 1)
+  assert_eq(shells.val, before, msg="a resting sheet should not rebuild its shell for each pointer event")
+}
+
+///|
+fn legacy_sheet_from_host_touch(delayed : Bool) -> (Double, Double, Double) {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let started = Ref(-1.0)
+  let state = Ref((0.0, 0.0))
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, time=0.0, tree=fn(root) {
+    window.val = Some(root)
+    @ui.old(root, fn(c) {
+      let id = c.id("open-sheet")
+      c.on_press(id, fn() {
+        root.event_action(fn() {
+          open.set(true)
+          root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+        })
+      })
+      c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  }) |> ignore
+    }).height(Is(Some(40.0))) |> ignore
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        if started.val < 0.0 { started.val = c.moment() }
+        sheet(c, "real-sheet", true, h=180.0, look=fn(ctx, s, body) {
+          state.val = (s.t, s.below)
+          ctx.box(w=Fill(1.0), h=Px(s.h), body) |> ignore
+        }, fn() { c.text("Body") |> ignore }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let press_at = 30.0
+  let release_at = 40.0
+  let sampled_at = 100.0
+  let base = t.time()
+  t.advance(if delayed { sampled_at } else { release_at })
+  t.touch_at(0, 20.0, 20.0, base + press_at)
+  t.touch_at(2, 20.0, 20.0, base + release_at)
+  if !delayed { t.advance(sampled_at - release_at) }
+  let root = window.val.unwrap()
+  root.event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  (started.val - base, state.val.0, state.val.1)
+}
+
+///|
+test "a staged legacy sheet uses the original time of a delayed host touch" {
+  let (now, scrim, below) = legacy_sheet_from_host_touch(false)
+  let (late, late_scrim, late_below) = legacy_sheet_from_host_touch(true)
+  assert_eq(now, 40.0)
+  assert_eq(late, now, msg="the old body must see the event's time, not its delivery time")
+  assert_true((scrim - late_scrim).abs() < 0.001, msg="scrim: \{scrim} vs \{late_scrim}")
+  assert_true((below - late_below).abs() < 0.001, msg="surface: \{below} vs \{late_below}")
+}
+
+///|
+fn legacy_sheet_touched_after_resize(with_frame : Bool, y : Double) -> (Double, Int) {
+  let open = @signals.signal(false)
+  let height = @signals.signal(120.0)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let button = Ref(0)
+  let taps = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, tree=fn(root) {
+    window.val = Some(root)
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        let fit = c.id("fit")
+        let h = c.laid_size(fit).map(fn(size) { size.1 }).unwrap_or(120.0)
+        sheet(c, "real-sheet", true, h~, look=fn(ctx, s, body) {
+          ctx.box(w=Fill(1.0), h=Px(s.h), body) |> ignore
+        }, fn() {
+          c.box(w=Px(100.0), h=Px(height.get()), id=fit, fn() {
+            button.val = c.id("button")
+            c.box(w=Px(100.0), h=Px(40.0), id=button.val, fn() {  }) |> ignore
+            c.on_press(button.val, fn() { taps.val += 1 })
+          }) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  t.advance(@ui.move_most_ms)
+  t.frame_at(t.time())
+  root.event_action(fn() { height.set(220.0) })
+  if with_frame { t.frame_at(t.time()) }
+  let target = if with_frame {
+    let rect = t.ctx().rect_of(button.val).unwrap()
+    rect.1 + rect.3 / 2.0
+  } else { y }
+  t.touch(0, 20.0, target)
+  t.touch(2, 20.0, target)
+  (target, taps.val)
+}
+
+///|
+test "a staged legacy sheet uses changed dimensions for an input at the same time" {
+  let (y, framed) = legacy_sheet_touched_after_resize(true, 0.0)
+  let (_, unframed) = legacy_sheet_touched_after_resize(false, y)
+  assert_eq((framed, unframed), (1, 1), msg="touch at y=\{y}")
+}
+
+///|
+fn legacy_sheet_touched_after_scrim(with_frame : Bool, y : Double) -> (Double, Int) raise {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let button = Ref(0)
+  let taps = Ref(0)
+  let height = 600.0
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=844.0, tree=fn(root) {
+    window.val = Some(root)
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        sheet(c, "real-sheet", true, h=height, look=fn(ctx, s, body) {
+          ctx.box(w=Fill(1.0), h=Px(s.h), body) |> ignore
+        }, fn() {
+          button.val = c.id("button")
+          c.box(w=Px(100.0), h=Px(40.0), id=button.val, fn() {  }) |> ignore
+          c.on_press(button.val, fn() { taps.val += 1 })
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  let first = sheet_scrim_ms + @ui.input_step_ms
+  let sample = @ui.move_ms(height) - @ui.input_step_ms
+  t.advance(first)
+  t.frame_at(t.time())
+  let before = t.ctx().rect_of(button.val).unwrap().1
+  t.advance(sample - first)
+  if with_frame { t.frame_at(t.time()) }
+  let target = if with_frame {
+    let after = t.ctx().rect_of(button.val).unwrap().1
+    assert_true(before - after > 0.01, msg="surface must still move after the scrim: \{before} -> \{after}")
+    (after + before) / 2.0
+  } else { y }
+  t.touch(0, 20.0, target)
+  t.touch(2, 20.0, target)
+  (target, taps.val)
+}
+
+///|
+test "a moving staged legacy sheet takes input after its scrim has settled" {
+  let (y, framed) = legacy_sheet_touched_after_scrim(true, 0.0)
+  let (_, unframed) = legacy_sheet_touched_after_scrim(false, y)
+  assert_eq((framed, unframed), (1, 1), msg="touch at y=\{y}")
+}
+
+///|
+test "a staged legacy sheet can close from a real button without a stale press owner" {
+  let shown = @signals.signal(false)
+  let open = @signals.signal(true)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let presses = Ref(0)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=800.0, tree=fn(root) {
+    window.val = Some(root)
+    root.box(fn(v) { v.height(Is(Some(100.0))) |> ignore }) |> ignore
+    root.show(fn() { shown.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        let fit = c.id("fit")
+        let h = c.laid_size(fit).map(fn(size) { size.1 }).unwrap_or(201.0)
+        sheet(c, "real-sheet", open.get(), h~, fn() {
+          c.box(w=Px(100.0), h=Px(159.0), id=fit, fn() {
+            let id = c.id("done")
+            c.box(w=Px(100.0), h=Px(40.0), id~, label="Done", fn() { c.text("Done") |> ignore }) |> ignore
+            if c.clicked(id) {
+              c.tell_input("done", fn() {
+                window.val.unwrap().event_action(fn() {
+                  @ui.probe_old_layer(host.val.unwrap())
+                  presses.val += 1
+                  open.set(false)
+                })
+              })
+            }
+          }) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(800.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  let root = window.val.unwrap()
+  root.event_action(fn() {
+    shown.set(true)
+    root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+  })
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("Done")
+  assert_eq(presses.val, 1)
+  assert_false(open.get())
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+test "a staged legacy sheet can open from an old input during a frame" {
+  let shown = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let window : Ref[@view.View?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) { @ui.old_views_here(c) }, w=390.0, h=800.0, tree=fn(root) {
+    window.val = Some(root)
+    @ui.old(root, fn(c) {
+      let id = c.id("open")
+      c.box(w=Px(100.0), h=Px(40.0), id~, label="Open", fn() { c.text("Open") |> ignore }) |> ignore
+      if c.clicked(id) {
+        c.tell_input("open", fn() {
+          root.event_action(fn() {
+            shown.set(true)
+            root.after_event_action(fn() { @ui.probe_old_layer(host.val.unwrap()) })
+          })
+        })
+      }
+    }).height(Is(Some(40.0))) |> ignore
+    root.show(fn() { shown.get() }, fn(layer) {
+      let v = @ui.old(layer, fn(c) {
+        sheet(c, "real-sheet", true, h=201.0, fn() { c.text("Body") |> ignore }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(800.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.check_looks(false)
+  t.draw()
+  t.tap_text("Open")
+  assert_true(shown.get())
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("Body") is Some(_))
+}

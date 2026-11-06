@@ -80,6 +80,70 @@ let old_layer_staged_tells : Map[@view.NodeId, Array[(Int, () -> Unit)]] = {}
 let old_layer_staged_views : Map[@view.NodeId, (@view.View, Double)] = {}
 
 ///|
+// Probe only: motions read by each staged old layer, including ones a later frame let go at rest.
+let old_layer_staged_motions : Map[@view.NodeId, Array[(Mover, &Moving)]] = {}
+
+///|
+// Probe only: separately watched body fragments currently used by each staged layer.
+let old_layer_staged_parts : Map[@view.NodeId, Array[Int]] = {}
+
+///|
+// Probe only: the temporary nodes most recently appended for each layer, until the next full build.
+let old_layer_staged_ranges : Map[@view.NodeId, (Int, Int)] = {}
+
+///|
+fn probe_staged_motion(c : Ctx, who : Mover) -> Unit {
+  if !probe_causal_layer.val { return }
+  let id = match island_building.val { Some(id) => id; None => return }
+  let m = match c.movers.iter().find_first(fn(e) { physical_equal(e.who, who) }) {
+    Some(e) => e.m
+    None => return
+  }
+  let motions = match old_layer_staged_motions.get(id) {
+    Some(ms) => ms
+    None => {
+      let ms : Array[(Mover, &Moving)] = []
+      old_layer_staged_motions[id] = ms
+      ms
+    }
+  }
+  match motions.search_by(fn(e) { physical_equal(e.0, who) }) {
+    Some(k) => motions[k] = (who, m)
+    None => motions.push((who, m))
+  }
+}
+
+///|
+fn probe_stage_changed(c : Ctx, v : @view.View, sampled : Double, at : Double) -> Bool {
+  if !v.alive() { return false }
+  match old_islands.iter().find_first(fn(o) { o.id == v.id() }) {
+    Some(o) => {
+      if o.watch.is_stale() || o.watch.changed_now() { return true }
+      match kept_nodes.get((o.part, -1)) {
+        Some(rn) if rn.watch.is_stale() || rn.watch.changed_now() => return true
+        _ => ()
+      }
+      match old_layer_staged_parts.get(v.id()) {
+        Some(parts) => for id in parts {
+          match kept_nodes.get((id, -1)) {
+            Some(rn) if rn.watch.is_stale() || rn.watch.changed_now() => return true
+            _ => ()
+          }
+        }
+        None => ()
+      }
+    }
+    _ => ()
+  }
+  if at == sampled { return false }
+  let earlier = dmin(at, sampled)
+  match old_layer_staged_motions.get(v.id()) {
+    Some(ms) => ms.iter().any(fn(e) { e.1.rest_at(earlier, c.frame_no) > earlier })
+    None => false
+  }
+}
+
+///|
 // Probe only: the first ordinary build after staging may reuse the staged body once.
 let old_layer_body_pending : Map[@view.NodeId, Bool] = {}
 
@@ -91,6 +155,10 @@ pub fn probe_keep_staged_body() -> Bool {
       old_layer_body_pending.remove(id)
       true
     }
+    Some(id) => {
+      old_layer_staged_parts.remove(id)
+      false
+    }
     _ => false
   }
 }
@@ -98,7 +166,22 @@ pub fn probe_keep_staged_body() -> Bool {
 ///|
 pub fn probe_kept_sheet_body(c : Ctx, key : String, body : () -> Unit) -> Unit {
   let (ww, wh) = c.window_size()
-  c.part_nodes(c.id(key + "/probe-body"), "\{ww}x\{wh}", body, true, own=true, fragment=true)
+  let part = c.id(key + "/probe-body")
+  match island_building.val {
+    Some(id) => {
+      let parts = match old_layer_staged_parts.get(id) {
+        Some(parts) => parts
+        None => {
+          let parts : Array[Int] = []
+          old_layer_staged_parts[id] = parts
+          parts
+        }
+      }
+      if !parts.contains(part) { parts.push(part) }
+    }
+    None => ()
+  }
+  c.part_nodes(part, "\{ww}x\{wh}", body, true, own=true, fragment=true)
 }
 
 ///|
@@ -408,6 +491,9 @@ fn view_forget() -> Unit {
   probe_causal_layer.val = false
   old_layer_staged_tells.clear()
   old_layer_staged_views.clear()
+  old_layer_staged_motions.clear()
+  old_layer_staged_parts.clear()
+  old_layer_staged_ranges.clear()
   old_layer_body_pending.clear()
   // A replacement tree can change who may type even if the numeric focus stays the same during an event.
   view_modals_version.val += 1
@@ -2832,7 +2918,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   let held_tip = passive_hold_before(kind, x, y)
   let stages = old_placed.iter().filter_map(fn(p) { old_layer_staged_views.get(p.0) }).collect()
   for (v, staged_at) in stages {
-    if v.alive() && at > staged_at { probe_old_layer(v) }
+    if probe_stage_changed(g(), v, staged_at, at) { probe_old_layer(v) }
   }
   g().projected_input(tree)
   // (what the old views take presses at, where the tree has them as of then)
@@ -3205,6 +3291,13 @@ fn view_frame_end(c : Ctx) -> Unit {
     Some(t) => t
     None => return
   }
+  if frame_drawn_as.val is Built {
+    for (id, (v, _)) in old_layer_staged_views.to_array() {
+      if v.alive() && (old_boxes.contains(id) || (old_whole.val && old_whole_island() == Some(id))) {
+        old_layer_staged_views[id] = (v, c.clock)
+      }
+    }
+  }
   // (where the old frame's topmost modal layer is in the window's stack of layers, as this frame built it: what of the
   // tree is not over it takes no input, Tree::hold_under)
   tree.hold_under(c.old_modal_stack())
@@ -3378,6 +3471,9 @@ pub fn old(
         let layers = c.last_layers.filter(fn(l) { l.owner == Some(id) }).rev()
         for l in layers { c.layer_ended(l.id) }
         old_layer_staged_views.remove(id)
+        old_layer_staged_motions.remove(id)
+        old_layer_staged_parts.remove(id)
+        old_layer_staged_ranges.remove(id)
         old_layer_staged_tells.remove(id)
         old_layer_body_pending.remove(id)
       }
@@ -6179,6 +6275,7 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
   let p = old_placed.iter().find_first(fn(p) { p.0 == o.id }).unwrap()
   let (_, _, _, w, h, _, x, y, _) = p
   let c = g()
+  old_layer_staged_parts.remove(v.id())
   let (window_w, window_h) = view_window.val
   let previous_window = (c.window_w, c.window_h)
   let previous_room = (c.width, c.height)
@@ -6217,6 +6314,10 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
   nodes_run.evented = false
   c.layers_opened.clear()
   for pass in 0..<frame_passes_most {
+    let reclaimed = match old_layer_staged_ranges.get(o.id) {
+      Some((from, until)) if until == c.count && old_boxes.get(o.id) == Some(from) => Some((from, until))
+      _ => None
+    }
     match kept_nodes.get((o.part, -1)) {
       Some(rn) if rn.in_pool => {
         let from = rn.base
@@ -6240,11 +6341,33 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
         c.row_nodes_out(rn)
         rn.in_pool = false
         rn.ok = false
+        // These slots now hold spare nodes, not the old layer. A stage can run after a frame's build and before its
+        // paint, when the frame still scans every slot below `count` for semantics and press ownership.
+        for i in from..<until {
+          c.nodes[i].reset_rest()
+          c.nodes[i].parent = -1
+        }
+        if wrapper >= 0 {
+          c.nodes[wrapper].reset_rest()
+          c.nodes[wrapper].parent = -1
+        }
         c.nodes[0].first = -1
         c.nodes[0].last = -1
         for i in children { c.link_last(0, i) }
       }
       _ => ()
+    }
+    match reclaimed {
+      Some((from, until)) => {
+        for i in from..<until {
+          native_nodes.remove(i)
+          stream_nodes.remove(i)
+          picture_at.remove(i)
+        }
+        old_box_owners.remove(from)
+        c.count = from
+      }
+      None => ()
     }
     if pass > 0 {
       nodes_run.whole = true
@@ -6284,6 +6407,7 @@ pub fn probe_old_layer(v : @view.View) -> Unit {
     c.raise_layers()
     c.reads_after_layout()
     c.layers_focus()
+    old_layer_staged_ranges[o.id] = (wrapper, c.count)
     laying.val = false
     building.val = false
     probe_causal_layer.val = false

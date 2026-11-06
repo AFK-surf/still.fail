@@ -501,3 +501,33 @@ test "a staged layer removed before any frame must not leak an unseen tell" {
   t.frame_now()
   assert_eq(told.val, 0, msg="an unshown, removed layer's build must not tell")
 }
+
+///|
+test "remeasuring a staged old layer does not accumulate discarded nodes" {
+  let open = @signals.signal(false)
+  let host : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_) {  }, w=390.0, h=844.0)
+  set_view_app(fn(root) {
+    old(root, fn(c) { c.text("Page") |> ignore }).height(Is(Some(40.0))) |> ignore
+    root.show(fn() { open.get() }, fn(layer) {
+      let v = old(layer, fn(c) {
+        c.overlay("sheet", modal=true, initial_focus=0, fn() {
+          c.box(w=Px(200.0), h=Px(120.0), fn() { c.text("Body") |> ignore }) |> ignore
+        }) |> ignore
+      })
+      v.over(Is(true)).width(Is(Some(390.0))).height(Is(Some(844.0))) |> ignore
+      host.val = Some(v)
+    })
+  })
+  t.draw()
+  let root = view_tree().unwrap().root()
+  root.event_action(fn() {
+    open.set(true)
+    root.after_event_action(fn() { probe_old_layer(host.val.unwrap()) })
+  })
+  let first_count = g().count
+  for _ in 0..<20 {
+    root.event_action(fn() { probe_old_layer(host.val.unwrap()) })
+  }
+  assert_true(g().count <= first_count + 10, msg="node count grew from \{first_count} to \{g().count} without a frame")
+}

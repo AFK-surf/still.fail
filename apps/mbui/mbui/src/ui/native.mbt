@@ -739,7 +739,7 @@ pub fn Ctx::native(
   }
   native_nodes[i] = (v, content, r)
   // (a view of the system's, placed where it is each frame: a part kept builds it each frame, kept_part.mbt)
-  part_live()
+  if !probe_causal_layer.val { part_live() }
   i
 }
 
