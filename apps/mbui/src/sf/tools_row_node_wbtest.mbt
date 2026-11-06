@@ -74,8 +74,8 @@ fn row_test_case(
 ///|
 test "tools row nodes: actual width drops whole tools in priority order and brings the same nodes back" {
   let width = @signals.signal(220.0)
-  let hits : Map[String, Int] = {}
-  let nodes : Map[String, @view.View] = {}
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
   let t = row_test_case(width, @signals.signal(true), @signals.signal(true), @signals.signal(false), @signals.signal(false), hits, nodes)
   let old = nodes["preview"].id()
   for k in ["view", "preview", "upload", "mkdir", "more"] {
@@ -110,8 +110,8 @@ test "tools row nodes: its open menu follows left-out tools and live items, and 
   let preview = @signals.signal(true)
   let off = @signals.signal(false)
   let choice = @signals.signal(false)
-  let hits : Map[String, Int] = {}
-  let nodes : Map[String, @view.View] = {}
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
   let t = row_test_case(width, fixed, preview, off, choice, hits, nodes)
   t.click(Button, label="more")
   assert_eq(t.all(MenuItem).map(fn(s) { s.label }), ["list", "preview menu", "mkdir menu", "refresh"])
@@ -132,8 +132,8 @@ test "tools row nodes: its open menu follows left-out tools and live items, and 
 test "tools row nodes: without fixed items the more button comes and goes with overflow, closing an open menu" {
   let width = @signals.signal(120.0)
   let fixed = @signals.signal(false)
-  let hits : Map[String, Int] = {}
-  let nodes : Map[String, @view.View] = {}
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
   let t = row_test_case(width, fixed, @signals.signal(true), @signals.signal(false), @signals.signal(false), hits, nodes)
   assert_true(t.query(Button, label="more") is Some(_))
   t.click(Button, label="more")
@@ -151,8 +151,8 @@ test "tools row nodes: without fixed items the more button comes and goes with o
 ///|
 test "tools row nodes: keyboard opens its menu, moves, chooses and restores focus; removing the row removes its menu" {
   let shown = @signals.signal(true)
-  let hits : Map[String, Int] = {}
-  let nodes : Map[String, @view.View] = {}
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
   let t = row_test_case(@signals.signal(69.0), @signals.signal(true), @signals.signal(true), @signals.signal(false), @signals.signal(false), hits, nodes, shown~)
   t.tab()
   assert_eq(t.focused().map(fn(s) { s.label }), Some("more"))
@@ -173,8 +173,8 @@ test "tools row nodes: keyboard opens its menu, moves, chooses and restores focu
 ///|
 test "tools row nodes: a finger holding a tool as it leaves cannot press it; its menu item still works" {
   let width = @signals.signal(245.0)
-  let hits : Map[String, Int] = {}
-  let nodes : Map[String, @view.View] = {}
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
   let t = row_test_case(width, @signals.signal(true), @signals.signal(true), @signals.signal(false), @signals.signal(false), hits, nodes, platform=2)
   let r = t.get(Button, label="preview").rect
   let x = r.0 + r.2 / 2.0
