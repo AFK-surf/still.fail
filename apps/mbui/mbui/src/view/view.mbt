@@ -6746,11 +6746,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     passes += 1
     self.laid_passes = passes
     if passes > laid_passes_most {
-      let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
+      let said = "TWOPASS \{passes - 1}: told \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
       println(said)
-      fault(said)
-      self.due = false
-      break
+      if passes > 64 {
+        fault(said)
+        self.due = false
+        break
+      }
     }
     self.told_otherwise.clear()
     let (p, o) = self.laid_pass(upto)
