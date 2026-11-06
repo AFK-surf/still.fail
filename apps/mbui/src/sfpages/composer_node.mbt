@@ -214,10 +214,9 @@ pub fn composer_node(
       ignore(w.files.get())
       @sfbase.writing_stills(@ui.current())
     })) |> ignore
-    // (what was put there before it was made: taken at the moment it is made, as an event of the tree's, not as it is
-    // built; what it left as it could take no files (its chat locked, its station offline): taken at the moment it can
-    // again)
-    root.reacts(no_files, fn(_) { root.at_moment(root.cause_at(), take) |> ignore })
+    // (what was put there before it was made, or left while its chat could take no files, taken in the same committed
+    // change that makes the composer or lets it take files again)
+    root.reacts(no_files, fn(_) { take() })
     root.owns(@signals.effect(fn() {
       match @sfbase.outside_ask.get() {
         Some(s) if s.key == draft => {

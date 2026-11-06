@@ -62,6 +62,33 @@ test "put into a chat's draft before its composer is made: taken once as the com
 }
 
 ///|
+test "a composer takes waiting files quotes marks and words once when it is made at every width" {
+  for (width, platform) in [(390.0, 2), (750.0, 2), (1280.0, 0)] {
+    new_run()
+    let src = fixture("chat")
+    let draft = "ws1/st1:s-c1"
+    @sfbase.files_into(draft, row_dragged("waiting.md"))
+    @sfbase.quote_file_into(draft, "林", "1.0", "user", Json::object({ "name": Json::string("quoted.md"), "size": Json::number(1.0) }))
+    @sfbase.marked_into[draft] = [("marked.png", png_head(), [("图片 标注 1", "标注内容", "说明")], "image")]
+    @sfbase.followed_into[draft] = "把周五的发布挪到周四"
+    @sfbase.draft_given_to(draft)
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform~)
+    t.run_for(@ui.move_most_ms)
+    let w = @sfbase.writings.get(draft).unwrap()
+    let file_count = fn(name) { w.files.get().filter(fn(f) { text(Some(f), "name") == name }).length() }
+    assert_eq(file_count("waiting.md"), 1, msg="\{width}: waiting file taken once")
+    assert_eq(file_count("marked.png"), 1, msg="\{width}: marked image taken once")
+    assert_eq(w.quotes.get().length(), 2, msg="\{width}: file and image quotes taken")
+    assert_true(w.field.text().contains("把周五的发布挪到周四"), msg="\{width}: words put in the field")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(file_count("waiting.md"), 1, msg="\{width}: file not taken again")
+    assert_eq(file_count("marked.png"), 1, msg="\{width}: image not taken again")
+    assert_eq(w.quotes.get().length(), 2, msg="\{width}: quotes not taken again")
+  }
+}
+
+///|
 test "a 文件 row sent to a chat left for another: not in the other's draft; back on the first, in its draft once" {
   let t = chat_tester("chat")
   let first = "ws1/st1:s-c1"
