@@ -22,6 +22,7 @@ fn way_node_case(
   platform? : Int = 0,
 ) -> @ui.Tester {
   presenters_reset()
+  set_dark(None)
   let t = @ui.Tester::new(fn(_c) {  }, w=1000.0, h=600.0, platform~)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
@@ -78,6 +79,32 @@ test "a way's path and room change: ancestors leave from after the first, return
 }
 
 ///|
+test "a way in a row takes the room left beside another control as that room changes" {
+  presenters_reset()
+  let room = @signals.signal(800.0)
+  let path = ["Home", "Projects", "Reports", "Quarterly", "Final notes"]
+  let t = @ui.Tester::new(fn(_c) {  }, w=1000.0, h=600.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    root.box(fn(row) {
+      row.row(Is(true)).width(By(fn() { Some(room.get()) })).lines_up(Is(Some(Middle))) |> ignore
+      way_line_node(row, fn() { path }, fn() { way_node_look(false) }, fn(_) {  }, in_row=true) |> ignore
+      row.box(fn(other) { other.width(Is(Some(200.0))).height(Is(Some(36.0))) |> ignore }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  assert_eq(way_node_links(t), ["Home", "Projects", "Reports", "Quarterly"])
+  room.set(350.0)
+  t.draw()
+  assert_true(way_node_links(t).length() < 4)
+  assert_eq(t.lines_of(way_more), [way_more])
+  room.set(800.0)
+  t.draw()
+  assert_eq(way_node_links(t), ["Home", "Projects", "Reports", "Quarterly"])
+}
+
+///|
 test "a way's hidden steps open in order and go to the chosen index; changing its path closes an open menu" {
   let path = @signals.signal(["Home", "Projects", "Reports", "Quarterly", "Drafts", "Final notes"], same=fn(a, b) { a == b })
   let room = @signals.signal(260.0)
@@ -96,6 +123,22 @@ test "a way's hidden steps open in order and go to the chosen index; changing it
   t.draw()
   assert_false(presenting())
   assert_eq(went, [1])
+}
+
+///|
+test "a way closes its hidden steps menu when a wider line brings those steps back" {
+  let path = @signals.signal(["Home", "Projects", "Reports", "Quarterly", "Drafts", "Final notes"], same=fn(a, b) { a == b })
+  let room = @signals.signal(260.0)
+  let t = way_node_case(path, room, @signals.signal(false), [])
+  let more = t.get(Button).label
+  assert_eq(t.get(Button, label=more).expanded, Some(false))
+  t.act(Button, Focus, label=more)
+  t.enter()
+  assert_true(presenting())
+  room.set(700.0)
+  t.draw()
+  assert_false(presenting())
+  assert_eq(way_node_links(t), ["Home", "Projects", "Reports", "Quarterly", "Drafts"])
 }
 
 ///|
@@ -120,14 +163,25 @@ test "a way follows its look without being remade and updates a step that become
   let went : Array[Int] = []
   let t = way_node_case(path, @signals.signal(700.0), large, went)
   let before = t.rect_of("Home").unwrap().2
+  let home_id = t.get(Link, label="Home").id
+  t.act(Link, Focus, label="Home")
   large.set(true)
   t.draw()
   assert_true(t.rect_of("Home").unwrap().2 > before)
+  assert_eq(t.get(Link, label="Home").id, home_id)
+  assert_true(t.get(Link, label="Home").focused)
+  t.set_dark(true)
+  set_dark(Some(true))
+  t.draw()
+  assert_eq(t.get(Link, label="Home").id, home_id)
+  assert_true(t.get(Link, label="Home").focused)
   path.set(["Home", "Projects"])
   t.draw()
   assert_eq(way_node_links(t), ["Home"])
+  assert_true(t.query(Text, label="Projects") is Some(_))
   t.tap_text("Projects")
   assert_eq(went, [])
+  set_dark(None)
 }
 
 ///|
@@ -148,10 +202,19 @@ test "a way's hover style follows the pointer or a finger held on a link" {
     assert_true(t.drawn_rects().iter().any(fn(r) {
       r.4 == hover && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + w && r.1 + r.3 >= y + h
     }), msg="platform \{platform}")
+    t.set_dark(true)
+    set_dark(Some(true))
+    t.draw()
+    let dark_hover = @ui.tree_theme().color(Hover)
+    assert_true(dark_hover != hover)
+    assert_true(t.drawn_rects().iter().any(fn(r) {
+      r.4 == dark_hover && r.0 <= x && r.1 <= y && r.0 + r.2 >= x + w && r.1 + r.3 >= y + h
+    }), msg="dark platform \{platform}")
     if platform == 2 {
       t.touch(2, cx, cy)
       assert_eq(went, [0])
     }
+    set_dark(None)
   }
 }
 
