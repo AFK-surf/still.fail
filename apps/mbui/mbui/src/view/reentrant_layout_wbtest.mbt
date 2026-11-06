@@ -618,7 +618,8 @@ test "a modal notification held by a batch keeps independent geometry reads sepa
     }
   })
   @signals.start_batch()
-  t.event(10.0, fn() { t.modals_told() })
+  // A raw batch may notify at the current moment; a new timed event must start outside it.
+  t.modals_told()
   assert_true(observed.is_empty())
   @signals.end_batch()
   assert_eq(observed, requested)
@@ -655,10 +656,8 @@ test "modal feedback held by a batch keeps the layout pass guard" {
   })
   @signals.start_batch()
   armed.val = true
-  t.event(10.0, fn() {
-    t.layout_marked_at(0)
-    t.laid_as_now()
-  })
+  t.layout_marked_at(0)
+  t.laid_as_now()
   assert_eq(steps.val, 0)
   @signals.end_batch()
   // The first callback starts a new operation; its 65th requested pass reaches the existing 64-pass guard.
