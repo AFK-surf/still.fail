@@ -2439,6 +2439,9 @@ fn Ctx::scene_emitted(
                 scene_own_redrawn.val = scene_own_redrawn.val + 1
                 if along {
                   scene_along_own.val = scene_along_own.val + 1
+                  // (never: what is moved with what holds it is held by one still, scene_still, all it holds put as kept,
+                  // scene_copyable, none drawn otherwise than by the tree; drawn again here all the same)
+                  @view.fault("layer \{c.id.at}, drawn otherwise than by the tree, moved with what holds it")
                 }
               }
               // (why, told a Tester as the walk tells why one is not copied)
