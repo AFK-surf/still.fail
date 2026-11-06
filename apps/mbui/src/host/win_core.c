@@ -674,7 +674,7 @@ static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json
 static char *on_app_sync(void *ctx, const char *op, const char *json, size_t len) {
   (void)ctx;
   if (strcmp(op, "text.collate") != 0) return NULL;
-  return win_collate_answer(json, len, NULL);
+  return win_collate_shared_answer(json, len, NULL);
 }
 
 static void on_log(void *ctx, int level, const char *text, size_t len) {
