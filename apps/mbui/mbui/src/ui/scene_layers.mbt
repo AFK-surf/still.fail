@@ -2272,12 +2272,10 @@ fn scene_reach_moved(l : SceneLayer, dx : Double, dy : Double) -> Unit {
   match l.entries {
     Some(es) =>
       for e in es {
-        let r = e.reach
-        if r.x1 > r.x0 {
-          r.x0 = r.x0 + dx
-          r.y0 = r.y0 + dy
-          r.x1 = r.x1 + dx
-          r.y1 = r.y1 + dy
+        let (x0, y0, x1, y1) = e.reach.rect()
+        if x1 > x0 {
+          e.reach.clear()
+          e.reach.add(x0 + dx, y0 + dy, x1 + dx, y1 + dy)
         }
       }
     None => ()
