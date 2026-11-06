@@ -35,10 +35,13 @@ pub fn composer_on_page(
   let w = @signals.untracked(fn() { @sfbase.writing(src, draft) })
   let me = parent.id()
   parent.show(fn() { active() && w.held_by.get().map_or(true, fn(h) { h == me }) }, fn(f) {
-    // (said held once the layout it is made in is over, as what another page's composer of it reads: that one let go
-    // then, not in a layout that measured it already)
+    // (said held once the layout it is made in is over, as what another page's composer of it reads: that one made or
+    // let go then, not in a layout that measured it already)
     f.made_after_layout(fn() { @signals.untracked(fn() { w.held_by.set(Some(me)) }) })
-    f.owns(fn() { if @signals.untracked(fn() { w.held_by.get() }) == Some(me) { w.held_by.set(None) } }) |> ignore
+    // (and let go so, as the layout that let it go is over: what holds it next made then)
+    f.owns(fn() {
+      f.told_after_layout(fn() { if @signals.untracked(fn() { w.held_by.get() }) == Some(me) { w.held_by.set(None) } })
+    }) |> ignore
     make(f)
   })
 }

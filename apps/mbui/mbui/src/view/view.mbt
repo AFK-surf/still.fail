@@ -2017,6 +2017,15 @@ pub fn View::made_after_layout(self : View, f : () -> Unit) -> Unit {
 }
 
 ///|
+/// `f` (what a node tells as it is made or let go: a signal what another branch shows by reads) told now, or, asked while
+/// its tree is laid out, as the outermost layout of this moment is done (as View::made_after_layout's), let go by then
+/// or not: what that other branch does then laid out in a pass of its own, never in the layout that measured it.
+pub fn View::told_after_layout(self : View, f : () -> Unit) -> Unit {
+  guard self.laying_out() else { f(); return }
+  self.tree.made_after.push(f)
+}
+
+///|
 /// The moment the logic is at (Tree::logic_at), for what a node works out from the time.
 pub fn View::logic_at(self : View) -> Double {
   self.tree.logic_at()
@@ -3712,7 +3721,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
       i = i + 1
     }
     self.bindings_due.clear()
-    if self.layout_due && self.measured_gen < 0 {
+    let measure = fn() {
       self.laid_out_now(0, self.last_w, self.last_h, fn(g) {
         self.measured_gen = g
         // (placed by once things are placed, whatever is laid out again before that)
@@ -3720,6 +3729,28 @@ fn Tree::measured_now(self : Tree) -> Unit {
           self.walk_from = g
         }
       })
+    }
+    if self.layout_due && self.measured_gen < 0 {
+      measure()
+    }
+    // (what this measuring said for once it is over (View::made_after_layout, told_after_layout), done before it
+    // returns where no layout holds it, and what that changed measured again: what is read after it is of then)
+    // (each round of them a pass of this moment's, bounded as a layout's are: laid_passes_most)
+    if self.laying == 0 && self.layout_owner < 0 {
+      let mut rounds = 0
+      while !self.made_after.is_empty() {
+        rounds += 1
+        if rounds > laid_passes_most {
+          // (a fault; what is left of them done by the next layout, as its own are: Tree::laid_out)
+          fault("measured: what was said for once it is measured said more each time, \{laid_passes_most} rounds")
+          break
+        }
+        self.made_after_run()
+        // (marked by them: measured_gen let go where the layout was marked, Tree::layout_marked_at)
+        if self.layout_due && self.measured_gen < 0 {
+          measure()
+        }
+      }
     }
   })
   if shown != at {
@@ -3729,6 +3760,20 @@ fn Tree::measured_now(self : Tree) -> Unit {
     })
   }
   self.standing = was_standing
+}
+
+///|
+/// What was said for once the layout under way is over (View::made_after_layout, told_after_layout), each done now
+/// (what those say in turn left for the next round).
+fn Tree::made_after_run(self : Tree) -> Unit {
+  let now = self.made_after.copy()
+  self.made_after.clear()
+  let was = self.making_after
+  self.making_after = true
+  for f in now {
+    f()
+  }
+  self.making_after = was
 }
 
 ///|
