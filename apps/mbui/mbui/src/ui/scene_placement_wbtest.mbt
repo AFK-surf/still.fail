@@ -80,3 +80,161 @@ test "a child moved alone stays where it moved when its parent's recording is re
 test "several child-only frames retain the latest position when their parent is replayed" {
   placement_after_child_moves([20.0, 30.0, 40.0], "placement-many")
 }
+
+///|
+test "the same parent and child inputs finish with the same picture and press target with or without intervening frames" {
+  let pictures : Array[Array[Array[Double]]] = []
+  for hz in [0, 60, 120] {
+    let parent_x = @signals.signal(20.0)
+    let child_y = @signals.signal(10.0)
+    let pressed = Ref(0)
+    let t = Tester::new(fn(_) { }, w=400.0, h=300.0)
+    set_view_app(fn(root) {
+      root.box(fn(parent) {
+        parent.over(Is(true)).offset(By(fn() { (parent_x.get(), 20.0) }))
+          .width(Is(Some(100.0))).height(Is(Some(100.0))).ground(Is(0xDDDDDDFFL)) |> ignore
+        parent.box(fn(child) {
+          child.over(Is(true)).offset(Is((10.0, 0.0))).drawn_off(By(fn() { (0.0, child_y.get()) }))
+            .width(Is(Some(18.0))).height(Is(Some(18.0))).ground(Is(0x1559C4FFL))
+            .says(Is(Some(@view.said(Button, label="child")))).on_press(fn() { pressed.val += 1 }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    })
+    t.draw()
+    t.measure_as_host()
+    t.clock_frame()
+    t.record_host()
+    let start = t.time()
+    let tree = view_tree().unwrap()
+    let period = if hz == 0 { 1000.0 } else { 1000.0 / hz.to_double() }
+    let mut next = 1
+    for (ms, y) in [(13.0, 20.0), (29.0, 30.0), (47.0, 40.0), (82.0, -1.0)] {
+      while next.to_double() * period < ms {
+        t.frame_at(start + next.to_double() * period)
+        next += 1
+      }
+      t.advance(start + ms - t.time())
+      tree.event(start + ms, fn() { if y < 0.0 { parent_x.set(40.0) } else { child_y.set(y) } })
+    }
+    while next.to_double() * period < 100.0 {
+      t.frame_at(start + next.to_double() * period)
+      next += 1
+    }
+    t.frame_at(start + 100.0)
+    let frames = t.host_frames().map(fn(f) { f.at })
+    println("placement schedule \{hz} Hz (0: direct): actual frames \{frames}, child \{placement_child_rect()}")
+    assert_eq(placement_child_rect(), (50.0, 60.0))
+    pictures.push(t.drawn_instances())
+    // drawn_off animates the picture away from its destination; presses still find that destination.
+    assert_eq(t.press_target_at(59.0, 29.0).map(fn(s) { s.label }), Some("child"))
+    assert_eq(t.press_target_at(59.0, 69.0).map(fn(s) { s.label }), None)
+    t.touch_at(0, 59.0, 29.0, start + 101.0)
+    t.touch_at(2, 59.0, 29.0, start + 102.0)
+    assert_eq(pressed.val, 1)
+  }
+  assert_eq(pictures[0], pictures[1], msg="direct and 60 Hz")
+  assert_eq(pictures[0], pictures[2], msg="direct and 120 Hz")
+}
+
+///|
+test "a removed child layer is replaced at its new position before its parent is replayed" {
+  let shown = @signals.signal(true)
+  let parent_x = @signals.signal(20.0)
+  let child_y = @signals.signal(10.0)
+  let child_view : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_) { }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(parent) {
+      parent.over(Is(true)).offset(By(fn() { (parent_x.get(), 20.0) }))
+        .width(Is(Some(150.0))).height(Is(Some(150.0))).ground(Is(0xDDDDDDFFL)) |> ignore
+      parent.show(fn() { shown.get() }, fn(child) {
+        child_view.val = Some(child)
+        child.over(Is(true)).offset(Is((10.0, 0.0))).drawn_off(By(fn() { (0.0, child_y.get()) }))
+          .width(Is(Some(18.0))).height(Is(Some(18.0))).ground(Is(0x1559C4FFL))
+          .says(Is(Some(@view.said(Button, label="child")))).on_press(fn() { }) |> ignore
+      })
+    }) |> ignore
+  })
+  t.draw()
+  t.measure_as_host()
+  t.clock_frame()
+  child_y.set(40.0)
+  t.clock_frame()
+  parent_x.set(40.0)
+  t.clock_frame()
+  let old = child_view.val.unwrap().id()
+  assert_eq(placement_child_rect(), (50.0, 60.0))
+  shown.set(false)
+  t.clock_frame()
+  assert_false(scene.layers.contains(old), msg="the removed layer really left the scene")
+  child_y.set(60.0)
+  shown.set(true)
+  t.clock_frame()
+  let fresh = child_view.val.unwrap().id()
+  assert_true(fresh.at == old.at && fresh.gen != old.gen, msg="the node slot was reused with a new identity")
+  assert_eq(placement_child_rect(), (50.0, 80.0))
+  parent_x.set(70.0)
+  t.clock_frame()
+  assert_eq(placement_child_rect(), (80.0, 80.0))
+  assert_eq(t.press_target_at(89.0, 29.0).map(fn(s) { s.label }), Some("child"))
+  child_y.set(65.0)
+  t.clock_frame()
+  parent_x.set(90.0)
+  t.clock_frame()
+  assert_eq(placement_child_rect(), (100.0, 85.0))
+  let kept = t.drawn_instances()
+  t.check_looks(true)
+  g().scene_check(-1)
+  assert_eq(t.drawn_instances(), kept)
+}
+
+///|
+test "a child layer left out of its row and drawn again keeps its current position when the parent replays" {
+  let width = @signals.signal(40.0)
+  let parent_x = @signals.signal(20.0)
+  let child_y = @signals.signal(10.0)
+  let child_view : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_) { }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    root.box(fn(parent) {
+      parent.over(Is(true)).row(Is(true)).fits(Is(true)).offset(By(fn() { (parent_x.get(), 20.0) }))
+        .width(By(fn() { Some(width.get()) })).height(Is(Some(100.0))).ground(Is(0xDDDDDDFFL)) |> ignore
+      parent.box(fn(filler) { filler.width(Is(Some(20.0))).height(Is(Some(18.0))) |> ignore }) |> ignore
+      parent.box(fn(child) {
+        child_view.val = Some(child)
+        child.drops(Is(1)).drawn_off(By(fn() { (0.0, child_y.get()) }))
+          .width(Is(Some(18.0))).height(Is(Some(18.0))).ground(Is(0x1559C4FFL))
+          .says(Is(Some(@view.said(Button, label="child")))).on_press(fn() { }) |> ignore
+      }) |> ignore
+    }) |> ignore
+  })
+  t.draw()
+  t.measure_as_host()
+  t.clock_frame()
+  child_y.set(40.0)
+  t.clock_frame()
+  parent_x.set(40.0)
+  t.clock_frame()
+  let id = child_view.val.unwrap().id()
+  assert_eq(placement_child_rect(), (60.0, 60.0))
+  width.set(20.0)
+  t.clock_frame()
+  assert_true(child_view.val.unwrap().left_out())
+  // A tree-only frame can keep an unseen layer's recording. A real window resize paints the old frame too,
+  // so scene_end discards layers no longer seen; the live node will later acquire a fresh layer with revision zero.
+  t.resize(401.0, 300.0)
+  assert_false(scene.layers.contains(id), msg="the live node's unseen layer was discarded at scene_end")
+  child_y.set(60.0)
+  width.set(40.0)
+  t.clock_frame()
+  assert_true(scene.layers.contains(id), msg="the same node has a newly recorded layer")
+  assert_eq(placement_child_rect(), (60.0, 80.0))
+  parent_x.set(70.0)
+  t.clock_frame()
+  assert_eq(placement_child_rect(), (90.0, 80.0))
+  assert_eq(t.press_target_at(99.0, 29.0).map(fn(s) { s.label }), Some("child"))
+  let kept = t.drawn_instances()
+  t.check_looks(true)
+  g().scene_check(-1)
+  assert_eq(t.drawn_instances(), kept)
+}
