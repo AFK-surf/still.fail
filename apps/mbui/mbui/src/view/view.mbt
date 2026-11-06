@@ -6747,16 +6747,20 @@ fn Tree::settled_at(self : Tree, at : Double) -> Bool {
   if self.standing || self.last_w <= 0.0 {
     return false
   }
-  if !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
-    return true
-  }
-  self.standing = true
-  self.work.settles = self.work.settles + 1
   let shown = @signals.untracked(fn() { self.clock.get() })
   // (a change told by what a frame's layout told (a size, a place), settled within that layout: at the frame's moment,
   // as that layout places all of it, never at the change's own between its passes, the clock set back and forth: what
   // is placed by the clock (a page sliding in) told at the one moment and then the other, pass after pass)
   let at = if self.laid_passes > 0 && at < shown { shown } else { at }
+  // (nothing told since and placed at that very moment: as it stands. Placed at another (a frame drawn for a later
+  // moment than an event's, a host's frame ahead of its input): laid out and placed at `at` all the same, whatever
+  // frames came between)
+  if shown == at &&
+    !(self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+    return true
+  }
+  self.standing = true
+  self.work.settles = self.work.settles + 1
   // A due change settles at its own moment, before the outer advance reaches its destination. Its looks must
   // see that same logical moment when they decide whether a finished way still needs the drawing clock.
   let cause = self.cause_at
