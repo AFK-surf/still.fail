@@ -1380,7 +1380,11 @@ fn Ctx::tree_step(
     // (a check's frame never left out by what was kept: drawn, and left out after by where it reaches as drawn now, below)
     if skippable && !scene_checking() && self.scene_layer_left_out(c.id, ox + x, oy + y, clip_top()) {
       match scene.layers.get(c.id) {
-        Some(l) => scene_left_out(l, scene.drawing, self.ninst, self.segs.length() / 4)
+        Some(l) => {
+          // (put where it is all the same, it and what it holds: kept so as what holds it keeps where it is)
+          scene_moved_out(l, (ox + x - l.held.0 - l.shown.0, oy + y - l.held.1 - l.shown.1))
+          scene_left_out(l, scene.drawing, self.ninst, self.segs.length() / 4)
+        }
         None => ()
       }
       return

@@ -2095,6 +2095,8 @@ fn Ctx::scene_emitted(
           match self.scene_moved_by(p.tree, l, c) {
             Some(m) =>
               if self.scene_layer_put_out(c, m) {
+                // (where it is put told to what holds it, scene_moved_by: it and what it holds put there all the same)
+                scene_moved_out(c, m)
                 scene_left_out(c, None, self.ninst, self.segs.length() / 4)
               } else {
                 self.scene_emitted(p, c, moved=m)
@@ -2353,7 +2355,9 @@ fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLa
   let tree = by.tree
   guard scene_place_now(tree, c) is Some(place) else { return }
   // (wholly outside what it is drawn in and the window: left out, as the walk leaves it out)
-  guard !self.scene_layer_put_out(c, (place.0 - c.held.0 - c.shown.0, place.1 - c.held.1 - c.shown.1)) else {
+  let m = (place.0 - c.held.0 - c.shown.0, place.1 - c.held.1 - c.shown.1)
+  // (left out only where it is where it was put: moved, it is drawn, where what holds it keeps it told)
+  guard m != (0.0, 0.0) || !self.scene_layer_put_out(c, m) else {
     scene_left_out(c, None, self.ninst, self.segs.length() / 4)
     return
   }
