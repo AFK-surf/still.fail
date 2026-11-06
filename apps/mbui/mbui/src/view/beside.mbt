@@ -471,10 +471,17 @@ pub fn View::window_taps(self : View) -> Int {
 
 ///|
 /// Whether what a finger or a button at (`x`, `y`) of the window is for, as the tree is now, is this node (Tree::target_at:
-/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's.
+/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's. A
+/// gesture begun on its drawing is on it only while in that drawing; one begun in its press room may end there too.
 pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
   match self.tree.target_at(x, y) {
-    Pressed(id) | Dragged(id) => id == self.id()
+    Pressed(id) | Dragged(id) => {
+      if id != self.id() { return false }
+      match self.live() {
+        Some(n) if n.gesture_from_room == Some(false) => self.tree.under(x, y).contains(id)
+        _ => true
+      }
+    }
     _ => false
   }
 }
