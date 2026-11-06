@@ -28,8 +28,6 @@ export const CREATE = "session.create";
 /// The method a station tells the opener of a chat how one of its turns ended.
 export const NOTICE = "session.notice";
 
-/// At most this many chats an agent opened are open at once (not ended all_done): more is for a person to ask for.
-export const MAX_OPEN = 8;
 /// At most this much text in the first message (as session_send's).
 const MAX_TEXT = 200_000;
 
@@ -188,17 +186,6 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     }
     return opened({ session: before.child, link: before.link, thread }, there, true);
   }
-  // Those still going: not ended all_done, and (here) not archived or deleted.
-  const open = hub.store.openedBy(key).filter((o) => {
-    if (o.state === "all_done") return false;
-    if (o.childStation !== "") return true;
-    const row = hub.store.getSession(o.child);
-    return row !== null && row.archivedAt === null;
-  });
-  if (open.length >= MAX_OPEN) {
-    throw new Error(`${open.length} chats you opened have not ended all_done (${open.map((o) => o.link ?? o.child).join(", ")}): finish with them, or ask a person, before opening more`);
-  }
-
   if (there === null) {
     const chosen = model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
     const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null });
