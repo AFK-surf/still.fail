@@ -339,7 +339,7 @@ export class Accounts {
     }
     if (this.deps.checkOnStart !== false) {
       this.background.after(CHECK_ON_START_MS, () => {
-        for (const p of this.profiles()) this.background.spawn(() => this.check(p.id));
+        for (const p of this.profiles()) if (p.enabled !== false) this.background.spawn(() => this.check(p.id));
         this.renewConsoles();
       });
     }
@@ -437,6 +437,9 @@ export class Accounts {
   /// joins later runs on it too.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
     this.own(id, lang);
+    const before = this.profile(id);
+    if (given.enabled !== undefined && typeof given.enabled !== "boolean") throw new Refusal(400, "enabled must be a boolean");
+    if (given.enabled !== undefined && before?.machine === true) throw new Refusal(400, "a machine login cannot be paused here");
     const givenWorkspaces = given.workspaces;
     if (givenWorkspaces !== undefined && !manages(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
     if (givenWorkspaces !== undefined && givenWorkspaces !== null && (!Array.isArray(givenWorkspaces) || !givenWorkspaces.every((w) => typeof w === "string" && /^[0-9A-Za-z_-]{1,128}$/.test(w)))) {
@@ -532,6 +535,7 @@ export class Accounts {
       // Only the default's opposite is written.
       if (background === false) next.backgroundOnMessage = false;
       if (fast === true) next.fast = true;
+      if ((given.enabled ?? existing?.enabled) === false) next.enabled = false;
       if (withheld.length > 0) next.withheld = withheld;
       if (existing) {
         const kept = runtimesFor(next.access, next.runtime);
@@ -542,6 +546,9 @@ export class Accounts {
       if (at >= 0) list[at] = next;
       else list.push(next);
     });
+    if (before?.enabled !== false && given.enabled === false) {
+      this.deps.hub?.profileGone?.(id).catch((error) => log.warn("accounts", "moving sessions off a disabled profile failed", { profile: id, error: (error as Error).message }));
+    }
   }
 
   /// DELETE /profiles/:id. Its home stays. Taken even while sessions or connects use it (the pages say so first): its
@@ -946,6 +953,7 @@ export class Accounts {
   async check(id: string, lang: Lang = stationLang()): Promise<ProfileCheck> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (profile.enabled === false) throw new Refusal(409, tr(lang, "station.profile.disabled", { profile: profile.name }));
     const kind = accessKind(profile);
     if (borrowed(profile) && kind === "subscription" && this.deps.shared) return this.checkBorrowed(profile, lang);
     // Signed in to Kimi: asked with its current token (renewed first where due), none once signed out.
@@ -1110,6 +1118,7 @@ export class Accounts {
   private async askQuota(id: string): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (profile.enabled === false) return this.quotas.get(id) ?? null;
     const generation = this.loginGeneration.get(id) ?? 0;
     // Another station's subscription: a Codex one's is read with the login its host lent while that is good; otherwise
     // (none lent yet, run out, refused) it comes with its host's check.
@@ -1183,6 +1192,7 @@ export class Accounts {
     if (!this.quotaFn) return;
     const now = this.background.now();
     for (const p of this.profiles()) {
+      if (p.enabled === false) continue;
       const q = this.quotas.get(p.id);
       const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
       if (fresh && !all) {
@@ -1204,6 +1214,7 @@ export class Accounts {
   /// retire app-servers that cached it after their current turns. A reset also wakes sessions once its allowance is read.
   async sharedChanged(id: string, reset: boolean): Promise<void> {
     const profile = this.profile(id);
+    if (profile?.enabled === false) await this.deps.hub?.profileGone?.(id);
     if (!profile || !borrowed(profile) || accessKind(profile) !== "subscription" || !this.deps.shared) return;
     // A host that signed out may have no login to lend; its status must still reach the copy.
     await this.checkBorrowed(profile, stationLang());
@@ -1268,6 +1279,7 @@ export class Accounts {
   decisionModels(): { id: string; name: string; profiles: string[] }[] {
     const models = new Map<string, string[]>();
     for (const profile of this.profiles()) {
+      if (profile.enabled === false) continue;
       const health = this.deps.hub?.accounts.healthOf(profile.id) ?? this.health(profile.id);
       if (!usable(health)) continue;
       const capability: Capability | undefined = health.check?.decision;
@@ -1329,7 +1341,7 @@ export class Accounts {
   /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
   async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyRefresh"));
-    const ids = this.profiles().map((p) => p.id);
+    const ids = this.profiles().filter((p) => p.enabled !== false).map((p) => p.id);
     const errors: unknown[] = [];
     let next = 0;
     const worker = async () => {
@@ -1478,9 +1490,10 @@ export class Accounts {
         models: p.models, named: p.named,
         env,
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
-        usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
+        usedBy: p.enabled === false ? [] : config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
         loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home, p.machine === true) : "",
         machine: p.machine === true,
+        enabled: p.enabled !== false,
         backgroundOnMessage: p.backgroundOnMessage,
         fast: takesFast(p) && (!fastNeedsCredits(p) || this.quotas.get(p.id)?.extraUsage === true) ? p.fast === true : null,
         check: checkView,

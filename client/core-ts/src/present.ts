@@ -732,10 +732,10 @@ export function profile(p: J): J {
   if (isObject(o.quota)) o.quota = legacyCodexQuota(o);
   if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access = { ...o.access, kind: "api-provider" };
   const blocked = get(o.quota, "state") === "blocked";
-  const [text, tone] = blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);
+  const [text, tone] = o.enabled === false ? [t("core-views.present.profile.disabled"), "neutral"] : blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);
   o.checkText = text;
   o.checkTone = tone;
-  o.trouble = profileTrouble(o);
+  o.trouble = o.enabled === false ? null : profileTrouble(o);
   // The kind of account it is listed under, as the workspace's list has it (views/profiles.ts).
   o.group = profileGroup(o);
   o.groupTitle = profileGroupTitle(o.group);
@@ -801,7 +801,7 @@ export function profile(p: J): J {
   const named = str(o.name) ?? "";
   const detail = withoutPart(withoutPart((detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, ""), named), kind === "subscription" ? (checkPlan ?? "") : "");
   // A machine's token-only check may have said `max` while its own login identifies that plan as Ultra.
-  o.checkLine = isObject(o.check)
+  o.checkLine = o.enabled === false ? "" : isObject(o.check)
     ? withoutPart(detail, o.runtime === "claude" && checkPlan?.toLowerCase() === "ultra" ? "max" : "")
     : t("core-views.present.profile.never_checked");
   return o;

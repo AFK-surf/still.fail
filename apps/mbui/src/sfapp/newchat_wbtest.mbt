@@ -314,6 +314,18 @@ test "a new chat: its station picked in the sheet, its model in the model's pane
 }
 
 ///|
+test "a new chat with disabled profiles leads back to enable them" {
+  let t = tester("newchat-disabled")
+  open_mode("newchat-disabled")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("Profile 已停用") is Some(_))
+  assert_true(t.find("Willow 的可用 Profile 均已停用，请在 Profile 页面重新启用。") is Some(_))
+  t.tap_text("查看 Profile")
+  assert_true(app.nav.top() is Setting(@settings.Route::Profiles("ws1/st1")))
+}
+
+///|
 test "the bar is glass of one capture: the bar with its notch, 令 and the ball frosting the page under them" {
   let t = tester("home")
   let gs = t.drawn_glass().filter(fn(g) { g.1 > 844.0 - 22.0 - 56.0 - 40.0 })

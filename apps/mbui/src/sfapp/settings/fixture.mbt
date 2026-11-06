@@ -63,6 +63,8 @@ priv struct SettingsFixture {
   mut reset_expiry : Bool
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
+  /// Whether the example API key is enabled.
+  mut key_enabled : Bool
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
@@ -133,6 +135,7 @@ let fx : SettingsFixture = {
   resets_used: 0,
   reset_expiry: false,
   models_added: [],
+  key_enabled: true,
   pairing: false,
   pairing_personal: false,
   protecting: false,
@@ -215,6 +218,7 @@ fn fixture_reset() -> Unit {
   fx.resets_used = 0
   fx.reset_expiry = false
   fx.models_added.clear()
+  fx.key_enabled = true
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -712,10 +716,10 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     )
   }
   p["checkLine"] = str(
-    match field(pv, "check") {
+    if has(pv, "enabled") && !flag(pv, "enabled") { "" } else { match field(pv, "check") {
       Some(Object(_)) => text(field(pv, "check"), "detail").replace(old="可用，", new="")
       _ => "尚未检查"
-    },
+    } },
   )
   Json::object(p)
 }
@@ -753,9 +757,10 @@ fn fx_profiles() -> Array[Json] {
       ),
     ])),
     fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", fx_cx_more()),
-    fx_profile("k2", "备用 key", "anthropic-api", "red", "没能使用", "key", "API key", [
+    fx_profile("k2", "备用 key", "anthropic-api", if fx.key_enabled { "red" } else { "neutral" }, if fx.key_enabled { "没能使用" } else { "已停用" }, "key", "API key", [
+      ("enabled", Json::boolean(fx.key_enabled)),
       // (as the core says it: present.ts issue, trouble.key_next, trouble.key_label)
-      ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("核对服务商的 key 是否有效、余额和权限是否足够；可以更换 key，保存后会自动检查")), ("action", str("key")), ("label", str("更换 key"))])),
+      ("trouble", if fx.key_enabled { obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("核对服务商的 key 是否有效、余额和权限是否足够；可以更换 key，保存后会自动检查")), ("action", str("key")), ("label", str("更换 key"))]) } else { Json::null() }),
       ("quota", obj([("state", str("unsupported")), ("windows", []), ("checkedAt", Json::number(0.0))])),
       ("usedBy", []),
     ]),
@@ -2810,6 +2815,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     "profile.put" if text(p, "id") == "cx" && field(field(p, "input"), "models") is Some(Array(_)) => {
       let named = items(field(p, "input"), "models").filter_map(fn(m) { if m is String(m) { Some(m) } else { None } })
       fx.models_added.retain(fn(m) { named.contains(m) })
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "profile.put" if text(p, "id") == "k2" && has(field(p, "input"), "enabled") => {
+      fx.key_enabled = flag(field(p, "input"), "enabled")
       fx_changed()
       Some(Ok(obj([])))
     }

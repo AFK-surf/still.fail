@@ -141,6 +141,13 @@ test("a shared key profile is copied to the other station, key and all; stopping
   a.config.update((raw) => (raw.profiles[0].access.key = "sk-new"));
   await settle(a, b);
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new");
+  a.config.update((raw) => (raw.profiles[0].enabled = false));
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "a disabled key stays disabled on its copy");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new", "the key is retained");
+  a.config.update((raw) => { delete raw.profiles[0].enabled; });
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, undefined, "enabling propagates too");
   // The host offline: the copy stays.
   all.delete(A);
   await settle(b);

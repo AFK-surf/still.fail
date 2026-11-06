@@ -140,11 +140,13 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const runtime = options.runtime;
   const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
   if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
+  const pinned = options.profile ?? null;
+  const requested = all.find((p) => p.id === pinned);
+  if (requested?.enabled === false) throw new Error(tr(lang, "station.profile.disabled", { profile: requested.name }));
   const here = new Set(hub.profilesIn(options.ws ?? null).map((p) => p.id));
   const profiles = all.filter((p) => here.has(p.id));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
-  const pinned = options.profile ?? null;
   let profile;
   if (pinned !== null) {
     profile = profiles.find((p) => p.id === pinned);

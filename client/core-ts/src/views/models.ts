@@ -19,7 +19,8 @@ const str = (v: J): string | null => (typeof v === "string" ? v : null);
 /// The runtimes a chat can run on, in the order they are offered.
 export const RUNTIMES = format.RUNTIMES;
 
-const profilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
+const allProfilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
+const profilesOf = (overview: J): J[] => allProfilesOf(overview).filter((p) => get(p, "enabled") !== false);
 const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r === runtime);
 /// What the station's model catalog says of a model it lists as any of `ids` (its `modelMakers`: who made it, its
 /// series); none from a station older than it, or for a model the catalog does not name.
@@ -235,7 +236,7 @@ function profileLines(profiles: J[], runtime: string, m: string | null, current:
 export function servingIn(overview: J, workspace: string, joined: boolean): J {
   const profiles = get(overview, "profiles");
   if (!Array.isArray(profiles)) return overview;
-  return { ...overview, profiles: profiles.filter((p) => profileServes(p, workspace, joined)) };
+  return { ...overview, profiles: profiles.filter((p) => get(p, "enabled") !== false && profileServes(p, workspace, joined)) };
 }
 
 /// The models the station can run, each with the runtimes it runs on.
@@ -406,7 +407,7 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
   const self = all.find((s) => s.station === here);
   if (self === undefined || self.joined) return [];
   const taken = new Set(have.map((o) => model.key(str(get(o, "model")) ?? "")));
-  const ownHere = new Set(profilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+  const ownHere = new Set(allProfilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
   const out: J[] = [];
   for (const s of all) {
     if (s.station === here || !s.online || s.joined || get(s.overview, "sharing") !== true) continue;
