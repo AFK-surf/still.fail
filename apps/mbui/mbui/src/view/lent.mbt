@@ -188,7 +188,13 @@ pub fn Tree::after_change(self : Tree, f : () -> Unit) -> Unit {
   if self.gone { return }
   // The layout that requested this completion can have returned before publication finishes. Record its budget so
   // the dispatch can retain its pass ancestry when it still belongs to the same operation.
-  self.changes.push((self.logic_at(), f, self.brought_budget))
+  // Only a request made under this drain's current stop flag is its descendant. A layout from another operation
+  // can have ended before its queued request is dispatched, even while a different completion is running.
+  let from_current = match (self.brought_budget, self.changes_owner) {
+    (Some((_, source_stop)), Some(owner_stop)) => physical_equal(source_stop, owner_stop)
+    _ => false
+  }
+  self.changes.push((self.logic_at(), f, self.brought_budget, from_current))
   // Every request has a batch-end wake, including one made inside a tree commit nested in a raw signal batch.
   // A tree event's own end also drains it, before the next deadline, once all its readers have returned.
   @signals.after_flush(fn() { self.changes_done() |> ignore })
@@ -206,25 +212,33 @@ fn Tree::changes_done(self : Tree) -> Bool {
   self.changes_running = true
   let was = self.cause_at
   let was_budget = self.brought_budget
+  let was_owner = self.changes_owner
   defer {
     self.cause_at = was
     self.brought_budget = was_budget
+    self.changes_owner = was_owner
     self.changes_running = false
   }
   let mut i = 0
   while i < self.changes.length() && !self.gone {
-    let (at, f, budget) = self.changes[i]
+    let (at, f, budget, from_current) = self.changes[i]
     i += 1
     self.cause_at = at
-    // A completion may wait past the operation that requested it. Its pass ancestry is valid only while both
-    // operations share the same stop flag. A different dispatcher owns the work and must stop if this faults;
-    // an unowned dispatch starts its own operation instead of carrying a finished operation's stop into it.
-    self.brought_budget = Some(match (budget, was_budget) {
-      (Some((passes, said_stop)), Some((_, dispatch_stop))) if physical_equal(said_stop, dispatch_stop) =>
-        (passes, said_stop)
-      (_, Some(b)) => b
-      _ => (Ref(0), Ref(false))
-    })
+    // A completion can wait past its requesting operation. In a dispatch owned by a layout, keep ancestry only
+    // from that operation; in an unowned drain, each independent request starts a root, while descendants registered
+    // under a current root keep that root's stop flag and their own pass count.
+    let owned = match was_budget {
+      Some((_, dispatch_stop)) => match budget {
+        Some((passes, source_stop)) if physical_equal(source_stop, dispatch_stop) => (passes, source_stop)
+        _ => was_budget.unwrap()
+      }
+      None => match (budget, from_current) {
+        (Some(b), true) => b
+        _ => (Ref(0), Ref(false))
+      }
+    }
+    self.brought_budget = Some(owned)
+    self.changes_owner = Some(owned.1)
     self.committing += 1
     @signals.start_batch()
     @signals.untracked(f)

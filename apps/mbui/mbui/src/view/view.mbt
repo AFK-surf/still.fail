@@ -902,8 +902,10 @@ pub struct Tree {
   /// moment: done once the outermost layout is over, before it returns (Tree::laid_out)
   afters_laid : Array[(Double, () -> Unit)]
   /// Work completing a published change, before the next timeline moment or input is taken (Tree::after_change).
-  changes : Array[(Double, () -> Unit, (Ref[Int], Ref[Bool])?)]
+  changes : Array[(Double, () -> Unit, (Ref[Int], Ref[Bool])?, Bool)]
   mut changes_running : Bool
+  /// The stop flag of the completion currently being dispatched, to distinguish its descendants from new roots.
+  mut changes_owner : Ref[Bool]?
   /// Structural readers of one unowned signal publication, committed together after its flush.
   structures : Array[() -> Bool]
   mut structures_asked : Bool
@@ -1224,6 +1226,7 @@ pub fn Tree::new(
     afters_laid: [],
     changes: [],
     changes_running: false,
+    changes_owner: None,
     structures: [],
     structures_asked: false,
     modals_due: false,
@@ -4318,8 +4321,14 @@ fn Tree::withins_ready(self : Tree) -> Unit {
   // change's end)
   if self.committing == 0 && !self.standing && !self.withins_passing && self.bars_due {
     self.withins_passing = true
-    self.bars_near_told() |> ignore
+    let told = self.bars_near_told()
     self.withins_passing = false
+    // A bar observer can mark geometry while reentry is held. Give that work to the normal bounded layout,
+    // which tells the pointer again after placing it, before this settlement returns.
+    if told && (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+      self.laid_now()
+      self.withins_restored()
+    }
   }
 }
 
@@ -4342,8 +4351,17 @@ fn Tree::withins_restored(self : Tree) -> Unit {
   }
   if !self.withins_passing && self.bars_due {
     self.withins_passing = true
-    self.bars_near_told() |> ignore
+    let told = self.bars_near_told()
     self.withins_passing = false
+    if told && (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+      let was_standing = self.standing
+      self.standing = true
+      @signals.untracked(fn() {
+        self.pull()
+        self.laid_out(self.clock.get())
+      })
+      self.standing = was_standing
+    }
   }
 }
 

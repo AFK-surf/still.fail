@@ -117,7 +117,42 @@ test "a bar notification that changes its own width is laid out and told again i
   // the modal notification itself must deliver the bar change and any geometry that change causes.
   t.pointer_xy = (95.0, 10.0)
   t.event(10.0, fn() { t.modals_told() })
-  assert_eq(t.nodes[id.val.unwrap().at].lw, 200.0, msg="the bar callback's width was placed before return")
+  assert_eq(t.nodes[id.val.unwrap().at].lw, 200.0, msg="the bar callback's width was placed before return; seen=\{seen}")
   assert_eq(seen, [true, false], msg="moving the edge away from the stationary pointer was told too")
+  t.dispose()
+}
+
+
+///|
+test "a bar notification that changes its own width keeps the layout pass guard" {
+  let faults : Array[String] = []
+  faults_stop.val = false
+  fault_told.val = Some(fn(s) { faults.push(s) })
+  defer {
+    faults_stop.val = true
+    fault_told.val = None
+  }
+  let width = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let armed = Ref(false)
+  let steps = Ref(0)
+  let t = Tree::new(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(n) {
+      n.width(By(fn() { Some(width.get()) })).height(Is(Some(100.0))) |> ignore
+      n.reacts(fn() { n.bar_near(10.0) }, fn(near) {
+        if armed.val {
+          steps.val += 1
+          if steps.val < 100 { width.set(if near { 200.0 } else { 100.0 }) }
+        }
+      })
+    }) |> ignore
+  })
+  t.frame(300.0, 200.0, now=0.0) |> ignore
+  t.pointer_xy = (95.0, 10.0)
+  armed.val = true
+  t.event(10.0, fn() { t.modals_told() })
+  println("bar feedback: steps=\{steps.val}, faults=\{faults}, due=\{t.due}, layout_due=\{t.layout_due}")
+  assert_true(steps.val > 1 && steps.val < 100, msg="feedback must stop at the layout guard, steps=\{steps.val}")
+  assert_true(faults.iter().any(fn(s) { s.contains("layout passes in one") }), msg="\{faults}")
   t.dispose()
 }
