@@ -80,7 +80,9 @@ const isPlace = (value: J): value is ChainPlace => Number.isSafeInteger(value?.l
   (value.length === 0 ? value.head === null : typeof value.head === "string" && /^[0-9a-f]{64}$/.test(value.head));
 
 /// What a person's device signs for a chat's grant of their phone.
-export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "chat"; exp: number };
+// `chatBound` is part of the signed body, not station metadata. Older verifiers already verify the entire body and
+// ignore this extra field; its absence means the signing client did not attest the chat shown to the person.
+export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "chat"; exp: number; chatBound?: true };
 export type SignedGrant = { body: GrantBody; sig: { key: string; sig: string } };
 const grantBytes = (body: unknown) => {
   const tag = utf8("stillfail-phone-grant/1\0");
@@ -97,7 +99,7 @@ export function grantHolds(g: J, station: string, sub: string, devices: Readonly
   const s = g?.signed as SignedGrant | undefined;
   const b = s?.body;
   if (b == null || typeof s?.sig?.key !== "string" || typeof s.sig.sig !== "string" || !devices.has(s.sig.key)) return null;
-  if (b.v !== 1 || b.sub !== sub || b.station !== station || b.request !== g.id || b.session !== g.session || b.chat !== g.chat || b.scope !== g.scope) return null;
+  if (b.v !== 1 || b.sub !== sub || b.station !== station || b.request !== g.id || typeof b.session !== "string" || b.session === "" || b.session !== g.session || typeof b.chat !== "string" || b.chat === "" || b.chat !== g.chat || b.scope !== g.scope) return null;
   if (!Number.isSafeInteger(b.exp) || b.exp <= now) return null;
   try {
     return verifies(s.sig.key, s.sig.sig, grantBytes(b)) ? b.exp : null;

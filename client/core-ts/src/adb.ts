@@ -475,10 +475,12 @@ class Lend {
   }
 
   /// An ask of station `station` on its link now: what it answered (JSON), or its words as the error.
-  askAt(station: string, ask: J): Effect.Effect<unknown, CoreError> {
+  askAt(station: string, ask: J, beforeSend?: () => CoreError | null): Effect.Effect<unknown, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const [mesh, link] = yield* this.#link(station);
-      const reply = yield* link.adb(head(), { ...ask, phone: mesh.deviceId() });
+      const refused = beforeSend?.();
+      if (refused) return yield* Effect.fail(refused);
+      const reply = yield* link.adb(head(), { ...ask, phone: mesh.deviceId() }, beforeSend);
       const parts: Uint8Array[] = [];
       for (;;) {
         const chunk = yield* Effect.mapError(reply.body.take, (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.cut")));
@@ -718,7 +720,22 @@ export class Adb {
         return Effect.gen({ self: this }, function* () {
           // Allowed on this device's own key, the person asked; refused needs none.
           const signed = call.scope === null ? undefined : yield* this.#signed(call.station, call.request, call.scope, call.chat);
-          const r = yield* this.#legacy.askAt(call.station, { op: "decide", request: call.request, scope: call.scope, ...(signed ? { signed } : {}) });
+          const current = this.#grants.get(call.station)?.get(call.request);
+          const version = this.#revocations.version;
+          const beforeSend = signed === undefined ? undefined : () => {
+            const b = signed.body;
+            const sub = this.#subAt(call.station);
+            const same = current && this.#grants.get(call.station)?.get(call.request) === current && current.status === "pending" &&
+              b?.station === call.station && b.request === call.request && b.session === current.session && b.chat === current.chat &&
+              b.scope === call.scope && Number.isSafeInteger(b.exp) && b.exp > Math.floor(this.#env.host.nowMs() / 1000) &&
+              sub !== null && b.sub === sub && this.#env.personal.ready(sub) && this.#env.personal.standing(sub) === "member" &&
+              this.#revocations.loaded && !this.#revocations.dirty && this.#revocations.version === version &&
+              !this.#locallyBlocked(call.station, { ...current, signed });
+            return same ? null : new CoreError("personal_changed", t("core-misc.personal.changed"));
+          };
+          const refused = beforeSend?.();
+          if (refused) return yield* Effect.fail(refused);
+          const r = yield* this.#legacy.askAt(call.station, { op: "decide", request: call.request, scope: call.scope, ...(signed ? { signed } : {}) }, beforeSend);
           this.heard(call.station, (r as J)?.request);
           return null;
         });
@@ -830,12 +847,21 @@ export class Adb {
         if (sub !== null) bySub.set(sub, [...(bySub.get(sub) ?? []), g]);
       }
       for (const [sub, grants] of bySub) {
+        const version = this.#revocations.version;
         const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as "hour" | "chat", exp: g.exp as number }));
         const signed = yield* this.#env.personal.signGrants(sub, bodies, t("core-misc.personal.reason.confirm"));
         for (const [i, g] of grants.entries()) {
           yield* this.#ensureRevocations();
-          if (this.#revocations.ids.has(g.id)) continue;
-          const r = yield* this.#legacy.askAt(g.station, { op: "sign", request: g.id, signed: signed[i] });
+          const proof = approvalProof(g);
+          const beforeSend = () => {
+            const current = this.#allGrants().find((item) => item.station === g.station && item.id === g.id);
+            return this.#revocations.version === version && this.#revocations.loaded && !this.#revocations.dirty &&
+              current && this.#toConfirm(current) && proof !== null && approvalProof(current) === proof
+              ? null : new CoreError("personal_changed", t("core-misc.personal.changed"));
+          };
+          const refused = beforeSend();
+          if (refused) return yield* Effect.fail(refused);
+          const r = yield* this.#legacy.askAt(g.station, { op: "sign", request: g.id, signed: signed[i] }, beforeSend);
           this.heard(g.station, (r as J)?.request);
         }
       }
@@ -864,6 +890,7 @@ export class Adb {
       if (this.#grants.get(station)?.get(request) === undefined) yield* this.readGrants(station);
       const g = this.#grants.get(station)?.get(request);
       if (g === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      if (typeof g.session !== "string" || g.session === "" || typeof g.chat !== "string" || g.chat === "") return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
       // A fresh answer can lift this phone's take-back for its exact signature. Bind that answer to the chat in
       // which the person saw the card, not to a row the station could swap before the tap. Older apps without the
       // chat identity may still refuse a request, but cannot implicitly lift a take-back on that station.
@@ -874,7 +901,7 @@ export class Adb {
       }
       if (this.#revocations.ids.has(request) && this.#scopesFor(station, g).length === 0) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
       const exp = Math.floor(this.#env.host.nowMs() / 1000) + (scope === "hour" ? 3600 : 30 * 86400);
-      const signed = yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp }, t("core-misc.personal.reason.grant"));
+      const signed = yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp, ...(shownChat !== undefined ? { chatBound: true as const } : {}) }, t("core-misc.personal.reason.grant"));
       yield* this.#ensureRevocations();
       if (this.#revocations.version !== version || this.#grants.get(station)?.get(request) !== g || exp <= Math.floor(this.#env.host.nowMs() / 1000)) return yield* Effect.fail(new CoreError("personal_changed", t("core-misc.personal.changed")));
       yield* this.#allowHere(station, g, signed, exp);
@@ -884,9 +911,17 @@ export class Adb {
 
   /// Every applicable take-back must have explicitly accepted the exact grant again on this phone.
   #scopesFor(station: string, g: J): string[] {
-    const scopes = [stationScope(station)];
-    if (typeof g.chat === "string" && g.chat !== "") scopes.push(chatScope(station, g.chat));
-    return scopes.filter((scope) => this.#revocations.chats.has(scope));
+    const scopes = new Set([stationScope(station)]);
+    if (typeof g.chat === "string" && g.chat !== "") scopes.add(chatScope(station, g.chat));
+    // Legacy signatures and bulk confirmations do not prove which chat the person saw. A station cannot evade a
+    // take-back by presenting such a signature as a different chat: every take-back at this station applies to it.
+    if (g.signed?.body?.chatBound !== true) {
+      for (const scope of this.#revocations.chats.keys()) {
+        const parts = JSON.parse(scope);
+        if (parts[0] === station && parts.length === 2) scopes.add(scope);
+      }
+    }
+    return [...scopes].filter((scope) => this.#revocations.chats.has(scope));
   }
 
   #hasTakenBackAt(station: string): boolean {
@@ -913,7 +948,7 @@ export class Adb {
   /// Record a locally approved signature before it can be sent or used. A later take-back clears these approvals.
   #allowHere(station: string, g: J, signed: J, until: number): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const scopes = this.#scopesFor(station, g);
+      const scopes = this.#scopesFor(station, { ...g, signed });
       if (scopes.length === 0) return;
       const fingerprint = signedFingerprint(signed);
       if (fingerprint === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
@@ -965,7 +1000,16 @@ export class Adb {
       if (until <= Math.floor(this.#env.host.nowMs() / 1000)) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
       yield* this.#allowHere(station, g, signed, until);
       if (g.signed == null) {
-        const r = yield* this.#legacy.askAt(station, { op: "sign", request, signed });
+        const version = this.#revocations.version;
+        const beforeSend = () => {
+          const same = this.#revocations.loaded && !this.#revocations.dirty && this.#revocations.version === version &&
+            this.#grants.get(station)?.get(request) === g && this.#env.personal.ready(sub) && this.#env.personal.standing(sub) === "member" &&
+            until > Math.floor(this.#env.host.nowMs() / 1000) && !this.#locallyBlocked(station, { ...g, signed });
+          return same ? null : new CoreError("personal_changed", t("core-misc.personal.changed"));
+        };
+        const refused = beforeSend();
+        if (refused) return yield* Effect.fail(refused);
+        const r = yield* this.#legacy.askAt(station, { op: "sign", request, signed }, beforeSend);
         this.heard(station, (r as J)?.request);
       }
       return null;
@@ -1092,7 +1136,9 @@ export class Adb {
       const { signed: _signed, ...shown } = whole;
       const sub = this.#subAt(whole.station);
       const standing = sub === null ? "member" : this.#env.personal.standing(sub);
-      const localApproval = whole.status === "granted" && this.#revocations.loaded && !this.#revocations.dirty && this.#scopesFor(whole.station, whole).length > 0 && this.#locallyBlocked(whole.station, whole);
+      const localApproval = whole.status === "granted" && typeof whole.session === "string" && whole.session !== "" && typeof whole.chat === "string" && whole.chat !== "" &&
+        this.#revocations.loaded && !this.#revocations.dirty && this.#scopesFor(whole.station, whole).length > 0 && this.#locallyBlocked(whole.station, whole) &&
+        (whole.signed == null || this.#signedExpiry(whole) !== null);
       const proof = localApproval ? approvalProof(whole) : null;
       const g = {
         ...shown,

@@ -1405,6 +1405,196 @@ test("taking back a chat blocks another signed request hidden by its station", a
   } finally { p.runner.shutdown(); a.runner.shutdown(); }
 });
 
+test("a hidden unbound signature cannot escape a take-back by naming another chat", async () => {
+  const c = cloud(), a = device(c, "a");
+  const sent: Record<string, unknown>[] = [];
+  const link = { adb: (_head: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    sent.push(ask);
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(ask.op === "revoke" ? { request: { id: ask.request, status: "ended" } } : {}));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  let cold: ReturnType<typeof phone> | undefined;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    // An older UI sends no identity of the chat whose card it displayed. The station supplies another chat.
+    p.adb.heard(STATION, { id: "hidden", session: "sess2", chat: "other", status: "pending", at: 2 });
+    await p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "hidden", scope: "hour" }));
+    const signed = sent.find((ask) => ask.op === "decide")?.signed as { body: { exp: number; chatBound?: boolean } };
+    assert.ok(signed);
+    assert.notEqual(signed.body.chatBound, true, "an older UI did not establish the displayed chat");
+    p.adb.heard(STATION, { id: "hidden", status: "ended" });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
+    const hidden = { ...grantOf(signed), id: "hidden", session: "sess2", chat: "other", exp: signed.body.exp };
+    p.adb.heard(STATION, hidden);
+    assert.deepEqual(p.adb.wanted(), [], "a signature without proven chat binding needs approval after any take-back at this station");
+    const row = p.adb.grants().find((g) => g.id === "hidden");
+    assert.equal(row?.localApproval, true);
+    await p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "hidden", proof: row.approvalProof }));
+    assert.deepEqual(p.adb.wanted(), [STATION], "the phone may explicitly approve the exact signature");
+    const newHost = new FakeHost();
+    for (const [key, value] of p.host.storage) newHost.storage.set(key, value.slice());
+    cold = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) }, newHost);
+    await flush();
+    cold.adb.heard(STATION, hidden);
+    assert.deepEqual(cold.adb.wanted(), [STATION], "that exact local approval survives restart");
+  } finally { cold?.runner.shutdown(); p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("only a card bound to its displayed chat gets a signed binding", async () => {
+  const c = cloud(), a = device(c, "a");
+  const sent: Record<string, unknown>[] = [];
+  const link = { adb: (_head: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    sent.push(ask);
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(ask.op === "revoke" ? { request: { id: ask.request, status: "ended" } } : {}));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const first = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
+    p.adb.heard(STATION, { id: "empty", session: "empty", chat: "", status: "pending", at: 2 });
+    await assert.rejects(p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "empty", scope: "hour" })), /./, "an empty chat cannot be signed");
+    const oldEmpty = await a.runner.run(a.lock.signGrant(SUB, body({ request: "empty", session: "empty", chat: "", exp: now + 3600 }), "why"));
+    assert.equal(grantHolds({ ...grantOf(oldEmpty), id: "empty", session: "empty", chat: "" }, STATION, SUB, a.lock.chain(SUB)!.devices, now), null, "an existing signature without a chat lends nothing");
+    p.adb.heard(STATION, { id: "bound", session: "sess2", chat: "other", status: "pending", at: 3 });
+    await p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "bound", scope: "hour", chat: "other" }));
+    const signed = sent.find((ask) => ask.op === "decide")?.signed as { body: { v: number; exp: number; chatBound?: boolean } };
+    assert.equal(signed.body.v, 1, "older verifiers can still check the signed body");
+    assert.equal(signed.body.chatBound, true, "the signing device attests that the card was in that chat");
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
+    const bound = { ...grantOf(signed), id: "bound", session: "sess2", chat: "other", exp: signed.body.exp };
+    p.adb.heard(STATION, bound);
+    assert.deepEqual(p.adb.wanted(), [STATION], "a separately bound chat is unaffected");
+    const forged = { ...signed, body: { ...signed.body, chatBound: false } };
+    assert.equal(grantHolds({ ...bound, signed: forged }, STATION, SUB, a.lock.chain(SUB)!.devices, now), null, "the binding is signed, not station metadata");
+  } finally { p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a batch confirmation cannot send a grant hidden while its chat was taken back", async () => {
+  const c = cloud(), a = device(c, "a"), release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  const sent: Record<string, unknown>[] = [];
+  const link = { adb: (_head: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    sent.push(ask);
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(ask.op === "revoke" ? { request: { id: ask.request, status: "ended" } } : {}));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  const mesh = { deviceId: () => "phone", link: () => Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  const get = a.host.secureGet!;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ request: "visible", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(signed), id: "visible", exp: now + 7200 });
+    p.adb.heard(STATION, { id: "hidden", session: "sess2", chat: "chat", status: "granted", scope: "hour", exp: now + 7200, at: 2 });
+    await flush();
+    a.host.secureGet = (key, opts) => Effect.andThen(Effect.sync(() => reached.resolve()), Effect.andThen(Deferred.await(release), get(key, opts)));
+    const confirming = p.runner.run(p.adb.run({ kind: "personalConfirm" }));
+    await reached.promise;
+    p.adb.heard(STATION, { id: "hidden", status: "ended" });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "visible", chat: "chat" }));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(confirming, /./, "the changed confirmation must be retried");
+    assert.equal(sent.filter((ask) => ask.op === "sign").length, 0, "the hidden grant is not sent to any station after the take-back");
+  } finally { Deferred.doneUnsafe(release, Effect.void); a.host.secureGet = get; p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a batch confirmation rechecks a take-back after the station link opens", async () => {
+  const c = cloud(), a = device(c, "a"), release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  const sent: Record<string, unknown>[] = [];
+  const link = { adb: (_head: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    sent.push(ask);
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(ask.op === "revoke" ? { request: { id: ask.request, status: "ended" } } : {}));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  let opens = 0;
+  const mesh = { deviceId: () => "phone", link: () => ++opens === 1
+    ? Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), link))
+    : Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ request: "visible", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(signed), id: "visible", exp: now + 7200 });
+    p.adb.heard(STATION, { id: "hidden", session: "sess2", chat: "chat", status: "granted", scope: "hour", exp: now + 7200, at: 2 });
+    await flush();
+    const confirming = p.runner.run(p.adb.run({ kind: "personalConfirm" }));
+    await reached.promise;
+    p.adb.heard(STATION, { id: "hidden", status: "ended" });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "visible", chat: "chat" }));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(confirming, /./);
+    assert.equal(sent.filter((ask) => ask.op === "sign").length, 0, "the prepared request never reaches the link after take-back");
+  } finally { Deferred.doneUnsafe(release, Effect.void); p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("a card approval cannot be sent after its chat is taken back while the link opens", async () => {
+  const c = cloud(), a = device(c, "a"), release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  const sent: Record<string, unknown>[] = [];
+  const link = { adb: (_head: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    sent.push(ask);
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(ask.op === "revoke" ? { request: { id: ask.request, status: "ended" } } : {}));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  let opens = 0;
+  const mesh = { deviceId: () => "phone", link: () => ++opens === 1
+    ? Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), link))
+    : Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ request: "visible", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(signed), id: "visible", exp: now + 7200 });
+    p.adb.heard(STATION, { id: "new", session: "sess2", chat: "chat", status: "pending", at: 2 });
+    const deciding = p.runner.run(p.adb.run({ kind: "decide", station: STATION, request: "new", scope: "hour", chat: "chat" }));
+    await reached.promise;
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "visible", chat: "chat" }));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(deciding, /./);
+    assert.equal(sent.filter((ask) => ask.op === "decide").length, 0, "no approval reaches the station after the later take-back");
+  } finally { Deferred.doneUnsafe(release, Effect.void); p.runner.shutdown(); a.runner.shutdown(); }
+});
+
+test("an explicit local approval cannot be sent after a later take-back while the link opens", async () => {
+  const c = cloud(), a = device(c, "a"), release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  const sent: Record<string, unknown>[] = [];
+  const link = { adb: (_head: unknown, ask: Record<string, unknown>) => Effect.sync(() => {
+    sent.push(ask);
+    let read = false;
+    const bytes = new TextEncoder().encode(JSON.stringify(ask.op === "revoke" ? { request: { id: ask.request, status: "ended" } } : {}));
+    return { status: 200, body: { take: Effect.sync(() => { if (read) return null; read = true; return bytes; }) } };
+  }) };
+  let opens = 0;
+  const mesh = { deviceId: () => "phone", link: () => ++opens === 2
+    ? Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), link))
+    : Effect.succeed(link) } as unknown as Mesh;
+  const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }], mesh: () => Effect.succeed(mesh) });
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ request: "visible", exp: now + 7200 }), "why"));
+    p.adb.heard(STATION, { ...grantOf(signed), id: "visible", exp: now + 7200 });
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "visible", chat: "chat" }));
+    p.adb.heard(STATION, { id: "old", session: "sess2", chat: "chat", status: "granted", scope: "hour", exp: now + 7200, at: 2 });
+    const row = p.adb.grants().find((g) => g.id === "old");
+    const approving = p.runner.run(p.adb.run({ kind: "approveHere", station: STATION, request: "old", proof: row.approvalProof }));
+    await reached.promise;
+    await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "old", chat: "chat" }));
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(approving, /./);
+    assert.equal(sent.filter((ask) => ask.op === "sign").length, 0, "no old grant reaches the station after the later take-back");
+  } finally { Deferred.doneUnsafe(release, Effect.void); p.runner.shutdown(); a.runner.shutdown(); }
+});
+
 test("a taken back chat requires this phone to approve the exact signature, including after restart", async () => {
   const c = cloud(), a = device(c, "a"), b = device(c, "b");
   const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] };
@@ -1419,7 +1609,7 @@ test("a taken back chat requires this phone to approve the exact signature, incl
     await b.runner.run(b.lock.joined(SUB, c.kept.entries, b.lock.joinGeneration(SUB)));
     const hidden = await b.runner.run(b.lock.signGrant(SUB, body({ request: "p2", session: "sess2", exp: now + 7200 }), "why"));
     const another = await b.runner.run(b.lock.signGrant(SUB, body({ request: "p3", session: "sess3", exp: now + 7200 }), "why"));
-    const otherChat = await a.runner.run(a.lock.signGrant(SUB, body({ request: "else", session: "other", chat: "other", exp: now + 7200 }), "why"));
+    const otherChat = await a.runner.run(a.lock.signGrant(SUB, body({ request: "else", session: "other", chat: "other", exp: now + 7200, chatBound: true }), "why"));
     p.adb.heard(STATION, { ...grantOf(first), exp: now + 7200 });
     await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
     p.adb.heard(STATION, { id: "p1", status: "ended" });

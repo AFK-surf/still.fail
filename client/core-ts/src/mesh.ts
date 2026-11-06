@@ -481,11 +481,15 @@ export class Link {
   /// A request's stream, its head and body sent and its reply's head read. Given up before that head (its asker gone, a
   /// read let go of; or failed), the stream goes at once: the station stops what it is sending on it, which no one
   /// would read.
-  #open(head: J, finish: boolean, body: Uint8Array | null, wrote?: (sent: number) => void): Effect.Effect<[IrohStream, Lines, J], CoreError> {
+  #open(head: J, finish: boolean, body: Uint8Array | null, wrote?: (sent: number) => void, beforeSend?: () => CoreError | null): Effect.Effect<[IrohStream, Lines, J], CoreError> {
     let opened: IrohStream | null = null;
     return Effect.gen({ self: this }, function* () {
       const stream = (opened = yield* Effect.mapError(this.conn.openBi(), cut));
-      yield* Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), cut);
+      // A security decision can change while a stream opens. Check immediately before handing its head to the host.
+      yield* Effect.suspend(() => {
+        const refused = beforeSend?.();
+        return refused ? Effect.fail(refused) : Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), cut);
+      });
       // A body that is told of goes a step at a time, each said as the stream takes it (as far as the link lets it).
       if (body !== null && body.length > 0 && wrote) {
         for (let at = 0; at < body.length; at += BODY_STEP) {
@@ -590,9 +594,9 @@ export class Link {
   }
 
   /// This phone's adb offered to the station, or asked about (adb.ts).
-  adb(head: RequestHead, ask: J): Effect.Effect<Reply, CoreError> {
+  adb(head: RequestHead, ask: J, beforeSend?: () => CoreError | null): Effect.Effect<Reply, CoreError> {
     const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers), adb: ask };
-    return Effect.map(this.#open(wire, true, null), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }));
+    return Effect.map(this.#open(wire, true, null, undefined, beforeSend), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }));
   }
 
   /// The next stream the station opens on the link; null once it closed.

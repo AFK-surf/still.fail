@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect } from "effect";
-import type { IrohStream } from "../src/iroh.ts";
-import { Lines } from "../src/mesh.ts";
+import { Deferred, Effect } from "effect";
+import { CoreError } from "../src/error.ts";
+import type { IrohConnection, IrohStream } from "../src/iroh.ts";
+import { Lines, Link } from "../src/mesh.ts";
 import { utf8 } from "../src/util.ts";
 import { run } from "./run.ts";
 
@@ -31,4 +32,21 @@ test("a longer permitted line preserves subsequent lines and the body", async ()
   assert.equal(await run(lines.next(bytes.length)), value);
   assert.equal(await run(lines.next()), "next");
   assert.equal(new TextDecoder().decode(lines.carry), "body");
+});
+
+test("a guarded adb request is checked again after opening its stream", async () => {
+  const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
+  let writes = 0, resets = 0, allowed = true;
+  const socket = { ...stream([]), write: () => Effect.sync(() => { writes++; }), reset: () => { resets++; } };
+  const conn = { openBi: () => Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), socket)) } as unknown as IrohConnection;
+  const link = new Link(conn, {} as never, "", (() => Effect.succeed({})) as never, null);
+  try {
+    const pending = run(link.adb({ method: "POST", path: "/admin/api/adb", headers: [] }, { op: "sign" }, () => allowed ? null : CoreError.invalid("changed")));
+    await reached.promise;
+    allowed = false;
+    Deferred.doneUnsafe(release, Effect.void);
+    await assert.rejects(pending, /changed/);
+    assert.equal(writes, 0, "the head was not handed to the host after the decision changed");
+    assert.equal(resets, 1, "the unused stream is released");
+  } finally { Deferred.doneUnsafe(release, Effect.void); }
 });

@@ -143,7 +143,9 @@ for (const committed of [false, true]) {
     try {
       await flush();
       p.adb.heard("ws/st", liveGrant(host, "p1"));
-      p.adb.heard("ws/st", liveGrant(host, "p2"));
+      // This unrelated chat has a binding attested by its signer. Unbound old grants are conservatively paused by any
+      // take-back at the same station and are covered separately by personal-lock.test.ts.
+      p.adb.heard("ws/st", { ...liveGrant(host, "p2"), signed: { body: { chatBound: true }, sig: { key: "k", sig: "s" } } });
       assert.deepEqual(p.adb.wanted(), ["ws/st"]);
       host.storageSet = (key, value) => key !== REVOKED_KEY ? set(key, value) : committed
         ? Effect.andThen(set(key, value), Effect.fail(new HostError("save failed", true)))
