@@ -207,8 +207,6 @@ jobs:
           scripts/textdiff.sh mac
       - name: "A Tester's draw list drawn offscreen (mbui-render) against the host's own picture of it (scripts/render_check.sh); its md5, to compare machines"
         run: scripts/render_check.sh
-      - name: iOS simulator app
-        run: scripts/ios.sh build
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -217,6 +215,20 @@ jobs:
             apps/mbui/mbui/out/textdiff/
             apps/mbui/mbui/out/render-check/
           if-no-files-found: ignore
+
+  # The simulator build has its own five minutes. The macOS apps and render checks can use nearly the whole budget
+  # on a slower runner before the simulator's native compile even starts (run 42303931990).
+  ios-simulator:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mbui-moonbit
+      - name: iOS simulator app
+        run: scripts/ios.sh build
 
   android:
     defaults:
