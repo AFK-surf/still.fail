@@ -375,11 +375,12 @@ everywhere. An old view hosted still lays out the old way, its passes counted as
 an event's, finding where things are at its own moment: Tree::laid_now). What comes after that layout only places (a
 column brought to what is to be in sight moves what it holds); a layout more is taken only for what is owed, counted by
 what asked for it (`Tree::owed_passes`: sizes told, once laid out, rows left out told, brought into sight, what is under
-the pointer and a bar near it told after placing), and anything else that marks the tree's layout after its own layout
+the pointer and a bar near it told after placing, what is made elsewhere for what a layout built: a window's layer for a
+popup open as its row is built, View::made_after_layout, before the layout returns), and anything else that marks the tree's layout after its own layout
 is a fault saying where it marked it (in a host's run: told, that moment drawn and hit as its one layout has it, what
 was marked laid out as the tree is next laid out, at whatever moment that is; what is drawn then is that layout's, not
 what was marked after it, and is not to be taken as one with it). Inside a layout box's own layout, only what it lays out may be changed: itself or another branch changed there is a
-fault naming it; a child it measured and then changed (what it is laid out by set after) is measured again in that
+fault naming it (the framework's own one mark for what it holds made, let go or reordered aside: Tree::kids_marked_at); a child it measured and then changed (what it is laid out by set after) is measured again in that
 layout, or it is a fault as the layout ends, naming it. The passes of one outermost layout and those nested in
 it (what is under the pointer told after placing lays it out once more) are bounded together; layouts asked for apart at
 the same moment (two inputs at one moment) are each their own, their order the events'. The count names what is still

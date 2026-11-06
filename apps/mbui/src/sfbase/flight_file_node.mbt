@@ -26,7 +26,8 @@ fn flight_file_node(
 ) -> Unit {
   // (its card's size, as of the moment it comes)
   let sized : @signals.Signal[(Double, Double)?] = @signals.signal(None)
-  parent.reacts(fn() { landing is Some(_) }, fn(_) {
+  // (said again as the window's size changes: what the message's column is laid out by)
+  parent.reacts(fn() { (landing is Some(_), parent.window()) }, fn(_) {
     guard landing is Some(l) else { return }
     match flight_to_now(l.view) {
       Some(to) => {

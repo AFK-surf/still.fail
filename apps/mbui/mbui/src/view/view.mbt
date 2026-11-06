@@ -812,6 +812,10 @@ pub struct Tree {
   /// what a layout found to tell of its moment, told as it is done (Tree::said_after_laid): a windowed list's blocks
   /// come in sight
   after_laid : Array[() -> Unit]
+  /// what is made elsewhere for what a layout built (View::made_after_layout), made as that layout is done, before it
+  /// returns; and whether that is being made now (no layout under way then)
+  made_after : Array[() -> Unit]
+  mut making_after : Bool
   /// how deep in Tree::laid_out it is (0: not laying out), and whether what layouts found is being told
   mut laying : Int
   mut telling_laid : Bool
@@ -1148,6 +1152,8 @@ pub fn Tree::new(
     painted: [],
     after_paint: [],
     after_laid: [],
+    made_after: [],
+    making_after: false,
     laying: 0,
     telling_laid: false,
     first_drawn: [],
@@ -1958,6 +1964,29 @@ pub fn View::cause_at(self : View) -> Double {
 }
 
 ///|
+/// Whether its tree is being laid out now (what is built in a layout, a list's rows as they come into it): what is made
+/// elsewhere for it (a window's layer for its popup) made after, at the same moment (View::at_moment), not in it.
+pub fn View::laying_out(self : View) -> Bool {
+  (self.tree.laying > 0 && !self.tree.making_after) || self.tree.layout_owner >= 0
+}
+
+///|
+/// `f` done now, or, asked while its tree is laid out (View::laying_out: what is built in a layout, a list's rows as
+/// they come into it), as the outermost layout of this moment is done, before it returns: before anything is drawn or
+/// hit at that moment. For what is made elsewhere for it (a window's layer for its popup open as its row is made again):
+/// what that makes is laid out at once, in a pass of its own (Tree::owed_passes: "made after its layout"). Not done
+/// once it is let go.
+pub fn View::made_after_layout(self : View, f : () -> Unit) -> Unit {
+  guard self.laying_out() else { f(); return }
+  let (at, gen) = (self.at, self.gen)
+  let tree = self.tree
+  tree.made_after.push(fn() {
+    let n = tree.nodes[at]
+    if n.live && n.gen == gen { f() }
+  })
+}
+
+///|
 /// The moment the logic is at (Tree::logic_at), for what a node works out from the time.
 pub fn View::logic_at(self : View) -> Double {
   self.tree.logic_at()
@@ -2036,7 +2065,8 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
       if o == at { return }
     }
     if c < 0 || at == self.layout_owner {
-      fault("layout_box node \{self.layout_owner}: node \{at}'s layout changed in its layout, not one of what it lays out")
+      let made = if self.box_kids_changing >= 0 { ", what node \{self.box_kids_changing} holds made, let go or reordered" } else { "" }
+      fault("layout_box node \{self.layout_owner}: node \{at}'s layout changed in its layout, not one of what it lays out\{made} (last set at \{@signals.last_set_at()})")
       return
     }
     if self.box_measured.contains(c) {
@@ -7353,6 +7383,23 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.laid_out(upto)
     }
     self.withins_passing = false
+  }
+  // (what is made elsewhere for what it built, made as it is done (View::made_after_layout), by the outermost: laid out
+  // at once, in its own pass, before it returns)
+  if self.laying == 1 {
+    while !self.made_after.is_empty() {
+      let now = self.made_after.copy()
+      self.made_after.clear()
+      self.making_after = true
+      for f in now {
+        f()
+      }
+      self.making_after = false
+      if self.due && self.layout_due {
+        self.owed_again("made after its layout")
+        self.laid_out(upto)
+      }
+    }
   }
   self.laying -= 1
   // (what it found to tell, told as it is done, of its moment, whatever laid it out (a frame, an input's moment, an

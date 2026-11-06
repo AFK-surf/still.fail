@@ -193,14 +193,6 @@ pub fn[K : Eq] View::layout_box(
       }
       None => ()
     }
-    // (a child measured, then changed in this same layout (what it is laid out by set after), and not measured again:
-    // what was placed by is not what it is; a fault, saying which)
-    if !self.tree.box_stale.is_empty() {
-      let stale = self.tree.box_stale.iter().collect()
-      fault("layout_box node \{self.at}: children \{stale} changed after they were measured in its layout, not measured again")
-    }
-    self.tree.box_measured = was_measured
-    self.tree.box_stale = was_stale
     let gone = []
     for k, child in keyed {
       if !ctx.seen.contains(k) { gone.push((k, child)) }
@@ -227,6 +219,14 @@ pub fn[K : Eq] View::layout_box(
       n.kids.append(ordered)
       self.boxes_again()
     }
+    // (a child measured, then changed in this same layout (what it is laid out by set after, what those it let go did
+    // as they went counted), and not measured again: what was placed by is not what it is; a fault, saying which)
+    if !self.tree.box_stale.is_empty() {
+      let stale = self.tree.box_stale.iter().collect()
+      fault("layout_box node \{self.at}: children \{stale} changed after they were measured in its layout, not measured again")
+    }
+    self.tree.box_measured = was_measured
+    self.tree.box_stale = was_stale
     ctx.live.val = false
     self.tree.layout_owner = was_owner
     let said = ctx.said_h.val

@@ -182,7 +182,8 @@ fn flight_quote_node(
 ) -> Unit {
   // (the card's size and its words' width, as of the moment it comes)
   let sized : @signals.Signal[((Double, Double), Double)?] = @signals.signal(None)
-  parent.reacts(fn() { landing.map(fn(q) { q.words.words_said() }) }, fn(_) {
+  // (said again as its words change, and as the window's size does: what the message's column is laid out by)
+  parent.reacts(fn() { (landing.map(fn(q) { q.words.words_said() }), parent.window()) }, fn(_) {
     guard landing is Some(q) else { return }
     match (flight_to_now(q.card), flight_to_now(q.words)) {
       (Some(to), Some(words)) => {
@@ -338,8 +339,8 @@ fn flight_waiting_node(parent : @view.View, f : SendFlight, origin : (@view.Laid
 }
 
 ///|
-/// The words sent flown to their bubble: how big it and its words are laid out said as they come and as what they say
-/// changes (flight_to_now), where they are read as each frame is painted.
+/// The words sent flown to their bubble: how big it and its words are laid out said as they come and as what they say or
+/// the window's size changes (flight_to_now), where they are read as each frame is painted.
 fn flight_landing_node(
   parent : @view.View,
   f : SendFlight,
@@ -352,7 +353,8 @@ fn flight_landing_node(
   // (the bubble's size and its words' width, and the pieces they are cut in, as of the moment they are said)
   let sized : @signals.Signal[((Double, Double), Double)?] = @signals.signal(None)
   let pieces : @signals.Signal[Array[FlightPiece]?] = @signals.signal(None)
-  parent.reacts(fn() { words.words_said() }, fn(_) {
+  // (said again as its words change, and as the window's size does: what the message's column is laid out by)
+  parent.reacts(fn() { (words.words_said(), parent.window()) }, fn(_) {
     match (flight_to_now(bubble), flight_to_now(words)) {
       (Some(b), Some(w)) => {
         flight_set_out_for(parent, f, (f.from_x, f.from_y), w)

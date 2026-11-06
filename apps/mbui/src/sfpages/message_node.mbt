@@ -214,13 +214,15 @@ fn others_message_node(row : @view.View, src : Source, here : () -> MessageHere,
       })
       // (the menu belongs to the message, not the hover button: it finishes leaving where it hung when that
       // button disappears; beside keeps that last place after its anchor is gone)
-      let popup = @sf.popup_root_node(head)
-      @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
-        message_items_of(src, here(), m())
-      }, "", End, 6.0, false, false, fn(item) {
-        close()
-        (item.select)()
-      }, close, exit=true)
+      // (in the window's layer, made as it first opens: none for each row whose menu never does, popup_root_when)
+      @sf.popup_root_when(head, fn() { @sf.menu_is_open(key()) }, fn(popup) {
+        @sf.menu_node(popup, fn() { @sf.menu_is_open(key()) }, fn(_) { anchor.val }, fn() {
+          message_items_of(src, here(), m())
+        }, "", End, 6.0, false, false, fn(item) {
+          close()
+          (item.select)()
+        }, close, exit=true)
+      })
     }
   })
   |> ignore
@@ -1001,9 +1003,8 @@ fn emits_here(here : MessageHere, m : Message) -> (Emits, String)? {
 /// Node `v` said as where what a message flies between is (emit_places), by `key` as it is now (None: not one of them),
 /// as long as it lives; `dy` below where it is.
 fn emit_place_node(v : @view.View, key : () -> String?, dy? : Double = 0.0) -> Unit {
-  let at = fn() -> (Double, Double, Double, Double)? {
-    v.owed_drawn_window().map(fn(r) { (r.0, r.1 + dy, r.2, r.3) })
-  }
+  // (the node itself: where it is read where it is asked, as a frame is painted or at a pose's end, emit.mbt)
+  let at : @sfbase.EmitAt = { node: v, dy }
   let room = fn() { v.list_room().map(fn(r) { r.height }) }
   let said = Ref("")
   let unsay = fn() {

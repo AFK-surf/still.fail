@@ -119,8 +119,10 @@ test "the flying avatar goes where its answer comes in: where it was aimed on it
   while t.time() < end && landed is None {
     t.frame()
     match em.current {
-      Some(turn) if turn.pose == Float => aimed = em.aimed
-      Some(turn) if turn.pose == Spit => landed = em.landed
+      Some(turn) if turn.pose == Float =>
+        aimed = emit_place(t.ctx(), "emit-landing/ws1/st1\u{1}s-c1/" + seq_s(turn.seq)).map(fn(r) { (r.0, r.1 + 3.0) })
+      Some(turn) if turn.pose == Spit =>
+        landed = emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, [turn.agent]).map(fn(r) { (r.0, r.1) })
       _ => ()
     }
   }

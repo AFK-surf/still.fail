@@ -69,6 +69,21 @@ pub fn chat_list_node(
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
+  // (the chat's own motions played on at their moments (chat_play: its list's turns, what comes out of its avatars, its
+  // agents' lines lingering): as what they read changes (its data taken, words sent laid out, a line come to linger),
+  // and at the moment the next of them is due, whichever frames are drawn, or none)
+  let next_play : Ref[() -> Unit] = Ref(fn() {  })
+  let play : Ref[() -> Unit] = Ref(fn() {  })
+  play.val = fn() {
+    (next_play.val)()
+    next_play.val = fn() {  }
+    let due = @signals.untracked(fn() { @sfbase.chat_play(@ui.current(), rk, rd0, shown=true) })
+    if due < @double.infinity {
+      next_play.val = v.at_moment(dmax(due, v.logic_at()), fn() { (play.val)() })
+    }
+  }
+  v.owns(fn() { (next_play.val)() }) |> ignore
+  v.reacts(fn() { (em.said.get(), rd0.landing.get(), rd0.linger_said.get()) }, fn(_) { (play.val)() })
   // (a row's key: the core's, else the key it was sent as from here; Reading's sent and sent_as, row_keys's)
   let id_of = fn(e : Entry) -> String {
     let k = match e {
@@ -244,7 +259,8 @@ pub fn chat_list_node(
           match em.current {
             Some(t) if t.pose == @sfbase.Pose::Float => {
               if said_id(t.seq, t.ts) == k {
-                Some(@sfbase.pose_ms(t.pose, t.from))
+                // (as long as its avatar's way there, said by how far it is as the row comes in: emit_step)
+                Some(t.span)
               } else {
                 None
               }
@@ -1313,16 +1329,14 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
   }
   layer.show(fn() { flying() is Some(_) }, fn(f) {
     // (where it is as this frame draws it, from the layer's corner: its 18 face's top left, the ring round it)
-    let at = fn() {
-      f.drawn_at() |> ignore
+    let at = fn(laid : @view.Laid) {
+      laid.at() |> ignore
       let agents = match view() {
         Some(v) => v.agents.map(fn(a) { a.key })
         None => []
       }
-      // The flight's clock and both endpoints belong to this frame. A row's placement can change after the
-      // clock was read; its published geometry must still invalidate the copy's position in that same pass.
-      em.read()
-      @sfbase.emit_flight(@ui.current(), rk, em, agents)
+      // The flight's clock and both endpoints belong to this frame: where they are as it is painted.
+      @sfbase.emit_flight_by(rk, em, agents, fn(k) { @sfbase.emit_place_drawn(laid, k) })
     }
     let a = fn() { flying() }
     f
@@ -1331,11 +1345,11 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
     .height(Is(Some(ring_side)))
     .lies_along(Is(Middle))
     .lines_up(Is(Some(Middle)))
-    .alpha(By(fn() { if at() is Some(_) { 1.0 } else { 0.0 } }))
+    .alpha(Painted(fn(laid) { if at(laid) is Some(_) { 1.0 } else { 0.0 } }))
     // (from where this frame laid the layer out, read as it is painted)
     .offset(Painted(fn(laid) {
       let (lx, ly, _, _) = laid.rect(layer).unwrap_or((0.0, 0.0, 0.0, 0.0))
-      match at() {
+      match at(laid) {
         Some((x, y, _, _)) => (x - ring_room - lx, y - ring_room - ly)
         None => (0.0, 0.0)
       }

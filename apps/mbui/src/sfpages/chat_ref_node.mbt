@@ -60,7 +60,7 @@ fn ref_menu_node(
   }
   let rows : Map[String, @view.View] = {}
   let row_key = fn(x : Json) { let item = @sfbase.chat_item(x); item.station + "\t" + item.id }
-  let layer = @sf.popup_root_node(owner)
+  @sf.popup_root_when(owner, fn() { offered() is Some(_) }, fn(layer) {
   layer.show(fn() { offered() is Some(_) }, fn(p) {
     let held = Ref(@signals.untracked(fn() { offered().unwrap() }))
     p.owns(@signals.effect(fn() { match offered() { Some(o) => held.val = o; None => () } })) |> ignore
@@ -152,6 +152,7 @@ fn ref_menu_node(
       })
     }) |> ignore
   }, leave=@kit.pop_out_ms)
+  })
   fn(code, mods) {
     guard offered() is Some(o) else { return false }
     if code == @ui.key_escape { @sfbase.refs_close(w.key); return true }
