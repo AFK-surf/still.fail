@@ -876,6 +876,7 @@ pub struct Tree {
   /// A property application or geometry read is still using the nodes; publish input ownership after it returns.
   mut modals_held : Int
   mut modals_asked : Bool
+  mut modals_at : Double
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// whether a gesture's finger let go was its tap (View::gesture: not moved past its slop, not held, not called off),
@@ -1166,6 +1167,7 @@ pub fn Tree::new(
     modals_due: false,
     modals_held: 0,
     modals_asked: false,
+    modals_at: -1.0,
     held: None,
     gesture_tapped: false,
     taps_withheld: false,
@@ -1873,6 +1875,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.drawn_marks.clear()
   // A checkpoint can lay out rows without painting them. A disposed tree must not later report those rows as drawn.
   self.after_paint.clear()
+  self.first_drawn.clear()
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
@@ -2179,8 +2182,9 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : 
 ///|
 /// The bindings marked since (what they read changed, told or not: a change under way, in its batch, tells them as it
 /// ends) worked out now, each once, where what they read did change (a computed read the same, not): what is asked at
-/// once (View::laid_size, Tree::bring_to). Nothing else run: what shows, which is picked and what effects do wait for
-/// the change's end; those not marked are not looked at.
+/// once (View::laid_size, Tree::bring_to). Only properties are pulled; pointer callbacks stay on the notified queue.
+/// A property's input-ownership notification waits for the geometry read and the whole change to finish. Those
+/// not marked are not looked at.
 fn Tree::pull(self : Tree) -> Unit {
   self.modals_held += 1
   defer { self.modals_released() }
@@ -2445,23 +2449,23 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
-    let stop = tree.queued(
-      f,
-      fn(v) {
-        let n = tree.nodes[at]
-        if !n.live || n.gen != gen {
-          return
-        }
-        let work = tree.work
-        work.bound = work.bound + 1
-        if last.val == Some(v) {
-          work.same = work.same + 1
-          return
-        }
-        last.val = Some(v)
-        apply(v)
-        marked()
-      }, property=true)
+      let stop = tree.queued(
+        f,
+        fn(v) {
+          let n = tree.nodes[at]
+          if !n.live || n.gen != gen {
+            return
+          }
+          let work = tree.work
+          work.bound = work.bound + 1
+          if last.val == Some(v) {
+            work.same = work.same + 1
+            return
+          }
+          last.val = Some(v)
+          apply(v)
+          marked()
+        }, property=true)
       n.props[prop] = stop
     }
     Roomed(of, f) => {
@@ -3956,6 +3960,7 @@ fn Tree::modals_told(self : Tree) -> Unit {
     self.bars_due = true
   }
   self.modals_due = true
+  self.modals_at = self.cause_now()
   self.modals_settled()
 }
 
@@ -3984,7 +3989,10 @@ fn Tree::modals_settled(self : Tree) -> Unit {
       }
       if self.modals_due {
         self.modals_due = false
+        let was = self.cause_at
+        self.cause_at = self.modals_at
         self.modals_now()
+        self.cause_at = was
       }
     })
   }
@@ -6963,8 +6971,6 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
 pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
-  self.modals_held += 1
-  defer { self.modals_released() }
   // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
@@ -7027,8 +7033,6 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
 /// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
 /// the tree has a size (its first frame).
 pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
-  self.modals_held += 1
-  defer { self.modals_released() }
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
@@ -7045,9 +7049,10 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   self.moves_before_due(at) |> ignore
   // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
   // finds things where they are then, nothing else told before the change ends)
-  self.pull()
   if self.last_w >= 0.0 {
     self.brought(at)
+  } else {
+    self.pull()
   }
 }
 
@@ -7063,7 +7068,17 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   defer { self.bringing_at = was }
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
-  self.laid_out(upto)
+  // Geometry sees the whole property's change. Publish input ownership only after its last layout pass, before
+  // returning the frame or hit-test geometry. A notification may change focus styling or structure; finish that
+  // work in the same call, with the same layout-pass guard rather than waiting for another picture.
+  let passes = Ref(0)
+  while !self.gone {
+    self.modals_held += 1
+    self.pull()
+    self.laid_out(upto, passes~)
+    self.modals_released()
+    if !self.due || passes.val > laid_passes_most { break }
+  }
 }
 
 ///|
@@ -7256,7 +7271,7 @@ fn Tree::told_noted(self : Tree, at : Int, what : String, was : () -> String, no
 /// things are as an event finds them in the middle of its change: Tree::laid_now). Pass after pass while what one tells
 /// marks more to do, each from the start, in a loop: once it ran in itself, as deep as passes came, and a frame whose
 /// passes never stopped (what it told taken at the host's clock, gone on: Tree::brought) ran the stack out, 2000 deep.
-fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+fn Tree::laid_out(self : Tree, upto : Double, passes? : Ref[Int] = Ref(0)) -> Unit {
   self.modals_held += 1
   defer { self.modals_released() }
   if !self.due {
@@ -7268,12 +7283,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   self.laying += 1
   let mut placing = false
   let mut ordered = false
-  let mut passes = 0
   while self.due {
-    passes += 1
-    self.laid_passes = passes
-    if passes > laid_passes_most {
-      let said = "view: \{passes - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
+    passes.val += 1
+    self.laid_passes = passes.val
+    if passes.val > laid_passes_most {
+      let said = "view: \{passes.val - 1} layout passes in one, each telling what marks another; told otherwise in the last: \{self.told_otherwise}; marked again from \{self.laid_marked_at}"
       println(said)
       fault(said)
       self.due = false
@@ -7294,7 +7308,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if placing && !self.withins_passing {
     self.withins_passing = true
     while self.withins_told() && self.due {
-      self.laid_out(upto)
+      self.laid_out(upto, passes~)
     }
     self.withins_passing = false
   } else if !self.withins_passing && self.bar_cols.length() > 0 && (ordered || self.changed.length() > 0 || self.bars_due) {
@@ -7302,7 +7316,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     // placed: an order, what bounds input, what takes it; in this same pass)
     self.withins_passing = true
     while self.bars_near_told() && self.due {
-      self.laid_out(upto)
+      self.laid_out(upto, passes~)
     }
     self.withins_passing = false
   }
