@@ -19,7 +19,7 @@ on:
         type: string
       external:
         description: Also add this build to the external group and submit it to Beta App Review
-        default: false
+        default: true
         type: boolean
       skip_tests:
         description: Upload whatever this run's tests say (they still run, and fail the run)
