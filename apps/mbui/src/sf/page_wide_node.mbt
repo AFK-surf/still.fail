@@ -523,7 +523,8 @@ fn wide_link_row_node(
 /// A switch's row on a wide page (switch_row's, wide): its title, `note` quieter under it (the theme's rows'), the
 /// switch at its end across their middle, 16 apart; on a list's card (part_of) a row of it (wide_in_list: as far in as
 /// its rows' words, 10 over and under, as high as one at least, its corner concentric with the card's), its title as
-/// strong as the list's other rows' (setting_title); its words' looks `looks` where given. The switch alone answers.
+/// strong as the list's other rows' (setting_title); its words' looks `looks` where given. `row_press`, `settings` and
+/// `before_switch` are switch_row_node's.
 fn wide_switch_row_node(
   parent : @view.View,
   title : () -> String,
@@ -532,6 +533,9 @@ fn wide_switch_row_node(
   note : () -> String,
   disabled : () -> Bool,
   lead : ((@view.View) -> Unit)?,
+  row_press : Bool,
+  settings : Bool,
+  before_switch : ((@view.View) -> Unit)?,
   looks? : (() -> @ui.TextStyle, () -> @ui.TextStyle),
 ) -> Unit {
   let at = part_of(parent)
@@ -539,7 +543,7 @@ fn wide_switch_row_node(
     Some(l) => l
     None => (fn() { if at.list { setting_title() } else { theme().rows.title } }, fn() { theme().rows.note })
   }
-  let row = fn(r : @view.View) {
+  let row = fn(r : @view.View, owner : @view.View?) {
     r.row(Is(true)).gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
@@ -547,7 +551,7 @@ fn wide_switch_row_node(
       words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, note_look) |> ignore })
     })
     |> ignore
-    switch_node(r, on, turn, title, disabled~)
+    switch_row_control_node(r, on, turn, title, disabled, owner, settings, before_switch)
   }
   if at.list {
     parent.box(fn(cell) {
@@ -559,11 +563,11 @@ fn wide_switch_row_node(
       .radius(Is(if in_pane_node(parent) { 0.0 } else { list_row_corner(cell) }))
       .min_height(By(fn() { Some(theme().items.least) }))
       |> ignore
-      cell.box(row) |> ignore
+      cell.box(fn(r) { row(r, if row_press { Some(cell) } else { None }) }) |> ignore
     })
     |> ignore
   } else {
-    parent.box(row) |> ignore
+    parent.box(fn(r) { row(r, if row_press { Some(r) } else { None }) }) |> ignore
   }
 }
 

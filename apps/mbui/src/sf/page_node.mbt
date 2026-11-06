@@ -816,40 +816,76 @@ pub fn switch_node(
   small? : Bool = false,
   disabled? : () -> Bool = fn() { false },
 ) -> Unit {
+  switch_control_node(parent, on, turn, label, small~, disabled~)
+}
+
+///|
+/// A switch drawn in `parent`, taking its press on `owner` when supplied (a whole row), otherwise on its own reach.
+/// In either case there is one press target and one switch in the semantics tree.
+fn switch_control_node(
+  parent : @view.View,
+  on : () -> Bool,
+  turn : (Bool) -> Unit,
+  label : () -> String,
+  small? : Bool = false,
+  disabled? : () -> Bool = fn() { false },
+  owner? : @view.View,
+  settings? : Bool = false,
+) -> Unit {
   parent.box(fn(at) {
     at.lines_up(Is(Some(Start))) |> ignore
     at.box(fn(v) {
       // (its track in the middle of that room, up and down: switch_reach's)
       v.min_height(By(fn() { Some(theme().items.least) })).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+      let target = owner.unwrap_or(v)
       let knob = EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
       let held = EdgeWay::new(0.0)
       v.reacts(on, fn(now) { knob.go(v, if now { 1.0 } else { 0.0 }, @kit.switch_ms) })
-      v.reacts(fn() { v.pressed() && @ui.pointing() is Finger }, fn(down) {
+      v.reacts(fn() { target.pressed() && @ui.pointing() is Finger }, fn(down) {
         held.go_by(v, if down { 1.0 } else { 0.0 }, @motion.lift_spring)
       })
+      v.owns(fn() {
+        (knob.due)()
+        (held.due)()
+      })
+      |> ignore
       let press = fn() {
-        let to = !@signals.untracked(on)
-        if @ui.pointing() is Finger {
-          @ui.haptic(TextHandleMove)
+        if !@signals.untracked(disabled) {
+          let to = !@signals.untracked(on)
+          if @ui.pointing() is Finger {
+            @ui.haptic(TextHandleMove)
+          }
+          turn(to)
         }
-        turn(to)
       }
-      v
+      target
       .presses(By(fn() { !disabled() }))
       .focusable(By(fn() { !disabled() }))
-      .alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } }))
       .says(By(fn() { Some(@view.said(Switch, label=label(), check=if on() { On } else { Off })) }))
       .on_press(press)
       |> ignore
-      let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
-      v.gesture(
+      // (settings' row could be unable to take a press while a request was under way, without fading its switch)
+      v.alpha(By(fn() { if disabled() && !settings { switch_disabled_alpha } else { 1.0 } })) |> ignore
+      let on_it = fn(d : @view.Drag) { target.finger_target(d.wx, d.wy) }
+      // (a whole row answers the hand with the same ripple as a settings list row; the switch-only reach keeps its
+      // own look, and neither gives feedback for a disabled press)
+      let ripple = match owner {
+        Some(_) => {
+          let draw = press_look(target, Is(row_corner), fn() { false })
+          Some(fn(d : @view.Drag) { if !@signals.untracked(disabled) { draw(d) } })
+        }
+        None => None
+      }
+      target.gesture(
         @ui.touch_slop(),
+        press?=ripple,
         tap=fn(d) { if on_it(d) && !disabled() { press() } },
         hold=(@ui.long_press_ms, fn(_) {  }),
         drag=fn(d) { if d.kind == Up && on_it(d) && !disabled() { press() } },
       )
       |> ignore
-      let size = fn() { switch_size(small) }
+      let size = fn() { if settings { (44.0, 26.0) } else { switch_size(small) } }
+      let inset = if settings { 3.0 } else { switch_in }
       v.box(fn(track) {
         track
         .width(By(fn() { Some(size().0) }))
@@ -857,17 +893,17 @@ pub fn switch_node(
         .radius(By(fn() { size().1 / 2.0 }))
         .ground(By(fn() {
           let p = theme().p
-          @kit.blend(p.line_strong, p.accent, knob.shown(track))
+          @kit.blend(if settings { p.line } else { p.line_strong }, if settings { p.green } else { p.accent }, knob.shown(track))
         }))
         |> ignore
-        let d = fn() { size().1 - 2.0 * switch_in }
-        let travel = fn() { size().0 - 2.0 * switch_in - d() }
+        let d = fn() { size().1 - 2.0 * inset }
+        let travel = fn() { size().0 - 2.0 * inset - d() }
         let k = fn() {
           let t = knob.shown(track)
           if @ui.current().rtl() { 1.0 - t } else { t }
         }
         // (held, the knob a lens: wider and larger about its middle, the knob fading under it)
-        let lens = fn() { if @ui.current().glass_solid() { 0.0 } else { held.shown(track) } }
+        let lens = fn() { if settings || @ui.current().glass_solid() { 0.0 } else { held.shown(track) } }
         track.box(fn(o) {
           o.over(Is(true)).lines_up(Is(Some(Start))) |> ignore
           o.box(fn(kn) {
@@ -876,8 +912,8 @@ pub fn switch_node(
             .height(By(fn() { Some(d()) }))
             .radius(By(fn() { d() / 2.0 }))
             .ground(Is(0xFFFFFFFFL))
-            .shadow(Is((2.0, 1.0, 0x00000033L)))
-            .offset(By(fn() { (switch_in + travel() * k(), switch_in) }))
+            .shadow(Is(if settings { (0.0, 0.0, 0L) } else { (2.0, 1.0, 0x00000033L) }))
+            .offset(By(fn() { (inset + travel() * k(), inset) }))
             .alpha(By(fn() { 1.0 - dmin(1.0, lens()) }))
             |> ignore
           })
@@ -900,7 +936,7 @@ pub fn switch_node(
             .offset(By(fn() {
               let (lw, lh) = lens_wh()
               let (w, h) = size()
-              let mid = switch_in + d() / 2.0 + travel() * k()
+              let mid = inset + d() / 2.0 + travel() * k()
               (dmax(0.0, dmin(mid - lw / 2.0, w - lw)), (h - lh) / 2.0)
             }))
             .alpha(By(fn() { dmin(1.0, lens()) }))
@@ -909,7 +945,7 @@ pub fn switch_node(
           |> ignore
         })
         // (the keyboard's focus on it: a ring round it, its gap and width the theme's)
-        track.show(fn() { v.focus_shown() }, fn(ring) {
+        track.show(fn() { target.focus_shown() }, fn(ring) {
           let out = fn() {
             let t = @ui.tree_theme()
             t.focus_gap + t.focus_w
@@ -939,9 +975,12 @@ let switch_disabled_alpha : Double = 0.5
 
 ///|
 /// A row on a group's card that turns something on or off (switch_row's; narrow, in a card: its title, `note` quieter
-/// under it, its switch at its end across their middle; wide: wide_switch_row_node's); the switch alone answers. `on`,
-/// `turn`: switch_node's. `in_words`: on a page's card of words (page_card_node), where narrow it is a row of its words
-/// (16 between them and the switch), not a group's row.
+/// under it, its switch at its end across their middle; wide: wide_switch_row_node's). The switch alone answers unless
+/// `row_press`, when the whole row is the one switch and takes its press. `settings` uses the settings' 44 by 26 green
+/// switch and row words, with a balanced note; its title wraps unless `wrap_title` is false. `before_switch` makes what
+/// stands just before it (a responsive work mark, for example), independently of `disabled`. `on`, `turn`: switch_node's.
+/// `in_words`: on a page's card of words (page_card_node), where narrow it is a row of its words (16 between them and
+/// the switch), not a group's row.
 pub fn switch_row_node(
   parent : @view.View,
   title : () -> String,
@@ -951,24 +990,26 @@ pub fn switch_row_node(
   disabled? : () -> Bool = fn() { false },
   lead? : (@view.View) -> Unit,
   in_words? : Bool = false,
+  row_press? : Bool = false,
+  settings? : Bool = false,
+  before_switch? : (@view.View) -> Unit,
+  wrap_title? : Bool = true,
 ) -> Unit {
-  if look_node(parent) is Wide {
-    // (among a card's words, its title as strong as a setting's: switch_row's wide)
-    if in_words {
-      wide_switch_row_node(parent, title, on, turn, note, disabled, lead, looks=(fn() { setting_title() }, fn() {
-        theme().rows.note
-      }))
-    } else {
-      wide_switch_row_node(parent, title, on, turn, note, disabled, lead)
-    }
-    return
-  }
+  let look = look_node(parent)
   // (narrow, among a card's words: a row of words with its switch, no row's ground or room of its own, switch_row's
   // in_words)
-  if in_words {
-    wide_switch_row_node(parent, title, on, turn, note, disabled, lead, looks=(fn() { pg_switch_title }, fn() {
-      meta.then(full_words)
-    }))
+  if look is Wide || in_words {
+    let looks = if settings {
+      Some((fn() { settings_switch_title(look, wrap_title) }, fn() { settings_switch_note(look) }))
+    } else if in_words && look is Wide {
+      // (among a wide card's words, its title as strong as a setting's: switch_row's wide)
+      Some((fn() { setting_title() }, fn() { theme().rows.note }))
+    } else if in_words {
+      Some((fn() { pg_switch_title }, fn() { meta.then(full_words) }))
+    } else {
+      None
+    }
+    wide_switch_row_node(parent, title, on, turn, note, disabled, lead, row_press, settings, before_switch, looks?=looks)
     return
   }
   parent.box(fn(r) {
@@ -983,13 +1024,53 @@ pub fn switch_row_node(
     r.box(fn(words) {
       // (as wide as the row leaves it, narrower where what it holds is wider: its words wrapped there, as a row's are)
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-      led_title_node(words, title, fn() { pg_switch_title }, lead)
-      words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { meta.then(full_words) }) |> ignore })
+      led_title_node(words, title, fn() { if settings { settings_switch_title(Narrow, wrap_title) } else { pg_switch_title } }, lead)
+      words.show(fn() { note() != "" }, fn(n) {
+        styled_words(n, note, fn() { if settings { settings_switch_note(Narrow) } else { meta.then(full_words) } }) |> ignore
+      })
     })
     |> ignore
-    switch_node(r, on, turn, title, disabled~)
+    switch_row_control_node(r, on, turn, title, disabled, if row_press { Some(r) } else { None }, settings, before_switch)
   })
   |> ignore
+}
+
+///|
+/// The settings list's words: a body title in lines, or one line (wide, at the UI size); its secondary or caption
+/// note in balanced lines. These are the old settings row_title and row_lines' looks.
+fn settings_switch_title(look : Look, wrap : Bool) -> @ui.TextStyle {
+  let title = if look is Wide && !wrap { @ui.text_style(size=Ui, color=Fg) } else { body }
+  (if wrap { title } else { title.then(one_line) }).then(full_words)
+}
+
+///|
+fn settings_switch_note(look : Look) -> @ui.TextStyle {
+  let note = if look is Wide { @ui.text_style(size=Caption, color=Muted) } else { secondary }
+  note.then(full_words).then(@ui.text_style(balance=true))
+}
+
+///|
+/// The switch and, where supplied, what stands before it. Its mark may appear or leave without making the switch again.
+fn switch_row_control_node(
+  parent : @view.View,
+  on : () -> Bool,
+  turn : (Bool) -> Unit,
+  title : () -> String,
+  disabled : () -> Bool,
+  owner : @view.View?,
+  settings : Bool,
+  before_switch : ((@view.View) -> Unit)?,
+) -> Unit {
+  match before_switch {
+    None => switch_control_node(parent, on, turn, title, disabled~, owner?=owner, settings~)
+    Some(make) =>
+      parent.box(fn(end) {
+        end.row(Is(true)).gap(Is(8.0)).lines_up(Is(Some(Middle))) |> ignore
+        make(end)
+        switch_control_node(end, on, turn, title, disabled~, owner?=owner, settings~)
+      })
+      |> ignore
+  }
 }
 
 ///|

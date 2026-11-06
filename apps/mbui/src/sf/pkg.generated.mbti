@@ -2276,7 +2276,7 @@ pub fn switch_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String, small? 
 
 pub fn switch_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, busy? : Bool, lead? : (@ui.Ctx) -> Unit) -> Bool
 
-pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String, disabled? : () -> Bool, lead? : (@view.View) -> Unit, in_words? : Bool) -> Unit
+pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String, disabled? : () -> Bool, lead? : (@view.View) -> Unit, in_words? : Bool, row_press? : Bool, settings? : Bool, before_switch? : (@view.View) -> Unit, wrap_title? : Bool) -> Unit
 
 pub let switch_small_h : Double
 
