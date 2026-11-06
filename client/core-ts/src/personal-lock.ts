@@ -14,7 +14,7 @@ import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { type Entry, canonical, entryHash, signedBytes } from "./lock.ts";
 import type { Runner } from "./runtime.ts";
-import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
+import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -99,6 +99,11 @@ export type PersonalEnv = {
 };
 
 const PATH = "/v1/me/personal-lock";
+// Older clouds ignore an unknown `expect` field on PATH. This distinct route guarantees a guarded restore is never
+// treated as an unconditional reset during a rolling cloud update.
+const RESTORE_PATH = `${PATH}/append`;
+/// The cloud reads at most this many UTF-8 bytes in one request (cloud/src/auth.ts).
+const POST_BYTES = 8192;
 
 export class PersonalLock {
   readonly #env: PersonalEnv;
@@ -143,9 +148,23 @@ export class PersonalLock {
       if (grows) {
         this.#seen.delete(sub);
         if (entries.length > pinned.length) yield* this.#pin(sub, entries);
-      } else if (pinned.length > 0 && entries.length === 0) {
-        // (the cloud lost it, or never had it: brought back)
-        yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
+      } else if (pinned.length > entries.length && holds && entries.every((e, i) => entryHash(e) === entryHash(pinned[i]!))) {
+        // The cloud lost all or part of it. Restore in bounded requests, continuing after an interrupted upload.
+        let batch: Entry[] = [];
+        let start = entries.length;
+        const payload = (part: Entry[]) => ({ entries: part, expect: { length: start, head: start === 0 ? null : entryHash(pinned[start - 1]!) } });
+        for (const entry of pinned.slice(entries.length)) {
+          const together = [...batch, entry];
+          if (toJsonBytes(payload(together)).length > POST_BYTES) {
+            if (batch.length === 0) return yield* Effect.fail(new CoreError("personal_entry_too_large", "a personal lock entry is too large to restore"));
+            yield* this.#env.cloud(sub, "POST", RESTORE_PATH, payload(batch));
+            start += batch.length;
+            batch = [entry];
+            if (toJsonBytes(payload(batch)).length > POST_BYTES) return yield* Effect.fail(new CoreError("personal_entry_too_large", "a personal lock entry is too large to restore"));
+          } else batch = together;
+        }
+        if (batch.length > 0) yield* this.#env.cloud(sub, "POST", RESTORE_PATH, payload(batch));
+        this.#seen.delete(sub);
       } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
       else this.#seen.delete(sub);
       this.#env.changed();

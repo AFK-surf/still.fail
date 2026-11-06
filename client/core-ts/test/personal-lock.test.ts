@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { Adb } from "../src/adb.ts";
 import { CoreError, HostError } from "../src/error.ts";
-import type { Entry } from "../src/lock.ts";
+import { entryHash, type Entry } from "../src/lock.ts";
 import type { Mesh } from "../src/mesh.ts";
 import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
@@ -160,6 +160,66 @@ test("a lock the cloud says began anew is not followed by itself", async () => {
   } finally {
     a.runner.shutdown();
     forged.runner.shutdown();
+  }
+});
+
+test("a long pinned lock restores to an empty cloud within its request limit, including after an interruption", async () => {
+  const c = cloud();
+  let sent = 0, interruptAfter: number | null = null, oldCloud = false;
+  let replacement: Entry[] | null = null;
+  const limited = {
+    ...c,
+    call: (sub: string, method: string, path: string, value: unknown) => {
+      if (method === "POST") {
+        if (oldCloud && path.endsWith("/append")) return Effect.fail(new CoreError("not_found", "cloud has no guarded restore"));
+        if (new TextEncoder().encode(JSON.stringify(value)).length > 8192) return Effect.fail(new CoreError("too_large", "cloud request is too large"));
+        if (replacement !== null) { c.kept.entries = replacement; replacement = null; }
+        const expected = (value as { expect?: { length: number; head: string | null } }).expect;
+        if (expected) assert.equal(path, "/v1/me/personal-lock/append");
+        if (expected && (c.kept.entries.length !== expected.length || (c.kept.entries.length ? entryHash(c.kept.entries.at(-1)!) : null) !== expected.head)) return Effect.fail(new CoreError("conflict", "the cloud lock changed"));
+        if (interruptAfter !== null && sent++ >= interruptAfter) return Effect.fail(new CoreError("offline", "offline"));
+      }
+      return c.call(sub, method, path, value);
+    },
+  };
+  const a = device(limited, "a");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    const key = await a.runner.run(a.lock.makeKey());
+    for (let i = 0; i < 24; i++) {
+      await a.runner.run(a.lock.addDevice(SUB, { key, id: "61".repeat(32), label: `设备${i}${"长".repeat(70)}` }, "why"));
+    }
+    const pinned = [...c.kept.entries];
+    assert.ok(new TextEncoder().encode(JSON.stringify({ entries: pinned })).length > 8192);
+    c.kept.entries = [];
+    oldCloud = true;
+    await assert.rejects(a.runner.run(a.lock.refresh(SUB)), /guarded restore/);
+    assert.deepEqual(c.kept.entries, [], "an old cloud never receives an unguarded restore");
+    oldCloud = false;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.deepEqual(c.kept.entries, pinned, "the entire verified chain was restored");
+
+    c.kept.entries = [];
+    sent = 0;
+    interruptAfter = 1;
+    await assert.rejects(a.runner.run(a.lock.refresh(SUB)), /offline/);
+    assert.ok(c.kept.entries.length > 0 && c.kept.entries.length < pinned.length, "the cloud kept the first part");
+    interruptAfter = null;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.deepEqual(c.kept.entries, pinned, "a retry extends the accepted prefix without losing entries");
+
+    const other = cloud(), b = device(other, "b");
+    try {
+      await b.runner.run(b.lock.signGrant(SUB, body(), "why"));
+      c.kept.entries = [];
+      replacement = [...other.kept.entries];
+      await assert.rejects(a.runner.run(a.lock.refresh(SUB)), /changed/);
+      assert.deepEqual(c.kept.entries, other.kept.entries, "the restore did not replace a concurrently created lock");
+    } finally {
+      b.runner.shutdown();
+    }
+  } finally {
+    a.runner.shutdown();
   }
 });
 
