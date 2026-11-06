@@ -254,6 +254,44 @@ test "the settings' list dragged on past its end by a finger, counted taller bel
 }
 
 ///|
+/// The settings' list dragged by a finger past its search block and back, at the system's size of words `scale`: what
+/// it holds moves as the finger does at every step, until it reaches its top.
+fn settings_list_follows_the_finger(scale : Double) -> Unit raise {
+  let (t, _) = settings_home_tester(true, 2, h=844.0, scale~)
+  let at = fn() {
+    let found = t.words().filter(fn(w) { w.0 == "归档" }).map(fn(w) { w.2 })
+    if found.length() == 1 { found[0] } else { 0.0 / 0.0 }
+  }
+  let rest = at()
+  let mut finger = 700.0
+  let drag = fn(d : Double) raise {
+    let was = at()
+    t.advance(@ui.drag_step_ms)
+    finger = finger + d
+    t.touch(1, 195.0, finger)
+    t.draw()
+    // (from the first step past the touch's slop, and short of the list's top)
+    if at() < rest && was < rest {
+      assert_eq(at() - was, d, msg="the finger at \{finger}: from \{was} to \{at()}")
+    }
+  }
+  t.touch(0, 195.0, finger)
+  for _ in 0..<30 {
+    drag(-8.0)
+  }
+  assert_true(at() < rest - 200.0, msg="not past its search: \{rest} to \{at()}")
+  for _ in 0..<30 {
+    drag(8.0)
+  }
+}
+
+///|
+test "the settings' list dragged back past its search block: what it holds does not jump as that block is made again" {
+  settings_list_follows_the_finger(1.0)
+  settings_list_follows_the_finger(1.5)
+}
+
+///|
 /// 记忆 on a small screen (`platform`'s input), 390 × 2400, its stations as the fixture has them, never come (`held`) or
 /// failed (`failed`): drawn by the old frame alone (`tree` false) or by the window's tree, its page made once.
 fn memories_tester(
