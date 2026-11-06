@@ -200,7 +200,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/pictures" && method === "GET") return servePicture(request);
 
   // ── accounts ────────────────────────────────────────────────────────────
-  const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
+  const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
   const claims = await account(bearerToken(request), env);
   if (claims instanceof Response) return claims;
@@ -217,6 +217,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   if (path === "/v1/me" && method === "GET") {
     return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
+  }
+  // The person's own lock, which the cloud keeps and carries but does not decide (personal-lock.ts).
+  if (path === "/v1/me/personal-lock") {
+    const lock = env.ACCOUNTS.getByName(sub);
+    if (method === "GET") return reply({ entries: await lock.personalLock() });
+    if (method === "POST") {
+      const said = await lock.appendPersonalLock(sub, input.entries);
+      return "refused" in said ? reply({ error: said.refused }, STATUS[said.refused] ?? 409) : reply(said);
+    }
   }
   // Deleting the account: the Directory first (it may refuse: 409 sole_owner), then its sessions and all of it.
   if (path === "/v1/me" && method === "DELETE") {

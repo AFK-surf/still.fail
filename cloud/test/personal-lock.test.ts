@@ -1,0 +1,93 @@
+// A person's own lock as the cloud keeps it (src/personal-lock.ts, docs/personal-lock.md): each entry following the last
+// and signed by a device on it; a chain begun anew is taken (all of a person's devices lost), and devices decide whether
+// to follow it. Hashes and signatures are the stations' and the core's.
+import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
+import test from "node:test";
+import { entryHash, signedBytes, type Entry } from "../../station/src/cloud/lock.ts";
+import { personFold } from "../../station/src/cloud/lock.ts";
+import { extendPersonal, type PersonalEntry } from "../src/personal-lock.ts";
+import { harness } from "./harness.ts";
+
+const SUB = "s1";
+
+function key() {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const raw = publicKey.export({ format: "der", type: "spki" }).subarray(-32);
+  return { id: `ed25519:${raw.toString("hex")}`, privateKey };
+}
+
+function entry(by: ReturnType<typeof key>, seq: number, prev: string | null, kind: string, body: unknown, ws = `person:${SUB}`): PersonalEntry {
+  const e = { v: 1 as const, ws, seq, prev, at: 1, kind, body };
+  const hash = entryHash(e as unknown as Entry);
+  return { ...e, sig: { key: by.id, alg: "Ed25519", sig: sign(null, signedBytes(hash), by.privateKey).toString("hex") } };
+}
+const hashOf = (e: PersonalEntry) => entryHash(e as unknown as Entry);
+const device = (k: ReturnType<typeof key>) => ({ key: k.id, id: "ab".repeat(32), label: "x" });
+
+test("a lock begins with its device's own genesis, and grows only by a device on it", () => {
+  const a = key(), b = key(), stranger = key();
+  const first = entry(a, 0, null, "genesis", { sub: SUB, device: device(a) });
+  const kept = extendPersonal(SUB, [], [first]);
+  const added = entry(a, 1, hashOf(first), "device", device(b));
+  const two = extendPersonal(SUB, kept, [added]);
+  assert.equal(two.length, 2);
+  assert.deepEqual(personFold(two, SUB).devices.map((d) => d.key).sort(), [a.id, b.id].sort());
+  // A device not on it, a stolen login's.
+  assert.throws(() => extendPersonal(SUB, two, [entry(stranger, 2, hashOf(added), "device", device(stranger))]), /lock_refused/);
+  // Not following what is kept.
+  assert.throws(() => extendPersonal(SUB, two, [entry(a, 2, "00", "device", device(stranger))]), /lock_refused/);
+  // Another person's.
+  assert.throws(() => extendPersonal("s2", [], [first]), /lock_refused/);
+  // A genesis signed by another than the device it names.
+  assert.throws(() => extendPersonal(SUB, [], [entry(stranger, 0, null, "genesis", { sub: SUB, device: device(a) })]), /lock_refused/);
+  // Signature not its own.
+  const forged = { ...added, body: device(stranger) };
+  assert.throws(() => extendPersonal(SUB, kept, [forged]), /lock_refused/);
+});
+
+test("the last device is not removed; one taken off signs no more; a lock may begin anew", () => {
+  const a = key(), b = key(), c = key();
+  const first = entry(a, 0, null, "genesis", { sub: SUB, device: device(a) });
+  assert.throws(() => extendPersonal(SUB, [first], [entry(a, 1, hashOf(first), "device.remove", { key: a.id })]), /lock_refused/);
+  const added = entry(a, 1, hashOf(first), "device", device(b));
+  const gone = entry(b, 2, hashOf(added), "device.remove", { key: a.id });
+  const kept = extendPersonal(SUB, [first, added], [gone]);
+  assert.throws(() => extendPersonal(SUB, kept, [entry(a, 3, hashOf(gone), "device", device(c))]), /lock_refused/);
+  const anew = extendPersonal(SUB, kept, [entry(c, 0, null, "genesis", { sub: SUB, device: device(c) })]);
+  assert.equal(anew.length, 1);
+});
+
+test("what is not an entry is refused", () => {
+  assert.throws(() => extendPersonal(SUB, [], []), /invalid_lock_entries/);
+  assert.throws(() => extendPersonal(SUB, [], [{ v: 2 }]), /invalid_lock_entries/);
+  assert.throws(() => extendPersonal(SUB, [], [{ v: 2, seq: 0 }]), /lock_refused/);
+  assert.throws(() => extendPersonal(SUB, [], "x"), /invalid_lock_entries/);
+});
+
+test("the personal lock API requires its account, keeps each account's chain separate and rejects another's entry", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    const alice = h.as(aliceTokens);
+    const bob = h.as(await h.login("bob"));
+    const path = "/v1/me/personal-lock";
+    assert.equal((await h.fetch(path)).status, 401);
+    assert.deepEqual(await (await alice("GET", path)).json(), { entries: [] });
+    assert.deepEqual(await (await bob("GET", path)).json(), { entries: [] });
+
+    const signer = key();
+    const first = entry(signer, 0, null, "genesis", { sub: aliceTokens.subject, device: device(signer) }, `person:${aliceTokens.subject}`);
+    assert.equal((await alice("POST", path, { entries: [first] })).status, 200);
+    assert.deepEqual(await (await alice("GET", path)).json(), { entries: [first] });
+    assert.deepEqual(await (await bob("GET", path)).json(), { entries: [] });
+    assert.equal((await bob("POST", path, { entries: [first] })).status, 409);
+
+    const stranger = key();
+    const forged = entry(stranger, 1, hashOf(first), "device", device(stranger), `person:${aliceTokens.subject}`);
+    assert.equal((await alice("POST", path, { entries: [forged] })).status, 409);
+    assert.deepEqual(await (await alice("GET", path)).json(), { entries: [first] });
+  } finally {
+    await h.close();
+  }
+});

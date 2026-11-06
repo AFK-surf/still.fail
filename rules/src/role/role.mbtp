@@ -234,3 +234,51 @@ predicate key_complete(seen : Bool, member : Bool, result : Bool) {
 predicate key_post(seen : Bool, member : Bool, result : Bool) {
   key_sound(seen, member, result) && key_complete(seen, member, result)
 }
+
+predicate binds_rule(mine : Bool, own : Bool) {
+  mine && own
+}
+
+predicate binds_sound(mine : Bool, own : Bool, result : Bool) {
+  result → binds_rule(mine, own)
+}
+
+predicate binds_complete(mine : Bool, own : Bool, result : Bool) {
+  binds_rule(mine, own) → result
+}
+
+predicate binds_post(mine : Bool, own : Bool, result : Bool) {
+  binds_sound(mine, own, result) && binds_complete(mine, own, result)
+}
+
+predicate person_changes_rule(held : Bool, lone : Bool) {
+  held && !lone
+}
+
+predicate person_changes_sound(held : Bool, lone : Bool, result : Bool) {
+  result → person_changes_rule(held, lone)
+}
+
+predicate person_changes_complete(held : Bool, lone : Bool, result : Bool) {
+  person_changes_rule(held, lone) → result
+}
+
+predicate person_changes_post(held : Bool, lone : Bool, result : Bool) {
+  person_changes_sound(held, lone, result) && person_changes_complete(held, lone, result)
+}
+
+predicate person_admits_rule(pinned : Bool, proved : Bool, held : Bool) {
+  pinned && proved && held
+}
+
+predicate person_admits_sound(pinned : Bool, proved : Bool, held : Bool, result : Bool) {
+  result → person_admits_rule(pinned, proved, held)
+}
+
+predicate person_admits_complete(pinned : Bool, proved : Bool, held : Bool, result : Bool) {
+  person_admits_rule(pinned, proved, held) → result
+}
+
+predicate person_admits_post(pinned : Bool, proved : Bool, held : Bool, result : Bool) {
+  person_admits_sound(pinned, proved, held, result) && person_admits_complete(pinned, proved, held, result)
+}
