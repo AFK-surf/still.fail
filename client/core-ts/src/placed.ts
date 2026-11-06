@@ -38,13 +38,13 @@ type J = any;
  * A chat's page (drawn: its files' `owner`, its messages' `placed`): the images before and after the one at `path`, in
  * the order the page shows them. `at` identifies the occurrence in a message when the same file is shown more than once.
  * A file sent from here is the same file by its upload (`upload`) before it is up (its path `upload:<id>`) and after,
- * wherever it is kept: one opened by its upload's path is found once it is up. While it goes up it is on no station
- * and has no owner: it is beside none (one stepped to is opened by where its station keeps it).
+ * wherever it is kept: one opened by its upload's path is found, up or not. While it goes up it is on no station and
+ * has no owner, but it is among them all the same, by its upload (the page draws it from the picture picked here).
  */
 export function near(chat: J, path: string, at?: string): { before?: J; after?: J; beforeAt?: string; afterAt?: string; index?: number; count: number } {
   const images: { file: J; at: string }[] = [];
   const add = (files: J[], place: string) => {
-    for (const f of files) if (f !== null && typeof f === "object" && typeof f.name === "string" && typeof f.owner === "string" && isImage(f.name)) images.push({ file: f, at: place });
+    for (const f of files) if (f !== null && typeof f === "object" && typeof f.name === "string" && (typeof f.owner === "string" || typeof f.upload === "string") && isImage(f.name)) images.push({ file: f, at: place });
   };
   const message = (m: J, row: string) => {
     const files: J[] = Array.isArray(m?.attachments) ? m.attachments : [];

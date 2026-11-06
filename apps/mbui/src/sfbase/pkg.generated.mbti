@@ -3777,6 +3777,7 @@ pub fn Viewer::read_near(Self, Source, Self?, Self?) -> Unit
 pub fn Viewer::read_on(Self, Source) -> Unit
 pub fn Viewer::read_part(Self, Source, Double, Int32, String, (Result[(@json.Json, Bytes), @json.Json]) -> Unit) -> Unit
 pub fn Viewer::read_whole(Self, Source, (Result[Bytes, @json.Json]) -> Unit) -> Unit
+pub fn Viewer::sent_whole(Self) -> String?
 pub fn Viewer::set_out(Self, @ui.Ctx, Source, Double) -> Unit
 pub fn Viewer::set_source(Self, Bool) -> Unit
 pub fn Viewer::shown_kind(Self) -> PKind?
