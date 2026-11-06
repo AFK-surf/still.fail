@@ -177,6 +177,18 @@ pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
 }
 
 ///|
+/// Its place among what holds it: a list's row's (one a list laid out from where it is scrolled to measured: Node's
+/// row_index) where its key is among all the list's, made or not, so a row gone out of the window and one in it stand
+/// in their order however many over them are made now (what is picked with the pointer across a list that scrolls on);
+/// else its place among the nodes made in what holds it.
+pub fn View::order_in_parent(self : View) -> Int {
+  match self.live() {
+    Some(n) if n.row_index is Some(i) => i
+    _ => self.parent().map(fn(p) { p.kids().search_by(fn(k) { k.id() == self.id() }).unwrap_or(0) }).unwrap_or(0)
+  }
+}
+
+///|
 /// A name for a row of a list made by its key (View::row_known_as), never a node's own: no node it names is let go and
 /// made again under it.
 pub fn Tree::row_name(self : Tree) -> NodeId {

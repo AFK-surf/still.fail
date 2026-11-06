@@ -251,6 +251,8 @@ jobs:
           # `Changelog: none`, the parts said).
           python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
           stable=$!
+          bash .github/test_mac_release_prebuild.sh > "$RUNNER_TEMP/mac-prebuild-test.log" 2>&1 &
+          mac_prebuild_test=$!
           undone=""
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             sh scripts/undone.sh "$(git merge-base HEAD origin/main)" HEAD > "$RUNNER_TEMP/undone.log" 2>&1 &
@@ -264,6 +266,7 @@ jobs:
           trap 'kill -TERM $check 2> /dev/null; wait $check; exit 1' INT TERM
           wait $check || status=1
           if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
+          if wait $mac_prebuild_test; then echo "· Mac release prebuild … ok"; else echo "· Mac release prebuild … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/mac-prebuild-test.log"; status=1; fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             if node scripts/changelog.ts --refuse "$(git merge-base HEAD origin/main)..HEAD"; then echo "· changelog trailers … ok"; else echo "· changelog trailers … FAILED"; status=1; fi
           fi
@@ -752,11 +755,8 @@ jobs:
             apps/mbui/out/core/hermesc
           key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
       - uses: ./.github/actions/setup
+        with: { pnpm: 'false' }
       - uses: ./.github/actions/natives
-      - uses: actions/cache@v4
-        with:
-          path: apps/mbui/out/mac/AppIcon-*
-          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
       - name: The macOS shell's key
         id: native-keys
         run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
@@ -765,6 +765,20 @@ jobs:
         with:
           path: ~/Library/Caches/stillfail-native/shell-apple
           key: ${{ steps.native-keys.outputs.key }}
+      - if: steps.shell.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
+            shell-apple-target-darwin-arm64-
+      # The core's native parts can build while MoonBit and the old Moon build are restored; the app's Moon build can
+      # then run beside pnpm and the icon restore. The same scripts, target and compiler are used by mac-app.sh below.
+      - name: Start the Mac app build
+        run: |
+          touch "$RUNNER_TEMP/start"
+          bash .github/mac-release-prebuild.sh start
       - uses: ./.github/actions/mbui-moonbit
       - uses: actions/cache/restore@v4
         id: moon
@@ -776,15 +790,14 @@ jobs:
           restore-keys: mbui-mac-moon-
       - run: |
           bash apps/mbui/scripts/moon-mtimes.sh
-          touch "$RUNNER_TEMP/start"
-      - if: steps.shell.outputs.cache-hit != 'true'
-        uses: actions/cache/restore@v4
+          bash .github/mac-release-prebuild.sh ready
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@v4
         with:
-          path: apps/mbui/out/core-target*/native/shell-apple
-          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
-          restore-keys: |
-            shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
-            shell-apple-target-darwin-arm64-
+          path: apps/mbui/out/mac/AppIcon-*
+          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
+      - name: Finish the Mac app build
+        run: bash .github/mac-release-prebuild.sh wait
       - name: Build, sign and notarize the beta Mac app
         if: github.ref == 'refs/heads/main'
         env:

@@ -377,7 +377,8 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 
 ///|
 /// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said (felt as
-/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run.
+/// something refused) and `failed` told why; gone through, `done` (when there is one) said (felt as something done)
+/// and `then` run.
 pub fn act(
   core : Core,
   what : String,
@@ -385,6 +386,7 @@ pub fn act(
   params : Json,
   done? : String = "",
   then? : (Json) -> Unit = fn(_) {  },
+  failed? : (Json) -> Unit = fn(_) {  },
 ) -> Unit {
   (core.call)(name, params, fn(r) {
     match r {
@@ -407,6 +409,7 @@ pub fn act(
             [("what", what), ("error", error_text(e))],
           ),
         )
+        failed(e)
       }
     }
   })

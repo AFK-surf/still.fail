@@ -60,6 +60,10 @@ pub struct Scroll {
   priv mut hand_v : Double
   /// taken over from what it went down on (View::claims): its first move from where it went down counted past the slop
   priv mut claimed : Bool
+  /// how many times it was moved at once (by the hand: a wheel's turn not eased in, a drag's move, its bar held and
+  /// moved; or put, a part of it brought into sight), not going on by itself: what a list laid out from where it is
+  /// tells a jump by from a way gone across (View::scrolls_window's `seen`)
+  priv mut moved_at_once : Int
   /// what is told as it scrolls (its bar), at the moment
   priv mut on_scrolled : (Double) -> Unit
   /// The hand's requested distance, before it moves or any new layout measures what it brings into sight.
@@ -158,6 +162,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     hand_t: 0.0,
     hand_v: 0.0,
     claimed: false,
+    moved_at_once: 0,
     on_scrolled: fn(_) {  },
     on_hand: fn(_) { },
     serial: {
@@ -472,6 +477,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
     Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
     _ => ()
   }
+  self.moved_at_once += 1
   self.x.set(dmax(to, 0.0))
 }
 
@@ -481,7 +487,10 @@ fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(was + d, 0.0, self.most())
-  if to != was { (self.on_hand)(to - was) }
+  if to != was {
+    self.moved_at_once += 1
+    (self.on_hand)(to - was)
+  }
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)
@@ -495,6 +504,9 @@ fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
   (self.rebase)()
   let was = self.stopped(t)
   let to = dclamp(to, 0.0, self.most())
+  if to != was {
+    self.moved_at_once += 1
+  }
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)

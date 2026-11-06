@@ -276,9 +276,10 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
 
 Where mbui is not yet so (2026-11-04):
 
-- The windowed list (view's `scrolls_window`, ui's `ListRows::in_node`) works the rows' tops out from the first and
-  goes through them as it is scrolled; its end is followed and what is read held by reactions reading layout's
-  results. It is made again as rule 11 says, its motions as paint's.
+- ui's `ListRows::in_node`, whose rooms are read as each block is worked out, still goes through the old windowed list
+  (view's `scrolls_window_rooms`): it works the rows' tops out from the first and goes through them as it is scrolled;
+  its end is followed and what is read held by reactions reading layout's results. It is made again as rule 11 says,
+  its rooms read before the layout as `in_node_indexed`'s are, its motions as paint's.
 - Layout's results are signals (`laid_size_told`, `laid_window_told`, `sizes_told`) read where they change what is
   made, and `Tree::laid_out` calls itself again where what they told marked more (rule 10); a change settled as of its
   logical moment turns the clock there and back in the middle of layout. Each reader goes to paint's, the next event's,
@@ -335,7 +336,8 @@ three places, each untracked, and nowhere else:
    - *filling what holds it* needs nothing new: `over(Is(true))` is laid out over all of its holder, `width_share(1.0)`
      as wide, `Within(n)` as wide as `n` or the holder where that is less; `min_width_within` and `max_width_within` say
      the least and most so, so a card between 360 and 560 within its room is said, not read back;
-   - *a long list* (rule 11) lays out its rows from its anchor in its own layout box (list_anchor.mbt): which rows are
+   - *a long list* (rule 11; a page's windowed list, `scrolls_window`, by the same pass, counting each row it has not
+     measured as its estimate) lays out its rows from its anchor in its own layout box (list_anchor.mbt): which rows are
      made, where they are, how far it may scroll, whether it is at its end, all from one pass; what it measured last
      time (its `ListLaid`, the heights it kept by key) is its own record, read by its next layout, never a signal; a row's
      room (`ListRoom`: offset, cut, fade) is set on the row's holder by the list as it places it, for paint. Going to a
@@ -348,7 +350,12 @@ three places, each untracked, and nowhere else:
 What a layout makes (a list's rows, `by_room`'s and `layout_box`'s children) is a cache of the picture: how many are
 made and let go is by the frames there were and the room there is. So it holds no state of the app's and starts nothing
 that lasts (a subscription, a download, a decoded picture, a draft): those are kept outside it by the data's key, and
-what it makes reads them.
+what it makes reads them. A long list makes the rows a scroll goes past only to measure them; which rows were shown is
+told, never found by a row being made: `scrolls_window`'s `seen` (in sight as it was laid out, or gone across as it
+went on by itself, whether the frames between were many or one; not what a move at once went past), told as the layout
+that found them is done, of its moment, whether a frame is painted before what comes next or not, as a page opens a
+draft for a block it showed; `scrolls_anchored`'s `sighted` (what a move at once went past too), told once the frame
+is painted, as the pictures a chat's rows show are asked of the host.
 
 What waits for a node "to be laid out" (a sheet opened once the page is there, a keyboard asked for once the field is)
 waits for nothing that is the tree's: it is done at its cause; where the host must have the node drawn first, the node's
