@@ -7,18 +7,20 @@ import { workspaceActivityStep } from "../store/workspace-activity.ts";
 import { recoverWaitsStep } from "../store/recover-waits.ts";
 import { awakeWaitsStep } from "../store/awake-waits.ts";
 import { disableSandboxIndex, enableSandboxIndex, sandboxIndexStep } from "../store/sandbox-index.ts";
+import { installSessionDirectories, sessionDirectoriesStep } from "../store/session-directory.ts";
 
 const db = new DatabaseSync(workerData.path as string);
 const priority = new Int32Array(workerData.priority as SharedArrayBuffer);
 db.exec("PRAGMA busy_timeout = 250; PRAGMA synchronous = NORMAL");
 
-parentPort!.on("message", async (message: { kind?: "activity" | "recovery" | "awake" | "sandbox" | "sandbox-off" }) => {
+parentPort!.on("message", async (message: { kind?: "activity" | "recovery" | "awake" | "sandbox" | "sandbox-off" | "directory" }) => {
   const kind = message.kind ?? "activity";
   let result: { done: boolean; error?: string } = { done: false };
   if (takeBackfill(priority, threadId)) {
     try {
       if (kind === "sandbox") { enableSandboxIndex(db); result = sandboxIndexStep(db); }
       else if (kind === "sandbox-off") { disableSandboxIndex(db); result = { done: true }; }
+      else if (kind === "directory") { installSessionDirectories(db); result = sessionDirectoriesStep(db); }
       else result = kind === "recovery" ? recoverWaitsStep(db) : kind === "awake" ? awakeWaitsStep(db) : workspaceActivityStep(db);
     }
     catch (error) {

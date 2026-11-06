@@ -23,6 +23,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type ProcessInfo, platform, treeOf } from "../platform/index.ts";
 import type { Store } from "../store/store.ts";
+import type { DirectorySession } from "../store/session-directory.ts";
 import type { Pressure } from "./admit.ts";
 import { type Jobs, named } from "./jobs.ts";
 
@@ -152,11 +153,20 @@ export class MemoryWatch {
     const table = await this.#o.table(pressed).catch(() => null);
     if (table === null) return pressure;
     const units = unitsOf(table, this.#o.jobs(), await this.#o.agents(), this.#o.self).sort((a, b) => b.bytes - a.bytes);
-    await this.#whose(units);
     const present = new Set(units.map((u) => u.key));
     for (const key of this.#told.keys()) if (!present.has(key)) this.#told.delete(key);
 
     const limit = limitOf(this.#o.totalBytes());
+    // A shared runtime's commands need their directories only when their agents are about to be told.
+    const toTell = new Set<Unit>();
+    for (const u of units) {
+      const last = this.#told.get(u.key);
+      if (u.bytes > limit && (last === undefined || u.bytes >= last * 2)) toTell.add(u);
+    }
+    if (pressed) for (const u of units.slice(0, TOLD_PRESSED)) {
+      if (u.bytes >= TOLD_MIN && !this.#toldPressed.has(u.key) && !this.#stopping.has(u.key)) toTell.add(u);
+    }
+    await this.#whose([...toTell]);
     for (const u of units) {
       const last = this.#told.get(u.key);
       if (u.bytes <= limit || (last !== undefined && u.bytes < last * 2)) continue;
@@ -180,7 +190,9 @@ export class MemoryWatch {
     if (pressure === "critical" && (this.#lastStop === null || now - this.#lastStop >= SETTLE_MS)) {
       const largest = units.find((u) => u.bytes >= TOLD_MIN && !this.#stopping.has(u.key));
       if (largest) {
-        this.#lastStop = now;
+        // A unit already told under pressure may still be the next one stopped.
+        if (!toTell.has(largest)) await this.#whose([largest]);
+        this.#lastStop = this.#fibers.now();
         await this.#stop(largest);
       }
     }
@@ -193,9 +205,12 @@ export class MemoryWatch {
     const unknown = units.filter((u) => u.session === null && u.job === null);
     if (unknown.length === 0) return;
     const cwds = await this.#o.cwds(unknown.map((u) => u.pids[0]!)).catch(() => new Map<number, string>());
+    const owners = new Map<string, string | null>();
     for (const u of unknown) {
       const dir = cwds.get(u.pids[0]!);
-      if (dir !== undefined) u.session = this.#o.sessionAt(dir);
+      if (dir === undefined) continue;
+      if (!owners.has(dir)) owners.set(dir, this.#o.sessionAt(dir));
+      u.session = owners.get(dir)!;
     }
   }
 
@@ -290,7 +305,8 @@ export async function runnersWithSessions(data: string, whose: (ids: string[]) =
 
 /// The watch as the station runs it: over its jobs (`jobs`' store) and the commands of its runtimes (the runners of
 /// before and now, <data>/run/runners), on this machine's memory.
-export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock; runnerNames?: RunnerNameLookup }): MemoryWatch {
+export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock; runnerNames?: RunnerNameLookup;
+  directory?: (dir: string) => DirectorySession | null }): MemoryWatch {
   const { store } = o;
   const whose = runnerSessions(store, o.runnerNames);
   // A directory none of the sessions shown has, and whose it is among every session ever (none: null): a session made
@@ -311,7 +327,13 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
     // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's),
     // and what that found kept: under memory pressure (the whole while on a station) the watch looks every few seconds, and
     // every session read each time held the main thread 3.2 s (2026-11-02).
-    sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? elsewhere(dir),
+    sessionAt: (dir) => {
+      const match = o.directory?.(dir);
+      if (match === null || match === undefined) return sessionIn(store.liveSessions(), dir) ?? elsewhere(dir);
+      if (match.live) return match.key;
+      if (!found.has(dir)) found.set(dir, match.key);
+      return found.get(dir)!;
+    },
     tell: (unit, text) => {
       const job = unit.job !== null ? store.getJob(unit.job) : null;
       // Another station's task: its notices, which go back to the session that asked for it (jobs/remote.ts).

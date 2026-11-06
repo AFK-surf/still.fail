@@ -77,7 +77,7 @@ function rig() {
   const scope = Effect.runSync(Scope.make());
   scopes.push(scope);
   const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
-  const state = { pressure: "normal" as Pressure, table: [] as ProcessInfo[], exact: [] as boolean[] };
+  const state = { pressure: "normal" as Pressure, table: [] as ProcessInfo[], exact: [] as boolean[], cwds: 0, owners: 0 };
   const told: [string | null, string][] = [];
   const signals: [number, string][] = [];
   const stoppedJobs: string[] = [];
@@ -89,11 +89,11 @@ function rig() {
       return state.table;
     },
     totalBytes: () => 64 * GiB,
-    cwds: async (pids) => new Map(pids.map((pid) => [pid, `/sessions/s9/workspace/sub`])),
+    cwds: async (pids) => { state.cwds++; return new Map(pids.map((pid) => [pid, `/sessions/s9/workspace/sub`])); },
     jobs: () => [{ id: "job_1", session: "remote:x", pgid: 30, label: 'Job "build" (job_1)' }],
     // A runtime of one session's, and one shared by sessions (codex's host).
     agents: async () => [{ pid: 21, session: "s2" }, { pid: 51, session: null }],
-    sessionAt: (dir) => (dir.startsWith("/sessions/s9/workspace") ? "s9" : null),
+    sessionAt: (dir) => { state.owners++; return dir.startsWith("/sessions/s9/workspace") ? "s9" : null; },
     tell: (u: Unit, text) => void told.push([u.job ?? u.session, text]),
     stopJob: async (id) => void stoppedJobs.push(id),
     signal: (pid, signal) => void signals.push([pid, signal]),
@@ -150,6 +150,55 @@ test("under pressure the largest few are told once, and still nothing is stopped
   assert.equal(r.told.length, 6);
 });
 
+test("commands in the same directory share its owner lookup within one memory check", async () => {
+  const told: string[] = [];
+  let reads = 0;
+  const watch = new MemoryWatch({
+    pressure: async () => "normal",
+    table: async () => [p(51, 50, 50, 0, "codex"), p(52, 51, 52, 3, "one"), p(53, 51, 53, 3, "two")],
+    totalBytes: () => 8 * GiB,
+    cwds: async (pids) => new Map(pids.map((pid) => [pid, "/session/workspace/sub"])),
+    jobs: () => [], agents: async () => [{ pid: 51, session: null }],
+    sessionAt: () => { reads++; return "s1"; },
+    tell: (unit) => { if (unit.session !== null) told.push(unit.session); },
+    stopJob: async () => {}, signal: () => {}, self: 10,
+  });
+  try {
+    await watch.look();
+    assert.deepEqual(told, ["s1", "s1"]);
+    assert.equal(reads, 1);
+  } finally { await watch.close(); }
+});
+
+test("a command needs no directory lookup until its agent needs a notice", async () => {
+  const state = { pressure: "normal" as Pressure, bytes: 1 * GiB, cwds: 0, owners: 0 };
+  const told: string[] = [];
+  const watch = new MemoryWatch({
+    pressure: async () => state.pressure,
+    table: async () => [p(51, 50, 50, 0, "codex"), { ...p(52, 51, 52, 0, "build"), bytes: state.bytes }],
+    totalBytes: () => 8 * GiB,
+    cwds: async (pids) => { state.cwds++; return new Map(pids.map((pid) => [pid, "/session/workspace"])); },
+    jobs: () => [], agents: async () => [{ pid: 51, session: null }],
+    sessionAt: () => { state.owners++; return "s1"; },
+    tell: (unit) => { if (unit.session !== null) told.push(unit.session); },
+    stopJob: async () => {}, signal: () => {}, self: 10,
+  });
+  try {
+    await watch.look();
+    assert.deepEqual([state.cwds, state.owners], [0, 0]);
+    state.pressure = "high";
+    await watch.look();
+    assert.deepEqual(told, ["s1"]);
+    assert.deepEqual([state.cwds, state.owners], [1, 1]);
+    await watch.look();
+    assert.deepEqual([state.cwds, state.owners], [1, 1], "already told at this pressure");
+    state.bytes = 3 * GiB;
+    await watch.look();
+    assert.deepEqual(told, ["s1", "s1"]);
+    assert.deepEqual([state.cwds, state.owners], [2, 2]);
+  } finally { await watch.close(); }
+});
+
 async function stopping(r: Rig, look: Promise<unknown>) {
   // A command's stop waits STOP_GRACE_MS before the SIGKILL.
   for (let i = 0; i < 10 && r.signals.length > 0 && !r.signals.some(([, s]) => s === "SIGKILL"); i++) {
@@ -158,6 +207,30 @@ async function stopping(r: Rig, look: Promise<unknown>) {
   }
   await look;
 }
+
+test("a shared command already told under pressure is named again when it must be stopped", async () => {
+  const r = rig();
+  r.state.table = tables.some(9);
+  r.state.pressure = "critical";
+  const first = r.watch.look();
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  await stopping(r, first);
+  assert.ok(r.told.some(([who, text]) => who === "s9" && /memory is under pressure/.test(text)));
+
+  // The shared command remains while the first stop settles. It needs no owner read until the next stop.
+  r.state.table = [p(51, 50, 50, 0.4, "codex"), p(52, 51, 52, 1, "pnpm")];
+  r.signals.length = 0;
+  const reads = [r.state.cwds, r.state.owners];
+  await r.watch.look();
+  assert.deepEqual([r.state.cwds, r.state.owners], reads);
+  await Effect.runPromise(r.clock.adjust(`${SETTLE_MS} millis`));
+  const second = r.watch.look();
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  await stopping(r, second);
+  assert.deepEqual([r.state.cwds, r.state.owners], reads.map((n) => n + 1));
+  assert.deepEqual(r.signals, [[52, "SIGTERM"], [52, "SIGKILL"]]);
+  assert.ok(r.told.some(([who, text]) => who === "s9" && /stopped your command pnpm/.test(text)));
+});
 
 test("about to run out, the largest is stopped and its agent told why; the next only after a while, if still so", async () => {
   const r = rig();
