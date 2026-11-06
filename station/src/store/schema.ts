@@ -136,9 +136,6 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
--- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
--- touched): without it each went over the thread's every entry.
-CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
 -- The first person to answer a card is found by its entry number, without reading intervening agent messages.
 CREATE INDEX IF NOT EXISTS entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
 CREATE TABLE IF NOT EXISTS deliveries (
