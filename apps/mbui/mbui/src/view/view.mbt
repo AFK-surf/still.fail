@@ -7106,11 +7106,16 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if next < 0 {
       return
     }
+    // Each deadline is a separate change, even when one frame advances across many of them. Its layouts and their
+    // reentrant notifications share a bound; the next deadline and the outer frame retain their own bounds.
+    let was_budget = self.brought_budget
+    if was_budget is Some(_) { self.brought_budget = Some((Ref(0), Ref(false))) }
     // (what went on by itself laid out where it is at this moment before what is due then is done, where asked
     // (View::laid_before_due): asked once a moment, however many are due then or are said at it as it comes, and not
     // at all while none asks; what that layout said is due chosen among the rest again)
     if self.moves_before_due(next_at) {
       self.laid_before_due_at(next_at)
+      self.brought_budget = was_budget
       continue
     }
     let d = self.timeline[next]
@@ -7157,6 +7162,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     if was < 0.0 {
       self.settle_now(next_at)
     }
+    self.brought_budget = was_budget
   }
 }
 
