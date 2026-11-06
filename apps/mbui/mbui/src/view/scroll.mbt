@@ -40,6 +40,22 @@ priv struct Edge {
 }
 
 ///|
+/// User scrolling at the logic's moment, independent of whether a frame is drawn. A coast can be cancelled before it
+/// moves; `ScrollStopped` says whether it actually moved, so that an idle timer need not be reset in that case.
+#derive(Eq, Debug)
+pub(all) enum ScrollActivity {
+  ScrollMoved(Double)
+  ScrollCoasting(Double)
+  ScrollStopped(Double, Bool)
+}
+
+///|
+priv struct ScrollActivityObserver {
+  mut live : Bool
+  tell : (ScrollActivity) -> Unit
+}
+
+///|
 /// How far a column that scrolls (View::scrolls) is scrolled: where it is at rest (or where a fling set out from), the
 /// fling under way, how far it can go as last laid out, and the hand on it.
 pub struct Scroll {
@@ -70,6 +86,11 @@ pub struct Scroll {
   priv mut on_hand : (Double) -> Unit
   /// A hand tries to scroll, including against an end where the content does not move.
   priv mut on_hand_attempt : () -> Unit
+  /// Listeners are held only while their owning view lives. A user coast is tracked separately from layout and puts.
+  priv activity_observers : Array[ScrollActivityObserver]
+  priv mut activity_coasting : Bool
+  priv mut activity_from : Double
+  priv mut activity_changed : Bool
   /// which column it is, of all made (what hosts the tree tells its glides by: Tree::on_glides)
   priv serial : Int
   /// it moves as a page's list does on the platform it is on (Scroll::list): what shows past its ends, pulled there or
@@ -168,6 +189,10 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     on_scrolled: fn(_) {  },
     on_hand: fn(_) { },
     on_hand_attempt: fn() { },
+    activity_observers: [],
+    activity_coasting: false,
+    activity_from: 0.0,
+    activity_changed: false,
     serial: {
       scrolls_made.val += 1
       scrolls_made.val
@@ -188,6 +213,55 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     to_end: @signals.signal(false, same=fn(a, b) { a == b }),
     rows: None,
   }
+}
+
+///|
+/// Tell `f` when a hand actually moves this scroll, or when a user coast starts, ends or is interrupted. Moments are
+/// on the tree's timeline; an end is told even if no frame was drawn. A failed attempt at a boundary, a layout
+/// correction and a programmatic placement do not count as a hand move. The listener is removed with `owner`.
+pub fn Scroll::on_activity(self : Scroll, owner : View, f : (ScrollActivity) -> Unit) -> Unit {
+  guard owner.alive() else { return }
+  let observer : ScrollActivityObserver = { live: true, tell: f }
+  self.activity_observers.push(observer)
+  owner.owns(fn() {
+    observer.live = false
+    let mut i = 0
+    while i < self.activity_observers.length() {
+      if physical_equal(self.activity_observers[i], observer) {
+        self.activity_observers.remove(i) |> ignore
+        break
+      }
+      i += 1
+    }
+  }) |> ignore
+}
+
+///|
+fn Scroll::activity_tell(self : Scroll, activity : ScrollActivity) -> Unit {
+  for observer in self.activity_observers.copy() {
+    if observer.live { @signals.untracked(fn() { (observer.tell)(activity) }) }
+  }
+}
+
+///|
+fn Scroll::activity_start(self : Scroll, at : Double, x : Double) -> Unit {
+  if self.activity_coasting {
+    self.activity_changed = self.activity_changed || x != self.activity_from
+  } else {
+    self.activity_changed = false
+  }
+  self.activity_coasting = true
+  self.activity_from = x
+  self.activity_tell(ScrollCoasting(at))
+}
+
+///|
+fn Scroll::activity_stop(self : Scroll, at : Double, x : Double) -> Unit {
+  if !self.activity_coasting { return }
+  let changed = self.activity_changed || x != self.activity_from
+  self.activity_coasting = false
+  self.activity_changed = false
+  self.activity_tell(ScrollStopped(at, changed))
 }
 
 ///|
@@ -362,6 +436,7 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
       Some(v) => v.logic_at()
       None => 0.0
     }
+    if self.activity_coasting { self.activity_from += d }
     self.x.set(self.x.get() + d)
     // (the hand past its edge: where it has it now as much further, its foot too where it goes down; on from there by
     // its own way, its end then: what is laid out after worked out again as that is)
@@ -467,6 +542,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
     }
   }
   self.x.set(x)
+  self.activity_stop(t, x)
   x
 }
 
@@ -498,6 +574,7 @@ fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   self.x.set(to)
   if to != was {
     (self.on_scrolled)(t)
+    self.activity_tell(ScrollMoved(t))
   }
   to != was
 }
@@ -556,7 +633,9 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
     self.fling.set(None)
     // (within how far it can go as of then: what holds it may have come to be shorter meanwhile)
     self.x.set(dclamp(end_x, 0.0, self.most()))
+    self.activity_stop(end_t, end_x)
   })
+  self.activity_start(t, x0)
 }
 
 ///|
@@ -578,6 +657,9 @@ pub fn Scroll::edge_toward(self : Scroll, speed : Double) -> Unit {
     let bound = if speed > 0.0 { self.most() } else { 0.0 }
     self.edge.set(Some({ x0, v: speed, t0: t, bound, end_t: t, parked: false }))
     self.edge_due(v, t)
+    if @signals.untracked(fn() { self.edge.get() }) is Some({ parked: false, .. }) {
+      self.activity_start(t, x0)
+    }
   })
 }
 
@@ -619,6 +701,7 @@ fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Doub
     if !e.parked {
       (self.on_scrolled)(t)
     }
+    self.activity_stop(t, bound)
     return
   }
   self.edge.set(Some({ x0, v: e.v, t0: t, bound, end_t, parked: false }))
@@ -632,6 +715,7 @@ fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Doub
       Some(g) => self.edge.set(Some({ ..g, x0: g.bound, t0: end_t, end_t, parked: true }))
       None => ()
     }
+    self.activity_stop(end_t, bound)
   })
 }
 
@@ -872,6 +956,8 @@ pub fn View::scrolls(
     s.content_extent = None
     s.tall = fn() { 0.0 }
     s.host = None
+    s.activity_coasting = false
+    s.activity_changed = false
     s.for_field = None
     match self.tree.scrolls_at.get(self.at) {
       Some(o) if physical_equal(o, s) => self.tree.scrolls_at.remove(self.at)

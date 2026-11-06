@@ -366,6 +366,7 @@ fn Scroll::list_fling(
   self.fling.set(Some(f))
   (self.on_scrolled)(t)
   self.list_settles(v, t)
+  self.activity_start(t, x0)
 }
 
 ///|
@@ -477,6 +478,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
       self.fling.set(None)
       self.x.set(dclamp(f.end_x, 0.0, self.most()))
       self.past.set(Some(p))
+      self.activity_stop(t, f.end_x)
     }
     Some(w) => {
       let left = @signals.untracked(fn() { self.past_at(t) })
@@ -518,6 +520,9 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   self.notch.set(Some({ x0, total, v0, t0: t, sent: false, kept: true }))
   (self.on_scrolled)(t)
   self.list_settles(v, t)
+  if (d > 0.0 && x0 < self.most()) || (d < 0.0 && x0 > 0.0) {
+    self.activity_start(t, x0)
+  }
   true
 }
 
@@ -549,6 +554,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
       (_, Some(n)) => self.x.set(if n.kept && !free { dclamp(n.x0 + n.total, 0.0, self.most()) } else { n.x0 + n.total })
       _ => ()
     }
+    self.activity_stop(rest, @signals.untracked(fn() { self.x.get() }))
   })
 }
 
