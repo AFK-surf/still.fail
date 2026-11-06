@@ -82,6 +82,7 @@ pub fn chat_list_node(
   // (an agent's message waiting its turn to come out of its avatar not in it yet: emit.mbt's emit_held)
   let em = @sfbase.emits_of(rk)
   let rd0 = @sfbase.reading_of(rk)
+  let advance = @sfbase.chat_timeline(v, rk, rd0, view, shown_by, app_in_front)
   // (a row's key: the core's, else the key it was sent as from here; Reading's sent and sent_as, row_keys's)
   let id_of = fn(e : Entry) -> String {
     let k = match e {
@@ -112,11 +113,11 @@ pub fn chat_list_node(
   v.owns(fn() { @signals.untracked(fn() { rows_now.get() }).let_go() }) |> ignore
   v.reacts(fn() {
     em.read()
-    ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }
+    (ListedFrom::{ cv: view(), f: @sfbase.send_flight.get(), lingered: rd0.linger_said.get(), emitted: em.said.get() }, rd0.landing.get(), shown_by(), app_in_front())
   }, fn(now) {
-    let { cv, f, .. } = now
+    let { cv, f, .. } = now.0
     guard cv is Some(cv) else { return }
-    @sfbase.chat_take(@ui.current(), rk, rd0, cv, shown=shown_by(), in_front=app_in_front())
+    advance()
     // (those waiting their turn as what came is decided: emit_take's)
     let held = @signals.untracked(fn() { @sfbase.emit_held_seqs(em) })
     let tail = @sfbase.tail_taken(rd0, rk, cv, f)
@@ -1330,7 +1331,7 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
   layer.show(fn() { flying() is Some(_) }, fn(f) {
     // (where it is as this frame draws it, from the layer's corner: its 18 face's top left, the ring round it)
     let at = fn() {
-      f.drawn_at() |> ignore
+      let shown = f.drawn_at()
       let agents = match view() {
         Some(v) => v.agents.map(fn(a) { a.key })
         None => []
@@ -1338,7 +1339,7 @@ fn emit_flyer_node(layer : @view.View, rk : String, view : () -> ChatView?) -> U
       // The flight's clock and both endpoints belong to this frame. A row's placement can change after the
       // clock was read; its published geometry must still invalidate the copy's position in that same pass.
       em.read()
-      @sfbase.emit_flight(@ui.current(), rk, em, agents)
+      @sfbase.emit_flight(@ui.current(), rk, em, agents, at=shown)
     }
     let a = fn() { flying() }
     f

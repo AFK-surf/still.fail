@@ -715,6 +715,9 @@ pub fn chat_take(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
 ///|
 /// A chat's own motions, once a frame, before its page is built (linger_tick; its page the first frame it shows).
 pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
+  // A retained page owns its input timeline, including while a whole-frame
+  // comparison is being built. Building the same picture advances nothing.
+  if rd.shown_by is Some(_) { return }
   chat_take(c, rk, rd, v, shown~, in_front~)
   let frame = c.frame_number()
   let lingered = rd.ticked == frame

@@ -156,8 +156,8 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
     Some(turn) => {
       // not there before them, waiting: still on its way down, to come down as they land
       assert_true(turn.pose == Float)
-      assert_true(turn.clock.moving())
-      assert_true((turn.clock.ends() - landing).abs() < 0.001)
+      assert_true(turn.clock.goes_at(t.time()))
+      assert_true((turn.clock.end() - landing).abs() < 0.001)
       [turn.agent]
     }
     None => fail("no answer comes out")

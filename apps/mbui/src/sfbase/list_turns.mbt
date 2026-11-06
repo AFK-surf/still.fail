@@ -164,6 +164,19 @@ pub fn Turns::emits(self : Turns, c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// Emissions have their turn at their input's cause. They do not wait for the
+/// next build to consume an ask that was made by the preceding build.
+pub fn Turns::emits_at(self : Turns, c : @ui.Ctx, at : Double) -> Unit {
+  if self.emitting() { return }
+  self.asks.retain(fn(a) { a.what != Emits })
+  self.on = Some(Emits)
+  self.open = true
+  self.until = at + turn_most_ms + turn_calm_ms
+  self.started[emits_turn] = at
+  c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
+}
+
+///|
 /// Whether messages out of avatars have their turn now.
 pub fn Turns::emitting(self : Turns) -> Bool {
   self.on == Some(Emits) && self.open
@@ -434,4 +447,3 @@ pub fn under_turn(prefix : String) -> Double {
     last
   }
 }
-

@@ -48,7 +48,7 @@ pub(all) struct Turn {
   agent : String
   pose : Pose
   from : (Double, Double)?
-  clock : @motion.Anim
+  clock : @motion.Way
   /// how long its clock is (ms)
   span : Double
   /// its way stretched as it goes (a Float waiting for words sent to land, emit_step): how far it was, how fast it went
@@ -62,7 +62,7 @@ pub(all) struct Emits {
   decided : Map[String, Bool]
   done : Map[String, Bool]
   /// waiting: seq, its message's ts (its row's key: Turn's), agent, its activity's folding (from when it began waiting)
-  queue : Array[(Double, String, String, @motion.Anim)]
+  queue : Array[(Double, String, String, @motion.Way)]
   mut current : Turn?
   /// when each agent's last message came out of its avatar, as its poses declared it to end (not the frame that saw
   /// it end): its line's lingering counted from there (chat_tick)
@@ -93,7 +93,7 @@ pub(all) struct Emits {
   mut taken : (@rows.TopicList, @rows.ListReader)?
   /// each message out of an avatar coming out (its seq's): its words' way in, 0 to 1 over emit_out_ms_most from the
   /// avatar landing on it (emit_out)
-  out_at : Map[String, @motion.Anim]
+  out_at : Map[String, @motion.Way]
   /// how many times it changed, as a signal (Emits::changed): what reads it (a message's row, an activity's:
   /// Emits::read) is built again as it does, kept or not (mbui's kept_nodes.mbt)
   said : @signals.Signal[Int]
@@ -223,11 +223,11 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
     // its agent's turn over already, no avatar to come out of: it comes in where it is, its words a glyph at a time
     // from now as they would out of one (emit_out), not grown in as a row (the user, 2026-10-31: 「为啥第二条是弹出来的」)
     if !goes && e.watched && m.said && agent != "" {
-      e.out_at[k] = pose_clock(emit_out_ms_most, Some(c.moment()))
+      e.out_at[k] = pose_clock(emit_out_ms_most, Some(emit_moment(c)))
     }
     if goes {
       // its agent's activity folds from now
-      e.queue.push((m.seq, m.ts, agent, pose_clock(Fold.ms(), None)))
+      e.queue.push((m.seq, m.ts, agent, pose_clock(Fold.ms(), Some(emit_moment(c)))))
     }
   }
   if e.decided.length() != decided {
@@ -348,9 +348,9 @@ pub fn emit_release(e : Emits) -> Unit {
 
 ///|
 pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
-  e.changed()
+  let at = at.unwrap_or(emit_moment(c))
   match e.current {
-    Some(t) => e.ended[t.agent] = t.clock.ends()
+    Some(t) => e.ended[t.agent] = t.clock.end()
     None => ()
   }
   if e.queue.length() == 0 {
@@ -361,20 +361,21 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   // folded already (its folding at the end it declared, or its agent's avatar out already): on its way; else what is
   // left of its folding (how far its folding has gone, from when it began waiting), from here: from where the turn
   // before was declared to end, else from this frame
-  let float = who == agent || fold.over()
-  let left = Fold.ms() * (1.0 - fold.get())
+  let float = who == agent || at >= fold.end()
+  let left = dmax(fold.end() - at, 0.0)
   e.current = Some({
     seq,
     ts,
     agent: who,
     pose: if float { Float } else { Fold },
     from: None,
-    clock: if float { pose_clock(Float.ms(), at) } else { pose_clock(left, at) },
+    clock: if float { pose_clock(Float.ms(), Some(at)) } else { pose_clock(left, Some(at)) },
     span: if float { Float.ms() } else { left },
     warp: None,
   })
   // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
   c.moving(e.mover, e as &@ui.Moving)
+  e.changed()
 }
 
 ///|
@@ -384,7 +385,7 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
   match self.current {
-    Some(t) => dmax(t.clock.ends(), self.held_until)
+    Some(t) => dmax(t.clock.end(), self.held_until)
     None => -1.0
   }
 }
@@ -420,10 +421,17 @@ pub fn pose_ms(pose : Pose, from : (Double, Double)?) -> Double {
 ///|
 /// A pose's way, 0 to 1 over its length, linear: from `at` (where the pose before was declared to end), else from
 /// this frame.
-pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
-  let a = @motion.Anim::new(0.0)
-  a.animate(1.0, @motion.tween(ms, ease=Linear), start_at?=at)
+pub fn pose_clock(ms : Double, at : Double?) -> @motion.Way {
+  let a = @motion.Way::new(0.0)
+  a.go(1.0, @motion.tween(ms, ease=Linear), at=at.unwrap_or(emit_moment(@ui.current())))
   a
+}
+
+///|
+/// The input or declared deadline being handled, even before a frame's Ctx has
+/// received its display time. A sampled picture never advances this clock.
+fn emit_moment(c : @ui.Ctx) -> Double {
+  @ui.tree_cause().unwrap_or(c.moment())
 }
 
 ///|
@@ -433,12 +441,12 @@ pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
-pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
+pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double, at? : Double) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
   let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
   // the words of what came out all in: drawn as laid out from here, what showed them built again (emit_out)
-  let now = c.moment()
-  let all_in = e.out_at.iter().filter(fn(o) { now >= o.1.ends() }).map(fn(o) { o.0 }).collect()
+  let now = at.unwrap_or(emit_moment(c))
+  let all_in = e.out_at.iter().filter(fn(o) { now >= o.1.end() }).map(fn(o) { o.0 }).collect()
   for k in all_in {
     e.out_at.remove(k)
   }
@@ -447,7 +455,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
   }
   // (and the frame their last comes in at built, they let go then: as their rows ask, emit_out)
   for _, way in e.out_at {
-    c.wake_in(dmax(way.ends() - now, 0.0))
+    c.wake_in(dmax(way.end() - now, 0.0))
   }
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
@@ -459,8 +467,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
       return
     }
     if !turns.emitting() {
-      turns.emits(c)
-      return
+      turns.emits_at(c, now)
     }
     emit_next(c, e, "", at=turns.started_at(emits_turn))
   }
@@ -477,16 +484,13 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
-      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over() => {
+      Float if sending >= 0.0 && sending > t.clock.end() && sending != e.held_until && now < t.clock.end() => {
         // (its clock is linear: how far it is says when now is on it) going on from where it is at the speed it has,
         // to come down at its own end speed when they land: no step in its speed (Turn's warp)
-        let s = t.clock.get()
-        let now = t.clock.ends() - (1.0 - s) * t.span
-        let u = emit_clock(c, t)
-        let rate = turn_rate(t)
-        let way = @motion.Anim::new(0.0)
+        let u = emit_clock_at(t, now)
+        let rate = turn_rate(t, now)
         let long = sending - now
-        way.animate(1.0, @motion.tween(long, ease=Linear), start_at=now)
+        let way = pose_clock(long, Some(now))
         let most = 3.0 * (1.0 - u)
         let end_rate = 1.0 / pose_ms(Float, t.from)
         e.held_until = sending
@@ -499,11 +503,11 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
       _ => t
     }
     // (a pose goes on till the end it declared as it set out)
-    if !t.clock.over() {
+    if now < t.clock.end() {
       break
     }
     // the next from where this one was declared to end, whichever frame sees it
-    let at = t.clock.ends()
+    let at = t.clock.end()
     match t.pose {
       Fold =>
         e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None })
@@ -591,9 +595,18 @@ pub fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
 
 ///|
 /// How fast it goes through its pose now (a share a ms).
-fn turn_rate(t : Turn) -> Double {
+fn emit_clock_at(t : Turn, at : Double) -> Double {
+  let s = t.clock.value_at(at)
   match t.warp {
-    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.get()) / t.span
+    Some((u0, m0, m1)) => hermite(u0, m0, 1.0, m1, s)
+    None => s
+  }
+}
+
+///|
+fn turn_rate(t : Turn, at : Double) -> Double {
+  match t.warp {
+    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.value_at(at)) / t.span
     None => 1.0 / t.span
   }
 }
@@ -622,7 +635,7 @@ fn hermite_slope(p0 : Double, m0 : Double, p1 : Double, m1 : Double, s : Double)
 ///|
 /// Where the flying avatar's 18 face is (its top left, in the window) and how it is scaled about its middle, or None
 /// when none flies (ChatMotion.flight): between where it set out and where it is going, both as last laid out.
-pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> (Double, Double, Double, Double)? {
+pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String], at? : Double) -> (Double, Double, Double, Double)? {
   e.read()
   let t = match e.current {
     Some(t) if t.pose != Fold => t
@@ -677,7 +690,10 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
   }
   e.aimed = Some(landing)
   e.aimed_at = t.seq
-  let u = emit_clock(c, t)
+  let u = match at {
+    Some(at) => emit_clock_at(t, at)
+    None => emit_clock(c, t)
+  }
   e.trace = (u, avatar.1, landing.1)
   match t.pose {
     Float => {
@@ -723,7 +739,7 @@ pub fn emit_out(c : @ui.Ctx, col : Int, head : Int, e : Emits, seq : Double) -> 
     None => return
   }
   // (built again as they are all in: emit_step lets them go then)
-  c.wake_in(dmax(way.ends() - c.moment(), 0.0))
+  c.wake_in(dmax(way.end() - c.moment(), 0.0))
   // (how far on from its coming out, read as it is painted)
   let since = fn() { way.get() * emit_out_ms_most }
   c.look_by(head, fn() {
@@ -890,7 +906,7 @@ pub fn emit_head_at(e : Emits, seq : Double, at : () -> Double) -> Double? {
   }
   match e.out_at.get(seq_s(seq)) {
     Some(way) => {
-      let since = dmax(at() - (way.ends() - emit_out_ms_most), 0.0)
+      let since = dmax(at() - way.starts_at(), 0.0)
       Some(@ui.Ease::Out.at(dmin(since / emit_head_ms, 1.0)))
     }
     None => None
@@ -906,7 +922,7 @@ pub let emit_head_slide : Double = emit_out_slide
 /// glyphs by the time (View::glyphs_by) works them out from it (emit_glyph_out).
 pub fn emit_out_from(e : Emits, seq : Double) -> Double? {
   e.read()
-  e.out_at.get(seq_s(seq)).map(fn(way) { way.ends() - emit_out_ms_most })
+  e.out_at.get(seq_s(seq)).map(fn(way) { way.starts_at() })
 }
 
 ///|
