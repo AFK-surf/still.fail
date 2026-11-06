@@ -64,6 +64,9 @@ jobs:
       - uses: ./.github/actions/apt
         with:
           name: mbui-host-linux
+          # The renderer uses the same Ubuntu release, graphics libraries and fonts. If the host's cache has been
+          # evicted, reuse those archives and fetch only the additional host packages.
+          fallback: mbui-render-linux
           packages: ${{ steps.host-packages.outputs.names }}
       - name: Stage the package archives and their indexes
         run: bash apps/mbui/mbui/scripts/linux-host-packages.sh snapshot "$PWD/.ci/apt" "$PWD/out/host-linux-packages"
