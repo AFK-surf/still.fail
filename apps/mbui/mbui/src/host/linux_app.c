@@ -37,6 +37,7 @@ static int want_frame;
 static guint tick_id;
 static double wake_at = -1;  // mb_now_ms() of the earliest wake_after, or -1
 static double scale = 1;
+static int context_asked, context_new;  // the canvas's context asked anew, and made so (mb_host_drive 10, 11)
 static int fb_pw, fb_ph;          // the area's framebuffer in pixels, as GTK last sized it
 static double frame_w, frame_h;   // the last frame's size in points
 static int ime_active;
@@ -354,6 +355,7 @@ static void on_realize(GtkWidget *w, gpointer data) {
     exit(1);
   }
   mb_render_setup();
+  if (context_asked) context_asked = 0, context_new = 1;
   schedule();
 }
 
@@ -1172,11 +1174,36 @@ void mb_host_set_dark(int32_t dark) {
   if (s) g_object_set(s, "gtk-application-prefer-dark-theme", dark ? TRUE : FALSE, NULL);
 }
 
+// The canvas's GL context made anew (@hostapi.drive 10), as a context is lost: the canvas taken out of the window and
+// put back, between frames (not inside the render that asked), unrealized with its context and realized with a new
+// one (on_realize: mb_render_setup, what the old one held made again); `context_new` once it is (as GTK realizes it
+// again, which comes after it is put back: its next layout's)
+static gboolean context_again(gpointer data) {
+  (void)data;
+  GtkWidget *overlay = gtk_widget_get_parent(area);
+  g_object_ref(area);
+  gtk_overlay_remove_overlay(GTK_OVERLAY(overlay), area);
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay), area);
+  gtk_overlay_set_measure_overlay(GTK_OVERLAY(overlay), area, TRUE);
+  g_object_unref(area);
+  gtk_widget_grab_focus(area);
+  schedule();
+  return G_SOURCE_REMOVE;
+}
+
 // Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), a notification clicked
 // (6) or looked for (7) by its words (linux_life.h), the window resized to "<w>x<h>" points (8), the runner's directory
-// watched (9); the rest is sent to the app itself.
+// watched (9), the canvas's context made anew (10), and whether it has been since (11); the rest is sent to the app
+// itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   if (kind == 9) return mb_done_watch(text);
+  if (kind == 10) {
+    context_new = 0;
+    context_asked = 1;
+    g_idle_add(context_again, NULL);
+    return 1;
+  }
+  if (kind == 11) return context_new;
   char *u = utf8(text);
   int done = 0;
   if (kind == 6 || kind == 7) {

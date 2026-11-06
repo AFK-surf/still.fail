@@ -37,6 +37,9 @@
 #   scripts/host_contract.sh HOST pdf           test/host/pdfcheck.pdf's two pages read and drawn by the host, the
 #        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
 #        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
+#   scripts/host_contract.sh linux images       a picture shown, the canvas's GL context made anew as one lost (kitdemo's
+#        MBUI_IMAGECHECK, src/kitdemo/gallery/imagecheck.mbt): the picture told ready again once the host has it in the
+#        new context, and drawn again there, red in the window's picture (scripts/chk images)
 #   scripts/host_contract.sh HOST play          test/host/playcheck.mp4 played by the host's player, its bytes read
 #        through the app: its length and size once ready, (Linux) the middle of its first frame as the canvas drew it
 #        red and its frames' times read, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
@@ -797,6 +800,14 @@ INSTALL
       echo "pdf contract ($H): the host said \"$have\", not \"$want\""; tail -20 $O/pdf.log; exit 1
     fi
     echo "pdf contract ($H): $have" ;;
+  images)
+    run "MBUI_IMAGECHECK=$PWD/$O/images.png" $O/images.log || true
+    have=$(grep -a "IMAGECHECK" $O/images.log | sed 's/.*IMAGECHECK/IMAGECHECK/' | tr -d '\r' | paste -sd'|' -)
+    case "$have" in
+      *"IMAGECHECK told 2"*"IMAGECHECK drawn "*) ;;
+      *) echo "images contract ($H): the host said \"$have\""; tail -20 $O/images.log; exit 1 ;;
+    esac
+    scripts/chk images $O/images.log ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
