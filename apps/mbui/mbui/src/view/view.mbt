@@ -902,7 +902,7 @@ pub struct Tree {
   /// moment: done once the outermost layout is over, before it returns (Tree::laid_out)
   afters_laid : Array[(Double, () -> Unit)]
   /// Work completing a published change, before the next timeline moment or input is taken (Tree::after_change).
-  changes : Array[(Double, () -> Unit, (Ref[Int], Ref[Bool]))]
+  changes : Array[(Double, () -> Unit, (Ref[Int], Ref[Bool])?)]
   mut changes_running : Bool
   /// Structural readers of one unowned signal publication, committed together after its flush.
   structures : Array[() -> Bool]

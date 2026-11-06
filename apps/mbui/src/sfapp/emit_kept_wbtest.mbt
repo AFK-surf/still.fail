@@ -191,7 +191,7 @@ test "the avatar going home draws its movement without laying out the chat again
   }
   // Compare whole and retained frames above; inspect the next frame itself, without the comparison's rebuild.
   t.check_looks(false)
-  let at = fn() {
+  let at = fn() raise {
     guard emit_flight(t.ctx(), emit_chat, em, [turn.agent]) is Some((x, y, _, _)) else {
       fail("no returning avatar at \{t.time()}, phase \{em.current.map(fn(t) { (t.pose, t.clock.end()) })}")
     }

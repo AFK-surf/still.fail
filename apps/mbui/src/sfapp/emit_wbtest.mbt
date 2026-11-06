@@ -176,6 +176,21 @@ test "the answer coming in does not end its own motion: float, spit and return e
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
+  let tree = @ui.view_tree().unwrap()
+  let route : Ref[(Double?, (Double, Double, Double, Double)?, (Double, Double, Double, Double)?)?] = Ref(None)
+  // Observe the placement already supplied when the Float is declared. This read neither lays out nor asks for
+  // a picture at the deadline: the loop below keeps the original continuous host-frame sequence.
+  let stop = @signals.effect(fn() {
+    em.read()
+    @signals.untracked(fn() {
+      if route.val is None && em.current is Some(turn) && turn.pose == Float && turn.timed {
+        route.val = Some((tree.moment(),
+          emit_place(t.ctx(), "emit-avatar/" + emit_chat + "/" + turn.agent),
+          emit_place(t.ctx(), "emit-landing/" + emit_chat + "/" + seq_s(turn.seq))))
+      }
+    })
+  })
+  defer { stop() }
   fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let frames : Map[String, Int] = {}
@@ -183,11 +198,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
   // frame by frame over its whole way out
   let end = t.time() + emit_all_ms()
   while t.time() < end {
-    // Observe the Float's endpoints at its cause, before the row has grown on in a later sample.
-    match em.current {
-      Some(turn) if turn.pose == Fold && turn.clock.end() < t.next_frame_time() => t.frame_at(turn.clock.end())
-      _ => t.frame()
-    }
+    t.frame()
     match em.current {
       Some(turn) => {
         let k = turn.pose.to_string()
@@ -199,9 +210,10 @@ test "the answer coming in does not end its own motion: float, spit and return e
             assert_true(t.time() >= was.2, msg="\{was.0} ended before \{was.2}: \{t.time()}")
             assert_eq(phase.1, was.2, msg="the next phase starts at the preceding phase's end")
             if turn.pose == Float {
-              assert_eq(t.time(), phase.1)
-              let a = emit_place(t.ctx(), "emit-avatar/" + emit_chat + "/" + turn.agent).unwrap()
-              let b = emit_place(t.ctx(), "emit-landing/" + emit_chat + "/" + seq_s(turn.seq)).unwrap()
+              guard route.val is Some((at, Some(a), Some(b))) else {
+                fail("Float has no endpoints at its declaration: \{route.val}")
+              }
+              assert_eq(at, Some(phase.1), msg="the route is resolved at its start without an extra picture")
               let distance = dmax((b.0 - a.0).abs(), (b.1 + 3.0 - a.1).abs())
               // The existing distance rule scales a 440 ms, 100-point Float by the window's Move duration.
               let expected = (440.0 * @ui.move_ms(distance) / @ui.move_ms(100.0)).round()

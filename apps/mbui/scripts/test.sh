@@ -97,7 +97,9 @@ for t in $targets; do
   s=$(date +%s)
   # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
   if [ -z "${APP_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
-    grep -v "$F" "$out.build" | tail -40
+    # Keep the compiler's source span and explanation: they use the same box drawing as warnings.
+    # Filtering those lines left only "Error: [4122]" for a failing test closure, with no actionable location.
+    tail -100 "$out.build"
     rm -f "$out.build"
     exit 1
   fi
@@ -121,7 +123,7 @@ for t in $targets; do
   # (sfapp's test program and its tests' list put where APP_BUILD_OUT says, for the jobs that run it: nothing run)
   if [ -n "${APP_BUILD_OUT:-}" ]; then
     b=_build/native/release/test/stillfail/sfapp
-    [ -f $b/sfapp.whitebox_test.exe ] || { moon test $mode $pkgs --build-only 2>&1 | grep -v "$F" | tail -40; exit 1; }
+    [ -f $b/sfapp.whitebox_test.exe ] || { moon test $mode $pkgs --build-only 2>&1 | tail -100; exit 1; }
     mkdir -p "$APP_BUILD_OUT" && cp $b/sfapp.whitebox_test.exe $b/__whitebox_test_info.json "$APP_BUILD_OUT/" &&
       cp "$(bash "$D/testexe" path)" "$APP_BUILD_OUT/testexe" || exit 1
     echo "test.sh: sfapp's test program put in $APP_BUILD_OUT ($(du -h $b/sfapp.whitebox_test.exe | cut -f1))"
