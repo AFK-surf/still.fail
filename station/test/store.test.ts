@@ -29,6 +29,8 @@ import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlocksScan } from "../src/store/usage-summary-blocks.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
 import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { activeJobUpgradeStep, ACTIVE_JOB_CONFLICT, ACTIVE_JOB_END, ACTIVE_JOB_FIRST, ACTIVE_JOB_NEXT, ACTIVE_JOB_NULL_ID,
+  ACTIVE_REMOTE_FIRST, ACTIVE_REMOTE_NEXT, REMOTE_QUEUE_PREPARED } from "../src/store/active-jobs-upgrade.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import { RECOVER_AWAKE_WAITS, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
 import { AWAKE_BACKFILL_FIRST, AWAKE_BACKFILL_NEXT, AWAKE_WAIT_STATUS, reconcileAwakeWaits, syncAwakeWait } from "../src/store/awake-waits.ts";
@@ -122,6 +124,29 @@ function assertProcessJobPlans() {
   assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
   assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
   assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
+}
+
+function assertActiveJobUpgradePlans() {
+  const db = memory().db;
+  db.exec("DROP INDEX active_other_remote_jobs");
+  activeJobUpgradeStep(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  assert.match(plan(ACTIVE_JOB_END), /SEARCH jobs USING COVERING INDEX jobs_state .*state=\?/);
+  assert.match(plan(ACTIVE_JOB_FIRST, "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid</);
+  assert.match(plan(ACTIVE_JOB_NEXT, "1", "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid>/);
+  assert.match(plan(ACTIVE_JOB_NULL_ID), /SEARCH jobs USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  const conflicts = plan(ACTIVE_JOB_CONFLICT, "a", "token", 1);
+  assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
+  assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
+  assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
+  assert.match(plan(ACTIVE_REMOTE_FIRST, "s", "j", 64), /SEARCH active_other_jobs USING PRIMARY KEY/);
+  assert.match(plan(ACTIVE_REMOTE_NEXT, "a", "j", "z", "j", 64), /SEARCH active_other_jobs USING PRIMARY KEY/);
+  const remote = plan(REMOTE_QUEUE_PREPARED);
+  assert.match(remote, /SEARCH w USING PRIMARY KEY .*job>\?/);
+  assert.match(remote, /SEARCH a USING PRIMARY KEY .*job>\?/);
+  assert.equal(remote.split(" | ").filter((s) => /SEARCH j USING INDEX sqlite_autoindex_jobs_1 .*id=\?/.test(s)).length, 2, remote);
+  assert.doesNotMatch(remote, /SCAN (a|w|j|jobs)\b/);
 }
 
 function assertSandboxPlans() {
@@ -1594,6 +1619,7 @@ test("what the station asks again and again is planned by an index, never a scan
   assertAwakeJobPlan();
   assertSessionJobPlans();
   assertProcessJobPlans();
+  assertActiveJobUpgradePlans();
   assertSandboxPlans();
   assertChatSharePlans();
   assertSessionDirectoryPlans();
@@ -1810,6 +1836,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertAwakeJobPlan();
   assertSessionJobPlans();
   assertProcessJobPlans();
+  assertActiveJobUpgradePlans();
   assertSandboxPlans();
   assertChatSharePlans();
   assertSessionDirectoryPlans();

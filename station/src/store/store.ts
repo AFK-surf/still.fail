@@ -39,8 +39,9 @@ import { retireDuplicateUsage } from "./usage-unified.ts";
 import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
-import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
+import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, installActiveWatches } from "./watch-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, AWAKE_JOBS_BEFORE_UPGRADE, REMOTE_QUEUE_BEFORE_UPGRADE, RUNNING_LIMIT_BEFORE_UPGRADE, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, UP_JOBS_BEFORE_UPGRADE, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
+import { activeRemoteJobsAvailable, REMOTE_QUEUE_PREPARED } from "./active-jobs-upgrade.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
 import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
 import { AWAKE_WAIT_STATUS, awakeWaitsReady, exactAwakeTime } from "./awake-waits.ts";
@@ -553,6 +554,17 @@ export class Store {
   }
   #all(sql: string, ...args: Arg[]): Json[] {
     return this.#stmt(sql).all(...args);
+  }
+  #active(sql: string, before: string, ...args: Arg[]): Json[] {
+    try { return this.#all(sql, ...args); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("no such table: active_watch_jobs") && !message.includes("no such table: active_other_jobs")
+        && !message.includes("no such index: active_other_remote_jobs")) throw error;
+      if (sql === REMOTE_QUEUE_JOBS && message.includes("no such index: active_other_remote_jobs")
+        && activeRemoteJobsAvailable(this.db)) return this.#all(REMOTE_QUEUE_PREPARED, ...args);
+      return this.#all(before, ...args);
+    }
   }
   /// How many rows it changed.
   #run(sql: string, ...args: Arg[]): number {
@@ -1364,12 +1376,12 @@ export class Store {
 
   /// Whether an agent in this thread has a watch running, without reading its completed jobs.
   hasActiveWatch(thread: number): boolean {
-    return this.#one(HAS_ACTIVE_WATCH, thread) !== undefined;
+    return this.#active(HAS_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, thread).length !== 0;
   }
 
   /// Whether this session has a watch running, without reading its completed jobs.
   hasSessionActiveWatch(session: string): boolean {
-    return this.#one(HAS_SESSION_ACTIVE_WATCH, session) !== undefined;
+    return this.#active(HAS_SESSION_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, session).length !== 0;
   }
 
   /// A thread of this session by the address the agent names it with, and how the session posts there.
@@ -2619,7 +2631,7 @@ export class Store {
 
   /// The remote queue's running jobs, in the same order, without unrelated running jobs.
   remoteQueueJobs(): Pick<JobRow, "id" | "sessionKey" | "startedAt" | "queued" | "screen" | "small">[] {
-    return this.#all(REMOTE_QUEUE_JOBS).map((r) => ({
+    return this.#active(REMOTE_QUEUE_JOBS, REMOTE_QUEUE_BEFORE_UPGRADE).map((r) => ({
       id: r.id, sessionKey: r.session_key, startedAt: r.started_at,
       ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
       ...(r.small === 1 ? { small: true } : {}),
@@ -2628,22 +2640,23 @@ export class Store {
 
   /// The running commands and watches that can keep the machine awake, without unrelated services on ports.
   awakeJobs(): { sessionKey: string; startedAt: number }[] {
-    return this.#all(AWAKE_JOBS).map((r) => ({ sessionKey: r.session_key, startedAt: r.started_at }));
+    return this.#active(AWAKE_JOBS, AWAKE_JOBS_BEFORE_UPGRADE).map((r) => ({ sessionKey: r.session_key, startedAt: r.started_at }));
   }
 
   /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
   runningJobsAtLeast(session: string, limit: number): boolean {
-    return limit <= 0 || this.#one(RUNNING_LIMIT, session, limit - 1) !== undefined;
+    return limit <= 0 || this.#active(RUNNING_LIMIT, RUNNING_LIMIT_BEFORE_UPGRADE, session, limit - 1).length !== 0;
   }
 
   /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
   runningWaitJobIds(session: string): string[] {
-    return this.#all(RUNNING_WAIT_JOBS, session).map((r) => r.id);
+    return this.#active(RUNNING_WAIT_JOBS, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, session).map((r) => r.id);
   }
 
   /// Its running jobs and services waiting to restart: what must stop when it is archived.
   upJobIds(session: string, old = false): string[] {
-    return this.#all(!old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION, session).map((r) => r.id);
+    const sql = !old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION;
+    return this.#active(sql, UP_JOBS_BEFORE_UPGRADE, session).map((r) => r.id);
   }
 
   /// Null means this old session's jobs have not been prepared yet.
