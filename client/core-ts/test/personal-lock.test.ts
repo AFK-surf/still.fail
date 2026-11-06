@@ -1360,6 +1360,35 @@ function phone(env: Partial<ConstructorParameters<typeof Adb>[0]>, host = new Fa
   return { host, runner, adb };
 }
 
+test("a reported remote take-back prevents a valid signed grant from lending after offline restart", async () => {
+  const c = cloud(), a = device(c, "a");
+  const env = { personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] };
+  const p = phone(env), set = p.host.storageSet.bind(p.host);
+  let cold: ReturnType<typeof phone> | undefined;
+  try {
+    const now = Math.floor(p.host.nowMs() / 1000);
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body({ exp: now + 7200 }), "why"));
+    await flush();
+    p.adb.heard(STATION, { ...grantOf(signed), exp: now + 7200 });
+    await flush();
+    assert.deepEqual(p.adb.wanted(), [STATION]);
+    p.host.storageSet = (key, value) => key === GRANTS_KEY ? Effect.fail(new HostError("grant cache save failed", true)) : set(key, value);
+    p.adb.heard(STATION, { id: "p1", status: "ended" });
+    await flush();
+    await p.runner.shutdown();
+    const host = new FakeHost();
+    for (const [key, value] of p.host.storage) host.storage.set(key, value.slice());
+    cold = phone(env, host);
+    await flush();
+    assert.deepEqual(cold.adb.wanted(), [], "the verified but ended signature cannot be restored from the old cache");
+  } finally {
+    p.host.storageSet = set;
+    await p.runner.shutdown();
+    if (cold) await cold.runner.shutdown();
+    await a.runner.shutdown();
+  }
+});
+
 test("a station cannot revive a revoked signed grant by extending its reported expiry", async () => {
   const c = cloud(), a = device(c, "a");
   const p = phone({ personal: a.lock, subOf: () => SUB, subs: () => [{ sub: SUB, email: "a@x" }] });
@@ -1427,7 +1456,8 @@ test("a hidden unbound signature cannot escape a take-back by naming another cha
     const signed = sent.find((ask) => ask.op === "decide")?.signed as { body: { exp: number; chatBound?: boolean } };
     assert.ok(signed);
     assert.notEqual(signed.body.chatBound, true, "an older UI did not establish the displayed chat");
-    p.adb.heard(STATION, { id: "hidden", status: "ended" });
+    // The station hides the signed outcome while still reporting the request as pending. An actual `ended` event is
+    // terminal and must not be revived even by replaying the signature.
     await p.runner.run(p.adb.run({ kind: "revoke", station: STATION, request: "p1", chat: "chat" }));
     const hidden = { ...grantOf(signed), id: "hidden", session: "sess2", chat: "other", exp: signed.body.exp };
     p.adb.heard(STATION, hidden);

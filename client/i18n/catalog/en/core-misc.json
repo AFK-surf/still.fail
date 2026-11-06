@@ -13,7 +13,7 @@
   "core-misc.adb.pair_failed": "Pairing failed: {error}",
   "core-misc.adb.paired": "Paired. No station needs pairing again",
   "core-misc.adb.pairing_closed": "The pairing dialog isn't open: in Wireless debugging, tap “Pair device with pairing code”",
-  "core-misc.adb.revocationsUnreadable": "This device's saved debugging revocations cannot be read. Check device storage and try again",
+  "core-misc.adb.revocationsUnreadable": "This device's saved debug authorization records cannot be read. Check device storage and try again",
   "core-misc.adb.station_ended": "Station ended the share",
   "core-misc.adb.station_too_old": "This station can't share debugging yet: update it in Settings",
   "core-misc.adb.unpaired": "This phone isn't paired yet: pair it once with a pairing code on the Debug sharing page",

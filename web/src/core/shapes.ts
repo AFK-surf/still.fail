@@ -172,7 +172,7 @@ export interface AdbShareView {
 	wanted?: string[];
 	/** Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started). */
 	known?: boolean;
-	/** Local revocations could not be read or saved; lending is paused until `adb.retryRevocations` succeeds. */
+	/** Local grants or revocations could not be read or saved; lending is paused until `adb.retryRevocations` succeeds. */
 	revocationsError?: boolean;
 	/** This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`). */
 	lasts?: string;

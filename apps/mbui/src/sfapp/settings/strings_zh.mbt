@@ -138,7 +138,7 @@ let zh : Map[String, String] = {
   "android-misc.adb.stopWhat": "停止共享",
   "android-misc.adb.on.note": "重启手机、更新 app 后也保持开启",
   "android-misc.adb.revocations.title": "共享调试已暂停",
-  "android-misc.adb.revocations.note": "无法读取或保存本机的授权收回记录，请检查设备存储后重试。",
+  "android-misc.adb.revocations.note": "无法读取或保存本机的调试授权记录，请检查设备存储后重试。",
   "android-misc.adb.chats.approvalNeeded": "已收回，需在手机重新允许",
   "android-misc.adb.chats.approveHere": "在手机允许",
   "android-misc.adb.title": "共享调试",

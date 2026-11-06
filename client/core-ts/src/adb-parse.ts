@@ -36,7 +36,7 @@ export type AdbCall =
   | { kind: "personalConfirm" }
   /// This phone's 共享调试 switch: off, lent to no chat; on, until turned off (kept on the device).
   | { kind: "on"; on: boolean }
-  /// Retry reading or saving the phone's local revocations without changing its sharing switch.
+  /// Retry reading or saving the phone's local grants and revocations without changing its sharing switch.
   | { kind: "retryRevocations" };
 
 export function parseAdb(name: string, params: unknown): AdbCall | null {

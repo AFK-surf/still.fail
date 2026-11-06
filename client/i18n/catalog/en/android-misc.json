@@ -87,7 +87,7 @@
   "android-misc.adb.stopWhat": "stop sharing",
   "android-misc.adb.on.note": "Stays on through restarts and updates",
   "android-misc.adb.revocations.title": "Debug sharing is paused",
-  "android-misc.adb.revocations.note": "This device could not read or save taken-back grants. Check device storage and try again.",
+  "android-misc.adb.revocations.note": "This device could not read or save its debug authorization records. Check device storage and try again.",
   "android-misc.adb.title": "Debug sharing",
   "android-misc.adb.turnOff": "Turn off debug sharing",
   "android-misc.adb.typeCode": "Enter the 6-digit code from the pairing dialog, without leaving Settings",

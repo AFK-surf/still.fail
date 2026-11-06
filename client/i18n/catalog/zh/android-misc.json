@@ -84,7 +84,7 @@
   "android-misc.adb.stopWhat": "停止共享",
   "android-misc.adb.on.note": "重启手机、更新 app 后也保持开启",
   "android-misc.adb.revocations.title": "共享调试已暂停",
-  "android-misc.adb.revocations.note": "无法读取或保存本机的授权收回记录，请检查设备存储后重试。",
+  "android-misc.adb.revocations.note": "无法读取或保存本机的调试授权记录，请检查设备存储后重试。",
   "android-misc.adb.title": "共享调试",
   "android-misc.adb.turnOff": "关闭共享调试",
   "android-misc.adb.typeCode": "输入配对窗口中的 6 位码，无需离开设置",

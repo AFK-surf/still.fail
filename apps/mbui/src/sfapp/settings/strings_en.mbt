@@ -140,7 +140,7 @@ let en : Map[String, String] = {
   "android-misc.adb.stopWhat": "stop sharing",
   "android-misc.adb.on.note": "Stays on through restarts and updates",
   "android-misc.adb.revocations.title": "Debug sharing is paused",
-  "android-misc.adb.revocations.note": "This device could not read or save taken-back grants. Check device storage and try again.",
+  "android-misc.adb.revocations.note": "This device could not read or save its debug authorization records. Check device storage and try again.",
   "android-misc.adb.chats.approvalNeeded": "Taken back; allow again on this phone",
   "android-misc.adb.chats.approveHere": "Allow on phone",
   "android-misc.adb.title": "Debug sharing",

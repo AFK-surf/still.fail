@@ -11,9 +11,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, c_char, c_void};
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, Weak, mpsc};
 
 use futures::{SinkExt, StreamExt};
 use iroh::endpoint::{Connection, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
@@ -329,12 +329,30 @@ impl Unzstd {
 
 type Job = Box<dyn FnOnce() + Send>;
 
+/// Shells replacing one another in this process share a gate for their directory. A stopped shell's queued work is
+/// discarded; work already inside the gate finishes before the next shell can read or write the same files.
+static DISK_GATES: std::sync::LazyLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> = std::sync::LazyLock::new(Mutex::default);
+
+fn disk_gate(dir: &Path) -> std::io::Result<Arc<Mutex<()>>> {
+    let dir = std::fs::canonicalize(dir)?;
+    let mut gates = DISK_GATES.lock().unwrap();
+    gates.retain(|_, gate| gate.strong_count() > 0);
+    if let Some(gate) = gates.get(&dir).and_then(Weak::upgrade) {
+        return Ok(gate);
+    }
+    let gate = Arc::new(Mutex::new(()));
+    gates.insert(dir, Arc::downgrade(&gate));
+    Ok(gate)
+}
+
 struct Inner {
     complete: Complete,
     ctx: Ctx,
     dir: PathBuf,
     /// One thread does every file and database job, in the order they were asked for (as the Rust core's did).
     disk: Mutex<mpsc::Sender<Job>>,
+    disk_gate: Arc<Mutex<()>>,
+    disk_open: Arc<AtomicBool>,
     db: Arc<Mutex<DbHandle>>,
     tls: Arc<rustls::ClientConfig>,
     http: Mutex<reqwest::Client>,
@@ -628,8 +646,15 @@ impl Inner {
     /// A job for the disk thread, answered when done.
     async fn disk<T: Send + 'static>(&self, job: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
         let (done, answer) = tokio::sync::oneshot::channel();
+        let gate = self.disk_gate.clone();
+        let open = self.disk_open.clone();
         self.disk.lock().unwrap().send(Box::new(move || {
-            let _ = done.send(job());
+            let result = match gate.lock() {
+                Ok(_guard) if open.load(Ordering::Acquire) => job(),
+                Ok(_) => Err("the shell has stopped".to_string()),
+                Err(_) => Err("the disk handoff failed".to_string()),
+            };
+            let _ = done.send(result);
         })).map_err(|_| "the disk thread is gone".to_string())?;
         answer.await.map_err(|_| "the disk thread is gone".to_string())?
     }
@@ -1345,6 +1370,8 @@ impl Shell {
 
     fn start_waiting(dir: PathBuf, complete: Complete, ctx: *mut c_void, open_wait: std::time::Duration) -> std::io::Result<Shell> {
         std::fs::create_dir_all(&dir)?;
+        let disk_gate = disk_gate(&dir)?;
+        let disk_open = Arc::new(AtomicBool::new(true));
         let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).thread_name("stillfail-shell").enable_all().build()?;
         let (jobs, queue) = mpsc::channel::<Job>();
         std::thread::Builder::new().name("stillfail-disk".into()).spawn(move || {
@@ -1356,7 +1383,7 @@ impl Shell {
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
         let adb = adb::Adb::new(dir.clone());
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), disk_gate, disk_open, db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
@@ -1535,6 +1562,7 @@ pub unsafe extern "C" fn sf_shell_stop(shell: *mut Shell) {
     if !shell.is_null() {
         // SAFETY: made by `sf_shell_start`.
         let shell = unsafe { Box::from_raw(shell) };
+        shell.inner.disk_open.store(false, Ordering::Release);
         shell.runtime.shutdown_background();
     }
 }
@@ -1753,6 +1781,67 @@ mod tests {
             assert!(shell.runtime.block_on(closed).unwrap().is_err());
             assert_eq!(cancel(), json!({ "value": false }));
         }
+    }
+
+    #[test]
+    fn a_stopped_shell_cannot_write_an_old_value_after_its_replacement() {
+        let dir = TempDir::new();
+        let old = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let (entered, blocked) = mpsc::channel();
+        let (release, wait) = mpsc::channel();
+        let (done, finished) = mpsc::channel();
+        // Hold the old disk thread while its storage.set reaches the queue, as a slow earlier disk job could.
+        old.inner.disk.lock().unwrap().send(Box::new(move || {
+            entered.send(()).unwrap();
+            wait.recv().unwrap();
+        })).unwrap();
+        blocked.recv().unwrap();
+        {
+            let mut write = Box::pin(old.inner.run("storage.set", json!({ "key": "adb-revoked" }), Some(b"old".to_vec())));
+            old.runtime.block_on(async { assert!(futures::poll!(&mut write).is_pending()); });
+        }
+        old.inner.disk.lock().unwrap().send(Box::new(move || { done.send(()).unwrap(); })).unwrap();
+        // This is the host's actual stop. It used to return while the queued write could still reach the file.
+        unsafe { sf_shell_stop(Box::into_raw(Box::new(old))); }
+        let new = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        new.runtime.block_on(new.inner.run("storage.set", json!({ "key": "adb-revoked" }), Some(b"new".to_vec()))).unwrap();
+        release.send(()).unwrap();
+        finished.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        assert_eq!(std::fs::read(dir.path().join("adb-revoked")).unwrap(), b"new");
+    }
+
+    #[test]
+    fn a_replacement_shell_waits_for_a_write_already_inside_the_old_shell() {
+        let dir = TempDir::new();
+        let old = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let (entered, started) = mpsc::channel();
+        let (release, wait) = mpsc::channel();
+        let (finished, old_done) = mpsc::channel();
+        let path = dir.path().join("adb-revoked");
+        let inner = old.inner.clone();
+        old.runtime.spawn(async move {
+            let _ = inner.disk(move || {
+                entered.send(()).unwrap();
+                wait.recv().unwrap();
+                std::fs::write(path, b"old").map_err(err)?;
+                finished.send(()).unwrap();
+                Ok(())
+            }).await;
+        });
+        started.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        unsafe { sf_shell_stop(Box::into_raw(Box::new(old))); }
+        let new = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let inner = new.inner.clone();
+        let (finished, new_done) = mpsc::channel();
+        new.runtime.spawn(async move {
+            finished.send(inner.run("storage.set", json!({ "key": "adb-revoked" }), Some(b"new".to_vec())).await.is_ok()).unwrap();
+        });
+        let early = new_done.recv_timeout(std::time::Duration::from_millis(200)).ok();
+        release.send(()).unwrap();
+        old_done.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        if early.is_none() { assert!(new_done.recv_timeout(std::time::Duration::from_secs(5)).unwrap()); }
+        assert!(early.is_none(), "the new shell cannot write while an old write still owns the directory");
+        assert_eq!(std::fs::read(dir.path().join("adb-revoked")).unwrap(), b"new");
     }
 
     #[test]
