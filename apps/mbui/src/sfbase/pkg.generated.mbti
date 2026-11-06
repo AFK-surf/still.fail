@@ -1114,6 +1114,8 @@ pub fn paste_threshold(@ui.Ctx, Source) -> Int32
 
 pub let pdf_small_in : Double
 
+pub let peek_again_ms : Double
+
 pub let peek_card : @ui.Style
 
 pub let peek_card_words : @ui.Style
@@ -1138,7 +1140,7 @@ pub fn peek_start(Source, Peek) -> Unit
 
 pub fn peek_stop(Source, Peek) -> Unit
 
-pub fn peek_took(Peek, String, Json, Bytes?) -> Unit
+pub fn peek_took(Source, Peek, String, Json, Bytes?) -> Unit
 
 pub let peek_views : @ref.Ref[Int32]
 
@@ -1651,6 +1653,10 @@ pub fn vf_meta(Viewer, Source) -> String
 pub fn vf_read(Viewer, @ui.Ctx, Source, Bytes) -> Unit
 
 pub fn vf_reads(Viewer) -> Bool
+
+pub let video_peeks : @ref.Ref[Int32]
+
+pub let video_peeks_most : Int32
 
 pub fn video_still(@ui.Ctx, Source, String, String, Attachment, String) -> String
 
@@ -2767,6 +2773,10 @@ pub(all) struct Peek {
   mut got : Int32
   pictures : Array[String]
   mut target : Int32
+  mut codec : String
+  mut stream : @ui.Stream?
+  mut video : Bool
+  mut again : Bool
 }
 
 pub(all) enum PeekRun {

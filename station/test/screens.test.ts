@@ -27,7 +27,7 @@ import type { SimDebug } from "../src/screens/sim-debug.ts";
 import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, ownRate, rateCeiling } from "../src/mesh/screen-pace.ts";
@@ -2066,4 +2066,14 @@ test("negotiated system audio flows while the picture is still, and unrequested 
     await v.served;
     assert.equal(sound.closed, true);
   }
+});
+
+test("a source's codec: the best of its own the view takes; a preview's JPEG where both have it", () => {
+  const own = ["h265", "h264", "jpeg"] as const;
+  assert.equal(codecFor({ codecs: ["jpeg", "h264", "h265"] }, own), "h265");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"] }, own), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, own), "jpeg");
+  assert.equal(codecFor({ codecs: ["h264"], peek: true }, own), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, ["h264"]), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg"] }, ["h264"]), undefined);
 });

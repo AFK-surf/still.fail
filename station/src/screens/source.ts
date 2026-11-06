@@ -48,6 +48,14 @@ export type ScreenInput =
 export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
 export type ViewFit = { width: number; height: number; scale: number };
 
+/// The codec a source that makes `own` (best first) sends a view: the first of them the view takes; for a preview
+/// (`peek`), JPEG where both have it, so a card stays a picture now and then while a source with nothing but a video
+/// (an Android device's) still gets a card that takes one. None: nothing in common.
+export function codecFor(options: Pick<ViewOptions, "codecs" | "peek">, own: readonly Codec[]): Codec | undefined {
+  if (options.peek === true && own.includes("jpeg") && options.codecs.includes("jpeg")) return "jpeg";
+  return own.find((c) => options.codecs.includes(c));
+}
+
 /// The least part of the screen a look shows, of its width or height (a 50th: zoomed in 50 times).
 export const LOOK_LEAST = 0.02;
 /// A part this much of the screen or more, both ways, is the whole of it.

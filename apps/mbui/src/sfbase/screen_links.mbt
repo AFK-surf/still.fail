@@ -2,9 +2,12 @@
 // AdbLinks.kt; docs/remote-screens.md, docs/adb-share.md), as the web draws them: one alone in a paragraph is its card
 // (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
 // `screenCard` and `adbCard` topics). A screen its station previews is live in its card while the card is built (the
-// messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, JPEG only, small, each
-// frame acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped
-// (the call cancelled) as the card goes from view or the app behind. A card's tap opens its link, as a tap on the link
+// messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, small, each frame
+// acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped (the
+// call cancelled) as the card goes from view or the app behind. JPEG, and H.264 where the host decodes it: a source
+// that has JPEG sends it a preview, one with nothing else (an Android device) H.264, decoded by a Stream of the card's,
+// video_peeks_most of those at once. One refused (its station previews as many as it can) or ended asks again
+// peek_again_ms on while its card is on the screen. A card's tap opens its link, as a tap on the link
 // does (open_links.mbt open_link).
 
 ///|
@@ -14,6 +17,15 @@ pub let peek_ms : Double = 500.0
 ///|
 /// The picture a preview asks for, in pixels at most (ScreenLinks.kt PEEK_SIZE): the card's width, twice over.
 pub let peek_size : Double = 640.0
+
+///|
+/// A preview refused or ended (ScreenLink.tsx PEEK_AGAIN_MS) is asked for again after this, while its card shows.
+pub let peek_again_ms : Double = 5000.0
+
+///|
+/// The most previews the app decodes as a video at once (an Android device's): a phone has few hardware decoders.
+/// One more is let go, its mark shown, and asks again peek_again_ms on.
+pub let video_peeks_most : Int = 2
 
 ///|
 /// The shape of a browser's preview (16:10), and the default before another screen's size is known.
@@ -450,6 +462,14 @@ pub(all) struct Peek {
   pictures : Array[String]
   /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle)
   mut target : Int
+  /// what its view's frames are (its config's `codec`): "jpeg" before one says otherwise
+  mut codec : String
+  /// its video's decoder (an H.264 preview), made as its config comes; its frames acknowledged once each is shown
+  mut stream : @ui.Stream?
+  /// it holds one of the app's video previews (video_peeks_most)
+  mut video : Bool
+  /// ended long enough: asked for again where its card shows (peeks_frame, peeks_settle)
+  mut again : Bool
 }
 
 ///|
@@ -465,10 +485,15 @@ pub let peeks_built : Map[String, Bool] = {}
 pub let peek_views : Ref[Int] = Ref(0)
 
 ///|
+/// The previews decoded as a video now (video_peeks_most at most).
+pub let video_peeks : Ref[Int] = Ref(0)
+
+///|
 pub fn peeks_reset() -> Unit {
   peeks.clear()
   peeks_built.clear()
   peek_views.val = 0
+  video_peeks.val = 0
 }
 
 ///|
@@ -487,6 +512,10 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         got: 0,
         pictures: [],
         target: 0,
+        codec: "jpeg",
+        stream: None,
+        video: false,
+        again: false,
       }
       peeks[key] = p
       p
@@ -524,6 +553,15 @@ pub fn screen_peek(
       None => ()
     }
   }
+  // (a video's picture, once one shows, over the pictures before it)
+  let video = match p.stream {
+    Some(st) if st.shown_any() => Some(st)
+    _ => None
+  }
+  match video.bind(fn(st) { st.size() }) {
+    Some((w, h)) if h > 0 => natural = w.to_double() / h.to_double()
+    _ => ()
+  }
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
   // (a simulator's panel, and so its shape, may have changed since it was listed: as its picture has it)
   let own = if natural > 0.0 { natural } else { listed }
@@ -533,13 +571,18 @@ pub fn screen_peek(
     peek_ratio
   }
   c.box(style=peek_frame, aspect=ratio, fn() {
-    if shown < 0 {
+    if shown < 0 && video is None {
       link_mark(c, Some(if card.kind == "browser" { globe_mark } else { monitor_mark }), Muted)
     }
     let from = if shown < 0 { 0 } else { shown }
     for i in from..<p.pictures.length() {
       let k = p.pictures[i]
       c.layer(fn() { peek_picture(c, k) }) |> ignore
+    }
+    match video {
+      Some(st) =>
+        c.layer(fn() { c.stream(st, fit=FitCoverAt(0.0), layer=false) |> ignore }) |> ignore
+      None => ()
     }
   })
   |> ignore
@@ -552,10 +595,50 @@ pub fn peek_picture(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// A frame of a preview as it comes: its picture (a JPEG) handed over under a key of its own, its `ts` to acknowledge.
-pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
+/// A value of a preview as it comes. A config: what its frames are; H.264's (an Android device's) to the card's Stream,
+/// if the app decodes fewer than video_peeks_most videos now, else the preview let go (asked again later). A frame:
+/// a JPEG handed over under a key of its own, its `ts` to acknowledge; an H.264 one to the Stream, acknowledged once
+/// it is shown or let go.
+pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
   if p.view != view {
     return
+  }
+  match field(Some(value), "config") {
+    Some(Object(_) as cfg) => {
+      let codec = text(Some(cfg), "codec")
+      p.codec = codec
+      if codec == "h264" {
+        if !p.video {
+          if video_peeks.val >= video_peeks_most {
+            peek_end(src, p)
+            return
+          }
+          p.video = true
+          video_peeks.val += 1
+        }
+        let st = match p.stream {
+          Some(st) => st
+          None => {
+            let st = @ui.Stream::new(
+              shown=fn(ts) { if p.view == view { p.waiting.push(Json::number(ts)) } },
+              broken=fn() {
+                if p.view == view {
+                  (src.call)("screen.keyframe", { "view": Json::string(view) }, fn(_) {  })
+                }
+              },
+            )
+            p.stream = Some(st)
+            st
+          }
+        }
+        match bytes {
+          Some(b) => st.h264(b, number(Some(cfg), "width").to_int(), number(Some(cfg), "height").to_int())
+          None => ()
+        }
+      }
+      return
+    }
+    _ => ()
   }
   let f = field(Some(value), "frame")
   let ts = match field(f, "ts") {
@@ -566,6 +649,13 @@ pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit 
         _ => return
       }
     _ => return
+  }
+  if p.codec == "h264" {
+    match (p.stream, bytes, ts) {
+      (Some(st), Some(b), Number(n, ..)) if b.length() > 0 => st.frame(b, flag(f, "key"), n)
+      _ => p.waiting.push(ts)
+    }
+    return
   }
   match bytes {
     Some(b) if b.length() > 0 => {
@@ -580,7 +670,7 @@ pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit 
 }
 
 ///|
-/// The preview of `p` asked for (`screen.view` with `peek`: JPEG only, small).
+/// The preview of `p` asked for (`screen.view` with `peek`, small: JPEG, and H.264 where the host decodes it).
 pub fn peek_start(src : Source, p : Peek) -> Unit {
   peek_views.val += 1
   let view = "mbui-peek-\{peek_views.val}"
@@ -588,27 +678,57 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
   p.run = PeekOn
   p.call = 0
   p.acked = 0
+  p.again = false
+  p.codec = "jpeg"
   p.waiting.clear()
+  let codecs : Array[Json] = if @ui.h264_here() { ["jpeg", "h264"] } else { ["jpeg"] }
   let params : Map[String, Json] = {
     "station": Json::string(p.station),
     "screen": Json::string(p.screen),
     "view": Json::string(view),
-    "codecs": ["jpeg"],
+    "codecs": Json::array(codecs),
     "maxWidth": Json::number(peek_size),
     "maxHeight": Json::number(peek_size),
     "peek": true,
   }
-  let id = (src.stream)("screen.view", Json::object(params), None, fn(v, b) { peek_took(p, view, v, b) }, fn(_) {
-    // refused or ended (the station no longer previews it): what it shows stays
+  let id = (src.stream)("screen.view", Json::object(params), None, fn(v, b) { peek_took(src, p, view, v, b) }, fn(_) {
+    // refused or ended (the station previews as many as it can now, or no longer this one): what it shows stays
     if p.view == view {
-      p.run = PeekEnded
       p.call = 0
-      p.waiting.clear()
+      peek_end(src, p)
     }
   })
   if p.view == view && p.run == PeekOn {
     p.call = id
   }
+}
+
+///|
+/// Its video's decoder stopped and its place among the app's video previews given back (its last picture goes with it:
+/// a JPEG one, kept, shows until the next).
+fn peek_drop_video(p : Peek) -> Unit {
+  match p.stream {
+    Some(st) => st.close()
+    None => ()
+  }
+  p.stream = None
+  if p.video {
+    p.video = false
+    video_peeks.val = if video_peeks.val > 0 { video_peeks.val - 1 } else { 0 }
+  }
+}
+
+///|
+/// The preview of `p` ended (refused, ended by the station, or let go for want of a decoder): its call cancelled if it
+/// still runs; asked for again peek_again_ms on while its card shows (`view` kept, its wait's key).
+fn peek_end(src : Source, p : Peek) -> Unit {
+  if p.call != 0 {
+    (src.cancel)(p.call)
+  }
+  p.call = 0
+  p.run = PeekEnded
+  p.waiting.clear()
+  peek_drop_video(p)
 }
 
 ///|
@@ -620,7 +740,9 @@ pub fn peek_stop(src : Source, p : Peek) -> Unit {
   p.call = 0
   p.view = ""
   p.run = PeekOff
+  p.again = false
   p.waiting.clear()
+  peek_drop_video(p)
 }
 
 ///|
@@ -640,6 +762,10 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
   peeks_built.clear()
   for key, p in peeks {
+    if p.run == PeekEnded &&
+      @kit.after(c, "peek-again/\{key}/\{p.view}", true, peek_again_ms, later=true) {
+      p.again = true
+    }
     if p.run != PeekOn {
       continue
     }
@@ -680,7 +806,13 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
     let want = shown && on
     match p.run {
       PeekOn => if !want { peek_stop(src, p) }
-      PeekEnded => if !want { p.run = PeekOff }
+      PeekEnded =>
+        if !want {
+          p.run = PeekOff
+          p.again = false
+        } else if p.again {
+          peek_start(src, p)
+        }
       PeekOff => if want { peek_start(src, p) }
     }
     let mut newest = -1

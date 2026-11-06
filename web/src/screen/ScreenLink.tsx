@@ -10,7 +10,7 @@ import { core, useTopic } from "../core/react.ts";
 import type { ScreenCard as Card } from "../core/shapes.ts";
 import { screenOfLink } from "../chatRefs.ts";
 import { t } from "../i18n.ts";
-import { ScreenFrames, type FrameConfig, type FrameHead } from "./frames.ts";
+import { ScreenFrames, Slots, decodable, type Codec, type FrameConfig, type FrameHead } from "./frames.ts";
 import * as chatCss from "../Chat.css.ts";
 import * as css from "./ScreenLink.css.ts";
 
@@ -18,6 +18,23 @@ import * as css from "./ScreenLink.css.ts";
 const PEEK_MS = 500;
 /** The picture a preview asks for, in device pixels at most: the card's width, twice over. */
 const PEEK_SIZE = 640;
+/**
+ * A preview refused (its station previews as many as it can now), ended, or let go for a decoder asks again after this,
+ * while its card is on the screen.
+ */
+const PEEK_AGAIN_MS = 5_000;
+/**
+ * The previews this page decodes as a video at once, two at most (an Android device's, which sends nothing else: WebCodecs,
+ * with the hardware's decoders, which a phone has few of); one more is let go, its mark shown, and asks again later.
+ */
+const videoPeeks = new Slots(2);
+
+/**
+ * What a preview takes: JPEG, and H.264 where WebCodecs plays it (no H.265: a card is small and slow). A source that has
+ * JPEG sends it a preview (station/src/screens/source.ts `codecFor`), so only one with nothing else sends it H.264.
+ */
+let peekCodecs: Promise<Codec[]> | null = null;
+const peekCodecsHere = () => (peekCodecs ??= decodable(true));
 
 /** Opens a station's screen beside the chat (pages/ChatPage.tsx): none where there is no side panel (a phone's chat). */
 export const OpenScreen = createContext<((station: string, screen: string) => void) | null>(null);
@@ -80,7 +97,8 @@ function useShown(el: RefObject<HTMLElement | null>): boolean {
 /**
  * The screen live in its card (`screen.view` with `peek`: only looking, not among those on it, its tab not brought
  * forward), a picture every PEEK_MS while the card is on the screen; its mark until a picture comes (a tab behind
- * another casts none).
+ * another casts none). JPEG where the source has it, else H.264 (an Android device's), two of those at once on
+ * the page (`videoPeeks`); one refused or ended asks again PEEK_AGAIN_MS on.
  */
 function Peek({ station, screen, card }: { station: string; screen: string; card: Card }) {
   const box = useRef<HTMLSpanElement>(null);
@@ -90,29 +108,58 @@ function Peek({ station, screen, card }: { station: string; screen: string; card
   useEffect(() => {
     const c = canvas.current;
     if (!shown || !c) return;
-    const name = newName();
-    const abort = new AbortController();
-    let open = true;
-    // Each acknowledgement PEEK_MS after the one before: the station sends no faster.
-    let at = 0;
-    const timers = new Set<ReturnType<typeof setTimeout>>();
-    const ack = (ts: number) => {
-      at = Math.max(Date.now(), at + PEEK_MS);
-      const timer = setTimeout(() => { timers.delete(timer); if (open) tell("screen.ack", { view: name, ts }); }, at - Date.now());
-      timers.add(timer);
+    let stopped = false;
+    let again: ReturnType<typeof setTimeout> | undefined;
+    let endView: (() => void) | null = null;
+    const open = async () => {
+      const codecs = await peekCodecsHere();
+      if (stopped) return;
+      const name = newName();
+      const abort = new AbortController();
+      let live = true;
+      let video = false;
+      // Each acknowledgement PEEK_MS after the one before: the station sends no faster.
+      let at = 0;
+      const timers = new Set<ReturnType<typeof setTimeout>>();
+      const ack = (ts: number) => {
+        at = Math.max(Date.now(), at + PEEK_MS);
+        const timer = setTimeout(() => { timers.delete(timer); if (live) tell("screen.ack", { view: name, ts }); }, at - Date.now());
+        timers.add(timer);
+      };
+      const frames = new ScreenFrames(c, { ack, keyframe: () => tell("screen.keyframe", { view: name }), drawn: () => setDrawn(true) });
+      const end = () => {
+        if (!live) return;
+        live = false;
+        abort.abort();
+        frames.close();
+        for (const timer of timers) clearTimeout(timer);
+        if (video) videoPeeks.free();
+      };
+      endView = end;
+      // (once for this view: refused, ended, or let go for a decoder)
+      const ended = () => {
+        const was = live;
+        end();
+        if (was && !stopped) again = setTimeout(() => void open(), PEEK_AGAIN_MS);
+      };
+      core().call("screen.view", { station, screen, view: name, codecs, maxWidth: PEEK_SIZE, maxHeight: PEEK_SIZE, peek: true }, (value, bytes) => {
+        if (!live) return;
+        const v = value as { config?: FrameConfig; frame?: FrameHead };
+        if (v.frame) frames.frame(v.frame, bytes);
+        else if (v.config) {
+          if (v.config.codec !== "jpeg" && !video) {
+            if (!videoPeeks.take()) { ended(); return; }
+            video = true;
+          }
+          frames.config(v.config, bytes);
+        }
+      }, abort.signal).catch(() => undefined).finally(ended);
     };
-    const frames = new ScreenFrames(c, { ack, keyframe: () => tell("screen.keyframe", { view: name }), drawn: () => setDrawn(true) });
-    core().call("screen.view", { station, screen, view: name, codecs: ["jpeg"], maxWidth: PEEK_SIZE, maxHeight: PEEK_SIZE, peek: true }, (value, bytes) => {
-      if (!open) return;
-      const v = value as { config?: FrameConfig; frame?: FrameHead };
-      if (v.frame) frames.frame(v.frame, bytes);
-      else if (v.config) frames.config(v.config, bytes);
-    }, abort.signal).catch(() => undefined);
+    void open();
     return () => {
-      open = false;
-      abort.abort();
-      frames.close();
-      for (const timer of timers) clearTimeout(timer);
+      stopped = true;
+      clearTimeout(again);
+      endView?.();
     };
   }, [station, screen, shown]);
   // Its shape as its station lists it (a tab's viewport), within bounds: the card does not change size as it comes.

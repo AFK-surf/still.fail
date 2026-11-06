@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { avcCodec, hvcCodec } from "../web/src/screen/frames.ts";
+import { Slots, avcCodec, decodable, hvcCodec } from "../web/src/screen/frames.ts";
 
 test("an avcC's codec string: its profile, compatibility and level", () => {
   assert.equal(avcCodec(new Uint8Array([1, 0x42, 0xe0, 0x1f, 0xff])), "avc1.42E01F");
@@ -16,4 +16,21 @@ test("an hvcC's codec string: profile, reversed compatibility flags, tier and le
   const high = new Uint8Array([1, 0x22, 0x20, 0, 0, 0, 0x90, 0x08, 0, 0, 0, 0, 120, 0xf0]);
   assert.equal(hvcCodec(high), "hvc1.2.4.H120.90.8");
   assert.equal(hvcCodec(undefined), "hvc1.1.6.L153.B0");
+});
+
+test("a page's video previews: so many at once, one more refused until one is given back", () => {
+  const slots = new Slots(2);
+  assert.equal(slots.take(), true);
+  assert.equal(slots.take(), true);
+  assert.equal(slots.take(), false);
+  slots.free();
+  assert.equal(slots.used, 1);
+  assert.equal(slots.take(), true);
+  slots.free(); slots.free(); slots.free();
+  assert.equal(slots.used, 0);
+});
+
+test("where nothing decodes a video, a preview takes JPEG alone", async () => {
+  assert.equal(typeof (globalThis as { VideoDecoder?: unknown }).VideoDecoder, "undefined");
+  assert.deepEqual(await decodable(true), ["jpeg"]);
 });
