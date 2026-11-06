@@ -138,12 +138,17 @@ pub struct Parts {
   priv mut why : Int
   /// instances reached and rects added since made: the work of saying where a frame changed
   priv mut work : Int
+  /// what the last taken was said as, in the window, before any was taken together (x0, y0, x1, y1), and the captures
+  /// of glass taken into its parts (Parts::said, Parts::glass_taken), kept only where asked (Parts::keep_said: a check's)
+  priv mut keeping : Bool
+  priv mut said : Array[(Double, Double, Double, Double)]
+  priv mut glass : Array[(Double, Double, Double, Double)]
 }
 
 ///|
 /// Nothing changed yet.
 pub fn Parts::new() -> Parts {
-  { parts: [], whole: false, whole_why: 0, why: 0, work: 0 }
+  { parts: [], whole: false, whole_why: 0, why: 0, work: 0, keeping: false, said: [], glass: [] }
 }
 
 ///|
@@ -195,11 +200,15 @@ pub fn Parts::take(
   self.parts.clear()
   self.whole = false
   self.why = 0
+  let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
+  if self.keeping {
+    self.said = parts.filter(fn(p) { p.meets(window) }).map(fn(p) { p.within(window).rect() })
+    self.glass = []
+  }
   if whole {
     self.why = self.whole_why
     return [(0.0, 0.0, -1.0, -1.0)]
   }
-  let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
   let inside = parts.filter(fn(p) { p.meets(window) }).map(fn(p) { p.within(window) })
   if inside.is_empty() {
     return []
@@ -215,6 +224,9 @@ pub fn Parts::take(
         if p.meets(gr) && !p.holds(gr.within(window)) {
           let g = gr.within(window)
           p.add(g.x0, g.y0, g.x1, g.y1)
+          if self.keeping {
+            self.glass.push(g.rect())
+          }
           grew = true
         }
       }
@@ -229,6 +241,30 @@ pub fn Parts::take(
     return [(0.0, 0.0, -1.0, -1.0)]
   }
   inside.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) })
+}
+
+///|
+/// Whether what each taken was said as, and the glass taken into it, are kept (Parts::said, glass_taken): a check's,
+/// which compares them with what the frame drew; none kept otherwise, nothing made for them.
+pub fn Parts::keep_said(self : Parts, on : Bool) -> Unit {
+  self.keeping = on
+  if !on {
+    self.said = []
+    self.glass = []
+  }
+}
+
+///|
+/// What the last taken was said as before any of it was taken together (x0, y0, x1, y1, in the window), whatever it
+/// came to (whole, Parts::why 5, included): what a check finds what changed in.
+pub fn Parts::said(self : Parts) -> Array[(Double, Double, Double, Double)] {
+  self.said.copy()
+}
+
+///|
+/// The captures of glass the last taken took into its parts (x0, y0, x1, y1, in the window), each as often as one took it.
+pub fn Parts::glass_taken(self : Parts) -> Array[(Double, Double, Double, Double)] {
+  self.glass.copy()
 }
 
 ///|

@@ -95,6 +95,10 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  // (what changed between frames but as the old frame's inputs were taken, counted to here: frame_watch.mbt)
+  if causes_counted.val {
+    frame_outside_began.val = changes_outside_input()
+  }
   let z = window_zoom_wanted.get()
   if z != window_zoom_drawn.val {
     let ratio = window_zoom_drawn.val / z
@@ -110,6 +114,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   inputs_since.val = false
   let taken = inputs_taken.val
   inputs_taken.val = false
+  frame_inputs_taken.val = taken
   in_frame.val = true
   frame_running.val = true
   paint_phase.val = 0
@@ -860,6 +865,9 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
       let_go_told(x, y)
     }
   })
+  // (an input handed to the old frame taken whole, what the tree's event it came as told once it was over with it:
+  // frame_watch.mbt)
+  old_input_end()
 }
 
 ///|
@@ -879,6 +887,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
     view_pointed()
     input_taped("pointer", h_event_time(), args)
+    host_tree_input("pointer", h_event_time(), args)
     // (a press the window's tree took is outside every layer of the old frame's: what it dismisses so, at its moment,
     // as one the old frame takes is: overlay.mbt)
     if kind == 0 {
@@ -888,6 +897,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
       c.layer_keys_now()
     }
   } else {
+    // (what it changes, as it is taken, its own, till the event it came as is over: frame_watch.mbt's
+    // built_for_old_input)
+    old_input_begin()
     took_input("pointer", h_event_time(), args)
     view_pointed()
     old_pointer_now(kind, x, y, button, mods, h_event_time())

@@ -344,6 +344,9 @@ pub fn effect_scope(f : () -> Unit) -> () -> Unit {
 ///|
 /// What `fn` reads told it changed (what follows it worked out again), whether or not it did.
 pub fn trigger(f : () -> Unit) -> Unit {
+  if counting.val {
+    sets_changed.val = sets_changed.val + 1
+  }
   let sub = ReactiveNode::new(WATCHING | RECURSED_CHECK, TriggerNode)
   let prev_sub = set_active_sub(Some(sub))
   run.batch_depth += 1
@@ -695,6 +698,9 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     }
     // (where, for what it tells to say: Signal::set_at)
     set_at.val = Some(loc)
+    if counting.val {
+      sets_changed.val = sets_changed.val + 1
+    }
     let node = self.0
     node.flags = MUTABLE | DIRTY
     match node.subs {
@@ -845,6 +851,9 @@ pub fn[T] untracked(f : () -> T) -> T {
 /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
 pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
   if run.batch_depth > 0 { run.batch_changed = true }
+  if counting.val {
+    sets_changed.val = sets_changed.val + 1
+  }
   let node = self.0
   node.flags = node.flags | DIRTY
   match node.subs {
@@ -1050,6 +1059,34 @@ pub fn Watch::stop(self : Watch) -> Unit {
 /// it (frame_watch.mbt's layout watch).
 // kept across runs: written by each set
 let set_at : Ref[SourceLoc?] = Ref(None)
+
+///|
+/// How many changes were told (Signal::set to another value, Computed::invalidate, trigger) since they were counted
+/// (count_changes): what a check counts to say whether anything changed between two moments. Nothing counted otherwise.
+// kept across runs: counted from 0 while a check asks (count_changes)
+let sets_changed : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: set by a check (count_changes)
+let counting : Ref[Bool] = Ref(false)
+
+///|
+/// The changes told counted from 0 from now on (sets_made), or no longer (`on` false): a check's, nothing counted
+/// otherwise.
+pub fn count_changes(on : Bool) -> Unit {
+  if on {
+    counting.val = true
+  } else {
+    counting.val = false
+  }
+  sets_changed.val = 0
+}
+
+///|
+/// How many changes were told since they were counted (count_changes; 0 where they are not), by anything.
+pub fn sets_made() -> Int {
+  sets_changed.val
+}
 
 ///|
 /// The set telling what follows it now (Signal::set, as it propagates and flushes): None while what is told comes of

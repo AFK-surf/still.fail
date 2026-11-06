@@ -93,6 +93,8 @@ struct HostStep {
   frames : Array[@ui.HostFrame]
   /// the times the chat's view was worked out in it, its frames and between them (@sfbase.views_worked)
   views : Int
+  /// the pointer's inputs it made (kind, x, y, the moment), as the host hands them
+  made : Array[(Int, Double, Double, Double)]
 }
 
 ///|
@@ -108,12 +110,18 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
     t.run_for(@ui.move_most_ms)
   }
   let steps : Array[HostStep] = []
+  let made_now : Array[(Int, Double, Double, Double)] = []
+  let touch = fn(kind : Int, x : Double, y : Double) {
+    made_now.push((kind, x, y, t.time()))
+    t.touch_at(kind, x, y, t.time())
+  }
   let step = fn(what : String, ms : Double, f : () -> Unit) {
     t.host_frames() |> ignore
     let views = @sfbase.views_worked()
     f()
     t.run_as_host(ms)
-    steps.push({ what, frames: t.host_frames(), views: @sfbase.views_worked() - views })
+    steps.push({ what, frames: t.host_frames(), views: @sfbase.views_worked() - views, made: made_now.copy() })
+    made_now.clear()
   }
   t.record_host()
   // (what a chat's page makes outside frames too: its list's entries, its messages made of their JSON)
@@ -121,8 +129,8 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
   t.count_between("messages", @sfbase.messages_made)
   // (a tap as the host hands it: down and up at one moment, the frames it asks for after)
   let tap = fn(x : Double, y : Double) {
-    t.touch_at(0, x, y, t.time())
-    t.touch_at(2, x, y, t.time())
+    touch(0, x, y)
+    touch(2, x, y)
   }
   let (fx, fy) = match t.find("发消息") {
     Some(p) => p
@@ -173,11 +181,11 @@ fn host_walk(mode : String, w : Double, h : Double, platform : Int) -> (Array[Ho
   }
   // (a finger's drag down the messages, toward their start, let go moving: a fling)
   let (lx, ly) = (w / 2.0, h * 0.3)
-  step("dragged", 0.0, fn() { t.touch_at(0, lx, ly, t.time()) })
+  step("dragged", 0.0, fn() { touch(0, lx, ly) })
   for i in 1..=12 {
-    step("dragged \{i}", host_finger_ms, fn() { t.touch_at(1, lx, ly + 15.0 * i.to_double(), t.time()) })
+    step("dragged \{i}", host_finger_ms, fn() { touch(1, lx, ly + 15.0 * i.to_double()) })
   }
-  step("flung", host_fling_ms, fn() { t.touch_at(2, lx, ly + 180.0, t.time()) })
+  step("flung", host_fling_ms, fn() { touch(2, lx, ly + 180.0) })
   // (sent: Enter on a desktop's keyboard; send pressed on a phone)
   step("sent", @ui.move_most_ms, fn() {
     if platform == 0 {
@@ -234,8 +242,12 @@ fn host_said(f : @ui.HostFrame) -> String {
   } else {
     "\{f.damage}"
   }
-  "at \{f.at}: " + (if f.old_built { "the old frame built whole (\{f.why}), " } else { "" }) +
-  "\{f.parts_built} parts built, drew again \{drawn}, glass copied \{f.glass}, laid \{f.laid} in \{f.passes} passes"
+  "at \{f.at}, \{f.drawn_as}: " + (if f.old_inputs.is_empty() { "" } else { "took \{f.old_inputs} in the old frame, " }) +
+  (if f.left_by == "" { "" } else { "left it by the frame before: \{f.left_by}, " }) +
+  (if f.drawn_as == "painted" { "painted for \{f.why}, \{f.layers_drawn} layers drawn (\{f.insts_recorded} instances), " } else { "" }) +
+  (if f.old_built { "the old frame built whole (\{f.why}" + (if f.for_old_input { ", for its inputs alone" } else { ", for more than its inputs: \{f.not_for_old_input}" }) + "), " } else { "" }) +
+  "\{f.parts_built} parts built, drew again \{drawn} (said \{f.damage_said}, glass taken in \{f.glass_taken}), glass copied \{f.glass}, laid \{f.laid} in \{f.passes} passes" +
+  (if f.missed.is_empty() { "" } else { ", left out \{f.missed}" })
 }
 
 ///|
@@ -277,18 +289,143 @@ test "a key in a long chat's composer builds nothing of the old frame and draws 
 }
 
 ///|
-test "a long chat's messages flung build nothing of the old frame and are never drawn over the whole window, on a phone and a desktop" {
+/// Whether `taken`, a pointer's input as a frame says it took it (HostFrame's old_inputs, tree_inputs), is `m` as made
+/// (kind, x, y, the moment).
+fn host_input_is(m : (Int, Double, Double, Double), taken : String) -> Bool {
+  taken.has_prefix("pointer [\{m.0}, \{m.1}, \{m.2},") && taken.has_suffix(" at \{m.3}")
+}
+
+///|
+/// The inputs made that nothing took, and those taken that none made (one made taken twice: once of them), each
+/// paired by its place and moment, once.
+fn host_inputs_unmatched(made : Array[(Int, Double, Double, Double)], taken : Array[String]) -> Array[String] {
+  let used = Array::make(taken.length(), false)
+  let out = []
+  for m in made {
+    let mut found = false
+    for i, k in taken {
+      if !used[i] && host_input_is(m, k) {
+        used[i] = true
+        found = true
+        break
+      }
+    }
+    if !found {
+      out.push("made, not taken: \{m}")
+    }
+  }
+  for i, k in taken {
+    if !used[i] {
+      out.push("taken, not made: \{k}")
+    }
+  }
+  out
+}
+
+///|
+test "each input made taken once, by its place and moment: one taken twice and another not at all is no match, though as many" {
+  let made = [(0, 195.0, 253.0, 100.0), (1, 195.0, 268.0, 116.0), (1, 195.0, 283.0, 132.0)]
+  let said = fn(m : (Int, Double, Double, Double)) { "pointer \{[m.0.to_double(), m.1, m.2, 0.0, 0.0]} at \{m.3}" }
+  assert_eq(host_inputs_unmatched(made, made.map(said)), [])
+  assert_eq(host_inputs_unmatched(made, [said(made[2]), said(made[0]), said(made[1])]), [])
+  assert_eq(host_inputs_unmatched(made, [said(made[0]), said(made[1]), said(made[1])]), [
+    "made, not taken: (1, 195, 283, 132)", "taken, not made: pointer [1, 195, 268, 0, 0] at 116",
+  ])
+  // (the same place at another moment is another input)
+  assert_eq(host_inputs_unmatched([made[0]], ["pointer [0, 195, 253, 0, 0] at 101"]), [
+    "made, not taken: (0, 195, 253, 100)", "taken, not made: pointer [0, 195, 253, 0, 0] at 101",
+  ])
+}
+
+///|
+/// Whether frame `f` took an input handed to the old frame (took_input's): the messages' list is the old frame's still,
+/// so a pointer on it is that frame's input, what it changes no signal.
+fn host_took_old_input(f : @ui.HostFrame) -> Bool {
+  !f.old_inputs.is_empty()
+}
+
+///|
+/// A long chat's messages dragged and flung, each of its frames: the old frame built whole only by an input handed to it
+/// (the list is the old frame's: a pointer on it an input of the old frame, outside_counted), in the frame that takes it
+/// and the one after, which the inputs it took leave to build (inputs_taken), each said so; none else. A finger's moves
+/// are the list's, which follows it as the tree has it (quiet): on a phone none of the drag's moves nor the fling's
+/// frames hands the old frame anything, its press alone does (its letting go the list's, which holds the finger then). A mouse's drag picks the words it goes
+/// over: each move an input of the old frame, its pick drawn again. Drawn over the whole window only where the parts said came to more than half of it
+/// (@damage's why 5: the glass the list moves under taken in), the host told so; every other frame's parts leave out
+/// nothing that changed, nor the glass over it. (The drag's and the fling's frames alone: what the walk's other steps
+/// draw, focus, typing, choosing, is not held to it here.) Frames of both at each width, and each input of the drag
+/// taken in them once, by the old frame or the tree, the press by the old frame: none, nothing held. (Moved to the window's tree, the press goes to the tree and nothing of
+/// the old frame is built at all: what the same walk holds then.)
+test "a long chat's messages flung build the old frame only for the inputs it was handed and the frame each left, and draw again all that changed, on a phone and a desktop" {
   let out : Array[String] = []
   for w in [390.0, 1280.0] {
     let (steps, _) = host_walk_of("chat-long", w)
+    let frames = []
     for s in steps {
-      if !s.what.has_prefix("dragged") && s.what != "flung" {
-        continue
-      }
-      for f in s.frames {
-        if f.old_built || f.damage_share >= 1.0 {
-          out.push("\{s.what} at \{w}: " + host_said(f))
+      if s.what.has_prefix("dragged") || s.what == "flung" {
+        for f in s.frames {
+          frames.push((s.what, f))
         }
+      }
+    }
+    // (what is checked there at all: frames of the drag's moves and of the fling, and each input the drag made taken
+    // once in them, by the old frame or the window's tree, by its place and moment (host_inputs_unmatched): the press's
+    // own step takes no time, its input taken by the frame after it)
+    let moved = frames.iter().any(fn(sf) { sf.0.has_prefix("dragged ") })
+    let flung = frames.iter().any(fn(sf) { sf.0 == "flung" })
+    let made = []
+    for s in steps {
+      if s.what.has_prefix("dragged") || s.what == "flung" {
+        made.append(s.made)
+      }
+    }
+    let old = []
+    let tree = []
+    for sf in frames {
+      old.append(sf.1.old_inputs.filter(fn(i) { i.has_prefix("pointer ") }))
+      tree.append(sf.1.tree_inputs.filter(fn(i) { i.has_prefix("pointer ") }))
+    }
+    let unmatched = host_inputs_unmatched(made, old + tree)
+    if !moved || !flung || made.length() != 14 || !unmatched.is_empty() {
+      out.push("at \{w}: frames of the moves \{moved}, of the fling \{flung}, \{made.length()} inputs made; \{unmatched}")
+    }
+    // (the press the old frame's, at each width; on a phone its letting go the list's, which holds the finger by then)
+    for m in made {
+      let by_old = old.iter().any(fn(i) { host_input_is(m, i) })
+      let by_tree = tree.iter().any(fn(i) { host_input_is(m, i) })
+      if (m.0 == 0 && !by_old) || (m.0 == 2 && w < 600.0 && !by_tree) {
+        out.push("at \{w}: \{m} taken by the old frame \{by_old}, by the tree \{by_tree}")
+      }
+    }
+    for i, sf in frames {
+      let (what, f) = sf
+      let said = "\{what} at \{w}: " + host_said(f)
+      // (a finger's moves the list's, in the tree, once it holds them: on a phone, the old frame handed its press, and the
+      // moves that came with it, before the list took the hold over)
+      let pressed_now = f.old_inputs.iter().any(fn(i) { i.has_prefix("pointer [0,") })
+      let handed = f.old_inputs.filter(fn(i) {
+        !(i.has_prefix("pointer [0,") || (pressed_now && i.has_prefix("pointer [1,")))
+      })
+      if w < 600.0 && !handed.is_empty() {
+        out.push("handed the old frame on a phone \{handed}: " + said)
+      }
+      if f.old_built {
+        // (built for those inputs alone: nothing else changed since the first of them, HostFrame's for_old_input)
+        let pressed = host_took_old_input(f) && f.for_old_input
+        let after = i > 0 &&
+          host_took_old_input(frames[i - 1].1) &&
+          frames[i - 1].1.old_built &&
+          f.why == "it left more to come" &&
+          f.left_by == "the inputs it took (inputs_taken)"
+        if !pressed && !after {
+          out.push("built: " + said)
+        }
+      }
+      if f.damage_share >= 1.0 && !(f.whole_why == 5 && f.damage == [(0.0, 0.0, -1.0, -1.0)]) {
+        out.push("whole: " + said)
+      }
+      if !f.missed.is_empty() {
+        out.push("left out: " + said)
       }
     }
   }
