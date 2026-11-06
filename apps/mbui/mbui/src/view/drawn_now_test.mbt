@@ -83,10 +83,11 @@ test "drawn_now reads what is drawn by the drawing's moment as of the event's mo
 }
 
 ///|
-/// How often what shows once the drawing is past 45 is made, a frame sampled for 50 with the host at 0, then an event at
-/// 40 asking where it is drawn now.
-fn made_past_45() -> Int {
+/// How often what shows once the drawing is past 45 is made, and what an effect reading whether it is past 45 reads, a
+/// frame sampled for 50 with the host at 0, then where it is drawn asked in an event at 40 and in none.
+fn made_and_read_past_45() -> (Int, Array[Bool]) {
   let made = Ref(0)
+  let read : Array[Bool] = []
   let page : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
     page.val = Some(root.box(fn(v) {
@@ -95,18 +96,25 @@ fn made_past_45() -> Int {
         made.val += 1
         c.width(Is(Some(30.0))).height(Is(Some(40.0))) |> ignore
       })
+      let stop = @signals.effect(fn() { read.push(v.drawn_past(45.0)) })
+      v.owns(stop) |> ignore
     }))
   }, time=fn() { 0.0 })
   defer { tree.dispose() }
   tree.frame(400.0, 300.0, now=0.0) |> ignore
   tree.at(50.0)
   tree.frame(400.0, 300.0, now=0.0) |> ignore
+  let before = (made.val, read.length())
   tree.event(40.0, fn() { page.val.unwrap().drawn_now() |> ignore })
   page.val.unwrap().drawn_now() |> ignore
-  made.val
+  (made.val - before.0, read[before.1:].to_array())
 }
 
 ///|
-test "drawn_now makes and lets go of nothing a structure shows by the drawing's moment: it stands as drawn" {
-  assert_eq(made_past_45(), 1)
+test "drawn_now makes and lets go of nothing by the drawing's moment, and tells an effect none of its look" {
+  // (a structure stands as drawn; an effect told of a read that changed and came back may run again, and reads it as
+  // drawn: never the look's moment)
+  let (made, read) = made_and_read_past_45()
+  assert_eq(made, 0)
+  assert_true(read.iter().all(fn(past) { past }), msg="\{read}")
 }

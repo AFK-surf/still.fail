@@ -55,6 +55,9 @@ priv struct Run {
   /// how many computeds are being worked out now, one inside another: what is set meanwhile (a getter's own
   /// bookkeeping) told, but nothing that follows it run till the outermost is worked out (computed_done)
   mut computing : Int
+  /// how deep in what holds effects back (effects_held), and the effects told meanwhile, in the order told
+  mut effects_held : Int
+  held_effects : Array[ReactiveNode]
 }
 
 ///|
@@ -79,6 +82,8 @@ let run : Run = {
   flush_trail: [],
   running: None,
   computing: 0,
+  effects_held: 0,
+  held_effects: [],
 }
 
 ///|
@@ -629,6 +634,11 @@ fn flush() -> Unit {
     let effect = run.queued[run.notify_index].unwrap()
     run.queued[run.notify_index] = None
     run.notify_index += 1
+    // (an effect told while effects are held: run once they are let go, if what it read is otherwise then)
+    if run.effects_held > 0 && effect.kind is EffectNode {
+      run.held_effects.push(effect)
+      continue
+    }
     run_effect(effect)
   }
   run.notify_index = 0
@@ -1242,4 +1252,25 @@ pub fn afters_held(f : () -> Unit) -> Unit {
   f()
   run.afters_held -= 1
   afters_drained()
+}
+
+///|
+/// `f` done with the effects told meanwhile held back (`effect`'s; a watch is told as ever, what is computed worked out
+/// as ever): run as `f` is over, each that what it read is then otherwise than as it last ran, in the order told. For a
+/// look at another moment set and set back (a view's look at an event's moment: what reads it for its own sake not told
+/// of the look). An effect whose read changed and came back as it was can run again, reading it as it was.
+pub fn[T] effects_held(f : () -> T) -> T {
+  run.effects_held += 1
+  let v = f()
+  run.effects_held -= 1
+  if run.effects_held == 0 && run.held_effects.length() > 0 {
+    let held = run.held_effects.copy()
+    run.held_effects.clear()
+    start_batch()
+    for e in held {
+      run_effect(e)
+    }
+    end_batch()
+  }
+  v
 }

@@ -131,6 +131,8 @@ pub fn reset_globals() -> Unit {
   run.flush_trail.clear()
   run.running = None
   run.computing = 0
+  run.effects_held = 0
+  run.held_effects.clear()
   check_frames.clear()
   propagate_frames.clear()
   watch_reading.depth = 0

@@ -42,7 +42,9 @@ pub fn View::drawn_now(self : View) -> DrawnNow? {
   guard self.alive() else { return None }
   let tree = self.tree
   guard tree.layout_owner < 0 && tree.laying == 0 else { return None }
-  guard tree.settled_at(tree.logic_at(), look=true) else { return None }
+  // (looked at as of the logic's moment: what reads the drawing's moment for its own sake (a structure's binding, a
+  // reaction, an effect) told nothing of the look, Tree::settled_at)
+  guard @signals.effects_held(fn() { tree.settled_at(tree.logic_at(), look=true) }) else { return None }
   guard self.alive() && !tree.out_at(self.at) else { return None }
   guard tree.drawn_of(self.id()) is Some(d) else { return None }
   let scale = tree.drawn_scale(self.id())
