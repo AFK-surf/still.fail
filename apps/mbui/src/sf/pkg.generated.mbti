@@ -1726,6 +1726,8 @@ pub let pill_in : Double
 
 pub fn pill_inner(Double, Double) -> Double
 
+pub fn pill_node(@view.View, () -> String, tone? : () -> PillTone, icon? : () -> String) -> @view.View
+
 pub let pin_raised : Raised
 
 pub fn place_mark_node(@view.View, () -> Bool, Double) -> @view.View

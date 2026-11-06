@@ -2091,15 +2091,7 @@ pub(all) enum PillTone {
 /// the muted ink, or in a tone (its pale ground, its ink). `icon`: what leads it, 14, in its ink (a status's check or
 /// wait: ui.tsx StatusText), 4 before its words.
 pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : String = "") -> Unit {
-  let p = theme().p
-  let (ground, ink) = match tone {
-    Neutral => (p.neutral_bg, p.muted)
-    Green => (p.green_bg, p.green_ink)
-    Blue => (p.blue_bg, p.blue)
-    Amber => (p.amber_bg, p.warn_ink)
-    Red => (p.red_bg, p.red)
-    Accented => (p.accent_bg, p.accent_text)
-  }
+  let (ground, ink) = pill_colors(tone)
   let b = c.box(style=pill_box, padx=pill_in, bg=ground, fn() {
     if icon != "" {
       draw_icon(c, icon, pill_icon, ink)
@@ -2109,6 +2101,20 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
     }
   })
   c.bone_whole(b)
+}
+
+///|
+/// A pill's ground and ink in the current theme.
+fn pill_colors(tone : PillTone) -> (Int64, Int64) {
+  let p = theme().p
+  match tone {
+    Neutral => (p.neutral_bg, p.muted)
+    Green => (p.green_bg, p.green_ink)
+    Blue => (p.blue_bg, p.blue)
+    Amber => (p.amber_bg, p.warn_ink)
+    Red => (p.red_bg, p.red)
+    Accented => (p.accent_bg, p.accent_text)
+  }
 }
 
 ///|
