@@ -1373,6 +1373,13 @@ fn Ctx::tree_step(
     let ux = e.ux
     let uy = e.uy
     let place = (ox + x, oy + y, a, s, oux + ux, ouy + uy)
+    // (wholly outside what it is drawn in and the window: nothing of it drawn, as a node wholly outside is not; what is
+    // in it drawn whole where it is drawn, cut where it is put, Flutter's picture recorded whole and cut as it is
+    // composited: Ctx::scene_layer_outside)
+    let skippable = scene_layer_skippable(tree, p, c)
+    if skippable && self.scene_layer_left_out(c.id, ox + x, oy + y, clip_top()) {
+      return
+    }
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none
     // of its, out of the way by now; the old layers under it first, the root's)
     if from == 0 && !p.alone && a > 0.002 && !(c.bones != 0L && c.bone_as == 2) && tree.root_holds(c.id) {
@@ -1393,6 +1400,12 @@ fn Ctx::tree_step(
       }
     } else {
       self.scene_layer_drawn(p, c, outer, place, d)
+    }
+    match scene.layers.get(c.id) {
+      Some(l) => {
+        l.skippable = skippable
+      }
+      None => ()
     }
     // (how far it reaches, what holds it's)
     let n = p.open.length()
@@ -1726,9 +1739,16 @@ fn Ctx::tree_draw_own(
   // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
   // (the window's edges among what it is drawn in, as the old frame's root clips to the window: a panel past its edge
   // draws nothing of what is wholly beyond it, whatever its own clip reaches)
+  // (but only by what the layer being drawn cuts it by itself: by what that layer is drawn in, or the window's edges,
+  // it is drawn whole, cut where it is put, the layer left out whole where it is wholly outside them, scene_layers.mbt's
+  // Ctx::scene_layer_left_out: what it draws the same wherever it is put)
   let k = clip_top()
-  let (cx0, cy0) = (dmax(clip_stack[k], 0.0), dmax(clip_stack[k + 1], 0.0))
-  let (cx1, cy1) = (dmin(clip_stack[k + 2], self.width), dmin(clip_stack[k + 3], self.height))
+  let own_cut = match scene.drawing {
+    Some(l) => k / clip_n > l.clip_lvl
+    None => true
+  }
+  let (cx0, cy0) = (clip_stack[k], clip_stack[k + 1])
+  let (cx1, cy1) = (clip_stack[k + 2], clip_stack[k + 3])
   // (turned, about whatever point of its box: what it draws no further from its box than the box's diagonal)
   let (bw, bh) = (c.w * s, c.h * s)
   let out = if tree.turn_now(c.id) == 0.0 {
@@ -1736,15 +1756,14 @@ fn Ctx::tree_draw_own(
   } else {
     (bw * bw + bh * bh).sqrt()
   }
-  if (x - out > cx1 || y - out > cy1 || x + bw + out < cx0 || y + bh + out < cy0) &&
+  if own_cut &&
+    (x - out > cx1 || y - out > cy1 || x + bw + out < cx0 || y + bh + out < cy0) &&
     p.stretching.length() == 0 &&
     e.ground_x == 0.0 &&
     e.ground_y == 0.0 &&
     e.ground_w == 0.0 &&
     e.ground_h == 0.0 &&
     (c.shadow.2 & 0xFFL) == 0L {
-    // (left out where it is drawn: moving what it is in may bring it in, scene_layers.mbt)
-    scene_cut_inside(x, y, x + bw, y + bh)
     self.tree_unseen(c, s)
     return -1
   }

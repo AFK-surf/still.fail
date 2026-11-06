@@ -101,6 +101,9 @@ priv struct SceneLayer {
   block_from : Array[Int]
   inner_cuts : @damage.Rect
   mut fades_inside : Bool
+  /// whether it is left out whole where all it reached as last drawn lies wholly outside what it is drawn in and the
+  /// window, put where it is (nothing of it drawn moved after it is drawn: scene_layer_skippable)
+  mut skippable : Bool
 }
 
 ///|
@@ -1332,6 +1335,7 @@ fn Ctx::scene_drawn(
         block_from: [],
         inner_cuts: @damage.Rect::none(),
         fades_inside: false,
+        skippable: false,
       }
       scene.layers[id] = l
       l
@@ -2067,17 +2071,23 @@ fn Ctx::scene_emitted(
       }
       continue
     }
+    // (wholly outside what it is drawn in and the window where it is put: left out, as the walk leaves it out)
     match scene.layers.get(cid) {
-      Some(c) if along => self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
+      Some(c) if along =>
+        if !self.scene_layer_put_out(c, moved) {
+          self.scene_emitted(p, c, depth=depth + c.depth_in, along=true, soft~, moved~)
+        }
       // (as kept where nothing of it changed, where it was put; moved in it, put where it is now, its block moved by
       // its reference (scene_moved_by); else drawn anew where its reference is, the rest of what holds it as kept:
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
       Some(c) =>
         if scene_copyable(c) && (c.shown == (0.0, 0.0) || scene_still(c)) {
-          self.scene_emitted(p, c)
+          if !self.scene_layer_put_out(c, (0.0, 0.0)) {
+            self.scene_emitted(p, c)
+          }
         } else {
           match self.scene_moved_by(p.tree, l, c) {
-            Some(m) => self.scene_emitted(p, c, moved=m)
+            Some(m) => if !self.scene_layer_put_out(c, m) { self.scene_emitted(p, c, moved=m) }
             None => self.scene_redrawn_in(p, l, c)
           }
         }
@@ -2199,9 +2209,10 @@ fn scene_still(l : SceneLayer) -> Bool {
 /// Whether layer `l`, drawn where `drawn` was and put now `place` is (as far from it as (`sx`, `sy`)), comes to its block
 /// moved by that, all of it: turned, as big, laid out as far from where it is drawn, as it was; on the pixels by whole
 /// pixels; nothing of what holds it stretching it or setting its glyphs, nor fading it where something of its own fades
-/// too; and all it reaches and all it cuts by its own clips, where it was and where it goes, inside what it began in
-/// (clear of that clip's curves) and in the window, where nothing of that cuts it and nothing of it lies outside to be
-/// left out (Ctx's culling, scene.mbt's paint): a move that changes none of what moving it would.
+/// too; and where what it began in has curves, all it cuts by its own clips clear of them where it was and where it goes
+/// (a clip pushed in it takes one with curves for its outer where those cut it, and a corner of its at one of theirs,
+/// push_clip): a move that changes none of what moving it would. What it draws is drawn whole, cut where it is put
+/// (nothing of it left out where it is drawn but by its own clips: Ctx's culling).
 fn Ctx::scene_offset_ok(
   self : Ctx,
   l : SceneLayer,
@@ -2224,11 +2235,15 @@ fn Ctx::scene_offset_ok(
   let c = l.clip
   let rmax = fn(at : Int) { dmax(dmax(c[at], c[at + 1]), dmax(c[at + 2], c[at + 3])) }
   let r = rmax(4)
-  let mut x0 = dmax(c[0] + r, 0.0)
-  let mut y0 = dmax(c[1] + r, 0.0)
-  let mut x1 = dmin(c[2] - r, self.width)
-  let mut y1 = dmin(c[3] - r, self.height)
   let ro = rmax(16)
+  // (square, and its outer none or square: nothing of what it pushes takes it as its outer or its corners)
+  if r <= 0.0 && ro <= 0.0 {
+    return true
+  }
+  let mut x0 = c[0] + r
+  let mut y0 = c[1] + r
+  let mut x1 = c[2] - r
+  let mut y1 = c[3] - r
   if ro > 0.0 {
     x0 = dmax(x0, c[12] + ro)
     y0 = dmax(y0, c[13] + ro)
@@ -2239,13 +2254,7 @@ fn Ctx::scene_offset_ok(
     rx1 <= rx0 || ry1 <= ry0 || (rx0 + mx >= x0 && ry0 + my >= y0 && rx1 + mx <= x1 && ry1 + my <= y1)
   }
   let (shx, shy) = l.shown
-  let reach = match scene.reach.get(l.id) {
-    Some(e) => e.reach.rect()
-    None => return false
-  }
   let u = l.inner_cuts.rect()
-  inside(reach.0, reach.1, reach.2, reach.3, 0.0, 0.0) &&
-  inside(reach.0, reach.1, reach.2, reach.3, sx - shx, sy - shy) &&
   inside(u.0, u.1, u.2, u.3, shx, shy) &&
   inside(u.0, u.1, u.2, u.3, sx, sy)
 }
@@ -2332,6 +2341,10 @@ fn scene_copyable(l : SceneLayer) -> Bool {
 fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLayer) -> Unit {
   let tree = by.tree
   guard scene_place_now(tree, c) is Some(place) else { return }
+  // (wholly outside what it is drawn in and the window: left out, as the walk leaves it out)
+  guard !self.scene_layer_put_out(c, (place.0 - c.held.0 - c.shown.0, place.1 - c.held.1 - c.shown.1)) else {
+    return
+  }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
   // (its outer from where it was, as far below it as it was: insts_moved_by)
   clip_say_from(if c.from_rel == scene_no_level { -1 } else { clip_top() / clip_n + c.from_rel })
@@ -2559,4 +2572,51 @@ fn scene_band_drawn(k : Int) -> Unit {
 /// frame of its looks alone would carry the last frame's instances with nobody's, so the scene is drawn, all of it anew.
 fn scene_owners_wanted() -> Bool {
   inst_owners_kept() && !scene.owners_were
+}
+
+///|
+/// Whether layer `c`'s node may be left out whole where all it reached lies outside what it is drawn in and the window:
+/// nothing of what it draws moved after it is drawn, out past where its drawing reached (stretched by what holds it,
+/// turned, its ground drawn off).
+fn scene_layer_skippable(tree : @view.Tree, p : TreePaint, c : @view.Content) -> Bool {
+  p.stretching.is_empty() && tree.turn_now(c.id) == 0.0 && tree.ground_drawn_of(c.id) == (0.0, 0.0, 0.0, 0.0)
+}
+
+///|
+/// Whether kept layer `id`, its node put at (`x`, `y`) now in what draws it (the clip at `k` of clip_stack), is left
+/// out: nothing of it changed but where it is, and all it reached as last drawn, moved there, wholly outside that clip
+/// and the window (Flutter's picture culled whole as it is composited; what is inside drawn whole, cut where it is put).
+fn Ctx::scene_layer_left_out(self : Ctx, id : @view.NodeId, x : Double, y : Double, k : Int) -> Bool {
+  guard scene.layers.get(id) is Some(l) && scene_kept_but_place(l) && l.skippable else { return false }
+  let (cx0, cy0, cx1, cy1) = (clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3])
+  self.scene_reach_out(l, x - l.held.0 - l.shown.0, y - l.held.1 - l.shown.1, cx0, cy0, cx1, cy1)
+}
+
+///|
+/// Whether kept layer `c`, put as far again from where it is as (`mx`, `my`) (its holder put as kept), is left out
+/// (Ctx::scene_layer_left_out): by the clip it began in, as its holder has it.
+fn Ctx::scene_layer_put_out(self : Ctx, c : SceneLayer, m : (Double, Double)) -> Bool {
+  guard scene_kept_but_place(c) && c.skippable else { return false }
+  self.scene_reach_out(c, m.0, m.1, c.clip[0], c.clip[1], c.clip[2], c.clip[3])
+}
+
+///|
+/// Whether all layer `l` reached as last drawn (as far as it is put from there now), moved by (`mx`, `my`), lies wholly
+/// outside the clip (`cx0` … `cy1`) and the window. Never where it reached nothing known.
+fn Ctx::scene_reach_out(
+  self : Ctx,
+  l : SceneLayer,
+  mx : Double,
+  my : Double,
+  cx0 : Double,
+  cy0 : Double,
+  cx1 : Double,
+  cy1 : Double,
+) -> Bool {
+  guard scene.reach.get(l.id) is Some(e) else { return false }
+  let (x0, y0, x1, y1) = e.reach.rect()
+  guard x1 > x0 && y1 > y0 else { return false }
+  let (ax0, ay0) = (dmax(cx0, 0.0), dmax(cy0, 0.0))
+  let (ax1, ay1) = (dmin(cx1, self.width), dmin(cy1, self.height))
+  x0 + mx >= ax1 || y0 + my >= ay1 || x1 + mx <= ax0 || y1 + my <= ay0
 }
