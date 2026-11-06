@@ -221,21 +221,18 @@ test "共享调试 of the second station a phone is lent to: its own lending, wa
 }
 
 ///|
-test "settings' 共享调试: the stations its grants lend it to, each as its adb holds the phone, its own page a tap away" {
-  let t = settings_tester("adb:", shows="settings-adb-chats")
-  for c in t.native_calls() {
-    if c.1 == "adb.phone" {
-      t.answer_native(c.0, adb_phone_of(wireless=true))
-    }
-  }
+test "settings' 共享调试: a station waiting for the phone to be paired: the pairing step on the page, no list of stations" {
+  let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
+  assert_true(t.find("共享给的 station") is None)
+  assert_true(t.find("打开配对窗口") is Some(_))
+  t.tap_text("前往无线调试")
   t.draw()
-  assert_true(t.find("共享给的 station") is Some(_))
-  assert_true(t.find("agent 可以使用 adb") is Some(_))
-  assert_true(t.find("手机尚未完成配对") is Some(_))
-  t.tap_text("手机尚未完成配对")
+  assert_eq(asked_native(t, "adb.open"), [{ "what": "wireless", "beside": true }])
+  // paired: nothing left to do, and nothing said of it
+  @settings.fixture_motion(1)
+  t.draw()
   t.run_for(@ui.move_most_ms)
-  // (Maple's page: settings' page gone from view)
-  assert_true(t.find("默认最长授权") is None)
+  assert_true(t.find("打开配对窗口") is None)
 }
 
 ///|
@@ -243,7 +240,7 @@ test "settings' 共享调试: unfinished setup stands out before routine setting
   let t = settings_tester("adb:", shows="settings-adb-chats-off", platform=2)
   guard t.find("待处理") is Some((_, attention_y)) else { fail("unfinished setup is marked") }
   guard t.find("开启无线调试") is Some((_, step_y)) else { fail("the next step is named") }
-  guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("the station list is shown") }
+  guard t.find("已授权的对话") is Some((_, stations_y)) else { fail("the chats are shown") }
   assert_true(attention_y < stations_y && step_y < stations_y)
   assert_true(t.find("前往设置开启") is Some(_))
   // When more than one prerequisite is missing, the first step and all the other missing settings are visible.
@@ -271,7 +268,7 @@ test "settings' 共享调试: the unfinished setup's mark follows its title" {
 test "settings' 共享调试: a pending request comes before information and opens its chat" {
   let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
   guard t.find("等你允许") is Some((_, pending_y)) else { fail("the request is shown") }
-  guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("the stations are shown") }
+  guard t.find("已授权的对话") is Some((_, stations_y)) else { fail("the chats are shown") }
   assert_true(pending_y < stations_y)
   t.tap_text("通知权限检查")
   t.run_for(@ui.move_most_ms)
@@ -341,31 +338,10 @@ test "settings' 共享调试: the take back button acts on its own chat" {
 }
 
 ///|
-test "settings' 共享调试: a station needing pairing precedes connected stations" {
-  let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
-  guard t.find("Maple") is Some((_, unpaired_y)) else { fail("the unpaired station is shown") }
-  guard t.find("agent 可以使用 adb") is Some((_, connected_y)) else { fail("the connected station is shown") }
-  assert_true(unpaired_y < connected_y)
-}
-
-///|
-test "settings' 共享调试: a station moves in place when pairing finishes" {
-  let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
-  let (_, before) = t.drawn_of("Maple").unwrap()
-  @settings.fixture_motion(1)
-  t.draw()
-  t.run_for(@ui.row_size_ms / 2.0)
-  let (_, halfway) = t.drawn_of("Maple").unwrap()
-  t.run_for(@ui.row_size_ms)
-  let (_, after) = t.drawn_of("Maple").unwrap()
-  assert_true(before < halfway && halfway < after, msg="\{before}, \{halfway}, \{after}")
-}
-
-///|
 test "settings' 共享调试: phone setup comes before a long list of grants" {
   let t = settings_tester("adb:", shows="settings-adb-chats-off", platform=2)
   guard t.find("本机设置") is Some((_, phone_y)) else { fail("phone setup is shown") }
-  guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("stations are shown") }
+  guard t.find("已授权的对话") is Some((_, stations_y)) else { fail("the chats are shown") }
   assert_true(phone_y < stations_y)
 }
 
@@ -391,6 +367,10 @@ test "settings' 共享调试: wireless debugging turns on in the app when allowe
 ///|
 test "settings' 共享调试: the phone setup closes in place as wireless debugging comes on" {
   let t = settings_tester("adb:", shows="settings-adb-chats-off", platform=2)
+  // (its stations' adb holding the phone already: nothing next once it is on)
+  @settings.fixture_motion(1)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
   let (_, before) = t.drawn_of("等你允许").unwrap()
   t.post("native:adb.phone", adb_phone_of(wireless=true).stringify())
   t.draw()

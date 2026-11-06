@@ -660,23 +660,7 @@ let adb_whole : @ui.Style = @ui.css("w=Full h=Full")
 let adb_quiet : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
 
 ///|
-/// Whether this station's current lending needs attention, rather than merely being in progress.
-fn adb_station_needs_attention(view : Json?, station : String) -> Bool {
-  let lent = adb_lend_view(view, station)
-  if !flag(lent, "sharing") || text(lent, "station") != station {
-    return false
-  }
-  if text(lent, "phase") != "offered" {
-    return false
-  }
-  match text(lent, "adb") {
-    "unpaired" | "unauthorized" | "off" | "missing" => true
-    _ => false
-  }
-}
-
-///|
-fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
   let view = (core.topic)("adbShare", Map([])).value
   let phone = adb_phone(c)
   let grants = match field(view, "grants") {
@@ -685,13 +669,6 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   }
   let live = grants.filter(fn(g) { text(Some(g), "status") == "granted" })
   let waiting = grants.filter(fn(g) { text(Some(g), "status") == "pending" })
-  // a station by its name, as the workspace's stations have it
-  let named = fn(address : String) {
-    match station_of(core, here, address) {
-      Some(st) => text(Some(st), "name")
-      None => station_name(address)
-    }
-  }
   c.box(style=adb_whole, fn() {
     // (what it is, in the title's ⓘ: not a card of words over the page)
     nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"), about=tr("android-misc.adb.chats.about"))
@@ -729,10 +706,32 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         })
       })
     }
-    // The first thing to do on this device, with its action and any later missing prerequisites in view.
+    // The first thing to do on this device, with its action and any later missing prerequisites in view: what the phone
+    // lacks, else what a station it is lent to waits on of it (pairing: the phone's own, once, for every station;
+    // docs/adb-share.md, the phone's own adb session), rather than a list of stations each a page away (2026-11-06,
+    // 左子健: 共享给的 station 应该删掉吧)
+    let (next, next_at) = match adb_next(None, phone, false) {
+      Some(step) => (Some(step), "")
+      None => {
+        let lent_to = adb_lends(view).map(fn(l) { text(Some(l), "station") })
+        if flag(view, "sharing") {
+          lent_to.push(text(view, "station"))
+        }
+        let mut found = (None, "")
+        for l in lent_to {
+          if found.0 is None && l != "" {
+            let lent = adb_lend_view(view, l)
+            if flag(lent, "sharing") && text(lent, "station") == l {
+              found = (adb_next(lent, phone, true), l)
+            }
+          }
+        }
+        found
+      }
+    }
     match phone {
       Some(_) if flag(phone, "supported") =>
-        match adb_next(None, phone, false) {
+        match next {
           Some(step) => {
             let later : Array[String] = []
             if !flag(phone, "developer") && !flag(phone, "wifi") {
@@ -753,7 +752,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
                   if step.act != "" {
                     @sf.card_foot(c, fn() {
                       if @sf.button(c, step.go, key="adb-phone-next", tone=Primary) {
-                        adb_do(core, step.act)
+                        adb_do(core, step.act, station=next_at)
                       }
                     })
                   }
@@ -799,54 +798,6 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
         })
       })
-    }
-    // the stations its grants lend it to, each with how its adb holds the phone, and its own page (pairing, what is
-    // next) a tap away (2026-10-30: a phone granted to chats on two stations, one of them not paired with it, and
-    // nothing here said which, nor led to where it is paired)
-    let stations : Array[String] = []
-    for g in live {
-      let st = text(Some(g), "station")
-      if st != "" && !stations.contains(st) {
-        stations.push(st)
-      }
-    }
-    for l in adb_lends(view) {
-      let st = text(Some(l), "station")
-      if st != "" && !stations.contains(st) {
-        stations.push(st)
-      }
-    }
-    let ordered_stations : Array[String] = []
-    for needs_attention in [true, false] {
-      for st in stations {
-        if adb_station_needs_attention(view, st) == needs_attention {
-          ordered_stations.push(st)
-        }
-      }
-    }
-    if !stations.is_empty() {
-      keys.push("stations-heading")
-      blocks.push(fn() { section_header(c, tr("android-misc.adb.stations"), start=S6) })
-      // Each station is a keyed card: when one is paired, its change of place is animated by the same list as the
-      // rest of this page, rather than jumping within a single unkeyed block.
-      for st in ordered_stations {
-        keys.push("station/" + st)
-        blocks.push(fn() {
-          list_card(c, fn() {
-            let lent = adb_lend_view(view, st)
-            let there = flag(lent, "sharing") && text(lent, "station") == st
-            let state = if there { adb_state(c, lent, (core.now)()) } else { tr("android-misc.adb.stations.notLent") }
-            let needs_attention = adb_station_needs_attention(view, st)
-            if @sf.link_row(c, "adb-station/" + st, named(st), note=state, lacks=needs_attention, title_after=fn() {
-                if needs_attention {
-                  @sf.pill(c, tr("web-main.attention.entry"), tone=Amber)
-                }
-              }) {
-              (core.push)(AdbShare(st))
-            }
-          })
-        })
-      }
     }
     // the grants from before signatures, one tap from lending again
     confirm_row(c, core, view, blocks, keys)
