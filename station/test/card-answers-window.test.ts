@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { answersSince, makeStore } from "../src/read/store.ts";
 import { Store } from "../src/store/store.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 
 test("a scoped recent-answer read does not enumerate a chat's old cards", () => {
   const store = Store.open(":memory:");
@@ -17,7 +18,7 @@ test("a scoped recent-answer read does not enumerate a chat's old cards", () => 
     put.run(thread, 5_002, "message", "more", "person", "p", "more", 110, null, null);
     put.run(thread, 5_003, "message", "legacy", "agent", "a", "again", 2, null, '["yes"]');
     put.run(thread, 5_004, "message", "answer-2", "person", "p", "yes", 120, null, null);
-    const expected = store.answersSince(100);
+    const expected = referenceAnswersSince(store, 100);
     assert.deepEqual(expected.map((a) => [a.question.n, a.answer?.n]), [[5_000, 5_001], [5_003, 5_004]]);
     let cardsRead = 0;
     const traced = new Proxy(db, {
@@ -56,7 +57,7 @@ test("a short card history does not enumerate many recent ordinary messages", ()
     db.exec("BEGIN");
     for (let n = 2; n <= 5_001; n++) put.run(thread, n, "message", `p-${n}`, "person", "p", "yes", 100 + n, null);
     db.exec("COMMIT");
-    const expected = store.answersSince(100);
+    const expected = referenceAnswersSince(store, 100);
     assert.equal(expected.length, 1);
     let peopleRead = 0;
     const traced = new Proxy(db, {
@@ -141,7 +142,7 @@ test("out-of-order message times do not hide a later card's recent answer", () =
     for (let i = 0; i < 70; i++) add("person", 100);
     const answers = answersSince(makeStore(db, "."), 100, [thread]);
     assert.deepEqual(answers.map((a) => [a.question.n, a.answer?.n]), [[70, 71], [lastCard, lastAnswer]]);
-    const ordered = store.answersSince(100).filter((a) => a.question.thread === thread).sort((a, b) => a.question.n - b.question.n);
+    const ordered = referenceAnswersSince(store, 100).filter((a) => a.question.thread === thread).sort((a, b) => a.question.n - b.question.n);
     assert.deepEqual(answers, ordered);
   } finally { store.close(); }
 });
@@ -156,7 +157,7 @@ test("a person's answer can itself carry the next card", () => {
     for (let n = 1; n <= 70; n++) put.run(thread, n, "message", `old-${n}`, "agent", "a", "choose", 1, card);
     put.run(thread, 71, "message", "answer-and-card", "person", "p", "first", 100, card);
     put.run(thread, 72, "message", "answer-next", "person", "p", "second", 101, null);
-    const expected = store.answersSince(100).filter((a) => a.question.thread === thread);
+    const expected = referenceAnswersSince(store, 100).filter((a) => a.question.thread === thread);
     assert.deepEqual(expected.map((a) => [a.question.n, a.answer?.n]), [[70, 71], [71, 72]]);
     assert.deepEqual(answersSince(makeStore(db, "."), 100, [thread]), expected);
   } finally { store.close(); }
@@ -182,7 +183,7 @@ test("a scoped read agrees with the whole-station read for mixed card and messag
         put.run(thread, n, kind, `${n}`, author, author, `${n}`, random(200), value, legacy ? '["yes"]' : null);
       }
       db.exec("COMMIT");
-      const expected = store.answersSince(100).filter((a) => a.question.thread === thread)
+      const expected = referenceAnswersSince(store, 100).filter((a) => a.question.thread === thread)
         .sort((a, b) => a.question.n - b.question.n);
       assert.deepEqual(answersSince(makeStore(db, "."), 100, [thread]), expected, `history ${seed}`);
     } finally { store.close(); }
@@ -221,7 +222,7 @@ test("recent answers agree on both sides of the card-history cutoff", () => {
         const closed = add("message", "agent", "closed", 1, card);
         db.prepare("INSERT INTO closed_cards (thread,n,viewer,at) VALUES (?,?,?,?)").run(thread, closed, "p", 140);
         add("message", "person", "after close", 140);
-        const whole = store.answersSince(100).filter((a) => a.question.thread === thread);
+        const whole = referenceAnswersSince(store, 100).filter((a) => a.question.thread === thread);
         // The whole-station read is ordered by answer time; the scoped read has always followed card order.
         const ordered = [...whole.filter((a) => a.answer !== null).sort((a, b) => a.question.n - b.question.n),
           ...whole.filter((a) => a.answer === null)];
