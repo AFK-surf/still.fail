@@ -176,7 +176,37 @@ fn panel_centred_node(
       // as its lists say they would be, up to that share, filling it where none says (measured_body's, capped_want's); no
       // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
       // `gives`), nothing of it scrolling past it)
-      if x.tall > 0.0 && !x.form && steps is None {
+      if x.nodes is Some(n) {
+        // The body's nodes share the dialog's scroll and frame, without a hosted old view between them.
+        d.box(fn(b) {
+          b.shrink(Is(1.0)).min_height(Is(Some(0.0)))
+          .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0))) |> ignore
+          if x.tall > 0.0 {
+            b.height(By(fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) })) |> ignore
+          }
+          let contents = fn(s : @view.View) {
+            s.box(fn(held) {
+              let top = fn() {
+                if untitled() { capsule_in(dialog_r, dialog_close) + dialog_close - dialog_pad } else { 18.0 }
+              }
+              held.padding(By(fn() { (panel_words, top(), panel_words, if n.foot is None { 24.0 } else { 0.0 }) }))
+              .gap(Is(16.0)).alpha(By(fn() { look().words })) |> ignore
+              if x.tall > 0.0 && !n.scrolls { held.grow(Is(1.0)) |> ignore }
+              held.box(fn(content) {
+                if x.tall > 0.0 && !n.scrolls { content.grow(Is(1.0)) |> ignore }
+                (n.body)(content, close)
+              }) |> ignore
+            }) |> ignore
+          }
+          if n.scrolls {
+            let scroll = @view.Scroll::new()
+            b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), contents)
+            .clips(By(fn() { scroll.goes() })).bounds_input(By(fn() { scroll.goes() })) |> ignore
+          } else {
+            contents(b)
+          }
+        }) |> ignore
+      } else if x.tall > 0.0 && !x.form && steps is None {
         // (whether a list in it says how tall it would be, as it was last built: what it holds as tall as that then)
         let says = @signals.signal(false)
         // (the old view itself held shorter where the dialog is short of room: what it asks its own node's height)
@@ -298,6 +328,23 @@ fn panel_centred_node(
           .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))
           |> ignore
         _ => ()
+      }
+      match x.nodes {
+        Some(n) => match n.foot {
+          Some(f) => d.box(fn(foot) {
+            let at = capsule_in(dialog_r, button_height())
+            foot.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2)))
+            .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))
+            .padding(Is((at, 24.0, at, at))).alpha(By(fn() { look().words })) |> ignore
+            foot.box(fn(spacer) { spacer.grow(Is(1.0)) |> ignore }) |> ignore
+            foot.box(fn(content) {
+              content.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))) |> ignore
+              f(content, close)
+            }) |> ignore
+          }) |> ignore
+          None => ()
+        }
+        None => ()
       }
       if x.live is Some(_) {
         corner()
