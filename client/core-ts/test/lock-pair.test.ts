@@ -238,6 +238,23 @@ test("a newer lock cannot be read: a permission from the old one does not show a
   assert.deepEqual((await m.prompts()).pairing, []);
 });
 
+test("a read that succeeds but is still behind the known lock does not use old permission", async () => {
+  const m = await met();
+  const signer = Effect.runSync(Signer.make(m.host));
+  const old = m.cloud.chains.get("ws")!;
+  const added = signer.sign(next("ws", m.cloud.head("ws"), m.host.nowMs() / 1000, "device", {
+    id: "ee".repeat(32), sub: "s2", kind: "app", label: "their first", sign_key: "ed25519:" + "22".repeat(32),
+  }));
+  m.cloud.chains.set("ws", [...old, added]);
+  const newer = m.cloud.head("ws");
+  m.cloud.chains.set("ws", old);
+  const topic = { topic: "workspace", workspace: "ws" };
+  m.core.inner.data.set(topic, { ...(m.core.inner.data.shared(topic) as object), lock: newer });
+  await m.host.time.pass(500);
+  assert.deepEqual(await m.hello(), { ok: { t: "no", error: "not_here" } });
+  assert.deepEqual((await m.prompts()).pairing, []);
+});
+
 test("one workspace's lock is updating: another ready workspace can show a code immediately", async () => {
   const g = grant();
   const r = await rig((me) => ({
@@ -263,6 +280,88 @@ test("one workspace's lock is updating: another ready workspace can show a code 
   await r.host.time.pass(1_000);
   assert.deepEqual(answers, [{ t: "code", workspaces: ["ws"] }]);
   release();
+});
+
+test("two workspaces are updating: the first ready one can show a code without waiting for the other", async () => {
+  const g = grant();
+  const owner = elsewhere();
+  let ownKey = "";
+  const r = await rig((me) => {
+    ownKey = me.id;
+    return Object.fromEntries(["ws", "w2"].map((ws) => [
+      ws, genesis(ws, owner, false, [], g.keys, ME, [{ id: "aa".repeat(32), sub: "s1", kind: "app", label: "owner", sign_key: owner.id }]),
+    ]));
+  });
+  for (const ws of ["ws", "w2"]) await r.watch({ topic: "lock", workspace: ws });
+  const prompts = await r.watch({ topic: "lockPrompts" });
+  const releases = ["ws", "w2"].map((ws) => {
+    const added = next(ws, r.cloud.head(ws), r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this", sign_key: ownKey });
+    const signed: Entry = { ...added, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(signedBytes(entryHash(added))) } };
+    r.cloud.chains.set(ws, [...r.cloud.chains.get(ws)!, signed]);
+    const release = r.host.hold(`/v1/workspaces/${ws}/lock?after=0`);
+    const topic = { topic: "workspace", workspace: ws };
+    r.core.inner.data.set(topic, { ...(r.core.inner.data.shared(topic) as object), lock: r.cloud.head(ws) });
+    return release;
+  });
+  await r.host.time.pass(500);
+  const [trusted, phone] = await pipe();
+  r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, trusted));
+  const answers: unknown[] = [];
+  r.core.inner.runner.fork(Effect.ignore(Effect.andThen(
+    phone.send({ t: "hello", v: 1, workspaces: ["ws", "w2"].map((ws) => ({ ws, credential: g.credential(ws, PHONE, "s1") })), kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }),
+    Effect.map(phone.next(), (answer) => { answers.push(answer); }),
+  )));
+  await r.host.time.pass(500);
+  assert.deepEqual(answers, []);
+  releases[0]!();
+  await r.host.time.pass(2_000);
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["ws"] }]);
+  const shown = (await prompts()).pairing;
+  assert.equal(shown.length, 1);
+  const results: unknown[] = [];
+  r.core.inner.runner.fork(Effect.map(Effect.result(tryOne(r.core.inner, { id: ME, d: phone, workspaces: ["ws"] }, PHONE, shown[0].code)), (result) => { results.push(result); }));
+  await r.host.time.pass(5_000);
+  assert.equal((results[0] as { _tag: string })._tag, "Success");
+  assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+  releases[1]!();
+});
+
+test("an updated lock without permission does not stop waiting for another workspace", async () => {
+  const g = grant();
+  const owner = elsewhere();
+  let ownKey = "";
+  const r = await rig((me) => {
+    ownKey = me.id;
+    return Object.fromEntries(["ws", "w2"].map((ws) => [
+      ws, genesis(ws, owner, false, [], g.keys, ME, [{ id: "aa".repeat(32), sub: "s1", kind: "app", label: "owner", sign_key: owner.id }]),
+    ]));
+  });
+  for (const ws of ["ws", "w2"]) await r.watch({ topic: "lock", workspace: ws });
+  const releases = ["ws", "w2"].map((ws) => {
+    const body = ws === "ws" ? { sub: "s3", email: "s3@x.com", role: "member" } : { id: ME, sub: "s1", kind: "app", label: "this", sign_key: ownKey };
+    const added = next(ws, r.cloud.head(ws), r.host.nowMs() / 1000, ws === "ws" ? "member" : "device", body);
+    const signed: Entry = { ...added, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(signedBytes(entryHash(added))) } };
+    r.cloud.chains.set(ws, [...r.cloud.chains.get(ws)!, signed]);
+    const release = r.host.hold(`/v1/workspaces/${ws}/lock?after=0`);
+    const topic = { topic: "workspace", workspace: ws };
+    r.core.inner.data.set(topic, { ...(r.core.inner.data.shared(topic) as object), lock: r.cloud.head(ws) });
+    return release;
+  });
+  await r.host.time.pass(500);
+  const [trusted, phone] = await pipe();
+  r.core.inner.runner.fork(serveTrusted(r.core.inner, PHONE, ME, trusted));
+  const answers: unknown[] = [];
+  r.core.inner.runner.fork(Effect.ignore(Effect.andThen(
+    phone.send({ t: "hello", v: 1, workspaces: ["ws", "w2"].map((ws) => ({ ws, credential: g.credential(ws, PHONE, "s1") })), kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) }),
+    Effect.map(phone.next(), (answer) => { answers.push(answer); }),
+  )));
+  await r.host.time.pass(500);
+  releases[0]!();
+  await r.host.time.pass(2_000);
+  assert.deepEqual(answers, []);
+  releases[1]!();
+  await r.host.time.pass(2_000);
+  assert.deepEqual(answers, [{ t: "code", workspaces: ["w2"] }]);
 });
 
 test("the owner approves a member's first device that signs, not a later one: that one the member approves from a device of their own", async () => {
