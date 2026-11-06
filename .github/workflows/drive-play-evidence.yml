@@ -1,0 +1,56 @@
+name: drive-play-baseline-evidence
+on:
+  push:
+    branches: [codex/drive-play-evidence-cde6c3f54c6]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  pictures:
+    runs-on: macos-15
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [player-video, player-audio]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 5876fa3066a681094b4b3295daefd15e87c19891
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: actions/download-artifact@v4
+        with:
+          name: mbui-film-wasm-12565dd27e8b7ef2eea2f64b
+          path: evidence/inbox
+          run-id: 42194857177
+          github-token: ${{ github.token }}
+      - name: Capture the player on each screen
+        shell: bash
+        env:
+          TASK_MODE: ${{ matrix.mode }}
+        run: |
+          set -eu
+          printf 'exit\n' > evidence/player.drive
+          case "$TASK_MODE" in
+            player-video) printf 'until 反正也不急\nexit\n' > evidence/prepare.drive;;
+            player-audio) printf 'until 1:03 / 3:34\nexit\n' > evidence/prepare.drive;;
+          esac
+          bash apps/mbui/scripts/media-job.sh film evidence/player.drive evidence/job evidence/prepare.drive
+          test "$(cat evidence/job/runtime.key)" = 12565dd27e8b7ef2eea2f64b
+          export STILLFAIL_NATIVE_INBOX="$PWD/evidence/inbox"
+          for task_size in 390x844 720x900 1280x800; do
+            case "$task_size" in 1280x800) task_platform=0;; *) task_platform=2;; esac
+            MBUI_FIXTURE="$TASK_MODE" MBUI_WIN="$task_size" MBUI_FILM_PLATFORM="$task_platform" \
+              MBUI_FILM_SCALE=2 MBUI_FILM_FPS=1 MBUI_FILM_ALLOW_INCOMPLETE=1 MBUI_MEDIA_KIND=film \
+              bash evidence/job/run.sh "$PWD/evidence/${TASK_MODE}-${task_size}.mp4"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: drive-play-baseline-${{ matrix.mode }}-5876fa306
+          path: |
+            evidence/*.png
+            evidence/*.mp4.scene.json
+          if-no-files-found: error
+          retention-days: 7
