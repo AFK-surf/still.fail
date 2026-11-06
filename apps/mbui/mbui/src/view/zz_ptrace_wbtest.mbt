@@ -71,4 +71,5 @@ fn ptrace(step : Double, change? : Bool = false) -> Unit {
 test "ptrace" {
   ptrace(1000.0 / 60.0, change=true)
   ptrace(1.0e9, change=true)
+  ptrace(1000.0 / 30.0)
 }

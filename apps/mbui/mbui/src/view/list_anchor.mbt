@@ -903,7 +903,7 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
           seen_x.val = Some(c.x - r.beyond_end)
         }
         // (once all of it is laid out: a fling planned to another foot than this one planned again to it)
-        if foot_hand.val is Some(_) && flinging.val {
+        if flinging.val {
           let host = s.host
           self.tree.once_laid_out(fn() {
             match (s.host, host) {
