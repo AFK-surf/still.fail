@@ -5,17 +5,19 @@
 ///|
 /// A chat whose last message places one picture twice in a row; the one at `which` (0 the first) pressed; once the
 /// preview is in, `during` ("third": the message places it a third time; "moved": its file told kept at another path;
-/// "": nothing); then the preview closed: what the ones beside it were asked by, where the preview flies from and back
+/// "fewer": placed three times, the message places it twice, the showing pressed gone if it was the third; "":
+/// nothing); then the
+/// preview closed: what the ones beside it were asked by, where the preview flies from and back
 /// to (by the showing whose rect it is, in the order they are drawn), and which showings are drawn halfway out,
 /// halfway back and after.
 fn twice_pressed(which : Int, during? : String = "") -> String raise {
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
-  // (0 as it was; 1 placed twice; 2 as `during` says)
+  // (0 as it was; 1 placed twice (three times for "fewer"); 2 as `during` says)
   let told = @signals.signal(0)
   let img : Json = ["img", { "src": "row-a.png" }]
   let words = fn() {
-    if told.get() == 2 && during == "third" {
+    if (told.get() == 2 && during == "third") || (told.get() == 1 && during == "fewer") {
       "![甲](row-a.png)![甲再一次](row-a.png)![甲第三次](row-a.png)"
     } else {
       "![甲](row-a.png)![甲再一次](row-a.png)"
@@ -46,7 +48,7 @@ fn twice_pressed(which : Int, during? : String = "") -> String raise {
   t.check_looks(false)
   t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
   @sf.markdown_read.val = Some(fn(said, done) {
-    let n = if said.contains("第三次") { 3 } else { 2 }
+    let n = if said.contains("第三次") { 3 } else if said.contains("再一次") { 2 } else { 1 }
     done(if said.has_prefix("![甲](row-a.png)") { Some([["p", Json::array(Array::make(n, img))]]) } else { None })
   })
   told.set(1)
@@ -58,7 +60,7 @@ fn twice_pressed(which : Int, during? : String = "") -> String raise {
     shown.sort_by(fn(a, b) { if near(a.rect.1, b.rect.1) { a.rect.0.compare(b.rect.0) } else { a.rect.1.compare(b.rect.1) } })
     shown.map(fn(s) { s.rect })
   }
-  assert_eq(rects().length(), 2, msg="\{rects()}")
+  assert_eq(rects().length(), if during == "fewer" { 3 } else { 2 }, msg="\{rects()}")
   let at = fn(x : Double, y : Double, w : Double, h : Double) -> String {
     let mut found = "elsewhere"
     for i, r in rects() {
@@ -135,5 +137,13 @@ test "one picture placed twice, the preview open: shown a third time, or its fil
       #|pressed 0: asked beside [/f], flies from 0, halfway out drawn [false, true]; third: open on Some(work/s-c1/row-a.png), drawn [true, true, true]; back to 0, halfway back drawn [false, true, true]; then [true, true, true]
       #|pressed 0: asked beside [/f], flies from 0, halfway out drawn [false, true]; moved: open on Some(work/s-c1/row-a.png), drawn [true, true]; back to 0, halfway back drawn [false, true]; then [true, true]
     ),
+  )
+}
+
+///|
+test "one picture placed three times, the preview open on the third: the message places it twice, it flies back into one left" {
+  inspect(
+    twice_pressed(2, during="fewer"),
+    content="pressed 2: asked beside [/f], flies from 2, halfway out drawn [true, true, false]; fewer: open on Some(work/s-c1/row-a.png), drawn [true, true]; back to 0, halfway back drawn [false, true]; then [true, true]",
   )
 }

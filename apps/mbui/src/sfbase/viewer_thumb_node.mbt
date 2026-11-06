@@ -27,8 +27,9 @@ fn tree_thumb_owner(id : String) -> @signals.Signal[(@view.View, () -> ThumbLook
 }
 
 ///|
-/// Each living thumbnail's node and how it looks, by its node: one pressed takes its place's id (thumb_pressed).
-let pv_thumb_nodes : Map[@view.NodeId, (@view.View, () -> ThumbLook)] = {}
+/// Each living thumbnail's node, how it looks and the id it holds, by its node: one pressed takes its place's id
+/// (thumb_pressed); one let go of it leaves it to another showing of the same place still here.
+let pv_thumb_nodes : Map[@view.NodeId, (@view.View, () -> ThumbLook, Ref[String?])] = {}
 
 ///|
 /// `node` (a thumbnail, note_thumb_node's) pressed: the thumbnail of `id` the viewer flies from and back into. One file
@@ -39,7 +40,7 @@ pub fn thumb_pressed(node : @view.View, id : String) -> Unit {
   let owner = tree_thumb_owner(id)
   match @signals.untracked(fn() { owner.get() }) {
     Some((n, _)) if n.id() == node.id() => ()
-    _ => owner.set(Some(held))
+    _ => owner.set(Some((held.0, held.1)))
   }
 }
 
@@ -88,9 +89,22 @@ pub fn note_thumb_node(
     guard pv_tree_thumbs.get(k) is Some(owner) else { return }
     match @signals.untracked(fn() { owner.get() }) {
       Some((n, _)) if n.id() == node.id() => {
-        pv_thumbs.remove(k)
-        owner.set(None)
-        if !owner.watched() { pv_tree_thumbs.remove(k) }
+        // (another showing of the same place still here takes it: what the viewer flies back into, hidden meanwhile)
+        let mut next = None
+        for other, e in pv_thumb_nodes {
+          if other != node.id() && e.0.alive() && e.2.val == Some(k) {
+            next = Some((e.0, e.1))
+            break
+          }
+        }
+        match next {
+          Some(o) => owner.set(Some(o))
+          None => {
+            pv_thumbs.remove(k)
+            owner.set(None)
+            if !owner.watched() { pv_tree_thumbs.remove(k) }
+          }
+        }
       }
       _ => ()
     }
@@ -132,7 +146,7 @@ pub fn note_thumb_node(
     pv_thumbs[k] = { radius: r, letterbox: l, top_crop: crop, picture: p, id: 0, list, over, said: s }
     if changed { thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1) }
   })) |> ignore
-  pv_thumb_nodes[node.id()] = (node, look)
+  pv_thumb_nodes[node.id()] = (node, look, held)
   node.owns(fn() {
     pv_thumb_nodes.remove(node.id())
     if held.val is Some(k) { let_go(k) }
