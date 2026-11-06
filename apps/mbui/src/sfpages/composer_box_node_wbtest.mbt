@@ -97,7 +97,7 @@ test "the retained composer's local edits, remote revisions and restrictions rea
     draft.val = Some(w)
     editor.val = Some(composer_field_node(
       root, src, w, fn() { "station" }, fn() { locked.get() }, fn() { false }, fn() { "Write" },
-      fn() { submitted.val += 1 }, fn() { changed.val += 1 }, fn() { 900.0 },
+      fn() { submitted.val += 1 }, fn() { changed.val += 1 }, (root, fn(_, _) { 900.0 }),
     ))
   })
   t.draw()

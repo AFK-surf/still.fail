@@ -34,7 +34,7 @@ pub fn chat_composer_node(
   r : ChatRef,
   view : () -> ChatView?,
   side : () -> Double,
-  height : () -> Double,
+  lines_room : (@view.View, (Double, Double) -> Double),
   foot : (Double) -> Double,
   place : () -> ComposerPlace,
   sent : (String) -> Unit,
@@ -86,7 +86,7 @@ pub fn chat_composer_node(
           })
           None => ()
         }
-      }, height, fn(p, w, inner, moves) {
+      }, lines_room, fn(p, w, inner, moves) {
         extras.val = Some(composer_extras_node(p, src, w, fn() { r.station }, inner, fn() { place().corner - @sf.composer_pad },
           media_content_node, moves~, tips?=tips))
       }, place~, place_in?=place_in.map(fn(of) { (parent, of) }), tail=fn(p) { cc_chooser_node(p, src, r, view) }, tips?=tips, active~, neighbour?=neighbour, drops?=drops))

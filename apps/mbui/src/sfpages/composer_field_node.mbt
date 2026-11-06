@@ -4,8 +4,10 @@
 ///|
 /// The composer's field in `parent`: its existing draft, where its files go, current restrictions and hint, and what
 /// gives its words up. `changed` is told only a local edit (the core's own revision has already updated Writing), so
-/// typing may warm the agent without warming it when its draft is read back. The field node is kept by the caller's
-/// keyed part as the composer changes arrangement.
+/// typing may warm the agent without warming it when its draft is read back. `room`: what its lines are given room by
+/// (a node that holds it) and how tall that room is by how big that is laid out (its share of it: text_window_share,
+/// text_most at most), worked out as it is laid out. The field node is kept by the caller's keyed part as the composer
+/// changes arrangement.
 fn composer_field_node(
   parent : @view.View,
   src : Source,
@@ -16,7 +18,7 @@ fn composer_field_node(
   hint : () -> String,
   submit : () -> Unit,
   changed : () -> Unit,
-  height : () -> Double,
+  room : (@view.View, (Double, Double) -> Double),
   hint_alpha? : () -> Double = fn() { 1.0 },
   caret_alpha? : () -> Double = fn() { 1.0 },
   keys? : (Int, Int) -> Bool,
@@ -35,10 +37,7 @@ fn composer_field_node(
     trim=true,
     size_by=fn() { words().size },
     line_by=line,
-    max_lines_by=fn() {
-      let n = (dmin(text_most, height() * text_window_share) / line()).to_int()
-      if n > 0 { n } else { 1 }
-    },
+    max_lines_in=(room.0, fn(w, h) { (dmin(text_most, (room.1)(w, h) * text_window_share) / line()).to_int() }),
     enter_by=fn() { @sf.enter_sends() },
     paste_limit_by=fn() { if files() && !w.starting.get() { @sfbase.paste_threshold_read() } else { 0 } },
     files_when=files,

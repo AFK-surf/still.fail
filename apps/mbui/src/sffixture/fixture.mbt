@@ -359,6 +359,23 @@ fn opened_by_first(r : Json) -> Json {
 }
 
 ///|
+/// A chat named longer than its bar has room for (chat-long-title).
+let chat_long_title : String = "把发布清单里每一项都对一遍，再把没跟上的几处标出来，写成一页交给值班的人看"
+
+///|
+/// The chat named `title`.
+fn with_title(v : Json?, title : String) -> Json? {
+  match v {
+    Some(Object(m)) => {
+      let m = m.copy()
+      m["title"] = Json::string(title)
+      Some(Json::object(m))
+    }
+    _ => v
+  }
+}
+
+///|
 /// The chat keeping watch, archiving it asked first (chat-watch).
 fn with_watch(v : Json?) -> Json? {
   match v {
@@ -757,6 +774,8 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
       fixture_with_tabs(f, params, with_opener(value))
     "chat" if f.mode == "chat-watch" && params.get("session") is Some(String("s-c1")) =>
       fixture_with_tabs(f, params, with_watch(value))
+    "chat" if f.mode == "chat-long-title" && params.get("session") is Some(String("s-c1")) =>
+      fixture_with_tabs(f, params, with_title(value, chat_long_title))
     "chat" => fixture_with_tabs(f, params, value)
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")

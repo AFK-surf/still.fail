@@ -11,7 +11,7 @@ test "a retained composer's hint is absent while focused and while the box close
     root.lies_along(Is(End)) |> ignore
     made.val = Some(chat_composer_node(root, src,
       { station: "ws/st", session: "chat", title: "Chat", station_name: "Studio" },
-      fn() { Some(@sfbase.chat_view_made({})) }, fn() { 10.0 }, fn() { 900.0 }, fn(_) { 12.0 }, fn() { composer_alone }, fn(_) {  }))
+      fn() { Some(@sfbase.chat_view_made({})) }, fn() { 10.0 }, (root, fn(_, _) { 900.0 }), fn(_) { 12.0 }, fn() { composer_alone }, fn(_) {  }))
   })
   t.draw()
   let n = made.val.unwrap().composer
