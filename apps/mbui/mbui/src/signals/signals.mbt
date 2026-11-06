@@ -1351,7 +1351,7 @@ pub fn Watch::draws_by(self : Watch, sample : () -> Unit) -> Watch {
 
 ///|
 /// Whether two handles are of the one watch (Signal::drawn_by makes a handle each way it reaches one).
-pub fn Watch::is(self : Watch, other : Watch) -> Bool {
+pub fn Watch::same_as(self : Watch, other : Watch) -> Bool {
   physical_equal(self.node, other.node)
 }
 
