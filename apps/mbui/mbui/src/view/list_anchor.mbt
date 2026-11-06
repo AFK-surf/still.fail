@@ -205,13 +205,18 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
   let sighted_rows : Ref[Array[(K, Double, Double)]] = Ref([])
   let sighted_h : Ref[Double] = Ref(-1.0)
   let sighted_cover : Ref[(Double, Double)] = Ref((-1.0, -1.0))
-  // (the rows in sight as last laid out, and how many times it had been moved at once by then: what came in sight anew
-  // is what is not among them, and what it went across as it went on by itself)
+  // (the rows in sight as last told, and how many times it had been moved at once as last laid out: what came in sight
+  // anew is what is not among them)
   let seen_last : Set[K] = Set::new()
   let seen_moves : Ref[Int] = Ref(s.moved_at_once)
-  // (the first and the last of those, each by its key and where it was: what it went across by itself since is what
-  // lies between them and those in sight now, however many layouts came between, whatever moment each was drawn at)
-  let seen_ends : Ref[(K, Int, K, Int)?] = Ref(None)
+  // (where the window it last told of is: its top, as drawn, how far from the row the next layout is laid out from
+  // (that row's top from its start, its foot from its end; the list's first or last at its start or its end; one gone,
+  // the row that layout puts in its place), kept so layout after layout. What it went across by itself since is what
+  // lies between that window and the one in sight now as the list is laid out now, as far from that row as it was: as
+  // that row went (the hand's way, held at an end, followed where it moved among the rest), rows come, gone, moved or
+  // grown since among them as they are now, however many layouts came between, whatever moment each was drawn at. None
+  // once it was moved at once or laid out from another row)
+  let told_from : Ref[(ListAnchor[K]?, Double)?] = Ref(None)
   // (and what it went across by itself up to a moment something is done at (come due, an input's, an event's), laid
   // out at it before what is done then may let it go or read what it told: the same whether frames came on the way or
   // none; where it has gone on by itself since the moment it last told of, at a moment past that: at rest, none. Asked
@@ -741,17 +746,23 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         let known = fn(i : Int) { heights.get(key_at(i)) }
         // (the rows the last of these layouts went past on the way: in sight on the way, sighted)
         let went_past : Array[K] = []
-        // (and where it set out from: another row than where it was (one brought into sight from out of it, put, held
-        // under what covers its top), what shows then got to at once, nothing gone across on the way)
+        // (and where it set out from, how far and with what room past its start: another row than where it was (one
+        // brought into sight from out of it, put, held under what covers its top), what shows then got to at once,
+        // nothing gone across on the way; the same laid out to where the hand was at the logic's moment, where it is
+        // then)
         let laid_from : Ref[ListAnchor[K]?] = Ref(None)
+        let laid_by = Ref(0.0)
+        let laid_slack = Ref(0.0)
         let lay = fn(from : ListAnchor[K]?, by : Double) {
           went_past.clear()
           laid_from.val = from
+          laid_by.val = by
+          laid_slack.val = if from_end { if short_glide.val { h } else { 0.0 } } else { slack }
           let past = fn(i : Int) { went_past.push(key_at(i)) }
           if from_end {
-            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=if short_glide.val { h } else { 0.0 }, went_past=past)
+            list_laid_from_end(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=laid_slack.val, went_past=past)
           } else {
-            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack~, went_past=past)
+            list_laid_from_top(n, key_of, find, measure, from, h, by~, ahead~, known~, slack=laid_slack.val, went_past=past)
           }
         }
         let from = anchor.val
@@ -1011,102 +1022,220 @@ fn[K : Hash + Eq] View::scrolls_anchored_impl(
         }
         // (what came in sight since it last told (laid out at an input's moment, an event's, one come due, or a frame's):
         // in sight now, or gone across on the way as it went on by itself (a fling, a wheel's notches easing in, a glide
-        // to its end: each row between those it had in sight then and those it has now, whether the layouts between
-        // were many or one); not what it went past as it was moved at once (a wheel's turn, a drag's move, its bar, put,
-        // a row brought into sight from out of it) or as it was first laid out where it was scrolled to, made only to be
-        // measured. Of the logic's moment, never of a frame's drawn ahead of it (what a press would stop it short of):
-        // where it is then, the rows this layout has where they would be then (by as much higher as it is drawn further
-        // on), and those past them as tall as they were measured. Seen, told as this layout is done, whether a frame is
-        // painted before what comes next or not (Tree::said_after_laid); of a moment before the one it last told of (a
-        // change said at a moment gone), nothing told, what it told kept)
+        // to its end): each row between the window it last told of and the one in sight now, as the list is laid out
+        // now, whether the layouts between were many or one; not what it went past as it was moved at once (a wheel's
+        // turn, a drag's move, its bar, put, a row brought into sight from out of it, laid out from another row) or as
+        // it was first laid out where it was scrolled to, made only to be measured. Of the logic's moment, never of a
+        // frame's drawn ahead of it (what a press would stop it short of): where the list is laid out then, from where
+        // this layout set out. Seen, told as this layout is done, whether a frame is painted before what comes next or
+        // not (Tree::said_after_laid); of a moment before the one it last told of (a change said at a moment gone),
+        // nothing told, what it told kept)
         match seen {
-          Some(tell) if c.glide_at < 0.0 || c.glide_at >= seen_laid_at.val => {
-            seen_laid_at.val = c.glide_at
-            let at_once = first_laid || laid_from.val != from || s.moved_at_once != seen_moves.val
-            seen_moves.val = s.moved_at_once
-            let shift = c.x - c.logic_x
+          Some(tell) if r.keys.length() > 0 => {
+            let count = r.keys.length()
             let tall = fn(i : Int) {
+              self.tree.work.seen_walked = self.tree.work.seen_walked + 1
               match known(i) {
                 Some(v) => v
-                None => measure(i)
-              }
-            }
-            // (in sight then, from its first: over those laid out, under them, as far as it is apart from where drawn)
-            let now : Array[(K, Int)] = []
-            let count = r.keys.length()
-            if count > 0 {
-              let over : Array[(K, Int)] = []
-              let mut edge = r.tops[0] + shift
-              let mut i = r.first - 1
-              while i >= 0 && edge > 0.0 {
-                let top = edge - tall(i)
-                if top < h {
-                  over.push((key_at(i), i))
-                }
-                edge = top
-                i = i - 1
-              }
-              over.rev_in_place()
-              now.append(over)
-              for q in 0..<count {
-                let top = r.tops[q] + shift
-                if top + r.heights[q] > 0.0 && top < h {
-                  now.push((r.keys[q], r.first + q))
+                None => {
+                  self.tree.work.seen_measured = self.tree.work.seen_measured + 1
+                  measure(i)
                 }
               }
-              let mut top = r.tops[count - 1] + r.heights[count - 1] + shift
-              let mut i = r.last + 1
-              while i < n && top < h {
-                let under = top + tall(i)
-                if under > 0.0 {
-                  now.push((key_at(i), i))
+            }
+            // (each row's top and how tall it is in this layout, as drawn: those laid out as laid out, those over and
+            // under them from them on as tall as they were measured, each gone through once)
+            let over : Array[(Double, Double)] = []
+            let under : Array[(Double, Double)] = []
+            let place = fn(i : Int) -> (Double, Double) {
+              if i < r.first {
+                while over.length() < r.first - i {
+                  let j = r.first - 1 - over.length()
+                  let foot = if over.is_empty() { r.tops[0] } else { over[over.length() - 1].0 }
+                  let tall_j = tall(j)
+                  over.push((foot - tall_j, tall_j))
                 }
-                top = under
-                i = i + 1
+                over[r.first - 1 - i]
+              } else if i > r.last {
+                while under.length() < i - r.last {
+                  let j = r.last + 1 + under.length()
+                  let top = if under.is_empty() {
+                    r.tops[count - 1] + r.heights[count - 1]
+                  } else {
+                    under[under.length() - 1].0 + under[under.length() - 1].1
+                  }
+                  under.push((top, tall(j)))
+                }
+                under[i - r.last - 1]
+              } else {
+                (r.tops[i - r.first], r.heights[i - r.first])
               }
             }
-            let came : Array[K] = []
-            let told : Set[K] = Set::new()
-            let came_in = fn(k : K) {
-              if !seen_last.contains(k) && !told.contains(k) {
-                told.add(k)
-                came.push(k)
+            // (where a row it is laid out from is in this layout: its top from its start, its foot from its end; one
+            // gone, the row the layout put in its place, near where it was (list_laid_from_end's); the list's first or
+            // last laid out from neither, at its start or its end)
+            let held_at = fn(a : ListAnchor[K]?) -> Double {
+              let i = match a {
+                Some(a) =>
+                  match find(a.key, a.near) {
+                    Some(i) => i
+                    None => if a.near < 0 { 0 } else if a.near >= n { n - 1 } else { a.near }
+                  }
+                None => if from_end { n - 1 } else { 0 }
+              }
+              let (top, tall_i) = place(i)
+              if from_end {
+                top + tall_i
+              } else {
+                top
               }
             }
-            // (gone across: toward its start, those over the first it had in sight, the nearest first; toward its end,
-            // those under the last)
-            match (now.get(0), now.last(), seen_ends.val) {
-              (Some((_, lo)), Some((_, hi)), Some((ka, ia, kb, ib))) if !at_once => {
-                let near = fn(k : K, i : Int) { find(k, i).unwrap_or(if i < 0 { 0 } else if i >= n { n - 1 } else { i }) }
-                let mut i = near(ka, ia) - 1
-                while i >= lo {
-                  came_in(key_at(i))
-                  i = i - 1
-                }
-                for j in (near(kb, ib) + 1)..=hi {
-                  came_in(key_at(j))
-                }
-              }
-              _ => ()
-            }
-            for k in now {
-              came_in(k.0)
-            }
-            seen_last.clear()
-            for k in now {
-              seen_last.add(k.0)
-            }
-            seen_ends.val = match (now.get(0), now.last()) {
-              (Some((ka, ia)), Some((kb, ib))) => Some((ka, ia, kb, ib))
+            // (where the window it last told of is in this layout, as drawn: as far from the row this one is laid out
+            // from as it was from that row then, so as that row went (the hand's way, held at an end, followed where
+            // it moved among the rest, the one put in its place where it is gone); nowhere once it was moved at once,
+            // first laid out, or laid out from another row or by another way)
+            let at_once = first_laid ||
+              laid_from.val != from ||
+              laid_by.val != by ||
+              s.moved_at_once != seen_moves.val
+            seen_moves.val = s.moved_at_once
+            let mut told_top = match told_from.val {
+              Some((a, off)) if !at_once && a == from => Some(held_at(from) + off)
               _ => None
             }
-            if !came.is_empty() {
-              // (to the list still there: one let go before its turn (by a telling before it, laying out at once and
-              // letting it go) tells nothing)
-              self.tree.said_after_laid(fn() { if held.live() is Some(_) { tell(came) } })
+            if c.glide_at < 0.0 || c.glide_at >= seen_laid_at.val {
+              seen_laid_at.val = c.glide_at
+              // (the window at the logic's moment, its top in this layout's terms, as drawn: the list laid out from
+              // where this layout set out, as far as the hand had gone by then, held at its start or its end as this
+              // layout is (a frame drawn ahead held there while the logic is short of it), the rows this layout has as
+              // tall as it has them, those past them as tall as they were measured)
+              let shift = c.x - c.logic_x
+              let then_top = if shift == 0.0 {
+                0.0
+              } else {
+                let laid_tall = fn(i : Int) -> Double? {
+                  if i >= r.first && i <= r.last {
+                    Some(r.heights[i - r.first])
+                  } else {
+                    None
+                  }
+                }
+                let tall_then = fn(i : Int) {
+                  match laid_tall(i) {
+                    Some(v) => v
+                    None => tall(i)
+                  }
+                }
+                // (as this layout was laid out, by as far as the hand had gone at the logic's moment)
+                let from = laid_from.val
+                let by = if from_end { laid_by.val + shift } else { laid_by.val - shift }
+                let slack = laid_slack.val
+                let then = if from_end {
+                  list_laid_from_end(n, key_of, find, tall_then, from, h, by~, known=laid_tall, slack~)
+                } else {
+                  list_laid_from_top(n, key_of, find, tall_then, from, h, by~, known=laid_tall, slack~)
+                }
+                place(then.first).0 - then.tops[0]
+              }
+              // (that window's top at the logic's moment, in its terms: what lies from there to it, and it, is what it
+              // can have come to since)
+              let told_at = told_top.map(fn(y) { y - then_top })
+              let (lo, hi) = match told_at {
+                Some(t) => (dmin(t, 0.0), dmax(t + h, h))
+                None => (0.0, h)
+              }
+              // (those rows from the first down, each with its top and how tall it is then)
+              let rows : Array[(K, Double, Double)] = []
+              let ups : Array[(K, Double, Double)] = []
+              let mut i = r.first - 1
+              let mut edge = r.tops[0] - then_top
+              while i >= 0 && edge > lo {
+                let (top, tall_i) = place(i)
+                if top - then_top < hi {
+                  ups.push((key_at(i), top - then_top, tall_i))
+                }
+                edge = top - then_top
+                i = i - 1
+              }
+              ups.rev_in_place()
+              rows.append(ups)
+              for q in 0..<count {
+                let top = r.tops[q] - then_top
+                if top + r.heights[q] > lo && top < hi {
+                  rows.push((r.keys[q], top, r.heights[q]))
+                }
+              }
+              let mut i = r.last + 1
+              let mut top = r.tops[count - 1] + r.heights[count - 1] - then_top
+              while i < n && top < hi {
+                let (_, tall_i) = place(i)
+                if top + tall_i > lo {
+                  rows.push((key_at(i), top, tall_i))
+                }
+                top = top + tall_i
+                i = i + 1
+              }
+              // (what came, each once: first what that window has now that it did not show then (rows come into it, or
+              // moved into it, as it was changed, there as the list shows it now), from its top down; then what lies on
+              // the way from it, in the order the window's leading edge went over it, down the column where it went
+              // toward its end, up it where it went toward its start; not those it showed then and still has there, a
+              // row moved out of it and come again counted anew)
+              let came : Array[K] = []
+              let told : Set[K] = Set::new()
+              let in_told = fn(row : (K, Double, Double)) {
+                match told_at {
+                  Some(t) => row.1 + row.2 > t && row.1 < t + h
+                  None => row.1 + row.2 > 0.0 && row.1 < h
+                }
+              }
+              let came_in = fn(row : (K, Double, Double)) {
+                let k = row.0
+                if !told.contains(k) && !(seen_last.contains(k) && in_told(row)) {
+                  told.add(k)
+                  came.push(k)
+                }
+              }
+              for row in rows {
+                if in_told(row) {
+                  came_in(row)
+                }
+              }
+              match told_at {
+                Some(t) if t > 0.0 =>
+                  for j = rows.length() - 1; j >= 0; j = j - 1 {
+                    if !in_told(rows[j]) {
+                      came_in(rows[j])
+                    }
+                  }
+                _ =>
+                  for row in rows {
+                    if !in_told(row) {
+                      came_in(row)
+                    }
+                  }
+              }
+              seen_last.clear()
+              for row in rows {
+                if row.1 + row.2 > 0.0 && row.1 < h {
+                  seen_last.add(row.0)
+                }
+              }
+              told_top = Some(then_top)
+              if !came.is_empty() {
+                // (to the list still there: one let go before its turn (by a telling before it, laying out at once and
+                // letting it go) tells nothing)
+                self.tree.said_after_laid(fn() { if held.live() is Some(_) { tell(came) } })
+              }
             }
+            // (kept as far from the row the next layout is laid out from as it is now)
+            told_from.val = told_top.map(fn(y) { (r.anchor, y - held_at(r.anchor)) })
           }
-          _ => ()
+          // (nothing laid out: nothing in sight, the window it told of nowhere)
+          Some(_) => {
+            seen_last.clear()
+            told_from.val = None
+          }
+          None => ()
         }
         // (a row a scroll only went past, measured for how far it went: not kept, a cache of the picture of what shows)
         for k in made_to_measure {

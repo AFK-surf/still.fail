@@ -451,6 +451,11 @@ pub(all) struct Work {
   /// otherwise (View::scrolls_anchored: those gone forgotten, the rows measured counted again): none while none of its
   /// rows is named or measured, as its first keys are
   mut keys_swept : Int
+  /// the rows a list that tells seen went through past those it laid out, to find what was in sight at the logic's
+  /// moment and what it went across since it last told (View::scrolls_window's `seen`), and of those the ones measured
+  /// for it, never measured before (the rest as tall as they were measured)
+  mut seen_walked : Int
+  mut seen_measured : Int
 } derive(Eq, Debug)
 
 ///|
@@ -1211,6 +1216,8 @@ pub fn Tree::new(
       settles: 0,
       due_asked: 0,
       keys_swept: 0,
+      seen_walked: 0,
+      seen_measured: 0,
     },
   }
   let root = t.made(-1)
