@@ -51,7 +51,36 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Download the packages once, on their own clock. An updated WebKit package has taken nearly three minutes to arrive
+  # from the Ubuntu mirror; that must not consume the time the actual host and stream contracts need to run.
+  packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-host-linux
+          packages: >-
+            libgtk-4-dev libepoxy-dev libpango1.0-dev libcairo2-dev libfontconfig-dev libgdk-pixbuf-2.0-dev
+            libsoup-3.0-dev zlib1g-dev libgl1-mesa-dri libegl-mesa0 xvfb xauth xdotool fonts-noto-cjk fonts-noto-color-emoji
+            fonts-dejavu-core dbus-daemon dbus-bin libwebkitgtk-6.0-4 libpoppler-glib8t64
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: Stage the package archives
+        run: |
+          mkdir -p out/host-linux-packages
+          find .ci/apt -maxdepth 1 -name '*.deb' -exec cp '{}' out/host-linux-packages/ \;
+          printf 'Archives prepared for the host contracts.\n' > out/host-linux-packages/README
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-linux-packages
+          path: out/host-linux-packages/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
   contracts:
+    needs: packages
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     defaults:
@@ -60,6 +89,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-linux-packages
+          path: .ci/apt
       # GTK 4 and what the host draws with (epoxy, Pango, cairo, gdk-pixbuf, libsoup), Mesa's software GL, Xvfb, and the
       # fonts the text is set in (the system's sans-serif, Han in Noto Sans CJK SC, Noto Color Emoji); D-Bus's daemon, for a
       # session bus of the links' run; WebKitGTK 6.0, poppler's GLib face and GStreamer (its base and good plugins, and
@@ -124,6 +157,7 @@ jobs:
 
   # Stream decoding is independent of the host contracts, and both fit the five-minute limit on their own.
   streams:
+    needs: packages
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     defaults:
@@ -132,6 +166,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-linux-packages
+          path: .ci/apt
       - uses: ./.github/actions/apt
         with:
           name: mbui-host-linux

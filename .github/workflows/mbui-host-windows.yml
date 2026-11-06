@@ -92,6 +92,29 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
         if: success() || failure()
         run: scripts/host_contract.sh windows site
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-windows
+          path: apps/mbui/mbui/out/host/
+          if-no-files-found: ignore
+
+  # The remaining service and accessibility contracts use the same host, but not the recorded-frame comparison.
+  services:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: kitdemo
+        run: scripts/host_contract.sh windows build
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner
@@ -113,7 +136,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: host-windows
+          name: host-windows-services
           path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore
 
