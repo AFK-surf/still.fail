@@ -1170,6 +1170,11 @@ fn Ctx::tree_close_past(self : Ctx, p : TreePaint, deep : Int, clips : Int, ring
         }
       }
       scene.parts.reach_add(self.inst, k, self.ninst, into)
+      // (and the layer being drawn: its own, drawn as its node is closed)
+      match scene.drawing {
+        Some(l) => scene.parts.reach_add(self.inst, k, self.ninst, l.own_reach)
+        None => ()
+      }
     }
   }
 }
