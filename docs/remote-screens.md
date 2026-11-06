@@ -181,10 +181,12 @@ client, so any client that acknowledges what it drew is paced.
   kbit/s, again each round trip and 200 ms it stays. Only frames held back lower it: an acknowledgement late alone (a
   still screen's large picture, a screen that changes little, a packet lost and sent again, which holds the frames
   behind it for about a round trip and then they all come) lowers nothing, as what went through then says nothing of
-  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, to the most the view is asked at
-  (`rateCeiling`): the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s), or by the 画质
-  the view asked, 原画 its pixels × 8 and 高清 × 4 (at least its own, at most 60 Mbit/s: 1080p 16.6 and 8.3 Mbit/s,
-  4K 60): a desktop's text at its own rate stayed soft on a LAN even at 原画. So a slow link gets as many frames,
+  the link. Once nothing was held back for 1 s it goes up by 15% each 0.5 s, and by 30% once nothing was held back
+  for 2 s (`UP_FAST`: a link with room climbs back sooner), to the most the view is asked at (`rateCeiling`): by the
+  画质 the view asked, 原画 its pixels × 16, 高清 × 10, else (自动, 流畅) × 6 (at least the source's own, `ownRate`:
+  its pixels × 3, at least 1 Mbit/s; at most 60 Mbit/s: 1080p 33, 20.7 and 12.4 Mbit/s, 4K 60, 60 and 50): a
+  desktop's text at its own rate stayed soft on a LAN even at 原画, and at × 8 and × 4 still soft as it moved
+  (2026-11-06; Moonlight asks 20 Mbit/s for 1080p at 60). So a slow link gets as many frames,
   smaller, rather than fewer and late.
   A frame's round trip and the oldest's wait are counted without the moments the station's own loop stood still
   (screen-pace.ts `LoopStall`: a 10 ms tick, how late it came): a Mac host's loop stood still 40–140 ms every few
@@ -515,9 +517,9 @@ A view is a run of scrcpy's server on the device (`stillfail-scrcpy-<id>.jar` in
 over an `adb forward` of its own): H.264 only, its protocol pinned to the file's version (scrcpy keeps no compatibility
 between releases: the version goes up only with the file). Its encoder takes no new size or rate while running, so a
 view has neither `bounds` nor `rate`: it opens at the larger of its bounds and 1280 on its long side, and its rate goes by
-that side (`bitrateOf`): 1 Mbit/s at 480, 1.5 at 720, 2.5 at 1080, 3.5 at 1440, 4 above, while the picture moves (a still
-screen sends nothing). The pace's opening rate (`ViewOptions.bitrate`, 1.5 Mbit/s) is not taken: the encoder cannot
-climb from it, and at 1280 and up it left a phone's text soft. A client asks the size its picture shows at, in device
+that side (`bitrateOf`): 2 Mbit/s at 480, 3 at 720, 5 at 1080, 7 at 1440, 8 above (2026-11-06, twice what they were),
+while the picture moves (a still screen sends nothing). The pace's opening rate (`ViewOptions.bitrate`, 1.5 Mbit/s) is
+not taken: the encoder cannot climb from it, and at 1280 and up it left a phone's text soft. A client asks the size its picture shows at, in device
 pixels (web: `viewSize`), so the page does not scale a larger picture down. A slow link drops what it could not fetch up
 to a new key frame (`keyframe` starts a new capture). A preview does not turn the screen on, a view does; with the
 screen off no frame comes. A preview runs at the size its card asks (640), 2 frames a second and 300 kbit/s; at most two
