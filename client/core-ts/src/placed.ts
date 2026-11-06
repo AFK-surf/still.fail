@@ -37,6 +37,9 @@ type J = any;
 /**
  * A chat's page (drawn: its files' `owner`, its messages' `placed`): the images before and after the one at `path`, in
  * the order the page shows them. `at` identifies the occurrence in a message when the same file is shown more than once.
+ * A file sent from here is the same file by its upload (`upload`) before it is up (its path `upload:<id>`) and after,
+ * wherever it is kept: one opened by its upload's path is found once it is up. While it goes up it is on no station
+ * and has no owner: it is beside none (one stepped to is opened by where its station keeps it).
  */
 export function near(chat: J, path: string, at?: string): { before?: J; after?: J; beforeAt?: string; afterAt?: string; index?: number; count: number } {
   const images: { file: J; at: string }[] = [];
@@ -65,7 +68,9 @@ export function near(chat: J, path: string, at?: string): { before?: J; after?: 
     message(m, row);
   }
   for (const o of Array.isArray(chat?.outbox) ? chat.outbox : []) message(o, `o:${o?.id ?? ""}`);
-  const index = images.findIndex((item) => item.file.path === path && (at === undefined || item.at === at));
+  const upload = path.startsWith("upload:") ? path.slice("upload:".length) : undefined;
+  const same = (f: J) => f.path === path || (upload !== undefined && f.upload === upload);
+  const index = images.findIndex((item) => same(item.file) && (at === undefined || item.at === at));
   if (index < 0) return { count: images.length };
   const before = images[index - 1];
   const after = images[index + 1];
