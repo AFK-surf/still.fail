@@ -130,6 +130,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     socket.on("error", (error) => (failed ??= error));
     socket.on("open", () => {
       takenBack(s, plane);
+      s.setPersonalOnline(true);
       writePresence(s.data, true, null);
       log.info("presence", `online at ${plane.name}`);
       // The cloud's answering is in the machine's time.
@@ -149,10 +150,24 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       if (binary) return;
       const text = data.toString();
       if (text === "pong") answered = true;
-      else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
+      else if (text.startsWith('{"type":"personal.lock"')) {
+        try {
+          const said = JSON.parse(text);
+          if (typeof said.sub !== "string" || !Array.isArray(said.entries)) throw new Error("invalid personal lock notification");
+          // Validation runs off the event loop. A bad notification must still take the connection offline.
+          void s.takePersonal(said.sub, said.entries, said.version).catch((error) => {
+            failed = new Error(`personal lock update could not be checked: ${String(error)}`);
+            socket.terminate();
+          });
+        } catch (error) {
+          failed = new Error(`personal lock update could not be checked: ${String(error)}`);
+          socket.terminate();
+        }
+      } else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
     });
     socket.on("close", (code, reason) => {
       ping?.();
+      s.setPersonalOnline(false);
       unlisten();
       if (code === CLOSE_REMOVED) removed(s, CLOSE_REMOVED);
       // With its code and reason: replaced by another socket of this station's (4000), silent (4008), the cloud restarting (1001, 1012)…
@@ -161,6 +176,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     });
     return Effect.sync(() => {
       ping?.();
+      s.setPersonalOnline(false);
       unlisten();
       socket.close();
     });

@@ -5,7 +5,7 @@
 // admin's console has its own, `adminApi`, which only the console's host
 // routes to (index.ts).
 import { consoleAdmin, isAdmin } from "./admin";
-import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
+import { bearerToken, clock, denied, limited, readJson, readText, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
@@ -18,7 +18,7 @@ import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveIncidents, serveStatus } from "./status";
-import { receiveLogs, receiveTraces } from "./tracing";
+import { receiveLogs, receiveTraces, stationSender } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 import { servePicture } from "./pictures";
 
@@ -143,6 +143,20 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
   }
 
+  // A station needs the current personal chain before admitting a device on it, even after a restart.
+  if (path === "/v1/stations/personal-lock" && method === "POST") {
+    if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
+    let text: string;
+    try { text = await readText(request); } catch { return reply({ error: "invalid_request" }, 400); }
+    const station = await stationSender(request, env, text, "station-personal-lock-v1");
+    if (!station) return reply({ error: "invalid_signature" }, 401);
+    let input: { workspace?: unknown; sub?: unknown };
+    try { input = JSON.parse(text); } catch { return reply({ error: "invalid_request" }, 400); }
+    if (input === null || typeof input !== "object" || typeof input.workspace !== "string" || typeof input.sub !== "string" || input.sub.length === 0 || input.sub.length > 256) return reply({ error: "invalid_request" }, 400);
+    if (!(await env.DIRECTORY.getByName("primary").stationMayReadPersonal(station, input.workspace, input.sub))) return reply({ error: "forbidden" }, 403);
+    return reply(await env.ACCOUNTS.getByName(input.sub).personalLockState());
+  }
+
   // Spans from a signed-in client, or from a station signing them with its key (tracing.ts).
   if (path === "/v1/telemetry/traces" && method === "POST") {
     const token = bearerToken(request);
@@ -200,7 +214,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/pictures" && method === "GET") return servePicture(request);
 
   // ── accounts ────────────────────────────────────────────────────────────
-  const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
+  const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path === "/v1/me/personal-lock/append" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
   const claims = await account(bearerToken(request), env);
   if (claims instanceof Response) return claims;
@@ -219,12 +233,18 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
   }
   // The person's own lock, which the cloud keeps and carries but does not decide (personal-lock.ts).
-  if (path === "/v1/me/personal-lock") {
+  if (path === "/v1/me/personal-lock" || path === "/v1/me/personal-lock/append") {
     const lock = env.ACCOUNTS.getByName(sub);
-    if (method === "GET") return reply({ entries: await lock.personalLock() });
+    if (method === "GET" && path === "/v1/me/personal-lock") return reply({ entries: await lock.personalLock() });
     if (method === "POST") {
-      const said = await lock.appendPersonalLock(sub, input.entries);
-      return "refused" in said ? reply({ error: said.refused }, STATUS[said.refused] ?? 409) : reply(said);
+      // An old cloud ignores unknown fields on the original endpoint. A separate route ensures a guarded restore
+      // cannot silently become an unguarded reset while different cloud versions are deployed.
+      if (path.endsWith("/append") && input.expect === undefined) return reply({ error: "invalid_request" }, 400);
+      const said = await lock.appendPersonalLock(sub, input.entries, input.expect);
+      if (said.refused !== null) return reply({ error: said.refused }, STATUS[said.refused] ?? 409);
+      await env.DIRECTORY.getByName("primary").personalChanged(sub, said.entries, said.version);
+      await lock.personalDelivered(said.version);
+      return reply({ entries: said.entries });
     }
   }
   // Deleting the account: the Directory first (it may refuse: 409 sole_owner), then its sessions and all of it.

@@ -160,6 +160,11 @@ export class Directory extends ProductionDirectory {
 }
 
 export class Account extends ProductionAccount {
+  /** Run the account's scheduled work without waiting for wall time. */
+  async fireAccountAlarm() { await this.alarm(); }
+  async nextAccountAlarm() { return this.ctx.storage.getAlarm(); }
+  personalPending() { return this.ctx.storage.kv.get("personal-lock-pending") !== undefined; }
+
   expire(id: string, kind: "idle" | "absolute") {
     const account = this.ctx.storage.kv.get<any>("account");
     const session = account.sessions.find((s: any) => s.id === id);

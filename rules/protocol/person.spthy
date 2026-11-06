@@ -6,8 +6,9 @@
  *   - a device begins a lock of its own, and a device on it, given a new device's code face to face, signs it in;
  *   - a member's device, one the workspace's lock has, says which lock is its person's;
  *   - a station goes along a bound lock's chain, taking a key only as a key it has on that lock signed it.
- * What is not: that the device binding is its person's own (proved in rules/src/role, `binds`), a device taken off a lock,
- * the cryptography itself (perfect here).
+ * What is not: the initial approval of a member's first workspace device (the role rules take that device as its own),
+ * whether the human actually compared a code, a device taken off a lock, or the cryptography itself (perfect here).
+ * `binds` proves the signer is one the workspace recognizes as that member's, not how its first key was approved.
  *
  * tamarin-prover --prove rules/protocol/person.spthy   (CI: .github/workflows/rules.yml `protocol`)
  */

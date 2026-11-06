@@ -13,8 +13,7 @@ import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
-import { PersonChains } from "./person-chains.ts";
-import { type Entry, LockRefusal, admit, admitPerson, asEntry, fold, lowerRole } from "../cloud/lock.ts";
+import { type Entry, LockRefusal, admit, asEntry, fold, lowerRole } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
 import type { ScreenHub } from "../screens/hub.ts";
@@ -129,9 +128,6 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
   }
 }
 
-/// The longest chain of each person's own lock heard here, by the lock's genesis.
-export const personChains = new PersonChains();
-
 /// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
 const joinedOf = (cloud: Cloud, ws: string) => (ws && ws !== cloud.home() ? ws : null);
 
@@ -240,36 +236,9 @@ export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, 
   try {
     return inLock(cloud, admitted, named, endpoint);
   } catch (e) {
-    if (!(e instanceof LockRefusal)) throw e;
-    if (brought(hello, cloud, admitted.viewer.workspace, admitted.viewer.lockDevice?.base)) {
-      try {
-        return inLock(cloud, admitted, named, endpoint);
-      } catch (again) {
-        if (!(again instanceof LockRefusal)) throw again;
-      }
-    }
-    const person = onPersonalLock(cloud, admitted, named, endpoint, hello);
-    if (person === null) throw e;
-    return person;
+    if (!(e instanceof LockRefusal) || !brought(hello, cloud, admitted.viewer.workspace, admitted.viewer.lockDevice?.base)) throw e;
+    return inLock(cloud, admitted, named, endpoint);
   }
-}
-
-/// Not in the workspace's lock as a device, on the person's own lock its member bound there (`lock.person`, the chain a
-/// hello brings: docs/personal-lock.md). The chain is checked and kept here as long as it goes on from the one this
-/// station has: an older one brought again (a device taken off since) is judged as the longer it has. Null when the
-/// hello brings none; throws a LockRefusal why not.
-function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string, hello: any): Admitted | null {
-  const raw = hello?.lock?.person;
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > BROUGHT_MOST) return null;
-  const v = admitted.viewer;
-  const ws = v.workspace && v.workspace !== cloud.home() ? v.workspace : null;
-  const state = cloud.locked(ws)?.state;
-  if (!state || !state.persons.has(v.sub)) return null;
-  const who = { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof };
-  const newest = personChains.newest(state.persons.get(v.sub)!, v.sub, raw);
-  const { role } = admitPerson(state, who, newest);
-  personChains.keep(state.persons.get(v.sub)!, newest);
-  return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
 }
 
 export type Members = {
@@ -291,6 +260,8 @@ export type Members = {
   tailnet?: () => string[];
   /// Told each time a member's device has connected (parts.ts `memberConnected`).
   connected?: () => void;
+  /// The cloud's current personal chain, for a member of one of this station's workspaces.
+  personal?: (workspace: string, sub: string) => Promise<{ entries: unknown[]; version: number }>;
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
@@ -310,16 +281,59 @@ export async function serve(m: Members, conn: Connection) {
   const proof = lockProof(hello?.lock);
   // The role the credential names: the control plane's word, which the lock may lower but not raise.
   let named = "";
-  const check = (line: any) => {
+  let personal = false;
+  let personalState: unknown = null;
+  let personalVersion = "";
+  let personalHead: ReturnType<Cloud["personalHead"]>;
+  const check = async (line: any) => {
     // Of any workspace the station is in: the viewer's is the one its requests are answered for.
-    const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
-    named = admitted.viewer.role;
+    const credential = typeof line?.credential === "string" ? line.credential : "";
+    const verify = () => verifyMemberOf(credential, (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
+    const admitted = verify();
+    const namedHere = admitted.viewer.role;
     if (proof) admitted.viewer.lockDevice = proof;
-    return inLockBringing(m.cloud, admitted, named, device, line);
+    // A device can bring workspace entries, but cannot attest its personal chain is current: ask the cloud.
+    try {
+      const result = inLockBringing(m.cloud, admitted, namedHere, device, { lock: { entries: line?.lock?.entries } });
+      named = namedHere;
+      personal = false;
+      return result;
+    } catch (e) {
+      if (!(e instanceof LockRefusal)) throw e;
+      const ws = admitted.viewer.workspace && admitted.viewer.workspace !== m.cloud.home() ? admitted.viewer.workspace : null;
+      if (!m.cloud.locked(ws)?.state?.persons.has(admitted.viewer.sub) || !m.personal || !m.cloud.personalOnline()) throw e;
+      let latest: { entries: unknown[]; version: number };
+      try { latest = await m.personal(admitted.viewer.workspace, admitted.viewer.sub); }
+      catch { throw new LockRefusal("the current personal lock could not be checked"); }
+      if (!m.cloud.personalOnline()) throw new LockRefusal("the personal lock updates are offline");
+      try { await m.cloud.takePersonal(admitted.viewer.sub, latest.entries, latest.version); }
+      catch { throw new LockRefusal("the current personal lock could not be checked"); }
+      const state = m.cloud.locked(ws)?.state;
+      const head = m.cloud.personalHead(admitted.viewer.sub);
+      if (!m.cloud.personalOnline() || m.cloud.personalBusy(admitted.viewer.sub) || !state || head?.genesis !== state.persons.get(admitted.viewer.sub)) throw new LockRefusal("the person's personal lock has been replaced or is being checked");
+      // Compare the same SQLite connection on both sides of the worker's check: another station can extend the
+      // persisted chain while verification is in progress. Its newer revocation must win over this admission.
+      const version = m.cloud.personChains().version();
+      let role: string;
+      try {
+        role = await m.cloud.personVerifier().admit(m.cloud.lockAfter(-1, ws), { sub: admitted.viewer.sub, endpoint: device, base: proof?.base, proof: proof?.proof }, latest.entries);
+      } catch { throw new LockRefusal("the current personal lock did not admit this device"); }
+      if (!m.cloud.personalOnline() || m.cloud.personalBusy(admitted.viewer.sub) || m.cloud.personalHead(admitted.viewer.sub) !== head || m.cloud.locked(ws)?.state !== state || m.cloud.personChains().version() !== version) throw new LockRefusal("the personal lock changed while this device was checked");
+      // Membership, credentials and roles may also have changed while the cloud and worker answered.
+      const fresh = verify();
+      if (fresh.viewer.sub !== admitted.viewer.sub || fresh.viewer.workspace !== admitted.viewer.workspace) throw new LockRefusal("the member changed while this device was checked");
+      if (proof) fresh.viewer.lockDevice = proof;
+      named = fresh.viewer.role;
+      personal = true;
+      personalState = state;
+      personalHead = head;
+      personalVersion = version;
+      return { ...fresh, viewer: { ...fresh.viewer, role: lowerRole(role, named) } };
+    }
   };
   let current: Admitted;
   try {
-    current = check(hello);
+    current = await check(hello);
   } catch (e) {
     await writeLine(first, refusalOf(m.cloud, hello, device, e, m.accepted?.())).catch(() => {});
     await first.finish().catch(() => {});
@@ -362,7 +376,14 @@ export async function serve(m: Members, conn: Connection) {
     else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
     else {
       try {
-        current = inLock(m.cloud, current, named, device);
+        if (!personal) current = inLock(m.cloud, current, named, device);
+        else {
+          const ws = current.viewer.workspace && current.viewer.workspace !== m.cloud.home() ? current.viewer.workspace : null;
+          const state = m.cloud.locked(ws)?.state;
+          if (!m.cloud.personalOnline() || m.cloud.personalBusy(current.viewer.sub) || m.cloud.personalHead(current.viewer.sub) !== personalHead || state !== personalState || personalHead?.genesis !== state?.persons.get(current.viewer.sub)) throw new LockRefusal("the personal lock is no longer current");
+          const version = m.cloud.personChains().version();
+          if (version !== personalVersion) throw new LockRefusal("a station updated the personal lock");
+        }
         return false;
       } catch {
         conn.close(3, "lock_unconfirmed");
@@ -378,12 +399,18 @@ export async function serve(m: Members, conn: Connection) {
   };
   watchExpiry();
   const unlisten = m.cloud.listen(gone);
+  // An update can arrive while the first answer is written, before the listener is installed.
+  if (gone()) {
+    expiry?.();
+    unlisten();
+    return;
+  }
   // Renewals on the credential stream.
   (async () => {
     for (let line = await credentials.line().catch(() => null); line !== null; line = await credentials.line().catch(() => null)) {
       let reply;
       try {
-        current = check(line);
+        current = await check(line);
         watchExpiry();
         reply = { ok: true, expires_at: current.exp };
       } catch (e) {

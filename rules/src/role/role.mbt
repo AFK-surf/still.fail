@@ -253,8 +253,8 @@ pub fn key_ok(seen : Bool, member : Bool) -> Bool where {
 
 ///|
 /// Whether a `person` entry binds a member to a lock of their own: signed by that member (`mine`), from a device or
-/// passkey that is their own (`own`). Proved: exactly then. A manager's signature binds no one, so no one but the person
-/// says which lock is theirs.
+/// passkey that the workspace considers their own (`own`). Proved: exactly then. A manager's signature cannot bind
+/// another member directly; the first device's ownership depends on the manager's initial approval.
 pub fn binds(mine : Bool, own : Bool) -> Bool where {
   proof_ensure: result => binds_post(mine, own, result),
 } {

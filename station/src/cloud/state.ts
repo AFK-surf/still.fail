@@ -10,6 +10,8 @@ import { log } from "../ops/log.ts";
 import { setStationCloud } from "../ops/i18n.ts";
 import { type Entry, type LockState, apply, asEntry, entryHash, fold } from "./lock.ts";
 import { type Provider, providerOf } from "./provider.ts";
+import { PersonChains } from "../mesh/person-chains.ts";
+import { PersonVerifier } from "../mesh/person-verifier.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
 
@@ -182,6 +184,11 @@ export class Cloud {
   private listeners = new Set<(s: CloudState | null) => void>();
   private writing = false;
   private watcher: FSWatcher | undefined;
+  private persons: PersonChains | null = null;
+  private verifier: PersonVerifier | null = null;
+  private personalUp = false;
+  private personalHeads = new Map<string, { version: number; genesis: string; head: string }>();
+  private personalPending = new Map<string, number>();
   readonly data: string;
 
   /// `watchFiles`: whether the files are watched for others' changes (tests that start and stop many stations leave it out:
@@ -217,6 +224,52 @@ export class Cloud {
   close() {
     this.watcher?.close();
     this.listeners.clear();
+    this.persons?.close();
+    this.verifier?.close();
+  }
+
+  /// Personal chains heard by this station, kept over restarts.
+  personChains(): PersonChains { return this.persons ??= new PersonChains(this.data); }
+  personVerifier(): PersonVerifier { return this.verifier ??= new PersonVerifier(this.data); }
+
+  /// A personal connection is valid only while updates can reach this station.
+  personalOnline(): boolean { return this.personalUp; }
+  setPersonalOnline(up: boolean): void {
+    if (up === this.personalUp) return;
+    this.personalUp = up;
+    this.tell();
+  }
+  personalHead(sub: string): { version: number; genesis: string; head: string } | undefined { return this.personalHeads.get(sub); }
+  personalBusy(sub: string): boolean { return this.personalPending.has(sub); }
+
+  /// The head/version recorded here describe the cloud snapshot. Admission independently checks the longest
+  /// verified chain on disk, which can be newer when the cloud has lost entries or a station has restarted.
+  async takePersonal(sub: string, entries: unknown[], version: number): Promise<void> {
+    if (!Number.isSafeInteger(version) || version < 0 || entries.length === 0 || entries.length > 1024) throw new Error("invalid personal lock snapshot");
+    const bindings = this.memberships().map((m) => this.locked(m.home ? null : m.workspace)?.state?.persons.get(sub)).filter((p): p is string => p !== undefined);
+    if (bindings.length === 0) return;
+    const before = this.personalHeads.get(sub);
+    if (before && version < before.version) return;
+    if (before && version === before.version) {
+      if (before.genesis !== entryHash(entries[0] as Entry) || before.head !== entryHash(entries[entries.length - 1] as Entry)) throw new Error("personal lock snapshot changed at the same version");
+      return;
+    }
+    // No personal connection may keep serving while a newer snapshot is being checked.
+    this.personalPending.set(sub, (this.personalPending.get(sub) ?? 0) + 1);
+    this.tell();
+    try {
+      const person = await this.personVerifier().snapshot(sub, entries, bindings);
+      const current = this.personalHeads.get(sub);
+      if (current && version < current.version) return;
+      if (current && version === current.version && (current.genesis !== person.genesis || current.head !== person.head)) throw new Error("personal lock snapshot changed at the same version");
+      this.personalHeads.set(sub, { version, genesis: person.genesis, head: person.head });
+      this.tell();
+    } finally {
+      const left = (this.personalPending.get(sub) ?? 1) - 1;
+      if (left > 0) this.personalPending.set(sub, left);
+      else this.personalPending.delete(sub);
+      this.tell();
+    }
   }
 
   /// The state read again from its file; told when it changed, or anyway (`tell`: the station joined a workspace, and

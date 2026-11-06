@@ -22,6 +22,24 @@ test("the station in a release starts", { skip: !process.env.STATION_BUNDLE }, (
   } finally { rmSync(data, { recursive: true, force: true }); }
 });
 
+test("the personal lock verifier in a station release answers", { skip: !process.env.STATION_BUNDLE }, async () => {
+  const directory = mkdtempSync(join(tmpdir(), "station-bundle-person-"));
+  const worker = new Worker(join(process.env.STATION_BUNDLE!, "mesh/person-verifier-worker.js"), { workerData: { data: directory } });
+  try {
+    const reply = new Promise<{ id: number; error?: string }>((resolve, reject) => {
+      worker.once("message", resolve);
+      worker.once("error", reject);
+    });
+    worker.postMessage({ id: 1, kind: "snapshot", sub: "test", entries: [], bindings: [] });
+    const result = await reply;
+    assert.equal(result.id, 1);
+    assert.equal(typeof result.error, "string", "the bundled worker must validate the request");
+  } finally {
+    await worker.terminate();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 // The mac-build job calls this on the release it just laid out; the regular test suite has no release directory.
 test("the workers in a station release start and process a batch", { skip: !process.env.STATION_BUNDLE }, async () => {
   const directory = mkdtempSync(join(tmpdir(), "station-bundle-workers-"));

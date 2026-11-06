@@ -78,7 +78,14 @@ pub fn fold_person(entries : Array[Json], sub : String, c : &Crypto) -> Person r
           guard @role.person_changes(devices.contains(key), devices.length() == 1) else {
             raise Refused("not signed by a device on the lock, or its last")
           }
-          devices.remove(gone)
+          // A base key identifies the connecting device. If older entries named it under several signing keys,
+          // removing just one key would still admit that very device through another. Revoke all its aliases.
+          let base = devices.get(gone).unwrap().id
+          let aliases : Array[String] = []
+          for id, d in devices {
+            if d.id == base { aliases.push(id) }
+          }
+          for id in aliases { devices.remove(id) }
         }
         _ => raise Refused("unknown entry kind " + kind)
       }

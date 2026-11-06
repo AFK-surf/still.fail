@@ -2,9 +2,11 @@ import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
 import { extendPersonal, type PersonalEntry } from "./personal-lock";
+import { entryHash, type Entry } from "../../station/src/cloud/lock.ts";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
+const PERSONAL_RETRY_MS = 5_000;
 type Retry = { hash: string; request: string; until: number; response: string };
 /** Why a session ended, kept a while (the last 32) for the span of a refresh that finds it gone. */
 type Ended = { id: string; at: number; why: "reused" | "logout" | "logout_all" | "removed" | "blocked" };
@@ -49,15 +51,62 @@ export class Account extends DurableObject<Env> {
     return this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock") ?? [];
   }
 
+  /** The revision orders snapshots and notifications, including when a new genesis replaces the old. */
+  personalLockState(): { entries: PersonalEntry[]; version: number } {
+    return { entries: this.personalLock(), version: this.ctx.storage.kv.get<number>("personal-lock-version") ?? 0 };
+  }
+
   /** Entries brought to it; the code it refuses them with, or the whole lock now. */
-  appendPersonalLock(sub: string, entries: unknown): { entries: PersonalEntry[] } | { refused: string } {
-    try {
-      const next = extendPersonal(sub, this.personalLock(), entries);
-      this.ctx.storage.kv.put("personal-lock", next);
-      return { entries: next };
-    } catch (error) {
-      return { refused: (error as Error).message };
-    }
+  async appendPersonalLock(sub: string, entries: unknown, expect?: unknown): Promise<{ entries: PersonalEntry[]; version: number; refused: string | null }> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      // Set the alarm before committing: if the caller stops immediately after the commit, the outbox is still retried.
+      const due = Date.now() + PERSONAL_RETRY_MS;
+      const alarm = await this.ctx.storage.getAlarm();
+      if (alarm === null || alarm > due) await this.ctx.storage.setAlarm(due);
+      try {
+        return this.ctx.storage.transactionSync(() => {
+          const kept = this.personalLock();
+          if (expect !== undefined) {
+            const wanted = expect as { length?: unknown; head?: unknown } | null;
+            if (!wanted || typeof wanted !== "object" || !Number.isSafeInteger(wanted.length) || (wanted.length as number) < 0 ||
+                !(wanted.head === null || (typeof wanted.head === "string" && /^[0-9a-f]{64}$/.test(wanted.head)))) throw new Error("invalid_lock_entries");
+            const head = kept.length ? entryHash(kept[kept.length - 1] as unknown as Entry) : null;
+            if (wanted.length !== kept.length || wanted.head !== head) throw new Error("lock_refused");
+          }
+          const next = extendPersonal(sub, kept, entries);
+          const nextGenesis = entryHash(next[0] as unknown as Entry);
+          const oldGenesis = kept.length ? entryHash(kept[0] as unknown as Entry) : null;
+          if (nextGenesis !== oldGenesis) {
+            // A reset is deliberately allowed, but it must not make an earlier retired lock current again.
+            if (this.ctx.storage.kv.get(`personal-lock-retired:${nextGenesis}`)) throw new Error("lock_refused");
+            if (oldGenesis !== null) this.ctx.storage.kv.put(`personal-lock-retired:${oldGenesis}`, true);
+          }
+          let version = this.ctx.storage.kv.get<number>("personal-lock-version") ?? 0;
+          if (nextGenesis !== oldGenesis || next.length !== kept.length) {
+            version++;
+            this.ctx.storage.kv.put("personal-lock", next);
+            this.ctx.storage.kv.put("personal-lock-version", version);
+            this.ctx.storage.kv.put("personal-lock-pending", { sub, version });
+          }
+          return { entries: next, version, refused: null };
+        });
+      } catch (error) {
+        return { entries: [], version: 0, refused: (error as Error).message };
+      }
+    });
+  }
+
+  /** A notification for an older revision must not erase a newer pending notification. */
+  private acknowledgePersonal(version: number): void {
+    const pending = this.ctx.storage.kv.get<{ sub: string; version: number }>("personal-lock-pending");
+    if (pending?.version === version) this.ctx.storage.kv.delete("personal-lock-pending");
+  }
+
+  async personalDelivered(version: number): Promise<void> {
+    await this.ctx.blockConcurrencyWhile(async () => {
+      this.acknowledgePersonal(version);
+      await this.schedule(this.data());
+    });
   }
 
   /** A new access credential for the session. */
@@ -241,17 +290,26 @@ export class Account extends DurableObject<Env> {
     data.sessions = data.sessions.filter((s) => s.expires > now && s.idle > now);
     this.save(data);
   }
-  private async schedule(data: AccountData) {
-    const deadlines = data.sessions.flatMap((s) => [s.expires, s.idle]);
-    if (deadlines.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 1000, Math.min(...deadlines) * 1000));
+  private async schedule(data?: AccountData) {
+    const deadlines = (data?.sessions ?? []).flatMap((s) => [s.expires * 1000, s.idle * 1000]);
+    if (this.ctx.storage.kv.get("personal-lock-pending")) deadlines.push(Date.now() + PERSONAL_RETRY_MS);
+    if (deadlines.length) await this.ctx.storage.setAlarm(Math.max(Date.now() + 1000, Math.min(...deadlines)));
     else await this.ctx.storage.deleteAlarm();
   }
   async alarm() {
-    const data = this.data();
-    if (data) {
-      this.prune(data);
-      await this.schedule(data);
+    const pending = this.ctx.storage.kv.get<{ sub: string; version: number }>("personal-lock-pending");
+    if (pending) {
+      try {
+        const current = this.personalLockState();
+        await this.env.DIRECTORY.getByName("primary").personalChanged(pending.sub, current.entries, current.version);
+        this.acknowledgePersonal(current.version);
+      } catch (error) {
+        console.warn("personal lock notification will be retried", error);
+      }
     }
+    const data = this.data();
+    if (data) this.prune(data);
+    await this.schedule(data);
   }
 
   /** Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but

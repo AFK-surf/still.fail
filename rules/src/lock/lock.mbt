@@ -582,7 +582,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
       let sub = text_of(field(b, "sub"))
       guard sub is Some(sub) && s.members.contains(sub) else { raise Refused("a person's lock is a member's") }
       guard text_of(field(b, "person")) is Some(person) && is_hex32(person) else { raise Refused("a person's lock is named by its genesis's hash") }
-      // (their own device or passkey, not a manager's: no one binds someone else to a lock)
+      // (their own device or passkey as this workspace recognized it; an admin approves a member's first device)
       need(@role.binds(sub == by.sub, by.own), "members bind only themselves to a lock of their own, from their own device")
       s.persons[sub] = person
     }

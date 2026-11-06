@@ -638,34 +638,15 @@ test("over the stations' own transport: a station the control plane stuffs in is
   }
 });
 
-test("a hello bringing its person's own lock is let in on it where its member bound it, and goes by the longest chain heard", () => {
+test("a hello cannot use a personal chain without checking the cloud", () => {
   const w = workspace();
   const cloud = stationData(w, w.stations[0]!.hex);
-  const owner = ed().hex;
-  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { sub: "alice", email: "", name: "", role: "owner", workspace: WS, device: owner, lockDevice: { base: w.alice.base.hex, proof: w.alice.base.sign(endpointBytes(WS, owner)) } } as any)[0], 200);
-  const entry = (chain: Entry[], kind: string, body: unknown, key: Key) => {
-    const last = chain[chain.length - 1];
-    chain.push(signed({ v: 1, ws: "person:carol", seq: chain.length, prev: last ? entryHash(last) : null, at: 1000, kind, body }, key));
-  };
-  const first = { key: ed(), base: ed() }, phone = { key: ed(), base: ed() };
-  const chain: Entry[] = [];
-  entry(chain, "genesis", { sub: "carol", device: { key: first.key.id, id: first.base.hex, label: "first" } }, first.key);
-  entry(chain, "device", { key: phone.key.id, id: phone.base.hex, label: "phone" }, first.key);
-  const endpoint = ed().hex;
-  const admitted = (base: Key) => ({ viewer: { sub: "carol", email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: base.hex, proof: base.sign(endpointBytes(WS, endpoint)) } }, exp: 4102444800 }) as any;
-  // Not bound yet: the lock it brings counts for nothing.
-  assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, { lock: { person: chain } }), LockRefusal);
-  cloud.takeLock([signed(after(cloud.locked()!.state!, "person", { sub: "carol", person: entryHash(chain[0]!) }), w.carol.signer)]);
-  // No chain brought, or a device not on it: refused.
-  assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, {}), LockRefusal);
-  assert.throws(() => inLockBringing(cloud, admitted(ed()), "member", endpoint, { lock: { person: chain } }), LockRefusal);
-  // On it: in, with the lower of the two roles.
-  assert.equal(inLockBringing(cloud, admitted(phone.base), "admin", endpoint, { lock: { person: chain } }).viewer.role, "member");
-  // Taken off, the chain from before brought again: judged by the longer one, once the station has heard it.
-  const before = [...chain];
-  entry(chain, "device.remove", { key: phone.key.id }, first.key);
-  assert.equal(inLockBringing(cloud, admitted(first.base), "member", endpoint, { lock: { person: chain } }).viewer.role, "member");
-  assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, { lock: { person: before } }), LockRefusal);
+  cloud.takeLock([w.first]);
+  const signer = ed(), base = ed(), endpoint = ed().hex;
+  const first = signed({ v: 1, ws: "person:carol", seq: 0, prev: null, at: 1000, kind: "genesis", body: { sub: "carol", device: { key: signer.id, id: base.hex, label: "phone" } } }, signer);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "person", { sub: "carol", person: entryHash(first) }), w.carol.signer)]);
+  const admitted = { viewer: { sub: "carol", email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: base.hex, proof: base.sign(endpointBytes(WS, endpoint)) } }, exp: 4102444800 } as any;
+  assert.throws(() => inLockBringing(cloud, admitted, "member", endpoint, { lock: { person: [first] } }), LockRefusal);
 });
 
 test("a device brings what put it in the lock to a station that has not heard of it yet, taken only as any entry is", () => {

@@ -2,7 +2,13 @@
 // binds a lock to them, a chain holds only as signed by a device on it, and a device is let in on it only as the
 // lock bound there says, not on one taken off since, nor on another lock.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { generateKeyPairSync, sign as nodeSign } from "node:crypto";
+import { once } from "node:events";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { type Entry, LockRefusal, admit, admitPerson, apply, endpointBytes, entryHash, genesis, personFold, signedBytes } from "../src/cloud/lock.ts";
 import { PersonChains } from "../src/mesh/person-chains.ts";
@@ -129,4 +135,93 @@ test("a device is let in on the lock its member bound, and no other way", () => 
   const last = fork[fork.length - 1]!;
   fork.push(signed({ v: 1, ws: "person:carol", seq: fork.length, prev: entryHash(last), at: 1000, kind: "device", body: { key: third.key.id, id: ed().hex, label: "x" } }, lock.first.key));
   assert.throws(() => kept.newest(pin, "carol", fork), LockRefusal);
+});
+
+test("removing a device revokes its base even if another signing key reused that base", () => {
+  const w = workspace();
+  const lock = personal("carol"), secondKey = ed(), otherKey = ed(), otherBase = ed();
+  const bound = apply(w.state, signed(next(w.state, "person", { sub: "carol", person: genesisOf(lock.chain) }), w.carol.signer), 2000);
+  lock.add("device", { key: secondKey.id, id: lock.first.base.hex, label: "same base" }, lock.first.key);
+  lock.add("device", { key: otherKey.id, id: otherBase.hex, label: "another device" }, lock.first.key);
+  lock.add("device.remove", { key: lock.first.key.id }, otherKey);
+  assert.throws(() => admitPerson(bound, who("carol", lock.first.base), lock.chain), LockRefusal,
+    "the removed device's base must not still admit it through another signing key");
+  assert.equal(admitPerson(bound, who("carol", otherBase), lock.chain).device, otherBase.hex);
+  assert.deepEqual(personFold(lock.chain, "carol").devices.map((d) => d.key), [otherKey.id]);
+  lock.add("device", { key: ed().id, id: ed().hex, label: "forged" }, secondKey);
+  assert.throws(() => personFold(lock.chain, "carol"), /not signed by a device/);
+});
+
+test("removing the last physical device with aliased keys leaves the lock needing recovery", () => {
+  const w = workspace(), lock = personal("carol"), alias = ed();
+  const bound = apply(w.state, signed(next(w.state, "person", { sub: "carol", person: genesisOf(lock.chain) }), w.carol.signer), 2000);
+  lock.add("device", { key: alias.id, id: lock.first.base.hex, label: "same base" }, lock.first.key);
+  lock.add("device.remove", { key: lock.first.key.id }, alias);
+  assert.deepEqual(personFold(lock.chain, "carol").devices, []);
+  assert.throws(() => admitPerson(bound, who("carol", lock.first.base), lock.chain), LockRefusal);
+  lock.add("device", { key: ed().id, id: ed().hex, label: "forged" }, alias);
+  assert.throws(() => personFold(lock.chain, "carol"), /not signed by a device/);
+});
+
+test("a manager can bind a new member through a first device they themselves approved", () => {
+  const w = workspace(), fake = { signer: ed(), base: ed() }, dave = personal("dave");
+  let state = apply(w.state, signed(next(w.state, "member", { sub: "dave", email: "d@x", role: "member" }), w.alice.signer), 2000);
+  state = apply(state, signed(next(state, "device", { id: fake.base.hex, sub: "dave", kind: "app", label: "first", sign_key: fake.signer.id }), w.bob.signer), 2000);
+  state = apply(state, signed(next(state, "person", { sub: "dave", person: genesisOf(dave.chain) }), fake.signer), 2000);
+  assert.equal(state.persons.get("dave"), genesisOf(dave.chain), "first-device ownership depends on the manager's prior approval");
+});
+
+test("a station remembers a personal revocation across restart and overlapping processes", () => {
+  const w = workspace(), lock = personal("carol"), second = { key: ed(), base: ed() };
+  lock.add("device", { key: second.key.id, id: second.base.hex, label: "second" }, lock.first.key);
+  const old = [...lock.chain], pin = genesisOf(old);
+  const bound = apply(w.state, signed(next(w.state, "person", { sub: "carol", person: pin }), w.carol.signer), 2000);
+  const data = mkdtempSync(join(tmpdir(), "person-chains-"));
+  const before = new PersonChains(data), overlap = new PersonChains(data);
+  before.keep(pin, old);
+  lock.add("device.remove", { key: lock.first.key.id }, second.key);
+  before.keep(pin, lock.chain);
+  // A process started during handover must not overwrite a newer chain with its old snapshot.
+  assert.equal(overlap.keep(pin, old).length, lock.chain.length);
+  before.close();
+  overlap.close();
+  const restarted = new PersonChains(data);
+  const judged = restarted.newest(pin, "carol", old);
+  assert.equal(judged.length, lock.chain.length);
+  assert.throws(() => admitPerson(bound, who("carol", lock.first.base), judged), LockRefusal);
+  assert.equal(admitPerson(bound, who("carol", second.base), judged).device, second.base.hex);
+  restarted.close();
+});
+
+test("a competing writer is refused without waiting and a killed writer cannot replace the stored chain", async () => {
+  const lock = personal("carol"), second = { key: ed(), base: ed() };
+  lock.add("device", { key: second.key.id, id: second.base.hex, label: "second" }, lock.first.key);
+  const old = [...lock.chain], pin = genesisOf(old);
+  const data = mkdtempSync(join(tmpdir(), "person-chains-busy-"));
+  const chains = new PersonChains(data);
+  chains.keep(pin, old);
+  lock.add("device.remove", { key: lock.first.key.id }, second.key);
+  const path = join(data, "mesh", "person-locks.sqlite");
+  const writer = new DatabaseSync(path);
+  writer.exec("BEGIN IMMEDIATE");
+  const started = performance.now();
+  assert.throws(() => chains.keep(pin, lock.chain), /try again/);
+  console.log(`PERSON_LOCK_BUSY_MS ${(performance.now() - started).toFixed(3)}`);
+  writer.exec("ROLLBACK");
+  writer.close();
+  chains.keep(pin, lock.chain);
+
+  const script = `const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(process.argv[1]); db.exec('BEGIN IMMEDIATE'); db.prepare('UPDATE chains SET entries = ? WHERE genesis = ?').run('[]', process.argv[2]); process.send('writing'); setInterval(() => {}, 1000);`;
+  const child = spawn(process.execPath, ["-e", script, path, pin], { stdio: ["ignore", "ignore", "ignore", "ipc"] });
+  try {
+    const [message] = await once(child, "message");
+    assert.equal(message, "writing");
+  } finally {
+    child.kill("SIGKILL");
+    await once(child, "exit");
+  }
+  chains.close();
+  const restarted = new PersonChains(data);
+  assert.deepEqual(restarted.newest(pin, "carol", old), lock.chain, "the uncommitted replacement was rolled back");
+  restarted.close();
 });

@@ -1045,6 +1045,20 @@ export class Directory extends DurableObject<Env> {
     return this.#one("SELECT 1 AS found FROM station_members WHERE station = ?", station) !== undefined;
   }
 
+  /** A station reads a person's chain only for a workspace that contains them both. */
+  stationMayReadPersonal(station: string, workspace: string, sub: string): boolean {
+    return this.#one("SELECT 1 AS found FROM station_members s JOIN members m ON m.workspace = s.workspace WHERE s.station = ? AND s.workspace = ? AND m.sub = ?", station, workspace, sub) !== undefined;
+  }
+
+  /** A signed personal chain changed: tell the stations of this person's current workspaces. */
+  personalChanged(sub: string, entries: unknown[], version: number): void {
+    const stations = this.#rows("SELECT DISTINCT s.station FROM station_members s JOIN members m ON m.workspace = s.workspace WHERE m.sub = ?", sub);
+    const frame = JSON.stringify({ type: "personal.lock", sub, entries, version });
+    for (const row of stations) for (const ws of this.#presence(row.station as string)) {
+      try { ws.send(frame); } catch { this.#drop(ws, 1011, "personal lock update failed"); }
+    }
+  }
+
   /** A mstill.fail's role, which its credential names (grants.ts). */
   memberRole(sub: string, workspace: string): Role {
     return this.#role(sub, workspace);
