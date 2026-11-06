@@ -2022,7 +2022,13 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
     while c >= 0 && self.nodes[c].parent != self.layout_owner {
       c = self.nodes[c].parent
     }
-    if c >= 0 && self.box_measured.contains(c) {
+    // (only what it lays out, inside it, may be changed in its layout: itself or another branch changed there is a
+    // fault, saying which; its layout is its constraints' and content's, read before it)
+    if c < 0 || at == self.layout_owner {
+      fault("layout_box node \{self.layout_owner}: node \{at}'s layout changed in its layout, not one of what it lays out")
+      return
+    }
+    if self.box_measured.contains(c) {
       self.box_stale.add(c)
     }
     let mut i = at

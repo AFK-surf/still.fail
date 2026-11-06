@@ -378,8 +378,9 @@ what asked for it (`Tree::owed_passes`: sizes told, once laid out, rows left out
 the pointer and a bar near it told after placing), and anything else that marks the tree's layout after its own layout
 is a fault saying where it marked it (in a host's run: told, that moment drawn and hit as its one layout has it, what
 was marked laid out as the tree is next laid out, at whatever moment that is; what is drawn then is that layout's, not
-what was marked after it, and is not to be taken as one with it). Inside a layout box's own layout, a child it measured and then changed (what it is laid out by set after) is measured
-again in that layout, or it is a fault as the layout ends, naming it. The passes of one outermost layout and those nested in
+what was marked after it, and is not to be taken as one with it). Inside a layout box's own layout, only what it lays out may be changed: itself or another branch changed there is a
+fault naming it; a child it measured and then changed (what it is laid out by set after) is measured again in that
+layout, or it is a fault as the layout ends, naming it. The passes of one outermost layout and those nested in
 it (what is under the pointer told after placing lays it out once more) are bounded together; layouts asked for apart at
 the same moment (two inputs at one moment) are each their own, their order the events'. The count names what is still
 to move and proves nothing of determinism: that is what the rules above aim at, still to be shown where the lists'
