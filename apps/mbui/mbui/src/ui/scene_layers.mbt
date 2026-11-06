@@ -1103,35 +1103,62 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
     return
   }
   let raised = ranges.fold(init=0, fn(n, r) { n + r.1 - r.0 })
+  // (how many were raised before each range: where one is found by halving, not by going through them all)
+  let before_of = Array::make(ranges.length(), 0)
+  for j in 1..<ranges.length() {
+    before_of[j] = before_of[j - 1] + ranges[j - 1].1 - ranges[j - 1].0
+  }
   let moved_to = fn(k : Int) -> Int {
-    let mut before = 0
-    let mut j = 0
-    while j < ranges.length() {
-      let (r0, r1) = ranges[j]
-      if k < r0 {
-        return k - before
+    // (the last range beginning at or before it)
+    let mut lo = 0
+    let mut hi = ranges.length()
+    while lo < hi {
+      let m = (lo + hi) / 2
+      if ranges[m].0 <= k {
+        lo = m + 1
+      } else {
+        hi = m
       }
-      if k < r1 {
-        return count - raised + before + (k - r0)
-      }
-      before = before + (r1 - r0)
-      j = j + 1
     }
-    k - before
+    if lo == 0 {
+      return k
+    }
+    let j = lo - 1
+    let (r0, r1) = ranges[j]
+    if k < r1 {
+      count - raised + before_of[j] + (k - r0)
+    } else {
+      k - before_of[j] - (r1 - r0)
+    }
   }
   // (the glyphs not yet set on the pixels, where they are now)
   for i, g in scene_glyphs {
     scene_glyphs[i] = (moved_to(g.0), g.1)
   }
   scene_glyphs.sort_by(fn(a, b) { a.0.compare(b.0) })
-  // (and the runs put where the window has them already, where they are now)
-  for i, r in scene_own_done {
-    if r.1 > r.0 {
-      let s = moved_to(r.0)
-      scene_own_done[i] = (s, s + r.1 - r.0)
+  // (and the runs put where the window has them already, where each of theirs is now: a run part of which was raised
+  // is two runs or more)
+  // (each cut where what was raised begins and ends: each piece moved as one)
+  let runs : Array[(Int, Int)] = []
+  for r in scene_own_done {
+    let mut at = r.0
+    for g in ranges {
+      for edge in [g.0, g.1] {
+        if edge > at && edge < r.1 {
+          let m = moved_to(at)
+          runs.push((m, m + edge - at))
+          at = edge
+        }
+      }
+    }
+    if r.1 > at {
+      let m = moved_to(at)
+      runs.push((m, m + r.1 - at))
     }
   }
-  scene_own_done.sort_by(fn(a, b) { a.0.compare(b.0) })
+  runs.sort_by(fn(a, b) { a.0.compare(b.0) })
+  scene_own_done.clear()
+  scene_own_done.append(runs)
   // (the bands the layers being drawn drew, where they are now)
   scene.layers.each(fn(_, l) {
     for i, k in l.bands_at {
@@ -1615,6 +1642,11 @@ fn Ctx::scene_drawn_end(self : Ctx, l : SceneLayer, outer : SceneLayer?, k0 : In
   l.seen = scene.frame
   // (all it drew kept as its own, what it is copied from where it is kept)
   self.scene_block_kept(l, k0, s0)
+  // (drawn each frame as its block was kept, holding one parted since it was drawn: what holds it too)
+  match outer {
+    Some(o) if l.each => o.each = true
+    _ => ()
+  }
   // (drawn from a place of its own: put where that is in what holds it)
   if l.has_origin {
     let (fx, fy) = scene_frame_origin.val
@@ -1802,6 +1834,8 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
   let n = self.ninst
   let kept = FixedArray::make(n * inst_size + 1, 0.0)
   self.inst.blit_to(kept, len=n * inst_size)
+  // (and the shapes' pieces, each band's by where it says they are)
+  let kept_pieces = self.segs.copy()
   let layers : Array[(@view.NodeId, Int, Int)] = []
   // (what a layer holding an old view draws of its own: the old frame's, never kept, painted where the old frame has
   // its views then (old_place), which the frame's end may have moved since; not the scene's to answer for)
@@ -1840,7 +1874,8 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
       let mut d = false
       for j in 0..<inst_size {
         let (a, b) = (kept[k * inst_size + j], self.inst[k * inst_size + j])
-        if a != b && !(a != a && b != b) {
+        // (a band's first piece: where its pieces are, compared by what they are, below)
+        if a != b && !(a != a && b != b) && !(j == 12 && kept[k * inst_size + 5] == 11.0) {
           d = true
           break
         }
@@ -1873,7 +1908,7 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
       if at < least {
         for j in 0..<inst_size {
           let (a, b) = (kept[at * inst_size + j], self.inst[at * inst_size + j])
-          if a != b && !(a != a && b != b) {
+          if a != b && !(a != a && b != b) && !(j == 12 && kept[at * inst_size + 5] == 11.0) {
             slots.push("\{j}: \{a} kept, \{b} anew")
           }
         }
@@ -1884,7 +1919,7 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
         let ds = []
         for j in 0..<inst_size {
           let (a, b) = (kept[q * inst_size + j], self.inst[q * inst_size + j])
-          if a != b && !(a != a && b != b) {
+          if a != b && !(a != a && b != b) && !(j == 12 && kept[q * inst_size + 5] == 11.0) {
             ds.push("\{j}: \{a}/\{b}")
           }
         }
@@ -1895,6 +1930,40 @@ fn Ctx::scene_check(self : Ctx, copied : Int) -> Unit {
         "\{differing} of \{least} instances differ (each, kept/anew: \{each}); \{n} instances kept, \{self.ninst} drawn anew; instance \{at} (kind \{kind}) the first to differ, in the layer of node \{who}: \{slots.join(", ")}; the frame \{if tree_alone_drawn.val { "of the tree alone" } else { "the old frame painted" }}",
       )
     }
+  }
+  // (every instance compared the same, the pieces each of their bands says are its the same: those, not where else in
+  // the frame's pieces they are nor what of them no band compared reads)
+  let differs = match differs {
+    None => {
+      let mut said : String? = None
+      for k in 0..<n {
+        let q = k * inst_size
+        if theirs[k] || kept[q + 5] != 11.0 || said is Some(_) {
+          continue
+        }
+        let (a, b) = (kept[q + 12].to_int(), self.inst[q + 12].to_int())
+        let count = kept[q + 13].to_int()
+        // (each its pieces in the frame's, kept and drawn anew alike)
+        if a < 0 || (a + count) * 4 > kept_pieces.length() {
+          said = Some("band \{k}'s pieces \{a}+\{count} past the \{kept_pieces.length() / 4} kept")
+          continue
+        }
+        if b < 0 || (b + count) * 4 > self.segs.length() {
+          said = Some("band \{k}'s pieces \{b}+\{count} past the \{self.segs.length() / 4} drawn anew")
+          continue
+        }
+        for p in 0..<count {
+          for j in 0..<4 {
+            let (kx, fy) = (kept_pieces[(a + p) * 4 + j], self.segs[(b + p) * 4 + j])
+            if kx != fy && said is None {
+              said = Some("band \{k}'s piece \{p} differs: \{kx} kept, \{fy} anew (its first \{a} kept, \{b} anew)")
+            }
+          }
+        }
+      }
+      said
+    }
+    d => d
   }
   match differs {
     Some(said) => {
@@ -2053,6 +2122,9 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
         }
         held.push(c)
       }
+      // (one drawn into it this frame and parted since, some of it raised over a scrim, Ctx::raise_ranges: no run of
+      // the frame of its own, what holds it kept as no block to put together of, drawn each frame while so)
+      Some(c) if c.seen == scene.frame && c.start < 0 => l.each = true
       // (what it holds is what was drawn into it this frame, its inner cleared as it began: one not so is a fault,
       // never its instances taken for the holder's own)
       Some(c) =>
@@ -2162,10 +2234,20 @@ fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom
     if looks_check.val {
       scene.parts.reach_add(self.inst, from, to, own_reach_checked)
     }
-    // (its bands where it drew them, scene_band_drawn; its instances' levels as drawn)
+    // (its bands where it drew them, scene_band_drawn, each with its own pieces, kept after those before it: where its
+    // first is told as it is in the block, whatever the frame has between them or in what order; its instances' levels
+    // as drawn)
     while band < l.bands_at.length() && l.bands_at[band] < to {
       if l.bands_at[band] >= from {
-        l.bands.push(l.block_n + l.bands_at[band] - from)
+        let i = l.block_n + l.bands_at[band] - from
+        l.bands.push(i)
+        let q = l.bands_at[band] * inst_size
+        let first = self.inst[q + 12].to_int()
+        let n = self.inst[q + 13].to_int()
+        l.block[i * inst_size + 12] = (l.block_segs.length() / 4).to_double()
+        for p in (first * 4)..<((first + n) * 4) {
+          l.block_segs.push(self.segs[p])
+        }
       }
       band = band + 1
     }
@@ -2186,9 +2268,8 @@ fn Ctx::scene_block_take(self : Ctx, l : SceneLayer, from : Int, to : Int, sfrom
     }
     l.block_n = l.block_n + to - from
   }
-  for q in (sfrom * 4)..<(sto * 4) {
-    l.block_segs.push(self.segs[q])
-  }
+  ignore(sfrom)
+  ignore(sto)
   band
 }
 
@@ -2807,7 +2888,8 @@ fn scene_own_place_same(tree : @view.Tree, l : SceneLayer) -> Bool {
 ///|
 /// Layer `l`'s own instances `from` to `to` of its block and its pieces `sfrom` to `sto` put next in the frame, a run
 /// at once: moved by (`dx`, `dy`) where it is put moved (insts_moved_by, `depth` and `soft` its), its bands from
-/// `band` on told where its pieces are now (`dseg` on), who drew each where that is kept. The band next after them.
+/// `band` on told where their pieces are put now (each by where it is among the run's, as its block keeps it: whatever
+/// what it holds drew between, `dseg` none of theirs), who drew each where that is kept. The band next after them.
 fn Ctx::scene_block_put(
   self : Ctx,
   l : SceneLayer,
@@ -2824,6 +2906,7 @@ fn Ctx::scene_block_put(
   lvl : Int,
 ) -> Int {
   let n = to - from
+  ignore(dseg)
   let mut band = band
   if n > 0 {
     while (self.ninst + n + 1) * inst_size > self.inst.length() {
@@ -2862,7 +2945,8 @@ fn Ctx::scene_block_put(
     }
     while band < l.bands.length() && l.bands[band] < to {
       let o = (k + l.bands[band] - from) * inst_size
-      self.inst[o + 12] = self.inst[o + 12] + dseg
+      // (its first piece where its pieces are put in the frame: those of this run of its block, put after the frame's)
+      self.inst[o + 12] = self.inst[o + 12] - sfrom.to_double() + (self.segs.length() / 4).to_double()
       band = band + 1
     }
     match l.block_owners {
@@ -3188,13 +3272,25 @@ fn own_clip_in_window(clip : FixedArray[Double], f : (Double, Double)) -> FixedA
   for j in 0..<8 {
     c[4 + j] = a[q + 24 + j]
   }
-  let outer = c[16] > 0.0 || c[17] > 0.0 || c[18] > 0.0 || c[19] > 0.0
-  let round = s[4] > 0.0 || s[5] > 0.0 || s[6] > 0.0 || s[7] > 0.0
-  let theirs = s[16] > 0.0 || s[17] > 0.0 || s[18] > 0.0 || s[19] > 0.0
-  if !outer && (round || theirs) {
-    for j in 0..<12 {
-      c[12 + j] = if round { s[j] } else { s[12 + j] }
-    }
+  // (its outer: its own, the one it is cut by there or that one's outer, the one whose curves cut into it the most,
+  // as push_clip_r chooses one)
+  let cands = FixedArray::make(36, 0.0)
+  for j in 0..<12 {
+    cands[j] = c[12 + j]
+    cands[12 + j] = s[j]
+    cands[24 + j] = s[12 + j]
+  }
+  let own = c[16] > 0.0 || c[17] > 0.0 || c[18] > 0.0 || c[19] > 0.0
+  match clip_cutting(if own { [0, 12, 24] } else { [12, 24] }, cands, c[0], c[1], c[2], c[3], (c[4], c[5], c[6], c[7]), (c[8], c[9], c[10], c[11])) {
+    Some(0) => ()
+    Some(o) =>
+      for j in 0..<12 {
+        c[12 + j] = cands[o + j]
+      }
+    None =>
+      for j in 0..<12 {
+        c[12 + j] = 0.0
+      }
   }
   c
 }
@@ -3233,6 +3329,11 @@ fn scene_glyphs_cut(k : Int) -> Unit {
   }
   while scene_own_done.length() > 0 && scene_own_done[scene_own_done.length() - 1].0 >= k {
     scene_own_done.pop() |> ignore
+  }
+  // (one run of them cut there: what is left of it)
+  match scene_own_done.last() {
+    Some((s, e)) if e > k => scene_own_done[scene_own_done.length() - 1] = (s, k)
+    _ => ()
   }
 }
 
@@ -3392,19 +3493,38 @@ fn scene_origin_put(
       clip_cut_by(a, q, clip)
       scene_work.origin_cuts = scene_work.origin_cuts + 1
     }
+    // (its outer: of its own (moved), the clip it began in and that one's outer, the one whose curves cut into it the
+    // most, as push_clip_r chooses one among the clip it is in and that one's outer; none where none cuts it)
     if fr > t {
       mv(q + 40)
-    } else {
-      let round = clip[4] > 0.0 || clip[5] > 0.0 || clip[6] > 0.0 || clip[7] > 0.0
-      let outer = clip[16] > 0.0 || clip[17] > 0.0 || clip[18] > 0.0 || clip[19] > 0.0
-      if round || outer {
+    }
+    let cands = FixedArray::make(36, 0.0)
+    for j in 0..<12 {
+      cands[j] = a[q + 40 + j]
+      cands[12 + j] = clip[j]
+      cands[24 + j] = clip[12 + j]
+    }
+    let picked = clip_cutting(
+      if fr > t { [0, 12, 24] } else { [12, 24] },
+      cands,
+      a[q + 16],
+      a[q + 17],
+      a[q + 18],
+      a[q + 19],
+      (a[q + 24], a[q + 25], a[q + 26], a[q + 27]),
+      (a[q + 28], a[q + 29], a[q + 30], a[q + 31]),
+    )
+    match picked {
+      Some(0) => ()
+      Some(c) => {
         for j in 0..<12 {
-          a[q + 40 + j] = if round { clip[j] } else { clip[12 + j] }
+          a[q + 40 + j] = cands[c + j]
         }
         if k < inst_froms.length() {
-          inst_froms[k] = if round { b } else { outer_from }
+          inst_froms[k] = if c == 12 { b } else { outer_from }
         }
-      } else {
+      }
+      None => {
         for j in 0..<12 {
           a[q + 40 + j] = 0.0
         }
