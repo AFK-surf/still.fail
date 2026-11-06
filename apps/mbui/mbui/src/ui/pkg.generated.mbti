@@ -408,6 +408,8 @@ pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, give
 
 pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
 
+pub fn old_defer_unbuilt_on_exit(@view.View) -> @view.View
+
 pub let old_fault_shown : @ref.Ref[(Ctx, String) -> Unit]
 
 pub fn old_islands_around() -> Bool

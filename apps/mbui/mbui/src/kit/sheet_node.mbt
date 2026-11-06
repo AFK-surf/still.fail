@@ -55,6 +55,8 @@ pub fn sheet_node(
   }, fn(layer) {
     shown()
     layer.owns(gone) |> ignore
+    // An old island has no contents to retain until it has actually built. Do not build one only for this exit.
+    @ui.old_defer_unbuilt_on_exit(layer) |> ignore
     // A page owning this presenter may itself leave as a layout removes it. Resolve that removal at the change
     // that caused it, even if no frame comes between that change and the sheet's exit.
     layer.laid_before_causes()

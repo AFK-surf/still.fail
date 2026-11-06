@@ -39,6 +39,9 @@ priv struct OldIsland {
   /// its part among the old frame's kept parts (Ctx::part_nodes: what it read, its nodes as last built), by id, once
   /// built (-1: not yet)
   mut part : Int
+  /// A deferred island has no old-frame contents to retain until its build actually runs.
+  built : Ref[Bool]
+  defer_unbuilt_on_exit : Bool
   /// how big its node is placed, as the old frame builds it: its room (Ctx::width, height, what it is built for) and
   /// part of its key (built again for another)
   room : Ref[(Double, Double)]
@@ -74,6 +77,19 @@ let old_islands : Array[OldIsland] = []
 ///|
 // kept across runs: put back as a run begins (view_forget)
 let old_made : Ref[Int] = Ref(0)
+
+///|
+/// Old views under a transient layer can defer their first build while it leaves. Lenders are let go with their nodes.
+// kept across runs: lenders belong to their nodes and are released with them
+let old_defer_unbuilt : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// An old view held by `v` that has not yet been built is not built for the first time while it or a holder leaves.
+/// One built before leaving keeps its contents during the exit. If it comes back before that first build, it builds
+/// normally. Use for a transient layer whose old content should have the old presenter's first-frame lifetime.
+pub fn old_defer_unbuilt_on_exit(v : @view.View) -> @view.View {
+  v.lends(old_defer_unbuilt, true)
+}
 
 ///|
 /// Where each old view was placed as the frame began: its node, where it is drawn (x, y: Tree::projected's, what moves
@@ -764,7 +780,8 @@ fn old_place(tree : @view.Tree) -> Unit {
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
   // (the old views alone, each found where the scene has it: the tree not gone through for them, Tree::drawn_each)
-  for d in tree.drawn_each(old_islands.map(fn(o) { o.id })) {
+  let ready = old_islands.filter(fn(o) { !o.defer_unbuilt_on_exit || o.built.val || !tree.leaving(o.id) })
+  for d in tree.drawn_each(ready.map(fn(o) { o.id })) {
     let (c, x, y, a, s, ux, uy) = d
     if c.hosted {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
@@ -3251,6 +3268,8 @@ pub fn old(
     old_made.val = old_made.val + 1
     let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
     let fit_probe = Ref(true)
+    let built = Ref(false)
+    let defer_unbuilt_on_exit = n.lent(old_defer_unbuilt).unwrap_or(false)
     let id = n.id()
     // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
@@ -3275,6 +3294,7 @@ pub fn old(
     n.faults_to(fn(said) { faulted.set(Some(said)) }) |> ignore
     // (what it builds marked with it, for what takes input to ask whether it may: island_allows)
     let held_build = fn(c : Ctx) {
+      built.val = true
       let was = island_building.val
       island_building.val = Some(id)
       match faulted.get() {
@@ -3303,6 +3323,8 @@ pub fn old(
       owner: owner.val,
       watch: watch.val.unwrap(),
       part: -1,
+      built,
+      defer_unbuilt_on_exit,
       room,
       natural: natural_h,
       gives: natural && gives,
