@@ -328,10 +328,10 @@ priv struct LetGoTaker {
 let let_go_takers : Array[LetGoTaker] = []
 
 ///|
-/// Node `v` told a button or a finger let go on what it holds (the topmost of what is under it there that it holds,
-/// Tree::under, as the window's tree is at that event's moment): `take` with where it was let go (in the window),
-/// saying whether it took it (a row carried onto a chat, put into its draft). What holds it asked after what it holds,
-/// the innermost first, till one takes it. Done no more once `v` is let go.
+/// Node `v` told a button or a finger let go on what it holds: `take` with where it was let go (in the window),
+/// saying whether it took it. The innermost visible taker is asked first, then those holding it until one takes it.
+/// A control or hosted view over it keeps the let-go for its own holders; a box only laying out content does not.
+/// Done no more once `v` is let go.
 pub fn takes_let_go(v : @view.View, take : (Double, Double) -> Bool) -> Unit {
   let taker = { view: v, take }
   let_go_takers.push(taker)
@@ -344,27 +344,52 @@ pub fn takes_let_go(v : @view.View, take : (Double, Double) -> Bool) -> Unit {
 }
 
 ///|
-/// A button or a finger let go at (`x`, `y`), in its event (pointer_in), the window's tree brought to its moment: told
-/// to what takes it there (takes_let_go), the innermost of those holding what is drawn topmost there first.
+/// A button or a finger let go at (`x`, `y`), in its event (pointer_in), the window's tree brought to its moment.
+/// Take candidates in drawing order down to the topmost input target. A full-window layout box may be above the
+/// actual drop target; its window-wide taker must not take precedence over a more specific visible one below it.
 fn let_go_told(x : Double, y : Double) -> Unit {
   guard !let_go_takers.is_empty() && view_app.val is Some(t) else { return }
+  let target = match t.target_at(x, y) {
+    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) | Off(id) => Some(id)
+    Nothing => None
+  }
   let under = t.under(x, y)
-  let mut k = under.length() - 1
-  while k >= 0 {
-    let id = under[k]
-    let holding = let_go_takers.filter(fn(h) { t.holds(h.view.id(), id) })
-    if !holding.is_empty() {
-      // (the innermost first: one held by another before it)
-      holding.sort_by(fn(a, b) {
-        if t.holds(b.view.id(), a.view.id()) { -1 } else if t.holds(a.view.id(), b.view.id()) { 1 } else { 0 }
-      })
-      for h in holding {
-        if (h.take)(x, y) {
-          return
+  // A small control can be reached from outside its drawn box. In that case it is the input target even though its
+  // id is absent from `under`; its holders, not the controls behind its press room, are asked.
+  let candidates : Array[LetGoTaker] = []
+  if target is Some(id) && !under.contains(id) {
+    for h in let_go_takers {
+      if t.holds(h.view.id(), id) { candidates.push(h) }
+    }
+  } else {
+    let mut k = under.length() - 1
+    while k >= 0 {
+      let id = under[k]
+      for h in let_go_takers {
+        if t.holds(h.view.id(), id) && !candidates.iter().any(fn(a) { physical_equal(a, h) }) {
+          candidates.push(h)
         }
       }
-      return
+      if target == Some(id) { break }
+      k = k - 1
     }
-    k = k - 1
+  }
+  // An ancestor may have been encountered first through an unrelated layout box. Prefer any of its visible
+  // descendants; among unrelated takers the first encountered is the one drawn over the other.
+  let first = candidates.iter().find_first(fn(h) {
+    !candidates.iter().any(fn(other) {
+      h.view.id() != other.view.id() && t.holds(h.view.id(), other.view.id())
+    })
+  })
+  guard first is Some(chosen) else { return }
+  let chain = candidates.filter(fn(h) { t.holds(h.view.id(), chosen.view.id()) })
+  while !chain.is_empty() {
+    let index = chain.search_by(fn(h) {
+      !chain.iter().any(fn(other) {
+        h.view.id() != other.view.id() && t.holds(h.view.id(), other.view.id())
+      })
+    }).unwrap()
+    let h = chain.remove(index)
+    if h.view.alive() && (h.take)(x, y) { return }
   }
 }
