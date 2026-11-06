@@ -1384,7 +1384,7 @@ fn Ctx::tree_step(
     // (a layer of its own: copied as kept where nothing of it, nor what it is drawn in, changed; else drawn as it keeps
     // how it is drawn, or by a walk of its own, followed by its own watch)
     let outer = scene.drawing
-    if self.scene_copied(c.id, p.moved_open > 0, place, p.fading, p.stretching, p.glyphing) {
+    if self.scene_copied(p, c.id, p.moved_open > 0, place, p.fading, p.stretching, p.glyphing) {
       match outer {
         Some(o) => o.inner.push(c.id)
         None => ()

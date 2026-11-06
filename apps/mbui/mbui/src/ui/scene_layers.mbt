@@ -1128,6 +1128,7 @@ fn copy_not(id : @view.NodeId, why : String) -> Bool {
 /// is no layer drawn otherwise than by the tree alone). `forced`: what holds it was drawn again whole.
 fn Ctx::scene_copied(
   self : Ctx,
+  p : TreePaint,
   id : @view.NodeId,
   forced : Bool,
   held : (Double, Double, Double, Double, Double, Double),
@@ -1153,7 +1154,7 @@ fn Ctx::scene_copied(
   guard scene_began_same(l, held, fading, stretching, glyphing) else { return copy_not(id, "drawn in otherwise") }
   // (from its own block and those of what it holds, each by its reference: Ctx::scene_emitted; its pictures kept as
   // shown, asked again)
-  self.scene_emitted(l)
+  self.scene_emitted(p, l)
   let n = l.count
   scene_work.copied = scene_work.copied + 1
   scene_work.copied_insts = scene_work.copied_insts + n
@@ -1875,7 +1876,7 @@ fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit
 /// Layer `l` put into the frame from its own block and those of the layers it holds, each where its reference in the
 /// block says, in the order drawn (Flutter's compositing a layer's children by their references): where each is in the
 /// frame said by this, its bands' first pieces told where its pieces are now, who drew each where that is kept.
-fn Ctx::scene_emitted(self : Ctx, l : SceneLayer) -> Unit {
+fn Ctx::scene_emitted(self : Ctx, p : TreePaint, l : SceneLayer) -> Unit {
   let at = self.ninst
   let seg0 = self.segs.length() / 4
   // (its own pieces in the frame as they were in it as it was drawn: the same in between what it holds)
@@ -1924,7 +1925,7 @@ fn Ctx::scene_emitted(self : Ctx, l : SceneLayer) -> Unit {
     match scene.layers.get(cid) {
       // (as kept where nothing of it changed; else drawn anew where its reference is, the rest of what holds it as kept:
       // Flutter's repaint boundary recorded alone, its parent's picture composited as it was)
-      Some(c) => if scene_copyable(c) { self.scene_emitted(c) } else { self.scene_redrawn_in(l, c) }
+      Some(c) => if scene_copyable(c) { self.scene_emitted(p, c) } else { self.scene_redrawn_in(p, l, c) }
       None => ()
     }
   }
@@ -1959,10 +1960,12 @@ fn scene_copyable(l : SceneLayer) -> Bool {
 /// has its node now (scene_place_now), in the clip, fades, stretches and glyph looks it was drawn in (its holder's, as
 /// kept), as it keeps how it is drawn where that stands, else by a walk of the tree from it. Where the tree no longer
 /// has it in its holder, nothing (as the walk leaves out what is out of its row).
-fn Ctx::scene_redrawn_in(self : Ctx, l : SceneLayer, c : SceneLayer) -> Unit {
-  guard view_app.val is Some(tree) && scene_place_now(tree, c) is Some(place) else { return }
+fn Ctx::scene_redrawn_in(self : Ctx, by : TreePaint, l : SceneLayer, c : SceneLayer) -> Unit {
+  let tree = by.tree
+  guard scene_place_now(tree, c) is Some(place) else { return }
   clip_put_back(c.clip, c.clip_window, c.clip_apart)
-  let p = TreePaint::new(tree, -1, true)
+  // (in the frame's paint: the old frame's root, what an old view it holds is painted by)
+  let p = TreePaint::new(tree, by.root, false)
   for f in c.fading {
     p.fading.push(f)
     p.fade_depth.push(-1)
