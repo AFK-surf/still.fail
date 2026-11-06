@@ -2635,7 +2635,8 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         marked()
       },
       sample?=match phase {
-        Paint | Place => Some(fn(v) { tree.shown_set(at, gen, v, last, apply, marked) })
+        // (once a frame: the layout of a frame shown later samples what lays out alone, Tree::shadow_shown)
+        Paint | Place => Some(fn(v) { if !tree.shadow_sampling { tree.shown_set(at, gen, v, last, apply, marked) } })
         // (what lays out by the time: for the layout of a frame shown later alone, Tree::shadow_shown)
         Layout | Both => Some(fn(v) { if tree.shadow_sampling { tree.shown_set(at, gen, v, last, apply, marked) } })
         _ => None
