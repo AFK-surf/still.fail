@@ -257,11 +257,16 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
   // waits for comes by real frames), so one after another the job was waiting, not working: a share took 90-150 s on
   // CI's runners (2026-10-23). Frames dropped while another plays change how many samples there are, never which way
   // anything moves (THROTTLE).
+  // The plays whose page crashed (its renderer gone), said with what that stopped, as is the browser gone under them:
+  // a call waiting when the browser's own process ends says only "Target page, context or browser has been closed",
+  // as one on a context the script closed would (2026-11-06: one did on CI, and nothing said which).
+  const crashed = new Set();
   const take = async (phone, name, play) => {
     const context = await browser.newContext(phone
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' }
       : { viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
     const page = await context.newPage();
+    page.on('crash', () => crashed.add(`${phone ? 'phone' : 'wide'} ${name}`));
     if (process.env.THROTTLE) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) });
     page.on('pageerror', (e) => failures.push(`${name}: page error ${e.message}`));
     await page.goto(base + '/list-settle-check.html' + (phone ? '#phone' : ''));
@@ -309,7 +314,17 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     await context.close();
   };
   await Promise.all(Array.from({ length: Number(process.env.PAGES) || 2 }, async () => {
-    while (plays.length) await take(...plays.shift());
+    while (plays.length) {
+      const [phone, name, play] = plays.shift();
+      const where = `${phone ? 'phone' : 'wide'} ${name}`;
+      try {
+        await take(phone, name, play);
+      } catch (e) {
+        // (a page or the browser gone under a play: which)
+        const why = [crashed.has(where) ? 'its page crashed (the renderer gone)' : null, browser.isConnected() ? null : 'the browser went away'].filter(Boolean);
+        throw new Error(`${where}: ${e.message}${why.map((w) => `\n    ${w}`).join('')}`, { cause: e });
+      }
+    }
   }));
   if (notes.length) console.log(notes.join('\n'));
   if (failures.length) { console.error(failures.join('\n')); process.exitCode = 1; }
