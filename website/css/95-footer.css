@@ -1,0 +1,16 @@
+/* ---------- Footer ---------- */
+.foot { padding-block: clamp(48px, 5vw, 80px) 32px; }
+.foot-grid { display: grid; grid-template-columns: minmax(0, 8fr) repeat(4, minmax(0, 3fr)); gap: var(--gap); }
+.foot-grid .fh { font-size: 13px; font-weight: 500; color: var(--graphite); margin-bottom: 14px; }
+.foot-grid ul { display: flex; flex-direction: column; gap: 10px; }
+.foot-grid a { text-decoration: none; font-size: 15px; color: var(--ink); }
+.foot-grid a:hover { color: var(--brand-deep); }
+.foot-tag { margin-top: 16px; color: var(--graphite); font-size: var(--t-small); max-width: 22em; }
+.foot-base { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: clamp(48px, 5vw, 80px); padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--graphite); }
+@media (max-width: 1180px) {
+  .foot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .foot-grid > :first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .foot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

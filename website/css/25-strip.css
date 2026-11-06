@@ -1,0 +1,14 @@
+/* ---------- Agents strip ---------- */
+.strip { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 20fr); gap: var(--gap); align-items: center; padding-block: clamp(28px, 3vw, 44px); border-bottom: 1px solid var(--line); }
+.strip + .strip { border-bottom: 0; padding-top: 0; }
+.strip > p { font-size: var(--t-small); color: var(--graphite); }
+.names { display: flex; flex-wrap: wrap; gap: 10px clamp(20px, 2.6vw, 44px); align-items: center; }
+.names li { font-size: clamp(17px, 1.45vw, 24px); font-weight: 600; letter-spacing: -.02em; color: var(--ink); white-space: nowrap; }
+.names li.dim { color: var(--silver); }
+@media (max-width: 960px) {
+  .strip { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+}
+/* Marks in the strip: each maker's own shape, in its colours where it has them (the VI's rule for third-party logos). */
+.names li { display: inline-flex; align-items: center; gap: .45em; }
+.names .lg { width: 1.05em; height: 1.05em; flex: none; color: var(--ink); }
+.names .lg.ico { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

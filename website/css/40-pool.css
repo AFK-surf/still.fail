@@ -1,0 +1,29 @@
+/* ---------- Account pool deep-dive ---------- */
+.pool { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 11fr) minmax(0, 5fr); gap: clamp(20px, 3vw, 56px); align-items: center; }
+.callouts { display: flex; flex-direction: column; gap: clamp(28px, 4vw, 64px); }
+.callout h3 { display: flex; align-items: center; gap: 10px; font-size: clamp(17px, 1.35vw, 21px); }
+.callout h3 svg { width: 22px; height: 22px; color: var(--brand-deep); flex: none; }
+.callout p { color: var(--graphite); margin-top: 8px; font-size: var(--t-small); line-height: 1.6; text-wrap: pretty; }
+.pool-card { position: relative; }
+.iso { width: 100%; height: auto; overflow: visible; }
+.pool-card .win { max-width: none; }
+.pool-card .flow { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.pool-sessions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pool-sessions .task { padding: 10px; gap: 4px; }
+.pool-sessions .task b { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pool-sessions .task small { font-size: 11px; }
+.formula { margin-top: clamp(40px, 5vw, 72px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
+.formula > div { border-top: 1px solid var(--line); padding-top: 14px; }
+.formula b { display: block; font-size: clamp(28px, 2.6vw, 44px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; font-feature-settings: "tnum"; }
+.formula > div > span { display: block; color: var(--graphite); font-size: var(--t-small); margin-top: 6px; }
+@media (max-width: 1180px) {
+  .pool { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .pool .pool-card { grid-column: 1 / -1; order: -1; max-width: 720px; justify-self: center; width: 100%; }
+}
+@media (max-width: 960px) {
+  .formula { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .pool { grid-template-columns: minmax(0, 1fr); }
+  .pool-sessions { grid-template-columns: minmax(0, 1fr); }
+}

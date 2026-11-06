@@ -1,0 +1,113 @@
+/* ---------- Every device (folder tabs) ---------- */
+.ftabs { display: flex; gap: 6px; flex-wrap: wrap; position: relative; z-index: 1; margin-bottom: -1px; }
+.ftabs button { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 12px 12px 0 0; background: var(--mist); color: var(--graphite); font-size: 15px; font-weight: 500; cursor: pointer; box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; }
+.ftabs button svg { width: 18px; height: 18px; }
+.ftabs button:hover { color: var(--ink); }
+.ftabs button[aria-selected=true] { background: #fff; color: var(--ink); box-shadow: inset 1px 1px 0 var(--line), inset -1px 0 0 var(--line); }
+.ftabs button[aria-selected=true] svg { color: var(--brand-deep); }
+.ftabs button:focus-visible { outline: 2px solid var(--brand-deep); outline-offset: -2px; }
+.fpanel { background: #fff; border: 1px solid var(--line); border-radius: 0 16px 16px 16px; display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 13fr); min-height: clamp(440px, 36vw, 580px); overflow: hidden; }
+.fpanel[hidden] { display: none !important; }
+.fpanel .txt { padding: clamp(28px, 3.4vw, 56px); display: flex; flex-direction: column; gap: 16px; }
+.fpanel .txt h3 { font-size: clamp(26px, 2.4vw, 40px); letter-spacing: -.02em; line-height: 1.12; }
+.fpanel .txt p { color: var(--graphite); text-wrap: pretty; }
+.fpanel .txt ul { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.fpanel .txt li { display: flex; gap: 10px; align-items: flex-start; font-size: var(--t-small); color: var(--ink); }
+.fpanel .txt li svg { width: 18px; height: 18px; color: var(--ok); flex: none; margin-top: 2px; }
+.fpanel .txt .actions { margin-top: auto; padding-top: 12px; }
+.fpanel .vis { background: radial-gradient(circle, rgba(255,255,255,.28) 1.1px, transparent 1.6px) 0 0 / 11px 11px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); display: grid; place-items: center; padding: clamp(28px, 3vw, 56px); position: relative; overflow: hidden; }
+.fpanel .vis.ink { background: radial-gradient(circle, rgba(255,255,255,.09) 1.1px, transparent 1.6px) 0 0 / 11px 11px, var(--ink); }
+.qr { display: flex; align-items: center; gap: 12px; font-size: var(--t-small); color: var(--graphite); }
+.qr img { width: 72px; height: 72px; padding: 6px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); background: #fff; }
+/* Slack-like thread on Ink */
+.slack { width: min(100%, 520px); background: #fff; border-radius: 16px; overflow: hidden; color: var(--ink); font-size: 14px; }
+.slack .hd { padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.slack .hd small { font-weight: 400; color: var(--graphite); font-size: 12px; }
+.slack .msg { display: grid; grid-template-columns: 32px 1fr; gap: 10px; padding: 12px 16px 4px; }
+.slack .msg .av { width: 32px; height: 32px; border-radius: 8px; font-size: 13px; }
+.slack .msg b { font-weight: 600; font-size: 13.5px; }
+.slack .msg b em { font-style: normal; font-weight: 400; color: var(--graphite); font-size: 12px; margin-left: 6px; }
+.slack .msg p { font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
+.slack .msg .mention { color: var(--brand-deep); background: #FDECE5; border-radius: 4px; padding: 0 3px; font-weight: 500; }
+.slack .msg .att { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.slack .reply { padding: 8px 16px 16px; }
+@media (max-width: 960px) {
+  .fpanel { grid-template-columns: minmax(0, 1fr); }
+  .fpanel .vis { min-height: 420px; }
+}
+@media (max-width: 640px) {
+  .ftabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--gl)); padding-inline: var(--gl); }
+  .ftabs::-webkit-scrollbar { display: none; }
+  .fpanel { border-radius: 0 0 16px 16px; }
+}
+/* ---------- Every device, as one scene played by scrolling (html.scrolly: large screens, motion allowed) ---------- */
+.dv-show { display: none; }
+.scrolly .dv-tabs { display: none; }
+.scrolly #devices { content-visibility: visible; }
+.scrolly .dv-show { display: block; height: 560vh; }
+.dv-stage { position: sticky; top: calc(var(--nav) + 16px); height: calc(100vh - var(--nav) - 32px); border-radius: 24px; overflow: hidden; isolation: isolate;
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 9fr); color: var(--dv-fg, var(--ink));
+  background: radial-gradient(circle, rgba(255,255,255,.26) 1.1px, transparent 1.6px) 0 0 / 12px 12px, linear-gradient(160deg, #F58459, var(--brand) 55%, #E5562A); }
+.dv-ink { position: absolute; inset: 0; z-index: -1; opacity: 0; background: radial-gradient(circle, rgba(255,255,255,.08) 1.1px, transparent 1.6px) 0 0 / 12px 12px, var(--ink); }
+.dv-copy { position: relative; display: flex; flex-direction: column; padding: clamp(32px, 3.6vw, 64px); min-width: 0; }
+.dv-no { font-family: var(--mono); font-size: 14px; color: var(--dv-mut, var(--brand-ink)); }
+.dv-no b { font-weight: 500; color: var(--dv-fg, var(--ink)); font-size: 15px; }
+.dv-steps { display: grid; margin-top: clamp(24px, 4vh, 56px); }
+.dv-step { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 14px; }
+.dv-step:not([data-i="0"]) { opacity: 0; visibility: hidden; }
+.dv-step .eyebrow { color: var(--dv-fg, var(--ink)); font-family: var(--mono); font-weight: 400; font-size: 13px; }
+.dv-step h3 { font-size: clamp(30px, 3vw, 48px); line-height: 1.08; letter-spacing: -.025em; }
+.dv-step h3 .zh { font-feature-settings: "halt"; }
+.dv-step p { color: var(--dv-mut, var(--brand-ink)); font-size: var(--t-body); max-width: 26em; text-wrap: pretty; }
+.dv-rail { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
+.dv-rail button { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 0; font-size: 15px; font-weight: 500; cursor: pointer;
+  color: var(--dv-mut, var(--brand-ink)); opacity: .62; transition: opacity .2s, transform .2s; }
+.dv-rail button svg { width: 18px; height: 18px; flex: none; }
+.dv-rail button:hover { opacity: 1; }
+.dv-rail button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 4px; }
+.dv-rail li[data-on] button { opacity: 1; color: var(--dv-fg, var(--ink)); transform: translateX(6px); }
+.dv-bar { height: 2px; margin-top: 14px; background: rgba(26,27,30,.14); border-radius: 2px; overflow: hidden; }
+.dv-bar i { display: block; height: 100%; background: var(--dv-fg, var(--ink)); transform-origin: left; transform: scaleX(0); }
+.dv-view { position: relative; min-width: 0; }
+/* The scene is drawn at 900 × 720 and scaled to fit (main.js sets --k); devices move inside it by transforms only. */
+.dv-scene { position: absolute; left: 50%; top: 50%; width: 900px; height: 720px; transform: translate(-50%, -50%) scale(var(--k, 1)); }
+.dv-scene .d { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+.dv-scene .d-duo { width: 440px; transform: translate(230px, 156px); }
+.dv-scene .d-android, .dv-scene .d-laptop, .dv-scene .d-slack { opacity: 0; }
+.d-duo .duo { width: 440px; will-change: transform, clip-path; }
+.d-duo .duo .scr { will-change: transform, opacity; }
+.d-android { width: 210px; }
+.d-android .phone { width: 210px; box-shadow: 0 40px 70px -30px rgba(42, 11, 2, .55); }
+.d-laptop { width: 600px; }
+.d-laptop .win { max-width: none; width: 600px; box-shadow: 0 40px 80px -40px rgba(42, 11, 2, .5); }
+.d-laptop .win-bar { position: relative; }
+.d-laptop .t-url { position: absolute; left: 70px; right: 14px; margin: 0 !important; background: #fff; border-radius: 99px; padding: 3px 12px; font-size: 12px; color: var(--graphite); opacity: 0; }
+.win-stack { display: grid; }
+.win-stack > .win-body { grid-area: 1 / 1; min-height: 270px; }
+.body-web { opacity: 0; }
+.d-slack { width: 360px; }
+.d-slack .slack { width: 360px; font-size: 13px; box-shadow: 0 40px 80px -30px rgba(0,0,0,.6); }
+.d-slack .hd span { display: inline-flex; align-items: center; gap: 8px; }
+.d-slack .sl { width: 16px; height: 16px; }
+/* on the cover screen: the folded Duo shows only its right half, moved to the middle (main.js) */
+.cover-notif { position: absolute; left: 124px; top: 44px; width: 192px; display: flex; gap: 8px; padding: 9px 10px; border-radius: 14px; background: rgba(241,241,242,.97);
+  font-size: 10.5px; line-height: 1.35; color: var(--ink); box-shadow: 0 10px 24px -12px rgba(42,11,2,.4); z-index: 2; }
+.cover-notif img { width: 20px; height: 20px; border-radius: 5px; flex: none; }
+.cover-notif b { display: flex; justify-content: space-between; font-weight: 600; }
+.cover-notif b em { font-style: normal; font-weight: 400; color: var(--graphite); }
+.done { position: absolute; left: -10px; top: -14px; z-index: 5; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 9px; border-radius: 99px;
+  background: #fff; color: var(--ink); font-size: 13px; font-weight: 500; box-shadow: 0 8px 20px -8px rgba(0,0,0,.35); transform: scale(0); }
+.done svg { width: 16px; height: 16px; }
+.dv-links { position: absolute; inset: 0; width: 900px; height: 720px; pointer-events: none; }
+.dv-links path { stroke: var(--brand-tint); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.dv-links .l1 { stroke: #fff; }
+.dv-tags { position: absolute; right: 8px; top: 8px; display: grid; justify-items: end; }
+.dv-tags .mtag { position: static; grid-area: 1 / 1; opacity: 0; }
+.dv-tags .mtag:first-child { opacity: 1; }
+/* z order: the window at the back, the links, the phones, Slack in front */
+.d-laptop { z-index: 1; }
+.dv-links { z-index: 2; }
+.d-duo { z-index: 3; }
+.d-android { z-index: 4; }
+.d-slack { z-index: 5; }
+.dv-tags { z-index: 6; }

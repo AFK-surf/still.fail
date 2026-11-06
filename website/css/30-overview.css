@@ -1,0 +1,37 @@
+/* ---------- Product overview (tabs left, stage right) ---------- */
+.overview { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 15fr); gap: clamp(24px, 3.4vw, 64px); align-items: stretch; }
+.ov-list { display: flex; flex-direction: column; }
+.ov-item { border-top: 1px dashed #CFCFD2; }
+.ov-item:last-child { border-bottom: 1px dashed #CFCFD2; }
+.ov-item button { all: unset; box-sizing: border-box; display: flex; width: 100%; align-items: center; gap: 12px; padding: clamp(18px, 1.8vw, 26px) 0; cursor: pointer; font-size: clamp(22px, 1.9vw, 30px); font-weight: 600; letter-spacing: -.015em; color: #6B6D72; transition: color .15s; }
+.ov-item button:focus-visible { outline: 2px solid var(--brand-deep); outline-offset: 2px; }
+.ov-item button .ico { width: 26px; height: 26px; flex: none; }
+.ov-item button .num { margin-left: auto; font-size: var(--t-small); font-weight: 500; color: #6B6D72; font-feature-settings: "tnum"; }
+.ov-item button:hover { color: var(--graphite); }
+.ov-item[data-on] button { color: var(--ink); }
+.ov-item[data-on] button .ico { color: var(--brand-deep); }
+.ov-item .ov-text { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
+.ov-item[data-on] .ov-text { grid-template-rows: 1fr; }
+.ov-text > div { overflow: hidden; }
+.ov-text p { color: var(--graphite); padding-bottom: clamp(18px, 1.8vw, 26px); max-width: 30em; text-wrap: pretty; }
+.ov-text a { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; text-decoration: none; color: var(--brand-deep); margin-top: -6px; padding-bottom: clamp(18px, 1.8vw, 26px); font-size: var(--t-small); }
+.stage { position: relative; border-radius: 20px; background: var(--brand); overflow: hidden; min-height: clamp(420px, 38vw, 640px); display: grid; place-items: center; padding: clamp(24px, 3vw, 56px); }
+.stage .pane { width: 100%; display: grid; place-items: center; }
+.stage .pane[hidden] { display: none !important; }
+.stage .pane { animation: rise .45s cubic-bezier(.2,.7,.2,1); }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* Two devices, one event: the phone sits over the window's right margin, never its content. */
+.compose-2 { position: relative; width: 100%; max-width: 760px; display: flex; align-items: center; padding-right: 150px; }
+.compose-2 .win-body { padding-right: 64px; }
+.compose-2 .phone { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 196px; }
+@media (max-width: 960px) {
+  .overview { grid-template-columns: minmax(0, 1fr); }
+  .stage { min-height: 420px; }
+}
+@media (max-width: 640px) {
+  .compose-2 { padding-right: 96px; }
+  .compose-2 .win-body { padding-right: 52px; }
+  .compose-2 .phone { width: 140px; }
+  .compose-2 .phone .list small, .compose-2 .notif { font-size: 9.5px; }
+  .stage { padding: 18px; }
+}

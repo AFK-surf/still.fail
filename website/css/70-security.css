@@ -1,0 +1,16 @@
+/* ---------- Security (Ink) ---------- */
+.sec-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 9fr) minmax(0, 6fr); gap: clamp(20px, 3vw, 56px); align-items: center; }
+[data-tone=ink] .callout h3 svg { color: var(--brand); }
+[data-tone=ink] .callout p { color: var(--mut); }
+[data-tone=ink] .callout + .callout { border-top: 1px dashed rgba(255,255,255,.18); padding-top: clamp(28px, 4vw, 64px); }
+.net { width: 100%; height: auto; }
+.trust { display: flex; flex-wrap: wrap; gap: 12px 40px; align-items: center; justify-content: space-between; margin-top: clamp(48px, 6vw, 96px); padding-top: 24px; border-top: 1px solid var(--hair); font-size: var(--t-small); color: var(--mut); }
+.trust b { color: #fff; font-weight: 500; }
+.trust .items { display: flex; flex-wrap: wrap; gap: 10px 32px; }
+@media (max-width: 1180px) {
+  .sec-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .sec-grid .net-wrap { grid-column: 1 / -1; order: -1; max-width: 720px; justify-self: center; width: 100%; }
+}
+@media (max-width: 640px) {
+  .sec-grid { grid-template-columns: minmax(0, 1fr); }
+}

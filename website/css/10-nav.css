@@ -1,0 +1,28 @@
+/* ---------- Nav ---------- */
+.nav { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.92); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); box-shadow: 0 1px 0 var(--line); }
+.nav .w { display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: none; }
+.brand img { width: 26px; height: 26px; border-radius: 6px; }
+.wordmark { font-weight: 600; font-size: 22px; letter-spacing: -.035em; line-height: 1; }
+.nav-list { display: flex; gap: clamp(14px, 1.6vw, 28px); flex: 1; min-width: 0; }
+.nav-list a { text-decoration: none; font-size: 15px; font-weight: 500; color: var(--graphite); white-space: nowrap; line-height: var(--nav); }
+.nav-list a:hover, .nav-list a[aria-current=true] { color: var(--ink); }
+.nav-list a[aria-current=true] { box-shadow: inset 0 -2px 0 currentColor; }
+.nav-tools { display: flex; align-items: center; gap: 10px; flex: none; margin-left: auto; }
+.seg { display: inline-flex; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); padding: 2px; }
+.seg button { border: 0; background: transparent; height: 28px; min-width: 36px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--graphite); }
+.seg button[aria-pressed=true] { background: var(--ink); color: #fff; }
+.icon-link { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: var(--ink); }
+.icon-link:hover { background: var(--mist); }
+.icon-link svg { width: 20px; height: 20px; }
+.menu-btn { display: none; border: 0; background: transparent; width: 40px; height: 40px; border-radius: 999px; cursor: pointer; place-items: center; }
+.menu-btn svg { width: 22px; height: 22px; }
+@media (max-width: 1180px) {
+  .nav-list { display: none; }
+  .menu-btn { display: grid; }
+  .nav[data-open] .nav-list { display: flex; position: absolute; top: var(--nav); left: 0; right: 0; flex-direction: column; gap: 0; background: #fff; padding: 8px var(--gr) 16px var(--gl); box-shadow: 0 1px 0 var(--line), 0 20px 30px -20px rgba(0,0,0,.2); }
+  .nav[data-open] .nav-list a { line-height: 48px; border-bottom: 1px solid var(--line); box-shadow: none; }
+}
+@media (max-width: 640px) {
+  .nav .btn-ink { display: none; }
+}

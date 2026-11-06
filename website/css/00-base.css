@@ -1,0 +1,145 @@
+/* monoid · official site.
+   Visual system: Comma Visual Identity v1.0 (2026-11), its roles kept and its brand colour monoid's Base, #EF6334. One
+   colour leads each band; no warm colours; emphasis by lightness. Layout runs on the 24-unit grid: 1U = page width / 24 (80 px at 1920), margins are 1U. */
+/* Suisse Intl, the brand face: Regular for running text, Book for UI and labels, Medium for headlines (CSS 400 / 500 / 600,
+   as in the VI). Latin only: Chinese is set in the system's PingFang SC / Microsoft YaHei, nothing downloaded for it.
+   An installed copy is used first. Inter stands in only for a glyph Suisse's subset lacks. */
+@font-face { font-family: "Suisse Intl"; font-style: normal; font-weight: 400; font-display: swap; src: local("Suisse Intl"), local("SuisseIntl-Regular"), url(../assets/fonts/suisse-intl-regular.woff2) format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215; }
+@font-face { font-family: "Suisse Intl"; font-style: normal; font-weight: 500; font-display: swap; src: local("Suisse Intl Book"), local("SuisseIntl-Book"), url(../assets/fonts/suisse-intl-book.woff2) format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215; }
+@font-face { font-family: "Suisse Intl"; font-style: normal; font-weight: 600; font-display: swap; src: local("Suisse Intl Medium"), local("SuisseIntl-Medium"), url(../assets/fonts/suisse-intl-medium.woff2) format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215; }
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(../assets/fonts/inter-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+:root {
+  /* Brand */
+  --brand: #EF6334;       /* Base: the brand colour, large fields. Text on it is Ink (5.3:1); white only at display sizes (3.2:1) */
+  --brand-deep: #C24A22;  /* Deep: small text and links on Paper (4.9:1), on-screen user bubbles with white text */
+  --brand-ink: #4A1606;   /* Deep Ink: secondary text on Base (4.6:1) */
+  --ink: #1A1B1E;
+  --graphite: #4A4C50;
+  --silver: #A4A5A9;
+  --line: #E3E3E4;
+  --mist: #F1F1F2;
+  --brand-haze: #F68B64; /* the Week's unlit commas on Base */
+  --brand-tint: #FFB599; /* accent on Ink */
+  --night: #2A0B02;
+  /* Status only */
+  --ok: #079455;
+  --warn: #F79009;
+  --err: #D92D20;
+
+  --font: "Suisse Intl", "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --u: min(calc(100vw / 24), 80px);
+  --gl: max(16px, var(--u), env(safe-area-inset-left, 0px));
+  --gr: max(16px, var(--u), env(safe-area-inset-right, 0px));
+
+  --t-display: clamp(44px, 7.6vw, 128px);
+  --t-title: clamp(32px, 4.4vw, 72px);
+  --t-head: clamp(20px, 1.8vw, 30px);
+  --t-body: clamp(16px, 1.2vw, 20px);
+  --t-small: clamp(14px, .95vw, 16px);
+  --gap: clamp(16px, 1.7vw, 24px);
+  --nav: 60px;
+
+  /* Tone of the band an element sits in (overridden by [data-tone]) */
+  --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep);
+  color-scheme: light;
+}
+[data-tone=paper] { --bg: #fff; --fg: var(--ink); --mut: var(--graphite); --hair: var(--line); --hit: var(--brand-deep); }
+[data-tone=mist] { --bg: var(--mist); --fg: var(--ink); --mut: var(--graphite); --hair: #D9D9DB; --hit: var(--brand-deep); }
+[data-tone=brand] { --bg: var(--brand); --fg: var(--ink); --mut: var(--brand-ink); --hair: rgba(74,22,6,.22); --hit: #fff; }
+[data-tone=ink] { --bg: var(--ink); --fg: #fff; --mut: #C9CACD; --hair: rgba(255,255,255,.16); --hit: var(--brand); }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+body {
+  margin: 0; background: #fff; color: var(--ink); font-family: var(--font); font-size: var(--t-body); line-height: 1.55;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden;
+}
+h1, h2, h3, h4, p, figure, ol, ul, dl, dd, blockquote { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+a { color: inherit; }
+button, input { font: inherit; color: inherit; }
+img, svg, video, canvas { display: block; max-width: 100%; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--brand-deep); outline-offset: 2px; border-radius: 4px; }
+[data-tone=brand] :focus-visible { outline-color: var(--ink); }
+[data-tone=ink] :focus-visible { outline-color: var(--brand); }
+/* Language: both are in the page, one is shown. Default Chinese. */
+.en { display: none !important; }
+:root[data-lang=en] .en { display: revert !important; }
+:root[data-lang=en] .zh { display: none !important; }
+.nb { white-space: nowrap; }
+/* Type */
+h1, h2, .display { font-weight: 600; text-wrap: balance; }
+h1, .display { font-size: var(--t-display); line-height: 1.04; letter-spacing: -.03em; }
+h2 { font-size: var(--t-title); line-height: 1.08; letter-spacing: -.025em; }
+h3 { font-size: var(--t-head); line-height: 1.25; font-weight: 600; letter-spacing: -.012em; }
+h1 .zh, h2 .zh, .display .zh { font-feature-settings: "halt"; word-break: keep-all; letter-spacing: -.01em; }
+/* The open sentence: a brand headline rests on a comma, which alone may take a colour (once per band). */
+.hit { color: var(--hit); }
+.lead { font-size: clamp(18px, 1.55vw, 24px); line-height: 1.5; color: var(--mut); max-width: 36em; text-wrap: pretty; }
+.note { font-size: var(--t-small); line-height: 1.6; color: var(--mut); }
+.tnum { font-feature-settings: "tnum"; }
+/* Eyebrow: a small label with a Central-style icon (24 grid, 2 px round stroke, no fill) */
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-small); font-weight: 500; color: var(--hit); }
+.eyebrow svg { width: 18px; height: 18px; flex: none; }
+.ico { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Layout */
+.band { background: var(--bg); color: var(--fg); position: relative; }
+.w { max-width: 1920px; margin-inline: auto; padding-left: var(--gl); padding-right: var(--gr); }
+.sec { padding-block: clamp(72px, 8.4vw, 136px); }
+section[id] { scroll-margin-top: var(--nav); }
+/* Bands below the first screen are laid out and painted only as they come near. */
+.sec { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
+.head { display: flex; flex-direction: column; gap: clamp(12px, 1.2vw, 18px); margin-bottom: clamp(36px, 4.4vw, 72px); max-width: 1180px; }
+.split-head { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(24px, 4vw, 64px); align-items: end; margin-bottom: clamp(40px, 5vw, 80px); }
+.split-head .lead { padding-bottom: .3em; }
+.split-head > div { display: flex; flex-direction: column; gap: clamp(12px, 1.2vw, 18px); }
+/* Buttons: full round, Ink fill or a hairline */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5em; height: 44px; padding: 0 22px; border-radius: 999px;
+  font-size: 16px; font-weight: 500; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; border: 0;
+  transition: background-color .15s, color .15s, box-shadow .15s, transform .15s;
+}
+.btn svg { width: 18px; height: 18px; }
+.btn.lg { height: 52px; padding: 0 26px; font-size: 17px; }
+.btn.sm { height: 36px; padding: 0 16px; font-size: 14px; }
+.btn-ink { background: var(--ink); color: #fff; }
+.btn-ink:hover { background: #000; }
+.btn-line { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--hair); }
+.btn-line:hover { box-shadow: inset 0 0 0 1px var(--fg); }
+.btn-paper { background: #fff; color: var(--ink); }
+.btn-paper:hover { background: var(--ink); color: #fff; }
+[data-tone=brand] .btn-line { box-shadow: inset 0 0 0 1px rgba(26,27,30,.45); color: var(--ink); }
+[data-tone=brand] .btn-line:hover { box-shadow: inset 0 0 0 1px var(--ink); background: rgba(255,255,255,.18); }
+[data-tone=ink] .btn-line { box-shadow: inset 0 0 0 1px rgba(255,255,255,.55); color: #fff; }
+[data-tone=ink] .btn-line:hover { box-shadow: inset 0 0 0 1px #fff; background: rgba(255,255,255,.08); }
+.btn .arr { transition: transform .15s; }
+.btn:hover .arr { transform: translateX(3px); }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+:root[data-lang=zh] .hero h1, :root:not([data-lang]) .hero h1 { max-width: 12ch; }
+:root:not([data-lang=en]) .end h2 { max-width: 11ch; }
+/* ---------- Reveal on scroll ---------- */
+.rv { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+.rv.in { opacity: 1; transform: none; }
+.no-js .rv { opacity: 1; transform: none; }
+/* ---------- Responsive ---------- */
+@media (max-width: 960px) {
+  .split-head { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  :root { --nav: 56px; }
+  h1 .zh, h2 .zh, .display .zh { overflow-wrap: anywhere; }
+}
+html, body { overflow-x: clip; }
+.typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--silver); animation: dot 1s ease-in-out infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; }
+.typing i:nth-child(3) { animation-delay: .3s; }

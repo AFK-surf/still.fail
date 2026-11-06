@@ -1,0 +1,56 @@
+/* ---------- Install + shipped ---------- */
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); }
+.card { background: #fff; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--line); padding: clamp(24px, 2.6vw, 44px); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.card h3 { font-size: clamp(22px, 2vw, 32px); letter-spacing: -.018em; }
+.term { background: var(--ink); color: #E6E7EA; border-radius: 14px; padding: 18px 20px; font-family: var(--mono); font-size: clamp(12.5px, .95vw, 14.5px); line-height: 1.75; overflow-x: auto; }
+.term .p { color: var(--silver); user-select: none; }
+.term .ok { color: #7EE2B0; }
+.term .dim { color: #8E9096; }
+.term .row { white-space: pre; }
+.copy-row { display: flex; align-items: center; gap: 10px; }
+.copy-btn { border: 0; background: transparent; box-shadow: inset 0 0 0 1px var(--line); height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.copy-btn:hover { box-shadow: inset 0 0 0 1px var(--ink); }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: auto; }
+.steps li { border-top: 1px solid var(--line); padding-top: 12px; font-size: var(--t-small); color: var(--graphite); }
+.steps li b { display: block; color: var(--ink); font-weight: 600; font-feature-settings: "tnum"; }
+.chart-top { display: flex; justify-content: space-between; gap: 12px; color: var(--graphite); font-size: var(--t-small); }
+.figure { font-size: clamp(44px, 4.2vw, 68px); font-weight: 600; letter-spacing: -.03em; line-height: 1.05; font-feature-settings: "tnum"; }
+.hb { display: grid; grid-template-columns: 5.6em minmax(0, 1fr); align-items: center; gap: 14px; min-height: 40px; font-size: var(--t-small); }
+.hb .track { display: flex; align-items: center; gap: 22px; }
+.hb .bar { position: relative; height: 12px; border-radius: 6px 0 0 6px; background: var(--c, var(--line)); }
+.hb .bar i { position: absolute; right: -11px; top: -5px; width: 22px; height: 22px; border-radius: 50%; background: var(--c, var(--line)); }
+.hb .val { font-feature-settings: "tnum"; font-weight: 500; }
+.changes { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px; }
+.changes li { display: flex; gap: 10px; font-size: var(--t-small); color: var(--ink); }
+.changes li svg { width: 18px; height: 18px; flex: none; margin-top: 2px; }
+@media (max-width: 960px) {
+  .two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .hb { grid-template-columns: 4.6em minmax(0, 1fr); }
+}
+/* ---------- Install ---------- */
+.card.install { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: clamp(24px, 3vw, 56px); align-items: center; }
+.install-term { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card.install .steps { grid-template-columns: minmax(0, 1fr); margin: 0; gap: 0; }
+.card.install .steps li { padding: 16px 0; font-size: var(--t-body); color: var(--ink); display: grid; grid-template-columns: 3em 1fr; align-items: baseline; }
+.card.install .steps li b { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--brand-deep); }
+/* ---------- Changelog: Reducto's latest articles, with pixel covers ---------- */
+.posts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.post { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: clamp(20px, 2.4vw, 40px); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.post.feature { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 3vw, 56px); align-items: start; }
+.post .cover { border-radius: 10px; overflow: hidden; aspect-ratio: 640 / 352; box-shadow: inset 0 0 0 1px var(--line); }
+.post .cover svg { width: 100%; height: 100%; display: block; }
+.post-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.post-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--graphite); }
+.post h3 { font-size: clamp(20px, 1.7vw, 28px); letter-spacing: -.018em; line-height: 1.2; }
+.post.feature h3 { font-size: clamp(24px, 2.2vw, 36px); }
+.post p { color: var(--graphite); font-size: var(--t-small); text-wrap: pretty; }
+.hbs { display: flex; flex-direction: column; }
+@media (max-width: 960px) {
+  .card.install, .post.feature { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .posts { grid-template-columns: minmax(0, 1fr); }
+}

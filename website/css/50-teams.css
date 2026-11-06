@@ -1,0 +1,121 @@
+/* ---------- Collaboration grid with dotted rails ---------- */
+.rails { position: relative; border: 1px solid var(--line); background: #fff; }
+.rails::before, .rails::after { content: ""; position: absolute; top: 0; bottom: 0; width: clamp(14px, 1.4vw, 22px); background-image: radial-gradient(circle, #D3D3D6 1.6px, transparent 1.9px); background-size: 100% 22px; background-position: center 11px; }
+.rails::before { left: 0; border-right: 1px solid var(--line); }
+.rails::after { right: 0; border-left: 1px solid var(--line); }
+.cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-inline: clamp(14px, 1.4vw, 22px); }
+.cell { padding: clamp(22px, 2.4vw, 40px); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.cell:nth-child(3n) { border-right: 0; }
+.cell:nth-last-child(-n+3) { border-bottom: 0; }
+/* Pictures sit on a faint dot grid, as Reducto's do, with a mono tag naming what is shown. */
+.cell .vis { position: relative; height: clamp(190px, 15vw, 236px); display: grid; place-items: center; border-radius: 12px; overflow: hidden; padding: 16px 16px 40px; font-size: 13px;
+  background: radial-gradient(circle, #D9D9DB 1px, transparent 1.4px) 0 0 / 14px 14px, #FAFAFA; box-shadow: inset 0 0 0 1px var(--line); }
+.cell h3 { font-size: clamp(17px, 1.35vw, 21px); display: flex; align-items: center; gap: 10px; }
+.cell h3 svg { width: 20px; height: 20px; color: var(--ink); flex: none; }
+.cell p { color: var(--graphite); font-size: var(--t-small); line-height: 1.6; text-wrap: pretty; margin-top: -8px; }
+.thread { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 300px; }
+.thread .bubble { font-size: 12.5px; max-width: 100%; }
+.avs { display: flex; }
+.avs .av { width: 34px; height: 34px; font-size: 13px; box-shadow: 0 0 0 3px var(--mist); margin-left: -8px; }
+.avs .av:first-child { margin-left: 0; }
+.stations { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.st { background: #fff; border-radius: 12px; box-shadow: inset 0 0 0 .5px var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 104px; }
+.st b { font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.st b i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.st small { color: var(--graphite); font-size: 11.5px; }
+.link-arrow { width: 40px; height: 14px; color: var(--brand-deep); flex: none; }
+.screen-mini { width: 100%; max-width: 280px; background: #fff; border-radius: 10px; box-shadow: inset 0 0 0 .5px var(--line); overflow: hidden; }
+.screen-mini .bar { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; font-size: 11.5px; color: var(--graphite); border-bottom: 1px solid var(--line); }
+.screen-mini .bar b { color: var(--ink); font-weight: 500; }
+.screen-mini .view { height: 98px; background: linear-gradient(135deg, #FDE3D8, #F7F8F8); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+.screen-mini .view span { background: #fff; border-radius: 6px; box-shadow: 0 0 0 .5px var(--line); }
+@media (max-width: 960px) {
+  .cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cell:nth-child(3n) { border-right: 1px solid var(--line); }
+  .cell:nth-child(2n) { border-right: 0; }
+  .cell:nth-last-child(-n+3) { border-bottom: 1px solid var(--line); }
+  .cell:nth-last-child(-n+2) { border-bottom: 0; }
+}
+@media (max-width: 640px) {
+  .cells { grid-template-columns: minmax(0, 1fr); margin-inline: 12px; }
+  .cell { border-right: 0 !important; border-bottom: 1px solid var(--line) !important; }
+  .cell:last-child { border-bottom: 0 !important; }
+  .rails::before, .rails::after { width: 12px; }
+}
+/* ---------- The teams grid: skeleton pictures that move (only while on screen: .cell.play) ---------- */
+.cell .vis * { animation-play-state: paused; }
+.cell.play .vis * { animation-play-state: running; }
+.sk-b { display: inline-block; height: 6px; border-radius: 3px; background: #E3E3E4; }
+/* Slack, as a skeleton: its rail, the channel list in grey bars, one thread that plays out */
+.sk-slack { width: 100%; max-width: 330px; height: 150px; display: grid; grid-template-columns: 26px 70px 1fr; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: inset 0 0 0 1px var(--line), 0 8px 20px -14px rgba(26,27,30,.35); font-size: 10.5px; line-height: 1.35; text-align: left; }
+.sk-rail { background: #3F0E40; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 7px; }
+.sk-logo { width: 14px; height: 14px; padding: 2px; background: #fff; border-radius: 4px; box-sizing: content-box; }
+.sk-rail i { width: 12px; height: 12px; border-radius: 3px; background: rgba(255,255,255,.18); }
+.sk-rail i.on { background: rgba(255,255,255,.5); }
+.sk-side { background: #4A154B; padding: 8px 7px; display: flex; flex-direction: column; gap: 7px; color: #fff; }
+.sk-side b { font-weight: 600; font-size: 10px; white-space: nowrap; background: #1164A3; margin: 0 -3px; padding: 2px 3px; border-radius: 3px; }
+.sk-side .sk-b { background: rgba(255,255,255,.22); height: 5px; }
+.sk-main { padding: 6px 9px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sk-head { font-weight: 600; border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+.sk-head em { font-style: normal; font-weight: 400; color: var(--graphite); margin-left: 4px; }
+.sk-msg { display: grid; grid-template-columns: 18px 1fr; gap: 6px; align-items: start; }
+.sk-msg > div { position: relative; min-width: 0; }
+.sk-msg b { font-weight: 600; font-size: 10px; }
+.sk-msg b em { font-style: normal; font-weight: 600; font-size: 8px; color: var(--graphite); background: var(--mist); border-radius: 2px; padding: 0 3px; margin-left: 3px; }
+.sk-msg p { margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-msg .mention { color: #1264A3; background: #E8F5FA; border-radius: 3px; padding: 0 2px; font-weight: 500; }
+.sk-av { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: #fff; font-size: 9px; font-weight: 600; }
+.sk-av.bot img { width: 18px; height: 18px; border-radius: 4px; }
+.sk-msg .cap { font-size: 9px; height: 1.9em; vertical-align: middle; }
+.sk-msg { opacity: 0; animation: sk-in 8s ease infinite; }
+.sk-msg.a2 { animation-delay: .5s; }
+.sk-msg.a3 { animation-delay: 1.2s; }
+@keyframes sk-in { 0%, 4% { opacity: 0; transform: translateY(6px); } 9%, 88% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; transform: none; } }
+.sk-msg .typing { display: flex; gap: 3px; height: 14px; align-items: center; animation: sk-typing 8s step-end infinite; animation-delay: 1.2s; }
+@keyframes dot { 0%, 100% { transform: translateY(0); opacity: .5; } 50% { transform: translateY(-2px); opacity: 1; } }
+@keyframes sk-typing { 0% { opacity: 1; } 30% { opacity: 0; } }
+.sk-msg .reply { position: absolute; left: 0; top: 14px; max-width: 100%; opacity: 0; animation: sk-reply 8s ease infinite; animation-delay: 1.2s; }
+@keyframes sk-reply { 0%, 29% { opacity: 0; transform: translateY(3px); } 33%, 85% { opacity: 1; transform: none; } 92%, 100% { opacity: 0; } }
+/* Workspace: members join one by one, the online dot breathes */
+.ws { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.ws .av { animation: pop 6s cubic-bezier(.3,1.5,.5,1) infinite; }
+.ws .av:nth-child(2) { animation-delay: .25s; }
+.ws .av:nth-child(3) { animation-delay: .5s; }
+.ws .av:nth-child(4) { animation-delay: .75s; }
+@keyframes pop { 0%, 3% { transform: scale(.3); opacity: 0; } 10%, 90% { transform: scale(1); opacity: 1; } 97%, 100% { transform: scale(.3); opacity: 0; } }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: live 2s ease-out infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 rgba(7,148,85,.45); } 100% { box-shadow: 0 0 0 7px rgba(7,148,85,0); } }
+/* Hand-off: work packets travel from Mini to Server, whose test bar fills */
+.handoff { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto; align-items: center; gap: 8px; width: 100%; max-width: 320px; }
+.handoff .st { min-width: 0; }
+.lane { position: relative; height: 2px; background: repeating-linear-gradient(90deg, #C9CACD 0 4px, transparent 4px 8px); }
+.pkt { position: absolute; left: 0; top: -4px; width: 10px; height: 10px; border-radius: 2px; background: var(--brand); opacity: 0; animation: pkt 2.4s cubic-bezier(.6,0,.4,1) infinite; }
+.pkt.d2 { animation-delay: 1.2s; background: var(--brand-deep); }
+@keyframes pkt { 0% { transform: translateX(0); opacity: 0; } 15%, 85% { opacity: 1; } 100% { transform: translateX(calc(var(--lane, 60px) - 10px)); opacity: 0; } }
+.prog { display: block; height: 4px; border-radius: 2px; background: var(--mist); overflow: hidden; margin-top: 6px; }
+.prog i { display: block; height: 100%; width: 100%; border-radius: 2px; background: var(--brand); transform-origin: left; animation: fill 4.8s ease-in-out infinite; }
+@keyframes fill { 0% { transform: scaleX(.05); } 80%, 100% { transform: scaleX(1); } }
+/* Lend: the shared accounts slide in; the one not shared stays grey */
+.lend { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.lend .cap { animation: slide 6s ease infinite; }
+.lend .l2 { animation-delay: .3s; }
+.lend .l3 { animation-delay: .6s; }
+@keyframes slide { 0%, 4% { opacity: 0; transform: translateX(-14px); } 12%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; transform: translateX(8px); } }
+/* Screen: someone's cursor moves on the shared screen and clicks; the watcher's eye blinks */
+.screen-mini .view { position: relative; }
+.cursor { position: absolute; left: 0; top: 0; width: 16px; height: 16px; animation: cur 6s ease-in-out infinite; filter: drop-shadow(0 2px 2px rgba(0,0,0,.2)); }
+@keyframes cur { 0% { transform: translate(30px, 24px); } 25% { transform: translate(150px, 20px); } 30% { transform: translate(150px, 20px) scale(.85); } 34% { transform: translate(150px, 20px); } 60% { transform: translate(90px, 66px); } 64% { transform: translate(90px, 66px) scale(.85); } 68%, 100% { transform: translate(30px, 24px); } }
+.screen-mini .t2 { animation: hit 6s step-end infinite; }
+.screen-mini .t3 { animation: hit 6s step-end infinite; animation-delay: 2.1s; }
+@keyframes hit { 0%, 30% { box-shadow: 0 0 0 .5px var(--line); } 31%, 45% { box-shadow: 0 0 0 1.5px var(--brand); } 46% { box-shadow: 0 0 0 .5px var(--line); } }
+.watch svg { animation: blink-eye 4s step-end infinite; }
+@keyframes blink-eye { 0%, 92% { opacity: 1; } 94% { opacity: .2; } }
+/* Phone lent: the run spins, the work bar fills */
+.lendphone { width: 100%; max-width: 270px; }
+.spin { animation: spin 2.4s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .sk-msg, .sk-msg .reply { opacity: 1 !important; }
+  .sk-msg .typing { display: none; }
+  .sk-msg .reply { position: static; }
+}

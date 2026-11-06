@@ -8,8 +8,14 @@ import { fileURLToPath } from "node:url";
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const out = here("../dist/website/");
 
+/** styles.css is a list of @imports, one file per section (css/): each inlined in its place, its URLs (written from
+ *  css/, "../assets/…") made the page's own ("assets/…"). */
+const sheet = readFileSync(here("styles.css"), "utf8")
+  .replace(/@import url\("([^"]+)"\);/g, (_, f) => readFileSync(here(f), "utf8").replaceAll("url(../assets/", "url(assets/"));
+if (sheet.includes("@import")) throw new Error("styles.css: an @import was not inlined");
+
 /** CSS without comments and indentation. The sheet has no strings or URLs containing comment markers. */
-const css = readFileSync(here("styles.css"), "utf8")
+const css = sheet
   .replace(/\/\*[\s\S]*?\*\//g, "")
   .split("\n").map((l) => l.trim()).filter(Boolean).join("\n")
   .replace(/\s*([{};,>])\s*/g, "$1")

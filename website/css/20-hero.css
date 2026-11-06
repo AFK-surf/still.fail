@@ -1,0 +1,32 @@
+/* ---------- Hero ---------- */
+.hero .top { display: flex; justify-content: space-between; gap: var(--gap); flex-wrap: wrap; align-items: baseline; padding-block: clamp(28px, 4vw, 60px) clamp(20px, 2.6vw, 40px); font-size: var(--t-small); font-weight: 500; }
+.hero .top .mut { color: var(--mut); font-weight: 400; }
+.hero h1 { max-width: 15ch; }
+.hero-body { display: grid; grid-template-columns: minmax(0, 13fr) minmax(0, 9fr); gap: clamp(24px, 4vw, 80px); align-items: end; padding-block: clamp(28px, 3.4vw, 52px) clamp(32px, 4vw, 60px); }
+.hero .lead { color: var(--brand-ink); }
+.hero .lead b { color: var(--ink); font-weight: 500; }
+.hero .actions { justify-content: flex-end; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px clamp(18px, 3vw, 48px); align-items: center; padding-bottom: clamp(16px, 2vw, 28px); font-size: var(--t-small); color: var(--mut); border-top: 1px solid var(--hair); padding-top: 16px; }
+.legend b { color: var(--ink); font-weight: 500; }
+.legend i { font-style: normal; color: var(--brand-ink); font-weight: 500; }
+.legend .tool { margin-left: auto; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1px var(--hair); color: var(--fg); font-size: 13px; font-weight: 500; cursor: pointer; }
+.field { display: block; width: 100%; height: auto; }
+@media (max-width: 960px) {
+  .hero-body { grid-template-columns: minmax(0, 1fr); }
+  .hero .actions { justify-content: flex-start; }
+}
+@media (max-width: 640px) {
+  .legend .tool { margin-left: 0; }
+}
+.field-wrap { position: relative; }
+.ftag { position: absolute; left: calc((var(--c) + .5) / 24 * 100%); top: calc((var(--r) + .5) / 7 * 100%); display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px;
+  margin: -12px 0 0 calc(100% / 24 * .55); border-radius: 4px; background: #fff; color: var(--ink); font-family: var(--mono); font-size: 12px; white-space: nowrap; box-shadow: 0 6px 16px -8px rgba(42,11,2,.45); pointer-events: none; }
+.ftag i { width: 8px; height: 8px; border-radius: 1.5px; background: var(--brand); }
+.ftag::before { content: ""; position: absolute; right: 100%; top: 50%; width: calc(100vw / 24 * .3); height: 1px; background: #fff; }
+.ftag.r::before { width: calc(100vw / 24 * .3); }
+@media (max-width: 960px) {
+  .ftag { display: none; }
+}
+.end .field { background: var(--brand); }
+.ftag.l { margin-left: calc(100% / 24 * -.55); transform: translateX(-100%); }
+.ftag.l::before { right: auto; left: 100%; }

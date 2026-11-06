@@ -1,0 +1,17 @@
+/* ---------- End ---------- */
+.end { padding-top: clamp(72px, 8vw, 140px); }
+.end h2 { font-size: var(--t-display); line-height: 1.04; letter-spacing: -.03em; max-width: 14ch; }
+.end .row { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; flex-wrap: wrap; padding-bottom: clamp(40px, 5vw, 80px); }
+.end .lead { color: var(--brand-ink); margin-top: 20px; }
+/* ---------- End: the back cover ---------- */
+.end { background-image: linear-gradient(rgba(74,22,6,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(74,22,6,.09) 1px, transparent 1px); background-size: 48px 48px; background-position: center top; }
+.end-in { display: flex; flex-direction: column; align-items: center; text-align: center; padding-bottom: clamp(56px, 6vw, 96px); }
+.end-in h2 { margin-inline: auto; }
+.end-in .lead { margin-inline: auto; }
+.end-in .actions { justify-content: center; margin-top: 32px; }
+.tile-wrap { position: relative; width: 340px; max-width: 100%; height: 200px; margin-bottom: 28px; }
+.tile { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; transform: translate(-50%, -50%); border-radius: 22px; background: var(--ink); display: grid; place-items: center;
+  box-shadow: 0 0 0 10px rgba(255,255,255,.18), 0 24px 48px -20px rgba(42,11,2,.6); }
+.tile img { width: 72px; height: 72px; border-radius: 0; }
+.pixels i { position: absolute; width: 12px; height: 12px; border-radius: 2px; transform: translate(-50%, -50%); animation: blink 3.2s ease-in-out var(--d) infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
