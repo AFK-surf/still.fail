@@ -7,9 +7,10 @@ import { hasLegacyAgent, legacyAgentMaintenanceStep, legacyAgentNeedsWork } from
 import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsNeedsWork } from "./legacy-login-cards.ts";
 import { hasLegacyEdits, legacyEditsMaintenanceStep, legacyEditsNeedsWork } from "./legacy-edits-build.ts";
 import { archivePolicyIndexNeedsWork, archivePolicyIndexStep, hasLegacyArchivePolicy } from "./archive-policy-index.ts";
+import { decisionTimeIndexNeedsWork, decisionTimeIndexStep, hasLegacyDecisionTime } from "./legacy-decision-time.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
@@ -29,18 +30,20 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     needsWork: () => legacyEditsNeedsWork(store.db), step: () => legacyEditsMaintenanceStep(store.db) });
   if (kinds.includes("legacy-policy") && hasLegacyArchivePolicy(store.db) && archivePolicyIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-policy",
     needsWork: () => archivePolicyIndexNeedsWork(store.db), step: () => archivePolicyIndexStep(store.db) });
+  if (kinds.includes("legacy-decision-time") && hasLegacyDecisionTime(store.db) && decisionTimeIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-time",
+    needsWork: () => decisionTimeIndexNeedsWork(store.db), step: () => decisionTimeIndexStep(store.db) });
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
   let worker: Worker | null = null;
   let retryCancel: (() => void) | null = null, memoryCancel: (() => void) | null = null;
   let allowed = false, closed = false, requested = false, retryMs = 250, next = 0;
   let off: () => void = () => {}, periodicCancel: () => void = () => {};
-  // Login and policy keys are kept current by their triggers and have no later reconciliation queue. Once published,
+  // Login, policy and decision-time keys are kept current by their triggers and have no later reconciliation queue. Once published,
   // these scans cannot become unfinished again; stop probing them on each message and periodic wake.
   const retireComplete = () => {
     for (let index = lookups.length - 1; index >= 0; index--) {
       const lookup = lookups[index]!;
-      if ((lookup.kind !== "legacy-login" && lookup.kind !== "legacy-policy") || lookup.needsWork()) continue;
+      if ((lookup.kind !== "legacy-login" && lookup.kind !== "legacy-policy" && lookup.kind !== "legacy-decision-time") || lookup.needsWork()) continue;
       lookups.splice(index,1);
       if (index < next) next--;
     }
@@ -172,5 +175,5 @@ export function buildLegacySaid(store: Store, previous: Promise<void>, workerFil
 
 /// Prepare the old lookups a store needs after the old station has handed over.
 export function buildLegacyEntryLookups(store: Store, previous: Promise<void>, workerFile?: URL): ReturnType<typeof buildLookups> {
-  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy"],workerFile);
+  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy","legacy-decision-time"],workerFile);
 }
