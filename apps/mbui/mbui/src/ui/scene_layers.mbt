@@ -37,6 +37,8 @@ priv struct SceneLayer {
   mut stretching : Array[(@view.NodeId, Double, Double, Double, Double, Double)]
   mut glyphing : Array[(@view.NodeId, (Double, @view.GlyphAt) -> @view.GlyphLook, (Double, Double))]
   mut held : (Double, Double, Double, Double, Double, Double)
+  /// its placement's revision: a frame drawing this layer alone does not update the entry kept by its parent
+  mut place_said : Int
   /// whether the old frame had a scrim up as it was drawn: what of it is drawn over a scrim is raised over it then
   /// (View::over_scrim), drawn otherwise
   mut scrim : Bool
@@ -92,6 +94,8 @@ priv struct SceneEntry {
   mut ux : Double
   mut uy : Double
   layer : Bool
+  /// the child layer's placement revision used here; refreshed when this entry is replayed, even in a later frame
+  mut place_seen : Int
   /// the looks its glyphs and those of all it holds are drawn by (Tree::glyphs_of), whether it is drawn over the scrim,
   /// how it is turned, where its ground is drawn off and bigger, how what it holds fades towards its edges (its soft cut's
   /// where it cuts softly), how what it holds is stretched, and whether it has a field of its own
@@ -144,6 +148,7 @@ fn scene_entry(
     ux,
     uy,
     layer,
+    place_seen: 0,
     glyphs: None,
     over_scrim: false,
     turn: 0.0,
@@ -710,7 +715,10 @@ fn scene_paint_told(id : @view.NodeId) -> Unit {
 fn scene_moved_layer(id : @view.NodeId) -> Unit {
   scene.moved_layers[id] = true
   let mut at = match scene.layers.get(id) {
-    Some(l) => l.outer
+    Some(l) => {
+      l.place_said = l.place_said + 1
+      l.outer
+    }
     None => None
   }
   while at is Some(o) && !scene.holding.contains(o) {
@@ -1364,6 +1372,7 @@ fn Ctx::scene_drawn(
         stretching: [],
         glyphing: [],
         held,
+        place_said: 0,
         scrim: false,
         reach: @damage.nowhere,
         watch: None,

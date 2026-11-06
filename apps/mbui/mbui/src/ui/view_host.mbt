@@ -1355,7 +1355,13 @@ fn Ctx::tree_step(
     // otherwise since it was last drawn (scene_moved_layer), then as the tree has it now, composed the same way, number
     // for number (Tree::placed_in), kept so; none where it is left out of its row, kept so till it is placed again,
     // what holds it marked as it comes back (its layer let go meanwhile, no longer kept: scene_told))
-    if !made && scene.moved_layers.contains(c.id) {
+    // (drawing the child alone consumes this frame's moved_layers, but has not visited this parent's entry: its
+    // recorded placement stays out of date until this entry has read the new one)
+    let placed = match scene.layers.get(c.id) {
+      Some(l) => l.place_said
+      None => 0
+    }
+    if !made && e.place_seen != placed {
       match tree.placed_in(c.id, from, oa, os) {
         Some((px, py, pa, ps, pux, puy)) => {
           e.x = px
@@ -1369,6 +1375,7 @@ fn Ctx::tree_step(
         None => e.gone = true
       }
     }
+    e.place_seen = placed
     if e.gone {
       return
     }
