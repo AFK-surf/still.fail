@@ -43,13 +43,14 @@ fn row_test_case(
   hits : Map[String, Int],
   nodes : Map[String, @view.View],
   shown? : @signals.Signal[Bool] = @signals.signal(true),
+  hidden? : @signals.Signal[Bool] = @signals.signal(false),
   platform? : Int = 0,
 ) -> @ui.Tester {
   let t = @ui.Tester::new(fn(c) { begin(c) |> ignore }, w=500.0, h=400.0, platform~)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
     root.show(fn() { shown.get() }, fn(place) {
-      place.padding(Is((30.0, 40.0, 0.0, 0.0))) |> ignore
+      place.padding(Is((30.0, 40.0, 0.0, 0.0))).laid_nowhere(By(fn() { hidden.get() })) |> ignore
       tools_row_node(
         place,
         fn() {
@@ -146,6 +147,23 @@ test "tools row nodes: without fixed items the more button comes and goes with o
   t.draw()
   assert_true(t.query(Button, label="more") is Some(_))
   assert_true(t.query(Menu) is None, msg="it does not reopen when the trigger returns")
+}
+
+///|
+test "tools row nodes: an open menu closes when a holder is laid nowhere and stays closed on return" {
+  let hidden = @signals.signal(false)
+  let hits : Map[String, Int] = Map([])
+  let nodes : Map[String, @view.View] = Map([])
+  let t = row_test_case(@signals.signal(107.0), @signals.signal(true), @signals.signal(true), @signals.signal(false), @signals.signal(false), hits, nodes, hidden~)
+  t.click(Button, label="more")
+  assert_true(t.query(Menu) is Some(_))
+  hidden.set(true)
+  t.draw()
+  assert_true(t.query(Menu) is None, msg="the menu closes when its anchor's holder leaves layout")
+  hidden.set(false)
+  t.draw()
+  assert_true(t.query(Button, label="more") is Some(_))
+  assert_true(t.query(Menu) is None, msg="the menu stays closed when its holder returns")
 }
 
 ///|

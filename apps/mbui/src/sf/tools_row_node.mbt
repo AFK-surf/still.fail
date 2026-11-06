@@ -108,10 +108,10 @@ pub fn tools_row_node(
         }
       })
       |> ignore
-      // If the last left-out tool comes back while this menu is open, the trigger leaves too. Do not reopen the menu
-      // on a later resize, and do not leave a modal menu anchored to a node laid nowhere.
-      slot.reacts(fn() { slot.left_out() }, fn(out) {
-        if out {
+      // Close as the trigger or any of its holders leaves or is laid nowhere. The popup lives at the window root, so
+      // otherwise it could remain modal after an enclosing row is left out. Do not reopen it when the trigger returns.
+      slot.reacts(fn() { slot.leaving() || slot.laid_window_told() is None }, fn(unavailable) {
+        if unavailable {
           opened.set(false)
         }
       })
