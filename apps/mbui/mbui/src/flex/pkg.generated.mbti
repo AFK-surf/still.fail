@@ -22,6 +22,8 @@ pub fn layout_child_fitted(Node, Double, containing_height? : Double) -> (Double
 
 pub fn measured_height(Node, Double) -> Double
 
+pub fn performing_layout() -> Bool
+
 // Errors
 
 // Types and methods

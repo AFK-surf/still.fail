@@ -23,7 +23,9 @@ pub fn Layout::sticky_cap(self : Layout, cap : LayoutCap, natural : Double, most
   guard self.live.val && self.owner.tree.layout_owner == self.owner.at else {
     abort("a layout cap is only used inside its own layout callback")
   }
-  if !cap.reached {
+  // An intrinsic probe of a sized layout can run after its actual layout. It must not replace the proposal from the
+  // layout which will be placed, even when the probe happens to find overflowing content.
+  if !cap.reached && @flex.performing_layout() {
     let owner = self.owner
     let id = owner.id()
     let tree = owner.tree
@@ -38,7 +40,28 @@ pub fn Layout::sticky_cap(self : Layout, cap : LayoutCap, natural : Double, most
       match cap.pending.search_by(fn(p) { same_owner(p.0) }) {
         Some(i) => {
           let (_, exceeded) = cap.pending.remove(i)
-          if tree.alive_id(id) && !tree.out_at(id.at) && exceeded { cap.reached = true }
+          if tree.alive_id(id) && exceeded {
+            if !tree.out_at(id.at) {
+              cap.reached = true
+            } else {
+              // A hidden subtree can later be placed with exactly these constraints. Flex would then reuse its
+              // layout without calling sticky_cap again. Forget that layout up through the outermost omitted node;
+              // changing its placement will dirty its parent. This schedules no layout and retains no hidden view.
+              let mut i = id.at
+              let mut outer = -1
+              while i >= 0 {
+                if tree.nodes[i].out { outer = i }
+                i = tree.nodes[i].parent
+              }
+              i = id.at
+              while i >= 0 {
+                let n = tree.nodes[i]
+                n.flex.dirty = true
+                if i == outer { break }
+                i = n.parent
+              }
+            }
+          }
         }
         None => ()
       }
