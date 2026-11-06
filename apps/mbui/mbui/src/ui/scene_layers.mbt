@@ -1062,7 +1062,17 @@ fn scene_raised(ranges : Array[(Int, Int)], count : Int) -> Unit {
     if e - s == l.count - 1 {
       l.start = s
     } else {
+      // (parted by it: no block of its own in the frame's order, nor of what holds it; drawn each frame, as what is
+      // moved after it is drawn is, scene_shifted)
       l.start = -1
+      let mut at : SceneLayer? = Some(l)
+      while at is Some(x) {
+        x.each = true
+        at = match x.outer {
+          Some(o) => scene.layers.get(o)
+          None => None
+        }
+      }
     }
   }
 }
@@ -1806,6 +1816,15 @@ fn scene_spans_wrong(spans : Array[(Int, Int, Int, Int, Int, Int, Int, Int)], ta
 /// that one drew (Flutter's PaintingContext appending a child's layer, Android's drawRenderNode of a child's). Its bands
 /// (kind 11) among its own instances, by where they are in the block, and who drew each of its own where that is kept.
 fn Ctx::scene_block_kept(self : Ctx, l : SceneLayer, k0 : Int, s0 : Int) -> Unit {
+  // (drawn each frame: never put in as kept, no block)
+  if l.each {
+    l.block_n = 0
+    l.block_segs.clear()
+    l.block_refs.clear()
+    l.bands.clear()
+    l.block_owners = None
+    return
+  }
   // (the layers it holds, as this frame has them in it, in the order drawn)
   let held : Array[SceneLayer] = []
   for i in l.inner {
