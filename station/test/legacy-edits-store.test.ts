@@ -9,6 +9,7 @@ import { legacyEditDrain, legacyEditStep } from "../src/store/legacy-edits-build
 import { buildLegacyEntryLookups } from "../src/store/legacy-said-builder.ts";
 import { Store } from "../src/store/store.ts";
 import { withoutSaidState } from "./legacy-message-fixture.ts";
+import { withoutLoginKeys } from "./legacy-login-fixture.ts";
 
 function populate(store: Store): number {
   const thread=store.openThread("ember","CHAT","legacy-edits-worker",null,null).id;
@@ -114,6 +115,7 @@ test("the four old entry lookups share preparation after handover", async () => 
   let store: Store | null=null,builder: ReturnType<typeof buildLegacyEntryLookups> | null=null;
   try {
     withoutSaidState(old);
+    withoutLoginKeys(old);
     old.exec(`DROP INDEX entries_agent_at; DROP INDEX entries_login_cards; DROP INDEX entries_edits;
       CREATE INDEX entries_target ON entries(thread,target) WHERE target IS NOT NULL`);
     store=Store.open(path);
