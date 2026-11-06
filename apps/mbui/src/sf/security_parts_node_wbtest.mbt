@@ -72,3 +72,24 @@ test "security rows put a role at the end and device actions below when narrow, 
   assert_true(narrow.3.1 > narrow.2.1)
   assert_true((wide.3.1 - wide.2.1).abs() < 10.0)
 }
+
+///|
+test "a narrow device mark stays beside its words when its actions appear underneath" {
+  let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=300.0, platform=2)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    look_lent(root, Narrow)
+    security_line_node(root, fn() { "Device" }, fn() { "Last used" }, indent=true, mark=fn(m) {
+      m.box(fn(mark) {
+        mark.width(Is(Some(16.0))).height(Is(Some(16.0))).says(Is(Some(@view.said(Group, label="Device mark")))) |> ignore
+      }) |> ignore
+    }, acts=fn(a) { security_action_node(a, fn() { "Remove" }, fn() {  }) })
+  })
+  t.draw()
+  let (_, title_y) = t.find("Device").unwrap()
+  let (_, note_y) = t.find("Last used").unwrap()
+  let (_, mark_y, _, mark_h) = t.get(Group, label="Device mark").rect
+  let (_, action_y) = t.find("Remove").unwrap()
+  assert_true((mark_y + mark_h / 2.0 - (title_y + note_y) / 2.0).abs() < 6.0)
+  assert_true(action_y > note_y)
+}

@@ -59,27 +59,17 @@ pub fn security_line_node(
 ) -> Unit {
   let wide = look_node(parent) is Wide
   parent.box(fn(row) {
-    row.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
     if wide {
-      row.min_height(Is(Some(30.0))) |> ignore
-    } else {
-      row.padding(Is((if indent { 24.0 } else { 12.0 }, 10.0, 12.0, 10.0))) |> ignore
-    }
-    match mark { Some(f) => f(row); None => () }
-    row.box(fn(body) {
-      body.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-      body.box(fn(line) {
-        line.row(Is(true)).gap(Is(if wide { 6.0 } else { 8.0 })).lines_up(Is(Some(if wide { End } else { Start })))
-        .fits(Is(wide && drops)) |> ignore
-        line.show(fn() { title() != "" }, fn(t) {
-          if wide {
+      row.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))).min_height(Is(Some(30.0))) |> ignore
+      match mark { Some(f) => f(row); None => () }
+      row.box(fn(body) {
+        body.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+        body.box(fn(line) {
+          line.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(End))).fits(Is(drops)) |> ignore
+          line.show(fn() { title() != "" }, fn(t) {
             t.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-          } else {
-            t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-          }
-          words_node(t, title, fn() { if wide { if strong { security_row_name } else { security_row_words } } else { pg_row_title } }) |> ignore
-        })
-        if wide {
+            words_node(t, title, fn() { if strong { security_row_name } else { security_row_words } }) |> ignore
+          })
           line.show(fn() { note() != "" }, fn(n) {
             if drops {
               n.drops(Is(1)) |> ignore
@@ -88,30 +78,65 @@ pub fn security_line_node(
             }
             words_node(n, note, fn() { if warn() { security_warn } else { security_row_meta } }) |> ignore
           })
-        } else {
-          match end { Some(f) => f(line); None => () }
-        }
+        }) |> ignore
       }) |> ignore
-      if !wide {
-        body.show(fn() { note() != "" }, fn(n) {
-          words_node(n, note, fn() { if warn() { security_narrow_warn } else { pg_link_note } }) |> ignore
-        })
-        match acts {
-          Some(f) => body.show(acts_shown, fn(a) {
-            a.row(Is(true)).gap(Is(20.0)).padding(Is((0.0, 6.0, 0.0, 0.0))) |> ignore
-            f(a)
-          })
-          None => ()
-        }
-      }
-    }) |> ignore
-    if wide {
       match end { Some(f) => f(row); None => () }
       match acts {
         Some(f) => row.show(acts_shown, fn(a) { a.row(Is(true)).gap(Is(12.0)) |> ignore; f(a) })
         None => ()
       }
+    } else {
+      row.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle)))
+      .padding(Is((if indent { 24.0 } else { 12.0 }, 10.0, 12.0, 10.0))) |> ignore
+      let words = fn(at : @view.View) {
+        match mark { Some(f) => f(at); None => () }
+        security_narrow_words_node(at, title, note, end, warn)
+      }
+      match acts {
+        None => words(row)
+        Some(f) =>
+          row.box(fn(content) {
+            content.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            content.box(fn(top) {
+              top.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
+              words(top)
+            }) |> ignore
+            content.show(acts_shown, fn(a) {
+              a.row(Is(true)).gap(Is(20.0))
+              .padding(Is((if mark is Some(_) { 28.0 } else { 0.0 }, 6.0, 0.0, 0.0))) |> ignore
+              f(a)
+            })
+          }) |> ignore
+      }
     }
+  }) |> ignore
+}
+
+///|
+/// The title, end and note in a narrow security row, beside its optional mark.
+fn security_narrow_words_node(
+  parent : @view.View,
+  title : () -> String,
+  note : () -> String,
+  end : ((@view.View) -> Unit)?,
+  warn : () -> Bool,
+) -> Unit {
+  parent.box(fn(body) {
+    body.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+    body.box(fn(line) {
+      line.row(Is(true)).gap(Is(12.0)).lines_up(Is(Some(Middle))) |> ignore
+      line.box(fn(t) {
+        t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+        words_node(t, title, fn() { pg_row_title }) |> ignore
+      }) |> ignore
+      match end {
+        Some(f) => line.box(fn(e) { e.row(Is(true)).height_share(Is(1.0)).gap(Is(8.0)).lines_up(Is(Some(Start))) |> ignore; f(e) }) |> ignore
+        None => ()
+      }
+    }) |> ignore
+    body.show(fn() { note() != "" }, fn(n) {
+      words_node(n, note, fn() { if warn() { security_narrow_warn } else { pg_link_note } }) |> ignore
+    })
   }) |> ignore
 }
 
