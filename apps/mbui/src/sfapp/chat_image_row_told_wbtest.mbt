@@ -2,7 +2,9 @@
 // at another path) is the same image, drawn at its proportion now and opened as the file is now.
 
 ///|
-test "an image in a row whose file its message tells again is the same image, drawn at its proportion now, opened as it is now, flying out of it and back into it" {
+/// A chat whose last message places two images in a row, 甲 and 乙, 乙 told first wide at one path, then again
+/// upright at another: the tester, an image's node by its file, and 甲's and 乙's as first drawn.
+fn row_told() -> (@ui.Tester, (String) -> @ui.SemNode raise, @ui.SemNode, @ui.SemNode) raise {
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
   let told = @signals.signal(0)
@@ -51,20 +53,41 @@ test "an image in a row whose file its message tells again is the same image, dr
   }
   let a = image_of("row-a.png")
   let b = image_of("row-b.png")
-  assert_true((b.rect.2 / b.rect.3 - 640.0 / 480.0).abs() < 0.02, msg="乙 drawn wide: \{b.rect}")
   told.set(2)
   t.frames_owed()
   @sf.markdown_read.val = None
+  (t, image_of, a, b)
+}
+
+///|
+test "an image in a row whose file its message tells again is the same image, drawn at its proportion now" {
+  let (_, image_of, a, b) = row_told()
+  assert_true((b.rect.2 / b.rect.3 - 640.0 / 480.0).abs() < 0.02, msg="乙 drawn wide: \{b.rect}")
   let a_now = image_of("row-a.png")
   let b_now = image_of("row-b.png")
   assert_eq(b_now.id, b.id, msg="乙 the same image")
   assert_eq(a_now.id, a.id, msg="甲 the same image")
   assert_true((b_now.rect.2 / b_now.rect.3 - 480.0 / 640.0).abs() < 0.02, msg="乙 drawn upright: \{b.rect} then \{b_now.rect}")
-  // (pressed, it opens the file where it is kept now from this image, its thumbnail under the file now and none under
-  // the file as it was: it flies out of it, the image hidden while the preview is its picture; closed, it flies back
-  // into it, lands where it is drawn and the image is shown again, the same image all along)
+}
+
+///|
+/// 乙 (row_told's) pressed and its preview closed when it is in, each of `frames` (ms from the press) drawn and looked
+/// at on the way: what is seen at the moments said (the preview's picture, 乙 hidden or not, where 乙 is), the same
+/// whichever frames are drawn between.
+fn row_told_preview(frames : Array[Double]) -> Array[String] raise {
+  let (t, image_of, _, b) = row_told()
+  let b_now = image_of("row-b.png")
+  let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
+  let rect = fn(r : (Double, Double, Double, Double)) { (r2(r.0), r2(r.1), r2(r.2), r2(r.3)) }
+  // (the upright pictures drawn, 乙's proportion: 乙 itself, or the preview's)
+  let upright = fn() {
+    t.drawn_images().filter(fn(i) { i[8] > 0.5 && (i[3] / i[2] - 640.0 / 480.0).abs() < 0.01 }).map(fn(i) { rect((i[0], i[1], i[2], i[3])) })
+  }
+  // (pressed, it opens the file where it is kept now from this image, its thumbnail under the file now and none
+  // under the file as it was)
   let drawn_b = (b_now.rect.0, b_now.rect.1, b_now.rect.2, b_now.rect.3)
   t.tap(b_now.rect.0 + b_now.rect.2 / 2.0, b_now.rect.1 + b_now.rect.3 / 2.0)
+  let t0 = t.time()
   guard viewer.get() is Some(v) else { fail("乙 opened nothing") }
   assert_eq(v.file.path, "work/s-c1/kept/row-b.png")
   let now_id = v.thumb_id()
@@ -74,41 +97,76 @@ test "an image in a row whose file its message tells again is the same image, dr
     Some(th) => th
     None => fail("no thumbnail of 乙 where it is kept now")
   }
-  assert_true(
-    (th.x - drawn_b.0).abs() < 0.5 && (th.y - drawn_b.1).abs() < 0.5 && (th.w - drawn_b.2).abs() < 0.5 &&
-    (th.h - drawn_b.3).abs() < 0.5,
-    msg="乙's thumbnail at \{(th.x, th.y, th.w, th.h)}, drawn at \{drawn_b}",
-  )
+  assert_eq(rect((th.x, th.y, th.w, th.h)), rect(drawn_b), msg="乙's thumbnail where 乙 is drawn")
   assert_true(thumb_of(t.ctx(), was_id) is None && !pv_thumbs.contains(was_id), msg="乙's thumbnail where it was let go")
   assert_true(v.flies && !v.fly_back, msg="the preview flies out")
-  assert_eq(pv_hidden.get(), now_id, msg="乙 hidden while the preview is its picture")
-  // (halfway out: its picture, upright, between 乙 and its place on the stage)
-  t.run_for(@ui.move_most_ms / 2.0)
+  // (each frame: while the preview's picture flies, it alone is drawn of 乙's proportion and 乙 is hidden; once it
+  // is in, 乙 shown under the stage again)
+  let look = fn(at : String) raise {
+    let ups = upright()
+    if (v.flies && !v.fly_back) || pv_leaving.get() is Some(_) {
+      assert_eq(pv_hidden.get(), now_id, msg="\{at}: 乙 hidden while the preview's picture flies")
+      assert_eq(ups.length(), 1, msg="\{at}: \{ups}")
+    } else {
+      assert_eq(pv_hidden.get(), "", msg="\{at}: 乙 shown")
+    }
+  }
+  let through = fn(from : Double, to : Double) raise {
+    for f in frames {
+      if f > from && f < to {
+        t.frame_at(t0 + f)
+        look("\{f} ms")
+      }
+    }
+  }
+  let seen : Array[String] = []
+  let half = @ui.move_most_ms / 2.0
+  let open = @ui.move_most_ms * 1.5
+  let close = @ui.move_most_ms * 2.0
+  let landed = close + @ui.move_most_ms
+  look("pressed")
+  through(0.0, half)
+  t.frame_at(t0 + half)
+  look("halfway out")
   let to = v.zoom.rect().unwrap()
-  let on_way = t
-    .drawn_images()
-    .filter(fn(i) { i[8] > 0.5 && i[2] > th.w + 0.5 && i[2] < to.2 - 0.5 && (i[3] / i[2] - to.3 / to.2).abs() < 0.01 })
-  assert_eq(on_way.length(), 1, msg="halfway out from \{(th.x, th.y, th.w, th.h)} to \{to}: \{on_way}")
-  let (cx, cy) = (on_way[0][0] + on_way[0][2] / 2.0, on_way[0][1] + on_way[0][3] / 2.0)
-  assert_true(cx > dmin(th.x + th.w / 2.0, to.0 + to.2 / 2.0) - 0.5 && cx < dmax(th.x + th.w / 2.0, to.0 + to.2 / 2.0) + 0.5)
-  assert_true(cy > dmin(th.y + th.h / 2.0, to.1 + to.3 / 2.0) - 0.5 && cy < dmax(th.y + th.h / 2.0, to.1 + to.3 / 2.0) + 0.5)
-  t.run_for(@ui.move_most_ms)
+  seen.push("halfway out: \{upright()}, hidden \{pv_hidden.get() == now_id}")
+  through(half, open)
+  t.frame_at(t0 + open)
+  look("in")
   assert_true(drawn_at(t, to), msg="in: \{to}")
-  // (in, the stage over the chat: 乙 shown under it again, as for any picture)
-  assert_eq(pv_hidden.get(), "")
-  // (closed: back into 乙 where it is drawn now, then 乙 itself again)
+  seen.push("in: \{rect(to)}, \{upright()}, hidden \{pv_hidden.get() == now_id}")
+  through(open, close)
+  t.advance(t0 + close - t.time())
+  // (closed: back into 乙 where it is drawn then, then 乙 itself again, the same image)
   t.back()
   assert_true(v.fly_back, msg="the preview flies back")
-  assert_eq(pv_hidden.get(), now_id, msg="乙 hidden while the preview flies back into it")
-  t.run_for(@ui.move_most_ms)
-  // (where 乙 is now: the chat may have moved under the preview)
+  look("closed")
+  through(close, landed)
+  t.frame_at(t0 + landed)
+  look("landed")
+  assert_true(pv_leaving.get() is None && viewer.get() is None)
   let home = image_of("row-b.png")
   let home_r = (home.rect.0, home.rect.1, home.rect.2, home.rect.3)
   assert_true(drawn_at(t, home_r), msg="landed: \{home_r} \{t.drawn_images()}")
-  assert_true(pv_leaving.get() is None)
-  assert_eq(pv_hidden.get(), "")
-  assert_true(viewer.get() is None)
-  t.draw()
   assert_eq(home.id, b.id, msg="乙 the same image after the preview")
-  assert_true(drawn_at(t, home_r), msg="乙 shown again: \{t.drawn_images()}")
+  seen.push("landed: 乙 \{rect(home_r)} (pressed at \{rect(drawn_b)}), \{upright()}, hidden \{pv_hidden.get() == now_id}")
+  // (pressed again, the same file from the same place)
+  t.tap(home.rect.0 + home.rect.2 / 2.0, home.rect.1 + home.rect.3 / 2.0)
+  let again = viewer.get().map(fn(v) { (v.file.path, v.thumb_id() == now_id) })
+  viewer.set(None)
+  pv_hidden.set("")
+  seen.push("pressed again: \{again}")
+  seen
+}
+
+///|
+test "an image told again at another path, pressed: the preview flies out of it and back into it where it is, the image hidden while it flies, the same image after; the same at 60 Hz, 120 Hz or in one jump" {
+  let hz = fn(period : Double) {
+    Array::makei(((@ui.move_most_ms * 3.0) / period).to_int(), fn(i) { (i + 1).to_double() * period })
+  }
+  let one = row_told_preview([])
+  let at60 = row_told_preview(hz(1000.0 / 60.0))
+  let at120 = row_told_preview(hz(1000.0 / 120.0))
+  assert_eq(at60, one)
+  assert_eq(at120, one)
 }
