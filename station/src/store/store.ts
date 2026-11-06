@@ -2678,11 +2678,11 @@ export class Store {
     return sessionUpJobsReady(this.db, session) ? this.#one(SESSION_UP_JOB, session) !== undefined : null;
   }
 
-  /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
-  /// the other jobs, for what other stations are told of this one's load (jobs/load.ts).
+  /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts; not those still in the
+  /// queue), web services (a port) and the other jobs, for what other stations are told of this one's load (jobs/load.ts).
   runningJobs(): { remote: number; jobs: number; services: number } {
     const r = this.#one(
-      "SELECT COALESCE(SUM(substr(id, 1, 7) = 'remote_'), 0) AS remote, COALESCE(SUM(substr(id, 1, 7) <> 'remote_' AND port IS NOT NULL), 0) AS services, COUNT(*) AS n FROM jobs WHERE state = 'running'",
+      "SELECT COALESCE(SUM(substr(id, 1, 7) = 'remote_'), 0) AS remote, COALESCE(SUM(substr(id, 1, 7) <> 'remote_' AND port IS NOT NULL), 0) AS services, COUNT(*) AS n FROM jobs WHERE state = 'running' AND COALESCE(queued, 0) = 0",
     );
     const remote = Number(r?.remote ?? 0);
     const services = Number(r?.services ?? 0);
