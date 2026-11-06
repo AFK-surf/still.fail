@@ -5,7 +5,7 @@
 
 ///|
 /// A list of `n` blocks 40 high (counted 80 till laid out: each it comes to measured otherwise than it was counted), 300
-/// by 200, turned by the wheel 10 at a time, a frame each, 40 times: what those frames did all told (Tree::work:
+/// by 200, turned by the wheel 10 every 16 ms for 640 ms, a frame each 16 ms: what those frames did all told (Tree::work:
 /// layouts, nodes laid out and gone through, made, let go).
 fn window_scroll_work(n : Int) -> (Int, Int, Int, Int, Int) {
   let scroll = @view.Scroll::list()
@@ -19,8 +19,9 @@ fn window_scroll_work(n : Int) -> (Int, Int, Int, Int, Int) {
   })
   tree.frame(300.0, 200.0, now=0.0) |> ignore
   let w0 = tree.work()
-  for i in 0..<40 {
-    let at = 16.0 * (i + 1).to_double()
+  let mut at = 0.0
+  while at < 640.0 {
+    at = at + 16.0
     tree.wheel_at(150.0, 100.0, 0.0, 10.0, 0, at - 8.0) |> ignore
     tree.frame(300.0, 200.0, now=at) |> ignore
   }

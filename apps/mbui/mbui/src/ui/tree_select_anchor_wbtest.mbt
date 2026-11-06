@@ -24,7 +24,9 @@ test "selection keeps the words already picked as an anchored list scrolls beyon
   height.set(200.0)
   t.frame_at(t.time() + 16.0)
   let mut was = t.ctx().selected_text()
-  for _ in 0..<10 {
+  // (each 32 ms of the next 320, the words picked grown, those picked before kept)
+  let end = t.time() + 320.0
+  while t.time() < end {
     t.frame_at(t.time() + 16.0)
     t.frame_at(t.time() + 16.0)
     let now = t.ctx().selected_text()
