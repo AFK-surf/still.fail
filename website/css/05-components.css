@@ -20,6 +20,11 @@
 @media (max-width: 640px) {
   .mtag.on-vis { right: 10px; top: 10px; font-size: 10.5px; }
 }
+/* The open Duo fills its card's height on phones and tablets, so its tag would sit on the bezel: the Duo gives up a
+   top band and stands below the tag, whole and uncovered. */
+@media (max-width: 899px) {
+  .fpanel .vis > .mtag.on-vis ~ .duo { width: min(100%, calc((var(--vis-h) - 64px) / .93)); margin-top: 24px; }
+}
 
 /* =====================================================================================================================
    monoid's own app, drawn in HTML/CSS (the overview stage, the device tabs, the scroll scene).
