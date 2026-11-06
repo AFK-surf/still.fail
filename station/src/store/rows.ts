@@ -2,6 +2,8 @@
 // Option is `T | null`; where the Rust leaves a None Value out (EntryRow's agentIdentity, options, card) it is undefined.
 // The readers (read/store.ts) read rows with these same conversions, leaving out what is not for the pages (tokens).
 
+import { LEGACY_SAID_LATEST } from "./legacy-said-build.ts";
+
 export type Json = any;
 
 /// The page's own threads live on this surface (stored under the name of before the rename: the stations' data and
@@ -630,6 +632,13 @@ export const LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
     UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
   )
 )`;
+/// On an old store whose ordinary messages were prepared in bounded batches, use its equivalent lookup.
+export const LEGACY_LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
+  SELECT MAX(n) FROM (
+    SELECT (SELECT n FROM (${LEGACY_SAID_LATEST})) AS n
+    UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
+  )
+)`;
 
 /// A page of messages as merged, latest first. Merge the two ordered message indexes to select a page before reading
 /// the messages and their edits; a page does not walk the edits that followed its messages. Like LAST_MESSAGE, old
@@ -640,6 +649,12 @@ export const MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN 
   UNION ALL
   SELECT n FROM entries
     WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
+  ORDER BY n DESC LIMIT ?3
+) ORDER BY n DESC`;
+export const LEGACY_MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (
+  SELECT n FROM legacy_said WHERE thread = ?1 AND n < ?2
+  UNION ALL
+  SELECT n FROM entries WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
   ORDER BY n DESC LIMIT ?3
 ) ORDER BY n DESC`;
 
