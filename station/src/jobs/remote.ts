@@ -833,8 +833,8 @@ export class Remote {
       const mirror = field(meta, "mirror");
       if (typeof mirror !== "string") continue;
       const job = this.store.getJob(this.jobOf(dir));
-      if (job?.state === "running") running.add(mirror);
-      else if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
+      if (job?.state === "running" || (job && meta.safe === true && meta.collected !== true)) running.add(mirror);
+      if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
     }
     const found: { name: string; used: number; busy: boolean }[] = [];
     let changed = false;
@@ -1396,8 +1396,11 @@ export class Remote {
     if (method.startsWith("sync.") && mirror === null) throw new Error("this task has no directory to sync");
     /// Another task of the session running in the same mirror (one at a time there).
     const refuseBusy = async () => {
-      const other = (await this.tasksOf(workspace, peer, session)).find((t) => t.dir !== dir && this.running(t.dir) && field(t.meta, "mirror") === mirror);
+      const tasks = (await this.tasksOf(workspace, peer, session)).filter((t) => t.dir !== dir && field(t.meta, "mirror") === mirror);
+      const other = tasks.find((t) => this.running(t.dir));
       if (other) throw new Error(`task ${text(other.meta, "key")} is running in ${mirror} on this station; wait for it or stop it`);
+      const collecting = tasks.find((t) => t.meta.safe === true && t.meta.collected !== true && this.store.getJob(this.jobOf(t.dir)) !== null);
+      if (collecting) throw new Error(`task ${text(collecting.meta, "key")} is still bringing back its results from ${mirror}; wait for its completion notice`);
     };
     /// The sync under way: its state, when `id` is its.
     const ongoing = (): Json => {
@@ -1446,15 +1449,32 @@ export class Remote {
         this.usedMirror(workspace, peer, session, mirror!);
         const manifest = readManifest(manifestPath);
         const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
+        const base = { ...(manifest?.files ?? {}) };
+        // Refresh the stat only where the content is still the source's: old manifests lacked ctime and must be hashed
+        // once, not at every subsequent sync. A changed file keeps the original content as its conflict base.
+        for (const [path, current] of Object.entries(files)) {
+          const before = base[path];
+          if (before && before[0] === current[0] && before[1] === current[1]) base[path] = current;
+        }
         const id = randomBytes(12).toString("hex");
         writeJson(join(syncing, "actual.json"), files);
+        writeJson(join(syncing, "base.json"), base);
         writeJson(join(syncing, "state.json"), { id, key, version: manifest?.version ?? 0 });
-        return { key, id, dir: mirror, version: manifest?.version ?? 0 };
+        if (field(request, "safe") === 1) {
+          meta.safe = true;
+          writeJson(record, meta);
+        }
+        return { key, id, dir: mirror, version: manifest?.version ?? 0, safe: 1 };
       }
       case "sync.manifest": {
         ongoing();
         const after = asU64(field(request, "after")) ?? 0;
         return page(listed(readJson(join(syncing, "actual.json"))), after);
+      }
+      case "sync.base": {
+        ongoing();
+        const after = asU64(field(request, "after")) ?? 0;
+        return page(listed(readJson(join(syncing, "base.json"))), after);
       }
       case "sync.put": {
         ongoing();
@@ -1478,12 +1498,46 @@ export class Remote {
           plan.set.push(...p.set);
           plan.remove.push(...p.remove);
         }
-        const files = readJson(join(syncing, "actual.json"));
+        const base = readJson(join(syncing, "base.json"));
+        const root = join(work, mirror!);
+        // Re-read at commit: a task's output may have changed while the source sent its files.
+        const verify = new Set([...plan.set.map(([path]) => path), ...plan.remove]);
+        const files = await actual(root, base, verify);
+        const untracked: Record<string, [string, string, number, number, number, number?]> = {};
+        if (existsSync(root)) for (const [path] of plan.set) {
+          if (base[path] !== undefined || files[path] !== undefined) continue;
+          let abs: string;
+          try { abs = filePath(root, path, false); } catch { throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`); }
+          try {
+            const st = lstatSync(abs);
+            if (!st.isFile()) throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`);
+            untracked[path] = ["", "", 0, 0, 0];
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          }
+        }
+        Object.assign(files, await actual(root, untracked));
+        const equal = (a: readonly unknown[] | undefined, b: readonly unknown[] | undefined) => a?.[0] === b?.[0] && a?.[1] === b?.[1];
+        const safe = { set: [] as [string, string, string][], remove: [] as string[] };
+        for (const [path, hash, mode] of plan.set) {
+          const before = base[path], current = files[path], wanted = [hash, mode];
+          // Old sources send a plan against the actual mirror: an unchanged source must not reset remote output.
+          if (equal(before, wanted) && !equal(before, current)) continue;
+          if (!equal(before, current) && !equal(current, wanted)) throw new Error(`sync conflict at ${path}: source and remote both changed; preserve the remote result and reconcile the files`);
+          safe.set.push([path, hash, mode]);
+        }
+        for (const path of plan.remove) {
+          if (files[path] !== undefined && !equal(base[path], files[path])) throw new Error(`sync conflict at ${path}: the remote file changed before removal`);
+          safe.remove.push(path);
+        }
+        const nextBase = { ...base };
         let done: { written: number; removed: number };
         try {
-          done = apply(work, mirror!, join(syncing, "scratch"), join(syncing, "blobs"), files, plan);
+          done = apply(work, mirror!, join(syncing, "scratch"), join(syncing, "blobs"), files, safe);
         } finally {
-          writeManifest(manifestPath, { dir: text(field(meta, "spec"), "dir"), name: mirror!, version: version + 1, files });
+          for (const [path, hash, mode] of safe.set) if (equal(files[path], [hash, mode])) nextBase[path] = files[path];
+          for (const path of safe.remove) if (files[path] === undefined) delete nextBase[path];
+          writeManifest(manifestPath, { dir: text(field(meta, "spec"), "dir"), name: mirror!, version: version + 1, files: nextBase });
         }
         meta.synced = true;
         writeJson(record, meta);
@@ -1510,6 +1564,12 @@ export class Remote {
           changes.push(change);
         }
         return { key, base: mirror, changes, more };
+      }
+      case "task.collected": {
+        if (!job || job.state === "running") throw new Error("the task has not finished");
+        meta.collected = true;
+        writeJson(record, meta);
+        return { key, collected: true };
       }
       case "task.files": {
         if (job?.state === "running") throw new Error("wait for the task to finish before downloading artifacts");
@@ -1832,7 +1892,9 @@ export class Remote {
       entry.since = now;
       try {
         writeJson(path, entry);
-      } catch {}
+      } catch {
+        return "again";
+      }
     }
     const result = "result" in got ? got.result : null;
     // Never started there (its prepare or start did not get through, and the agent went on with another key): followed
@@ -1868,7 +1930,26 @@ export class Remote {
       }
       try {
         writeJson(path, entry);
-      } catch {}
+      } catch {
+        return "again";
+      }
+    }
+    if (finished && typeof entry.dir === "string" && entry.brought !== undefined) {
+      const brought = entry.brought;
+      const missing = Array.isArray(brought?.files?.missing) ? brought.files.missing : [];
+      const incomplete = brought?.error || brought?.changed?.error || brought?.changed?.more === true ||
+        (Array.isArray(brought?.changed?.notInPatch) && brought.changed.notInPatch.length > 0) ||
+        missing.some((m: unknown) => typeof m !== "string" || !m.endsWith(": not there"));
+      if (incomplete) {
+        brought.pending = "Some results were not brought back. Preserve them with station_file; then station_task release permits the next task in this mirror.";
+      } else {
+        try {
+          await this.ask(text(entry, "station"), { method: "task.collected", workspace: field(entry, "workspace"), session: field(entry, "session"), key: field(entry, "key") });
+        } catch (error) {
+          // An old target has no result fence. New targets retain it until this acknowledgement is received.
+          if (!(error instanceof Refused && /unsupported peer method/.test(error.message))) return "again";
+        }
+      }
     }
     if (finished && entry.brought !== undefined && typeof result === "object") result.back = entry.brought;
     if (finished || (Array.isArray(notices) && notices.length > 0 && !isDeepStrictEqual(field(entry, "notices"), notices))) {
@@ -2052,7 +2133,7 @@ export class Remote {
           changed.patch = file;
           changed.apply = `review it, then git apply it in ${entry.dir} if wanted`;
         }
-        const left = [...missing, ...(made?.missing ?? [])];
+        const left = [...missing, ...(made?.missing ?? (made === null ? changes.map((c) => String(c.path)) : []))];
         if (left.length > 0) changed.notInPatch = left.slice(0, 50);
         out.changed = changed;
       }
@@ -2090,8 +2171,8 @@ export class Remote {
     if (!sessionAction) this.recordUse(workspace, session, station);
     const request: Json = { workspace, session, key };
     if (tool === "station_task") {
-      if (!["prepare", "start", "get", "log", "stop", "list", "mirrors", "clean"].includes(action)) throw new Error("unknown task action");
-      request.method = `task.${action}`;
+      if (!["prepare", "start", "get", "log", "stop", "release", "list", "mirrors", "clean"].includes(action)) throw new Error("unknown task action");
+      request.method = action === "release" ? "task.collected" : `task.${action}`;
       if (action === "mirrors" || action === "clean") {
         if (action === "clean") request.mirror = field(args, "mirror");
         return this.ask(station, request);
