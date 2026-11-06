@@ -456,7 +456,10 @@ pub fn emit_step(c : @ui.Ctx, key : String, e : Emits, turns : Turns, sending : 
   }
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
-    turns.over(c, Emits, turns.moment(c))
+    // (its turn ended from now where it has one: no moment said, nothing of the list moved, where it has none)
+    if turns.emits_held() {
+      turns.over(c, Emits, turns.moment(c))
+    }
     return due
   }
   if e.current is None {
