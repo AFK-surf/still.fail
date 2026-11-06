@@ -366,7 +366,7 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = t
     if active.length() > 0 {
       c.box(style=lg_cards, fn() {
         for l in active {
-          login_card(c, core, station, text(Some(l), "id"))
+          login_card(c, core, station, text(Some(l), "id"), place="station")
         }
       })
       |> ignore
