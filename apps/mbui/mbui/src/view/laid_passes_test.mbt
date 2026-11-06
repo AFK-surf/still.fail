@@ -101,3 +101,36 @@ test "independent deadlines do not share one frame's layout pass limit" {
     assert_eq(histories[0][i - 1], i.to_double())
   }
 }
+
+///|
+test "independent geometry reads in one event do not share the layout pass limit" {
+  let told : Array[String] = []
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { told.push(said) })
+  defer {
+    @view.faults_stop.val = true
+    @view.fault_told.val = None
+  }
+  let width = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let child : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    child.val = Some(root.box(fn(v) {
+      v.width(By(fn() { Some(width.get()) })).height(Is(Some(10.0))) |> ignore
+    }))
+  }, time=fn() { 0.0 })
+  defer { tree.dispose() }
+  tree.frame(200.0, 100.0, now=0.0) |> ignore
+  let seen : Array[Double] = []
+  tree.event(10.0, fn() {
+    for i in 1..=65 {
+      width.set(i.to_double())
+      tree.laid_as_now()
+      seen.push(child.val.unwrap().laid_size().0)
+    }
+  })
+  assert_eq(told, [])
+  assert_eq(seen.length(), 65)
+  for i in 1..=65 {
+    assert_eq(seen[i - 1], i.to_double())
+  }
+}

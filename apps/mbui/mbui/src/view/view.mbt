@@ -901,6 +901,8 @@ pub struct Tree {
   /// A property application or geometry read is still using the nodes; publish input ownership after it returns.
   mut modals_held : Int
   mut modals_asked : Bool
+  /// nesting of the input ownership notification (a geometry read it calls is part of the same layout chain)
+  mut modals_telling : Int
   mut modals_at : Double
   /// the change whose modal state will be published, including its layout work if notification is deferred
   mut modals_budget : (Ref[Int], Ref[Bool])?
@@ -1213,6 +1215,7 @@ pub fn Tree::new(
     modals_due: false,
     modals_held: 0,
     modals_asked: false,
+    modals_telling: 0,
     modals_at: -1.0,
     modals_budget: None,
     held: None,
@@ -4204,7 +4207,9 @@ fn Tree::modals_settled(self : Tree) -> Unit {
         self.modals_budget = None
         let was = self.cause_at
         self.cause_at = self.modals_at
+        self.modals_telling += 1
         self.modals_now()
+        self.modals_telling -= 1
         self.cause_at = was
       }
     })
@@ -5386,6 +5391,16 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 /// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
 /// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
 fn Tree::laid_now(self : Tree) -> Unit {
+  // Independent geometry reads in one event are separate work, not successive passes of one layout. A read from
+  // layout's own telling or the modal notification it caused is reentrant and retains that chain's pass count.
+  let was_budget = self.brought_budget
+  if self.laying == 0 && !self.telling_laid && self.modals_telling == 0 {
+    match was_budget {
+      Some((_, stopped)) => self.brought_budget = Some((Ref(0), stopped))
+      None => ()
+    }
+  }
+  defer { self.brought_budget = was_budget }
   self.modals_held += 1
   defer { self.modals_released() }
   if self.last_w <= 0.0 {
