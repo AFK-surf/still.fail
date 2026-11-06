@@ -89,10 +89,23 @@ fn pick_rows_said() -> Unit {
 
 ///|
 /// The same told of rows made or let go in `tree`, as its rows are in a list's layout: once that layout is over, at
-/// its moment, never inside it (what reads which message is picked laid out elsewhere: the chat's bar).
+/// its moment, never inside it, once for all of them (what reads which message is picked laid out elsewhere: the chat's bar).
 fn pick_rows_said_in(tree : @view.Tree) -> Unit {
-  tree.root().made_after_layout(pick_rows_said)
+  // (told once for all of a layout's rows)
+  if pick_rows_due.val is Some(t) && physical_equal(t, tree) {
+    return
+  }
+  pick_rows_due.val = Some(tree)
+  tree.root().made_after_layout(fn() {
+    pick_rows_due.val = None
+    pick_rows_said()
+  })
 }
+
+///|
+/// The tree whose layout's rows made or let go are to be told as it is over (pick_rows_said_in's).
+// kept across runs: none between layouts, another tree's not this one's
+let pick_rows_due : Ref[@view.Tree?] = Ref(None)
 
 ///|
 /// The tree the messages' words picked are in (pick_row_node's), once one is.

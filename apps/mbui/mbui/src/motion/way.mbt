@@ -122,7 +122,8 @@ pub fn Way::go(
   self.mover.changed()
   // (who it is for the performance record: who sent it, not where to)
   self.mover.told_as("a Way", loc)
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  // (its write said as its sender's: where a fault names who set it)
+  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1, loc~)
 }
 
 ///|
