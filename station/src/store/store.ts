@@ -31,8 +31,8 @@ import { installUsageCompactions, usageCompactionsReady } from "./usage-compacti
 import { installPeopleSinceIndex } from "./legacy-people-since.ts";
 import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, hasLegacyArchivePolicy, installArchivePolicyIndex } from "./archive-policy-index.ts";
 import { hasLegacyDecisionTime, installDecisionTimeIndex } from "./legacy-decision-time.ts";
-import { hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex,
-  DecisionSessionsUnavailable, LEGACY_LAST_DECISION_SHARED, LEGACY_LAST_DECISION_SEPARATE } from "./legacy-decision-session.ts";
+import { hasDecisionSessionRepair, hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex,
+  DecisionSessionsUnavailable, LEGACY_LAST_DECISION_SHARED, LEGACY_LAST_DECISION_SEPARATE, LEGACY_LAST_DECISION_REPAIR } from "./legacy-decision-session.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
@@ -275,10 +275,11 @@ export const SMALL_DECISION_SCOPE = {
   old: smallDecisionScope("decision_checks", "decision_checks_at"),
   prepared: smallDecisionScope("legacy_decision_time", "legacy_decision_time_at"),
 };
-const decisionScoped = (legacy: boolean, withoutTime = false, sessionIndex: "shared" | "separate" | null = null) => {
-const sessionTable = sessionIndex === "shared" ? "legacy_decision_time" : "legacy_decision_session";
-const sessionMeta = sessionIndex === "shared" ? "legacy_decision_time_meta" : "legacy_decision_session_meta";
-const sessionKey = sessionIndex === "shared" ? "legacy_decision_time_by_session" : "legacy_decision_session_by_session";
+const decisionScoped = (legacy: boolean, withoutTime = false, sessionIndex: "shared" | "separate" | "repair" | null = null) => {
+const sessionTable = sessionIndex === "shared" ? "legacy_decision_time"
+  : sessionIndex === "repair" ? "legacy_decision_session_repair" : "legacy_decision_session";
+const sessionMeta = `${sessionTable}_meta`;
+const sessionKey = `${sessionTable}_by_session`;
 const source = sessionIndex ? `SELECT d.id,d.created_at FROM session_state i CROSS JOIN ${sessionTable} p INDEXED BY ${sessionKey}
   CROSS JOIN decision_checks d ON d.id=p.id WHERE i.complete=1 AND p.session=c.key ORDER BY p.id DESC`
   : "SELECT id, created_at FROM decision_checks INDEXED BY decision_checks_session WHERE session = c.key ORDER BY id DESC";
@@ -351,8 +352,10 @@ const sessionDecisionQueries = {
     noTime: decisionScoped(false, true, "shared") },
   separate: { native: decisionScoped(false, false, "separate"), legacy: decisionScoped(true, false, "separate"),
     noTime: decisionScoped(false, true, "separate") },
+  repair: { native: decisionScoped(false, false, "repair"), legacy: decisionScoped(true, false, "repair"),
+    noTime: decisionScoped(false, true, "repair") },
 };
-export const decisionScopedWithSession = (legacy: boolean, withoutTime: boolean, session: "shared" | "separate") =>
+export const decisionScopedWithSession = (legacy: boolean, withoutTime: boolean, session: "shared" | "separate" | "repair") =>
   sessionDecisionQueries[session][withoutTime ? "noTime" : legacy ? "legacy" : "native"];
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
@@ -468,7 +471,8 @@ export class Store {
   readonly #legacyEditsOldIndex: boolean;
   readonly #legacyArchivePolicy: boolean;
   readonly #legacyDecisionTime: boolean;
-  readonly #legacyDecisionSession: "shared" | "separate" | null;
+  #legacyDecisionSession: "shared" | "separate" | "repair" | null;
+  #decisionSessionIndexWasMissing = false;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
@@ -504,7 +508,8 @@ export class Store {
     this.#legacyArchivePolicy = hasLegacyArchivePolicy(db);
     this.#legacyDecisionTime = hasLegacyDecisionTime(db);
     this.#legacyDecisionSession = db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session'").get()
-      ? null : hasSharedDecisionSession(db) ? "shared" : hasLegacyDecisionSession(db) ? "separate" : null;
+      ? null : hasSharedDecisionSession(db) ? "shared" : hasLegacyDecisionSession(db) ? "separate"
+        : hasDecisionSessionRepair(db) ? "repair" : null;
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
@@ -1811,18 +1816,58 @@ export class Store {
 
   /// Select the lookup visible in this connection's snapshot. Another opener may have built the native index while
   /// our old lookup was still being prepared; use it without publishing or completing the partial lookup.
-  #decisionSessionLookup(): "native" | "shared" | "separate" | "pending" {
-    if (this.#legacyDecisionSession === null) return "native";
-    const table = this.#legacyDecisionSession === "shared" ? "legacy_decision_time_meta" : "legacy_decision_session_meta";
-    const state = this.#one(`SELECT complete, CASE WHEN complete=0 THEN EXISTS (
-      SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session') ELSE 0 END AS native
-      FROM ${table} WHERE id=1`);
-    if (state?.complete === 1) return this.#legacyDecisionSession;
-    return state?.native === 1 ? "native" : "pending";
+  #useDecisionSession(lookup: "native" | "shared" | "separate" | "repair"): void {
+    this.#legacyDecisionSession = lookup === "native" ? null : lookup;
+    this.#decisionSessionIndexWasMissing = false;
+  }
+
+  #decisionSessionLookup(verifyNative = false): "native" | "shared" | "separate" | "repair" | "pending" {
+    // Normal new stores use a named index in the actual query. An unexpected removal makes that query fail and
+    // switches this connection to the checked path; readiness checks must also notice a removal before any read.
+    if (!this.#decisionSessionIndexWasMissing && !verifyNative) {
+      const legacy = this.#legacyDecisionSession;
+      if (legacy === null) return "native";
+      const table = legacy === "shared" ? "legacy_decision_time_meta"
+        : legacy === "repair" ? "legacy_decision_session_repair_meta" : "legacy_decision_session_meta";
+      try {
+        const state = this.#one(`SELECT complete, CASE WHEN complete=0 THEN EXISTS (
+          SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session') ELSE 0 END AS native
+          FROM ${table} WHERE id=1`);
+        if (state?.complete === 1) return legacy;
+        if (state?.native === 1) { this.#useDecisionSession("native"); return "native"; }
+        // The first lookup may have lost its index while it was still preparing. Another opener can finish a
+        // replacement without changing that old metadata, so only the pending path needs the full recheck.
+        const current = this.#decisionSessionLookup(true);
+        if (current !== "pending") this.#useDecisionSession(current);
+        return current;
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes(`no such table: ${table}`)) throw error;
+        this.#decisionSessionIndexWasMissing = true;
+      }
+    }
+    const indexes = this.#one(`SELECT
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session') AS native,
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='legacy_decision_time_by_session') AS shared,
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='legacy_decision_session_by_session') AS separate,
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='legacy_decision_session_repair_by_session') AS repair`);
+    if (indexes?.native === 1) return "native";
+    for (const [kind, table] of [["shared", "legacy_decision_time_meta"], ["separate", "legacy_decision_session_meta"],
+      ["repair", "legacy_decision_session_repair_meta"]] as const) {
+      if (indexes?.[kind] !== 1) continue;
+      try { if (this.#one(`SELECT complete FROM ${table} WHERE id=1`)?.complete === 1) return kind; }
+      catch (error) {
+        if (!(error instanceof Error) || !error.message.includes(`no such table: ${table}`)) throw error;
+      }
+    }
+    return "pending";
   }
 
   /// Whether a session lookup can answer without reading the old source table.
-  decisionSessionsReady(): boolean { return this.#decisionSessionLookup() !== "pending"; }
+  decisionSessionsReady(): boolean {
+    const current = this.#decisionSessionLookup(true);
+    if (current !== "pending") this.#useDecisionSession(current);
+    return current !== "pending";
+  }
 
   async prepareDecisionSessions(): Promise<void> {
     if (this.decisionSessionsReady()) return;
@@ -1860,15 +1905,24 @@ export class Store {
       if (recent && recent.n < DECISION_SCOPE_BATCH) return null;
       throw new DecisionSessionsUnavailable();
     }
-    const source = () => this.#one("SELECT result FROM decision_checks WHERE session = ? ORDER BY id DESC LIMIT 1", session);
+    const source = () => this.#one("SELECT result FROM decision_checks INDEXED BY decision_checks_session WHERE session = ? ORDER BY id DESC LIMIT 1", session);
     let row: Json | undefined;
     try { row = lookup === "native" ? source() : this.#one(
-      lookup === "shared" ? LEGACY_LAST_DECISION_SHARED : LEGACY_LAST_DECISION_SEPARATE, session); }
+      lookup === "shared" ? LEGACY_LAST_DECISION_SHARED
+        : lookup === "repair" ? LEGACY_LAST_DECISION_REPAIR : LEGACY_LAST_DECISION_SEPARATE, session); }
     catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (!/no such (?:index|table): (?:main\.)?legacy_decision_(?:time|session)(?:_meta|_by_session)?$/.test(message)) throw error;
-      row = source();
+      if (!/no such (?:index|table): (?:main\.)?(?:decision_checks_session|legacy_decision_(?:time|session)(?:_repair)?(?:_meta|_by_session)?)$/.test(message)) throw error;
+      if (!this.#decisionSessionIndexWasMissing) {
+        this.#decisionSessionIndexWasMissing = true;
+        return this.lastDecision(session);
+      }
+      const recent = this.#one(RECENT_LAST_DECISION, session);
+      if (recent?.found === 1) return parsed(recent.result) ?? null;
+      if (recent && recent.n < DECISION_SCOPE_BATCH) return null;
+      throw new DecisionSessionsUnavailable();
     }
+    if (this.#decisionSessionIndexWasMissing) this.#useDecisionSession(lookup);
     return row ? (parsed(row.result) ?? null) : null;
   }
 
@@ -1876,6 +1930,15 @@ export class Store {
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
     const lookup = viewer?.home === false ? this.#decisionSessionLookup() : "native";
+    const missingSession = () => {
+      this.#decisionSessionIndexWasMissing = true;
+      const current = this.#decisionSessionLookup(true);
+      if (current !== "pending" && current !== lookup) return this.latestDecisionsSince(since, viewer);
+      const small = this.#smallRecentDecisionScope(since, viewer!.workspace);
+      if (small !== null) return small;
+      throw new DecisionSessionsUnavailable();
+    };
+    const isMissingSession = (message: string) => /no such (?:index|table): (?:main\.)?(?:decision_checks_session|legacy_decision_time_by_session|legacy_decision_session(?:_repair)?(?:_meta|_by_session)?)$/.test(message);
     if (viewer?.home === false && lookup === "pending") {
       const small = this.#smallRecentDecisionScope(since, viewer.workspace);
       if (small !== null) return small;
@@ -1885,28 +1948,31 @@ export class Store {
     try {
       if (viewer === undefined) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS : LATEST_DECISIONS, since);
       else if (viewer.home !== false) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK : LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
-      else rows = this.#all(lookup === "shared" || lookup === "separate"
+      else rows = this.#all(lookup === "shared" || lookup === "separate" || lookup === "repair"
         ? decisionScopedWithSession(this.#legacyDecisionTime, false, lookup)
         : this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED : LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately|legacy_decision_time_at|legacy_decision_time_by_session|legacy_decision_session_by_session)$/.test(message)
-        && !/no such table: (?:main\.)?legacy_decision_(?:time|session)(?:_meta)?$/.test(message)) throw error;
+      if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately|legacy_decision_time_at|legacy_decision_time_by_session|legacy_decision_session_by_session|legacy_decision_session_repair_by_session)$/.test(message)
+        && !/no such table: (?:main\.)?legacy_decision_(?:time|session(?:_repair)?)(?:_meta)?$/.test(message)) throw error;
+      if (viewer?.home === false && isMissingSession(message)) return missingSession();
       const fallback = () => viewer === undefined ? this.#all(LATEST_DECISIONS, since)
         : this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, flag(viewer.home !== false));
       if (viewer?.home === false && (/no such index: (decision_checks_lately|legacy_decision_time_at)$/.test(message)
         || /no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message))) {
         // A time index can disappear after this store opened. Keep the bounded session path if its indexes remain.
-        try { rows = this.#all(lookup === "shared" || lookup === "separate"
+        try { rows = this.#all(lookup === "shared" || lookup === "separate" || lookup === "repair"
           ? decisionScopedWithSession(false, true, lookup)
           : LATEST_DECISIONS_SCOPED_NO_TIME, since, viewer.workspace, 0); }
         catch (retryError) {
           const retryMessage = retryError instanceof Error ? retryError.message : "";
-          if (!/no such (?:index|table): (?:main\.)?(?:sessions_by_connect|decision_checks_session|legacy_decision_(?:time|session)(?:_meta|_by_session)?)$/.test(retryMessage)) throw retryError;
+          if (isMissingSession(retryMessage)) return missingSession();
+          if (!/no such (?:index|table): (?:main\.)?(?:sessions_by_connect|legacy_decision_time(?:_meta)?)$/.test(retryMessage)) throw retryError;
           rows = fallback();
         }
       } else rows = fallback();
     }
+    if (viewer?.home === false && lookup !== "pending" && this.#decisionSessionIndexWasMissing) this.#useDecisionSession(lookup);
     return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
