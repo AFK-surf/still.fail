@@ -817,9 +817,6 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
-  /// Pointer-follow callbacks are notified after placement and the input batch, never by pulling properties.
-  follows_due : Array[Bound]
-  mut follows_telling : Bool
   /// how many bindings live: what is asked at once (View::laid_size, Tree::bring_to) pulls those whose reads changed
   mut pulls_held : Int
   /// those marked as what they read changed, since they last ran (Tree::pull)
@@ -1141,8 +1138,6 @@ pub fn Tree::new(
     telling_laid: false,
     first_drawn: [],
     bindings_due: [],
-    follows_due: [],
-    follows_telling: false,
     pulls_held: 0,
     pulls_marked: [],
     boxes_deferred: None,
@@ -1876,7 +1871,6 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
-  self.follows_due.clear()
   self.pulls_held = 0
   self.pulls_marked.clear()
   self.boxes_deferred = None
@@ -2133,12 +2127,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : 
     if b.live && !b.queued {
       b.queued = true
       told_at.val = if self.standing { self.cause_now() } else { self.time_now() }
-      if property {
-        self.bindings_due.push(b)
-      } else {
-        self.follows_due.push(b)
-        @signals.after_flush(fn() { self.follows_done() })
-      }
+      self.bindings_due.push(b)
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
       // something asks, View::laid_before_causes)
@@ -2148,6 +2137,8 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : 
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
+      // Only properties can be read through a partial batch. follow_point's callback stays on the existing
+      // notified queue; pulling a size-dependent property must not dispatch an arbitrary pointer callback.
       if property { self.pulls_marked.push(b) }
     }
   })
@@ -2175,36 +2166,6 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, property~ : 
     self.pulls_held -= 1
     w.stop()
   }
-}
-
-///|
-/// A followed pointer's change is an observation of the completed geometry. Its public callback can change or
-/// dispose the tree, so it must not share the property-binding pull, a partial input batch, or an active layout.
-fn Tree::follows_done(self : Tree) -> Unit {
-  if self.follows_telling || self.committing > 0 || self.laying > 0 || self.layouts_active > 0 ||
-    @signals.batch_depth() > 0 || self.follows_due.is_empty() || self.gone {
-    return
-  }
-  self.follows_telling = true
-  defer { self.follows_telling = false }
-  let mut i = 0
-  while i < self.follows_due.length() && !self.gone {
-    let b = self.follows_due[i]
-    i += 1
-    if b.live && b.queued {
-      // All dependent properties are current before the target is read. Further callbacks made by this layout
-      // remain in this queue; no callback can recursively tell another half-finished placement.
-      if self.standing {
-        // An active picture is already sampling its own time; completing its placement does not rewind it.
-        self.pull()
-        self.laid_out(@signals.untracked(fn() { self.clock.get() }))
-      } else {
-        self.laid_now()
-      }
-      if b.live && !self.gone { (b.run)() }
-    }
-  }
-  self.follows_due.clear()
 }
 
 ///|
@@ -3616,7 +3577,6 @@ fn Tree::measured_now(self : Tree) -> Unit {
     })
   }
   self.standing = was_standing
-  self.follows_done()
 }
 
 ///|
@@ -3990,7 +3950,6 @@ fn Tree::modals_settled(self : Tree) -> Unit {
     self.modals_now()
   }
   self.withins_settled()
-  self.follows_done()
 }
 
 ///|
@@ -7305,7 +7264,6 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // event finding where things are, a change settled): once, by the outermost)
   if self.laying == 0 {
     self.tell_laid()
-    self.follows_done()
   }
 }
 
