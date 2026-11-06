@@ -99,7 +99,7 @@ export type AccountsDeps = {
   config: ConfigFile;
   /// The hub, whose account pool picks profiles by their checks and allowances (and knows which ran out lately).
   /// Starts reviewing the done chats no decision has answered (review.ts): how many, or null without a usable model.
-  reviewUndecided?: () => number | null;
+  reviewUndecided?: () => number | null | Promise<number | null>;
   hub?: {
     accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void };
     /// A profile was deleted: its sessions are taken on by another, or stopped.
@@ -1328,12 +1328,13 @@ export class Accounts {
   }
 
   /// POST /automatic-decisions/review: the done chats no decision has answered, reviewed now in the background; how many.
-  reviewUndecided(viewer: Viewer, lang: Lang = stationLang()): number {
+  async reviewUndecided(viewer: Viewer, lang: Lang = stationLang()): Promise<number> {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyReview"));
     const review = this.deps.reviewUndecided;
     if (!review) throw new Refusal(503, tr(lang, "station.decisions.reviewUnsupported"));
     if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, tr(lang, "station.decisions.enableFirst"));
-    const queued = review();
+    const queued = await review();
+    if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, tr(lang, "station.decisions.enableFirst"));
     if (queued === null) throw new Refusal(409, tr(lang, "station.decisions.modelUnavailable"));
     return queued;
   }
