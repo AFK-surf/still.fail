@@ -71,8 +71,37 @@ fn kind_of(key : String) -> String? {
 }
 
 ///|
-/// 2026-10-22T05:37:59.731503Z: seconds since 1970
+/// A GitHub UTC timestamp (2026-10-22T05:37:59.731503Z): seconds since 1970, or 0 for an invalid value.
 fn iso_s(t : String) -> Double {
+  // A partial or malformed time cannot safely order caches or determine their age.
+  if t.length() < 20 || t.code_unit_at(t.length() - 1).to_int() != 90 {
+    return 0.0
+  }
+  for (i, want) in [(4, 45), (7, 45), (10, 84), (13, 58), (16, 58)] {
+    if t.code_unit_at(i).to_int() != want {
+      return 0.0
+    }
+  }
+  for i in 0..<19 {
+    if i == 4 || i == 7 || i == 10 || i == 13 || i == 16 {
+      continue
+    }
+    let c = t.code_unit_at(i).to_int()
+    if c < 48 || c > 57 {
+      return 0.0
+    }
+  }
+  if t.length() > 20 {
+    if t.length() < 22 || t.code_unit_at(19).to_int() != 46 {
+      return 0.0
+    }
+    for i in 20..<(t.length() - 1) {
+      let c = t.code_unit_at(i).to_int()
+      if c < 48 || c > 57 {
+        return 0.0
+      }
+    }
+  }
   let num = fn(a : Int, b : Int) -> Int {
     let mut v = 0
     for i in a..<b {
@@ -85,12 +114,26 @@ fn iso_s(t : String) -> Double {
     }
     v
   }
-  if t.length() < 19 {
-    return 0.0
-  }
   let y0 = num(0, 4)
   let m = num(5, 7)
   let d = num(8, 10)
+  let hour = num(11, 13)
+  let minute = num(14, 16)
+  let second = num(17, 19)
+  if y0 < 1970 || m < 1 || m > 12 || hour > 23 || minute > 59 || second > 59 {
+    return 0.0
+  }
+  let leap = y0 % 4 == 0 && (y0 % 100 != 0 || y0 % 400 == 0)
+  let last_day = if m == 2 {
+    if leap { 29 } else { 28 }
+  } else if m == 4 || m == 6 || m == 9 || m == 11 {
+    30
+  } else {
+    31
+  }
+  if d < 1 || d > last_day {
+    return 0.0
+  }
   // days from 1970-01-01 (Howard Hinnant's days_from_civil)
   let y = if m <= 2 { y0 - 1 } else { y0 }
   let era = (if y >= 0 { y } else { y - 399 }) / 400
@@ -100,7 +143,7 @@ fn iso_s(t : String) -> Double {
   let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
   let days = era * 146097 + doe - 719468
   days.to_double() * 86400.0 +
-  (num(11, 13) * 3600 + num(14, 16) * 60 + num(17, 19)).to_double()
+  (hour * 3600 + minute * 60 + second).to_double()
 }
 
 ///|
@@ -119,7 +162,7 @@ fn gh_lines(args : String) -> Array[String]? {
 }
 
 ///|
-/// A deleted branch's old caches are not available to live branches. Keep recent, malformed and non-branch refs.
+/// A deleted branch's old caches are not available to live branches. Keep recent and non-branch refs.
 fn deleted_head_cache(c : Cache, heads : Map[String, Bool], now : Double) -> Bool {
   c.ref_.has_prefix("refs/heads/") &&
   !heads.contains(c.ref_) &&
@@ -221,15 +264,23 @@ fn cache_prune(args : Array[String]) -> Int {
   for l in lines {
     let f = l.split("\t").map(fn(p) { p.to_owned() }).to_array()
     if f.length() < 6 {
-      continue
+      @sys.eprintln("chk cache-prune: incomplete cache record; nothing deleted")
+      return 1
+    }
+    let created = iso_s(f[4])
+    let accessed = iso_s(f[5])
+    if created <= 0.0 || accessed <= 0.0 {
+      // Bad times also poison sorting and Gradle's shared cutoffs. Do not make any deletion decision from this list.
+      @sys.eprintln("chk cache-prune: invalid cache time; nothing deleted")
+      return 1
     }
     caches.push({
       id: f[0],
       key: f[1],
       ref_: f[2],
       size: num_of(f[3]).to_int64(),
-      created: iso_s(f[4]),
-      accessed: iso_s(f[5]),
+      created,
+      accessed,
     })
   }
   caches.sort_by(fn(a, b) { b.created.compare(a.created) })
