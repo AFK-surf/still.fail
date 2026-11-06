@@ -417,7 +417,7 @@
     },
     "layout-read-back": {
       "src/sf/markdown.mbt": 1,
-      "src/sf/page_node.mbt": 1,
+      "src/sf/page_node.mbt": 2,
       "src/sf/panel_node.mbt": 1,
       "src/sf/parts.mbt": 5,
       "src/sf/player.mbt": 2,
@@ -460,6 +460,7 @@
       "src/sfpages/screen_view.mbt": 1,
       "src/sfpages/search.mbt": 3,
       "src/sfpages/service.mbt": 3,
+      "src/sfpages/sidebar_node.mbt": 1,
       "src/sfpages/things.mbt": 2
     },
     "motion-length": {}

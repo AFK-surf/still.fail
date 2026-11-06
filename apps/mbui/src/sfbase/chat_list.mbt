@@ -297,9 +297,9 @@ pub fn reading_of(key : String) -> Reading {
         motion_of: [],
         motion_list: "",
         landing: @signals.computed(fn(was) {
-          match send_flight.get() {
-            Some(f) if f.turns == key => if f.placed { f.way.ends() } else { -2.0 }
-            _ =>
+          match flight_landing_of(key) {
+            Some(at) => at
+            None =>
               match was {
                 Some(at) if at >= 0.0 => at
                 _ => -1.0

@@ -122,6 +122,11 @@ pub(all) struct FlyingFile {
 pub let send_flight : @signals.Signal[SendFlight?] = @signals.signal(None)
 
 ///|
+/// Told each time the words' way is said (set out, timed again as long as it is far): what reads where they land
+/// (Reading's landing) reads it, the way being the flight's own, not a signal.
+let flight_way_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// What flies to the `i`th quote of the message words are sent to (as file_key says a file: "upload:<id>").
 pub fn quote_key(i : Int) -> String {
   quote_prefix + i.to_string()
@@ -600,6 +605,7 @@ fn flight_placed_at(c : @ui.Ctx, f : SendFlight, at : Double) -> Unit {
       f.way.animate(1.0, @motion.tween(f.ms, ease=Linear), start_at=at)
       (f.hold)(flight_settle * f.ms)
     }
+    flight_way_told.set(flight_way_told.get() + 1)
   }
 }
 
@@ -630,6 +636,7 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
         if !f.carried {
           (f.hold)(dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
         }
+        flight_way_told.set(flight_way_told.get() + 1)
       }
     }
     None => ()
@@ -1337,4 +1344,15 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
     )
     @ui.look(alpha=flight_shown(c, card, ff.shown, ff.from, w, h, up), dx~, dy~)
   })
+}
+
+///|
+/// Where words sent to chat `turns` land, as their way was last said (-2: their row not laid out yet; None: none on
+/// their way): read where it is said.
+pub fn flight_landing_of(turns : String) -> Double? {
+  flight_way_told.get() |> ignore
+  match send_flight.get() {
+    Some(f) if f.turns == turns => Some(if f.placed { f.way.ends() } else { -2.0 })
+    _ => None
+  }
 }
