@@ -52,6 +52,15 @@ const TOKEN_HEADER = "__stillfail_mcp_authorization__";
 const piEffort = (effort: string | undefined) => (effort && ["minimal", "low", "medium", "high", "xhigh", "max"].includes(effort) ? effort : undefined);
 const deepseekEffort = (effort: string | undefined) => (effort === "low" ? "low" : effort === "medium" || effort === "high" ? "high" : effort === "max" ? "max" : undefined);
 
+/// Whether a route's address is OpenAI's own API.
+const openaiOwn = (baseURL: string) => {
+  try {
+    return new URL(baseURL).hostname === "api.openai.com";
+  } catch {
+    return false;
+  }
+};
+
 /// dsh's prompt variables are `{{name}}`, strictly: any `{{` in the instructions would stop it, so it is broken.
 const literal = (text: string) => text.replaceAll("{{", "{​{");
 
@@ -75,6 +84,10 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
     const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}) };
     const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [entry] };
     if (route.headers) provider.headers = expandRoute(route.headers, sessionRoute);
+    // pi-ai gives a reasoning model's instructions the "developer" role on an OpenAI protocol at an address it does not
+    // know, which only OpenAI's own API takes: a gateway refuses the whole request (FB-7: 400 Unexpected role
+    // "developer"). Everywhere else they go as "system", which OpenAI takes too.
+    if (route.api !== "anthropic-messages" && !openaiOwn(route.baseURL)) provider.compat = { supportsDeveloperRole: false };
     const reasoning = piEffort(effort);
     chosenEffort = reasoning;
     if (reasoning) {
