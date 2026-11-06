@@ -34,6 +34,11 @@ on:
         required: false
         default: ""
         type: string
+      diagnostic_run:
+        description: CI run whose native test artifact is examined
+        required: false
+        default: ""
+        type: string
       scene_spec:
         description: Optional JSON fixture, drives, capture time or frame, and window list
         required: false
@@ -41,7 +46,48 @@ on:
         type: string
 permissions:
   contents: read
+  actions: read
 jobs:
+  native-diagnostic:
+    if: ${{ inputs.diagnostic_run != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_ref }}
+      - name: Verify the source of the existing native program
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          DIAGNOSTIC_RUN: ${{ inputs.diagnostic_run }}
+        run: |
+          set -euo pipefail
+          [[ "$DIAGNOSTIC_RUN" =~ ^[0-9]+$ ]]
+          [ "$(git rev-parse HEAD)" = "$SOURCE_REF" ]
+          [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DIAGNOSTIC_RUN" --jq .head_sha)" = "$SOURCE_REF" ]
+      - uses: actions/download-artifact@v4
+        with:
+          name: mbui-app-test-${{ inputs.diagnostic_run }}-1
+          path: ${{ runner.temp }}/native-test
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.diagnostic_run }}
+      - name: Run the isolated case and the whole file
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/native-test"
+          chmod +x sfapp.whitebox_test.exe testexe
+          ./testexe parts __whitebox_test_info.json 4 apps/mbui/src/sfapp/tape_wbtest.mbt > parts
+          arg=$(cut -d ' ' -f2- parts)
+          printf 'Whole file: %s\n' "$arg"
+          if ./sfapp.whitebox_test.exe "$arg" > 0.out 2>&1; then code=0; else code=$?; fi
+          printf '%s 0\n' "$code" > 0.code
+          ./testexe said __whitebox_test_info.json . stillfail/sfapp || true
+          printf '\nIsolated case: tape_wbtest.mbt:27-28\n'
+          printf '0 tape_wbtest.mbt:27-28\n' > parts
+          if ./sfapp.whitebox_test.exe 'tape_wbtest.mbt:27-28' > 0.out 2>&1; then code=0; else code=$?; fi
+          printf '%s 0\n' "$code" > 0.code
+          ./testexe said __whitebox_test_info.json . stillfail/sfapp || true
   evidence:
     if: ${{ inputs.render }}
     runs-on: macos-15
