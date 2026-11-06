@@ -624,6 +624,10 @@ struct Node {
   mut fault_to : ((String) -> Unit)?
   /// drawn by what hosts the tree (View::hosted)
   mut hosted : Bool
+  /// whether it is drawn otherwise than by the tree alone (hosted, glass, a native view's anchor: what the scene draws
+  /// where it is drawn, never moved as kept), and how many of it and all it holds are (Tree::holds_own_only)
+  mut own_only : Bool
+  mut own_only_below : Int
   /// the hosted content needs its node's clip in addition to any clip explicitly set on the node
   mut hosted_clips : Bool
   /// what it says it is, read out (View::says); None nothing
@@ -1268,6 +1272,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.fault_to = None
       n.hosted = false
       n.hosted_clips = false
+      n.own_only = false
+      n.own_only_below = 0
       n.on_press = None
       n.top_row = false
       n.moves_window = false
@@ -1438,6 +1444,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         fault_to: None,
         hosted: false,
         hosted_clips: false,
+        own_only: false,
+        own_only_below: 0,
         said: None,
         said_hidden: false,
         bones: 0L,
@@ -2858,7 +2866,10 @@ pub fn View::ground(self : View, ink : Live[Int64]) -> View {
 /// and the host hides its control. Drawn as nothing of its own, and no change of where it is drawn draws anything again.
 /// Paint's.
 pub fn View::native_anchor(self : View, name : Live[String]) -> View {
-  self.bind(NativeAnchor, name, Paint, fn(a) { self.tree.nodes[self.at].look.native_anchor = a })
+  self.bind(NativeAnchor, name, Paint, fn(a) {
+    self.tree.nodes[self.at].look.native_anchor = a
+    self.tree.own_only_now(self.at)
+  })
   self
 }
 
@@ -2970,7 +2981,10 @@ pub fn View::image_in(self : View, at : Live[((Double, Double, Double, Double), 
 /// The glass it is drawn as, under its ground and what it draws (@paint.Glass: frosted or liquid; None: none): paint's.
 /// What it frosts is what the frame drew under it, wherever it is composed (its capture told as the frame is).
 pub fn View::glass(self : View, g : Live[@paint.Glass?]) -> View {
-  self.bind(Glass, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
+  self.bind(Glass, g, Paint, fn(g) {
+    self.tree.nodes[self.at].look.glass = g
+    self.tree.own_only_now(self.at)
+  })
   self
 }
 
@@ -5453,6 +5467,12 @@ fn View::let_go(self : View) -> Unit {
   for k in kids {
     k.let_go()
   }
+  // (what of it is drawn otherwise than by the tree alone gone with it from what holds it: what it held, as each went)
+  if n.own_only {
+    self.tree.own_only_counted(self.at, -1)
+  }
+  n.own_only = false
+  n.own_only_below = 0
   n.live = false
   match self.tree.modals.search(self.at) {
     Some(i) => self.tree.modals.remove(i) |> ignore
@@ -7915,6 +7935,7 @@ pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)
   let tree = self.tree
   self.box(fn(v) {
     tree.nodes[v.at].hosted = true
+    tree.own_only_now(v.at)
     tree.hosting = v.at
     make(v)
   })

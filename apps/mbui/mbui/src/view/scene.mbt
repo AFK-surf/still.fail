@@ -253,3 +253,35 @@ pub fn Tree::scene_told_since(self : Tree) -> Bool {
   !self.removed.is_empty() ||
   !self.ordered_pending.is_empty()
 }
+
+///|
+/// Whether node `id` or anything it holds is drawn otherwise than by the tree alone (hosted: an old view; glass; a native
+/// view's anchor): what the scene draws where it is drawn, in the window's terms, never in a layer's own and moved
+/// (docs/retained.md rule 15). Known as each is said, before anything of it is drawn.
+pub fn Tree::holds_own_only(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  self.nodes[id.at].own_only_below > 0
+}
+
+///|
+/// Node `at` said drawn otherwise than by the tree alone or not, as it is now (hosted, its glass, its native anchor):
+/// told what holds it where that changed.
+fn Tree::own_only_now(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  let own = n.hosted || n.look.glass is Some(_) || n.look.native_anchor != ""
+  if own != n.own_only {
+    n.own_only = own
+    self.own_only_counted(at, if own { 1 } else { -1 })
+  }
+}
+
+///|
+/// Node `at` and each holding it, out to the root, holding `by` more drawn otherwise than by the tree alone.
+fn Tree::own_only_counted(self : Tree, at : Int, by : Int) -> Unit {
+  let mut i = at
+  while i >= 0 && i < self.nodes.length() {
+    let n = self.nodes[i]
+    n.own_only_below = n.own_only_below + by
+    i = n.parent
+  }
+}
