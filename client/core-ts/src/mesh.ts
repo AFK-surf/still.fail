@@ -485,11 +485,14 @@ export class Link {
     let opened: IrohStream | null = null;
     return Effect.gen({ self: this }, function* () {
       const stream = (opened = yield* Effect.mapError(this.conn.openBi(), cut));
-      // A security decision can change while a stream opens. Check immediately before handing its head to the host.
-      yield* Effect.suspend(() => {
-        const refused = beforeSend?.();
-        return refused ? Effect.fail(refused) : Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), cut);
-      });
+      const bytes = utf8(`${JSON.stringify(head)}\n`);
+      if (beforeSend) {
+        // A host unable to check in the same synchronous registration as its write must not send a guarded request.
+        if (!stream.writeGuarded) return yield* Effect.fail(meshError(t("core-logic.mesh.cut")));
+        yield* Effect.mapError(stream.writeGuarded(bytes, beforeSend), (e) => e instanceof CoreError ? e : cut(e));
+      } else {
+        yield* Effect.mapError(stream.write(bytes), cut);
+      }
       // A body that is told of goes a step at a time, each said as the stream takes it (as far as the link lets it).
       if (body !== null && body.length > 0 && wrote) {
         for (let at = 0; at < body.length; at += BODY_STEP) {

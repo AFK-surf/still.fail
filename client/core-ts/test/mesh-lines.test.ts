@@ -37,7 +37,15 @@ test("a longer permitted line preserves subsequent lines and the body", async ()
 test("a guarded adb request is checked again after opening its stream", async () => {
   const release = Deferred.makeUnsafe<void>(), reached = Promise.withResolvers<void>();
   let writes = 0, resets = 0, allowed = true;
-  const socket = { ...stream([]), write: () => Effect.sync(() => { writes++; }), reset: () => { resets++; } };
+  const socket = {
+    ...stream([]),
+    writeGuarded: (_bytes: Uint8Array, check: () => CoreError | null) => Effect.callback<void, CoreError>((resume) => {
+      const refused = check();
+      if (refused) resume(Effect.fail(refused));
+      else { writes++; resume(Effect.void); }
+    }),
+    reset: () => { resets++; },
+  };
   const conn = { openBi: () => Effect.andThen(Effect.sync(() => reached.resolve()), Effect.as(Deferred.await(release), socket)) } as unknown as IrohConnection;
   const link = new Link(conn, {} as never, "", (() => Effect.succeed({})) as never, null);
   try {
@@ -49,4 +57,14 @@ test("a guarded adb request is checked again after opening its stream", async ()
     assert.equal(writes, 0, "the head was not handed to the host after the decision changed");
     assert.equal(resets, 1, "the unused stream is released");
   } finally { Deferred.doneUnsafe(release, Effect.void); }
+});
+
+test("a stream without an atomic guarded write cannot send a guarded adb request", async () => {
+  let writes = 0, resets = 0;
+  const socket = { ...stream([]), write: () => Effect.sync(() => { writes++; }), reset: () => { resets++; } };
+  const conn = { openBi: () => Effect.succeed(socket) } as unknown as IrohConnection;
+  const link = new Link(conn, {} as never, "", (() => Effect.succeed({})) as never, null);
+  await assert.rejects(run(link.adb({ method: "POST", path: "/admin/api/adb", headers: [] }, { op: "sign" }, () => null)));
+  assert.equal(writes, 0);
+  assert.equal(resets, 1);
 });

@@ -57,7 +57,7 @@ import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
 import type { CoreModule } from "../module.ts";
-import { HostError } from "../error.ts";
+import { HostError, type CoreError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
 import { accessOf } from "../iroh-bindings.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, type Unzstd, sqlError } from "../host.ts";
@@ -101,7 +101,21 @@ export class Bridge {
   /// Operation `op`; interrupted, its answer is let go. A fetch is also cancelled in the shell: dropping only this
   /// waiter would leave its HTTP exchange alive through every subsequent retry on a weak network.
   call(op: string, json: unknown, bytes: Uint8Array | null = null): Effect.Effect<Answer, HostError> {
-    return Effect.callback<Answer, HostError>((resume) => {
+    return this.#call<never>(op, json, bytes);
+  }
+
+  /// The check and the native call share one synchronous registration: an Effect fiber cannot yield between them.
+  callGuarded(op: string, json: unknown, bytes: Uint8Array, check: () => CoreError | null): Effect.Effect<Answer, HostError | CoreError> {
+    return this.#call(op, json, bytes, check);
+  }
+
+  #call<E>(op: string, json: unknown, bytes: Uint8Array | null, check?: () => E | null): Effect.Effect<Answer, HostError | E> {
+    return Effect.callback<Answer, HostError | E>((resume) => {
+      const refused = check?.();
+      if (refused !== undefined && refused !== null) {
+        resume(Effect.fail(refused));
+        return;
+      }
       const id = this.#next++;
       this.#waiting.set(id, { resolve: (a) => resume(Effect.succeed(a)), reject: (e) => resume(Effect.fail(e)) });
       this.native.call(id, op, JSON.stringify(json ?? {}), bytes);
@@ -465,6 +479,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
   const stream = (id: number): IrohStream => ({
     read: () => Effect.map(bridge.call("istream.read", { id }), (a) => ((a.json as J)?.end === true ? null : (a.bytes ?? new Uint8Array(0)))),
     write: (bytes) => Effect.asVoid(bridge.call("istream.write", { id }, bytes)),
+    writeGuarded: (bytes, check) => Effect.asVoid(bridge.callGuarded("istream.write", { id }, bytes, check)),
     finish: () => Effect.asVoid(bridge.call("istream.finish", { id })),
     stopped: () => Effect.map(bridge.call("istream.stopped", { id }), (a) => (typeof (a.json as J)?.code === "number" ? (a.json as J).code : null)),
     reset: (code) => void Effect.runFork(Effect.ignore(bridge.call("istream.reset", { id, code }))),
