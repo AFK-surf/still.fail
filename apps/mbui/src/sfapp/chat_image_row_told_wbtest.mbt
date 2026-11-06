@@ -2,7 +2,7 @@
 // at another path) is the same image, drawn at its proportion now and opened as the file is now.
 
 ///|
-test "an image in a row whose file its message tells again is the same image, drawn at its proportion now, opened as it is now from its thumbnail" {
+test "an image in a row whose file its message tells again is the same image, drawn at its proportion now, opened as it is now, flying out of it and back into it" {
   let images = @sfbase.ChatImages::new()
   let calls : Array[Made] = []
   let told = @signals.signal(0)
@@ -36,6 +36,9 @@ test "an image in a row whose file its message tells again is the same image, dr
       },
     }
   })
+  // (the pictures as big as their files are: 乙 upright, as it is told last)
+  t.add_image("mem:row-told/row-a.png", 640, 480)
+  t.add_image("mem:row-told/row-b.png", 480, 640)
   t.check_looks(false)
   t.run_for(first_page_ms + @ui.move_most_ms + @sfpages.reveal_ms)
   @sf.markdown_read.val = Some(fn(words, done) { done(if words == text { Some(tree) } else { None }) })
@@ -57,24 +60,55 @@ test "an image in a row whose file its message tells again is the same image, dr
   assert_eq(b_now.id, b.id, msg="乙 the same image")
   assert_eq(a_now.id, a.id, msg="甲 the same image")
   assert_true((b_now.rect.2 / b_now.rect.3 - 480.0 / 640.0).abs() < 0.02, msg="乙 drawn upright: \{b.rect} then \{b_now.rect}")
-  // (pressed, it opens the file where it is kept now, from this image: its thumbnail by the file now, none by the file
-  // as it was)
+  // (pressed, it opens the file where it is kept now from this image, its thumbnail under the file now and none under
+  // the file as it was: it flies out of it, the image hidden while the preview is its picture; closed, it flies back
+  // into it, lands where it is drawn and the image is shown again, the same image all along)
+  let drawn_b = (b_now.rect.0, b_now.rect.1, b_now.rect.2, b_now.rect.3)
   t.tap(b_now.rect.0 + b_now.rect.2 / 2.0, b_now.rect.1 + b_now.rect.3 / 2.0)
-  let opened = viewer.get()
-  viewer.set(None)
-  guard opened is Some(v) else { fail("乙 opened nothing") }
+  guard viewer.get() is Some(v) else { fail("乙 opened nothing") }
   assert_eq(v.file.path, "work/s-c1/kept/row-b.png")
   let now_id = v.thumb_id()
   let was_id = now_id.replace(old="work/s-c1/kept/row-b.png", new="work/s-c1/row-b.png")
   assert_true(was_id != now_id, msg=now_id)
-  match thumb_of(t.ctx(), now_id) {
-    Some(th) =>
-      assert_true(
-        (th.x - b_now.rect.0).abs() < 0.5 && (th.y - b_now.rect.1).abs() < 0.5 && (th.w - b_now.rect.2).abs() < 0.5 &&
-        (th.h - b_now.rect.3).abs() < 0.5,
-        msg="乙's thumbnail at \{(th.x, th.y, th.w, th.h)}, drawn at \{b_now.rect}",
-      )
+  let th = match thumb_of(t.ctx(), now_id) {
+    Some(th) => th
     None => fail("no thumbnail of 乙 where it is kept now")
   }
+  assert_true(
+    (th.x - drawn_b.0).abs() < 0.5 && (th.y - drawn_b.1).abs() < 0.5 && (th.w - drawn_b.2).abs() < 0.5 &&
+    (th.h - drawn_b.3).abs() < 0.5,
+    msg="乙's thumbnail at \{(th.x, th.y, th.w, th.h)}, drawn at \{drawn_b}",
+  )
   assert_true(thumb_of(t.ctx(), was_id) is None && !pv_thumbs.contains(was_id), msg="乙's thumbnail where it was let go")
+  assert_true(v.flies && !v.fly_back, msg="the preview flies out")
+  assert_eq(pv_hidden.get(), now_id, msg="乙 hidden while the preview is its picture")
+  // (halfway out: its picture, upright, between 乙 and its place on the stage)
+  t.run_for(@ui.move_most_ms / 2.0)
+  let to = v.zoom.rect().unwrap()
+  let on_way = t
+    .drawn_images()
+    .filter(fn(i) { i[8] > 0.5 && i[2] > th.w + 0.5 && i[2] < to.2 - 0.5 && (i[3] / i[2] - to.3 / to.2).abs() < 0.01 })
+  assert_eq(on_way.length(), 1, msg="halfway out from \{(th.x, th.y, th.w, th.h)} to \{to}: \{on_way}")
+  let (cx, cy) = (on_way[0][0] + on_way[0][2] / 2.0, on_way[0][1] + on_way[0][3] / 2.0)
+  assert_true(cx > dmin(th.x + th.w / 2.0, to.0 + to.2 / 2.0) - 0.5 && cx < dmax(th.x + th.w / 2.0, to.0 + to.2 / 2.0) + 0.5)
+  assert_true(cy > dmin(th.y + th.h / 2.0, to.1 + to.3 / 2.0) - 0.5 && cy < dmax(th.y + th.h / 2.0, to.1 + to.3 / 2.0) + 0.5)
+  t.run_for(@ui.move_most_ms)
+  assert_true(drawn_at(t, to), msg="in: \{to}")
+  // (in, the stage over the chat: 乙 shown under it again, as for any picture)
+  assert_eq(pv_hidden.get(), "")
+  // (closed: back into 乙 where it is drawn now, then 乙 itself again)
+  t.back()
+  assert_true(v.fly_back, msg="the preview flies back")
+  assert_eq(pv_hidden.get(), now_id, msg="乙 hidden while the preview flies back into it")
+  t.run_for(@ui.move_most_ms)
+  // (where 乙 is now: the chat may have moved under the preview)
+  let home = image_of("row-b.png")
+  let home_r = (home.rect.0, home.rect.1, home.rect.2, home.rect.3)
+  assert_true(drawn_at(t, home_r), msg="landed: \{home_r} \{t.drawn_images()}")
+  assert_true(pv_leaving.get() is None)
+  assert_eq(pv_hidden.get(), "")
+  assert_true(viewer.get() is None)
+  t.draw()
+  assert_eq(home.id, b.id, msg="乙 the same image after the preview")
+  assert_true(drawn_at(t, home_r), msg="乙 shown again: \{t.drawn_images()}")
 }
