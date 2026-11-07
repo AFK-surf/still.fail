@@ -40,7 +40,7 @@ function world(o: { listed?: string; held?: string; surface?: string; db?: Datab
         hidden = false;
         return [++n];
       },
-      pendingCard: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
+      pendingCardHeader: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
       withdrawCard: (_a: string, _t: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: (_a: string, _t: number, ts: string, f: (was: any) => any) => {
         const c = cards.find((x) => x.ts === ts)!;

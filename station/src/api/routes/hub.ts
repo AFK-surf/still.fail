@@ -612,7 +612,7 @@ export const routes = (tools: Tools): Route[] => {
           // option check also considers quotes that quotesOf omits (including ones beyond its display limit).
           const originalQuotes: unknown[] = Array.isArray(i.quotes) ? i.quotes : [];
           const named = originalQuotes.some((q: any) => q !== null && typeof q === "object" && typeof q.ts === "string");
-          const pending = named ? s.pendingCard(t.id) : null;
+          const pending = named ? s.pendingCardHeader(t.id) : null;
           if (pending !== null) {
             const [asked, card] = pending;
             const options: unknown[] = Array.isArray(card?.options) ? card.options : [];

@@ -55,7 +55,7 @@ export type SignInDeps = {
       latestThread(session: string): SessionThread | null;
       latestThreadIfReady?(session: string): SessionThread | null | undefined;
       sessionThreadById(session: string, thread: number): SessionThread | null;
-      pendingCard(thread: number): [{ ts: string }, unknown] | null;
+      pendingCardHeader(thread: number): [{ ts: string }, unknown] | null;
       insertMessage(m: Record<string, unknown>): readonly unknown[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;

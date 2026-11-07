@@ -69,7 +69,7 @@ test("finding an operation's pending card does not merge its message", () => {
       .run(thread, JSON.stringify({ type: "text" }));
     Object.defineProperty(store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
       if (key === "prepare") return (sql: string) => {
-        if (/\bFROM\s+merged\b/i.test(sql)) throw new Error("card identity merged an unrelated message");
+        if (/\bFROM\s+merged\b/i.test(sql)) throw new Error("card identity merged its message");
         return target.prepare(sql);
       };
       const value = Reflect.get(target, key, target);
