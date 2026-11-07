@@ -326,6 +326,45 @@ test "a message appended after unchanged history keeps its old entries and rebui
 }
 
 ///|
+test "messages replaced or reordered in the same source array keep the unread line and do not change old rows" {
+  let messages = [said(1, "第一句"), said(2, "第二句"), said(3, "第三句")]
+  let initial : Json = {
+    "thread": { "id": 1 },
+    "messages": Json::array(messages),
+    "unreadLine": 2,
+  }
+  let value = Ref(initial)
+  let version = Ref(1)
+  let changes = @signals.signal(1)
+  let src = pushed_source(value, version, changes)
+  let r : ChatRef = { station: "ws1/st1", session: "changed-history", title: "", station_name: "" }
+  let entries : Ref[Array[Entry]] = Ref([])
+  let t = @ui.Tester::new(fn(_) { entries.val = view_of_chat(src, r).1 })
+  t.draw()
+  let original = entries.val
+  assert_eq(original.map(fn(e) { e.id() }), ["top", "m:t1", "line", "m:t2", "m:t3", "foot"])
+  messages[1] = said(2, "改过的第二句")
+  version.val = 2
+  changes.set(2)
+  t.draw()
+  let replaced = entries.val
+  assert_eq(replaced.map(fn(e) { e.id() }), ["top", "m:t1", "line", "m:t2", "m:t3", "foot"])
+  assert_true(replaced.iter().any(fn(e) { match e { Said(m) => m.text == "改过的第二句"; _ => false } }))
+  assert_true(original.iter().any(fn(e) { match e { Said(m) => m.text == "第二句"; _ => false } }))
+  let first = messages[0]
+  let second = messages[1]
+  messages[0] = messages[2]
+  messages[1] = first
+  messages[2] = second
+  version.val = 3
+  changes.set(3)
+  t.draw()
+  assert_eq(entries.val.map(fn(e) { e.id() }), ["top", "m:t3", "m:t1", "line", "m:t2", "foot"])
+  assert_eq(replaced.map(fn(e) { e.id() }), ["top", "m:t1", "line", "m:t2", "m:t3", "foot"])
+  assert_true(replaced.iter().any(fn(e) { match e { Said(m) => m.text == "改过的第二句"; _ => false } }))
+}
+
+///|
 /// What made_again made of `before` (each made the text of its words), then of `now` from that, and how many of `now`
 /// it made anew.
 fn made_again_of(before : Array[Json], now : Array[Json]) -> (Array[(Json, String)], Array[(Json, String)], Int) {
