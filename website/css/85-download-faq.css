@@ -1,0 +1,119 @@
+/* ---------- Downloads: one white block of six cells, dashed rules between them; this device's first, outlined in Ink
+   and tagged (a grouped list on a phone) ---------- */
+.dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.dl a {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto 1fr auto;
+  grid-template-areas: "os tags go" ". . ." "txt txt txt"; column-gap: 12px;
+  min-height: 200px; padding: clamp(20px, 2vw, 28px); color: var(--ink); text-decoration: none;
+  background: var(--dash-y), var(--dash-x); background-position: right top, left bottom;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: background-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
+}
+/* Rules only between cells: none on the last column's right or the last row's foot. */
+.dl a:nth-child(3n) { background: var(--dash-x); background-position: left bottom; }
+.dl a:nth-child(n+4) { background: var(--dash-y); background-position: right top; }
+.dl a:nth-child(6) { background: none; }
+@media (prefers-reduced-motion: no-preference) { .dl a:active { scale: .985; } } /* a whole card: a lighter press */
+.dl a:focus-visible { outline: 2px solid var(--ring); outline-offset: -4px; border-radius: 10px; }
+.dl .os { grid-area: os; width: 44px; height: 44px; border-radius: 8px; background: var(--panel); display: grid; place-items: center; }
+.dl .os svg { width: 22px; height: 22px; stroke-width: 2.18; } /* 2 px drawn, beside Medium */
+.dl .tags { grid-area: tags; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.dl .go { grid-area: go; width: 20px; height: 20px; stroke-width: 2.4; color: var(--silver); transition: color var(--dur-ui) ease, transform var(--dur-ui) var(--ease-out); }
+.dl .txt { grid-area: txt; display: flex; flex-direction: column; gap: 6px; padding-top: 28px; min-width: 0; }
+.dl b { font-size: 17px; font-weight: 600; letter-spacing: -.015em; line-height: 1.2; }
+.dl small { color: var(--graphite); font-size: var(--t-small); line-height: 1.45; }
+/* Tags: small mono labels in a hairline box. */
+.tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; font-family: var(--mono); font-size: 11px; line-height: 1; font-weight: 400; letter-spacing: .04em; text-transform: uppercase;
+  border: 1px solid var(--guide); color: var(--graphite); width: max-content; white-space: nowrap; }
+/* This device: an Ink outline over its cell's edges, and its tag in Ink. */
+.dl .primary .go { color: var(--ink); }
+.dl .primary .tag.mine { border-color: var(--ink); color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  .dl a:hover { background-color: var(--paper); }
+  .dl a:hover .go { color: var(--ink); transform: translate(2px, -2px); }
+  .dl a[href^="#"]:hover .go { transform: translateX(3px); }
+}
+
+/* ---------- FAQ ---------- */
+.faq { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 14fr); gap: clamp(24px, 4vw, 80px); }
+/* Rows split by dotted rules. */
+.faq .qa { --dotted: linear-gradient(to right, var(--dot) 1px, transparent 1px) 0 0 / 4px 1px repeat-x; background: var(--dotted); background-position: left top; }
+.faq details { background: var(--dotted); background-position: left bottom; }
+.faq summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 24px;
+  min-height: 64px; padding: clamp(16px, 1.5vw, 22px) 0;
+  font-family: var(--serif); font-size: 18px; line-height: 1.35; font-weight: 400; letter-spacing: -.005em;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: 6px; }
+:root:not(:lang(zh), :lang(ja), :lang(ko)) :is(.faq summary .q, .faq .a p) { text-wrap: pretty; }
+/* CJK questions: the serif's Regular a step up where the face has one. */
+:root:is(:lang(zh), :lang(ja), :lang(ko)) .faq summary { font-weight: 500; font-size: 17px; letter-spacing: 0; }
+/* Chinese and Korean questions keep words whole (不|同 never splits), as the headlines do. */
+:root:is(:lang(zh), :lang(ko)) .faq summary .q { word-break: keep-all; }
+/* The mark: plus while closed, minus while open, cross-fading in one place (both stay in the DOM, so a second click
+   turns it back from where it is). */
+.faq summary .pm {
+  display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 6px; border: 1px solid transparent; color: var(--graphite);
+  transition: color var(--dur-ui) ease, border-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
+}
+.faq summary .pm svg { grid-area: 1 / 1; width: 16px; height: 16px; stroke-width: 2.5; transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1), scale 300ms cubic-bezier(0.2, 0, 0, 1), filter 300ms cubic-bezier(0.2, 0, 0, 1); } /* 2 px drawn, beside Book */
+.faq .pm-minus, .faq details.is-open .pm-plus { opacity: 0; scale: .25; filter: blur(4px); }
+.faq details.is-open .pm-minus { opacity: 1; scale: 1; filter: blur(0); }
+.faq details.is-open summary .pm { color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) { .faq summary:active .pm { scale: .96; } }
+@media (hover: hover) and (pointer: fine) {
+  .faq summary:hover .pm { color: var(--ink); border-color: var(--guide); }
+}
+/* The answer grows on a grid row (0fr to 1fr), so the height is the content's own and the move is interruptible.
+   Opening takes a little longer than closing; both stay under 300 ms. */
+.faq .a { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 200ms var(--ease-out); }
+.faq .a > div { min-height: 0; overflow: hidden; }
+.faq .a p {
+  padding: 0 56px 24px 0; max-width: 46em; font-size: 15px; color: var(--graphite);
+  opacity: 0; transform: translateY(-4px); transition: opacity 160ms ease, transform 200ms var(--ease-out);
+}
+.faq details.is-open .a { grid-template-rows: 1fr; transition-duration: 280ms; }
+.faq details.is-open .a p { opacity: 1; transform: none; transition-duration: 240ms, 280ms; transition-delay: 40ms; }
+.faq .a a { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .22em; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+@media (hover: hover) and (pointer: fine) { .faq .a a:hover { text-decoration-color: var(--brand-deep); } }
+/* Reduced motion: nothing moves. The answer's room opens at once and its words fade in; closing, the words fade out
+   (quicker) and then the room closes (a step at the fade's end; main.js waits for it). The mark only cross-fades. */
+@media (prefers-reduced-motion: reduce) {
+  .faq .a { transition: grid-template-rows 150ms step-end !important; }
+  .faq details.is-open .a { transition: none !important; }
+  .faq .a p { transform: none; transition: opacity 150ms ease-out !important; }
+  .faq details.is-open .a p { transition: opacity 200ms ease-out !important; }
+  .faq summary .pm svg { scale: none !important; filter: none !important; transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1) !important; }
+}
+
+@media (max-width: 960px) {
+  .faq { grid-template-columns: minmax(0, 1fr); }
+  .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dl a, .dl a:nth-child(3n), .dl a:nth-child(n+4), .dl a:nth-child(6) { background: var(--dash-y), var(--dash-x); background-position: right top, left bottom; }
+  .dl a:nth-child(2n) { background: var(--dash-x); background-position: left bottom; }
+  .dl a:nth-child(5) { background: var(--dash-y); background-position: right top; }
+  .dl a:nth-child(6) { background: none; }
+}
+/* Phone: a grouped list of 72 px rows, this device's first. */
+@media (max-width: 640px) {
+  .dl { grid-template-columns: minmax(0, 1fr); }
+  .dl a, .dl a:nth-child(n) {
+    min-height: 72px; padding: 13px 15px; column-gap: 14px; background: var(--dash-x); background-position: left bottom;
+    grid-template-rows: auto auto; grid-template-areas: "os tags go" "os txt go"; align-items: center;
+  }
+  .dl a:last-child { background: none; }
+  .dl a .txt { padding-top: 0; gap: 2px; }
+  .dl a .tags:empty { display: none; }
+  .dl a .tags:not(:empty) { margin-bottom: 4px; }
+  .dl a .os { width: 40px; height: 40px; }
+  .dl a .go { width: 18px; height: 18px; }
+  .dl a b { font-size: 16px; }
+  .dl a small { font-size: 14px; }
+  .dl a:active { scale: none; background-color: var(--paper); }
+  .dl > a:first-child { border-radius: 11px 11px 0 0; }
+  .dl > a:last-child { border-radius: 0 0 11px 11px; }
+  .faq summary { min-height: 56px; font-size: 17px; gap: 16px; }
+  .faq .a p { padding-right: 0; font-size: 15px; }
+}
