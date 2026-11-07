@@ -23,13 +23,14 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
+import { archiveLastKey } from "../store/archive-last.ts";
 import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -418,10 +419,23 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   return summaries;
 }
 
-/// The thread's latest message as merged, for lists.
+export const LAST_MESSAGE_PENDING = "last message pending: ";
+export class LastMessageUnavailable extends Refused {
+  readonly threads: number[];
+  constructor(threads: number[]) { super(503, LAST_MESSAGE_PENDING + JSON.stringify(threads)); this.threads = threads; }
+}
+export const LAST_MESSAGE_KEYED = "SELECT * FROM merged WHERE thread=?1 AND n=CAST(?2 AS INTEGER)";
+
+/// The thread's latest message as merged. The key and edited text must come from the same snapshot.
 export function lastMessage(s: Store, thread: number): MessageRow | null {
-  const r = one(s, s.legacySaid ? LEGACY_LAST_MESSAGE : LAST_MESSAGE, thread);
-  return r ? toMessage(r) : null;
+  s.db.exec("SAVEPOINT last_message_read");
+  try {
+    const last = archiveLastKey(s.db, thread);
+    if (!last.known) throw new LastMessageUnavailable([thread]);
+    if (last.n === null) return null;
+    const r = one(s, LAST_MESSAGE_KEYED, thread, last.n);
+    return r ? toMessage(r) : null;
+  } finally { s.db.exec("RELEASE last_message_read"); }
 }
 
 /// How many letters the thread has (isLetter), in either way: those kept as entries before letters had their own log,
