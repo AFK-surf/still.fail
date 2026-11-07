@@ -45,15 +45,6 @@ fn open_pick_station(stations : Array[Json], go : (String) -> Unit, from~ : @sf.
 }
 
 ///|
-/// A variable being edited (EnvRow): its row, the name and value typed, what a secret saved before shows masked, and
-/// the name it had.
-priv struct EnvRow {
-  row : Int
-  masked : String?
-  original : String?
-}
-
-///|
 /// What a sign-in's sheet keeps while it is up: the code typed (by the sign-in's id), whether its link was copied, the
 /// command to run by hand shown.
 priv struct LoginState {

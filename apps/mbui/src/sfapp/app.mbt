@@ -57,7 +57,6 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
   bar_reset()
