@@ -10,7 +10,7 @@
 pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, only : String) -> Unit {
   let look = look_of(c)
   let mine = connects_mine.val
-  let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
+  let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) }).get()
   let st = @settings.stations_of(core, here)
   let stations = match st.value {
     Some(Array(a)) => if only == "" { a } else { a.filter(fn(x) { text(Some(x), "station") == only }) }

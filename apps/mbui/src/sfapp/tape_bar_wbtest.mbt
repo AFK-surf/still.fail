@@ -23,8 +23,8 @@ fn tape_bar_in(
         let base = wrap(fixture_app(mode))
         let s : Source = {
           ..base,
-          topic: fn(name, params) {
-            let got = (base.topic)(name, params)
+          topic_read: fn(name, params) {
+            let got = base.topic(name, params).get().snapshot()
             if name != "prefs" || lang.val == "" {
               return got
             }
@@ -134,8 +134,8 @@ test "on the tape 用量 made once: its bar the tree's, its title where a chat's
   let t = tape_bar_in("settings-usage", Ref(""), wrap=fn(base) {
     let s : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         if name == "workspaces" && !listed.get() {
           return { ..got, value: Some(Json::array([])) }
         }
@@ -459,8 +459,8 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
 fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
   {
     ..base,
-    topic: fn(topic, params) {
-      let r = (base.topic)(topic, params)
+    topic_read: fn(topic, params) {
+      let r = base.topic(topic, params).get().snapshot()
       let n = name.get()
       match (topic, r.value) {
         ("stations", Some(Array(a))) if n != "" =>

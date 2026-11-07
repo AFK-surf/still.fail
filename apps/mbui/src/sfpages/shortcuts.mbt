@@ -51,7 +51,7 @@ pub fn shortcuts_node(
       keys_recording.set("")
     }
   }
-  let prefs = fn() { (core.topic)("prefs", Map::new()).value }
+  let prefs = fn() { (core.topic)("prefs", Map::new()).get().value }
   let keymap = fn() { field(prefs(), "keymap") }
   let listed = fn() { key_actions(prefs()).filter(fn(a) { flag(Some(a), "listed") }) }
   let groups = fn() { items(keymap(), "groups") }

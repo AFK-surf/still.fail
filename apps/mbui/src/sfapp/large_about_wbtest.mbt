@@ -20,12 +20,12 @@ fn large_about_tester(
   // (the core's language as `lang` says it, where it says one)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match topics.get(name) {
         Some(v) => return { value: Some(v.get()), error: None, version: 1 }
         None => ()
       }
-      let got = (base.topic)(name, params)
+      let got = base.topic(name, params).get().snapshot()
       if name != "prefs" || lang.val == "" {
         return got
       }
@@ -527,8 +527,8 @@ fn archiving_pictures_asked(w : Double, url : String) -> (Array[Int], Array[Int]
       }
       core(u, s)
     },
-    topic: fn(name, params) {
-      let r = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let r = base.topic(name, params).get().snapshot()
       guard name == "stations" && r.value is Some(Array(a)) else { return r }
       let first = match a.get(0) {
         Some(Object(m)) => {
@@ -592,8 +592,8 @@ test "归档 made once, on every screen: a station's picture answered later, whi
         }
         key
       },
-      topic: fn(name, params) {
-        let r = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let r = base.topic(name, params).get().snapshot()
         guard name == "stations" && r.value is Some(Array(a)) else { return r }
         let first = match a.get(0) {
           Some(Object(m)) => {

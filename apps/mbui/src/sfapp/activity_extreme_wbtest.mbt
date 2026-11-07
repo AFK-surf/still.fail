@@ -13,8 +13,8 @@ fn activity_extreme_clock_positions(
   let src : Source = if two_agents {
     {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         guard name == "chat" && got.value is Some(Object(chat)) else { return got }
         let agents = items(got.value, "agents").copy()
         agents.push({

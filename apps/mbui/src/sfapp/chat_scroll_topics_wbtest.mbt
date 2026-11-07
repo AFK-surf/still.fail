@@ -5,9 +5,9 @@ test "scrolling an unchanged chat does not repeatedly read its topic" {
   let reads = Ref(0)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" { reads.val += 1 }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })

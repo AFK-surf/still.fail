@@ -71,10 +71,10 @@ pub fn settings_parts(
     Some(Array(a)) => Some(a)
     _ => None
   }
-  let connects = (core.topic)("connects", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).value
-  let lock = (core.topic)("lock", { "workspace": Json::string(here.workspace) }).value
-  let vaults = (core.topic)("vaults", { "workspace": Json::string(here.workspace) }).value
-  let profiles = (core.topic)("profiles", { "scope": Json::string(here.workspace) }).value
+  let connects = (core.topic)("connects", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).get().value
+  let lock = (core.topic)("lock", { "workspace": Json::string(here.workspace) }).get().value
+  let vaults = (core.topic)("vaults", { "workspace": Json::string(here.workspace) }).get().value
+  let profiles = (core.topic)("profiles", { "scope": Json::string(here.workspace) }).get().value
   let parts : Array[SettingsPart] = []
   // who is signed in, the workspace in view
   let me = if here.person != "" { here.person } else { here.email }
@@ -199,14 +199,14 @@ pub fn settings_parts(
   })
   // this device's: what there is of it here (the bottom bar where the window has one, 2026-10-26: 「为啥中型屏会有这个
   // 设置」; the keys, this computer's station a computer's)
-  let prefs = (core.topic)("prefs", Map::new()).value
+  let prefs = (core.topic)("prefs", Map::new()).get().value
   let theme = match @settings.appearance(prefs) {
     "light" => @sf.t("android-settings.theme.light")
     "dark" => @sf.t("android-settings.theme.dark")
     _ => @sf.t("android-settings.theme.system")
   }
   // notifications as the core's `notify` says, or as switched while `notify.set` is out; refused by the system, in red
-  let notify = (core.topic)("notify", Map::new()).value
+  let notify = (core.topic)("notify", Map::new()).get().value
   let on = match @settings.notify_switched.get() {
     Some(v) => v
     None => notify is None || flag(notify, "on")

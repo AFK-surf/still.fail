@@ -146,7 +146,7 @@ fn open_decide_panels(mode : String, src : Source) -> Unit {
         src,
         "ws1",
         r,
-        @sfpages.chat_extra_items(src, r, (src.topic)("chat", chat_params(r)).value),
+        @sfpages.chat_extra_items(src, r, src.topic("chat", chat_params(r)).get().value),
         from=@sf.at_point(195.0, 800.0),
       )
     }
@@ -442,7 +442,7 @@ pub fn fixture_json(json : String) -> Source {
   let base = @sffixture.fixture("")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       let key : Map[String, Json] = { "topic": Json::string(name) }
       for k, v in params {
         key[k] = v

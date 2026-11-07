@@ -8,7 +8,7 @@ pub fn Viewer::desk_back(self : Viewer, src : Source) -> String {
   match self.drive {
     Some(d) => viewer_folder_label(src, d.station, d.root, dv_parent(d.path))
     None => {
-      let title = text((src.topic)("chat", { "station": Json::string(self.station), "session": Json::string(self.key) }).value, "title")
+      let title = text(src.topic("chat", { "station": Json::string(self.station), "session": Json::string(self.key) }).get().value, "title")
       if title != "" {
         title
       } else {

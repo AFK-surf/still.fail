@@ -33,7 +33,7 @@ fn screen_links_core(
       streams.length()
     },
     cancel: fn(id) { cancelled.push(id) },
-    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
+    topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, h264~)

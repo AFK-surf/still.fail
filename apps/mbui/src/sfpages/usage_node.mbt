@@ -968,10 +968,10 @@ pub fn usage_node(
     Some(w) => w
     None => fn() { v.window().0 }
   }
-  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())) }
+  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())).get() }
   let value = fn() { read().value }
   // Keep the chart's unfiltered view subscribed while the selected totals and chats are read.
-  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)) }
+  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)).get() }
   let chart = fn() { chart_read().value }
   // (at its title's line's end; where a frame's bar names it, in that bar, as tall as its days' choice stands there)
   let actions = fn(l : @view.View) {
@@ -1074,7 +1074,7 @@ pub fn usage_prices_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }) }
+  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }).get() }
   let tables = fn() { items(topic().value, "prices") }
   let wait = fn() { field(topic().value, "wait") }
   let blocks = fn() {

@@ -679,7 +679,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   v.reacts(
     fn() {
       match @sfbase.workspace_in_view(src).0 {
-        Some(w) if (src.topic)("prefs", {}).value is Some(_) => w.id + "\n" + side_group(src, w.id)
+        Some(w) if src.topic("prefs", {}).get().value is Some(_) => w.id + "\n" + side_group(src, w.id)
         _ => ""
       }
     },
@@ -718,7 +718,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }
       // (the chat shown has its view: what its side panel shows is known)
       let known = match app.nav.top() {
-        Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
+        Chat(r) | History(r, _, _) => src.topic("chat", chat_params(r)).get().value is Some(_)
         _ => true
       }
       (chat, open, known, wide.tape_ask.get(), tape_page_ready(), tape_to_of(tape_room_now()))

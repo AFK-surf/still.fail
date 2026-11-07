@@ -131,8 +131,8 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
   let s = field(a, "session")
   let on = [("station", station), ("key", key)]
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let card = (src.topic)("agentCard", params).value
-  let host = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) }).value
+  let card = src.topic("agentCard", params).get().value
+  let host = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) }).get().value
   let compacts = flag(s, "canCompact")
   let clears = flag(s, "canClear")
   // (what is under way and what failed a moment ago, as the core's `doing` says: useContextActions)
@@ -183,7 +183,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
       },
     )
     // the station it runs on, what runs low on it at its end
-    let look = stations_of((src.topic)("stations", { "scope": Json::string(scope_of(station)) }).value)
+    let look = stations_of(src.topic("stations", { "scope": Json::string(scope_of(station)) }).get().value)
       .iter()
       .find_first(fn(x) { x.address == station })
     wh_line(

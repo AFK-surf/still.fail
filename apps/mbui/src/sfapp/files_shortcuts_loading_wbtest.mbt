@@ -5,11 +5,11 @@ test "a station's configured folder opens as soon as its drive is known" {
   // The files page already has the stations with drives; the separate unfiltered subscription is still loading.
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "stations" && !params.contains("drive") {
         { value: None, error: None, version: 0 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

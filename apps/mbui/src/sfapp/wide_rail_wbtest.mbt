@@ -289,11 +289,11 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   let archive : Json = { "days": [{ "label": "今天", "items": [row("a1", "整理上个月的发票"), row("a2", "试一下新的图标尺寸")] }] }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "archive" {
         { value: Some(archive), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -385,11 +385,11 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
   let kept_told = @signals.signal(0)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match changed.get(name) {
         Some(v) => { value: Some(v), error: None, version: 1 }
         None if name == "prefs" =>
-          match (base.topic)(name, params) {
+          match base.topic(name, params).get().snapshot() {
             { value: Some(Object(m)), version, .. } => {
               let p = m.copy()
               p["trouble"] = Json::object(kept)
@@ -397,7 +397,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
             }
             t => t
           }
-        None => (base.topic)(name, params)
+        None => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -426,7 +426,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
 ///|
 /// The home fixture's chats of ws1 with what is wrong with its stations.
 fn chats_in_trouble() -> Json {
-  match (fixture("home").topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value {
+  match fixture("home").topic("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).get().value {
     Some(Object(m)) => {
       let v = m.copy()
       v["trouble"] = { "text": "Maple 连不上了", "state": "error" }
@@ -1030,11 +1030,11 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   // (the second workspace's own station: the fixture's list is the first's)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, params.get("scope")) {
         ("stations", Some(String("ws2"))) =>
-          match ((base.topic)(name, { "scope": Json::string("ws1") }).value) {
+          match (base.topic(name, { "scope": Json::string("ws1") }).get().value) {
             Some(Array(list)) =>
               match list[0] {
                 Object(m) => {

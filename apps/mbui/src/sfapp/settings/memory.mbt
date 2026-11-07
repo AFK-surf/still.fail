@@ -14,7 +14,7 @@ pub(all) struct MemoryRead {
 ///|
 /// A station's memory (the `memory` topic).
 pub fn memory_of(core : Core, address : String) -> MemoryRead {
-  let topic = (core.topic)("memory", { "station": str(address) })
+  let topic = (core.topic)("memory", { "station": str(address) }).get()
   {
     value: topic.value,
     error: match topic.error {

@@ -31,7 +31,7 @@ fn xsharing_read(src : Source, r : ChatRef) -> Unit {
   if xsharing.read {
     return
   }
-  let share = field((src.topic)("chat", chat_params(r)).value, "xshare")
+  let share = field(src.topic("chat", chat_params(r)).get().value, "xshare")
   guard share is Some(_) else { return }
   xsharing.read = true
   for p in items(share, "places") {
@@ -71,7 +71,7 @@ pub fn open_xshare(src : Source, r : ChatRef, thread : Double?, from~ : @sf.Anch
 ///|
 /// 完成: the station told, in the order the panel lists them.
 fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
-  let share = field((src.topic)("chat", chat_params(r)).value, "xshare")
+  let share = field(src.topic("chat", chat_params(r)).get().value, "xshare")
   let to = items(share, "places").map(fn(p) { text(Some(p), "workspace") }).filter(fn(ws) { xsharing.ticked.contains(ws) })
   let session = text(share, "session")
   let p : Map[String, Json] = {
@@ -91,7 +91,7 @@ fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
 /// The workspaces, each a row with its box; 允许它们的 agent 发言 (off while none is ticked: the switch's note says so).
 fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   xsharing_read(src, r)
-  let share = field((src.topic)("chat", chat_params(r)).value, "xshare")
+  let share = field(src.topic("chat", chat_params(r)).get().value, "xshare")
   c.box(style=xshare_list, fn() {
     for p in items(share, "places") {
       let ws = text(Some(p), "workspace")

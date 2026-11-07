@@ -96,7 +96,7 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
-      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).value, "items") {
+      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).get().value, "items") {
         [item, ..] => @sfpages.cd_mode_dialog(core, "ws1/st1", Some(item))
         _ => ()
       }

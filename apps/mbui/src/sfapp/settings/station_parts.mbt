@@ -400,7 +400,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
     Some(s) => text(Some(s), "name")
     None => station_name(address)
   }
-  let all = (core.topic)("adbShare", Map([])).value
+  let all = (core.topic)("adbShare", Map([])).get().value
   let view = adb_lend_view(all, address)
   let sharing = flag(view, "sharing")
   let there = sharing && text(view, "station") == address
@@ -409,7 +409,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   // (lent there for chats' grants, not with this page's switch)
   let granted = adb_lends(all).iter().any(fn(l) { text(Some(l), "station") == address })
   // (a device with no adb to lend, as the core says: so at once, not after asking its host)
-  let card = (core.topic)("adbCard", { "station": str(address) }).value
+  let card = (core.topic)("adbCard", { "station": str(address) }).get().value
   let cannot = card is Some(_) && !flag(card, "lendable") && !there
   let phone = if cannot { None } else { adb_phone(c) }
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -659,7 +659,7 @@ let adb_quiet : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
 
 ///|
 fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
-  let view = (core.topic)("adbShare", Map([])).value
+  let view = (core.topic)("adbShare", Map([])).get().value
   let phone = adb_phone(c)
   let grants = match field(view, "grants") {
     Some(Array(a)) => a

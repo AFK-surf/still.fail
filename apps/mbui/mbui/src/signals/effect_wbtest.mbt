@@ -117,6 +117,91 @@ test "computed unwatched: child effect cleanups run in reverse creation (LIFO)" 
 }
 
 ///|
+test "a scoped computed releases a one-off read and keeps a tracked read until it ends" {
+  let source = signal(1)
+  let cleanups = Ref(0)
+  let c = computed_scoped(fn(_) {
+    effect_cleanup(fn() { fn() { cleanups.val += 1 } }) |> ignore
+    source.get()
+  })
+  assert_eq(c.get(), 1)
+  assert_false(source.watched())
+  assert_eq(cleanups.val, 1)
+  let stop = effect(fn() { c.get() |> ignore })
+  assert_true(source.watched())
+  stop()
+  assert_false(source.watched())
+  assert_eq(cleanups.val, 2)
+}
+
+///|
+test "a scoped computed can answer an untracked read without changing its tracked readers" {
+  let source = signal(1)
+  let direct = Ref(true)
+  let c = computed_scoped(fn(_) { source.get() }, untracked_read=Some(fn() {
+    if direct.val { Some(99) } else { None }
+  }))
+  assert_eq(c.get(), 99)
+  assert_false(source.watched())
+  let seen : Array[Int] = []
+  let stop = effect(fn() { seen.push(c.get()) })
+  assert_eq(seen, [1])
+  source.set(2)
+  assert_eq(seen, [1, 2])
+  stop()
+  assert_false(source.watched())
+  direct.val = false
+  assert_eq(c.get(), 2)
+  assert_false(source.watched())
+}
+
+///|
+test "a signal tells a resource each time its last reader leaves" {
+  let value = signal(0)
+  let ended = Ref(0)
+  value.on_unwatched(fn() { ended.val += 1 })
+  let first = effect(fn() { value.get() |> ignore })
+  let second = effect(fn() { value.get() |> ignore })
+  first()
+  assert_eq(ended.val, 0)
+  second()
+  assert_eq(ended.val, 1)
+  let again = effect(fn() { value.get() |> ignore })
+  again()
+  assert_eq(ended.val, 2)
+}
+
+///|
+test "computed fields follow a shared resource only for their graph readers" {
+  let opened = Ref(0)
+  let closed = Ref(0)
+  let resource = computed(fn(_) {
+    effect_cleanup(fn() {
+      opened.val += 1
+      fn() { closed.val += 1 }
+    }) |> ignore
+  })
+  let a = signal(1)
+  let b = signal("first")
+  let first_value = computed_following(fn(_) { a.get() }, resource)
+  let second_value = computed_following(fn(_) { b.get() }, resource)
+  assert_eq(first_value.get(), 1)
+  assert_eq(opened.val, 0, msg="one-off reads must not follow the resource")
+  let first = effect(fn() { first_value.get() |> ignore })
+  let second = effect(fn() { second_value.get() |> ignore })
+  assert_eq(opened.val, 1)
+  a.set(2)
+  b.set("second")
+  assert_eq(closed.val, 0, msg="updates must not reconstruct the shared resource")
+  first()
+  assert_eq(closed.val, 0, msg="the other field still follows the resource")
+  second()
+  assert_eq(closed.val, 1)
+  assert_eq(second_value.get(), "second")
+  assert_eq(opened.val, 1)
+}
+
+///|
 test "effect created inside computed: old inner cleanup runs before new inner setup" {
   // When a computed re-evaluates, any effects its getter created on the previous run must be disposed (with cleanup)
   // before the getter runs again. Otherwise the old inner's cleanup ends up running after the new inner has already

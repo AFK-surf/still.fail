@@ -295,7 +295,7 @@ fn search_of(src : Source, scope : String, query : String) -> SearchView? {
   }
   finder.held = Some(params)
   finder_leave.val = Some(fn() { (src.leave)("search", params) })
-  let topic = (src.topic)("search", params)
+  let topic = src.topic("search", params).get().snapshot()
   finder.failed.set(topic.error is Some(_))
   match topic.value {
     Some(v) => {
@@ -510,7 +510,7 @@ pub fn finder_list(
     c.list_scroll_to(key, 0)
   }
   // (several stations: what is found says which it is on)
-  let several = match (src.topic)("stations", { "scope": Json::string(w.id) }).value {
+  let several = match src.topic("stations", { "scope": Json::string(w.id) }).get().value {
     Some(Array(a)) => a.length() > 1
     _ => false
   }

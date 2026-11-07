@@ -8,7 +8,7 @@
 /// says it is kept in the clear where the library is not locked); each its mark, its name and what it is.
 pub fn vault_add(core : Core, here : Here, from~ : @sf.Beside) -> Unit {
   let ws = here.workspace
-  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).get().value
   let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
   let plain = flag(v, "plain")
   let kinds = ["profile"]

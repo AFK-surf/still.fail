@@ -10,7 +10,7 @@
 fn pushed_source(value : Ref[Json], version : Ref[Int], changes : @signals.Signal[Int]) -> Source {
   {
     ..fixture("home"),
-    topic: fn(_, _) {
+    topic_read: fn(_, _) {
       changes.get() |> ignore
       { value: Some(value.val), error: None, version: version.val }
     },
@@ -54,7 +54,7 @@ test "a topic's value is worked out once for each change the core pushes, howeve
 test "what is worked out of a topic another chat reads is that chat's own" {
   let src : Source = {
     ..fixture("home"),
-    topic: fn(_, params) { { value: params.get("chat"), error: None, version: 1 } },
+    topic_read: fn(_, params) { { value: params.get("chat"), error: None, version: 1 } },
   }
   let made : @sfbase.Derived[String] = @sfbase.Derived::new("named", fn(v, _) {
     match v {
@@ -87,7 +87,7 @@ test "what is worked out of a topic and a signal of the page's is worked out aga
     for _ in 0..<3 {
       seen.val = made.read("rows", fn(_) {
         worked.val += 1
-        let n = (src.topic)("counted", {}).value.unwrap().as_number().unwrap_or(0.0)
+        let n = src.topic("counted", {}).get().value.unwrap().as_number().unwrap_or(0.0)
         "\{n.to_int()} \{only_io.get()}"
       })
     }
@@ -167,12 +167,12 @@ test "a chat's messages the core's change did not touch are kept as they were re
   let base = fixture("home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" {
         changes.get() |> ignore
         { value: Some(value.val), error: None, version: version.val }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -431,7 +431,7 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   let changes = @signals.signal(1)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
         let version = changes.get()
         let chat : Json = {
@@ -445,7 +445,7 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
         }
         { value: Some(chat), error: None, version }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -492,7 +492,7 @@ test "a chat keeps its rows when scrolled and renamed, then shows a new message 
   let changes = @signals.signal(1)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
         let version = changes.get()
         let chat : Json = {
@@ -504,7 +504,7 @@ test "a chat keeps its rows when scrolled and renamed, then shows a new message 
         }
         { value: Some(chat), error: None, version }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

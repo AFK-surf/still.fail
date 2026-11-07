@@ -64,7 +64,7 @@ pub fn things_params(station : String, thread : Double, q? : String = "") -> Map
 /// How many things a chat has of every kind but its pull requests (what the info's row to the page counts), and its
 /// pull requests, the latest first, as the core has them now (none until it has read them).
 pub fn things_now(src : Source, station : String, thread : Double) -> (Int, Array[Json]) {
-  let v = (src.topic)("chatThings", things_params(station, thread)).value
+  let v = src.topic("chatThings", things_params(station, thread)).get().value
   let counts = field(v, "counts")
   let n = count(counts, "media") + count(counts, "files") + count(counts, "links")
   (n, items(v, "pulls"))
@@ -124,7 +124,7 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
   let key = r.station + "\u{1}" + r.session
   let at = things_of(key)
   let q = at.field.text()
-  let topic = (src.topic)("chatThings", things_params(r.station, thread, q~))
+  let topic = src.topic("chatThings", things_params(r.station, thread, q~)).get().snapshot()
   let v = topic.value
   let counts = field(v, "counts")
   let has = thing_kinds.filter(fn(k) { count(counts, k) > 0 })

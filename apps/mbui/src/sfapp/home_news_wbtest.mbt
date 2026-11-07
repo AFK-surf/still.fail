@@ -8,7 +8,7 @@ fn news_home(calls : Array[String]) -> @ui.Tester {
   let base = fixture("home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "changelog" {
         {
           value: Some({
@@ -26,7 +26,7 @@ fn news_home(calls : Array[String]) -> @ui.Tester {
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

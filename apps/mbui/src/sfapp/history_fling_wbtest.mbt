@@ -58,11 +58,11 @@ test "touch wide: an agent's history flung toward its start rests further that w
   let history = fling_history(12)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(history), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -126,11 +126,11 @@ test "touch wide: an agent's history as the agent writes builds again only the r
   let chose_dark = @signals.signal(false)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(history.get()), error: None, version: 1 }
       } else if name == "prefs" && chose_dark.get() {
-        let p = (base.topic)(name, params)
+        let p = base.topic(name, params).get().snapshot()
         match p.value {
           Some(Object(m)) => {
             let o : Map[String, Json] = {}
@@ -143,7 +143,7 @@ test "touch wide: an agent's history as the agent writes builds again only the r
           _ => p
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

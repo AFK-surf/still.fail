@@ -7,7 +7,7 @@
 ///|
 /// Whether the preview shows beside a folder's list (`place`: the files' page's, `page`, or a chat's 文件 tab's, `tab`).
 pub fn preview_shown(src : Source, place : String) -> Bool {
-  text(field((src.topic)("prefs", {}).value, "driveViews"), if place == "page" { "preview" } else { "tabPreview" }) ==
+  text(field(src.topic("prefs", {}).get().value, "driveViews"), if place == "page" { "preview" } else { "tabPreview" }) ==
   "shown"
 }
 

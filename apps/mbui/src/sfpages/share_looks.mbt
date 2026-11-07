@@ -84,7 +84,7 @@ pub fn share_look_keys() -> Array[String] {
 ///|
 /// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the first).
 fn share_look(src : Source) -> ShareLook {
-  let kept = text((src.topic)("prefs", Map::new()).value, "shareLook")
+  let kept = text(src.topic("prefs", Map::new()).get().value, "shareLook")
   for l in share_looks {
     if l.key == kept {
       return l

@@ -16,6 +16,8 @@ import {
   "mbui/runfs",
 }
 
+import { "mbui/signals" } for "wbtest"
+
 options(
   targets: {
     "emit_js.mbt": [ "js" ],

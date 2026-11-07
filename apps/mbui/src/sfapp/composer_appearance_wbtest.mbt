@@ -84,7 +84,7 @@ test "a newly added picture appears within the growing composer" {
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
   t.run_for(composer_sample_ms)
-  let picture = @sfbase.writing_pictures[text(Some(w.files[0]), "id")]
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
   let images = t.drawn_instances().filter(fn(a) { a[5] == 4.0 && t.image_src(a[20].to_int()) == picture })
   let (_, ground_y, _, _) = composer_glass(t)
   assert_true(images.length() > 0, msg="the picture was not drawn as the composer opened")
@@ -104,7 +104,7 @@ test "a newly added picture comes in whole, never cut or faded across as the com
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
-  let picture = @sfbase.writing_pictures[text(Some(w.files[0]), "id")]
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
   let mut seen = 0
   let mut ms = 0.0
   while ms < @ui.move_most_ms {
@@ -155,7 +155,7 @@ test "a picture sent while the composer opens leaves from where it was seen" {
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
-  let picture = @sfbase.writing_pictures[text(Some(w.files[0]), "id")]
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
   t.run_for(composer_sample_ms * 2.0)
   let before = picture_instances(t, picture)[0].1
   tap_send(t)
@@ -227,7 +227,7 @@ test "the composer follows a waiting video's picture becoming available" {
     glasses[glasses.length() - 1].1
   }
   let before = ground()
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   @sfbase.writing_pictures[id] = "mem:fixture/video-still.png"
   t.draw()
   let first = ground()

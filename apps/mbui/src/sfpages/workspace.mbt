@@ -99,7 +99,7 @@ let workspaces_tall : Double = 0.7
 /// another account and a new one. Filling a share of the window, the list scrolls in it (@sf.panel_list), its foot
 /// staying under it: more workspaces than the share holds are reached by scrolling, not cut off.
 fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], close : () -> Unit, compact~ : Bool) -> Unit {
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
   let by_ws = field(marks.value, "workspaces")
   let rows : Array[() -> Unit] = [
     fn() {
@@ -350,7 +350,7 @@ let ws_count_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap
 /// The invitations waiting for any account signed in, each with the account it is for (the rail's ＋ shows them too).
 pub fn invitations_waiting(src : Source) -> Array[(Json?, Json)] {
   let out : Array[(Json?, Json)] = []
-  match (src.topic)("workspaces", {}).value {
+  match src.topic("workspaces", {}).get().value {
     Some(Array(a)) =>
       for e in a {
         for i in items(Some(e), "invitations") {
@@ -480,7 +480,7 @@ pub fn open_new_workspace(src : Source) -> Unit {
 ///|
 /// The account it is made by: the one chosen, else the first signed in.
 fn new_ws_owner(src : Source) -> (Array[Json], String) {
-  let accounts = match (src.topic)("accounts", {}).value {
+  let accounts = match src.topic("accounts", {}).get().value {
     Some(Array(a)) => a
     _ => []
   }
@@ -647,7 +647,7 @@ pub fn workspace_menu_open() -> Bool {
 /// pointer comes over them). Pressed, that workspace.
 pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], parts : SquareParts) -> Unit {
   let t = @sf.theme()
-  let marks = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "workspaces")
+  let marks = field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "workspaces")
   let area = c.id("rail/workspaces")
   let add = c.id("rail/ws-add")
   let open = ws_menu.val
