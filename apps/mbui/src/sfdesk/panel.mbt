@@ -52,6 +52,27 @@ pub fn side_now(src : Source, r : ChatRef) -> (Array[String], String) {
 /// the front; all of them closed (`clear`). The panel is told first whether any will be open, to slide as they come.
 pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) -> Unit {
   let (tabs, front) = side_now(src, r)
+  let targets = tabs.copy()
+  if action == "clear" {
+    for pending in service_tabs_pending(r) {
+      if !targets.contains(pending) { targets.push(pending) }
+    }
+  }
+  let asked : Array[(String, Int)] = []
+  match (action, tab) {
+    ("open", Some(t)) | ("close", Some(t)) =>
+      match service_tab_asking(src, r, t, action == "open", was_open=tabs.contains(t)) {
+        Some(id) => asked.push((t, id))
+        None => ()
+      }
+    ("clear", _) => for t in targets {
+      match service_tab_asking(src, r, t, false, was_open=tabs.contains(t)) {
+        Some(id) => asked.push((t, id))
+        None => ()
+      }
+    }
+    _ => ()
+  }
   let any = match action {
     "open" | "front" => true
     "close" => tabs.iter().any(fn(t) { Some(t) != tab })
@@ -60,24 +81,31 @@ pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) ->
   side_changing(chat_key(r), tabs, front, any)
   // a web service's or a visualization's tab closed lets its page go (ChatPage.tsx endPreview)
   match (action, tab) {
-    ("close", Some(t)) => tab_let_go(r, t)
-    ("clear", _) => for t in tabs { tab_let_go(r, t) }
+    ("close", Some(t)) => tab_let_go(src, r, t)
+    ("clear", _) => for t in targets { tab_let_go(src, r, t) }
     ("open", Some(t)) => tab_kept(r, t)
     _ => ()
   }
-  side_ask(src, r, action, tab)
+  side_ask_answered(src, r, action, tab, fn(answer) {
+    for (t, id) in asked { service_tab_answered(src, r, t, id, answer is Ok(_)) }
+  })
 }
 
 ///|
 /// The change asked of the core alone (changeTabs, `chat.tabs.*`), the panel told nothing: as a chat made from the new
 /// chat's page starts with what it had beside it.
 pub fn side_ask(src : Source, r : ChatRef, action : String, tab : String?) -> Unit {
+  side_ask_answered(src, r, action, tab, fn(_) {  })
+}
+
+///|
+fn side_ask_answered(src : Source, r : ChatRef, action : String, tab : String?, done : (Result[Json, Json]) -> Unit) -> Unit {
   let params : Map[String, Json] = { "chat": Json::string(tabs_key(r)) }
   match tab {
     Some(t) => params["tab"] = Json::string(t)
     None => ()
   }
-  (src.call)("chat.tabs." + action, Json::object(params), fn(_) {  })
+  (src.call)("chat.tabs." + action, Json::object(params), done)
 }
 
 ///|

@@ -300,6 +300,12 @@ pub fn rows_view(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, Shown, Bool, 
 
 pub fn save_entry(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry) -> Unit
 
+pub fn service_node_held(@view.View, @sfbase.Source, String, String) -> Unit
+
+pub fn service_page_drop(@sfbase.Source, String, String) -> Unit
+
+pub fn service_page_kept(@sfbase.Source, String, String, excluding? : (@sfbase.ChatRef, String)?) -> Bool
+
 pub fn set_drive_view(@sfbase.Source, String, String) -> Unit
 
 pub fn set_preview_shown(@sfbase.Source, String, Bool) -> Unit
