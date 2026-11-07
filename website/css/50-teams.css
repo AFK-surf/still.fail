@@ -134,7 +134,7 @@ img.sl-av { background: none; }
   .rails::before { display: none; }
   .rails > .cells { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(calc(100vw - var(--gl) - var(--gr) - 28px), 380px); gap: 12px;
     margin: 0; padding: 2px var(--gr) 4px var(--gl); scroll-padding-inline: var(--gl); overflow-x: auto; overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory; touch-action: pan-x pan-y; scrollbar-width: none; align-items: start; }
+    scroll-snap-type: x mandatory; touch-action: pan-x pan-y; scrollbar-width: none; align-items: stretch; }
   .rails > .cells::-webkit-scrollbar { display: none; }
   .rails > .cells:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 18px; }
   .cell, .cell + .cell { scroll-snap-align: start; scroll-snap-stop: always; padding: 8px 8px 22px; border: 1px solid var(--line); border-radius: 15px; background: #fff; } /* .vis 6 + padding 8 + border 1 */
