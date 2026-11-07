@@ -75,6 +75,26 @@ function grantOf(r: Request, by: Person, secret: unknown, o: Partial<Grant> = {}
   return signed(g, TAG.grant, by.signer);
 }
 
+test("a prepared grant checks its box and expiry again when it is taken", () => {
+  const w = world();
+  let now = 1000;
+  const keeper = new Keeper(() => now);
+  const old = requestOf("r_old_box", keeper.open("r_old_box"));
+  const takeOld = keeper.prepareAccept(w.state, w.vault, w.item, old, grantOf(old, w.alice, w.plain));
+  assert.equal(typeof takeOld, "function");
+  keeper.open(old.id);
+  assert.match((takeOld as () => string | null)()!, /no longer holds the request's box/);
+  assert.equal(typeof keeper.usable(old.session, old.id), "string");
+
+  const expiring = requestOf("r_expiring", keeper.open("r_expiring"));
+  const takeExpiring = keeper.prepareAccept(w.state, w.vault, w.item, expiring, grantOf(expiring, w.alice, w.plain));
+  assert.equal(typeof takeExpiring, "function");
+  now = 1500;
+  assert.match((takeExpiring as () => string | null)()!, /expiry/);
+  assert.equal(keeper.waiting(expiring.id), true);
+  assert.equal(typeof keeper.usable(expiring.session, expiring.id), "string");
+});
+
 test("idle grants renew on use while fixed grants expire at the approved deadline", () => {
   const w = world();
   let now = 1000;
@@ -366,6 +386,77 @@ test("a command run with a grant in its environment: its output comes back with 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+for (const action of ["grant", "save"] as const) test(`a failed queued vault ${action} restores its box and can be accepted again`, () => {
+  const w = world(), db = new DatabaseSync(":memory:"), vaults = new VaultStore(db);
+  vaults.putVault(w.vault); vaults.putItem(w.item);
+  const hub = { store: { getSession: () => ({ archivedAt: null }), subscribe: () => () => {} }, notify: () => {} };
+  let fail = true;
+  const cardOutcomes = { save: (_item: unknown, save: () => void) => {
+    db.exec("SAVEPOINT test_outcome");
+    try {
+      save();
+      if (fail) throw new Error("queue failed");
+      db.exec("RELEASE test_outcome");
+      return "1";
+    } catch (error) { db.exec("ROLLBACK TO test_outcome; RELEASE test_outcome"); throw error; }
+  } };
+  const secrets = new Secrets({ db, vaults, plain: new PlainStore(db), home: () => WS, hub: hub as never,
+    cardOutcomes, proxy: {} as never, data: ".", lock: () => w.state, now: () => 1_000_000 });
+  const id = "r_01HZZZZZZZZZZZZZZZZZZBOX", request = requestOf(id, secrets.keeper.open(id), action === "save" ? {
+    owner: "alice@x.com", save: { kind: "token", name: "GitHub", modes: ["proxy", "env"], hosts: ["api.github.com"] },
+  } : {});
+  db.prepare("INSERT INTO vault_requests(ws,id,session,status,body,thread,card_ts) VALUES(?,?,?,?,?,1,'card')")
+    .run(request.ws, request.id, request.session, request.status, JSON.stringify(request));
+  const grant = grantOf(request, w.alice, w.plain);
+  const decide = () => action === "grant" ? secrets.grant(w.state, "alice", grant)
+    : secrets.saved(w.state, "alice", { request: id, vault: VAULT, grant });
+  try {
+    assert.throws(decide, /queue failed/);
+    assert.equal(secrets.keeper.waiting(id), true);
+    assert.equal(secrets.held("s1").length, 0);
+    assert.equal(db.prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, id)?.status, "pending");
+    fail = false;
+    assert.equal(decide(), null);
+    assert.equal(secrets.keeper.waiting(id), false);
+    assert.equal(secrets.held("s1").length, 1);
+    assert.equal(db.prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, id)?.status, "granted");
+  } finally { secrets.keeper.drop(id); db.close(); }
+});
+
+for (const action of ["grant", "save"] as const) for (const changed of ["vault", "item"] as const)
+  test(`a queued vault ${action} checks a changed ${changed} before committing`, () => {
+    const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-decision-")), path = join(dir, "stillfail.db");
+    const db = new DatabaseSync(path), vaults = new VaultStore(db);
+    vaults.putVault(w.vault); vaults.putItem(w.item);
+    const other = new DatabaseSync(path), fromOther = new VaultStore(other);
+    const hub = { store: { getSession: () => ({ archivedAt: null }), subscribe: () => () => {} }, notify: () => {} };
+    const cardOutcomes = { save: (_item: unknown, save: () => void) => {
+      if (changed === "vault") fromOther.putVault({ ...w.vault, members: ["bob"] });
+      else fromOther.putItem({ ...w.item, deleted: true });
+      db.exec("BEGIN IMMEDIATE");
+      try { save(); db.exec("COMMIT"); return "1"; }
+      catch (error) { db.exec("ROLLBACK"); throw error; }
+    } };
+    const previous = Promise.withResolvers<void>();
+    const secrets = new Secrets({ db, vaults, plain: new PlainStore(db), home: () => WS, hub: hub as never,
+      cardOutcomes, proxy: {} as never, data: dir, lock: () => w.state, now: () => 1_000_000,
+      backfill: { previousGone: previous.promise } });
+    const id = "r_01HZZZZZZZZZZZZZZZZZZRACE", request = requestOf(id, secrets.keeper.open(id), action === "save" ? {
+      owner: "alice@x.com", save: { kind: "token", name: "GitHub", modes: ["proxy", "env"], hosts: ["api.github.com"] },
+    } : {});
+    db.prepare("INSERT INTO vault_requests(ws,id,session,status,body,thread,card_ts) VALUES(?,?,?,?,?,1,'card')")
+      .run(request.ws, request.id, request.session, request.status, JSON.stringify(request));
+    const grant = grantOf(request, w.alice, w.plain);
+    try {
+      const why = action === "grant" ? secrets.grant(w.state, "alice", grant)
+        : secrets.saved(w.state, "alice", { request: id, vault: VAULT, grant });
+      assert.match(why!, /vault or item changed/);
+      assert.equal(secrets.keeper.waiting(id), true);
+      assert.equal(secrets.held("s1").length, 0);
+      assert.equal(db.prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, id)?.status, "pending");
+    } finally { other.close(); secrets.keeper.drop(id); db.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
 
 test("a request from secret_use to the grant: listed for the chat's starter, decided by the vault's member, refused otherwise", async () => {
   const w = world();

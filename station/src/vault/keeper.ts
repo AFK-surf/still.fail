@@ -64,6 +64,35 @@ export class Keeper {
     this.#d = d;
   }
 
+  /// Restore this request's in-memory box and grant if its surrounding database transaction rolls back. The
+  /// transaction also rolls back any `kept` writes, so restoring memory must not issue another database write.
+  rollbackOnError<T>(id: string, run: () => T): T {
+    const box = this.#boxes.get(id), held = this.#held.get(id), order = this.#heldOrder.get(id);
+    try { return run(); }
+    catch (error) {
+      if (this.#boxes.get(id) === box && this.#held.get(id) === held) throw error;
+      this.#timers.get(id)?.();
+      this.#timers.delete(id);
+      const current = this.#held.get(id);
+      if (current !== undefined) {
+        this.#held.delete(id);
+        this.#removeFromSession(current.request.session, id);
+        this.#heldOrder.delete(id);
+      }
+      if (held !== undefined) {
+        this.#held.set(id, held);
+        this.#heldOrder.set(id, order!);
+        const ids = [...(this.#heldBySession.get(held.request.session) ?? []), id];
+        ids.sort((a, b) => this.#heldOrder.get(a)! - this.#heldOrder.get(b)!);
+        this.#heldBySession.set(held.request.session, new Set(ids));
+        this.#schedule(held);
+      }
+      if (box === undefined) this.#boxes.delete(id);
+      else this.#boxes.set(id, box);
+      throw error;
+    }
+  }
+
   #hold(h: Held) {
     this.#put(h);
     this.#schedule(h);
@@ -138,8 +167,10 @@ export class Keeper {
     return pub;
   }
 
-  /// Takes `grant` for `request` (of `item` in `vault`, as the lock has it now); why not, or null when taken.
-  accept(lock: LockState, vault: Vault, item: Item, request: Request, grant: Grant): string | null {
+  /// Check and open a grant without changing the keeper. The returned operation takes it once, provided the box
+  /// still belongs to this request and the grant has not expired. This lets callers verify the decision's database
+  /// state under a write transaction without holding that writer during signature verification and decryption.
+  prepareAccept(lock: LockState, vault: Vault, item: Item, request: Request, grant: Grant): string | (() => string | null) {
     const g = grant as any;
     if (g === null || typeof g !== "object" || g.v !== 1) return "a grant is {v: 1, …}";
     if (request.status !== "pending") return `the request is ${request.status}`;
@@ -170,9 +201,20 @@ export class Keeper {
       return "the grant's secret does not open";
     }
     if (secret === null || typeof secret !== "object" || valueOf(secret) === null) return "the grant's secret has no value to use";
-    this.#boxes.delete(request.id);
-    this.#hold({ request: { ...request, status: "granted" }, grant, secret, uses: 0 });
-    return null;
+    const checked = structuredClone(grant);
+    return () => {
+      if (this.#boxes.get(request.id) !== box) return "this station no longer holds the request's box (it restarted): ask again";
+      if (checked.exp <= this.#now()) return "the grant's expiry is out of range for its scope";
+      this.#boxes.delete(request.id);
+      this.#hold({ request: { ...request, status: "granted" }, grant: checked, secret, uses: 0 });
+      return null;
+    };
+  }
+
+  /// Takes `grant` for `request` (of `item` in `vault`, as the lock has it now); why not, or null when taken.
+  accept(lock: LockState, vault: Vault, item: Item, request: Request, grant: Grant): string | null {
+    const prepared = this.prepareAccept(lock, vault, item, request, grant);
+    return typeof prepared === "string" ? prepared : prepared();
   }
 
   /// Holds an item of the plain library for `request`, as its owner decided ( 不加锁的库): no seal and no

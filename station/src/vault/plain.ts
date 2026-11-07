@@ -106,8 +106,13 @@ export class PlainStore {
   }
 
   item(ws: string, id: string): PlainItem | null {
+    return this.itemSnapshot(ws, id)?.value ?? null;
+  }
+
+  /// Keep the exact stored body with the value so a later write can check that its decision is still current.
+  itemSnapshot(ws: string, id: string): { value: PlainItem; body: string } | null {
     const row = this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND id = ?").get(ws, id) as { body: string } | undefined;
-    return row ? JSON.parse(row.body) : null;
+    return row ? { value: JSON.parse(row.body) as PlainItem, body: row.body } : null;
   }
 
   /// The longest grant `owner`'s items are given for where an item says none, and when they said so (none: any).

@@ -19,6 +19,7 @@ import type { To } from "../api/events.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
+import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import { CARD_OCCUPIED, cardPlace, recordPostedCard } from "../sessions/card-place.ts";
 import type { Hub } from "../sessions/hub.ts";
@@ -132,6 +133,7 @@ export function ulid(ms: number): string {
 
 export type SecretsDeps = {
   db: DatabaseSync;
+  cardOutcomes?: CardOutcomeSaver;
   vaults: VaultStore;
   plain: PlainStore;
   /// The station's home workspace (a session of it has none of its own).
@@ -186,10 +188,12 @@ export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string,
 type Away = { station: string; session?: string; workspace?: string; done(result: Json): void; used?(): number | null };
 
 /// A request as the station keeps it: the contract's, and where its card is.
-type Kept = { request: Request; thread: number | null; cardTs: string | null };
+type Kept = { request: Request; thread: number | null; cardTs: string | null; raw?: string };
 
 /// What a tool or a route is told when it cannot go on.
 class Refused extends Error {}
+class DecisionChanged extends Error {}
+class DecisionCardMoved extends Error {}
 
 /// An item an agent may ask for: of a vault (its id) or of the plain library (`plain`), whose owner (email) decides.
 export type Listed = { vault: string; item: string; owner: string | null; listing: Listing };
@@ -477,17 +481,23 @@ export class Secrets {
 
   #kept(ws: string, id: string): Kept | null {
     const row = this.#d.db.prepare("SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ?").get(ws, id) as any;
-    return row ? { request: JSON.parse(row.body), thread: row.thread ?? null, cardTs: row.card_ts ?? null } : null;
+    return row ? { request: JSON.parse(row.body), thread: row.thread ?? null, cardTs: row.card_ts ?? null, raw: row.body } : null;
   }
 
-  #save(k: Kept) {
+  #write(k: Kept) {
     const r = k.request;
     this.#d.db
       .prepare("INSERT INTO vault_requests (ws, id, session, status, body, thread, card_ts) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET status = excluded.status, body = excluded.body, thread = excluded.thread, card_ts = excluded.card_ts")
       .run(r.ws, r.id, r.session, r.status, JSON.stringify(r), k.thread, k.cardTs);
+  }
+
+  #trackSaved(k: Kept) {
+    const r = k.request;
     const lost = this.#lostSaves.get(r.ws);
     if (lost !== undefined) this.#trackPending(r.ws, r.id, r, r.status === "pending");
   }
+
+  #save(k: Kept) { this.#write(k); this.#trackSaved(k); }
 
   #audit(r: Request, kind: string, detail: string) {
     this.#d.db.prepare("INSERT INTO vault_audit (ws, at, request, vault, item, session, kind, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(r.ws, Math.floor(this.#d.now() / 1000), r.id, r.vault, r.item, r.session, kind, detail);
@@ -623,12 +633,14 @@ export class Secrets {
     const vaultDecisions = new Map<string, boolean>();
     return rows
       .map((r) => JSON.parse(r.body) as Request)
-      .filter((r) => {
+      .flatMap((r) => {
         // A secret to keep that is gone with a restart (the plain library's) and sealed to no device can never be kept:
         // let go; one the person types in is held nowhere until then. A request to use one lives on (`reboxed`).
-        if (this.#requestLive(r, now)) return true;
-        this.#settle(r, "expired");
-        return false;
+        if (this.#requestLive(r, now)) return [r];
+        if (this.#settle(r, "expired")) return [];
+        // Another connection may have changed the request before its expiration could be recorded.
+        const current = this.#kept(r.ws, r.id)?.request;
+        return current?.status === "pending" && this.#requestLive(current, now) ? [current] : [];
       })
       .filter((r) => {
         if (r.vault === PLAIN || r.save || lock === null) return this.#decides(r, viewer, lock);
@@ -834,7 +846,7 @@ export class Secrets {
     const r = kept.request;
     if (r.status !== "pending") throw new Refused(`Request ${id} is no longer pending (${r.status}).`);
     if (!this.#requestLive(r, Math.floor(this.#d.now() / 1000))) {
-      this.#settle(r, "expired");
+      if (!this.#settle(r, "expired")) throw new Refused(`Request ${id} changed while it was checked; try again.`);
       throw new Refused(`Request ${id} is no longer pending (expired).`);
     }
     const place = cardPlace(this.#d.hub.store, session, kept.thread, kept.cardTs);
@@ -860,9 +872,21 @@ export class Secrets {
       if (posted !== null) this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted);
       throw new Refused(`Request ${id} is no longer pending.`);
     }
-    latest.thread = place.thread.thread.id;
-    latest.cardTs = posted;
-    this.#save(latest);
+    if (!this.#requestLive(latest.request, Math.floor(this.#d.now() / 1000))) {
+      if (posted !== null) this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted);
+      throw new Refused(`Request ${id} changed while it was checked; try again.`);
+    }
+    try {
+      // The decision and the card location can change on another connection after the last read above.
+      const changed = this.#d.db.prepare(`UPDATE vault_requests SET thread=?,card_ts=?
+        WHERE ws=? AND id=? AND status='pending' AND body=? AND thread IS ? AND card_ts IS ?`)
+        .run(place.thread.thread.id, posted, ws, id, latest.raw!, latest.thread, latest.cardTs).changes;
+      if (changed === 0) throw new Refused(`Request ${id} changed while the card was posted; try again.`);
+      this.#trackSaved(latest);
+    } catch (error) {
+      if (posted !== null) this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted);
+      throw error;
+    }
     return `The card for request ${id} is in the chat again. It is the same request; no secret was read again. ${UNDECIDED}`;
   }
 
@@ -1130,19 +1154,25 @@ export class Secrets {
     if (k === null || !k.request.save || k.request.vault === PLAIN) return "no such request to keep a secret in a vault";
     if (lock.members.get(sub)?.email.toLowerCase() !== k.request.owner) return "only the person it is kept for decides it";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
-    const vault = typeof d.vault === "string" ? this.#d.vaults.vault(lock.ws, d.vault) : null;
+    const vaultSnapshot = typeof d.vault === "string" ? this.#d.vaults.vaultSnapshot(lock.ws, d.vault) : null;
+    const vault = vaultSnapshot?.value ?? null;
     if (vault === null || !vault.members.includes(sub)) return "no such vault of theirs here";
-    const item = this.#d.vaults.item(lock.ws, vault.id, k.request.item);
+    const itemSnapshot = this.#d.vaults.itemSnapshot(lock.ws, vault.id, k.request.item);
+    const item = itemSnapshot?.value ?? null;
     if (item === null || item.deleted || item.listing?.name !== k.request.save.name) return "the item is not in that vault here: bring its copy first";
     // Keeping it lets the chat that asked use it (its app's grant, sealed to this request's box): kept all the same if
     // that grant does not hold.
-    const why = d.grant === undefined ? "none sent" : this.keeper.accept(lock, vault, item, { ...k.request, vault: vault.id }, d.grant as Grant);
-    if (why !== null) {
-      log.warn("vault", "a kept secret's grant to its chat not taken", { why });
-      // Its box is of no more use.
-      if (this.keeper.waiting(k.request.id)) this.keeper.drop(k.request.id);
-    }
-    this.#settle(k.request, "granted", undefined, vault.id);
+    const prepared = d.grant === undefined ? "none sent" : this.keeper.prepareAccept(lock, vault, item, { ...k.request, vault: vault.id }, d.grant as Grant);
+    let why: string | null = null;
+    try {
+      const settled = this.#settle(k.request, "granted", undefined, vault.id, (current) => {
+        this.#checkVaultSnapshot(lock.ws, vault.id, item.id, vaultSnapshot!.body, itemSnapshot!.body);
+        why = typeof prepared === "string" ? prepared : prepared();
+        if (why !== null && this.keeper.waiting(current.id)) this.keeper.drop(current.id);
+      });
+      if (!settled) return this.#decisionChanged(k.request);
+    } catch (error) { if (error instanceof Refused) return error.message; throw error; }
+    if (why !== null) log.warn("vault", "a kept secret's grant to its chat not taken", { why });
     return null;
   }
 
@@ -1164,34 +1194,73 @@ export class Secrets {
     if (this.#d.plain.item(ws, next.id) !== null) return "the item is there already";
     const why = plainOk(null, next, next.owner);
     if (why !== null) return why;
-    this.#d.plain.put(next);
-    // Keeping it lets the chat that asked use it, for as long as the person's items are given.
-    const lasts = this.#d.plain.lasts(ws, next.owner)?.lasts ?? null;
-    const scope: Scope = allows(lasts, "hour") ? "hour" : "once";
-    const held = this.keeper.hold(k.request, { scope, hosts: hosted(s.modes[0]!) ? s.hosts : [], listing: next.listing!, lasts, ...(scope === "hour" ? { timeout: { kind: "idle" as const, seconds: 3600 } } : {}) }, { kind: s.kind, name: s.name, fields });
+    let held: string | null = null;
+    try {
+      const settled = this.#settle(k.request, "granted", undefined, undefined, (current) => {
+        if (this.#d.plain.item(ws, next.id) !== null) throw new Refused("the item is there already");
+        this.#d.plain.put(next);
+        // Keeping it lets the chat that asked use it, for as long as the person's items are given.
+        const lasts = this.#d.plain.lasts(ws, next.owner)?.lasts ?? null;
+        const scope: Scope = allows(lasts, "hour") ? "hour" : "once";
+        held = this.keeper.hold(current, { scope, hosts: hosted(s.modes[0]!) ? s.hosts : [], listing: next.listing!, lasts, ...(scope === "hour" ? { timeout: { kind: "idle" as const, seconds: 3600 } } : {}) }, { kind: s.kind, name: s.name, fields });
+      });
+      if (!settled) return this.#decisionChanged(k.request);
+    } catch (error) { if (error instanceof Refused) return error.message; throw error; }
     if (held !== null) log.warn("vault", "a kept secret's grant to its chat not held", { why: held });
-    this.#settle(k.request, "granted");
     return this.#d.plain.item(ws, next.id)!;
   }
 
   /// A request decided otherwise than granted, or granted (`grant` checked by the keeper first); `into`: the vault a
   /// secret to keep went into.
-  #settle(r: Request, status: Request["status"], scope?: Scope, into?: string) {
-    const k = this.#kept(r.ws, r.id);
-    if (k === null || k.request.status !== "pending") return;
-    k.request.status = status;
-    if (into !== undefined) k.request.vault = into;
-    this.#save(k);
-    this.#forgetSave(r.id, r.ws);
-    if (status !== "granted") this.keeper.drop(r.id);
-    if (k.thread !== null && k.cardTs !== null) {
+  #settle(r: Request, status: Request["status"], scope?: Scope, into?: string, prepare?: (current: Request) => void): boolean {
+    let settled: { k: Kept; outcome: Record<string, unknown>; queued: boolean } | undefined;
+    const requested = JSON.stringify(r);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const k = this.#kept(r.ws, r.id);
+      if (k === null || k.request.status !== "pending" || JSON.stringify(k.request) !== requested) return false;
+      const expected = k;
+      const outcome: Record<string, unknown> = { status, ...(status === "granted" && scope ? { scope } : {}) };
+      const save = () => {
+        // The writer is held here: a decision or reissued card committed after our first read must be seen.
+        const current = this.#d.db.prepare("SELECT thread,card_ts FROM vault_requests WHERE ws=? AND id=? AND status='pending' AND body=?")
+          .get(r.ws, r.id, expected.raw!) as { thread: number | null; card_ts: string | null } | undefined;
+        if (current === undefined) throw new DecisionChanged();
+        if (current.thread !== expected.thread || current.card_ts !== expected.cardTs) throw new DecisionCardMoved();
+        prepare?.(k.request);
+        k.request.status = status;
+        if (into !== undefined) k.request.vault = into;
+        const held = status === "granted" ? this.keeper.usable(r.session, r.id) : null;
+        if (typeof held === "object" && held !== null && held.grant.timeout) outcome.timeout = held.grant.timeout;
+        this.#write(k);
+      };
+      const queue = k.thread !== null && k.cardTs !== null ? this.#d.cardOutcomes : undefined;
+      try {
+        this.keeper.rollbackOnError(r.id, () => {
+          if (queue) queue.save({ thread: expected.thread!, ts: expected.cardTs!, agent: r.session, field: "vault", close: true, outcome }, save);
+          else {
+            const nested = this.#d.db.isTransaction;
+            this.#d.db.exec(nested ? "SAVEPOINT vault_settle" : "BEGIN IMMEDIATE");
+            try { save(); this.#d.db.exec(nested ? "RELEASE vault_settle" : "COMMIT"); }
+            catch (error) { try { this.#d.db.exec(nested ? "ROLLBACK TO vault_settle; RELEASE vault_settle" : "ROLLBACK"); } catch {} throw error; }
+          }
+        });
+      } catch (error) {
+        if (error instanceof DecisionChanged) return false;
+        if (error instanceof DecisionCardMoved) continue;
+        throw error;
+      }
+      settled = { k, outcome, queued: queue !== undefined };
+      break;
+    }
+    if (settled === undefined) return false;
+    const { k, outcome, queued } = settled;
+    this.#trackSaved(k);
+    if (!queued && k.thread !== null && k.cardTs !== null) {
       this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);
-      // The post says how it ended: 已批准 · 仅本次, 已拒绝, 已过期.
-      const kept = status === "granted" ? this.keeper.usable(r.session, r.id) : null;
-      const timeout = typeof kept === "object" && kept !== null ? kept.grant.timeout : undefined;
-      const outcome = { status, ...(status === "granted" && scope ? { scope } : {}), ...(timeout ? { timeout } : {}) };
       this.#d.hub.store.restateCard(r.session, k.thread, k.cardTs, (card) => ({ ...card, vault: { ...card?.vault, outcome } }));
     }
+    this.#forgetSave(r.id, r.ws);
+    if (status !== "granted") this.keeper.drop(r.id);
     this.#audit(k.request, status, "");
     this.#told(k.request);
     if (status === "granted" && k.request.mode === "browser") {
@@ -1207,6 +1276,18 @@ export class Secrets {
         // The session is gone: nobody to tell.
       }
     }
+    return true;
+  }
+
+  #decisionChanged(r: Request): string {
+    const current = this.#kept(r.ws, r.id);
+    return current === null ? "no such request" : current.request.status === "pending" ? "the request changed; try again" : `the request is ${current.request.status}`;
+  }
+
+  #checkVaultSnapshot(ws: string, vault: string, item: string, vaultBody: string, itemBody: string): void {
+    const currentVault = this.#d.db.prepare("SELECT 1 FROM vaults WHERE ws=? AND id=? AND body=?").get(ws, vault, vaultBody);
+    const currentItem = this.#d.db.prepare("SELECT 1 FROM vault_items WHERE ws=? AND vault=? AND id=? AND body=?").get(ws, vault, item, itemBody);
+    if (currentVault === undefined || currentItem === undefined) throw new Refused("the request's vault or item changed; try again");
   }
 
   /// A sign-in granted: put into the chat's browser while the grant lasts.
@@ -1315,13 +1396,22 @@ export class Secrets {
     const k = typeof grant?.request === "string" ? this.#kept(lock.ws, grant.request) : null;
     if (k === null) return "no such request";
     if (k.request.save) return "a secret to keep is approved by POST vault/saves";
-    const vault = this.#d.vaults.vault(lock.ws, k.request.vault);
-    const item = this.#d.vaults.item(lock.ws, k.request.vault, k.request.item);
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    const vaultSnapshot = this.#d.vaults.vaultSnapshot(lock.ws, k.request.vault);
+    const itemSnapshot = this.#d.vaults.itemSnapshot(lock.ws, k.request.vault, k.request.item);
+    const vault = vaultSnapshot?.value ?? null, item = itemSnapshot?.value ?? null;
     if (vault === null || item === null) return "the request's vault or item is gone";
     if (!vault.members.includes(sub)) return "only the vault's members decide its requests";
-    const why = this.keeper.accept(lock, vault, item, k.request, grant);
-    if (why !== null) return why;
-    this.#settle(k.request, "granted", grant.scope);
+    const prepared = this.keeper.prepareAccept(lock, vault, item, k.request, grant);
+    if (typeof prepared === "string") return prepared;
+    try {
+      const settled = this.#settle(k.request, "granted", grant.scope, undefined, () => {
+        this.#checkVaultSnapshot(lock.ws, vault.id, item.id, vaultSnapshot!.body, itemSnapshot!.body);
+        const why = prepared();
+        if (why !== null) throw new Refused(why);
+      });
+      if (!settled) return this.#decisionChanged(k.request);
+    } catch (error) { if (error instanceof Refused) return error.message; throw error; }
     return null;
   }
 
@@ -1331,15 +1421,23 @@ export class Secrets {
     const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
     if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
     if (k.request.save) return "a secret to keep is approved by POST vault/plain/saves";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
     if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
     if (lock !== null) return "security mode is on: the plain library's secrets are moved into the vault, not given out";
-    const item = this.#d.plain.item(ws, k.request.item);
+    const itemSnapshot = this.#d.plain.itemSnapshot(ws, k.request.item);
+    const item = itemSnapshot?.value ?? null;
     if (item === null || item.deleted || item.listing === undefined) return "the item is gone, or not one agents may ask for";
     const hosts = hosted(k.request.mode) ? (k.request.hosts ?? item.listing.hosts) : [];
     const timeout = d.timeout as { kind: "idle" | "fixed"; seconds: number } | undefined;
-    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing, lasts: this.#lastsOf(k.request, item.listing), ...(timeout === undefined ? {} : { timeout }) }, { kind: item.kind, name: item.name, fields: item.fields });
-    if (why !== null) return why;
-    this.#settle(k.request, "granted", d.scope as Scope);
+    try {
+      const settled = this.#settle(k.request, "granted", d.scope as Scope, undefined, (current) => {
+        if (this.#d.db.prepare("SELECT 1 FROM vault_plain WHERE ws=? AND id=? AND body=?").get(ws, item.id, itemSnapshot!.body) === undefined)
+          throw new Refused("the item changed; try again");
+        const why = this.keeper.hold(current, { scope: d.scope as Scope, hosts, listing: item.listing!, lasts: this.#lastsOf(current, item.listing!), ...(timeout === undefined ? {} : { timeout }) }, { kind: item.kind, name: item.name, fields: item.fields });
+        if (why !== null) throw new Refused(why);
+      });
+      if (!settled) return this.#decisionChanged(k.request);
+    } catch (error) { if (error instanceof Refused) return error.message; throw error; }
     return null;
   }
 
@@ -1349,7 +1447,7 @@ export class Secrets {
     if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
     if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
-    this.#settle(k.request, "denied");
+    if (!this.#settle(k.request, "denied")) return this.#decisionChanged(k.request);
     return null;
   }
 
@@ -1371,7 +1469,7 @@ export class Secrets {
     }
     if (!signedOk(d, TAG.deny)) return "the refusal's signature is invalid";
     if (k.request.status !== "pending") return `the request is ${k.request.status}`;
-    this.#settle(k.request, "denied");
+    if (!this.#settle(k.request, "denied")) return this.#decisionChanged(k.request);
     return null;
   }
 

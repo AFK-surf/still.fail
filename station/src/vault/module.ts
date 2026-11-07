@@ -39,7 +39,7 @@ export const VaultLive = Layer.effectDiscard(
     const browsers = yield* Browser;
     // The vault's secrets, asked for by agents and granted from the members' apps.
     const secrets = new Secrets({
-      db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
+      db: store.db, vaults, plain: plainStore(store.db), hub, cardOutcomes, data, home: () => cloud.home(), lock, now: () => wall.now(),
       title: (session) => sender(hub, session)[0] ?? null,
       titleIfReady: (session) => senderTitleIfReady(hub, session),
       // Commands with a secret on another station of the workspace ( 在另一台 station 上用).

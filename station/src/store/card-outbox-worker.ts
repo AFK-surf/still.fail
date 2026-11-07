@@ -38,7 +38,9 @@ export class CardOutcomeWorker {
   /// Save the request and its outcome together, then wake the consumer after that savepoint is released.
   save(item: Omit<CardOutcome, "id">, save: () => void): string {
     const id = this.#store.saveCardOutcome(item, save);
-    this.wake();
+    // The save has committed. A scheduling failure must not make the producer roll back its in-memory state.
+    try { this.wake(); }
+    catch (error) { log.warn("card-outbox", "waking queued card outcomes failed", { error: String(error) }); }
     return id;
   }
 
@@ -47,8 +49,9 @@ export class CardOutcomeWorker {
     if (this.#closed || !this.#ready) return;
     // A head already passed by this traversal may have become ready while it was waiting.
     this.#again = true;
-    this.#timer?.();
+    const previous = this.#timer;
     this.#timer = this.#time.after(0, () => { this.#timer = null; this.#tick(); });
+    previous?.();
   }
 
   #later(ms: number): void {
