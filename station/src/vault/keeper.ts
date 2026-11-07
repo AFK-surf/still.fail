@@ -26,7 +26,7 @@ export type Carried = { boxes: [string, string][]; held: Held[] };
 
 /// What a keeper is told of: whether a session's chat is over (archived or gone), and where its grants are kept
 /// across restarts (`save` each grant taken or used, `forget` each one gone).
-export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(h: Held): void } };
+export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(h: Held): void; spendOnce?(h: Held): boolean | null } };
 
 /// Whether `host` is one of `patterns`: the same name, or under a `*.` pattern's domain (not the domain itself).
 export function hostAllowed(host: string, patterns: string[]): boolean {
@@ -251,7 +251,17 @@ export class Keeper {
   /// What the process before held (`carried`), held here too: what runs out or ends with its chat goes as ever.
   carry(c: Carried) {
     for (const [id, priv] of c.boxes ?? []) if (!this.#boxes.has(id)) this.#boxes.set(id, new Uint8Array(Buffer.from(priv, "base64")));
-    for (const h of c.held ?? []) if (!this.#held.has(h.request.id)) this.restore(h);
+    for (const h of c.held ?? []) {
+      const current = this.#held.get(h.request.id);
+      if (current === undefined) this.restore(h);
+      else if (current.request.ws === h.request.ws && current.request.session === h.request.session
+        && current.request.vault === h.request.vault && current.request.item === h.request.item
+        && current.grant.scope === "once" && h.grant.scope === "once" && current.grant.mode === h.grant.mode
+        && current.grant.at === h.grant.at && current.grant.exp === h.grant.exp) {
+        // Either process may have used the same one-use grant after the new one read it from disk.
+        current.uses = Math.max(current.uses, h.uses);
+      }
+    }
   }
 
   /// The grant `id` as `session` may use it now; else why not.
@@ -280,11 +290,14 @@ export class Keeper {
   }
 
   /// One use of grant `id` begins (a command run with it).
-  spend(id: string) {
+  spend(id: string): boolean {
     const h = this.#held.get(id);
-    if (h === undefined) return;
+    if (h === undefined || (h.grant.scope === "once" && h.uses > 0)) return false;
+    const saved = h.grant.scope === "once" ? this.#d.kept?.spendOnce?.(h) : null;
+    if (saved === false) return false;
     h.uses++;
-    this.#d.kept?.save(h);
+    if (saved !== true) this.#d.kept?.save(h);
+    return true;
   }
 
   /// A successful use extends an idle grant, provided it has not ended in the meantime.
