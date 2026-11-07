@@ -19,7 +19,7 @@ import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
-import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
+import { failureOf, modelLimitOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 import { type DeliveryCardState, type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
 import { runChangeWords } from "./run-change.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
@@ -1666,7 +1666,7 @@ export class SessionActor {
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
       // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
-      if (!this.saidLast((said) => [SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) {
+      if (!this.saidLast((said) => [failureNotice(outcome).split("\n\n")[0]!, SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) {
         await this.notice(failureNotice(outcome), this.profile, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
       } else if (turn) {
         // The existing notice is deliberately reused for this turn; retain its identity as for a new notice.
@@ -2014,9 +2014,12 @@ const codexTooOld = (message: string) => /\bmodel requires a newer version of Co
 /// A failed turn as its chat is told it: what it means and what to do, by its reason, on its first line (what a
 /// notice shows closed, and a push says); what the runtime said after it, as it said it (`withSaid`). A reason the
 /// station cannot put in words of its own (the model's, any other) has the runtime's first line in it: "模型服务出错"
-/// alone told people nothing (2026-11-05).
+/// alone told people nothing (2026-11-05). A model's own limit names the model: "额度已用完" beside quota bars with room
+/// left read as a mistake (#4365).
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
+  const model = outcome.reason === "rate_limit" ? modelLimitOf(outcome.message) : null;
+  if (model !== null) return `⚠️ ${withSaid(t("station.notice.modelLimit", { model }), outcome.message)}`;
   const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
   const why = outcome.reason === "model" || outcome.reason === "other" ? firstLine(outcome.message) : "";
   return `⚠️ ${withSaid(why === "" ? t(`station.notice.${key}`) : t(`station.notice.${key}Why`, { why }), outcome.message)}`;

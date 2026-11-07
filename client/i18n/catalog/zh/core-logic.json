@@ -228,6 +228,7 @@
   "core-logic.format.failure.auth": "账号认证失败",
   "core-logic.format.failure.exited": "agent 进程意外退出",
   "core-logic.format.failure.model": "模型服务出错",
+  "core-logic.format.failure.model_limit": "{model} 自身限额已用完",
   "core-logic.format.failure.other": "未知错误",
   "core-logic.format.failure.refused": "所在地区不受支持",
   "core-logic.format.failure.overloaded": "模型繁忙",

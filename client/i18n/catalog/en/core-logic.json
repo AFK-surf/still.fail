@@ -288,6 +288,7 @@
   "core-logic.format.failure.auth": "Account authentication failed",
   "core-logic.format.failure.exited": "Agent process exited",
   "core-logic.format.failure.model": "Model failed",
+  "core-logic.format.failure.model_limit": "{model}'s limit spent",
   "core-logic.format.failure.other": "Unknown error",
   "core-logic.format.failure.refused": "Region not served",
   "core-logic.format.failure.overloaded": "Model busy",

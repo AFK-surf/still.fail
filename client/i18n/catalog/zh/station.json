@@ -289,6 +289,7 @@
   "station.notice.retryCanceled": "已取消重试",
   "station.wait.overloaded": "模型恢复可用",
   "station.notice.rateLimit": "额度已用完，恢复后自动继续",
+  "station.notice.modelLimit": "{model} 自身限额已用完（非账号额度），恢复后自动继续",
   "station.notice.refused": "模型服务不支持此 station 所在地区：在 Profile 中设置代理",
   "station.notice.runtimeMissing": "无法启动 agent：此 station 尚未安装 {name}",
   "station.notice.stopped": "已停止当前任务",

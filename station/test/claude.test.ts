@@ -12,6 +12,7 @@ import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
+import { modelLimitOf } from "../src/agents/runtime.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -312,6 +313,10 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
     assert.equal(classifyResult("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue."), "rate_limit");
+    // A model's own limit names the model; an account's window is no model (#4365).
+    assert.equal(modelLimitOf("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue."), "Fable");
+    assert.equal(modelLimitOf("Claude usage limit reached: you have reached your weekly usage limit"), null);
+    assert.equal(modelLimitOf("You've hit your session limit · resets 3:40am"), null);
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
     assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
     assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");

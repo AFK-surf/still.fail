@@ -331,6 +331,8 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
+  // A model's own limit is the model's: the account's quota bars still show room (#4365).
+  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue." }), "出错：Fable 自身限额已用完");
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：账号认证失败");
   assert.equal(words({ outcome: "aborted" }), "已停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
