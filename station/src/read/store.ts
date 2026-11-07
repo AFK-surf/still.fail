@@ -514,6 +514,24 @@ export function lastSaid(s: Store, thread: number): MessageRow | null {
   } finally { s.db.exec("RELEASE last_said_read"); }
 }
 
+/// The latest said text for searching, without decoding a message's other fields.
+export function lastSaidText(s: Store, thread: number): string | null {
+  s.db.exec("SAVEPOINT last_said_text_read");
+  try {
+    if (legacyMergedReadReady(s.db)) {
+      const r = one(s, "SELECT m.text AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
+      return r ? r.t : null;
+    }
+    const n = one(s, "SELECT CAST(said_n AS TEXT) AS n FROM thread_state WHERE thread=?", thread)?.n as string | null | undefined;
+    if (n == null) return null;
+    const edit = boundedEditKey(s, thread, n);
+    const r = one(s, `SELECT CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS t
+      FROM entries m LEFT JOIN entries e ON e.thread=m.thread AND e.n=CAST(?3 AS INTEGER)
+      WHERE m.thread=?1 AND m.n=CAST(?2 AS INTEGER) AND m.kind='message'`, thread, n, edit);
+    return r ? r.t : null;
+  } finally { s.db.exec("RELEASE last_said_text_read"); }
+}
+
 /// When the latest message was written, without loading its text or edits.
 export function lastSaidAt(s: Store, thread: number): number | null {
   return one(s, "SELECT e.at FROM thread_state t JOIN entries e ON e.thread = t.thread AND e.n = t.said_n AND e.kind = 'message' WHERE t.thread = ?", thread)?.at ?? null;
