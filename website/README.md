@@ -3,9 +3,9 @@
 The official site of still.fail and of monoid, each with its test channel's: still.fail, youdid.wtf, monoid.build,
 monoid.zone (`build.mjs` SITES; `cloud/deploy.py` deploys `site` and `site-beta` from it). It is a static page: HTML,
 one stylesheet (split by section) and one script, with no framework and no dependencies. The template is monoid.build's;
-each other site is the same page with its name, its web app and its cloud's downloads (the beta apps on a test
-channel's), its share cards and Android code (`assets/og/<site>/`, `assets/android-qr-<site>.svg`), and the beta apps' icon
-on a test channel's. The site before it (`site/`, `web/src/site/`) is no longer deployed.
+each other site is the same page with its name (monoid.zone's is monoid too), its web app and its cloud's downloads
+(the beta apps on a test channel's), its share cards and Android code (`assets/og/<site>/`,
+`assets/android-qr-<site>.svg`), and the beta apps' icon on a test channel's. The site before it (`site/`, `web/src/site/`) is no longer deployed.
 
 ```
 website/
