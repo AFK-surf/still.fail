@@ -20,7 +20,7 @@ import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
 import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
-import { type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
+import { type DeliveryCardState, type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
 import { runChangeWords } from "./run-change.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 import { WidgetSourcesUnavailable } from "../store/widget-sources.ts";
@@ -120,6 +120,8 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// Card state for a person's delivery, read off the station thread.
+  deliveryCardState(thread: number, n: number, signal?: AbortSignal): Promise<DeliveryCardState | null>;
   /// An older store brings forward only the message ranges this delivery needs.
   preparePostsAfter?(messages: readonly { thread: number; n: number }[], signal?: AbortSignal): Promise<void>;
   prepareWidgetSources?(threads: readonly number[], signal?: AbortSignal): Promise<void>;
@@ -1099,19 +1101,19 @@ export class SessionActor {
       }
     }
     fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
-    const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
+    const cards = new Map<PendingMessage, { ended: DeliveryCardState["ended"]; current: DeliveryCardState["current"]; special: string | null }>();
     for (const m of said as PendingMessage[]) {
       if (m.message.apart === true || m.message.authorKind !== "person") continue;
-      const ended = store.cardEndedByMessage(m.message.thread, m.message.n);
-      if (ended === null) continue;
-      const card = ended[1];
-      const current = store.pendingCard(m.message.thread)?.[0] ?? null;
+      if (signal.aborted) throw new Error("delivery cancelled");
+      const state = await this.deps.deliveryCardState(m.message.thread, m.message.n, signal);
+      if (state === null) continue;
+      const card = state.card;
       const special = typeof card?.vault?.request === "string" ? `Use secret_reask {request: ${JSON.stringify(card.vault.request)}} if the request is still needed.`
         : typeof card?.adb?.request === "string" ? `Use phone_use {reason: ${JSON.stringify(card.adb.reason ?? "")}, reask: true} if the request is still needed.`
         : typeof card?.signin?.site === "string" ? `Use sign_in {site: ${JSON.stringify(card.signin.site)}, reask: true} if the sign-in is still needed.`
         : card?.type === "login" ? "Check the login with its tool; if it still needs the person, post its login card again."
         : null;
-      cards.set(m, { ended: ended[0], current, special });
+      cards.set(m, { ended: state.ended, current: state.current, special });
     }
     const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key);
     let models: any[];

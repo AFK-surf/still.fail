@@ -79,7 +79,7 @@ const cancelled = () => new HttpError(503, "read cancelled");
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
 /// snapshot can block just as a slow aggregate can. A machine sample (api/host.ts), one job, and the jobs up without
 /// their chats are interactive too; jobs with their chats (an older device's, the sidebar made for it) are a bulk read.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "openedChatSaid", "chatHistoryMessages", "historyPendingCard", "host", "hostTicks", "job"]);
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "openedChatSaid", "chatHistoryMessages", "historyPendingCard", "deliveryCardState", "host", "hostTicks", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.

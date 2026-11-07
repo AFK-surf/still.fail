@@ -1,7 +1,7 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { chatHistoryMessages, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, threadSessions } from "./store.ts";
+import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, threadSessions } from "./store.ts";
 import { searchChats } from "../store/chat-list.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
@@ -48,6 +48,8 @@ export const sessionOps: Record<string, ReadOp> = {
   chatHistoryMessages: (s, a) => chatHistoryMessages(s, a.thread, a.before ?? null, a.limit),
   /// The card post, if any, that is still pending in a chat history.
   historyPendingCard: (s, a) => pendingCardNumber(s, a.thread),
+  /// Card state accompanying a person's delivered message.
+  deliveryCardState: (s, a) => deliveryCardState(s, a.thread, a.n),
   /// The archive review needs the pending post's merged message as well as its card.
   reviewPendingCard: (s, a) => pendingCard(s, a.thread),
   /// One session as lists and events have it (views.rs `summary`).

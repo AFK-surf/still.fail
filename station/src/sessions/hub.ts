@@ -33,6 +33,7 @@ import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
+import type { DeliveryCardState } from "../store/rows.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -172,6 +173,8 @@ export class Hub {
   historyMessages: ((thread: number, before: string | null, limit: number) => Promise<MessageRow[] | null>) | null = null;
   /// Read a chat history's pending card post off the station thread.
   historyPendingCard: ((thread: number) => Promise<number | null>) | null = null;
+  /// Card state accompanying a person's message to an agent.
+  deliveryCardState: ((thread: number, n: number, signal?: AbortSignal) => Promise<DeliveryCardState | null>) | null = null;
   /// Read the pending post and its card for the background archive review.
   reviewPendingCard: ((thread: number) => Promise<[MessageRow, Json] | null>) | null = null;
   /// Prepare an old session's up-job lookup before its archived actor stops its jobs.
@@ -1235,6 +1238,14 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      deliveryCardState: async (thread, n, signal) => {
+        if (this.deliveryCardState) return this.deliveryCardState(thread, n, signal);
+        const ended = this.store.cardEndedByMessage(thread, n);
+        if (ended === null) return null;
+        const current = this.store.pendingCard(thread)?.[0] ?? null;
+        return { ended: { author: ended[0].author, ts: ended[0].ts }, card: ended[1],
+          current: current === null ? null : { ts: current.ts } };
+      },
       preparePostsAfter: (messages, signal) => {
         if (!this.preparePostsAfter) throw new Error("post block builder unavailable");
         return this.preparePostsAfter(messages, signal);
