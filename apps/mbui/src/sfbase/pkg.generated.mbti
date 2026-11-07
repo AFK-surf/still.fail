@@ -1608,6 +1608,10 @@ pub let unseen_at : Double
 
 pub let update : Update
 
+pub fn update_again(@ui.Ctx, Source) -> Unit
+
+pub let update_again_ms : Double
+
 pub fn update_asks() -> Bool
 
 pub fn update_check(Source, Bool, done? : (String) -> Unit) -> Unit

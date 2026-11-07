@@ -31,6 +31,7 @@ pub fn update_reset() -> Unit {
   update_pending.set(None)
   update.available.set(None)
   update.asked = false
+  update_again_n.val = 0
   update.checking.set(false)
   update.source = None
   update.said.set(Unsaid)
@@ -430,6 +431,27 @@ pub fn update_first(src : Source) -> Unit {
   if !update.asked {
     update.asked = true
     update_check(src, false)
+  }
+}
+
+///|
+/// How long the app, left open, waits before asking for a newer build again. A window never put away on a Mac that
+/// never sleeps is never shown again: asked only as it started (right after the machine did, before the network was
+/// up), it stayed three days on a build 400 behind (2026-11-07). The core asks the feed at most every 5 minutes.
+pub let update_again_ms : Double = 60.0 * 60.0 * 1000.0
+
+///|
+// kept across runs: put back by update_reset
+let update_again_n : Ref[Int] = Ref(0)
+
+///|
+/// Asked again each update_again_ms the app stays signed in, in every frame (signed_in_frame, beside update_first): as
+/// a check as it is shown again, nothing said unless a newer build is found.
+pub fn update_again(c : @ui.Ctx, src : Source) -> Unit {
+  let n = update_again_n.val
+  if @kit.after(c, "update-again/\{n}", true, update_again_ms, later=true) {
+    update_again_n.val = n + 1
+    c.tell("update-again", fn() { update_check(src, false) })
   }
 }
 
