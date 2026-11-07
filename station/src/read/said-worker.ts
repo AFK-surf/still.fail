@@ -5,6 +5,7 @@ import { wall } from "../ops/fibers.ts";
 import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { SAID_BATCH_SIZE, saidScanStep, type SaidScan } from "../store/said-state.ts";
 import { archiveLastStep } from "../store/archive-last.ts";
+import { legacyEditsMaintenanceStep, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { TURN_COUNT_BATCH, turnCountStep, type TurnCountScan } from "../store/turn-state.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 250 });
@@ -13,10 +14,10 @@ const scans = new Map<number, SaidScan>();
 const counts = new Map<string, TurnCountScan>();
 db.exec("PRAGMA synchronous = NORMAL");
 
-parentPort!.on("message", async (message: { thread: number; cancel?: boolean; archiveLast?: boolean } | { session: string; cancel?: boolean }) => {
+parentPort!.on("message", async (message: { thread: number; cancel?: boolean; archiveLast?: boolean; legacyEdits?: boolean } | { session: string; cancel?: boolean }) => {
   if (message.cancel) {
     if ("thread" in message) {
-      if (message.archiveLast) return;
+      if (message.archiveLast || message.legacyEdits) return;
       const scan = scans.get(message.thread);
       scans.delete(message.thread);
       if (scan && takeBackfill(priority, threadId)) {
@@ -39,7 +40,13 @@ parentPort!.on("message", async (message: { thread: number; cancel?: boolean; ar
   let owns = false;
   try {
     if ("thread" in message) {
-      if (message.archiveLast) {
+      if (message.legacyEdits) {
+        owns = takeBackfill(priority, threadId);
+        if (owns) {
+          if (!legacyMergedReadReady(db)) legacyEditsMaintenanceStep(db);
+          result = { done: legacyMergedReadReady(db) };
+        }
+      } else if (message.archiveLast) {
         owns = takeBackfill(priority, threadId);
         if (owns) result = { done: archiveLastStep(db, message.thread).done };
       } else {

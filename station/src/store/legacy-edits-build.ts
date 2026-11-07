@@ -1,10 +1,33 @@
 // Prepare an older store's edit lookup in bounded ranges without holding a writer over its whole history.
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 
 const VERSION = 1;
 const BATCH = 64;
 const exists = (db: DatabaseSync, type: string, name: string) =>
   db.prepare("SELECT 1 FROM sqlite_master WHERE type=? AND name=?").get(type,name) !== undefined;
+
+const mergedViews = new WeakMap<DatabaseSync, { version: number; legacy: boolean }>();
+const schemaStatements = new WeakMap<DatabaseSync, StatementSync>();
+
+/// A single merged-message lookup is bounded once the old scan has finished and at most one batch of changed keys
+/// remains. Inspect the actual view: another connection can create a native index before rebuilding that view.
+/// Call inside the same snapshot as the message read.
+export function legacyMergedReadReady(db: DatabaseSync): boolean {
+  let schema = schemaStatements.get(db);
+  if (!schema) { schema = db.prepare("PRAGMA schema_version"); schemaStatements.set(db, schema); }
+  const version = Number(schema.get()!.schema_version);
+  let view = mergedViews.get(db);
+  if (!view || view.version !== version) {
+    const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get()?.sql;
+    view = { version, legacy: typeof sql === "string" && sql.includes("legacy_edit_meta") };
+    mergedViews.set(db, view);
+  }
+  if (!view.legacy) return true;
+  const row = db.prepare(`SELECT scanned=1 AND NOT EXISTS (SELECT 1 FROM legacy_edit_dirty LIMIT 1 OFFSET 64) AS ready
+    FROM legacy_edit_meta WHERE id=1`).get();
+  if (!row) throw new Error("legacy edit lookup metadata is missing");
+  return row.ready === 1;
+}
 
 export function hasLegacyEdits(db: DatabaseSync): boolean {
   if (!exists(db,"table","legacy_edit_meta")) return false;
