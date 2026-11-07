@@ -822,6 +822,8 @@ pub fn in_pane() -> Bool
 
 pub fn in_panel() -> Bool
 
+pub fn in_side(@ui.Ctx, () -> Unit) -> Unit
+
 pub fn in_small_panel() -> Bool
 
 pub fn initial(String) -> String
@@ -2008,6 +2010,10 @@ pub let side_row_h : @ui.Len
 
 pub let side_row_radius : @ui.Radius
 
+pub fn side_hued() -> Bool
+
+pub let side_scope : Int32
+
 pub fn side_scroll(@ui.Ctx, String, () -> Unit) -> Unit
 
 pub fn side_scroll_node(@view.View, @view.Scroll, (@view.View) -> Unit) -> @view.View
@@ -2551,8 +2557,7 @@ pub(all) struct AccentTone {
   light_text : Int64
   dark : Int64
   dark_text : Int64
-  light_grounds : Grounds?
-  dark_grounds : Grounds?
+  hue : Double?
 }
 
 #derive(Eq)
@@ -2764,20 +2769,6 @@ pub(all) struct GlyphCounts {
 pub(all) struct Got {
   loaded : Double
   total : Double
-}
-
-pub(all) struct Grounds {
-  bg : Int64
-  canvas : Int64
-  raised : Int64
-  sidebar : Int64
-  list : Int64
-  selected : Int64
-  paper : Int64
-  card : Int64
-  card2 : Int64
-  chip : Int64
-  faint : Int64
 }
 
 pub(all) struct Items {

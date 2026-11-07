@@ -145,6 +145,8 @@ struct ListState {
   // as it is laid out, are built in them, as what is built beside the list is
   mut theme : Theme
   mut direction : Direction
+  // the part of the window's tree's scope it was built in (@view.View::scope): its rows, built later, read in it
+  mut scope : Int
   // the page's time on top where the list was (Ctx::page_stint): its rows, built as it is laid out, ask what they show
   // of it on it, as what is built beside the list does
   mut stint : Int

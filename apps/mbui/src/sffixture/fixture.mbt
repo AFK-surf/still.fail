@@ -19,6 +19,8 @@ pub(all) struct Fixture {
   mut motion : String
   /// haptics chosen (the prefs' `haptics`: off; "" on)
   mut haptics : String
+  /// the colour theme chosen (the prefs' `accent`: one of @sf.accents' keys, `custom:<hue>`; "" the orange)
+  mut accent : String
   /// automatic updates chosen (the prefs' `appUpdate`: off; "" on)
   mut app_update : String
   archived : Map[String, Bool]
@@ -916,6 +918,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "windowZoom": Json::string(f.window_zoom),
         "motion": Json::string(f.motion),
         "haptics": Json::string(f.haptics),
+        "accent": if f.accent == "" { Json::null() } else { Json::string(f.accent) },
         "appUpdate": Json::string(f.app_update),
         "shareLook": if f.share_look == "" { Json::null() } else { Json::string(f.share_look) },
         "fonts": fixture_fonts(f.fonts),
@@ -1133,6 +1136,7 @@ pub fn fixture(mode : String) -> Source {
     motion: "",
     window_zoom: "",
     haptics: "",
+    accent: "",
     app_update: "",
     archived: {},
     hidden: {},
@@ -1447,6 +1451,11 @@ pub fn fixture(mode : String) -> Source {
           match field(Some(params), "haptics") {
             Some(String(h)) => f.haptics = h
             Some(Null) => f.haptics = ""
+            _ => ()
+          }
+          match field(Some(params), "accent") {
+            Some(String(a)) => f.accent = a
+            Some(Null) => f.accent = ""
             _ => ()
           }
           match field(Some(params), "appUpdate") {

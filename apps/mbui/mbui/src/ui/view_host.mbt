@@ -2471,13 +2471,25 @@ pub fn old(
     let faulted : @signals.Signal[String?] = @signals.signal(None)
     n.faults_to(fn(said) { faulted.set(Some(said)) }) |> ignore
     // (what it builds marked with it, for what takes input to ask whether it may: island_allows)
+    // (built in the scope it was made in, @view.View::scope: in a part drawn in a theme of its own, the tree's theme
+    // there, as its nodes are)
+    let scope = @view.scope_now()
     let held_build = fn(c : Ctx) {
       let was = island_building.val
       island_building.val = Some(id)
-      match faulted.get() {
-        Some(said) => (old_fault_shown.val)(c, said)
-        None => build(c)
-      }
+      @view.in_scope(scope, fn() {
+        let built = fn() {
+          match faulted.get() {
+            Some(said) => (old_fault_shown.val)(c, said)
+            None => build(c)
+          }
+        }
+        if scope != 0 {
+          c.with_theme(tree_theme(), built)
+        } else {
+          built()
+        }
+      })
       island_building.val = was
     }
     // (made as the frame is built: as the old views are built (by what one of them builds: a dialog presented as a page

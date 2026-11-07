@@ -297,6 +297,9 @@ struct Node {
   mut flex : @flex.Node
   look : Look
   mut parent : Int
+  /// the part of the window it is drawn in (View::scope; its holder's, as it was made): what its bindings and its
+  /// making read as `scope_now`
+  mut scope : Int
   /// A last-resort ellipsis in its own words was deliberately allowed, without changing their sizing.
   mut allow_ellipsis : Bool
   kids : Array[Int]
@@ -1003,6 +1006,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.drawn_off = (0.0, 0.0, 0.0, 0.0)
       n.went = None
       n.parent = parent
+      n.scope = self.scope_of(parent)
       n.allow_ellipsis = false
       n.slot = false
       n.boxes_due = false
@@ -1087,6 +1091,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         flex: @flex.Node::new(),
         look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
+        scope: self.scope_of(parent),
         allow_ellipsis: false,
         kids: [],
         owner: None,
@@ -1229,7 +1234,7 @@ fn View::owning(self : View, f : () -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
   let was = @signals.set_active_sub(None)
   let was_owner = @signals.set_owner(n.owner)
-  f()
+  in_scope(n.scope, f)
   @signals.set_active_sub(was) |> ignore
   @signals.set_owner(was_owner) |> ignore
 }
@@ -1662,6 +1667,8 @@ priv enum Phase {
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
 fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+  // (read and done in the scope it was bound in: View::scope)
+  let (read, then) = scoped(read, then)
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them)
@@ -1751,6 +1758,8 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 /// by that moment let go first. Layout, words and paint of what it makes wait for the frame. Run now with the target
 /// it starts at. What stops it.
 fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+  // (read and done in the scope it was bound in: View::scope)
+  let (read, then) = scoped(read, then)
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
   // (the watch reads anew as it is told; let go as it stops)
@@ -1957,8 +1966,10 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
+    // (read in the node's own scope: View::scope)
+    let scope = n.scope
     let stop = tree.queued(
-      f,
+      fn() { in_scope(scope, f) },
       fn(v) {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
