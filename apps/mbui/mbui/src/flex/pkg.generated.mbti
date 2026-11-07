@@ -145,15 +145,6 @@ pub(all) struct Style {
   // private fields
 }
 pub fn Style::basis_kind(Self) -> Int32
-pub fn Style::basis_value(Self) -> Double
-pub fn Style::border_bottom_kind(Self) -> Int32
-pub fn Style::border_bottom_value(Self) -> Double
-pub fn Style::border_left_kind(Self) -> Int32
-pub fn Style::border_left_value(Self) -> Double
-pub fn Style::border_right_kind(Self) -> Int32
-pub fn Style::border_right_value(Self) -> Double
-pub fn Style::border_top_kind(Self) -> Int32
-pub fn Style::border_top_value(Self) -> Double
 pub fn Style::gap_col_kind(Self) -> Int32
 pub fn Style::gap_col_value(Self) -> Double
 pub fn Style::gap_row_kind(Self) -> Int32
@@ -233,7 +224,6 @@ pub fn Style::set_inset_bottom(Self, Dim) -> Unit
 pub fn Style::set_inset_left(Self, Dim) -> Unit
 pub fn Style::set_inset_right(Self, Dim) -> Unit
 pub fn Style::set_inset_top(Self, Dim) -> Unit
-pub fn Style::set_margin(Self, Dim) -> Unit
 pub fn Style::set_margin_bottom(Self, Dim) -> Unit
 pub fn Style::set_margin_left(Self, Dim) -> Unit
 pub fn Style::set_margin_right(Self, Dim) -> Unit

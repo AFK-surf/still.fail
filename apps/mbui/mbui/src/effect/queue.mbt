@@ -72,15 +72,6 @@ pub async fn[X] Queue::take(self : Queue[X]) -> X {
 }
 
 ///|
-pub fn[X] Queue::try_take(self : Queue[X]) -> X? {
-  let x = self.items.pop_front()
-  if x is Some(_) {
-    self.putters.wake_all()
-  }
-  x
-}
-
-///|
 /// No more offers; takes end once what is in it is taken.
 pub fn[X] Queue::shutdown(self : Queue[X]) -> Unit {
   self.shut = true

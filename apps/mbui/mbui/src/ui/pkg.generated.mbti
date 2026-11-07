@@ -1085,7 +1085,6 @@ pub struct Ctx {
 pub fn Ctx::a11y_lines(Self) -> String
 pub fn Ctx::action_asked(Self, Int32, @view.Action) -> Bool
 pub fn Ctx::after_build(Self, String, () -> Unit) -> Unit
-pub fn Ctx::any_right_click(Self) -> Bool
 pub fn Ctx::ask_action(Self, Int32, @view.Action) -> Unit
 pub fn Ctx::back(Self) -> Bool
 pub fn Ctx::bench_frames(Self, Bool) -> Unit
@@ -1274,7 +1273,6 @@ pub fn Ctx::node_is_list(Self, Int32) -> Bool
 pub fn Ctx::node_pad(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::node_parent(Self, Int32) -> Int32
 pub fn Ctx::node_radii(Self, Int32) -> (Double, Double, Double, Double)
-pub fn Ctx::node_radius(Self, Int32) -> Double
 pub fn Ctx::node_rect(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::notch_by(Self, Int32, () -> (Double, Double, Double)) -> Unit
 #callsite(autofill(loc))
@@ -1295,7 +1293,6 @@ pub fn Ctx::page(Self, Pages, Int32) -> Int32
 pub fn Ctx::page_stint(Self) -> Int32
 pub fn Ctx::pager(Self, String, Int32, Int32, (Int32) -> Unit, w? : Size, h? : Size, on_edge? : (Int32) -> Unit, on_middle? : () -> Unit) -> Int32
 pub fn Ctx::pager_rest(Self, String) -> Double
-pub fn Ctx::paint_rect(Self, Double, Double, Double, Double, radius~ : Double, Int64) -> Unit
 pub fn Ctx::passes(Self, Int32) -> Unit
 pub fn Ctx::paths_into(Self, Int32, String) -> Array[DroppedPath]?
 pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32, bg? : Int64, matte? : Bool) -> Int32
@@ -1391,7 +1388,6 @@ pub fn Ctx::text_asked(Self, Int32) -> String?
 pub fn Ctx::text_size(Self, TextSize) -> (Double, Double)
 pub fn Ctx::theme(Self) -> Theme
 pub fn Ctx::took_back(Self, () -> Unit) -> Bool
-pub fn Ctx::unfocus(Self) -> Unit
 pub fn Ctx::visually_hidden(Self, String, role? : @view.Role) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::wake_in(Self, Double, later? : Bool, loc~ : SourceLoc) -> Unit
@@ -1931,7 +1927,6 @@ pub fn[P] Nav::risen(Self[P]) -> Bool
 pub fn[P] Nav::shows_when(Self[P], () -> Bool, Double) -> Unit
 pub fn[P] Nav::top(Self[P]) -> P
 pub fn[P] Nav::top_over(Self[P]) -> Bool
-pub fn[P] Nav::top_shows(Self[P]) -> Bool
 pub fn[P] Nav::top_stay(Self[P]) -> (Int32, Int32)
 pub fn[P] Nav::top_waits(Self[P]) -> Bool
 pub fn[P] Nav::under(Self[P]) -> P?

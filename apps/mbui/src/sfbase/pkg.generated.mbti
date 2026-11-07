@@ -3237,7 +3237,6 @@ pub(all) struct Turns {
   mover : @ui.Mover
 }
 pub fn Turns::admit(Self, @ui.Ctx, String, Double, after? : Bool) -> Unit
-pub fn Turns::after_sent(Self, TurnAsk) -> Double
 pub fn Turns::ask(Self, @ui.Ctx, TurnFor, Double, after? : Bool) -> Unit
 pub fn Turns::emits(Self, @ui.Ctx) -> Unit
 pub fn Turns::emitting(Self) -> Bool

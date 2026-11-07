@@ -48,12 +48,6 @@ let unmoved : Moved = {
 }
 
 ///|
-/// What a build said said again of node `node` (a part's or a row's box drawn again).
-fn moved_to(node : Int) -> Moved {
-  { ..unmoved, node: node }
-}
-
-///|
 /// Rect (x0 y0 x1 y1) moved, in the clip it is put in.
 fn Moved::rect(
   self : Moved,
@@ -178,32 +172,6 @@ let said_hits : Int = 0
 
 ///|
 let said_scrolls : Int = 1
-
-///|
-/// Where each of the frame's paint lists stands now (`marks`, filled).
-fn Ctx::paint_marks(self : Ctx, marks : Array[Int]) -> Unit {
-  marks.clear()
-  for l in paint_lists {
-    marks.push(l.said_len(self))
-  }
-}
-
-///|
-/// What the paint added to each list since `marks`, taken into `into` (what was there let go).
-fn Ctx::paint_take(self : Ctx, marks : Array[Int], into : Array[&SaidAgain]) -> Unit {
-  into.clear()
-  for j, l in paint_lists {
-    into.push(l.said_take(self, marks[j]))
-  }
-}
-
-///|
-/// Each paint list cut back to where it stood at `marks`.
-fn Ctx::paint_cut(self : Ctx, marks : Array[Int]) -> Unit {
-  for j, l in paint_lists {
-    l.said_cut(self, marks[j])
-  }
-}
 
 ///|
 /// What was taken (of the builds' lists or the paint's) said again, moved (`m`).

@@ -406,11 +406,6 @@ pub fn Style::basis_kind(self : Style) -> Int {
 }
 
 ///|
-pub fn Style::basis_value(self : Style) -> Double {
-  self.basis_v
-}
-
-///|
 pub fn Style::get_basis(self : Style) -> Dim {
   dim_of(self.basis_k, self.basis_v)
 }
@@ -745,17 +740,6 @@ pub fn Style::set_border_left(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
-pub fn Style::border_left_kind(self : Style) -> Int {
-  self.border_left_k
-}
-
-///|
-pub fn Style::border_left_value(self : Style) -> Double {
-  self.border_left_v
-}
-
-///|
 pub fn Style::get_border_left(self : Style) -> Dim {
   dim_of(self.border_left_k, self.border_left_v)
 }
@@ -765,17 +749,6 @@ pub fn Style::set_border_top(self : Style, d : Dim) -> Unit {
   self.border_top_k = dim_k(d)
   self.border_top_v = dim_v(d)
   self.ver = self.ver + 1
-}
-
-///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
-pub fn Style::border_top_kind(self : Style) -> Int {
-  self.border_top_k
-}
-
-///|
-pub fn Style::border_top_value(self : Style) -> Double {
-  self.border_top_v
 }
 
 ///|
@@ -791,17 +764,6 @@ pub fn Style::set_border_right(self : Style, d : Dim) -> Unit {
 }
 
 ///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
-pub fn Style::border_right_kind(self : Style) -> Int {
-  self.border_right_k
-}
-
-///|
-pub fn Style::border_right_value(self : Style) -> Double {
-  self.border_right_v
-}
-
-///|
 pub fn Style::get_border_right(self : Style) -> Dim {
   dim_of(self.border_right_k, self.border_right_v)
 }
@@ -811,17 +773,6 @@ pub fn Style::set_border_bottom(self : Style, d : Dim) -> Unit {
   self.border_bottom_k = dim_k(d)
   self.border_bottom_v = dim_v(d)
   self.ver = self.ver + 1
-}
-
-///|
-/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT, LEN_WITHIN) and number, as set.
-pub fn Style::border_bottom_kind(self : Style) -> Int {
-  self.border_bottom_k
-}
-
-///|
-pub fn Style::border_bottom_value(self : Style) -> Double {
-  self.border_bottom_v
 }
 
 ///|
@@ -976,15 +927,6 @@ pub fn Style::set_box_sizing(self : Style, b : BoxSizing) -> Unit {
 ///|
 pub fn Style::get_box_sizing(self : Style) -> BoxSizing {
   self.box_sizing
-}
-
-///|
-/// Sets margin's four sides to `d`.
-pub fn Style::set_margin(self : Style, d : Dim) -> Unit {
-  self.set_margin_left(d)
-  self.set_margin_top(d)
-  self.set_margin_right(d)
-  self.set_margin_bottom(d)
 }
 
 ///|

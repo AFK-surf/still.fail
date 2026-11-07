@@ -92,12 +92,6 @@ async fn[X] shielded(t : Task, f : async () -> X) -> X {
 }
 
 ///|
-/// The running fiber was asked to stop.
-pub fn is_interrupted() -> Bool {
-  current_task().interrupted
-}
-
-///|
 /// Waits for ever (Effect.never): only an interruption ends it.
 pub async fn[X] never() -> X noraise {
   while true {

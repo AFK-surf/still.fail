@@ -82,12 +82,6 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
 }
 
 ///|
-/// A picture held by a composer that has not got a message attachment for it yet.
-pub fn local_picture(c : @ui.Ctx, key : String, name : String, w : Double, h : Double) -> Unit {
-  media_content(c, local_media(key, file_kind(name)), w, h, FitCover, 0.0)
-}
-
-///|
 /// A message's files (Files), at the column's end when it is the viewer's (`mine`).
 pub fn message_files(
   c : @ui.Ctx,

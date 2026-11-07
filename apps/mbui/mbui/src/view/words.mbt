@@ -145,13 +145,6 @@ pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
 }
 
 ///|
-/// What of its words in pieces is picked with the pointer as it is said now (View::runs_picked).
-pub fn View::runs_picked_now(self : View) -> (Int, Int) {
-  guard self.live() is Some(n) else { return (0, 0) }
-  n.look.runs_picked
-}
-
-///|
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
 /// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
 pub fn View::pointer_here(self : View) -> (Double, Double)? {

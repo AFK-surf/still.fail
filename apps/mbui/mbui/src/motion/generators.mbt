@@ -54,12 +54,6 @@ pub fn Generator::velocity(self : Generator, t : Double, initial? : Double = 0.0
 }
 
 ///|
-/// Whether it can be aimed anew mid-way (a spring).
-pub fn Generator::can_retarget(self : Generator) -> Bool {
-  self.retarget_ is Some(_)
-}
-
-///|
 /// Aimed anew: from `from` to `to`, at `velocity` (per second), keeping its physics (a spring; Motion's retarget).
 pub fn Generator::retarget(self : Generator, from : Double, to : Double, velocity : Double) -> Unit {
   match self.retarget_ {

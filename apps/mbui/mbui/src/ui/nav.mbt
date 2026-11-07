@@ -554,18 +554,6 @@ fn[P] Nav::flat_held(self : Nav[P], c : Ctx) -> NavPage[P]? {
 }
 
 ///|
-/// Drawn flat (Ctx::nav_flat), whether the page on top shows this frame: not waited for while the one before stays
-/// (Nav::shows_when). What moves to show it (a pane brought over on a tape) sets out once it does, as a page pushed
-/// slides in once it has what it shows (Nav::comes_when); one pushed over a stack drawn flat holds its own slide.
-/// Asked as the frame builds, after Nav::shows_when.
-pub fn[P] Nav::top_shows(self : Nav[P]) -> Bool {
-  if self.flat_owner {
-    return self.stacked() || self.flat_kept_entry() is None
-  }
-  self.stacked() || self.flat_held(g()) is None
-}
-
-///|
 /// Pushes `page`: it slides in over the one on top.
 pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.pushes(page, false)

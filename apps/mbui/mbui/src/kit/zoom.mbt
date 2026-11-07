@@ -625,13 +625,6 @@ pub fn Zoom::fit_now(self : Zoom, at? : Double) -> Unit {
 }
 
 ///|
-/// A glide or a fling called off where it is (a finger took it).
-pub fn Zoom::stop_glide(self : Zoom, at? : Double) -> Unit {
-  self.settle(cause(at)) |> ignore
-  self.moved()
-}
-
-///|
 /// A fling called off where it has got to (a finger came down on it): whether one went on (none: nothing done).
 pub fn Zoom::stop_fling(self : Zoom, at? : Double) -> Bool {
   let t = cause(at)

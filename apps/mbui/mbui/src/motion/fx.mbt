@@ -462,12 +462,6 @@ pub fn while_hover(c : @ui.Ctx, id : Int, v : Value, rest~ : Double, to~ : Doubl
 }
 
 ///|
-/// `v` goes to `to` while `id` is pressed, back to `rest` once let go (Motion's whilePress / whileTap).
-pub fn while_press(c : @ui.Ctx, id : Int, v : Value, rest~ : Double, to~ : Double, spec? : Spec = spring_to()) -> Unit {
-  v.follow(if c.pressed(id) { to } else { rest }, spec)
-}
-
-///|
 /// Motion's drag on one axis of drag area `id` (@ui.Ctx::drag_area): pressed, `v`'s animation stops where it is;
 /// dragged, `v` follows the finger (past `min` or `max` by `elastic` of the way); let go, it goes on by momentum
 /// (Motion's drag inertia: power 0.8, time constant 750 ms, caught by a spring at `min` and `max`) from the finger's

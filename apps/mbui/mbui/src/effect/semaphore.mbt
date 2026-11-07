@@ -16,16 +16,6 @@ pub fn Semaphore::available(self : Semaphore) -> Int {
 }
 
 ///|
-pub fn Semaphore::try_acquire(self : Semaphore) -> Bool {
-  if self.permits > 0 {
-    self.permits -= 1
-    true
-  } else {
-    false
-  }
-}
-
-///|
 pub async fn Semaphore::acquire(self : Semaphore) -> Unit noraise {
   while self.permits == 0 {
     self.waiters.wait()

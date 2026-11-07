@@ -2956,15 +2956,6 @@ pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
 }
 
 ///|
-/// Where it was last placed in what holds it, and how big (its layout's place and its offset: the frame's, or a
-/// change's brought to its moment), drawn off nothing: as it stood before a change told now is laid out (for what moves
-/// from there for that change's cause, said once at that moment, never followed).
-pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
-  (n.lx, n.ly, n.lw, n.lh)
-}
-
-///|
 /// Where it is laid out in what holds it as of the logic's moment, and how big (what the change under way set so far
 /// counted, as a frame would lay it out; its offset with it): where it goes for that change's cause, said once at that
 /// moment (View::laid_size's terms), never followed.
@@ -3222,16 +3213,6 @@ fn Tree::places_told(self : Tree) -> Unit {
 /// as any is put at another place (View::stacked, View::over_all).
 pub fn Tree::places_read(self : Tree) -> Unit {
   self.places.get() |> ignore
-}
-
-///|
-/// Whether what takes a finger at (x, y) is over all else of the window (Tree::target_at's, View::over_all): what of
-/// the old frame's is put over all of it there under it, taking none of it.
-pub fn Tree::over_all_takes(self : Tree, x : Double, y : Double) -> Bool {
-  match self.target_at(x, y) {
-    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) => self.over_all_at(id.at)
-    Nothing => false
-  }
 }
 
 ///|
@@ -7242,12 +7223,6 @@ fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
 /// them); none said, the desktop's, at 1.
 pub fn Tree::lists_feel(self : Tree, f : () -> (ListFeel, Double)) -> Unit {
   self.list_feel = f
-}
-
-///|
-/// Node `id` pressed (Tree::target_at's): its callback run outside any tracking, as one change, if it lives.
-pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
-  self.run_press_at(id, self.time_now())
 }
 
 ///|

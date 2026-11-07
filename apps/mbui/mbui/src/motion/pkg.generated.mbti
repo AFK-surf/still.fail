@@ -24,8 +24,6 @@ pub fn anticipate(Double) -> Double
 
 pub fn apply_axis_delta(Axis, Double, Double, Double, box_scale? : Double) -> Unit
 
-pub fn apply_box_delta(Box, Delta) -> Unit
-
 pub fn apply_point_delta(Double, Double, Double, Double, box_scale? : Double) -> Double
 
 pub fn back_in(Double) -> Double
@@ -267,8 +265,6 @@ pub fn visual_to_compose(Double, Double) -> (Double, Double)
 
 pub fn while_hover(@ui.Ctx, Int32, Value, rest~ : Double, to~ : Double, spec? : Spec) -> Unit
 
-pub fn while_press(@ui.Ctx, Int32, Value, rest~ : Double, to~ : Double, spec? : Spec) -> Unit
-
 pub fn wrap(Double, Double, Double) -> Double
 
 // Errors
@@ -338,7 +334,6 @@ pub struct Generator {
   // private fields
 }
 pub fn Generator::calculated_duration(Self) -> Double?
-pub fn Generator::can_retarget(Self) -> Bool
 pub fn Generator::next(Self, Double) -> GenState
 pub fn Generator::retarget(Self, Double, Double, Double) -> Unit
 pub fn Generator::to_css(Self) -> String

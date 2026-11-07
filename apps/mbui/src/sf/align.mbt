@@ -76,12 +76,6 @@ pub fn Surface::style(self : Surface) -> @ui.Style {
 }
 
 ///|
-/// What sits at its corner, as a style's corner (inner).
-pub fn Surface::inner_radius(self : Surface) -> @ui.Radius {
-  rounded(self.inner)
-}
-
-///|
 /// The corner of what sits in `s`, or `fallback` where it stands in none (innerOr).
 pub fn inner_or(s : Surface?, fallback : Double) -> Double {
   match s {

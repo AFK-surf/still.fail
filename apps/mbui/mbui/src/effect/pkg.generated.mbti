@@ -8,8 +8,6 @@ pub fn for_seeds(count? : Int32, (Int32) -> Unit raise) -> Unit raise
 
 pub async fn[X] host_call(((Result[X, Error]) -> Unit) -> Unit, cancel? : () -> Unit) -> X
 
-pub fn is_interrupted() -> Bool
-
 pub async fn[X] never() -> X noraise
 
 pub async fn next_frame() -> Unit noraise
@@ -105,7 +103,6 @@ pub fn[X] Queue::shutdown(Self[X]) -> Unit
 pub fn[X] Queue::size(Self[X]) -> Int32
 pub async fn[X] Queue::take(Self[X]) -> X
 pub fn[X] Queue::try_offer(Self[X], X) -> Bool
-pub fn[X] Queue::try_take(Self[X]) -> X?
 pub fn[X] Queue::unbounded() -> Self[X]
 
 pub struct Rng {
@@ -180,7 +177,6 @@ pub async fn Semaphore::acquire(Self) -> Unit noraise
 pub fn Semaphore::available(Self) -> Int32
 pub fn Semaphore::new(Int32) -> Self
 pub fn Semaphore::release(Self) -> Unit
-pub fn Semaphore::try_acquire(Self) -> Bool
 pub async fn[X] Semaphore::with_permit(Self, async () -> X) -> X
 
 pub struct SimFiles {

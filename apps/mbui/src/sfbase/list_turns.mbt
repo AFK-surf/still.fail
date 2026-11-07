@@ -271,16 +271,6 @@ pub fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
 }
 
 ///|
-/// What ask `a` waits for of words sent: their landing, asked after they were sent (-1: nothing).
-pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
-  if self.sent_at >= 0.0 && a.at >= self.sent_at {
-    self.sent_until
-  } else {
-    -1.0
-  }
-}
-
-///|
 /// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
 /// `list_rest`: when the list's glide after what came is over (Ctx::list_info's `glide_rest`; inf: under way, its end
 /// not known), not the reader's hand on it (listQueue.ts listStill).

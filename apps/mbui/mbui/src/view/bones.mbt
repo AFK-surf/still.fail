@@ -106,12 +106,6 @@ fn Tree::bone_as_at(self : Tree, at : Int) -> Int {
 }
 
 ///|
-/// Whether node `at` or what holds it is in its bones: not pressed, pointed at or read out.
-fn Tree::boned_at(self : Tree, at : Int) -> Bool {
-  self.bones_of_at(at) != 0L
-}
-
-///|
 /// Node `at` and all it holds drawn again: how they are drawn in their bones changed (View::bones, View::bone_whole).
 fn Tree::bones_marked_below(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]

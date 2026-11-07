@@ -814,7 +814,6 @@ pub fn Zoom::resize_keeping(Self, Double, Double, (Double, Double)?, Double, whe
 pub fn Zoom::scale_at(Self, Double) -> Double
 pub fn Zoom::step(Self) -> Unit
 pub fn Zoom::stop_fling(Self, at? : Double) -> Bool
-pub fn Zoom::stop_glide(Self, at? : Double) -> Unit
 pub fn Zoom::told(Self) -> Unit
 pub fn Zoom::transform(Self, Double, Double, Double, Double, Double, at? : Double) -> Unit
 pub fn Zoom::under_bars(Self, Double, Double, at? : Double) -> Unit

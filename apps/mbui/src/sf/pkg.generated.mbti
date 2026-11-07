@@ -3062,7 +3062,6 @@ pub(all) struct Surface {
   inner : Double
 }
 pub fn Surface::corner(Self) -> Double
-pub fn Surface::inner_radius(Self) -> @ui.Radius
 pub fn Surface::radius(Self) -> @ui.Radius
 pub fn Surface::style(Self) -> @ui.Style
 

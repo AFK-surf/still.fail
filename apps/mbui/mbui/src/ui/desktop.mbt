@@ -608,14 +608,6 @@ pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
 }
 
 ///|
-/// Whether anything was clicked with the secondary button since the last frame (what closes a menu as another opens).
-pub fn Ctx::any_right_click(self : Ctx) -> Bool {
-  ignore(self)
-  hand_events_read()
-  desk.menus.length() > 0
-}
-
-///|
 /// A press on `id` drags the window (and a double click on it zooms it, as the system's title bar does): the app's
 /// own top row, in a window with none of the system's (@hostapi.window_setup `inset`). Said each frame it is drawn.
 pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
@@ -692,12 +684,6 @@ pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
     return []
   }
   desk.keys
-}
-
-///|
-/// The focused field let go of (the keyboard's words go nowhere until another is pressed).
-pub fn Ctx::unfocus(self : Ctx) -> Unit {
-  self.focus_moved(0)
 }
 
 ///|

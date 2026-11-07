@@ -175,12 +175,6 @@ pub fn apply_axis_delta(
 }
 
 ///|
-pub fn apply_box_delta(box : Box, delta : Delta) -> Unit {
-  apply_axis_delta(box.x, delta.x.translate, delta.x.scale, delta.x.origin_point)
-  apply_axis_delta(box.y, delta.y.translate, delta.y.scale, delta.y.origin_point)
-}
-
-///|
 pub fn translate_axis(axis : Axis, distance : Double) -> Unit {
   axis.min = axis.min + distance
   axis.max = axis.max + distance
