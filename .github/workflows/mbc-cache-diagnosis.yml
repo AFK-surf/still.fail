@@ -76,6 +76,10 @@ jobs:
           [ -n '${{ steps.moon.outputs.cache-matched-key }}' ] || { echo 'No previous Moon build restored' >&2; exit 1; }
           test "$(cat apps/mbui/_build/.macos-min)" = 12.0
           bash apps/mbui/scripts/moon-mtimes.sh
+          find apps/mbui/_build -type d -name '*.mbc' -prune -print > "$RUNNER_TEMP/old-unit-dirs"
+          test -s "$RUNNER_TEMP/old-unit-dirs"
+          cat "$RUNNER_TEMP/old-unit-dirs"
+          while IFS= read -r dir; do rm -rf -- "$dir"; done < "$RUNNER_TEMP/old-unit-dirs"
           rm -f apps/mbui/_build/native/release/build/stillfail/stillfail/stillfail.exe
           bash .github/mac-release-prebuild.sh ready
       - uses: ./.github/actions/setup
@@ -88,6 +92,7 @@ jobs:
           set -eu
           bash .github/mac-release-prebuild.sh wait
           grep -E 'mbc: .* of [0-9]+ compiled' apps/mbui/out/mbc.log
+          python3 -c 'import re, sys; s=open(sys.argv[1]).read(); m=re.search(r"mbc: .*: (\d+) of (\d+) compiled", s); assert m and int(m[1]) == int(m[2]) and int(m[2]) >= 500, "the C-unit build was not cold"' apps/mbui/out/mbc.log
           MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
           bundle='apps/mbui/out/mac/youdid.wtf.app'
           mkdir -p "$RUNNER_TEMP/handoff"
