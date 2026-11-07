@@ -681,7 +681,7 @@ fn rec_line(at : Int, top : Double, h : Double) -> Unit {
 ///|
 /// Whether glyph `key`, at `sc` pixels a point, lying at (`x0`, `y0`)–(`x1`, `y1`), is one a row painted whole
 /// (rec_whole) would ask the host for outside its list's clip (rec_real), where a paint of the list alone would not: not
-/// drawn, and the row not kept so (painted as it is, its glyphs asked for as they show).
+/// drawn, and the row kept drawn only short of it (rec_skip), its glyphs asked for as they come to show.
 fn rec_glyph_early(key : Int, sc : Double, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Bool {
   if !rec_whole.val {
     return false
@@ -693,6 +693,27 @@ fn rec_glyph_early(key : Int, sc : Double, x0 : Double, y0 : Double, x1 : Double
   match text_cache.glyphs.get(key) {
     Some(g) => glyph_other_scale(g, sc)
     None => true
+  }
+}
+
+///|
+/// How far down a row painted whole (rec_whole) is drawn, top and bottom: short of each line of words above or below
+/// the list's clip whose glyphs were not asked for (rec_skip).
+// kept across runs: set as a row is painted whole
+let rec_reach : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// A line of words from `y0` down to `y1` with glyphs not asked for (rec_glyph_early), not drawn: above or below the
+/// list's clip, the row is kept drawn only so far as it ends short of the line (rec_reach); beside it, not kept.
+fn rec_skip(y0 : Double, y1 : Double) -> Unit {
+  let (_, ry0, _, ry1) = rec_real.val
+  let (t, b) = rec_reach.val
+  if y1 < ry0 {
+    rec_reach.val = (dmax(t, y1 + 0.001), b)
+  } else if y0 > ry1 {
+    rec_reach.val = (t, dmin(b, y0 - 0.001))
+  } else {
+    paint_culled.val += 1
   }
 }
 
@@ -995,7 +1016,7 @@ fn Ctx::emit_text(
     }
     if rec_whole.val {
       if rec_glyph_early(key, sc / zoom, ox + tl.xs[c], top, ox + tl.xs[c] + s.adv[c], top + tl.line_h) {
-        paint_culled.val += 1
+        rec_skip(top, top + tl.line_h)
         continue
       }
       rec_line(self.ninst, top, tl.line_h)

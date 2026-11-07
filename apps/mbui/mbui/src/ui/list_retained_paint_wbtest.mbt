@@ -30,6 +30,20 @@ fn row_kept_drawing(item : Int) -> (Bool, Bool, Double)? {
 }
 
 ///|
+/// Row `item`'s drawing's band and how far it was kept drawn, at their foot.
+fn row_kept_reach(item : Int) -> (Double, Double)? {
+  for _, rn in kept_nodes {
+    if rn.item == item {
+      return match rn.drawing {
+        Some(d) if d.band.length() == 4 && d.reach.length() == 4 => Some((d.band[3], d.reach[3]))
+        _ => None
+      }
+    }
+  }
+  None
+}
+
+///|
 test "scrolling moves a keyed row's drawing and target without painting the row again" {
   let painted = Ref(0)
   let pressed : Array[Int] = []
@@ -451,9 +465,12 @@ test "a row past how far it is painted whole draws what comes into view as a pai
   t.draw()
   let row = t.row(0).unwrap()
   assert_true(row.3 > 160.0 * 2.0 + 160.0, msg="the row reaches past how far it is painted whole: \{row}")
-  // (its lines past the list's clip have glyphs not yet asked for: not drawn there, so it is not kept as painted whole)
+  // (its lines past the list's clip have glyphs not yet asked for: not drawn there, so it is kept drawn only short of
+  // them, rec_reach)
   let kept = row_kept_drawing(0)
-  assert_true(kept is Some((false, _, _)), msg="not kept with glyphs not asked for: \{kept}")
+  assert_true(kept is Some((true, true, _)), msg="kept painted whole: \{kept}")
+  let reach = row_kept_reach(0)
+  assert_true(reach is Some((b, r)) && r < b, msg="kept short of its lines with glyphs not asked for: \{reach}")
   own_clips_scroll(t, 80)
   let later = t.row(0).unwrap()
   assert_true(later.1 + later.3 < 160.0, msg="its foot came into view: \{later}")
@@ -732,4 +749,120 @@ test "a kept row's node marked to pass a finger on from another row's build pass
   t.tap_once(100.0, 20.0)
   assert_eq((pressed, under.val), ([], 1), msg="the box under pressed through row 0: pressed \{pressed}, under \{under.val}, said again \{said}")
   assert_true(passes, msg="row 0's target passes the finger on")
+}
+
+///|
+/// A list whose row 0 is 40 lines of rich words, its paint counted: alike but its 15th to 18th, in letters none of the
+/// others has (their glyphs first asked for as they show); the other rows short.
+fn cold_rich_list(painted : Ref[Int]) -> Tester {
+  let rows : ListRows[Int] = ListRows::new()
+  Tester::new(fn(c) {
+    let ids = Array::makei(20, fn(i) { i })
+    let (items, _) = rows.rows(c, ids.map(fn(i) { "row/" + i.to_string() }), ids, fn(_) { "" })
+    c.list("rows", items.length(), 40.0, fn(k) {
+      let item = items[k]
+      if item == 0 {
+        let n = c.box(bg=0x224466FFL, fn() {
+          for l in 0..<40 {
+            let words = if l >= 14 && l < 18 { "jumpy quiz vex" } else { "a line of the tall row" }
+            c.rich([@text.plain(words)], key="line/\{l}", wrap=false) |> ignore
+          }
+        })
+        c.bg_by(n, fn() {
+          painted.val += 1
+          0x224466FFL
+        })
+      } else {
+        c.box(h=Px(40.0), bg=0x446622FFL, fn() { c.text("row \{item}", wrap=false) |> ignore }) |> ignore
+      }
+    }, rows_read=true, sized=rows.sized()) |> ignore
+  }, w=300.0, h=160.0)
+}
+
+///|
+/// Row `item`'s drawing's band and how far it was kept drawn, at their top.
+fn row_kept_reach_top(item : Int) -> (Double, Double)? {
+  for _, rn in kept_nodes {
+    if rn.item == item {
+      return match rn.drawing {
+        Some(d) if d.band.length() == 4 && d.reach.length() == 4 => Some((d.band[1], d.reach[1]))
+        _ => None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Jumped in one step so that row 0's 18th line ends 40 above the list's top (its lines above never shown, those
+/// below alike), then moved back up `steps` times by 7.
+fn cold_rich_back(t : Tester, steps : Int) -> Unit {
+  let mut at = t.time()
+  let line = t.row(0).unwrap().3 / 40.0
+  t.wheel_told(100.0, 100.0, 0.0, (18.0 * line + 40.0).round(), 0, at + 1.0)
+  t.frame_at(at + 16.0)
+  t.frame_at(at + 32.0)
+  at = t.time()
+  for _ in 0..<steps {
+    t.wheel_told(100.0, 100.0, 0.0, -7.0, 0, at + 1.0)
+    t.frame_at(at + 16.0)
+    t.frame_at(at + 32.0)
+    at = t.time()
+  }
+}
+
+///|
+test "a rich row cut by the top with glyphs above not yet asked for is drawn from what it kept short of them, painted again as they come" {
+  let painted = Ref(0)
+  let t = cold_rich_list(painted)
+  t.check_looks(false)
+  t.keep_parts(true)
+  t.draw()
+  cold_rich_back(t, 0)
+  let top = t.row(0).unwrap()
+  assert_true(top.1 < -100.0 && top.1 + top.3 > 160.0, msg="row 0 cut by both edges: \{top}")
+  let kept = row_kept_drawing(0)
+  assert_true(kept is Some((true, true, _)), msg="kept painted whole: \{kept}")
+  let reach = row_kept_reach_top(0)
+  assert_true(reach is Some((b, r)) && r > b, msg="kept short of its lines above with glyphs not asked for: \{reach}")
+  let (_, r) = reach.unwrap()
+  let (_, _, y0) = kept.unwrap()
+  // (moved back up while the list's clip, its top at 0, stays inside how far it was kept, moved as the row is: drawn
+  // from what it kept, not painted)
+  let first = painted.val
+  let mut at = t.time()
+  let mut moved = 0
+  while moved < 30 && t.row(0).unwrap().1 + 7.0 - y0 + r <= 0.0 {
+    t.wheel_told(100.0, 100.0, 0.0, -7.0, 0, at + 1.0)
+    t.frame_at(at + 16.0)
+    t.frame_at(at + 32.0)
+    at = t.time()
+    moved = moved + 1
+  }
+  let inside = t.row(0).unwrap().1
+  assert_true(moved >= 2 && inside - top.1 >= 14.0, msg="moved back up inside how far it was kept: \{moved} steps, \{top.1} -> \{inside}, reach \{r} from \{y0}")
+  assert_true(inside - y0 + r <= 0.0, msg="the list's clip still inside how far it was kept")
+  assert_eq(painted.val, first, msg="drawn from what it kept while inside how far it was kept")
+  assert_eq(row_kept_drawing(0), kept, msg="the same kept, from where it was painted")
+  // (on past it: painted again, its lines coming into view asked for as they show)
+  for _ in 0..<12 {
+    t.wheel_told(100.0, 100.0, 0.0, -7.0, 0, at + 1.0)
+    t.frame_at(at + 16.0)
+    t.frame_at(at + 32.0)
+    at = t.time()
+  }
+  let past = t.row(0).unwrap().1
+  assert_true(past - y0 + r > 0.0, msg="the list's clip went past how far it was kept: \{past} from \{y0}, reach \{r}")
+  assert_true(painted.val > first, msg="painted again once the list's clip went past how far it was kept")
+}
+
+///|
+test "a rich row cut by the top with glyphs above not yet asked for draws what comes into view as a paint there draws it" {
+  let painted = Ref(0)
+  let t = cold_rich_list(painted)
+  // (each frame painted alone compared with it built whole, its lines above coming into view)
+  t.check_looks(true)
+  t.keep_parts(true)
+  t.draw()
+  cold_rich_back(t, 40)
 }
