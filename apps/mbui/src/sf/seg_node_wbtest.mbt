@@ -4,16 +4,17 @@
 
 ///|
 /// 预览 and 源码 (`chosen` the one chosen, a choice said to it), and a button beside them.
-fn seg_tester(chosen : @signals.Signal[Int], said : Array[Int]) -> @ui.Tester {
+fn seg_tester(chosen : @signals.Signal[Int], said : Array[Int], fill? : Bool = false) -> @ui.Tester {
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform=0)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root.row(Is(true)).padding(Is((20.0, 20.0, 20.0, 20.0))).gap(Is(20.0)) |> ignore
-    seg_node(root, fn() { ["预览", "源码"] }, fn() { chosen.get() }, fn(k) {
-      said.push(k)
-      chosen.set(k)
-    }, item_w=58.0)
-    |> ignore
+    let choose = fn(k) { said.push(k); chosen.set(k) }
+    if fill {
+      seg_fill_node(root, fn() { ["预览", "源码"] }, fn() { chosen.get() }, choose) |> ignore
+    } else {
+      seg_node(root, fn() { ["预览", "源码"] }, fn() { chosen.get() }, choose, item_w=58.0) |> ignore
+    }
     button_node(root, fn() { "下载" }, fn() {  }) |> ignore
   })
   t.draw()
@@ -39,32 +40,34 @@ test "a choice of a few as nodes: read out as radios, the chosen one on; pressed
 
 ///|
 test "a choice of a few as nodes, a roving group: Tab to the chosen one alone; → and ← round it, Home and End, each chosen with its focus; Tab on to the button beside it, its arrows none of its own" {
-  let chosen = @signals.signal(1)
-  let said = []
-  let t = seg_tester(chosen, said)
-  t.key(@ui.key_tab)
-  t.draw()
-  assert_eq(t.focused().map(fn(s) { s.label }), Some("源码"), msg="Tab: the chosen one")
-  t.key(@ui.key_code_right)
-  t.draw()
-  assert_eq((chosen.get(), t.focused().map(fn(s) { s.label })), (0, Some("预览")), msg="→ from the last: round to the first")
-  t.key(@ui.key_code_left)
-  t.draw()
-  assert_eq((chosen.get(), t.focused().map(fn(s) { s.label })), (1, Some("源码")), msg="← from the first: round to the last")
-  t.key(@ui.key_code_home)
-  t.draw()
-  assert_eq(chosen.get(), 0, msg="Home")
-  t.key(@ui.key_code_end)
-  t.draw()
-  assert_eq(chosen.get(), 1, msg="End")
-  t.key(@ui.key_tab)
-  t.draw()
-  assert_eq(t.focused().map(fn(s) { s.label }), Some("下载"), msg="Tab on: the button beside it")
-  let before = said.length()
-  t.key(@ui.key_code_right)
-  t.key(@ui.key_code_home)
-  t.draw()
-  assert_eq((chosen.get(), said.length()), (1, before), msg="its arrows none of its own, the focus not in it")
+  for fill in [false, true] {
+    let chosen = @signals.signal(1)
+    let said = []
+    let t = seg_tester(chosen, said, fill~)
+    t.key(@ui.key_tab)
+    t.draw()
+    assert_eq(t.focused().map(fn(s) { s.label }), Some("源码"), msg="Tab: the chosen one")
+    t.key(@ui.key_code_right)
+    t.draw()
+    assert_eq((chosen.get(), t.focused().map(fn(s) { s.label })), (0, Some("预览")), msg="→ from the last: round to the first")
+    t.key(@ui.key_code_left)
+    t.draw()
+    assert_eq((chosen.get(), t.focused().map(fn(s) { s.label })), (1, Some("源码")), msg="← from the first: round to the last")
+    t.key(@ui.key_code_home)
+    t.draw()
+    assert_eq(chosen.get(), 0, msg="Home")
+    t.key(@ui.key_code_end)
+    t.draw()
+    assert_eq(chosen.get(), 1, msg="End")
+    t.key(@ui.key_tab)
+    t.draw()
+    assert_eq(t.focused().map(fn(s) { s.label }), Some("下载"), msg="Tab on: the button beside it")
+    let before = said.length()
+    t.key(@ui.key_code_right)
+    t.key(@ui.key_code_home)
+    t.draw()
+    assert_eq((chosen.get(), said.length()), (1, before), msg="its arrows none of its own, the focus not in it")
+  }
 }
 
 ///|

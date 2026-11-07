@@ -5,6 +5,48 @@
 // Activate, read out as a radio of a group.
 
 ///|
+/// Arrow and endpoint keys choose and focus an option only while this group holds focus.
+fn seg_keys(
+  labels : () -> Array[String],
+  chosen : () -> Int,
+  choose : (Int) -> Unit,
+  options : Array[@view.View],
+) -> (@view.Key) -> Bool {
+  fn(k) {
+    let n = @signals.untracked(labels).length()
+    let now = @signals.untracked(chosen)
+    // (only while one of its options has the focus: none of the window's arrows else)
+    let focused = options.iter().any(fn(o) { o.focused() })
+    let to = if n == 0 || k.mods != 0 || !focused {
+      None
+    } else if k.code == @ui.key_code_left {
+      Some((now + n - 1) % n)
+    } else if k.code == @ui.key_code_right {
+      Some((now + 1) % n)
+    } else if k.code == @ui.key_code_home {
+      Some(0)
+    } else if k.code == @ui.key_code_end {
+      Some(n - 1)
+    } else {
+      None
+    }
+    match to {
+      Some(i) => {
+        if i != now {
+          choose(i)
+        }
+        match options.get(i) {
+          Some(o) => o.ask_focus(visible=true) |> ignore
+          None => ()
+        }
+        true
+      }
+      _ => false
+    }
+  }
+}
+
+///|
 /// Its options' columns as segmented has them: each as wide as the widest of their words in the chosen weight with
 /// segmented_in either side, `item_w` at least.
 fn seg_node_cols(labels : Array[String], item_w : Double) -> Double {
@@ -100,38 +142,7 @@ pub fn seg_node(
       .says(By(fn() { if menu() { None } else { Some(@view.said(RadioGroup, label=said)) } }))
       // (a roving group, as @kit.toggle_group's: Tab stops at the chosen one alone; ← and → go to the one before and after,
       // round from the ends, Home and End to the first and the last, each chosen and its focus as it is)
-      .on_key(fn(k) {
-        let n = @signals.untracked(labels).length()
-        let now = @signals.untracked(chosen)
-        // (only while one of its options has the focus: none of the window's arrows else)
-        let focused = options.iter().any(fn(o) { o.focused() })
-        let to = if n == 0 || k.mods != 0 || !focused {
-          None
-        } else if k.code == @ui.key_code_left {
-          Some((now + n - 1) % n)
-        } else if k.code == @ui.key_code_right {
-          Some((now + 1) % n)
-        } else if k.code == @ui.key_code_home {
-          Some(0)
-        } else if k.code == @ui.key_code_end {
-          Some(n - 1)
-        } else {
-          None
-        }
-        match to {
-          Some(i) => {
-            if i != now {
-              choose(i)
-            }
-            match options.get(i) {
-              Some(o) => o.ask_focus(visible=true) |> ignore
-              None => ()
-            }
-            true
-          }
-          _ => false
-        }
-      })
+      .on_key(seg_keys(labels, chosen, choose, options))
       |> ignore
       // side by side: the thumb, under the options' words, and the options
       track.show(fn() { !menu() }, fn(strip) {
@@ -349,37 +360,7 @@ pub fn seg_fill_node(
     .says(By(fn() { if menu() { None } else { Some(@view.said(RadioGroup, label=said)) } }))
     // (a roving group, as @kit.toggle_group's: Tab stops at the chosen one alone; ← and → go to the one before and after,
     // round from the ends, Home and End to the first and the last, each chosen and its focus as it is)
-    .on_key(fn(k) {
-      let n = @signals.untracked(labels).length()
-      let now = @signals.untracked(chosen)
-      let focused = options.iter().any(fn(o) { o.focused() })
-      let to = if n == 0 || k.mods != 0 || !focused {
-        None
-      } else if k.code == @ui.key_code_left {
-        Some((now + n - 1) % n)
-      } else if k.code == @ui.key_code_right {
-        Some((now + 1) % n)
-      } else if k.code == @ui.key_code_home {
-        Some(0)
-      } else if k.code == @ui.key_code_end {
-        Some(n - 1)
-      } else {
-        None
-      }
-      match to {
-        Some(i) => {
-          if i != now {
-            choose(i)
-          }
-          match options.get(i) {
-            Some(o) => o.ask_focus(visible=true) |> ignore
-            None => ()
-          }
-          true
-        }
-        _ => false
-      }
-    })
+    .on_key(seg_keys(labels, chosen, choose, options))
     |> ignore
     // side by side: the thumb under the options' words, and the options
     track.show(fn() { !menu() }, fn(strip) {
