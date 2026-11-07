@@ -11,7 +11,8 @@ test "the search read last is let go of as the next words are read and as the se
       }
       made.topic(name, params).get().snapshot()
     },
-    leave: fn(name, params) {
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
       if name == "search" {
         left.push(params.get("query").unwrap().as_string().unwrap())
       }

@@ -280,11 +280,18 @@ fn home() -> Unit {
 ///|
 /// The pages left since a build last began, told so (where each was left, what it held let go).
 fn pages_left(src : Source) -> Unit {
-  for p in left_pages {
+  for i in 0..<left_pages.length() {
+    let p = left_pages[i]
+    let (page_src, chat_view) = @sfbase.left_page_source(src, i)
     match p {
       Chat(r) => {
-        chat_left(src, r)
-        viz_chat_left(r.station, r.session)
+        match page_src {
+          Some(source) => {
+            chat_left(source, r, saved=chat_view)
+            viz_chat_left(r.station, r.session)
+          }
+          None => ()
+        }
       }
       DriveRead(at) => reader_left(at)
       DrivePlay(at) => play_left(at)

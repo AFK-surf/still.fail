@@ -35,7 +35,9 @@ fn chat_open_tester(slow : Ref[Bool], waiting : Ref[Bool]) -> @ui.Tester {
       open_changes.get() |> ignore
       name == "chat" && waiting.val
     },
-    leave: fn(name, params) { asked.remove(key(name, params)) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      asked.remove(key(name, params)) },
     release: fn(name, params) { asked.remove(key(name, params)) },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -66,11 +68,11 @@ fn chat_prefetch_tester(asked : Array[String], left : Array[String]) -> @ui.Test
       }
       base.topic(name, params).get().snapshot()
     },
-    leave: fn(name, params) {
+    leave: fn(name, params, __reason) {
       if name == "chat" {
         left.push(Json::object(params).stringify())
       }
-      (base.leave)(name, params)
+      (base.leave)(name, params, __reason)
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)

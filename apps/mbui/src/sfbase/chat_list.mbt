@@ -390,15 +390,11 @@ fn chat_entry_tail(out : Array[Entry], v : ChatView) -> Unit {
 /// whoever reads it in a frame (the page, its side panel, the frame round it, the chats kept: linger_tick).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
   let key = chat_inputs_key(r)
-  match chat_inputs.peek(key) {
-    Some(input) if !physical_equal(input.source, src.topic_read) => chat_inputs.forget(key)
-    _ => ()
-  }
-  let live = match chat_inputs.peek(key) {
+  let live = match chat_inputs.peek_from(src, key) {
     Some(input) => input.live
     None => Ref(true)
   }
-  let input = chat_inputs.read(key, fn(was) {
+  let input = chat_inputs.read(src, key, fn(was) {
     if !live.val {
       // The page has left. Tell anything still following this computation to read again, without re-subscribing as
       // the old subscription ends; a reader still in use obtains a new input on its next read.
@@ -415,6 +411,7 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
   })
   let read = input.read
   let topic = input.topic
+  page_chat_view_read(src, r, read.map(fn(chat) { chat.view }))
   match (read, topic.value, fresh_view(r)) {
     // (the chat a new chat became is never said to be empty: its first message is in it from the frame it was sent,
     // sent_local, while the core has it made and not yet sent to)
@@ -432,7 +429,7 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 /// The topic and its derived messages are shared by reads of a chat until the topic changes. A different source gets
 /// its own reading. The fresh view is still read by each caller above: its full ChatRef can differ for the same topic.
 // kept across runs: the Kept is registered on first use and its stored inputs are cleared by kept_reset (derived.mbt)
-let chat_inputs : Kept[ChatInput] = Kept::new()
+let chat_inputs : SourceKept[ChatInput] = { kept: {}, listed: false }
 
 ///|
 priv struct ChatInput {
@@ -452,11 +449,28 @@ fn chat_inputs_key(r : ChatRef) -> String {
 /// Let the computed go before the core's chat topic is left, so an ending topic cannot cause it to subscribe again.
 pub fn chat_inputs_left(r : ChatRef) -> Unit {
   let key = chat_inputs_key(r)
-  match chat_inputs.peek(key) {
-    Some(input) => input.live.val = false
+  match chat_inputs.kept.get(key) {
+    Some(entries) =>
+      for entry in entries {
+        match entry.value.peek() {
+          Some(input) => input.live.val = false
+          None => ()
+        }
+      }
     None => ()
   }
   chat_inputs.forget(key)
+}
+
+///|
+/// Let one source's chat input go without invalidating another source that still reads the chat.
+pub fn chat_inputs_left_from(src : Source, r : ChatRef) -> Unit {
+  let key = chat_inputs_key(r)
+  match chat_inputs.peek_from(src, key) {
+    Some(input) => input.live.val = false
+    None => ()
+  }
+  chat_inputs.forget_from(src, key)
 }
 
 ///|
@@ -464,6 +478,15 @@ pub fn chat_inputs_left(r : ChatRef) -> Unit {
 /// whose page was never drawn, or is left, asks nothing of the core for it).
 pub fn chat_kept(r : ChatRef) -> ChatView? {
   match chat_read.kept(chat_params(r)) {
+    Some(c) => Some(c.view)
+    None => None
+  }
+}
+
+///|
+/// A chat view last read through this source, without acquiring its topic.
+pub fn chat_kept_from(src : Source, r : ChatRef) -> ChatView? {
+  match chat_read.kept_from(src, chat_params(r)) {
     Some(c) => Some(c.view)
     None => None
   }
@@ -609,10 +632,11 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
       None => continue
     }
     let r : ChatRef = { station, session, title: "", station_name: "" }
-    if chat_kept(r) is None {
+    let page_src = page_source_for_chat(src, r)
+    if chat_kept_from(page_src, r) is None {
       continue
     }
-    match view_of_chat(src, r).0 {
+    match view_of_chat(page_src, r).0 {
       Some(v) => chat_tick(c, rk, rd, v, shown=rd.shown_frame >= c.frame_number() - 1, in_front~)
       None => ()
     }

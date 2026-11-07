@@ -12,11 +12,12 @@ fn chat_client_source(client : @core.Client) -> Source {
         base.topic(name, params).get().snapshot()
       }
     },
-    leave: fn(name, params) {
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
       if name == "chat" {
         client.leave_topic(name, params=@sfbase.core_topic_params(name, params))
       } else {
-        (base.leave)(name, params)
+        (base.leave)(name, params, @sfbase.TopicLeave::Legacy)
       }
     },
     release: fn(name, params) {

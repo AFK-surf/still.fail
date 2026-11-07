@@ -96,6 +96,7 @@ pub fn[P] nav_flat_view(
   takes_back? : () -> Bool = fn() { true },
   stacks? : () -> Bool = fn() { true },
   page_key? : (P) -> String = fn(_) { "" },
+  page_for? : (@view.View, Int) -> (@view.View) -> (Ctx, P) -> Unit,
   head? : (@view.View, Int, Bool) -> Unit,
   gone? : (Int) -> Unit = fn(_) {  },
   made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
@@ -174,7 +175,7 @@ pub fn[P] nav_flat_view(
         }
         g().forget(e.serial)
         gone(e.serial)
-        (nav.on_leave)(e.page)
+        nav.entry_left(e)
       }
     }
     // (as it is first held: once that change is told whole, its owner's keeping told with it)
@@ -228,12 +229,13 @@ pub fn[P] nav_flat_view(
           g().forget(k)
           gone(k)
           match entry {
-            Some(e) => (nav.on_leave)(e.page)
+            Some(e) => nav.entry_left(e)
             None => ()
           }
         }
       })
       |> ignore
+      let draw_for = match page_for { Some(make) => make(pv, k); None => fn(_) { page } }
       // (its old view while it shows; or, where `made` says so of what it is as the stack stood whole (FlatSeen's
       // `kinds`, never the half between a change and its owner's keeping), its nodes made once, as it first shows, and
       // kept while it is held, laid out nowhere while it does not show: as nav_view's)
@@ -273,6 +275,7 @@ pub fn[P] nav_flat_view(
             _ =>
               pb.show(shows, fn(b) {
                 b.grow(Is(1.0)) |> ignore
+                let draw_page = draw_for(b)
                 let key = fn() {
                   match entry {
                     Some(e) => {
@@ -291,7 +294,7 @@ pub fn[P] nav_flat_view(
                       nav.floor = if takes_back() && stacks() { nav.over_floor() } else { nav.pages.length() }
                       if seen.get().stacked && nav.entry(k) is Some(_) {
                         // (under what the frame puts over it, the stack's back that node's: below)
-                        nav.page_built(c, k, page, if head is Some(_) { 0L } else { bg() }, edge, stack=head is None)
+                        nav.page_built(c, k, draw_page, if head is Some(_) { 0L } else { bg() }, edge, stack=head is None)
                       } else {
                         // (in place: built as Ctx::nav_flat builds it, all of its room, cut to it, no back of the stack's; on the
                         // stack, or kept shown though it left it)
@@ -306,7 +309,7 @@ pub fn[P] nav_flat_view(
                               let (owner, stint) = (c.owner, c.stint)
                               c.owner = e.serial
                               c.stint = e.stint
-                              nav.built_by(e, fn() { c.scope(e.serial, fn() { page(c, e.page) }) })
+                              nav.built_by(e, fn() { c.scope(e.serial, fn() { draw_page(c, e.page) }) })
                               c.owner = owner
                               c.stint = stint
                             })

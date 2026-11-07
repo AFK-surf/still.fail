@@ -45,6 +45,18 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
       fn(p) { (tape_goes.ready)(p) },
       tape_goes.most,
       bg=fn() { tape_page_ground(panel) },
+      page_for=fn(entry, serial) {
+        let retained = @sfbase.page_entry_source(src, entry, serial)
+        let page_read = @sfbase.page_chat_reader(retained, entry, serial)
+        fn(visible) {
+          let shown = src.owned_by(visible)
+          fn(c, page) {
+            @sfbase.page_entry_read(serial, retained, page)
+            page_read(page)
+            tape_page_one(c, if page is Chat(_) { retained } else { shown }, page)
+          }
+        }
+      },
       // (a page's bar on the tape the tree's, over its own view: what the page says of it, collected as it is built)
       head=fn(b, k, made) { tape_bar_head(b, k, made, tips) },
       // (a page of the library's made once in its place, where it is: its bar the tape's, from what the page is)

@@ -26,7 +26,7 @@ fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
 ///|
 /// The history's page left: what it followed let go.
 fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
-  (src.leave)("history", history_params(r, key))
+  (src.leave)("history", history_params(r, key), @sfbase.TopicLeave::Legacy)
   // the station's figures its details read
   @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
   history_placed.remove("history/" + r.station + "/" + key)

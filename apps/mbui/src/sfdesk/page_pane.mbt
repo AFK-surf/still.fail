@@ -144,6 +144,18 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
     fold_goes.most,
     bg=fn() { @sf.theme().p.bg },
     stacks=fn() { false },
+    page_for=fn(entry, serial) {
+      let retained = @sfbase.page_entry_source(src, entry, serial)
+      let page_read = @sfbase.page_chat_reader(retained, entry, serial)
+      fn(visible) {
+        let shown = src.owned_by(visible)
+        fn(c, page) {
+          @sfbase.page_entry_read(serial, retained, page)
+          page_read(page)
+          pane_page_one(c, if page is Chat(_) { retained } else { shown }, page)
+        }
+      }
+    },
     page_key=fn(_) { tape_island_key() },
     // (a page of the library's made once in its place: 关于)
     made=fn(p) { pane_made(src, p, tips) },

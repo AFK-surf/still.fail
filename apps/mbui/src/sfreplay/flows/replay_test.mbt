@@ -55,8 +55,8 @@ test "a legacy jobs recording is shared by the bar and the opened sheet" {
   let shown = src.topic("chatJobs", full).get().value
   assert_eq(shown.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
   @sfbase.held_end()
-  (src.leave)("chatJobs", full)
-  (src.leave)("chatJobs", summary)
+  (src.leave)("chatJobs", full, @sfbase.TopicLeave::Legacy)
+  (src.leave)("chatJobs", summary, @sfbase.TopicLeave::Legacy)
   assert_eq(r.diverged(), [])
   assert_eq(r.fuzzy().length(), 0)
   @core.Replay::detach()

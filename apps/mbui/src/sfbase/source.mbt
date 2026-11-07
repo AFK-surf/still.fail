@@ -25,6 +25,21 @@ pub fn TopicState::snapshot(self : TopicState) -> Topic {
 }
 
 ///|
+/// A legacy topic read leaves by name; an owned read releases only the supplied, independently owned reader.
+pub(all) enum TopicLeave {
+  Legacy
+  Owned(() -> Unit)
+}
+
+///|
+/// How a source read is owned. A lease may explicitly move to another view after it is created.
+pub(all) enum TopicReadMode {
+  Raw
+  Graph
+  Lease
+} derive(Eq)
+
+///|
 /// Where signing in to still.fail stands, as the sign-in page says it: nothing under way; its page being opened; out in
 /// the browser, the app waiting for it to come back; what it brought back being checked; or failed, why in the person's
 /// words ("" when there are none).
@@ -54,10 +69,16 @@ pub fn SignInStep::of(busy~ : Bool, verifying~ : Bool, waiting~ : Bool, failed~ 
 
 ///|
 pub(all) struct Source {
-  /// the topic `name` with its params (the core's `subscribe`): the same each frame. Read in a computed (mbui/signals:
-  /// derived.mbt), followed: the computed is worked out again as the topic changes, a signal of its changes set as
-  /// they come (the core client's Sub.changes; a made-up core's own as its state changes)
+  /// The low-level topic reader used to build `topic`. Use `prefetch` for an independent early read.
   topic_read : (String, Map[String, Json]) -> Topic
+  /// This source's subscription identity, after any parameter normalization; equal keys share a subscription.
+  topic_key : (String, Map[String, Json]) -> String
+  /// A view source distinguishes graph evaluation from an independent read.
+  topic_scope : ((TopicReadMode, () -> TopicState) -> TopicState)?
+  /// Whether the source can still create a reader (a view-owned source ends with its view).
+  topic_alive : () -> Bool
+  /// Attach a new lease to all views which currently own this source; returns a cleanup deregistration.
+  topic_lease_own : ((() -> Unit) -> () -> Unit)?
   /// whether the core said that topic, which has no value yet, waits on a station for it: none of what it shows is on
   /// the device (a chat whose messages are still to come), not the core still reading what is. Read as `topic` is.
   waits : (String, Map[String, Json]) -> Bool
@@ -104,7 +125,7 @@ pub(all) struct Source {
   /// the time of day, in milliseconds since 1970 (how long an agent's turn has run)
   now : () -> Double
   /// a topic no page shows any more (`unsubscribe`)
-  leave : (String, Map[String, Json]) -> Unit
+  leave : (String, Map[String, Json], TopicLeave) -> Unit
   /// a signal reader ended; another graph reader or a legacy untracked hold may still need the topic
   release : (String, Map[String, Json]) -> Unit
   /// ask an already held topic for a fresh value without dropping its readers
@@ -122,24 +143,50 @@ pub fn Source::topic(src : Source, name : String, params : Map[String, Json]) ->
   @signals.computed_scoped(fn(_) {
     followed_topic(src, name, key).get()
   }, untracked_read=Some(fn() {
-    if !held_building.val {
+    if !held_building.val && src.topic_scope is None {
       return None
     }
     // An event in a build can read a topic the graph already holds. Use that value without adding a manual hold.
-    match existing_followed_topic(src, name, key) {
-      Some(holder) if holder.watched() => return Some(holder.get())
-      _ => ()
+    if src.topic_scope is None {
+      match existing_followed_topic(src, name, key) {
+        Some(holder) if holder.watched() => return Some(holder.get())
+        _ => ()
+      }
     }
-    let topic = (src.topic_read)(name, key)
-    Some({ value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, key) })
+    Some(match src.topic_scope {
+      Some(scope) => scope(Raw, fn() { read_topic_state(src, name, key) })
+      None => read_topic_state(src, name, key)
+    })
   }))
 }
 
 ///|
+/// Read ahead independently of any current graph. A view source holds this read until it leaves or its view ends.
+pub fn Source::prefetch(src : Source, name : String, params : Map[String, Json]) -> Topic {
+  @signals.untracked(fn() {
+    let read = fn() {
+      let topic = (src.topic_read)(name, params)
+      { value: topic.value, error: topic.error, version: topic.version, waiting: false }
+    }
+    let state = match src.topic_scope {
+      Some(scope) => scope(Raw, read)
+      None => read()
+    }
+    state.snapshot()
+  })
+}
+
+///|
+fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> TopicState {
+  let topic = (src.topic_read)(name, params)
+  { value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, params) }
+}
+
+///|
 /// A page scope already has a graph reader and must not also acquire an untracked frame hold.
-fn scoped_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
+fn scoped_topic(src : Source, name : String, params : Map[String, Json], independent? : Bool = false) -> @signals.Computed[TopicState] {
   let key = params.copy()
-  @signals.computed_scoped(fn(_) { followed_topic(src, name, key).get() })
+  @signals.computed_scoped(fn(_) { followed_topic(src, name, key, independent~).get() })
 }
 
 ///|
@@ -147,6 +194,7 @@ fn scoped_topic(src : Source, name : String, params : Map[String, Json]) -> @sig
 priv struct FollowedTopic {
   source : Source
   key : String
+  independent : Bool
   holder : @signals.Computed[TopicState]
   token : Ref[Bool]
 }
@@ -158,38 +206,41 @@ let followed_topics : Ref[Array[FollowedTopic]] = Ref([])
 ///|
 fn existing_followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState]? {
   let key = name + "\u{1}" + Json::object(params).stringify()
-  followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key }).map(fn(i) { followed_topics.val[i].holder })
+  followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && !t.independent }).map(fn(i) { followed_topics.val[i].holder })
 }
 
 ///|
-fn followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
+fn followed_topic(src : Source, name : String, params : Map[String, Json], independent? : Bool = false) -> @signals.Computed[TopicState] {
   let key = name + "\u{1}" + Json::object(params).stringify()
-  match followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key }) {
+  match followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && t.independent == independent }) {
     Some(i) => followed_topics.val[i].holder
     None => {
       // Read first and on every evaluation, so the lifetime ends only when the holder loses its last reader.
       let lifetime = @signals.signal(0)
       let token = Ref(true)
       lifetime.on_unwatched(fn() {
-        // A reader can go before its replacement reads in the same frame. Keep the wire subscription until that
-        // frame finishes; outside a frame the final reader's release is immediate.
-        @ui.after_frame(fn() {
-          match followed_topics.val.search_by(fn(t) { physical_equal(t.token, token) }) {
-            Some(i) if !followed_topics.val[i].holder.watched() => {
-              // A removed Array slot keeps its old value alive; replace the array before releasing.
-              followed_topics.val = followed_topics.val.filter(fn(t) { !physical_equal(t.token, token) })
-              (src.release)(name, params)
+        // Another reader may take over in this signal flush or this frame. Check again once both have finished.
+        @signals.after_flush(fn() {
+          @ui.after_frame(fn() {
+            match followed_topics.val.search_by(fn(t) { physical_equal(t.token, token) }) {
+              Some(i) if !followed_topics.val[i].holder.watched() => {
+                // A removed Array slot keeps its old value alive; replace the array before releasing.
+                followed_topics.val = followed_topics.val.filter(fn(t) { !physical_equal(t.token, token) })
+                (src.release)(name, params)
+              }
+              _ => ()
             }
-            _ => ()
-          }
+          })
         })
       })
       let holder = @signals.computed(fn(_) {
         lifetime.get() |> ignore
-        let topic = (src.topic_read)(name, params)
-        { value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, params) }
+        match src.topic_scope {
+          Some(scope) => scope(if independent { Lease } else { Graph }, fn() { read_topic_state(src, name, params) })
+          None => read_topic_state(src, name, params)
+        }
       })
-      followed_topics.val.push({ source: src, key, holder, token })
+      followed_topics.val.push({ source: src, key, independent, holder, token })
       holder
     }
   }
@@ -205,6 +256,20 @@ pub fn core_topic_params(name : String, params : Map[String, Json]) -> Map[Strin
   let out = params.copy()
   out["compact"] = Json::boolean(true)
   out
+}
+
+///|
+/// A source which treats its name and each parameter object as given may use this identity.
+pub fn exact_topic_key(name : String, params : Map[String, Json]) -> String {
+  name.length().to_string() + ":" + name + Json::object(params).stringify()
+}
+
+///|
+/// Identity of the object sent to a core Client, including the `topic` parameter's override and field order.
+pub fn wire_topic_key(name : String, params : Map[String, Json]) -> String {
+  let object : Map[String, Json] = { "topic": Json::string(name) }
+  for key, value in params { object[key] = value }
+  Json::object(object).stringify()
 }
 
 ///|
@@ -253,6 +318,10 @@ pub fn made_source(
         None => { value: None, error: None, version: 0 }
       }
     },
+    topic_key: exact_topic_key,
+    topic_scope: None,
+    topic_alive: fn() { true },
+    topic_lease_own: None,
     waits: fn(_, _) { false },
     generation: fn(_, _) { (0, true) },
     call,
@@ -274,7 +343,9 @@ pub fn made_source(
     draft_picture: fn(_, _) { "!" },
     images: ChatImages::new(),
     now: fn() { 0.0 },
-    leave: fn(_, _) {  },
+    leave: fn(_, _, __reason) {
+      if __reason is TopicLeave::Owned(__stop) { __stop(); return }
+      },
     release: fn(_, _) {  },
     refresh: fn(_, _) {  },
     read_only: false,

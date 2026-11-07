@@ -279,7 +279,11 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
       check_frames.pop() |> ignore
       if dirty {
         let subs = sub.subs
-        if update(sub) {
+        // The update below may have disconnected this entire computed chain. Do not run a computed that no longer
+        // has a reader just because check_dirty still has one of its old links on the traversal stack.
+        if subs is None {
+          dirty = false
+        } else if update(sub) {
           if subs is Some(subs) && subs.next_sub is Some(_) {
             shallow_propagate(subs)
           }

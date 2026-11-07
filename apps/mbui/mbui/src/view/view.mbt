@@ -4832,7 +4832,7 @@ pub fn View::owns(self : View, f : () -> Unit) -> View {
 ///|
 /// `stop` kept as one it lets go of as it goes (View::owns), and what lets go of that keeping again: for what ends
 /// before it does (a moment's work done or called off), nothing of it kept by it after.
-fn View::owns_while(self : View, stop : () -> Unit) -> () -> Unit {
+pub fn View::owns_while(self : View, stop : () -> Unit) -> () -> Unit {
   guard self.live() is Some(n) else { return fn() {  } }
   let key = n.drop_next
   n.drop_next = n.drop_next + 1
