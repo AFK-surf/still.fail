@@ -65,7 +65,6 @@ type Working = { connect: string; channel: string; threadTs: string; ts: string 
 
 /// What the actor needs of the store: the Rust Store's methods, camelCase (src/store/store.ts).
 export type SessionStore = {
-  pendingMessages(key: string): any[];
   hasPending(key: string): boolean;
   markDelivered(key: string, handed: Handed[]): void;
   markUndelivered(key: string, handed: Handed[]): void;
@@ -120,6 +119,8 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// Pending messages and letters, merged as they are now, read off the station thread.
+  pendingDeliveries(key: string, signal?: AbortSignal): Promise<PendingMessage[]>;
   /// Card state for a person's delivery, read off the station thread.
   deliveryCardState(thread: number, n: number, signal?: AbortSignal): Promise<DeliveryCardState | null>;
   /// An older store brings forward only the message ranges this delivery needs.
@@ -332,6 +333,12 @@ export class SessionActor {
   private unread: PendingMessage[] = [];
   private queued = 0;
   private formatAbort: AbortController | null = null;
+  /// A stop or suspension also prevents earlier queued deliveries from starting another read before it takes effect.
+  private deliveryInterruptions = 0;
+  /// Recoveries queued or reading: a stop cancels them; suspension keeps the cut-off turn marked running.
+  private recoveries = 0;
+  /// A recovery that reached a hold must resume the cut-off turn when the hold is released.
+  private recoveryDeferred = false;
   /// File work cannot be interrupted by closing the effect that awaits it; disposal waits for it to stop.
   private archiving: Promise<void> | null = null;
 
@@ -347,6 +354,10 @@ export class SessionActor {
 
   private now(): number {
     return this.deps.clock.currentTimeMillisUnsafe();
+  }
+
+  private closed(): boolean {
+    return this.phase === "closed";
   }
 
   // ── the queue ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -506,29 +517,35 @@ export class SessionActor {
 
   /// Stops what it is doing: the running turn; or, while it waits on work it started, that work and the wait.
   stop(): Promise<void> {
+    const stopRecovery = this.recoveries > 0 || this.recoveryDeferred;
+    this.recoveryDeferred = false;
+    this.deliveryInterruptions++;
     this.formatAbort?.abort();
     return this.enqueue(async () => {
-      if (this.codexUpdate) {
-        this.codexUpdate = null;
-        this.deps.store.setRunning(this.key, false);
-        await this.notice(t("station.notice.stopped"));
-        this.deps.live?.turnEnded(this.key);
-        return;
-      }
-      if (this.agent?.session.busy()) {
-        this.stopRequested = true;
-        try {
-          await this.agent.session.abort();
-        } catch (error) {
-          this.stopRequested = false;
-          throw error;
+      try {
+        if (stopRecovery) this.deps.store.setRunning(this.key, false);
+        if (this.codexUpdate) {
+          this.codexUpdate = null;
+          this.deps.store.setRunning(this.key, false);
+          await this.notice(t("station.notice.stopped"));
+          this.deps.live?.turnEnded(this.key);
+          return;
         }
-        return;
-      }
-      if (this.turn) return;
-      await this.stopWaiting();
-      // Nothing runs: whatever is still said to be under way (a start that failed) is not.
-      this.deps.live?.turnEnded(this.key);
+        if (this.agent?.session.busy()) {
+          this.stopRequested = true;
+          try {
+            await this.agent.session.abort();
+          } catch (error) {
+            this.stopRequested = false;
+            throw error;
+          }
+          return;
+        }
+        if (this.turn) return;
+        await this.stopWaiting();
+        // Nothing runs: whatever is still said to be under way (a start that failed) is not.
+        this.deps.live?.turnEnded(this.key);
+      } finally { this.deliveryInterruptions--; }
     });
   }
 
@@ -608,14 +625,39 @@ export class SessionActor {
 
   /// After a station stopped with this session's turn running and no runner kept it: the turn was cut off; resume it.
   recover(): Promise<void> {
+    this.recoveries++;
     return this.enqueue(async () => {
-      const store = this.deps.store;
-      store.setRunning(this.key, false);
-      if (this.archived()) return this.letGo();
-      const pending = store.pendingMessages(this.key);
-      const [said, widgets] = await this.format(pending);
-      await this.startTurn("resume", said === "" ? RESUME_AFTER_RESTART : `${RESUME_AFTER_RESTART}\n\n${said}`);
-      this.delivered(pending, widgets);
+      let reading = true;
+      try {
+        if (this.deliveryInterruptions > 0) return;
+        const store = this.deps.store;
+        if (this.archived()) {
+          this.recoveryDeferred = false;
+          store.setRunning(this.key, false);
+          return this.letGo();
+        }
+        if (this.deps.held(this.key)) {
+          this.recoveryDeferred = true;
+          return;
+        }
+        this.recoveryDeferred = false;
+        const delivery = await this.pendingAndFormat(true);
+        this.recoveries--;
+        reading = false;
+        if (delivery === null || this.deliveryInterruptions > 0 || this.closed()) return;
+        if (this.archived()) {
+          store.setRunning(this.key, false);
+          return this.letGo();
+        }
+        if (this.deps.held(this.key)) {
+          this.recoveryDeferred = true;
+          return;
+        }
+        const { pending, text: said, widgets } = delivery;
+        store.setRunning(this.key, false);
+        await this.startTurn("resume", said === "" ? RESUME_AFTER_RESTART : `${RESUME_AFTER_RESTART}\n\n${said}`);
+        this.delivered(pending, widgets);
+      } finally { if (reading) this.recoveries--; }
     });
   }
 
@@ -647,6 +689,10 @@ export class SessionActor {
 
   /// Turns were held and are no longer: what waited meanwhile goes on.
   release(): Promise<void> {
+    if (this.recoveryDeferred) {
+      this.recoveryDeferred = false;
+      if (this.recoveries === 0) return this.recover();
+    }
     return this.enqueue(async () => {
       if (this.waiting !== null && this.waitingUntil <= this.now()) this.waitMs(this.waitingSeconds, 0);
       if (this.refill !== null && this.refillAt <= this.now()) this.awaitRefill(this.now());
@@ -831,31 +877,34 @@ export class SessionActor {
   /// given (session.rs `suspend`): a turn under way stays marked running (to resume once back), unless it had already
   /// said a settled state; messages given to it while it ran are pending again.
   suspend(): Promise<void> {
+    this.deliveryInterruptions++;
     this.formatAbort?.abort();
     return this.enqueue(async () => {
-      const agent = this.agent;
-      this.agent = null;
-      const busy = agent?.session.busy() ?? false;
-      const turn = this.turn;
-      this.turn = null;
-      this.tools = [];
-      this.workingFor = [];
-      this.stopRequested = false;
-      const steered = this.steered;
-      this.steered = [];
-      this.steeredFor = [];
-      this.unread = [];
-      if (!agent && !turn) return;
-      const store = this.deps.store;
-      const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
-      log.info("session", "ending the runtime process: the station is in no workspace", { session: this.key, resume });
-      await agent?.session.dispose();
-      if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", endedIn(turn.declared, "aborted")?.kind ?? null, null);
-      store.setRunning(this.key, resume);
-      if (turn || busy) store.markUndelivered(this.key, steered);
-      this.deps.live?.turnEnded(this.key);
-      store.notify(this.key);
-      this.phase = "idle";
+      try {
+        const agent = this.agent;
+        this.agent = null;
+        const busy = agent?.session.busy() ?? false;
+        const turn = this.turn;
+        this.turn = null;
+        this.tools = [];
+        this.workingFor = [];
+        this.stopRequested = false;
+        const steered = this.steered;
+        this.steered = [];
+        this.steeredFor = [];
+        this.unread = [];
+        if (!agent && !turn) return;
+        const store = this.deps.store;
+        const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
+        log.info("session", "ending the runtime process: the station is in no workspace", { session: this.key, resume });
+        await agent?.session.dispose();
+        if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", endedIn(turn.declared, "aborted")?.kind ?? null, null);
+        store.setRunning(this.key, resume);
+        if (turn || busy) store.markUndelivered(this.key, steered);
+        this.deps.live?.turnEnded(this.key);
+        store.notify(this.key);
+        this.phase = "idle";
+      } finally { this.deliveryInterruptions--; }
     });
   }
 
@@ -983,16 +1032,17 @@ export class SessionActor {
   }
 
   private async pump() {
-    if (this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
+    if (this.deliveryInterruptions > 0 || this.recoveries > 0 || this.recoveryDeferred || this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
     if (this.codexUpdate) {
       if (this.codexUpdate.finished) await this.continueAfterCodexUpdate(this.codexUpdate);
       return;
     }
     const store = this.deps.store;
     if (!store.hasPending(this.key) || (await this.compactingToCap())) return;
-    const pending = store.pendingMessages(this.key);
-    if (pending.length === 0) return;
-    const [text, widgets] = await this.format(pending);
+    if (this.deliveryInterruptions > 0 || this.recoveries > 0 || this.recoveryDeferred || this.closed() || this.deps.held(this.key) || this.archived() || this.compacting) return;
+    const delivery = await this.pendingAndFormat(false);
+    if (delivery === null || this.deliveryInterruptions > 0 || this.recoveries > 0 || this.recoveryDeferred || this.closed() || this.deps.held(this.key) || this.archived() || this.compacting) return;
+    const { pending, text, widgets } = delivery;
     const agent = this.agent?.session;
     if (agent?.busy()) {
       // So it is read now, not when a long command ends; what it waited on goes on.
@@ -1055,12 +1105,26 @@ export class SessionActor {
     this.deps.store.markWidgetModelsTold(this.key, widgets);
   }
 
-  /// The messages as the agent reads them, made now so edits count (session.rs `format`).
-  private async format(said: any[]): Promise<[string, [string, string][]]> {
+  /// Stop and handover can interrupt both the pending read and its formatting, including old-index preparation.
+  private async pendingAndFormat(allowEmpty: boolean): Promise<{ pending: PendingMessage[]; text: string; widgets: [string, string][] } | null> {
     const abort = new AbortController();
     this.formatAbort = abort;
-    try { return await this.formatWithSignal(said, abort.signal); }
-    finally { if (this.formatAbort === abort) this.formatAbort = null; }
+    try {
+      const pending = await this.deps.pendingDeliveries(this.key, abort.signal);
+      if (abort.signal.aborted) throw new Error("delivery cancelled");
+      if (!allowEmpty && pending.length === 0) return null;
+      const [text, widgets] = await this.format(pending, abort);
+      if (abort.signal.aborted) throw new Error("delivery cancelled");
+      return { pending, text, widgets };
+    } finally { if (this.formatAbort === abort) this.formatAbort = null; }
+  }
+
+  /// The messages as the agent reads them, made now so edits count (session.rs `format`).
+  private async format(said: any[], abort?: AbortController): Promise<[string, [string, string][]]> {
+    const controller = abort ?? new AbortController();
+    if (!abort) this.formatAbort = controller;
+    try { return await this.formatWithSignal(said, controller.signal); }
+    finally { if (!abort && this.formatAbort === controller) this.formatAbort = null; }
   }
 
   private async formatWithSignal(said: any[], signal: AbortSignal): Promise<[string, [string, string][]]> {
