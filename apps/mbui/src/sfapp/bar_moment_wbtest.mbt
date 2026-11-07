@@ -460,3 +460,118 @@ test "bar: a ride set out long before what it rides on rests, off its steps from
     assert_true((a - b).abs() < 0.000001, msg="at \{at}: \{a}, the whole way \{b}")
   }
 }
+
+///|
+/// A tap at `t1` (down, up `tap_held_ms` later) at (`x`, `y`), frames drawn at `t1 +` each of `frames` (after it is let
+/// go, the clock going on; none at all between some), then one at `t1 + 3000`: how long the bar chosen still had to land
+/// as the tap was let go, the place it lands with then (its swap's key; None when none lands), where the ball was sent
+/// then, the place shown at the end, where the ball is then and where it goes, and how long after the tap its way ended.
+fn bar_tap_landing(
+  t : @ui.Tester,
+  t1 : Double,
+  x : Double,
+  y : Double,
+  frames : Array[Double],
+) -> (Double, String??, Double, String?, Double, Double, Double) {
+  t.advance(t1 - t.time())
+  t.touch_at(0, x, y, t1)
+  let up = t1 + tap_held_ms
+  t.advance(up - t.time())
+  t.touch_at(2, x, y, up)
+  let left = bar_landed() - up
+  let key = bar.swap_at(up).map(fn(s) { s.key })
+  let sent = bar.ball_x.to + 22.0
+  for f in frames {
+    if f <= tap_held_ms {
+      abort("a frame at \{f} ms, before the tap was let go")
+    }
+    t.frame_at(t1 + f)
+  }
+  t.frame_at(t1 + 3000.0)
+  (left, key, sent, bar.told.unwrap().active, bar.ball_x.x + 22.0, bar.ball_x.to + 22.0, bar.ball_x.end() - t1)
+}
+
+///|
+/// How long a tap's finger is down.
+let tap_held_ms : Double = 30.0
+
+///|
+/// Frames drawn between, each way: none, each frame's worth, a few.
+let landing_frames : Array[Array[Double]] = [
+  [],
+  Array::makei(120, fn(i) { 32.0 + i.to_double() * bar_step_ms }),
+  [40.0, 700.0, 1500.0],
+]
+
+///|
+/// The panel drawn up from the bar's last place and let go on the other bar's row (that bar chosen, its last place with
+/// it, landing), then its first place tapped `after` ms later, frames drawn at `frames` (bar_tap_landing). The bar is
+/// where it goes from its first frame (BarModel::jump), so the panel is drawn up at once.
+fn bar_tapped_landing(after : Double, frames : Array[Double]) -> (Double, String??, Double, String?, Double, Double, Double) {
+  let t = tester("home")
+  let (xs, y) = bar_places_at()
+  t.drag(xs[3], y, xs[3], y - 64.0, steps=60)
+  bar_tap_landing(t, t.time() + after, xs[0], y, frames)
+}
+
+///|
+test "bar: a bar chosen landing, another of its places tapped before it has landed: the ball sent to that place then, there after it has landed, whichever frames came between" {
+  let (xs, _) = bar_places_at()
+  let src = fixture("home")
+  let (sets, cur) = bars_in(src, workspace_in_view(src).0.unwrap().id)
+  let first = sets[if cur == 0 { 1 } else { 0 }][0]
+  for after in [between_frames_ms, 50.0, 300.0] {
+    let one = bar_tapped_landing(after, landing_frames[0])
+    for frames in landing_frames {
+      assert_eq(bar_tapped_landing(after, frames), one)
+    }
+    let (left, key, sent, active, x, to, end) = one
+    assert_true(left > 0.0 && end < 3000.0, msg="after \{after}: \{one}")
+    assert_eq(active, Some(first))
+    assert_eq(key, Some(Some(first)))
+    assert_true((sent - xs[0]).abs() < 0.5, msg="after \{after}: sent to \{sent}")
+    assert_true((x - xs[0]).abs() < 0.5 && (to - xs[0]).abs() < 0.5, msg="after \{after}: ball at \{x}, going to \{to}")
+  }
+}
+
+///|
+/// The bars [chats, files, profiles, stations] and [stations, archive], on Station (the last place), the panel drawn up
+/// and open, then the other bar's row tapped between its places (that bar chosen without a place) at `t1`, frames drawn
+/// at `frames` (bar_tap_landing). Gone to Station and the panel drawn up, the bar is put where each goes at once
+/// (BarModel::jump, as on its first frame), not waited for.
+fn bar_chosen_bare(frames : Array[Double]) -> (Double, String??, Double, String?, Double, Double, Double) {
+  let t = tester("home")
+  bars_picked.set(Some(([["chats", "files", "profiles", "stations"], ["stations", "archive"]], 0)))
+  if !@sfbase.go_place("stations") {
+    abort("not gone to stations")
+  }
+  t.draw()
+  bar.jump()
+  let (xs, y) = bar_places_at()
+  t.drag(xs[3], y, xs[3], y - 64.0, steps=20)
+  t.draw()
+  bar.jump()
+  t.draw()
+  if !bar.mode.get() {
+    abort("the panel not open")
+  }
+  let (top, _) = bar_panel_at()
+  bar_tap_landing(t, t.time() + between_frames_ms, 195.0, top + over + bar_row / 2.0, frames)
+}
+
+///|
+test "bar: a bar chosen without a place, the place shown in it elsewhere: the ball sent to where that bar has it as it is chosen, there after it has landed, whichever frames came between" {
+  let (xs, _) = bar_places_at()
+  let one = bar_chosen_bare(landing_frames[0])
+  for frames in landing_frames {
+    assert_eq(bar_chosen_bare(frames), one)
+  }
+  let (left, key, sent, active, x, to, end) = one
+  assert_true(left > 0.0 && end < 3000.0, msg="\{one}")
+  // (chosen between its places: no place with it)
+  assert_eq(key, Some(None))
+  assert_eq((active, bars_picked.get().map(fn(b) { b.1 })), (Some("stations"), Some(1)))
+  // (Station first in that bar)
+  assert_true((sent - xs[0]).abs() < 0.5, msg="sent to \{sent}")
+  assert_true((x - xs[0]).abs() < 0.5 && (to - xs[0]).abs() < 0.5, msg="ball at \{x}, going to \{to}")
+}
