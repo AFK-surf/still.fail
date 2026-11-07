@@ -13,6 +13,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
 import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
+import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Driven, FormAsks, FormField, FormValues } from "../browser/signin-form.ts";
 import type { Request } from "./crypto.ts";
@@ -48,6 +49,7 @@ const HELD_MS = 15 * 60_000;
 
 export type SignInDeps = {
   db: DatabaseSync;
+  cardOutcomes?: CardOutcomeSaver;
   hub: {
     store: {
       getSession(key: string): { archivedAt?: number | null } | null;
@@ -224,8 +226,12 @@ export class SignIns {
           if (posted !== null) {
             current.thread = place.thread.thread.id;
             current.cardTs = posted;
-            this.#save(current);
-            this.#restate(current);
+            try { this.#saveAndRestate(current, false); }
+            catch (error) {
+              // Posting happens before the request can be saved. Do not leave an unassociated card waiting on failure.
+              try { this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted); } catch {}
+              throw error;
+            }
           }
           return this.#waiting(current);
         }
@@ -319,30 +325,40 @@ export class SignIns {
       } : undefined, signal);
   }
 
-  /// The ask's card as it stands now (`signin.outcome`): where it is, why a person is needed, whether it is kept.
-  #restate(x: SignInAsk) {
-    if (x.thread === undefined || x.cardTs === undefined) return;
-    const outcome = {
+  /// The ask's card as it stands now: where it is, why a person is needed, whether it is kept.
+  #outcome(x: SignInAsk) {
+    return {
       status: x.status, ...(x.why ? { why: x.why } : {}), ...(x.said ? { said: x.said } : {}), ...(x.keep !== undefined ? { keep: x.keep } : {}),
       ...(x.save ? { save: x.save } : {}), ...(x.kept ? { kept: x.kept } : {}),
     };
-    this.#d.hub.store.restateCard(x.session, x.thread, x.cardTs, (card) => ({ ...card, signin: { ...card?.signin, outcome } }));
   }
 
-  #set(x: SignInAsk, status: Status, why?: string) {
+  /// Save the state with its durable card outcome; a closed card is announced only after the transaction commits.
+  #saveAndRestate(x: SignInAsk, close: boolean) {
+    if (x.thread !== undefined && x.cardTs !== undefined && this.#d.cardOutcomes) {
+      this.#d.cardOutcomes.save({ thread: x.thread, ts: x.cardTs, agent: x.session, field: "signin", close, outcome: this.#outcome(x) }, () => this.#save(x));
+      return;
+    }
+    this.#save(x);
+    if (x.thread !== undefined && x.cardTs !== undefined) {
+      const outcome = this.#outcome(x);
+      this.#d.hub.store.restateCard(x.session, x.thread, x.cardTs, (card) => ({ ...card, signin: { ...card?.signin, outcome } }));
+      if (close) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
+    }
+  }
+
+  #set(x: SignInAsk, status: Status, why?: string, close = false) {
     x.status = status;
     if (why === undefined) delete x.why;
     else x.why = why;
-    this.#save(x);
-    this.#restate(x);
+    this.#saveAndRestate(x, close);
   }
 
   /// Its card no longer waits on anyone: withdrawn, but while its sign-in's keeping waits for the app to approve it.
   #end(x: SignInAsk, status: "done" | "denied" | "expired" | "ended") {
+    const close = !(status === "done" && x.save !== undefined && (x.kept ?? "pending") === "pending");
+    this.#set(x, status, undefined, close);
     this.#forget(x.id);
-    this.#set(x, status);
-    if (status === "done" && x.save !== undefined && (x.kept ?? "pending") === "pending") return;
-    if (x.thread !== undefined && x.cardTs !== undefined) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
   }
 
   /// The ask `id` as its person may answer it (in their workspace's station), or why not.
@@ -482,11 +498,9 @@ export class SignIns {
     const x = JSON.parse(body) as SignInAsk;
     if (x.kept !== status) {
       x.kept = status;
-      this.#save(x);
     } else if (!replay) return;
     // A queued decision can have been saved just before the previous process stopped. Finish telling its card.
-    this.#restate(x);
-    if (x.thread !== undefined && x.cardTs !== undefined) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
+    this.#saveAndRestate(x, true);
   }
 
   async close(): Promise<void> { await this.#saveIndex.close(); }
