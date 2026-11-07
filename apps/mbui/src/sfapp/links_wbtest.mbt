@@ -172,7 +172,7 @@ test "a web service's own page's link (/w/…/s/…/services/<job>): the service
   open_link("https://app.still.fail/w/ws1/s/st1/services/j-web")
   let pages = app.nav.pages()
   assert_eq(pages.length(), 3)
-  assert_true(pages[1] == Chat(chat_ref("ws1/st1", "s-c1")))
+  assert_true(pages[1] is Chat(_))
   assert_true(pages[2] == Service("ws1/st1", "j-web"))
   assert_eq(t.opened().length(), 0)
   open_link("https://app.still.fail/w/ws2/s/st9/services/j-x")

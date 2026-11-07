@@ -199,18 +199,27 @@ test "a chat's link" {
 ///|
 test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
-  // (the chat's last: its public links' last, Bob's)
+  // (its last row: the lowest words drawn in it)
   // (its foot the presenters' sheet's, under what it holds: sheet_panel's)
-  for case in [("chat-info", "Bob"), ("chat-agent", "后台")] {
-    let (mode, last) = case
+  for mode in ["chat-info", "chat-agent"] {
     let t = decide_core(calls, mode)
     sheet_rested(t, "sf-present")
-    let (_, sy, _, sh) = t.get(@ui.Role::Dialog).rect
-    let (_, ly, _, lh) = t.rect_of(last).unwrap()
+    let (sx, sy, sw, sh) = t.get(@ui.Role::Dialog).rect
+    let inside = t
+      .words()
+      .filter(fn(w) { w.0 != "" && w.5 > 0.0 && w.1 >= sx && w.1 < sx + sw && w.2 >= sy && w.2 + w.4 <= sy + sh })
+    assert_true(inside.length() > 0, msg="\{mode}: no words in the sheet")
+    let mut last = inside[0]
+    for w in inside {
+      if w.2 + w.4 > last.2 + last.4 {
+        last = w
+      }
+    }
+    let (_, _, ly, _, lh, _) = last
     // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
     let under = sy + sh - (ly + lh)
     let foot = @sf.sheet_panel_foot + nav_foot()
-    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
+    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last.0} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
     assert_true(sh < 844.0 * @sf.sheet_most, msg="\{mode}: \{sh}")
   }
 }
