@@ -244,36 +244,14 @@ fn gh_said(
   scale? : Double = 1.0,
   hi_scale? : Double = 1.0,
 ) -> Array[@ui.Run] {
-  let runs : Array[@ui.Run] = []
-  let mut rest = gh_t(key, [])
-  while true {
-    match rest.find("{") {
-      None => break
-      Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
-        match after.find("}") {
-          None => break
-          Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
-            if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned(), scale~))
-            }
-            let value = sr_arg(args, name)
-            if gh_plain.contains(name) {
-              runs.push(@ui.span(value, scale~))
-            } else {
-              runs.push(@ui.span(value, color=hi, weight=700, scale=hi_scale))
-            }
-            rest = after.view(start_offset=j + 1).to_owned()
-          }
-        }
-      }
+  sr_runs(gh_t(key, []), fn(name) {
+    let value = sr_arg(args, name)
+    if gh_plain.contains(name) {
+      @ui.span(value, scale~)
+    } else {
+      @ui.span(value, color=hi, weight=700, scale=hi_scale)
     }
-  }
-  if rest != "" {
-    runs.push(@ui.span(rest, scale~))
-  }
-  runs
+  }, scale~)
 }
 
 ///|

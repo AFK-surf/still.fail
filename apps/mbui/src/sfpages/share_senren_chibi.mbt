@@ -65,36 +65,14 @@ fn sb_said(
   bold? : Bool = true,
   plain? : Array[String] = [],
 ) -> Array[@ui.Run] {
-  let runs : Array[@ui.Run] = []
-  let mut rest = @sf.t(key)
-  while true {
-    match rest.find("{") {
-      None => break
-      Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
-        match after.find("}") {
-          None => break
-          Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
-            if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned()))
-            }
-            let value = sr_arg(args, name)
-            if plain.contains(name) {
-              runs.push(@ui.span(value))
-            } else {
-              runs.push(@ui.span(value, color=hi, weight=if bold { 700 } else { 0 }, scale~))
-            }
-            rest = after.view(start_offset=j + 1).to_owned()
-          }
-        }
-      }
+  sr_runs(@sf.t(key), fn(name) {
+    let value = sr_arg(args, name)
+    if plain.contains(name) {
+      @ui.span(value)
+    } else {
+      @ui.span(value, color=hi, weight=if bold { 700 } else { 0 }, scale~)
     }
-  }
-  if rest != "" {
-    runs.push(@ui.span(rest))
-  }
-  runs
+  })
 }
 
 ///|

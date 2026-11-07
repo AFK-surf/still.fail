@@ -150,7 +150,18 @@ fn sr_rich(c : @ui.Ctx, runs : Array[@ui.Run], style : @ui.TextStyle) -> Unit {
 /// The words of `key` with its `{name}`s put in from `args`, as runs: the words as they are, each name's figure in `hi`
 /// (`scale` its size, bolder): 「主人！这七天你烧掉了 {tokens} token」, the 2.1 亿 in the look's own colour.
 fn sr_said(key : String, args : Array[(String, String)], hi : Int64, scale? : Double = 1.0) -> Array[@ui.Run] {
-  let whole = @sf.t(key)
+  sr_runs(@sf.t(key), fn(name) {
+    let value = match args.iter().find_first(fn(a) { a.0 == name }) {
+      Some(a) => a.1
+      None => "{" + name + "}"
+    }
+    @ui.span(value, color=hi, weight=700, scale~)
+  })
+}
+
+///|
+/// Split translated words at placeholders, keeping each look's replacement and plain-text style.
+fn sr_runs(whole : String, marked : (String) -> @ui.Run, scale? : Double = 1.0) -> Array[@ui.Run] {
   let runs : Array[@ui.Run] = []
   let mut rest = whole
   while true {
@@ -163,13 +174,9 @@ fn sr_said(key : String, args : Array[(String, String)], hi : Int64, scale? : Do
           Some(j) => {
             let name = after.view(end_offset=j).to_owned()
             if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned()))
+              runs.push(@ui.span(rest.view(end_offset=i).to_owned(), scale~))
             }
-            let value = match args.iter().find_first(fn(a) { a.0 == name }) {
-              Some(a) => a.1
-              None => "{" + name + "}"
-            }
-            runs.push(@ui.span(value, color=hi, weight=700, scale~))
+            runs.push(marked(name))
             rest = after.view(start_offset=j + 1).to_owned()
           }
         }
@@ -177,7 +184,7 @@ fn sr_said(key : String, args : Array[(String, String)], hi : Int64, scale? : Do
     }
   }
   if rest != "" {
-    runs.push(@ui.span(rest))
+    runs.push(@ui.span(rest, scale~))
   }
   runs
 }
