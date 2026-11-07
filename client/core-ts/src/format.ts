@@ -508,8 +508,10 @@ export function modeText(mode: string, requireMention: boolean): [string, string
 /// Why a turn failed, in words, from its `detail`.
 export function failureText(detail: string): string {
   switch (detail.split(":")[0]!.trim()) {
-    case "rate_limit":
-      return said("core-logic.format.failure.rate_limit");
+    case "rate_limit": {
+      const model = modelLimitOf(detail);
+      return model !== null ? tr(current(), "core-logic.format.failure.model_limit", { model }) : said("core-logic.format.failure.rate_limit");
+    }
     case "overloaded":
       return said("core-logic.format.failure.overloaded");
     case "network":
@@ -531,6 +533,13 @@ export function failureText(detail: string): string {
     default:
       return said("core-logic.format.failure.other");
   }
+}
+
+/// The model whose own allowance a limit was, as the runtime named it (the station's agents/runtime.ts `modelLimitOf`):
+/// "You've reached your Fable limit." is not the account's, whose quota then still shows room (#4365).
+function modelLimitOf(text: string): string | null {
+  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  return name && !/\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i.test(name) ? name : null;
 }
 
 /// A status in words, and its tone.

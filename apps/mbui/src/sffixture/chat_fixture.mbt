@@ -453,6 +453,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
           let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
+          } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
+            with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
           } else if f.mode == "chat-run-change" {
             with_run_change(rich_chat(f.older))
           } else if f.mode == "chat-md" {
@@ -1815,6 +1817,55 @@ fn with_run_change(v : Json) -> Json {
           "notice": notice(long, "换成 Codex · GPT-6 Astra · 高 · Fast", "之前：Claude Code · Sonnet 5.5 · 中 · 标准 · 自动 · lin@example.com", now),
         }),
       ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// A model's own limit spent, as the station says it in the chat and the core in its agent's state, before #4365 (as
+/// though the account's quota were) and after (the model's, named).
+fn with_model_limit(v : Json, after : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let en = @sf.language() == "en"
+      let (words, state) = if after && en {
+        ("Fable's limit is spent, not your quota; resumes on refill", "Failed: Fable's limit spent")
+      } else if after {
+        ("Fable 自身限额已用完（非账号额度），恢复后自动继续", "出错：Fable 自身限额已用完")
+      } else if en {
+        ("Out of quota; continues when it refills", "Failed: Out of quota")
+      } else {
+        ("额度已用完，恢复后自动继续", "出错：额度已用完")
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", {
+          "notice": { "failed": true, "words": Json::string(words) },
+        }),
+      ]
+      o["agents"] = Json::array(
+        items(Some(v), "agents").map(fn(a) {
+          match (a, field(Some(a), "session")) {
+            (Object(am), Some(Object(session))) => {
+              let w = am.copy()
+              let failed = session.copy()
+              failed["statusText"] = Json::string(state)
+              failed["tone"] = Json::string("red")
+              w["session"] = Json::object(failed)
+              w["status"] = Json::string("failed")
+              w["badge"] = Json::string("failed")
+              Json::object(w)
+            }
+            _ => a
+          }
+        }),
+      )
       o["asks"] = []
       o["askClear"] = false
       o["more"] = false

@@ -289,6 +289,7 @@
   "station.notice.retryCanceled": "Retry canceled",
   "station.wait.overloaded": "the model to free up",
   "station.notice.rateLimit": "Out of quota; continues when it refills",
+  "station.notice.modelLimit": "{model}'s limit is spent, not your quota; resumes on refill",
   "station.notice.refused": "The provider doesn't serve this station's region: set a proxy in the profile",
   "station.notice.runtimeMissing": "Couldn't start the agent: {name} isn't installed on this station",
   "station.notice.stopped": "Stopped the current task",

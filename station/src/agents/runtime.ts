@@ -161,6 +161,15 @@ const CONTEXT = ["context window", "context length", "context_length", "prompt i
 /// What they say when the way to the provider broke: the request not sent, its answer cut off.
 const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
 
+/// The model whose own allowance a limit was, as the runtime named it (Claude Code's "You've reached your Fable limit.
+/// Switch to another model…": Fable has a weekly cap of its own, under the account's), so it is told apart from the
+/// account's limit, whose quota then still shows room (#4365); null for the account's own ("your weekly usage limit").
+export function modelLimitOf(text: string): string | null {
+  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  return name && !ACCOUNT_LIMIT.test(name) ? name : null;
+}
+const ACCOUNT_LIMIT = /\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i;
+
 /// The rest of a failure, once neither the account, the provider nor a limit: the network, the conversation's size,
 /// else the model.
 export function failureRest(text: string): FailureReason {

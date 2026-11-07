@@ -2602,6 +2602,24 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   await r.close();
 });
 
+test("a model's own limit is said as the model's, not the account's: the quota left would make that look wrong", async () => {
+  // #4365: Fable 5.1 at its own weekly cap while the account had 5H 96% / W 29% left; "额度已用完" read as a mistake.
+  const r = new Rig();
+  const said = "You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue.";
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  agent.end({ kind: "failed", reason: classifyResult(said), message: said });
+  await settle();
+  assert.equal(r.chat.lastText(), `⚠️ Fable 自身限额已用完（非账号额度），恢复后自动继续\n\n\`\`\`\n${said}\n\`\`\``);
+  // Woken meanwhile, it runs into it again: said once, as an account's is.
+  r.hub.notify(r.claude.last().options.route, "a job ended");
+  await settle();
+  assert.equal(r.chat.texts().filter((t) => t.includes("限额已用完")).length, 1);
+  await r.close();
+});
+
 test("an account spent with none to move to is said once; what wakes it waits for the refill, a person is tried at once", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
