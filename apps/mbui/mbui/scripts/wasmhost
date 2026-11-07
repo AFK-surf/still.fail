@@ -4,7 +4,7 @@
 D=$(cd "$(dirname "$0")" && pwd)
 T=$D/../tools
 TOOLS_SCRIPTS=$D; . "$D/tooltarget.sh"
-B=$T/_build/$TT/release/build/wasmhost/wasmhost.$TX
+B=$T/_build/$TT/release/build/mbctools/wasmhost/wasmhost.$TX
 src=$(cd "$T" && find wasmhost sys moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
 if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
   (cd "$T" && env -u MOON_CC moon build --target $TT --release wasmhost >&2) || { echo "wasmhost: tools/wasmhost did not build" >&2; exit 1; }
