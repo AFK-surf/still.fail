@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
-import { addClientColumn } from "../src/store/schema.ts";
+import { addClientColumn, repairMergedEditLookup } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
 import { installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_ORIGINAL, widgetSourcesStep } from "../src/store/widget-sources.ts";
 
@@ -148,6 +148,27 @@ test("another connection's writes run the gated old widget lookup", () => {
     put.run(thread, 1, "message", null, 1, files("message"));
     put.run(thread, 2, "edit", 1, 2, files("edit"));
     assert.equal(db.prepare(WIDGET_SOURCE).get("a", "/w/item")?.name, "edit");
+    assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", "/w/item")), plain(db.prepare(WIDGET_SOURCE_ORIGINAL).get("a", "/w/item")));
+  } finally { old?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("repairing a removed old edit index keeps tracked widget files current for another writer", () => {
+  const dir = mkdtempSync(join(tmpdir(), "legacy-widget-repair-")), path = join(dir, "station.db");
+  const store = Store.open(path), db = store.db;
+  let old: DatabaseSync | null = null;
+  try {
+    oldEditLookup(store, true);
+    const thread = store.openThread("ember", "CHAT", "tracked-repair", null, null).id;
+    widgetSourcesStep(db, thread); store.joinThread(thread, "a", "ember");
+    const files = (name: string) => JSON.stringify([{ path: "/w/item", name }]);
+    db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,at,attachments)
+      VALUES(?,1,'message','agent','a',1,?)`).run(thread, files("message"));
+    old = new DatabaseSync(path, { timeout: 5000 });
+    old.exec("DROP INDEX entries_target");
+    repairMergedEditLookup(old);
+    old.prepare(`INSERT INTO entries(thread,n,kind,target,author_kind,author,at,attachments)
+      VALUES(?,2,'edit',1,'agent','a',2,?)`).run(thread, files("edited"));
+    assert.equal(db.prepare(WIDGET_SOURCE).get("a", "/w/item")?.name, "edited");
     assert.deepEqual(plain(db.prepare(WIDGET_SOURCE).get("a", "/w/item")), plain(db.prepare(WIDGET_SOURCE_ORIGINAL).get("a", "/w/item")));
   } finally { old?.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

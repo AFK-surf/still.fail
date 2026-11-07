@@ -4,7 +4,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { hasLegacySaid, installLegacySaid } from "./legacy-said-build.ts";
 import { hasLegacyAgent, installLegacyAgent } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-cards.ts";
-import { hasLegacyEdits, hasOldEditIndex, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
+import { hasLegacyEdits, hasOldEditIndex, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex, usesLegacyEdits } from "./legacy-edits-build.ts";
+import { repairWidgetSourceBeforeAdd, widgetSourceBeforeAddNeedsRepair } from "./widget-sources.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
@@ -409,7 +410,7 @@ const has = (db: DatabaseSync, table: string, column: string): boolean =>
 const hasEditIndex = (db: DatabaseSync) =>
   db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits'").get() !== undefined;
 
-export const usesLegacyEdits = (db: DatabaseSync): boolean => !hasEditIndex(db) && hasLegacyEdits(db);
+export { usesLegacyEdits } from "./legacy-edits-build.ts";
 
 /// A view's index can be removed by another connection while this station is running. Switch it under a writer,
 /// installing the old-store lookup if necessary, without building an index over the whole store at once.
@@ -417,8 +418,9 @@ export function repairMergedEditLookup(db: DatabaseSync): void {
   const view = () => (db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get() as { sql: string } | undefined)?.sql ?? "";
   const needsRepair = (sql: string) => sql.includes("legacy_edit_meta")
     ? sql.includes("INDEXED BY entries_target") && !hasOldEditIndex(db) : !hasEditIndex(db);
-  if (!needsRepair(view())) return;
-  if (!hasEditIndex(db)) installLegacyEdits(db, true);
+  const viewNeedsRepair = needsRepair(view());
+  if (!viewNeedsRepair && !widgetSourceBeforeAddNeedsRepair(db)) return;
+  if (viewNeedsRepair && !hasEditIndex(db)) installLegacyEdits(db, true);
   db.exec("BEGIN IMMEDIATE");
   try {
     if (needsRepair(view())) {
@@ -428,6 +430,7 @@ export function repairMergedEditLookup(db: DatabaseSync): void {
         legacyEditLatest("m.thread", "m.n", "1", legacyEditsUseOldIndex(db))) : MERGED;
       db.exec(`DROP VIEW IF EXISTS merged; ${merged}`);
     }
+    repairWidgetSourceBeforeAdd(db);
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
