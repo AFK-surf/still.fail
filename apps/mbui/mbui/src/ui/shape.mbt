@@ -78,6 +78,15 @@ let shape_band = 8.0
 let seg_slots : FixedArray[Int] = [0, 2, 3, 4, 6, 7]
 
 ///|
+/// An instance of kind 12 with none of its pieces in it yet (Ctx::emit_segs): what each is written over from.
+// kept across runs: a table, never written
+let seg_inst : FixedArray[Double] = {
+  let a = FixedArray::make(inst_size, 0.0)
+  a[5] = 12.0
+  a
+}
+
+///|
 /// A node's shapes painted: the bands they come to worked out once for those shapes (as the node is built with the
 /// same ones again, an icon's, or kept), each frame only put where the node is, in its colours.
 fn Ctx::paint_shapes(self : Ctx, n : Node, alpha : Double) -> Unit {
@@ -277,21 +286,21 @@ fn Ctx::emit_segs(self : Ctx) -> Unit {
     self.grow()
   }
   let a = self.inst
+  let segs = self.segs
+  // (each read and written unchecked, every piece of the frame's packed each frame: the room for `k` more instances
+  // grown above, `4 * n` numbers in the pieces, six slots in an instance)
   for j in 0..<k {
     let b = (self.ninst + j) * inst_size
-    for q in 0..<inst_size {
-      a[b + q] = 0.0
-    }
-    a[b + 5] = 12.0
-    for s in 0..<6 {
-      let i = j * 6 + s
-      if i < n {
-        let o = b + seg_slots[s] * 4
-        a[o] = self.segs[4 * i]
-        a[o + 1] = self.segs[4 * i + 1]
-        a[o + 2] = self.segs[4 * i + 2]
-        a[o + 3] = self.segs[4 * i + 3]
-      }
+    seg_inst.blit_to(a, len=inst_size, dst_offset=b)
+    let first = j * 6
+    let last = if first + 6 < n { first + 6 } else { n }
+    for i in first..<last {
+      let o = b + seg_slots.unsafe_get(i - first) * 4
+      let p = 4 * i
+      a.unsafe_set(o, segs.unsafe_get(p))
+      a.unsafe_set(o + 1, segs.unsafe_get(p + 1))
+      a.unsafe_set(o + 2, segs.unsafe_get(p + 2))
+      a.unsafe_set(o + 3, segs.unsafe_get(p + 3))
     }
   }
   self.ninst = self.ninst + k

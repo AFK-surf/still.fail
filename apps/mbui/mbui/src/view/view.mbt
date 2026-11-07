@@ -1362,6 +1362,54 @@ pub fn Tree::resident_read(self : Tree) -> Bool {
   if self.resident_readers.is_empty() {
     return false
   }
+  // (each reader drawn where something of what it is, or holds, is drawn as the order goes (Tree::each_drawn_in_order):
+  // none of what holds it in the order left out, nor itself, and content of its own or under it; each found by where it
+  // is in the order, nothing else of the tree gone through. A reader not in the order itself (a slot's) found the long
+  // way, as each drawn is found)
+  let mut plain = true
+  for at, _ in self.resident_readers {
+    if at >= self.order_of.length() || self.order_of[at] < 0 {
+      plain = false
+    }
+  }
+  if plain {
+    let len = self.order.length()
+    for at, _ in self.resident_readers {
+      let p = self.order_of[at]
+      if p >= len || self.order[p] != at {
+        plain = false
+        break
+      }
+      let mut h = p
+      let mut hidden = false
+      while h >= 0 {
+        if self.nodes[self.order[h]].out {
+          hidden = true
+          break
+        }
+        h = self.order_holder[h]
+      }
+      if hidden {
+        continue
+      }
+      let mut i = p
+      let end = self.order_end[p]
+      while i < end && i < len {
+        let n = self.nodes[self.order[i]]
+        if n.out {
+          i = self.order_end[i]
+          continue
+        }
+        if n.content is Some(_) {
+          return true
+        }
+        i = i + 1
+      }
+    }
+    if plain {
+      return false
+    }
+  }
   let mut seen = false
   // (what of the way up from each is known to hold no reader, by index: each looked at once, not for every node under it)
   let clear : Array[Bool] = Array::make(self.nodes.length(), false)
