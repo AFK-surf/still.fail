@@ -446,7 +446,7 @@ let looks_base : LooksBase = {
 }
 
 ///|
-/// A list's anchor moved in this frame. Its new drawing must not be treated as the one whose fingerprint was kept;
+/// A list's anchor moved in this frame, or something of the window's tree scrolled (view_paint). Its new drawing must not be treated as the one whose fingerprint was kept;
 /// whether it happens to be identical need not be worked out while it is moving.
 // kept across runs: cleared as each frame begins
 let scroll_paint_uncompared : Ref[Bool] = Ref(false)

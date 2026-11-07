@@ -917,6 +917,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // bringing, or by an input's finding things meanwhile, Tree::bring_to, with nothing told after: what is painted is
   // what it is now)
   view_changes_taken(tree)
+  // (what of it scrolled since it was last painted (Tree::take_scrolled): its drawing not compared with the one before,
+  // as an old view's list scrolled is not (scroll_paint_uncompared))
+  if tree.take_scrolled() {
+    scroll_paint_uncompared.val = true
+  }
   dr.targets_said = true
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
   view_glyphs_held(tree, self.scale / words_zoom.val)
