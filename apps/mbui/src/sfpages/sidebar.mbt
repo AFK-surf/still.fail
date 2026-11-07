@@ -44,24 +44,6 @@ pub(all) struct ListPart {
 }
 
 ///|
-/// A frame's lists with nothing of the frame's own in them, standing `at`.
-pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int, at : @sf.ListAt) -> ListsFrame {
-  { top, under: top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at, kept: false }
-}
-
-///|
-/// What a list kept on the page's way (ListsFrame's `kept`) is built from besides what it reads.
-fn lists_kept_key(frame : ListsFrame, w : Double, h : Double) -> String {
-  @sfbase.page_way.id +
-  " " +
-  [frame.top, frame.under, frame.foot, frame.inset, w, h].map(fn(x) { x.to_string() }).join(" ") +
-  " " +
-  frame.ground.to_string() +
-  " " +
-  frame.shown.to_string()
-}
-
-///|
 /// The lists the track holds first, in this order (Sidebar.tsx, mobile/Home.tsx: all, mine, watching).
 // kept across runs: a table, never written
 pub let list_filters : Array[String] = ["all", "mine", "watching", "hidden"]
@@ -70,73 +52,6 @@ pub let list_filters : Array[String] = ["all", "mine", "watching", "hidden"]
 /// Which of the lists the filter shows (0 all, 1 mine, 2 watching).
 pub fn filter_at(src : Source, w : Workspace) -> Int {
   list_filters.search(@sfbase.filter_of(src, w.id)).unwrap_or(0)
-}
-
-///|
-/// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
-pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
-  let last = list_filters.length() + frame.others.length() - 1
-  // (its track a list's width a step: a Move as long as it goes)
-  let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide.per_unit(c.width))
-  // the others read once switching to them is in sight: as the filter's menu opens (what it would show is there by
-  // the time one is picked)
-  if @sf.presented_drawn_of(filter_menu_serial.val) {
-    for f in list_filters {
-      if f != "hidden" { @sfbase.chats_of(src, w.id, f) |> ignore }
-    }
-  }
-  let width = c.width
-  // the search's page open over them (search.mbt: from a list's field, or by ⌘K laid out Small): the lists up and
-  // away under it, whatever opened it (its page over them: chats_search)
-  search_start(c)
-  let away = search_away(c)
-  c.box(style=lists_window, fn() {
-    let track = c.layer(fn() {
-      for p in x.floor().to_int()..=x.ceil().to_int() {
-        if p < 0 || p > last {
-          continue
-        }
-        c.layer(fn() {
-          c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
-            if p < list_filters.length() {
-              let pane = fn() { chats_pane(c, src, w, list_filters[p], frame, p == frame.shown) }
-              // (on the page's way alone: at rest as any list, built whenever what holds it is)
-              if frame.kept && @sfbase.page_way.id != "" {
-                c.kept_part(
-                  c.id("chats-pane/" + w.id + "/" + list_filters[p]),
-                  lists_kept_key(frame, width, c.height),
-                  pane,
-                  read_out=true,
-                  rows_stay=true,
-                )
-              } else {
-                pane()
-              }
-            } else {
-              (frame.others[p - list_filters.length()])()
-            }
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
-    if away > 0.0 {
-      c.look(track, { ..@ui.still_look, alpha: 1.0 - away, dy: -search_list_rise * away })
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A finger's search over the lists, while it is open (search.mbt): drawn by the frame after what it lays over the
-/// lists (their bar, faded by `search_away`), in the same box, `inset` what is over it there; its lines standing as the
-/// lists do (`at`).
-pub fn chats_search(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
-  // (opened from the field at a list's top, or by ⌘K laid out Small; over another page, the shell's: search_over)
-  if !search_read().over {
-    search_page(c, src, w, inset, at)
-  }
 }
 
 ///|

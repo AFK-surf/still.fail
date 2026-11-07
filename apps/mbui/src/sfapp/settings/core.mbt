@@ -323,15 +323,6 @@ pub fn join(parts : Array[String], sep : String) -> String {
 }
 
 ///|
-fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
 fn dmax(a : Double, b : Double) -> Double {
   if a > b {
     a

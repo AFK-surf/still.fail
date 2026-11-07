@@ -1457,12 +1457,6 @@ let st_env_problems : @ui.Style = @ui.css("w=Full gap=S1")
 let st_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
 
 ///|
-/// A st_footed_card's buttons at its end, reaching past its words to its foot corner's.
-fn st_foot_actions() -> @ui.Style {
-  st_card_actions.then(@sf.foot_across(@sf.button_height()))
-}
-
-///|
 /// The variables' editor on its card: the field, what is wrong under it, its buttons, 12 apart.
 // kept across runs: a value (no field of it changes)
 let st_editor : @ui.Style = @ui.css("w=Full gap=S3")

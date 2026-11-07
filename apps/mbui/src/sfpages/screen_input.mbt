@@ -63,17 +63,6 @@ fn clamp01(v : Double) -> Double {
 }
 
 ///|
-fn clamp_to(v : Double, lo : Double, hi : Double) -> Double {
-  if v < lo {
-    lo
-  } else if v > hi {
-    hi
-  } else {
-    v
-  }
-}
-
-///|
 /// Where a frame of `fw` × `fh` px fits whole in a stage of `bw` × `bh` px, centred (letterboxed).
 fn fit_in(bw : Double, bh : Double, fw : Double, fh : Double) -> SRect {
   if fw <= 0.0 || fh <= 0.0 || bw <= 0.0 || bh <= 0.0 {

@@ -50,14 +50,3 @@ pub fn last_files_page(ws : String) -> DriveAt? {
 pub fn keep_files_page(ws : String, at : DriveAt) -> Unit {
   kept.pages[ws] = at
 }
-
-///|
-/// Where the chats' 文件 tab was in workspace `ws` (Some(None): the places).
-pub fn kept_tab(ws : String) -> DriveAt?? {
-  kept.tabs.get(ws)
-}
-
-///|
-pub fn keep_tab(ws : String, at : DriveAt?) -> Unit {
-  kept.tabs[ws] = at
-}

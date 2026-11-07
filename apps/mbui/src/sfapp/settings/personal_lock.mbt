@@ -29,12 +29,6 @@ pub fn personal_lock_page(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
-/// The lock of account `sub`, of `adbShare`'s `personal`.
-fn personal_of(view : Json?, sub : String) -> Json? {
-  items(view, "personal").iter().find_first(fn(p) { text(Some(p), "sub") == sub })
-}
-
-///|
 /// The grants from before signatures, one tap (and the person asked once) from lending again: where there are any.
 fn confirm_row(c : @ui.Ctx, core : Core, view : Json?, blocks : Array[() -> Unit], keys : Array[String]) -> Unit {
   let n = count(view, "toConfirm")

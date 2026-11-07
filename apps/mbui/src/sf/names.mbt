@@ -110,12 +110,6 @@ pub fn extension_of(name : String) -> String {
 }
 
 ///|
-/// Whether `name` is a subtitle this player reads (SubRip, WebVTT, ASS/SSA).
-pub fn is_subtitle(name : String) -> Bool {
-  subtitle_extensions.contains(extension_of(name))
-}
-
-///|
 /// The subtitle beside the video `base`, out of the names in its folder (sideSubtitle): `<base>.<ext>` or `<stem>.<ext>` (E01.srt for E01.mp4)
 /// first, then one with a tag between (`E01.zh.srt`), the whole name winning a tie.
 pub fn side_subtitle(base : String, names : Array[String]) -> String? {

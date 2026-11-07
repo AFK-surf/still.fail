@@ -485,13 +485,6 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// At work, as a row says it (Spokes.kt): yellow spokes 10 across stepping round in 12, no disc round them (it showed as
-/// a dark rim).
-fn at_work_mark(c : @ui.Ctx) -> Unit {
-  @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
-}
-
-///|
 /// An agent's mark (Parts.kt ModelMark, small, as a list's): its maker's mark on a soft tile, its state on the corner.
 fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
   let t = @sf.theme()

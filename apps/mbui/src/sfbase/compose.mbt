@@ -562,14 +562,6 @@ pub fn writing_focused(src : Source, w : Writing) -> Unit {
 }
 
 ///|
-/// What went wrong said in the draft, or no longer (`composer.error`).
-pub fn writing_error(src : Source, w : Writing, error : String) -> Unit {
-  writing_act(src, w, "error", { "error": if error == "" { Json::null() } else { Json::string(error) } }, show=fn(w) {
-    w.error = error
-  })
-}
-
-///|
 /// A new chat being made for the message, or no longer (`composer.starting`).
 pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
   writing_act(src, w, "starting", { "starting": Json::boolean(on) }, show=fn(w) { w.starting = on })

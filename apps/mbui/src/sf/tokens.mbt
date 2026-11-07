@@ -251,12 +251,6 @@ pub let tape_corner : Double = pane_corner
 pub let tape_line : Double = @ui.capsule_in(tape_corner, 32.0)
 
 ///|
-/// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
-fn corner_fits(k : Double) -> Bool {
-  k >= corner_fit.least - 0.5 && k <= corner_fit.most + 0.5
-}
-
-///|
 /// Whether `d` from a container's edges is a place corner_fit lets what lies in its corner stand.
 fn place_fits(d : Double) -> Bool {
   d >= corner_fit.near - 0.5 && d <= corner_fit.far + 0.5
@@ -650,16 +644,6 @@ pub fn foot_start(height : Double, words_in : Double) -> @ui.Style {
 }
 
 ///|
-/// A card's rows `row_h` high, each with something `end_h` high in its middle at its end (a key's button): reaching into
-/// the card's padding over the first and under the last by as much as that stands in from a row's top and foot, and
-/// at their end, out further to where the ladder's small corner is concentric with the card's (16 in: card_end_out), so
-/// the first's and the last's stand in the card's corners as far from both its edges, round as the corner there wants.
-pub fn card_rows_reach(row_h : Double, end_h : Double) -> @ui.Style {
-  let out = card_corner - small_corner - card_pad
-  @ui.style(my=room((end_h - row_h) / 2.0 + out), mr=room(out))
-}
-
-///|
 /// A block (a command's box, a table) across a card's foot, its ground reaching past the card's words to the
 /// ladder's inset: round by the ladder's next step there.
 pub let block_across : @ui.Style = @ui.style(mx=room(corner_inset - card_pad))
@@ -668,21 +652,6 @@ pub let block_across : @ui.Style = @ui.style(mx=room(corner_inset - card_pad))
 /// A card's foot with a capsule `height` high in its corners: as far in as makes it concentric (card_foot_in).
 pub fn foot_pad(height : Double) -> @ui.Style {
   @ui.style(pb=room(card_foot_in(height)))
-}
-
-///|
-/// A card's first row with a capsule `height` high at its start (a field, a button): reaching past the card's words to
-/// where it stands concentric with its top corner (card_foot_in), at its start and its top.
-pub fn head_reach(height : Double) -> @ui.Style {
-  let out = room(card_foot_in(height) - card_pad)
-  @ui.style(ml=out, mt=out)
-}
-
-///|
-/// What follows the capsule in such a row, at its start where the row runs on to another line: back where the card's
-/// words stand (as far in as head_reach took the row out).
-pub fn head_back(height : Double) -> @ui.Style {
-  @ui.style(ml=room(card_pad - card_foot_in(height)))
 }
 
 ///|
@@ -747,13 +716,6 @@ pub fn capsule_room(corner : Double, height : Double, less? : Double = 0.0) -> @
 /// button in a capsule's end), as a style's room.
 pub fn capsule_end_room(outer : Double, height : Double) -> @ui.Space {
   room(@ui.capsule_in(outer / 2.0, height, room=outer / 2.0))
-}
-
-///|
-/// `more` under the system's bar at the window's top (a phone's status bar; 0 where the host lays the app out under it):
-/// where what floats at the top of a layer over the whole window stands.
-pub fn system_top_room(more : Double) -> @ui.Space {
-  room(more + @ui.system_bars().top)
 }
 
 ///|
@@ -2613,16 +2575,6 @@ pub fn tape_bar_end_of(
     return window_keys_room_tape() - window_in + alone
   }
   line_end_in(k[1].radius(roots), alone, side~)
-}
-
-///|
-/// Whether the panel of its own the view is built in stands at the window's right edge (its top right corner the
-/// window's, tape_corners' `right`).
-pub fn pane_at_window_right() -> Bool {
-  match pane_round.val {
-    Some(k) => k[1] == tape_edge
-    None => false
-  }
 }
 
 ///|

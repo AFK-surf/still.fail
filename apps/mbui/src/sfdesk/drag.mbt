@@ -114,15 +114,6 @@ fn fdrag_press(c : @ui.Ctx, item : Dragged) -> Unit {
 }
 
 ///|
-/// Whether a row is what is being dragged.
-fn fdrag_carried(station : String, root : String, path : String) -> Bool {
-  match fdrag.item.get() {
-    Some(i) => i.station == station && i.root == root && i.path == path
-    None => false
-  }
-}
-
-///|
 /// What a drop of `item` into a folder of `station` does (browse.ts effectOf): across stations a copy (⌘: a move),
 /// within one a move (⌥: a copy).
 fn fdrag_effect(item : Dragged, station : String, mods : Int) -> String {

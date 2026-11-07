@@ -486,15 +486,6 @@ pub fn fixture_json(json : String) -> Source {
 }
 
 ///|
-/// The app as src/sffix starts it over a screen's JSON (MBUI_FIXTURE=json), for a Tester made next: the app as at the
-/// start (whatever ran before in the process reset), then the
-/// screen's source and its pages.
-pub fn fixture_json_app(json : String) -> Source {
-  reset()
-  fixture_json(json)
-}
-
-///|
 /// What a fixture mode opens over Home at the start (src/sffix): a new chat, with one of its sheets; the bar's panel;
 /// a place.
 pub fn open_mode(mode : String) -> Unit {
