@@ -17,7 +17,7 @@ export const FeishuLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const agents = yield* Agents;
     const feishu = yield* connectsPart(makeFeishu, { kind: "feishu", shown: (f, c) => f.shown(c), entry: feishuEntry });
-    parts.overview("feishuRegistrations", (viewer) => feishu.registrations.of(viewer.email).map(shownRegistration));
+    parts.overview("feishuRegistrations", (viewer) => feishu.registrations.of(viewer.email, viewer.workspace).map(shownRegistration));
     parts.routes(
       feishuRoutes({
         feishu, config, data,

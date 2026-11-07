@@ -438,9 +438,8 @@ function initial(input: J): J {
 
 type FlowDraft = { owner: ClientId; generation: number; pending: boolean; value: J; watches: Watch[] };
 
-/// What the wizard has done beside its own calls: a Feishu bot being made let go of (`cancel`, the station's
-/// registration), and the overview changed (`ready`: its bot made, the connect is added without being asked).
-export type FlowHooks = { cancel(station: string, registration: string): void; ready(topic: Topic): void };
+/// A Feishu bot has been made: older stations still need the client to ask for the connect to be added.
+export type FlowHooks = { ready(topic: Topic): void };
 
 /// A registration's state as the station follows it (the overview), else as it was started.
 function registrationOf(overview: J, f: J): J {
@@ -460,7 +459,7 @@ export class ConnectFlows {
 
   readonly #hooks: FlowHooks;
 
-  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void, hooks: FlowHooks = { cancel: () => {}, ready: () => {} }) {
+  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void, hooks: FlowHooks = { ready: () => {} }) {
     this.#store = store;
     this.#pick = pick;
     this.#clearPick = clearPick;
@@ -479,7 +478,7 @@ export class ConnectFlows {
     const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) =>
       this.#store.watch(s, () => {
         this.#store.invalidate(topic);
-        if (s.topic === "overview") this.#hooks.ready(topic);
+        if (s.topic === "overview" || s.topic === "pick") this.#hooks.ready(topic);
       }),
     );
     this.#drafts.set(key, { owner, generation: ++this.#next, pending: false, value: initial(input), watches });
@@ -490,7 +489,6 @@ export class ConnectFlows {
     const key = topicKey(topic);
     const d = this.#drafts.get(key);
     if (d && d.owner === owner) {
-      this.#letGo(topic, d);
       this.#drafts.delete(key);
       for (const w of d.watches) w.drop();
       this.#clearPick(topic.station as string, topic.form as string);
@@ -507,19 +505,6 @@ export class ConnectFlows {
       this.drop(topic, owner);
     }
     return gone;
-  }
-
-  /// Its Feishu bot still waiting to be made by scanning: the station stops waiting for it.
-  #letGo(topic: Topic, d: FlowDraft): void {
-    const station = topic.station as string;
-    let overview: J = null;
-    try {
-      overview = overviewOf(this.#store, station);
-    } catch {
-      // Not read: as it was started.
-    }
-    const r = registrationOf(overview, d.value.feishu);
-    if (r !== null && get(r, "state") === "waiting") this.#hooks.cancel(station, str(get(r, "id")));
   }
 
   #own(topic: Topic, owner: ClientId): FlowDraft {
@@ -575,7 +560,6 @@ export class ConnectFlows {
     if (!allowed) throw CoreError.invalid(t("core-misc.connect.not_ready"));
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.busy"));
-    if (step === "feishuScan" && target !== "feishuScan") this.#letGo(topic, d);
     if (step === "platform") d.value.platform = target === "team" ? "slack" : "feishu";
     d.value.step = target;
     this.#store.invalidate(topic);
@@ -665,7 +649,7 @@ export class ConnectFlows {
     if (action === "config" && (step === "token" || v.gettingToken === true) && v.configReady === true) [name, p] = ["slack.addConfigToken", { refreshToken: v.config }];
     else if (action === "make" && step === "app" && v.canMake === true) [name, p] = ["slack.makeApp", { team: get(v.chosen, "teamId") ?? null, settings: v.settings, icon: v.icon ?? null }];
     else if (action === "verify" && (step === "install" || step === "manual")) [name, p] = ["slack.verify", { ...tokenInput, install: get(v.made, "state") ?? null }];
-    else if (action === "register" && (step === "feishuWay" || (step === "feishuScan" && v.feishu.failed === true))) [name, p] = ["feishu.register", {}];
+    else if (action === "register" && v.canCreate === true && (step === "feishuWay" || (step === "feishuScan" && v.feishu.failed === true))) [name, p] = ["feishu.register", { bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention, threads: v.threads }];
     else if (action === "verify" && step === "feishuApp" && v.feishu.canVerify === true) [name, p] = ["feishu.verify", feishuApp(v.feishu)];
     else if (action === "create" && v.canCreate === true && ((step === "feishuApp" && v.feishu.verified === true) || (step === "feishuScan" && get(v.feishu.registration, "state") === "done"))) {
       const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
@@ -694,12 +678,25 @@ export class ConnectFlows {
     return d.owner;
   }
 
-  /// Its bot made by scanning and nothing tried with it yet: the connect is to be added now (once for each bot made).
+  /// A newer station may already have saved the bot even if the picker is no longer available. Older stations need a
+  /// create request once its app and the picker are ready.
   ready(topic: Topic): boolean {
     const d = this.#drafts.get(topicKey(topic));
     if (!d || d.pending || d.value.platform !== "feishu" || d.value.step !== "feishuScan") return false;
     let v: J;
     try {
+      const overview = overviewOf(this.#store, topic.station as string);
+      const r = registrationOf(overview, d.value.feishu);
+      const appId = get(r, "appId");
+      const saved = typeof appId === "string" && appId !== "" && get(r, "state") === "done"
+        ? arr(get(overview, "connects")).find((c) => get(c, "kind") === "feishu" && get(get(c, "feishu"), "appId") === appId)
+        : undefined;
+      if (typeof get(saved, "id") === "string") {
+        d.value.feishu.connect = saved.id;
+        d.value.step = "done";
+        this.#store.invalidate(topic);
+        return false;
+      }
       v = this.value(topic);
     } catch {
       return false;
@@ -734,6 +731,7 @@ export class ConnectFlows {
       else if (action === "verify" && get(r, "identity") !== undefined && r.identity !== null && Array.isArray(get(r, "errors")) && r.errors.length === 0) d.value.step = "bind";
     }
     this.#store.invalidate(topic);
+    if (d.value.platform === "feishu" && d.value.step === "feishuScan") this.#hooks.ready(topic);
     return true;
   }
 }

@@ -55,7 +55,7 @@ export interface OperationParams {
   "connect.reconnect": { id: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
   "connect.putSlackApp": { connect: string; input?: unknown; from?: unknown };
-  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
+  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; threads?: boolean | null | undefined };
   "feishu.cancelRegistration": { id: string };
   "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };
   "feishu.createConnect": { feishu: unknown; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; owner?: unknown };

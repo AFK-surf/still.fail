@@ -67,7 +67,7 @@ export type FeishuParts = ReturnType<typeof makeFeishu>;
 
 export function makeFeishu(options: FeishuOptions) {
   const threads = new FeishuThreads(join(options.data, "feishu-threads.json"));
-  const registrations = new Registrations({ clock: options.clock });
+  const registrations = new Registrations({ clock: options.clock, file: join(options.data, "feishu-registrations.json") });
   const create =
     options.create ??
     ((c: FeishuConnect, book: NameBook, t: FeishuThreads) => new FeishuSurface({ connect: c.id, appId: c.appId, appSecret: c.appSecret, domain: c.domain, threads: t, threadMode: c.threads, book, clock: options.clock }));
@@ -109,8 +109,8 @@ export function makeFeishu(options: FeishuOptions) {
       };
     },
     close: async () => {
-      await connects.close();
       await registrations.close();
+      await connects.close();
     },
   };
 }
