@@ -614,7 +614,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 willow", "芯片 Apple M1 Pro · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
   assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲率", "负载 4.0"]);
   const left = h.meters[2];
-  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "可用磁盘", "磁盘总量 1000 GB"]);
+  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "可用磁盘", "总磁盘 1000 GB"]);
 });
 
 test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
@@ -654,7 +654,7 @@ test("a station's GPUs are shown separately with only measurements that are know
   assert.deepEqual(p.host({ gpus: [{ name: "GPU", busy: -1, memoryUsedBytes: 2 * GIB }] }).gpus,
     [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲率", total: "显存已用 2G", model: "" }]);
   assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 4 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
-    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 可用显存", total: "显存总量 16 GB", model: "AMD Radeon" }]);
+    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 可用显存", total: "总显存 16 GB", model: "AMD Radeon" }]);
   assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 17 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
     [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲率", total: "显存 16G", model: "AMD Radeon" }]);
 });

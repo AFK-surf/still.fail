@@ -1236,11 +1236,11 @@ fn fx_station(address : String) -> Json {
             "meters",
             [
               meter("CPU", if fx.low_meters { 8 } else { 72 }, if fx.low_meters { "red" } else { "ok" }, if fx.low_meters { "空闲 8%" } else { "空闲 72%" }, if fx.low_meters { "8" } else { "72" }, "%", "CPU 空闲率", "负载 1.4"),
-              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "可用内存", "内存总量 32 GB"),
+              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "可用内存", "总内存 32 GB"),
               if fx.low_meters {
-                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "可用磁盘", "磁盘总量 1 TB")
+                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "可用磁盘", "总磁盘 1 TB")
               } else {
-                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "可用磁盘", "磁盘总量 1 TB")
+                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "可用磁盘", "总磁盘 1 TB")
               },
             ],
           ),
