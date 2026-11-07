@@ -795,6 +795,10 @@ jobs:
         with:
           path: apps/mbui/out/mac/AppIcon-*
           key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
+      # The native app is already compiling in the background. Bytecode needs pnpm, but not that app: make it now
+      # so bundling takes the content-keyed HBC cache instead of starting another serial compile at the deadline.
+      - name: Build core bytecode beside the native app
+        run: bash apps/mbui/scripts/core.sh hermes apple
       - name: Finish the Mac app build
         run: bash .github/mac-release-prebuild.sh wait
       # Hand over the same build to the signing job; mac-app.sh checks its build and beta face when taking it back.
@@ -811,7 +815,7 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/posthog.json"' EXIT
           MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
           mkdir -p "$RUNNER_TEMP/mac-unsigned"
-          ditto -c -k --sequesterRsrc --keepParent apps/mbui/out/mac/youdid.wtf.app "$RUNNER_TEMP/mac-unsigned/bundle.zip"
+          ditto -c -k --zlibCompressionLevel 0 --sequesterRsrc --keepParent apps/mbui/out/mac/youdid.wtf.app "$RUNNER_TEMP/mac-unsigned/bundle.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: mac-unsigned-${{ github.sha }}
