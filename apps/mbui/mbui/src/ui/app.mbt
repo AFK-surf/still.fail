@@ -206,6 +206,8 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
+  // Offscreen frames bypass frame_drawn, so they read the host generation here.
+  atlas_said.val = Some(h_atlas_generation())
   frame_body(g(), w, h, scale, t) |> ignore
   g()
 }

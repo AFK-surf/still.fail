@@ -208,6 +208,163 @@ test "a chat's messages the core's change did not touch are kept as they were re
 }
 
 ///|
+test "a chat's unrelated metadata leaves its messages and rows as they were; an unread line or message change does not" {
+  let original : Json = {
+    "title": "原名",
+    "thread": { "id": 1 },
+    "messages": Json::array([said(1, "第一句"), said(2, "第二句")]),
+    "agents": [],
+    "people": [],
+  }
+  let value = Ref(original)
+  let version = Ref(1)
+  let changes = @signals.signal(1)
+  let src = pushed_source(value, version, changes)
+  let r : ChatRef = { station: "ws1/st1", session: "metadata-only", title: "", station_name: "" }
+  let seen_view : Ref[ChatView?] = Ref(None)
+  let seen_list : Ref[Array[Entry]] = Ref([])
+  let t = @ui.Tester::new(fn(_) {
+    let (v, entries, _) = view_of_chat(src, r)
+    seen_view.val = v
+    seen_list.val = entries
+  })
+  t.draw()
+  let old_messages = seen_view.val.unwrap().messages
+  let old_list = seen_list.val
+  let fields = match value.val {
+    Object(m) => m.copy()
+    _ => fail("chat is not an object")
+  }
+  fields["title"] = Json::string("新名")
+  value.val = Json::object(fields)
+  version.val = 2
+  changes.set(2)
+  t.draw()
+  assert_eq(seen_view.val.unwrap().title, "新名")
+  assert_true(physical_equal(seen_view.val.unwrap().messages, old_messages))
+  assert_true(physical_equal(seen_list.val, old_list))
+
+  let fields = fields.copy()
+  fields["unreadLine"] = Json::number(2.0)
+  value.val = Json::object(fields)
+  version.val = 3
+  changes.set(3)
+  t.draw()
+  assert_false(physical_equal(seen_list.val, old_list))
+  assert_true(seen_list.val.iter().any(fn(e) { e is Line }))
+
+  let fields = fields.copy()
+  fields["messages"] = Json::array([said(1, "第一句"), said(2, "改过")])
+  value.val = Json::object(fields)
+  version.val = 4
+  changes.set(4)
+  t.draw()
+  assert_eq(seen_view.val.unwrap().messages[1].text, "改过")
+  assert_true(seen_list.val.iter().any(fn(e) { match e { Said(m) => m.text == "改过"; _ => false } }))
+
+  let fields = fields.copy()
+  fields["agents"] = Json::array([{ "status": "running", "session": { "key": "agent-1" } }])
+  value.val = Json::object(fields)
+  version.val = 5
+  changes.set(5)
+  t.draw()
+  assert_true(seen_list.val.iter().any(fn(e) { match e { Working(a) => a.key == "agent-1"; _ => false } }))
+
+  let fields = fields.copy()
+  fields["agents"] = Json::array([])
+  fields["outbox"] = Json::array([{ "id": "pending-1", "text": "正发送" }])
+  value.val = Json::object(fields)
+  version.val = 6
+  changes.set(6)
+  t.draw()
+  assert_true(seen_list.val.iter().any(fn(e) { match e { Out(o) => o.text == "正发送"; _ => false } }))
+}
+
+///|
+test "a message appended after unchanged history keeps its old entries and rebuilds the live tail" {
+  let messages = [said(1, "第一句"), said(2, "第二句")]
+  let fields : Map[String, Json] = {
+    "thread": { "id": 1 },
+    "messages": Json::array(messages),
+    "unreadLine": 3,
+    "outbox": [{ "id": "old", "text": "原发送" }],
+    "stateText": "原状态",
+    "agents": [{ "status": "running", "session": { "key": "agent" } }],
+  }
+  let value = Ref(Json::object(fields))
+  let version = Ref(1)
+  let changes = @signals.signal(1)
+  let src = pushed_source(value, version, changes)
+  let r : ChatRef = { station: "ws1/st1", session: "append-entries", title: "", station_name: "" }
+  let entries : Ref[Array[Entry]] = Ref([])
+  let t = @ui.Tester::new(fn(_) { entries.val = view_of_chat(src, r).1 })
+  t.draw()
+  let before = entries.val
+  assert_eq(before.map(fn(e) { e.id() }), ["top", "m:t1", "m:t2", "o:old", "state", "act:agent", "foot"])
+
+  let message = match said(3, "第三句") {
+    Object(m) => m.copy()
+    _ => fail("message is not an object")
+  }
+  message["elsewhere"] = Json::array([{ "key": "forward", "text": "转发" }])
+  messages.push(Json::object(message))
+  let next = fields.copy()
+  next["outbox"] = Json::array([{ "id": "new", "text": "新发送" }])
+  next["stateText"] = Json::string("新状态")
+  value.val = Json::object(next)
+  version.val = 2
+  changes.set(2)
+  t.draw()
+  assert_eq(
+    entries.val.map(fn(e) { e.id() }),
+    ["top", "m:t1", "m:t2", "line", "m:t3", "s:forward", "o:new", "state", "act:agent", "foot"],
+  )
+  assert_true(physical_equal(entries.val[1], before[1]))
+  assert_true(physical_equal(entries.val[2], before[2]))
+  assert_eq(before.map(fn(e) { e.id() }), ["top", "m:t1", "m:t2", "o:old", "state", "act:agent", "foot"])
+  assert_true(entries.val.iter().any(fn(e) { match e { State(a, _, _) => a == "新状态"; _ => false } }))
+}
+
+///|
+test "messages replaced or reordered in the same source array keep the unread line and do not change old rows" {
+  let messages = [said(1, "第一句"), said(2, "第二句"), said(3, "第三句")]
+  let initial : Json = {
+    "thread": { "id": 1 },
+    "messages": Json::array(messages),
+    "unreadLine": 2,
+  }
+  let value = Ref(initial)
+  let version = Ref(1)
+  let changes = @signals.signal(1)
+  let src = pushed_source(value, version, changes)
+  let r : ChatRef = { station: "ws1/st1", session: "changed-history", title: "", station_name: "" }
+  let entries : Ref[Array[Entry]] = Ref([])
+  let t = @ui.Tester::new(fn(_) { entries.val = view_of_chat(src, r).1 })
+  t.draw()
+  let original = entries.val
+  assert_eq(original.map(fn(e) { e.id() }), ["top", "m:t1", "line", "m:t2", "m:t3", "foot"])
+  messages[1] = said(2, "改过的第二句")
+  version.val = 2
+  changes.set(2)
+  t.draw()
+  let replaced = entries.val
+  assert_eq(replaced.map(fn(e) { e.id() }), ["top", "m:t1", "line", "m:t2", "m:t3", "foot"])
+  assert_true(replaced.iter().any(fn(e) { match e { Said(m) => m.text == "改过的第二句"; _ => false } }))
+  assert_true(original.iter().any(fn(e) { match e { Said(m) => m.text == "第二句"; _ => false } }))
+  let first = messages[0]
+  let second = messages[1]
+  messages[0] = messages[2]
+  messages[1] = first
+  messages[2] = second
+  version.val = 3
+  changes.set(3)
+  t.draw()
+  assert_eq(entries.val.map(fn(e) { e.id() }), ["top", "m:t3", "m:t1", "line", "m:t2", "foot"])
+  assert_eq(replaced.map(fn(e) { e.id() }), ["top", "m:t1", "line", "m:t2", "m:t3", "foot"])
+  assert_true(replaced.iter().any(fn(e) { match e { Said(m) => m.text == "改过的第二句"; _ => false } }))
+}
+
+///|
 /// What made_again made of `before` (each made the text of its words), then of `now` from that, and how many of `now`
 /// it made anew.
 fn made_again_of(before : Array[Json], now : Array[Json]) -> (Array[(Json, String)], Array[(Json, String)], Int) {
@@ -269,6 +426,8 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   new_run()
   let base = fixture("chat")
   let messages = Array::makei(30, fn(i) { said(i + 1, "第 \{i + 1} 句") })
+  let title = Ref("整理发布清单")
+  let clear_ask = Ref(false)
   let changes = @signals.signal(1)
   let src : Source = {
     ..base,
@@ -276,11 +435,13 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
       if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
         let version = changes.get()
         let chat : Json = {
-          "title": "整理发布清单",
+          "title": Json::string(title.val),
           "thread": { "id": 1 },
           "messages": Json::array(messages),
           "agents": [],
           "people": [],
+          "asks": if clear_ask.val { [{ "seq": 1 }] } else { [] },
+          "askClear": Json::boolean(clear_ask.val),
         }
         { value: Some(chat), error: None, version }
       } else {
@@ -297,11 +458,84 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   t.frame()
   t.frame()
   assert_true(physical_equal(rd.motion_keys, rows))
-  // one more said: its rows made again, the new one among them once it has come in
-  messages.push(said(31, "新的一句"))
+  // Unrelated metadata changes, but its message rows and their names do not need to be made again.
+  title.val = "发布清单"
   changes.set(2)
   t.frame()
+  assert_true(physical_equal(rd.motion_keys, rows))
+  assert_true(t.find("发布清单") is Some(_))
+  // The bell changes the foot's room even though the message entries themselves are unchanged.
+  let foot = t.row(rd.motion_keys.length() - 1).unwrap().3
+  clear_ask.val = true
+  changes.set(3)
+  t.frame()
   assert_false(physical_equal(rd.motion_keys, rows))
+  t.run_for(@ui.row_size_ms / 2.0)
+  let foot_half = t.row(rd.motion_keys.length() - 1).unwrap().3
+  assert_true(foot_half > foot, msg="foot \{foot}, halfway \{foot_half}")
+  let after_ask = rd.motion_keys
+  // one more said: its rows made again, the new one among them once it has come in
+  messages.push(said(31, "新的一句"))
+  changes.set(4)
+  t.frame()
+  assert_false(physical_equal(rd.motion_keys, after_ask))
   t.run_for(@sf.enter_ms)
   assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=rd.motion_keys.to_string())
+}
+
+///|
+test "a chat keeps its rows when scrolled and renamed, then shows a new message at the end" {
+  new_run()
+  let base = fixture("chat")
+  let messages = Array::makei(30, fn(i) { said(i + 1, "第 \{i + 1} 句") })
+  let title = Ref("整理发布清单")
+  let changes = @signals.signal(1)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
+        let version = changes.get()
+        let chat : Json = {
+          "title": Json::string(title.val),
+          "thread": { "id": 1 },
+          "messages": Json::array(messages),
+          "agents": [],
+          "people": [],
+        }
+        { value: Some(chat), error: None, version }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  let rd = @sfbase.reading_of("ws1/st1\u{1}s-c1")
+  let rows = rd.motion_keys
+  assert_true(t.at_end())
+  t.scroll_to(4)
+  t.frame()
+  assert_false(t.at_end())
+  let (first, _) = t.visible()
+  assert_true(first >= 0 && first < 15, msg="first visible row \{first}")
+  assert_true(physical_equal(rd.motion_keys, rows))
+  title.val = "发布清单"
+  changes.set(2)
+  t.frame()
+  assert_true(t.find("发布清单") is Some(_))
+  assert_false(t.at_end())
+  assert_eq(t.visible().0, first)
+  assert_true(physical_equal(rd.motion_keys, rows))
+  messages.push(said(31, "新的一句"))
+  changes.set(3)
+  t.frame()
+  t.run_for(@sf.enter_ms)
+  assert_false(t.at_end())
+  assert_eq(t.visible().0, first)
+  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }))
+  t.scroll_to_end()
+  t.frame()
+  assert_true(t.at_end())
+  assert_true(t.find("新的一句") is Some(_))
 }

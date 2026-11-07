@@ -118,6 +118,8 @@ pub fn by_of(Json?) -> By
 
 pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
+pub fn chat_inputs_left(ChatRef) -> Unit
+
 pub fn chat_item(Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
@@ -418,7 +420,7 @@ pub let emit_out_ms : Double
 
 pub fn emit_release(Emits) -> Unit
 
-pub fn emit_step(@ui.Ctx, Emits, Turns, Double) -> Unit
+pub fn emit_step(@ui.Ctx, Emits, Turns, () -> Double) -> Unit
 
 pub fn emit_take(@ui.Ctx, Emits, ChatView, Map[String, Bool]) -> Unit
 
@@ -2970,7 +2972,6 @@ pub(all) struct RowAgent {
 pub struct RowsMade {
   all : Array[Entry]
   v : ChatView
-  following : Bool
   rise_ms : Double
   known : Int32
   list : Array[Entry]

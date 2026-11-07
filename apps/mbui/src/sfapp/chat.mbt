@@ -184,6 +184,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
   // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
+  @sfbase.chat_inputs_left(r)
   (src.leave)("chat", chat_params(r))
   (src.leave)("chatJobs", chat_params(r))
   (src.leave)("chatJobs", chat_jobs_summary_params(r))

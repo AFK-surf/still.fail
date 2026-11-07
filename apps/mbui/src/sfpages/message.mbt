@@ -352,10 +352,19 @@ pub fn agent_avatar(
 
 ///|
 /// Agent `agent`'s card (AgentHover) over trigger `id` while the pointer rests on it, to a finger as it holds it
-/// (hover): over its picture and over its name beside its messages alike.
-fn agent_hover(c : @ui.Ctx, src : Source, here : MessageHere, key : String, id : Int, agent : String) -> Unit {
+/// (hover): over its picture and over its name beside its messages alike; over its name (`words_along`), its words
+/// where the name's start.
+fn agent_hover(
+  c : @ui.Ctx,
+  src : Source,
+  here : MessageHere,
+  key : String,
+  id : Int,
+  agent : String,
+  words_along? : Bool = false,
+) -> Unit {
   let r = here_ref(here)
-  hover(c, key, id, tile=true, fn() {
+  hover(c, key, id, tile=true, words_along~, fn() {
     match agent_json((src.topic)("chat", chat_params(r)).value, agent) {
       Some(j) => agent_card(c, src, r, j)
       None => ()
@@ -415,7 +424,7 @@ fn message_name(
   })
   |> ignore
   if agent != "" {
-    agent_hover(c, src, here, "agent-name-hover/" + key, id, agent)
+    agent_hover(c, src, here, "agent-name-hover/" + key, id, agent, words_along=true)
   }
 }
 

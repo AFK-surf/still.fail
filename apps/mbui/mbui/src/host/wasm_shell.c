@@ -7,12 +7,23 @@
 //
 //     SHELL PROGRAM.wasm [ARGS…]      (MBUI_WASM_APP: PROGRAM.wasm, where no argument says; PROGRAM.cwasm: compiled
 //                                     ahead for this machine by wasmtime's command line, a device's)
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE  // (pthread_getattr_np)
+#endif
 #include "wasmhost.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#if defined(__ANDROID__) || defined(__linux__)
+#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+#include <ucontext.h>
+#include <unistd.h>
+#define MBW_CRASH 1
+#endif
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #include <mach-o/dyld.h>
@@ -53,13 +64,156 @@ void moonbit_panic(void) {
   abort();
 }
 
+// How deep the program's own stack may go (wasmtime's max_wasm_stack: MBUI_WASM_STACK, in bytes, else wasmtime's own)
+static size_t wasm_stack_max;
+// Whether the program's traps are checked in its code (Android: app.traps "checked"), else taken by signals
+static int traps_checked;
+// Where the program's compiled code lies (wasmtime_module_image_range): a fault's pc said as an offset in it
+static uintptr_t code_start, code_end;
+
+#ifdef MBW_CRASH
+// The crash file, open from the start (a fatal signal's report written to it without opening anything): crash.txt in an
+// Android app's files, else MBUI_CRASH_FILE where said
+static int crash_fd = -1;
+
+// The stack of the thread calling: [lo, hi), and how much of it is used as `here` lies (the stack grows down)
+static void thread_stack(uintptr_t *lo, uintptr_t *hi) {
+  *lo = *hi = 0;
+  pthread_attr_t a;
+  if (pthread_getattr_np(pthread_self(), &a) != 0) return;
+  void *addr = NULL;
+  size_t size = 0;
+  if (pthread_attr_getstack(&a, &addr, &size) == 0) {
+    *lo = (uintptr_t)addr;
+    *hi = *lo + size;
+  }
+  pthread_attr_destroy(&a);
+}
+#endif
+
+// A line of the crash report: the system's log (say), and the crash file
+static void report(const char *fmt, ...) {
+  char line[1024];
+  va_list ap;
+  va_start(ap, fmt);
+  int n = vsnprintf(line, sizeof line, fmt, ap);
+  va_end(ap);
+  if (n < 0) return;
+  if ((size_t)n >= sizeof line) n = sizeof line - 1;
+  say("%s", line);
+#ifdef MBW_CRASH
+  if (crash_fd >= 0) {
+    ssize_t w = write(crash_fd, line, (size_t)n);
+    (void)w;
+  }
+#endif
+}
+
+// How deep the program and the thread are, and the host's last PERF lines (android_host.c's mb_host_recent): what a
+// trap's report says beside its stack
+#ifdef __ANDROID__
+void mb_host_recent(void (*each)(const char *line));
+static void recent_line(const char *line) { report("  %s\n", line); }
+#endif
+// (`sp`: where the thread's stack was when it went wrong, a fault's; 0: here)
+static void report_depth(size_t frames, uintptr_t sp) {
+#ifdef MBW_CRASH
+  uintptr_t lo, hi, here = sp ? sp : (uintptr_t)&lo;
+  thread_stack(&lo, &hi);
+  report("wasm shell: max_wasm_stack %zu bytes; the program %zu frames deep; this thread's stack %zu bytes, %zu used\n",
+         wasm_stack_max, frames, (size_t)(hi - lo), hi > here ? (size_t)(hi - here) : (size_t)0);
+#else
+  (void)sp;
+  report("wasm shell: max_wasm_stack %zu bytes; the program %zu frames deep\n", wasm_stack_max, frames);
+#endif
+#ifdef __ANDROID__
+  report("wasm shell: the last lines said:\n");
+  mb_host_recent(recent_line);
+#endif
+}
+
+// A trap's stack, by the program's functions (their names where the program kept them: its name section), innermost
+// first: the first 48 and the last 16 where it is deeper
+static size_t report_trace(wasm_trap_t *trap) {
+  wasm_frame_vec_t frames = {0};
+  wasm_trap_trace(trap, &frames);
+  for (size_t k = 0; k < frames.size; k++) {
+    if (k == 48 && frames.size > 64) {
+      report("  … %zu more …\n", frames.size - 64);
+      k = frames.size - 16;
+    }
+    const wasm_frame_t *f = frames.data[k];
+    const wasm_name_t *name = wasmtime_frame_func_name(f);
+    report("  #%zu %.*s (function %u, +0x%zx)\n", k, name ? (int)name->size : 1, name ? name->data : "?",
+           wasm_frame_func_index(f), wasm_frame_module_offset(f));
+  }
+  size_t n = frames.size;
+  wasm_frame_vec_delete(&frames);
+  return n;
+}
+
 static void die(const char *what, wasmtime_error_t *err, wasm_trap_t *trap) {
   wasm_byte_vec_t msg = {0};
   if (err) wasmtime_error_message(err, &msg);
   else if (trap) wasm_trap_message(trap, &msg);
-  say("wasm shell: %s%s%.*s\n", what, msg.size ? ": " : "", (int)msg.size, msg.data ? msg.data : "");
+  // (said a line at a time: wasmtime's message holds the whole of the program's stack, each frame a line)
+  report("wasm shell: %s%s", what, msg.size ? ": " : "\n");
+  for (size_t at = 0; at < msg.size;) {
+    size_t end = at;
+    while (end < msg.size && msg.data[end] != '\n') end++;
+    report("%.*s\n", (int)(end - at), msg.data + at);
+    at = end + 1;
+  }
+  if (trap) {
+    wasmtime_trap_code_t code;
+    if (wasmtime_trap_code(trap, &code)) report("wasm shell: trap code %d\n", (int)code);
+    report_depth(report_trace(trap), 0);
+  }
   exit(1);
 }
+
+#ifdef MBW_CRASH
+// A fatal signal no handler before it took (wasmtime's takes a trap of the program's and the call returns it: die):
+// said, where it was and how deep, to the log and the crash file, then the process ends as the signal would end it
+static struct sigaction fatal_before[32];
+
+static void fatal(int sig, siginfo_t *info, void *uc) {
+  // (wasmtime's first, as it was before this: a trap of the program's it takes, unwinding to the call, never back here)
+  struct sigaction *b = &fatal_before[sig];
+  if (b->sa_flags & SA_SIGINFO) {
+    if (b->sa_sigaction) b->sa_sigaction(sig, info, uc);
+  } else if (b->sa_handler != SIG_DFL && b->sa_handler != SIG_IGN && b->sa_handler) {
+    b->sa_handler(sig);
+  }
+  uintptr_t pc = 0, sp = 0;
+#if defined(__aarch64__)
+  pc = (uintptr_t)((ucontext_t *)uc)->uc_mcontext.pc;
+  sp = (uintptr_t)((ucontext_t *)uc)->uc_mcontext.sp;
+#elif defined(__x86_64__)
+  pc = (uintptr_t)((ucontext_t *)uc)->uc_mcontext.gregs[REG_RIP];
+  sp = (uintptr_t)((ucontext_t *)uc)->uc_mcontext.gregs[REG_RSP];
+#endif
+  report("wasm shell: fatal signal %d (code %d) at pc %p, address %p\n", sig, info ? info->si_code : 0, (void *)pc,
+         info ? info->si_addr : NULL);
+  if (pc >= code_start && pc < code_end)
+    report("wasm shell: in the program's code, +0x%zx of %zu bytes (a trap no handler took)\n",
+           (size_t)(pc - code_start), (size_t)(code_end - code_start));
+  report_depth(0, sp);
+  signal(sig, SIG_DFL);
+}
+
+static void fatal_watch(void) {
+  int sigs[] = {SIGILL, SIGSEGV, SIGBUS, SIGFPE, SIGTRAP};
+  for (size_t k = 0; k < sizeof sigs / sizeof sigs[0]; k++) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = fatal;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
+    sigaction(sigs[k], &sa, &fatal_before[sigs[k]]);
+  }
+}
+#endif
 
 static int has_memory;
 
@@ -84,7 +238,51 @@ int mbw_keep(wasmtime_func_t *slot, const wasmtime_val_t *v) {
   return 1;
 }
 
+#ifdef __ANDROID__
+// A crash made on purpose, to see its report (a development build's check: `crash-test` in the app's files says which:
+// "trap", a program's trap; "stack", its stack overflowing; "segv", a fault of the shell's own), made once, on the
+// thread that calls the program, as its first call comes: a module of its own, named functions in it
+static char crash_test[16];
+static wasm_engine_t *crash_engine;
+
+static void crash_test_now(void) {
+  char what[16];
+  memcpy(what, crash_test, sizeof what);
+  crash_test[0] = 0;
+  if (strcmp(what, "segv") == 0) {
+    report("wasm shell: a fault made on purpose (crash-test)\n");
+    volatile int *nowhere = (volatile int *)(uintptr_t)16;
+    *nowhere = 1;
+    return;
+  }
+  const char *wat = "(module (func $deeper (param i32) (result i32) local.get 0 i32.const 1 i32.add call $deeper)"
+                    " (func $made_to_trap unreachable) (func $calls_it call $made_to_trap)"
+                    " (export \"trap\" (func $calls_it)) (export \"stack\" (func $deeper)))";
+  wasm_byte_vec_t bin;
+  wasmtime_error_t *err = wasmtime_wat2wasm(wat, strlen(wat), &bin);
+  if (err) die("crash-test: no module", err, NULL);
+  wasmtime_module_t *m = NULL;
+  err = wasmtime_module_new(crash_engine, (const uint8_t *)bin.data, bin.size, &m);
+  wasm_byte_vec_delete(&bin);
+  if (err) die("crash-test: no module", err, NULL);
+  wasmtime_instance_t inst;
+  wasm_trap_t *trap = NULL;
+  err = wasmtime_instance_new(ctx, m, NULL, 0, &inst, &trap);
+  if (err || trap) die("crash-test: no instance", err, trap);
+  wasmtime_extern_t item;
+  int stack = strcmp(what, "stack") == 0;
+  if (!wasmtime_instance_export_get(ctx, &inst, stack ? "stack" : "trap", stack ? 5 : 4, &item)) return;
+  report("wasm shell: a %s made on purpose (crash-test)\n", stack ? "stack overflow" : "trap");
+  wasmtime_val_t arg = {.kind = WASMTIME_I32, .of.i32 = 0}, res;
+  err = wasmtime_func_call(ctx, &item.of.func, &arg, stack ? 1 : 0, &res, stack ? 1 : 0, &trap);
+  if (err || trap) die("the program trapped", err, trap);
+}
+#endif
+
 void mbw_call(const wasmtime_func_t *f, wasmtime_val_t *args, size_t n, wasmtime_val_t *res, size_t nr) {
+#ifdef __ANDROID__
+  if (crash_test[0]) crash_test_now();
+#endif
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *err = wasmtime_func_call(ctx, f, args, n, res, nr, &trap);
   if (exiting) exit(exit_code);
@@ -333,9 +531,8 @@ static wasm_byte_vec_t read_file(const char *path) {
 }
 
 #ifdef __ANDROID__
-// Where an Android app's program lies, unless MBUI_WASM_APP says: app.cwasm in its files (the package's, as the process
-// is named: scripts/wasm-app.sh compiles it for the device and puts it there)
-static const char *android_program(void) {
+// An Android app's files (the package's, as the process is named), `file` in them
+static const char *android_file(const char *file) {
   static char path[512];
   char name[256] = {0};
   FILE *f = fopen("/proc/self/cmdline", "rb");
@@ -346,7 +543,16 @@ static const char *android_program(void) {
   // (a process of its own, "package:name", is the package's still)
   char *colon = strchr(name, ':');
   if (colon) *colon = 0;
-  snprintf(path, sizeof path, "/data/data/%s/files/app.cwasm", name);
+  snprintf(path, sizeof path, "/data/data/%s/files/%s", name, file);
+  return path;
+}
+
+// Where an Android app's program lies, unless MBUI_WASM_APP says: app.cwasm in its files (scripts/wasm-app.sh compiles it
+// for the device and puts it there)
+static const char *android_program(void) {
+  // (its own copy: android_file's is said again for the crash file and the crash test)
+  static char path[512];
+  snprintf(path, sizeof path, "%s", android_file("app.cwasm"));
   return path;
 }
 #endif
@@ -388,7 +594,56 @@ int main(int argc, char **argv) {
     wasmtime_error_t *target_err = wasmtime_config_target_set(config, "pulley64");
     if (target_err) die("no Pulley", target_err, NULL);
   }
+  // (how deep the program's own stack may go: said in a trap's report, beside how deep it was and the thread's stack)
+  const char *stack = getenv("MBUI_WASM_STACK");
+  wasm_stack_max = stack && *stack ? (size_t)strtoull(stack, NULL, 10) : (size_t)512 * 1024;
+  wasmtime_config_max_wasm_stack_set(config, wasm_stack_max);
+#ifdef __ANDROID__
+  // (on Android a trap by a signal is never taken by wasmtime's handler, ART's in the way (2026-11-05: an `unreachable`
+  // and the stack's limit each ended the process with SIGILL). The program says how it was compiled for its traps:
+  // app.traps beside it in the app's files, "checked" (in its code: each trap returned to its call, its stack said;
+  // what a build that hunts a crash wants, its CPU dearer) or "signals" (as ever: none said, any ends the process;
+  // what a phone's development build has), scripts/wasm-app.sh MBUI_WASM_TRAPS; none: "signals". The shell takes the
+  // same: a program compiled the other way is told as it is read, not run.)
+  {
+    char traps[16] = {0};
+    FILE *t = fopen(android_file("app.traps"), "rb");
+    if (t) {
+      size_t got = fread(traps, 1, sizeof traps - 1, t);
+      fclose(t);
+      traps[got] = 0;
+      for (size_t k = 0; k < got; k++)
+        if (traps[k] == '\n' || traps[k] == '\r') traps[k] = 0;
+    }
+    traps_checked = strcmp(traps, "checked") == 0;
+    wasmtime_config_signals_based_traps_set(config, !traps_checked);
+  }
+#endif
+#ifdef MBW_CRASH
+  {
+#ifdef __ANDROID__
+    const char *crash = android_file("crash.txt");
+#else
+    const char *crash = getenv("MBUI_CRASH_FILE");
+#endif
+    if (crash && *crash) crash_fd = open(crash, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  }
+#endif
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
+#ifdef __ANDROID__
+  {
+    crash_engine = engine;
+    FILE *t = fopen(android_file("crash-test"), "rb");
+    if (t) {
+      size_t got = fread(crash_test, 1, sizeof crash_test - 1, t);
+      fclose(t);
+      crash_test[got] = 0;
+      for (size_t k = 0; k < got; k++)
+        if (crash_test[k] == '\n' || crash_test[k] == '\r') crash_test[k] = 0;
+      remove(android_file("crash-test"));
+    }
+  }
+#endif
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   ctx = wasmtime_store_context(store);
   wasmtime_module_t *module = NULL;
@@ -397,7 +652,11 @@ int main(int argc, char **argv) {
   if (len > 6 && strcmp(path + len - 6, ".cwasm") == 0) {
     // (compiled ahead for this machine by wasmtime's command line, as this wasmtime would: a device's)
     err = wasmtime_module_deserialize_file(engine, path, &module);
-    if (err) die("the program is not one compiled for this shell", err, NULL);
+    if (err) {
+      report("wasm shell: the shell takes traps %s (app.traps); a program compiled the other way is not run "
+             "(scripts/wasm-app.sh MBUI_WASM_TRAPS)\n", traps_checked ? "checked in the code" : "by signals");
+      die("the program is not one compiled for this shell", err, NULL);
+    }
   } else {
     wasm_byte_vec_t wasm = read_file(path);
     err = wasmtime_module_new(engine, (const uint8_t *)wasm.data, wasm.size, &module);
@@ -436,6 +695,16 @@ int main(int argc, char **argv) {
     free(m);
   }
   wasm_importtype_vec_delete(&imports);
+  {
+    void *start = NULL, *end = NULL;
+    wasmtime_module_image_range(module, &start, &end);
+    code_start = (uintptr_t)start;
+    code_end = (uintptr_t)end;
+  }
+#ifdef MBW_CRASH
+  // (after wasmtime's own: its first, then this one, for what it does not take)
+  fatal_watch();
+#endif
   wasmtime_instance_t instance;
   wasm_trap_t *trap = NULL;
   err = wasmtime_linker_instantiate(linker, ctx, module, &instance, &trap);

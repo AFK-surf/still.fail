@@ -61,6 +61,20 @@ pub fn[T] Kept::peek(self : Kept[T], key : String) -> T? {
 }
 
 ///|
+/// Let go of a key now. A value still followed by something else keeps its dependencies until that reader lets go.
+fn[T] Kept::forget(self : Kept[T], key : String) -> Unit {
+  match self.kept.get(key) {
+    Some(k) => {
+      if !k.value.watched() {
+        k.value.dispose()
+      }
+      self.kept.remove(key) |> ignore
+    }
+    None => ()
+  }
+}
+
+///|
 /// Those no frame read since the last (neither `frame` nor the one before) let go, but what something follows (a part
 /// kept as it was drawn reads it no more each frame, and holds it: mbui's Ctx::kept_part).
 fn[T] Kept::sweep(self : Kept[T], frame : Int) -> Unit {
@@ -247,4 +261,3 @@ pub fn[T] made_again(
     }
   })
 }
-

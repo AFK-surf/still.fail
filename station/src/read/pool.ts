@@ -14,6 +14,7 @@ import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
 import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
 import { SaidBuilder } from "./said-builder.ts";
+import { RequestedBuilder } from "./requested-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";
 import { RecentChatBuilder } from "./recent-chat-builder.ts";
 import { RECENT_CHAT_PENDING } from "./recent-chat.ts";
@@ -32,7 +33,7 @@ import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
+import { LAST_MESSAGE_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -122,6 +123,7 @@ export class Readers {
   private minutes: MinuteReader | null = null;
   private outflowChats: OutflowChatIndex | null = null;
   private said: SaidBuilder | null = null;
+  private archiveLast: RequestedBuilder<number> | null = null;
   private turns: TurnBuilder | null = null;
   private recentChats: RecentChatBuilder | null = null;
   private sessionList: SessionListBuilder | null = null;
@@ -264,6 +266,14 @@ export class Readers {
     return this.covered(this.said.ready(threads, signal), signal);
   }
 
+  /// Prepare only the requested chats' last messages in bounded slices for the archive and notices.
+  prepareArchiveLast(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.archiveLast ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
+      "archive last message", (thread, cancel) => ({ thread, archiveLast: true, cancel }));
+    return this.covered(this.archiveLast.ready(threads, signal), signal);
+  }
+
   /// Prepare the old connection bindings for session reads and auto-archiving together.
   prepareSessionBindings(signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -339,6 +349,13 @@ export class Readers {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
         if (!(error instanceof HttpError)) throw error;
+        if (error.message.startsWith(LAST_MESSAGE_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(LAST_MESSAGE_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.prepareArchiveLast(threads, signal);
+          continue;
+        }
         if (error.message === SESSION_BINDINGS_PENDING) {
           await this.prepareSessionBindings(signal);
           continue;
@@ -608,6 +625,7 @@ export class Readers {
     if (this.minutes !== null) void this.minutes.close();
     if (this.outflowChats !== null) void this.outflowChats.close();
     if (this.said !== null) void this.said.close();
+    if (this.archiveLast !== null) void this.archiveLast.close();
     if (this.turns !== null) void this.turns.close();
     if (this.recentChats !== null) void this.recentChats.close();
     if (this.sessionList !== null) void this.sessionList.close();

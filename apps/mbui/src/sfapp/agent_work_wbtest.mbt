@@ -102,6 +102,8 @@ test "an agent's card over its name, as over its picture: its background work an
   assert_eq(line.length(), 1)
   let latest = word("改了 src/ui/list.mbt")
   assert_true(latest.length() == 1 && line[0].2 > latest[0].2, msg="\{(line, latest)}")
+  // the card's words start where the name does, its edge out to the side of them (its lines 14 in, after the dot)
+  assert_eq(latest[0].1, name.1 + 14.0)
   assert_eq(word("审阅 live.ts 的改动").length(), 0)
   assert_eq(word("截图").length(), 0)
   // as tall as one of its latest lines: it never wraps

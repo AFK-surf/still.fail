@@ -296,7 +296,7 @@ pub let emit_out_ms : Double
 
 pub fn emit_release(@sfbase.Emits) -> Unit
 
-pub fn emit_step(@ui.Ctx, @sfbase.Emits, @sfbase.Turns, Double) -> Unit
+pub fn emit_step(@ui.Ctx, @sfbase.Emits, @sfbase.Turns, () -> Double) -> Unit
 
 pub fn emit_take(@ui.Ctx, @sfbase.Emits, @sfbase.ChatView, Map[String, Bool]) -> Unit
 

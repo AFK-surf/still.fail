@@ -565,7 +565,7 @@ fn looks_apply(c : Ctx) -> Unit {
 /// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
 /// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
 fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
+  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{atlas_now()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
 }
 
 ///|
@@ -865,6 +865,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
+  atlas_said.val = Some(h_atlas_generation())
   frame_env.set(looks_env(c, w, h, scale))
   clock_frame_start(t)
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that

@@ -121,6 +121,8 @@ fn reset_globals() -> Unit {
   fake_passkey.val = None
   fake_passkey_asks.clear()
   image_cache.clear()
+  image_by_id.clear()
+  image_bytes.val = 0.0
   images_said.clear()
   views_told_text.clear()
   views_told_info.clear()
@@ -334,10 +336,13 @@ pub fn Tester::new(
     image_loads: [],
     image_srcs: {},
     images: {},
+    image_ids: 0,
     frame_failed_images: [],
     bold: 0.0,
     ui_face: 0.0,
     generation: 0,
+    generation_asks: 0,
+    generation_on_face_add: Ref(false),
     tabular: 0.0,
     glyph_box: (6.0, 10.0),
     faces_wider: {},

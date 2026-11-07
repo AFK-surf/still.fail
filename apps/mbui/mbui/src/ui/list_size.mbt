@@ -571,10 +571,28 @@ pub fn[T] ListRows::rows(
   let same = self.given &&
     physical_equal(keys, self.last_keys) &&
     physical_equal(items, self.last_items)
+  // A fresh set of items can still have the same keys in the same order. Their versions must be read, but no row
+  // can have moved or gone; finding the longest retained order again would do work proportional to the whole list.
+  let same_keys = if same {
+    true
+  } else if self.given && keys.length() == self.order.length() && keys.length() == self.was.length() {
+    // Compare against the recorded order, not the caller's last array: a caller may have changed that array in place
+    // while giving new items. Duplicate keys keep the ordinary path too.
+    let mut equal = true
+    for i, k in keys {
+      if k != self.order[i].0 {
+        equal = false
+        break
+      }
+    }
+    equal
+  } else {
+    false
+  }
   self.last_keys = keys
   self.last_items = items
   let here : Map[String, Bool] = {}
-  if !same {
+  if !same_keys {
     for k in keys {
       here[k] = true
     }
@@ -628,8 +646,8 @@ pub fn[T] ListRows::rows(
     // 出来更合理」, not across the rows between, which it would cover)
     // Those that moved are the fewest whose order changed: all but the most rows kept in the order they had (one gone
     // down past others moved, not each it passed, which only kept their order among themselves)
-    let ahead : Set[String] = Set::new()
-    {
+    if !same_keys {
+      let ahead : Set[String] = Set::new()
       let before : Map[String, Int] = {}
       for j, r in self.order {
         before[r.0] = j
@@ -654,26 +672,26 @@ pub fn[T] ListRows::rows(
           began = true
         }
       }
-    }
-    let mut prev = ""
-    for r in self.order {
-      let (k, item) = r
-      if ahead.contains(k) {
-        let copy = k + row_moved_mark
-        let at = from(k).unwrap_or(now)
-        self.going[copy] = { item, at, after: prev }
-        self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-        prev = copy
-        continue
-      }
-      if !here.contains(k) && !self.going.contains(k) {
-        let at = from(k).unwrap_or(now)
-        self.going[k] = { item, at, after: prev }
-        self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-        began = true
-      }
-      if here.contains(k) || self.going.contains(k) {
-        prev = k
+      let mut prev = ""
+      for r in self.order {
+        let (k, item) = r
+        if ahead.contains(k) {
+          let copy = k + row_moved_mark
+          let at = from(k).unwrap_or(now)
+          self.going[copy] = { item, at, after: prev }
+          self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+          prev = copy
+          continue
+        }
+        if !here.contains(k) && !self.going.contains(k) {
+          let at = from(k).unwrap_or(now)
+          self.going[k] = { item, at, after: prev }
+          self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+          began = true
+        }
+        if here.contains(k) || self.going.contains(k) {
+          prev = k
+        }
       }
     }
   } else if !self.going.is_empty() || !self.causes.by.is_empty() {

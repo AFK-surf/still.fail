@@ -109,7 +109,7 @@ pub fn group_thumb_look(@ui.Ctx, Double, Double) -> Unit
 
 pub fn held_in_room(@ui.Ctx, PopState, key? : String, most? : Double) -> Bool
 
-pub fn hover_card(@ui.Ctx, String, Int32, open_delay? : Double, close_delay? : Double, side? : @view.Side, along? : @view.Along, offset? : Double, tap? : Bool, held? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> Bool
+pub fn hover_card(@ui.Ctx, String, Int32, open_delay? : Double, close_delay? : Double, side? : @view.Side, along? : @view.Along, along_offset? : Double, offset? : Double, tap? : Bool, held? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> Bool
 
 pub let hover_card_close_ms : Double
 

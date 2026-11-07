@@ -87,6 +87,7 @@ let row_calls : Array[String] = ["chat.pin", "chat.rename", "chat.archive"]
 /// A row let go without opening its chat (a scroll, a hold): what it read ahead let go too, unless its page is open.
 fn unprime(src : Source, r : ChatRef) -> Unit {
   if !src.read_only && !readings.contains(r.station + "\u{1}" + r.session) {
+    @sfbase.chat_inputs_left(r)
     (src.leave)("chat", chat_params(r))
   }
 }

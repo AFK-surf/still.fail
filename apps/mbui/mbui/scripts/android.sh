@@ -254,6 +254,12 @@ case "${1:-build}" in
     # only when it changed)
     [ "${INSTALL:-1}" = 0 ] || $ADB -s $SERIAL install -r ${APK:-$APK_FILE} >/dev/null
     $ADB -s $SERIAL shell am force-stop $APP_ID
+    # (a phone takes an intent's script and env only in a debug build the shell opened them in: MainActivity.testHooks)
+    case "$($ADB -s $SERIAL shell getprop ro.hardware | tr -d '\r')" in
+      ranchu | goldfish) ;;
+      *) [ "$($ADB -s $SERIAL shell getprop debug.mbui.hooks | tr -d '\r')" = 1 ] \
+           || echo "android.sh: $SERIAL is a phone: its app takes no script or env (adb shell setprop debug.mbui.hooks 1 opens them in a debug build)" >&2 ;;
+    esac
     if [ $PKG = photos ]; then photos; fi
     if [ -n "${2:-}" ]; then
       $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity --es script "$2" ${ENV:+--es env "'$ENV'"} >/dev/null

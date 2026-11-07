@@ -307,14 +307,15 @@ static GLuint image_tex(int id) {
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
 }
 
-// a new context has none of the old textures: forget them and decode again
+// a new context has none of the old textures: forget them and decode again; each told the app again as it is uploaded
+// anew (Native.imageDone), so what draws it is drawn again then, not left as the frames drawn without it had it
 static void images_lost(JNIEnv *env) {
   static int first = 1;
   if (first) {
     first = 0;
     return;
   }
-  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
+  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0, imgs[i].told = 0;
   white_tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
   streams_lost(env);
@@ -881,7 +882,33 @@ void mb_host_clipboard_secret_off(void) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret_off);
 }
 
+// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines, each kept
+// as it is said, the oldest let go
+#define MB_RECENT 12
+static char mb_recent[MB_RECENT][240];
+static int mb_recent_at, mb_recent_n;
+
+void mb_host_recent(void (*each)(const char *line)) {
+  for (int k = 0; k < mb_recent_n; k++) each(mb_recent[(mb_recent_at - mb_recent_n + k + MB_RECENT) % MB_RECENT]);
+}
+
+static void recent_keep(moonbit_string_t s) {
+  int32_t n = Moonbit_array_length(s);
+  if (n < 4) return;
+  int perf = 0;
+  for (int32_t k = 0; k + 3 < n && k < 16; k++)
+    if (s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') perf = 1;
+  if (!perf) return;
+  char *out = mb_recent[mb_recent_at];
+  int32_t m = n < (int32_t)sizeof mb_recent[0] - 1 ? n : (int32_t)sizeof mb_recent[0] - 1;
+  for (int32_t k = 0; k < m; k++) out[k] = s[k] < 128 ? (char)s[k] : '?';
+  out[m] = 0;
+  mb_recent_at = (mb_recent_at + 1) % MB_RECENT;
+  if (mb_recent_n < MB_RECENT) mb_recent_n++;
+}
+
 void mb_host_log(moonbit_string_t s) {
+  recent_keep(s);
   JNIEnv *env = env_();
   jstring j = jstr(env, s);
   (*env)->CallStaticVoidMethod(env, host_cls, m_log, j);
@@ -901,9 +928,9 @@ int32_t mb_host_reduce_motion(void) {
 // video's first frame shown, a sound that can play) or failed (state -1), or (a view, state 0: NView.askApp) waiting on
 // the app now, a player's read or a site's request: the host's work for it stops until the app answers. Told on the
 // GL thread, MoonBit's, between frames (each comes as a queued event, which GLSurfaceView runs before the next
-// onDrawFrame); ready or failed once per item. Also (Native.tell) what the pickers gave, the gallery read, marks
-// drawn, a video's frame grabbed, an update's progress: the kinds named as src/ui/hostcall.mbt's outside_* and
-// Native.java's OUTSIDE_*.
+// onDrawFrame); ready or failed once per item, a ready one told again as a new context has it uploaded anew. Also
+// (Native.tell) what the pickers gave, the gallery read, marks drawn, a video's frame grabbed, an update's progress: the
+// kinds named as src/ui/hostcall.mbt's outside_* and Native.java's OUTSIDE_*.
 enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_POSTED = 11, MB_OUTSIDE_STREAMED = 12 };
 static void (*outside_cb)(int32_t, int32_t, int32_t);
 int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {

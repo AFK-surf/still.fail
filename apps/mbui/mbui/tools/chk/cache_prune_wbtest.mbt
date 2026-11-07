@@ -8,6 +8,15 @@ test "a rolling cache's kind" {
     kind_of("mbui-linux-store-lto-app-00b78fb4840fdc3e"),
     Some("mbui-linux-store-lto-app"),
   )
+  // A Mac runner image changes its compiler launcher. Each launcher's store must retain its own newest cache.
+  assert_eq(
+    kind_of("mbui-mac-cc-61e77a2d557f8677-00b78fb4840fdc3e"),
+    Some("mbui-mac-cc-61e77a2d557f8677"),
+  )
+  assert_eq(
+    kind_of("mbui-mac-cc-f39ac2e5baa34bad-1234567890abcdef"),
+    Some("mbui-mac-cc-f39ac2e5baa34bad"),
+  )
   assert_eq(
     kind_of(
       "gradle-home-v1|Linux-X64|check-android[2face68063188a806d63532a8cee1e9b]-09b758a048c406bf0db415ad3709264632d1cb5b",

@@ -154,6 +154,127 @@ test "list: a row gone down past others is the one that moves: it leaves where i
 }
 
 ///|
+test "list: keys changed in place and given with new items still move their rows" {
+  let keys = ["r0", "r1", "r2"]
+  let items = Ref([0, 1, 2])
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(fn(c) {
+    let (shown, names) = rows.rows(c, keys, items.val, fn(_) { "" }, moves=fn(_) { true })
+    c.list("list", shown.length(), 50.0, fn(i) {
+      let b = c.box(h=Px(50.0), fn() { c.text("Row \{shown[i]}", wrap=false) |> ignore })
+      rows.enter(c, b, names[i])
+      rows.leave(c, b, names[i])
+    }, sized=rows.sized()) |> ignore
+  }, w=300.0, h=400.0)
+  keys[0] = "r1"
+  keys[1] = "r2"
+  keys[2] = "r0"
+  items.val = [1, 2, 0]
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  assert_eq(row_seen(t, 0).length(), 2)
+  t.run_for(@ui.row_size_ms)
+  assert_eq(row_seen(t, 0).length(), 1)
+}
+
+///|
+test "list: unchanged keys still follow a row's changed version" {
+  let changed = [false]
+  let t = @ui.Tester::new(
+    sized_rows(fn() { Array::makei(20, fn(i) { i }) }, tall=18, changed=fn() { changed[0] }),
+    w=300.0,
+    h=400.0,
+  )
+  assert_eq(t.row(18).unwrap().3, 50.0)
+  // Both arrays are made anew, but their keys have the same order. Only the version of row 18 changes.
+  changed[0] = true
+  t.draw()
+  assert_true((t.row(18).unwrap().3 - 50.0).abs() < 0.5)
+  t.run_for(@ui.row_size_ms / 2.0)
+  let halfway = t.row(18).unwrap().3
+  assert_true(halfway > 50.0 && halfway < 120.0, msg="halfway: \{halfway}")
+  t.run_for(@ui.row_size_ms / 2.0)
+  assert_true((t.row(18).unwrap().3 - 120.0).abs() < 0.5)
+}
+
+///|
+/// Draw the named display's frames strictly before a shared sampling moment, then draw that exact moment.
+fn list_frames_until(t : @ui.Tester, at : Double, hz : Int) -> Unit {
+  if hz > 0 {
+    let step = 1000.0 / hz.to_double()
+    let mut next = t.time() + step
+    while next < at - 0.001 {
+      t.frame_at(next)
+      next = next + step
+    }
+  }
+  t.frame_at(at)
+}
+
+///|
+/// A row begins leaving, then an existing row changes height while the leaving row is still held.
+fn list_leaving_changed_history(hz : Int) -> Array[(Double, Double, Double, Double)] raise {
+  let goes = [false]
+  let changed = [false]
+  let t = @ui.Tester::new(
+    sized_rows(
+      fn() { Array::makei(if goes[0] { 19 } else { 20 }, fn(i) { i }) },
+      tall=18,
+      changed=fn() { changed[0] },
+      in_place=true,
+    ),
+    w=300.0,
+    h=400.0,
+  )
+  let start = t.time()
+  goes[0] = true
+  t.draw()
+  let change_at = start + @ui.row_size_ms / 4.0
+  list_frames_until(t, change_at, hz)
+  let (_, _, _, leaving) = t.row(19).unwrap()
+  assert_true(leaving > 0.0 && leaving < 50.0, msg="\{hz} Hz: leaving \{leaving}")
+  changed[0] = true
+  t.draw()
+  assert_true(row_seen(t, 19).length() > 0, msg="\{hz} Hz: the old row is still held")
+  let sample = fn() {
+    let (_, y, _, h) = t.row(18).unwrap()
+    match t.row(19) {
+      Some((_, old_y, _, old_h)) => (y, h, old_y, old_h)
+      None => (y, h, -1.0, -1.0)
+    }
+  }
+  let out = [sample()]
+  list_frames_until(t, change_at + @ui.row_size_ms / 2.0, hz)
+  let middle = sample()
+  assert_true(middle.1 > 50.0 && middle.1 < 120.0, msg="\{hz} Hz: changed row \{middle}")
+  assert_true(middle.3 > 0.0 && middle.3 < leaving, msg="\{hz} Hz: leaving row \{middle}")
+  out.push(middle)
+  list_frames_until(t, change_at + @ui.row_size_ms * 2.0, hz)
+  let end = sample()
+  assert_true((end.1 - 120.0).abs() < 0.5 && end.3 == -1.0, msg="\{hz} Hz: settled \{end}")
+  out.push(end)
+  println("leaving and changed row \{hz} Hz: \{out}")
+  out
+}
+
+///|
+test "list: a changed version while another row leaves at the same moments with or without frames" {
+  let direct = list_leaving_changed_history(0)
+  for hz in [60, 120] {
+    let frames = list_leaving_changed_history(hz)
+    for i in 0..<direct.length() {
+      let a = direct[i]
+      let b = frames[i]
+      assert_true(
+        (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01 &&
+        (a.2 - b.2).abs() < 0.01 && (a.3 - b.3).abs() < 0.01,
+        msg="\{hz} Hz, sample \{i}: \{a} vs \{b}",
+      )
+    }
+  }
+}
+
+///|
 test "list: a row read from stays where it shows as one over it grows and one under it comes" {
   let n = [40]
   let changed = [false]
