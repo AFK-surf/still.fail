@@ -4510,7 +4510,7 @@ export interface Meter {
 	big: string;
 	/** Beside `big`, small: GB, %. */
 	unit: string;
-	/** Under `big`: 内存剩余, CPU 空闲. */
+	/** Under `big`: 可用内存, CPU 空闲率. */
 	title: string;
 	/** Under `title`, quiet: 共 64 GB, 负载 1.4. */
 	total: string;

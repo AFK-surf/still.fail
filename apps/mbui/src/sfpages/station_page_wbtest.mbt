@@ -335,9 +335,9 @@ test "the station's GPUs are each visible on narrow and wide pages with either i
     let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-gpu", h=2400.0)
     t.run_for(@ui.move_most_ms)
     assert_eq(t.squeeze_faults(), [])
-    assert_true(t.find("GPU 1 空闲") is Some(_))
+    assert_true(t.find("GPU 1 空闲率") is Some(_))
     assert_true(t.find("显存剩 20/24G") is Some(_))
-    assert_true(t.find("GPU 2 空闲") is Some(_))
+    assert_true(t.find("GPU 2 空闲率") is Some(_))
     assert_true(t.find("显存剩 23/24G") is Some(_))
     assert_true(t.words().filter(fn(word) { word.0 == "NVIDIA GeForce RTX 4090" }).length() == 2)
   }
@@ -349,9 +349,9 @@ test "more than three GPUs continue on another row" {
     let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-gpu-many", h=2400.0)
     t.run_for(@ui.move_most_ms)
     assert_eq(t.squeeze_faults(), [])
-    let cpu = drawn(t, "CPU 空闲")
-    let first = drawn(t, "GPU 1 空闲")
-    let fourth = drawn(t, "GPU 4 空闲")
+    let cpu = drawn(t, "CPU 空闲率")
+    let first = drawn(t, "GPU 1 空闲率")
+    let fourth = drawn(t, "GPU 4 空闲率")
     if w > 1000.0 {
       assert_true((first.1 - cpu.1).abs() < 0.5, msg="GPU and the other resources share the first wide row")
     }

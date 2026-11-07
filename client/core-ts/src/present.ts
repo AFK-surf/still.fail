@@ -970,10 +970,10 @@ export function host(h: J): J {
   // What is left in gigabytes, large: one decimal below 100.
   const big = (bytes: number) => format.gb1(Math.max(bytes, 0)).replace(/ GB$/, "");
   const memory = meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null, {
-    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.out_of", { size: format.gb(memTotal) }),
+    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.memory_total", { size: format.gb(memTotal) }),
   });
   const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
-    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.out_of", { size: format.gb(diskTotal) }),
+    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.disk_total", { size: format.gb(diskTotal) }),
   });
   // Each GPU is an ordinary resource dial: free capacity in its figure, used capacity in its cells.
   const gpus = (arr(src.gpus) ?? []).filter(isObject);
@@ -999,7 +999,7 @@ export function host(h: J): J {
     if (total !== null && used !== null) {
       const m = meter(label, label, used / total * 100, "", null, {
         remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }),
-        total: t("core-views.present.host.out_of", { size: format.gb(total) }),
+        total: t("core-views.present.host.gpu_memory_all", { size: format.gb(total) }),
       });
       return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
     }
