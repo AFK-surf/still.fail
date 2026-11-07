@@ -70,6 +70,8 @@ struct FakeHost {
   /// what each decode asked for is of: its source (bytes handed over, the source they were handed for)
   image_srcs : Map[Int, String]
   images : Map[Int, FakeImage]
+  /// the last decode's number: each new one the next, never one let go of again (as every host numbers them)
+  mut image_ids : Int
   /// Failed decodes of pictures the last painted frame needed, not every failed decode still in the cache.
   frame_failed_images : Array[Int]
   // what bold adds to a cluster's advance, in ems (0 by default: weight
@@ -345,7 +347,8 @@ priv struct FakeImage {
 
 ///|
 fn fake_image_sized(f : FakeHost, w : Double, h : Double, ow : Double, oh : Double) -> Int {
-  let id = f.images.length() + 1
+  f.image_ids += 1
+  let id = f.image_ids
   f.wants = true
   f.images[id] = { state: if ow > 0.0 { 0 } else { -1 }, w, h, ow, oh }
   id
@@ -355,7 +358,8 @@ fn fake_image_sized(f : FakeHost, w : Double, h : Double, ow : Double, oh : Doub
 fn fake_image(f : FakeHost, ow : Int, oh : Int, max_px : Int) -> Int {
   let k = if ow > oh { max_px.to_double() / ow.to_double() } else { max_px.to_double() / oh.to_double() }
   let k = if k > 1.0 { 1.0 } else { k }
-  let id = f.images.length() + 1
+  f.image_ids += 1
+  let id = f.image_ids
   // the decode will be done by the next frame, which it asks for
   f.wants = true
   f.images[id] = {

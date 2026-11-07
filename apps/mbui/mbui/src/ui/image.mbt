@@ -46,6 +46,36 @@ impl Moving for ImageEntry with rest_at(self, now, frame) {
 let image_cache : Map[String, Array[ImageEntry]] = {}
 
 ///|
+// kept across runs: each decode in image_cache by its host's number, and its source (a host numbers each anew, never one
+// let go of again), gone with it (image_dropped, Tester's reset)
+let image_by_id : Map[Int, (String, ImageEntry)] = {}
+
+///|
+// kept across runs: the bytes of the ready decodes in image_cache (each w·h·4 as it is ready, image_dropped's taken off):
+// what Ctx::trim_images holds to its budget, told as they change, not added up each frame (Tester's reset)
+let image_bytes : Ref[Double] = Ref(0.0)
+
+///|
+/// Decode `e` of `src` put in image_cache: known by its number, its bytes counted where it is ready already (else as
+/// it comes to be, ImageEntry::poll).
+fn image_added(src : String, e : ImageEntry) -> Unit {
+  image_by_id[e.id] = (src, e)
+  if e.state == 1 {
+    image_bytes.val = image_bytes.val + e.w * e.h * 4.0
+  }
+}
+
+///|
+/// Decode `e` let go of from image_cache (its host's freed by what lets it go): its number and its bytes with it.
+fn image_dropped(e : ImageEntry) -> Unit {
+  match image_by_id.get(e.id) {
+    Some((_, x)) if physical_equal(x, e) => image_by_id.remove(e.id)
+    _ => ()
+  }
+  image_bytes.val = image_bytes.val - e.w * e.h * 4.0
+}
+
+///|
 /// Whether a named picture's current decodes are ready, still coming, or failed. An exact source wins over a suffix
 /// or prefix; an incomplete name matching more than one picture is an error, not whichever the map happens to visit.
 /// Old decodes with px=0 only stand in while a replacement is drawn and do not make the replacement ready.
@@ -180,6 +210,7 @@ pub fn redraw_vector_pictures() -> Unit {
     for e in list {
       if e.state == -1 {
         h_image_free(e.id)
+        image_dropped(e)
       }
     }
     list.retain(fn(e) { e.state != -1 })
@@ -230,6 +261,7 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
     if st == 1 {
       self.w = image_info_out[0]
       self.h = image_info_out[1]
+      image_bytes.val = image_bytes.val + self.w * self.h * 4.0
       self.ow = image_info_out[2]
       self.oh = image_info_out[3]
       self.ready_at = self.follows.unwrap_or(now)
@@ -320,6 +352,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       k = k + 1
     }
     list.insert(k, e)
+    image_added(src, e)
     // (done at once, as the host decoded it, or failed, while asked: so at the moment it was asked, this build's, said
     // as a word of the host's that it is done is, image_decoded)
     image_done(src, e, self.clock)
@@ -390,12 +423,7 @@ fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) 
 /// what is kept fits the budget.
 fn Ctx::trim_images(self : Ctx) -> Unit {
   images_said_trim()
-  let mut total = 0.0
-  for _, list in image_cache {
-    for e in list {
-      total = total + e.w * e.h * 4.0
-    }
-  }
+  let mut total = image_bytes.val
   if total <= image_budget {
     return
   }
@@ -415,6 +443,7 @@ fn Ctx::trim_images(self : Ctx) -> Unit {
     let (src, e) = item
     total = total - e.w * e.h * 4.0
     h_image_free(e.id)
+    image_dropped(e)
     match image_cache.get(src) {
       Some(list) => {
         list.retain(fn(x) { x.id != e.id })
@@ -812,12 +841,8 @@ fn image_done(src : String, e : ImageEntry, at : Double) -> Unit {
 /// The host said decode `id` is done (or could not be), at `at` (its word's moment): it is ready then (its fade from
 /// then, or on from the one it follows), and its picture's size told, that picture's alone, where it is new.
 fn image_decoded(id : Int, at : Double) -> Unit {
-  for src, list in image_cache {
-    for e in list {
-      if e.id == id {
-        image_done(src, e, at)
-        return
-      }
-    }
+  match image_by_id.get(id) {
+    Some((src, e)) => image_done(src, e, at)
+    None => ()
   }
 }
