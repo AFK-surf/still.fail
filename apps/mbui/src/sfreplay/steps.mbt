@@ -24,8 +24,6 @@ pub struct Flow {
   priv said : Array[String]
   /// what may come is given a message at a time (Flow::until), not all at each frame's end
   priv one_by_one : Ref[Bool]
-  /// what moved as the last step that acts was taken (Tester::moving's lines): not what it began
-  priv at_step : Array[String]
 }
 
 ///|
@@ -185,7 +183,6 @@ pub fn Flow::start(
     strict: seed == 0,
     one_by_one,
     said,
-    at_step: [],
   }
   // each step the test says taken when the run took it, at this pace (at once: as soon as the test takes it), what
   // came after it in the run let come (Replay::step_taken)
@@ -248,10 +245,6 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
       }
     }
     None => ()
-  }
-  if !waiting_step(line) {
-    self.at_step.clear()
-    self.at_step.push_iter(self.t.moving().iter())
   }
 }
 

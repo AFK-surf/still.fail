@@ -1164,19 +1164,6 @@ pub fn Replay::given_at(self : Replay, call : String) -> Double? {
 }
 
 ///|
-/// When the latest message in given so far that `which` holds for (its JSON) was given here (the clock): a change a
-/// subscription's topic came with, what a motion starts from as the tape has it. None while none is.
-pub fn Replay::given_at_where(self : Replay, which : (Json) -> Bool) -> Double? {
-  let mut at : Double? = None
-  for e in self.evs {
-    if !e.out && !e.host && e.done && which(e.msg) {
-      at = Some(e.given)
-    }
-  }
-  at
-}
-
-///|
 /// The run's display's frame period as its host's lines measure it (a player's `info` each frame: the first of a
 /// frame's lines its moment, those a frame apart and less of it the same frame's), its frames' mean spacing; None
 /// where the trace has fewer than two frames of them.
