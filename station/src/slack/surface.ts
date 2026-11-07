@@ -583,6 +583,9 @@ export class SlackSurface extends ConnectedSurface {
       await handler({ type: "message", message: { channel, threadTs, ts, user, text: answer.said, addressed: true } });
     } catch (error) {
       this.answered.delete(asked);
+      // Slack has already acknowledged the button press, so it will not redeliver a rejected answer.
+      await tell("station.slack.answerUnconfirmed").catch((noticeError) =>
+        log.warn("slack", "could not tell the person their answer was unconfirmed", { error: (noticeError as Error).message }));
       throw error;
     }
     const asking = text(payload?.message?.text);

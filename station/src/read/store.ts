@@ -25,7 +25,8 @@ import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
 import { PAGE_LETTER_KEYS, pageLetterReady } from "../store/page-letter-index.ts";
-import { hasLegacyEdits, hasOldEditIndex, legacyMergedNeedsRepair, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
+import { legacyMergedNeedsRepair, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
+import { boundedEditKey as readBoundedEditKey, LAST_MESSAGE_WITH_EDIT } from "../store/legacy-edits-read.ts";
 import { hasLegacySaid, legacySaidPageState, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
@@ -427,23 +428,7 @@ export class LastMessageUnavailable extends Refused {
   constructor(threads: number[]) { super(503, LAST_MESSAGE_PENDING + JSON.stringify(threads)); this.threads = threads; }
 }
 export const LAST_MESSAGE_KEYED = "SELECT * FROM merged WHERE thread=?1 AND n=CAST(?2 AS INTEGER)";
-// A current edit in this bounded tail is newer than every unvisited entry. A short tail is the whole chat. Both keep
-// a message readable while a much older part of a legacy database is still being prepared.
-export const LAST_MESSAGE_RECENT_EDIT = `WITH tail AS MATERIALIZED (
-    SELECT n,target FROM entries WHERE thread=?1 ORDER BY n DESC LIMIT 65
-  ) SELECT (SELECT CAST(n AS TEXT) FROM tail WHERE target=CAST(?2 AS INTEGER) ORDER BY n DESC LIMIT 1) AS n,
-    (SELECT COUNT(*) FROM tail) AS count`;
-export const LAST_MESSAGE_OLD_EDITS = `WITH edits AS MATERIALIZED (
-    SELECT x.n FROM entries x INDEXED BY entries_target WHERE x.thread=?1 AND x.target=CAST(?2 AS INTEGER)
-      ORDER BY x.rowid DESC LIMIT 65
-  ) SELECT CAST(MAX(n) AS TEXT) AS n,COUNT(*) AS count FROM edits`;
-export const LAST_MESSAGE_WITH_EDIT = `SELECT m.thread,m.n,m.ts,m.author_kind,m.author,
-    CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
-    CASE WHEN e.n IS NULL THEN m.attachments ELSE e.attachments END AS attachments,
-    CASE WHEN e.n IS NULL THEN m.quotes ELSE e.quotes END AS quotes,
-    m.declared,m.client,m.agent_identity,m.at AS created_at,e.at AS edited_at,m.letter
-  FROM entries m LEFT JOIN entries e ON e.thread=m.thread AND e.n=CAST(?3 AS INTEGER)
-  WHERE m.thread=?1 AND m.n=CAST(?2 AS INTEGER) AND m.kind='message'`;
+export { LAST_MESSAGE_RECENT_EDIT, LAST_MESSAGE_OLD_EDITS, LAST_MESSAGE_WITH_EDIT } from "../store/legacy-edits-read.ts";
 export const LEGACY_EDITS_PENDING = "legacy edit lookup pending";
 export class LegacyEditsUnavailable extends Refused {
   constructor() { super(503, LEGACY_EDITS_PENDING); }
@@ -452,13 +437,9 @@ export class LegacyEditsUnavailable extends Refused {
 // The caller holds the message and edit lookup in one snapshot. Without a prepared lookup, a recent edit (or a
 // short chat) proves the latest edit; an old index can prove it when at most one bounded batch matches.
 function boundedEditKey(s: Store, thread: number, n: string): string | null {
-  let edit = one(s, LAST_MESSAGE_RECENT_EDIT, thread, n) as { n: string | null; count: number };
-  if (edit.n === null && edit.count === 65) {
-    const meta = hasLegacyEdits(s.db) ? one(s, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1") : undefined;
-    if (meta?.scanned === 0 && meta.old_index === 1 && hasOldEditIndex(s.db)) edit = one(s, LAST_MESSAGE_OLD_EDITS, thread, n);
-    if (edit.count === 65) throw new LegacyEditsUnavailable();
-  }
-  return edit.n;
+  const edit = readBoundedEditKey(s.db, thread, n);
+  if (edit === undefined) throw new LegacyEditsUnavailable();
+  return edit;
 }
 
 function mergedWithBoundedEdit(s: Store, thread: number, n: string): MessageRow | null {

@@ -374,6 +374,7 @@
   "station.session.noProfile": "No Profile can run {runtime}",
   "station.session.noProfileHere": "No Profile can run {runtime} for this workspace's chats; an admin of the station's home workspace can enable one",
   "station.session.noProfileForModel": "No {runtime} Profile can run {model}: turn it on in a Profile first",
+  "station.slack.answerUnconfirmed": "Could not confirm your answer. Please check and try again.",
   "station.slack.chooseFirst": "Choose an option first",
   "station.slack.confirm": "OK",
   "station.slack.fileNotFetched": "[Couldn't fetch file {name}: {error}]",
