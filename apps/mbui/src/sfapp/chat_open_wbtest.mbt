@@ -80,27 +80,58 @@ fn chat_prefetch_tester(asked : Array[String], left : Array[String]) -> @ui.Test
 }
 
 ///|
-test "a finger starts reading a chat as it goes down, before a quick tap is let go" {
+test "a finger starts reading a chat once its press shows, and a tap after that opens it, keeping the read" {
   let asked : Array[String] = []
   let left : Array[String] = []
   let t = chat_prefetch_tester(asked, left)
   let (x, y) = t.find("整理发布清单").unwrap()
   t.press_at(x, y)
-  assert_true(asked.any(fn(p) { p.contains("s-c1") }), msg="the chat is read on finger down")
+  assert_false(asked.any(fn(p) { p.contains("s-c1") }), msg="nothing read as the finger goes down")
+  t.run_for(@ui.tap_indication_ms)
+  assert_true(asked.any(fn(p) { p.contains("s-c1") }), msg="the chat is read once the press shows")
   assert_false(app.nav.top() is Chat(_), msg="the press has not opened it yet")
   t.release(x, y)
-  assert_true(app.nav.top() is Chat(_), msg="a quick tap opens the chat")
+  assert_true(app.nav.top() is Chat(_), msg="the tap opens the chat")
   assert_false(left.any(fn(p) { p.contains("s-c1") }), msg="the opened chat keeps its read")
 }
 
 ///|
-test "a finger that starts reading a chat and then scrolls releases the read" {
+test "a quick tap, let go before its press shows, opens the chat" {
   let asked : Array[String] = []
   let left : Array[String] = []
   let t = chat_prefetch_tester(asked, left)
   let (x, y) = t.find("整理发布清单").unwrap()
   t.press_at(x, y)
-  assert_true(asked.any(fn(p) { p.contains("s-c1") }), msg="the chat is read on finger down")
+  t.release(x, y)
+  assert_true(app.nav.top() is Chat(_), msg="a quick tap opens the chat")
+  assert_false(left.any(fn(p) { p.contains("s-c1") }), msg="nothing of it let go")
+}
+
+///|
+test "a finger that scrolls before its press shows reads nothing" {
+  let asked : Array[String] = []
+  let left : Array[String] = []
+  let t = chat_prefetch_tester(asked, left)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.press_at(x, y)
+  t.touch(1, x, y - 40.0)
+  t.frame()
+  t.run_for(@ui.tap_indication_ms)
+  t.touch(2, x, y - 40.0)
+  t.frame()
+  assert_false(asked.any(fn(p) { p.contains("s-c1") }), msg="the scroll read nothing")
+  assert_false(app.nav.top() is Chat(_), msg="scrolling does not open the chat")
+}
+
+///|
+test "a finger held until its press shows and then scrolls releases the read" {
+  let asked : Array[String] = []
+  let left : Array[String] = []
+  let t = chat_prefetch_tester(asked, left)
+  let (x, y) = t.find("整理发布清单").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.tap_indication_ms)
+  assert_true(asked.any(fn(p) { p.contains("s-c1") }), msg="the chat is read once the press shows")
   t.touch(1, x, y - 40.0)
   t.frame()
   assert_true(left.any(fn(p) { p.contains("s-c1") }), msg="scrolling releases the read")
