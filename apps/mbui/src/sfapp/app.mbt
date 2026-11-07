@@ -50,7 +50,6 @@ fn new_run() -> Unit {
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
   @sf.set_language(None)
-  files_cornered.val = false
   image_quoted_at.val = -1
   bar_glyph.val = None
   bar_stations_said.val = ""
@@ -90,16 +89,6 @@ fn reset() -> Unit {
   frame_bare.val = false
   window_shown.val = false
   @sfbase.held_pictures_waiting.val = false
-  drafts.clear()
-  cui.attach = false
-  cui.picking = None
-  cui.picking_for = ""
-  cui.outside = false
-  cui.restore_error.clear()
-  cui.room_for = ("", None)
-  cui.cap_id = 0
-  cui.content_id = 0
-  cui.doing.clear()
   pick_reset()
   dv_reset()
   decide_reset()
@@ -117,7 +106,6 @@ fn reset() -> Unit {
   // the menu open (@sf.menu_of, context_items)
   @sf.parts_reset()
   outside_reset()
-  attach_reset()
   // the menu bar given (menu_bar.mbt)
   // Home (home.mbt), the host told (above), a chat's page and what is in it
   flying.val = None
@@ -126,9 +114,7 @@ fn reset() -> Unit {
   flashing.val = ("", 0.0)
   bench_on.val = -1
   boxed_n.val = 0
-  // the composer: its ids counted from the start, what waits for it
-  next_pending.val = 1
-  quote_fields.clear()
+  // shared-file ids counted from the start
   share_files_made.val = 0
   // the made-up core's own, where one is linked (a test's, a tool's: sffixture's, as its wire says)
   (@sfbase.made_reset.val)()

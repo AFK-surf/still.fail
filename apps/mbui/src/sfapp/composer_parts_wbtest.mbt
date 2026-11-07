@@ -4,11 +4,6 @@
 // a long press letting the keyboard be. Over the fake core of composer_wbtest.mbt.
 
 ///|
-fn the_draft() -> Draft {
-  drafts.get("ws1/st1:s-c1").unwrap()
-}
-
-///|
 /// A PNG's first bytes (IHDR 1600 × 900): what a picture's size is read from.
 fn png_head() -> Bytes {
   Bytes::from_array(

@@ -781,8 +781,6 @@ fn share_open(
     match r {
       Ok(a) => {
         let key = text(Some(a), "key")
-        // the composer reads what the core keeps anew (Drafts.refresh)
-        drafts.remove(key)
         share_opened(c, station, text(Some(a), "session"), text(Some(a), "title"), files, fn() {  }, key~)
       }
       Err(e) => share_in.error.set(sh("android-misc.shareIn.failed", args=[("error", text(Some(e), "message"))]))
