@@ -173,6 +173,8 @@ export class Hub {
   historyMessages: ((thread: number, before: string | null, limit: number) => Promise<MessageRow[] | null>) | null = null;
   /// Read a chat history's pending card post off the station thread.
   historyPendingCard: ((thread: number) => Promise<number | null>) | null = null;
+  /// Check a named need against its visible question off the station thread.
+  stateQuestion: ((key: string, threads: number[], ts: string) => Promise<import("../read/store.ts").StateQuestion>) | null = null;
   /// Card state accompanying a person's message to an agent.
   deliveryCardState: ((thread: number, n: number, signal?: AbortSignal) => Promise<DeliveryCardState | null>) | null = null;
   /// A session's undelivered messages and letters, merged by a reader.

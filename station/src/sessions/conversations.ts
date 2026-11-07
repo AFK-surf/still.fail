@@ -6,11 +6,14 @@ import { mkdirSync, rmSync } from "node:fs";
 import { copyFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
+import { wall } from "../ops/fibers.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
+import { LegacyEditsUnavailable, makeStore as makeReadStore, stateQuestion as readStateQuestion } from "../read/store.ts";
 import { iso } from "../read/transcript.ts";
+import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { type Attachment, type MessageRow, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
-import type { DeclaredState } from "./actor.ts";
+import type { DeclaredState, SessionActor } from "./actor.ts";
 import {
   type Args,
   MAX_WAIT_SECONDS,
@@ -67,6 +70,99 @@ function messageForAbout(hub: Hub, key: string, thread: number, ts: string, ques
   if (message === null) return null;
   checkQuestion(hub, key, message);
   return [message.thread, message.n, message.ts];
+}
+
+function questionResult(found: ReturnType<typeof readStateQuestion>): [number, number, string] | null {
+  if (found.kind === "missing") return null;
+  if (found.kind === "invalid") throw new Error("need_human about must point to your visible question, not a person's message or another agent's post");
+  if (found.kind === "answered") throw new Error("that question is no longer pending. Read what the person said; if a decision is still needed, ask again with a new card");
+  return found.about;
+}
+
+const needsQuestionPreparation = (error: unknown) => error instanceof LegacyEditsUnavailable ||
+  (error instanceof Error && error.message.startsWith(CARD_POSTS_PENDING));
+
+/// A reader's snapshot may have become stale before it answers. If so, confirm it with the bounded lookup in the
+/// current snapshot; when an old lookup is not prepared yet, let the reader prepare it and try again.
+async function questionForAbout(hub: Hub, key: string, threadsOf: () => number[], ts: string): Promise<[number, number, string] | null> {
+  const version = () => Number(hub.store.db.prepare("PRAGMA main.data_version").get()!.data_version);
+  // If a native edit index was removed after this station opened, its old merged view can scan the whole chat. That
+  // view is still safe on the reader; do not use it for this synchronous confirmation until the index returns.
+  const bounded = () => hub.store.db.prepare(`SELECT 1 WHERE
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits') OR
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='view' AND name='merged' AND instr(sql, 'legacy_edit_meta') > 0)`).get() !== undefined;
+  for (;;) {
+    const before = version();
+    const threads = threadsOf();
+    const included = new Set(threads);
+    let changed = false;
+    const stop = hub.store.subscribe((change) => {
+      if ((change.type === "thread" || change.type === "threadRemoved") && included.has(change.id)) changed = true;
+      if (change.type === "sessionRemoved" && change.key === key) changed = true;
+    });
+    let found: Awaited<ReturnType<NonNullable<Hub["stateQuestion"]>>>;
+    try { found = await hub.stateQuestion!(key, threads, ts); }
+    finally { stop(); }
+    const current = threadsOf();
+    const after = version();
+    if (changed || before !== after || current.length !== threads.length || current.some((id, i) => id !== threads[i])) {
+      if (!bounded()) continue;
+      try { found = readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, current, ts); }
+      catch (error) {
+        if (needsQuestionPreparation(error)) continue;
+        throw error;
+      }
+    }
+    return questionResult(found);
+  }
+}
+
+class StateWriteBusy extends Error {}
+
+/// Recheck and write in one SQLite transaction. Do not wait for another connection's writer on the station thread.
+function stateWrite(hub: Hub, write: () => void): void {
+  const db = hub.store.db;
+  const timeout = Number(db.prepare("PRAGMA busy_timeout").get()!.timeout);
+  db.exec("PRAGMA busy_timeout=0");
+  let begun = false;
+  try {
+    try { db.exec("BEGIN IMMEDIATE"); begun = true; }
+    catch (error) {
+      const code = (error as { errcode?: number }).errcode;
+      if (code !== undefined && [5, 6].includes(code & 255)) throw new StateWriteBusy();
+      throw error;
+    }
+  } finally {
+    try { db.exec(`PRAGMA busy_timeout=${timeout}`); }
+    catch (error) { if (begun) { try { db.exec("ROLLBACK"); } catch {} } throw error; }
+  }
+  try { write(); db.exec("COMMIT"); }
+  catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+/// An answer can arrive after the reader returns, while the actor waits its turn. Confirm it inside the same bounded
+/// transaction as the state write. An old lookup or a busy writer is waited for outside the actor's queue.
+async function recordQuestionForTurn(hub: Hub, key: string, actor: SessionActor, turn: string, kind: DeclaredState,
+  words: string | null, about: [number, number, string], watch: boolean, threadsOf: () => number[], ts: string,
+  missing: string): Promise<boolean> {
+  let delay = 10;
+  for (;;) {
+    try {
+      return await actor.stateForTurn(turn, kind, words, about, watch, (save) => stateWrite(hub, () => {
+        const current = questionResult(readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, threadsOf(), ts));
+        if (current === null) throw new Error(missing);
+        save(current);
+      }));
+    } catch (error) {
+      if (error instanceof StateWriteBusy) {
+        await wall.sleep(delay);
+        delay = Math.min(delay * 2, 250);
+        continue;
+      }
+      if (needsQuestionPreparation(error)) { await questionForAbout(hub, key, threadsOf, ts); continue; }
+      throw error;
+    }
+  }
 }
 
 /// A thread of this session the agent named with to=, and how the session posts there.
@@ -281,8 +377,23 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
   let about: [number, number, string] | null = null;
   const ts = aboutTs(args);
+  const checkingQuestion = kind?.kind === "need_help" && ts !== null && hub.stateQuestion != null;
+  const questionActor = checkingQuestion ? actorOf(hub, key) : undefined;
+  const questionTurn = questionActor?.currentTurnId() ?? null;
+  let questionThreads: (() => number[]) | null = null;
   if (ts !== null) {
-    about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
+    if (checkingQuestion) {
+      questionThreads = () => {
+        const current = target(hub, key, args.to);
+        if (current.thread.id !== thread.thread.id || current.connect !== thread.connect) throw new Error("the conversation changed while checking the question; try again");
+        if (store.manuallyArchived(current.thread.id)) throw new Error(`${threadAddress(current.thread.channel, current.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
+        return [current.thread.id];
+      };
+      about = await questionForAbout(hub, key, questionThreads, ts);
+      if (questionActor && questionTurn !== null &&
+        (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
+        throw new Error("the turn ended while checking its question; no message was posted");
+    } else about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
     if (about === null) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
     if (kind?.kind === "need_help" && card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
   }
@@ -300,6 +411,9 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     return link;
   };
   const files = await keep(paths.length === 0 ? [] : await attach(hub, key, paths), thumbsDir(hub.config().dataDir));
+  if (checkingQuestion && questionActor && questionTurn !== null &&
+    (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
+    throw new Error("the turn ended while checking its question; no message was posted");
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   let posted: string;
   // A chat's first post where it was relayed goes into the station's first message there (relay.ts).
@@ -322,9 +436,13 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   }
   const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
   hub.shared(thread.thread.id, n, key, text);
-  const actor = actorOf(hub, key);
-  await actor?.postedNow();
-  if (need !== null) await actor?.need(need);
+  const actor = checkingQuestion ? questionActor : actorOf(hub, key);
+  if (checkingQuestion) {
+    if (actor && questionTurn !== null && hub.actors.get(key) === actor) await actor.postedForTurn(questionTurn);
+  } else await actor?.postedNow();
+  if (!checkingQuestion && need !== null) await actor?.need(need);
+  let recorded = true;
+  let stateError: string | null = null;
   if (kind !== null) {
     // What the state is about: as said, else for need_help the card still pending in this chat (this post's, when it
     // carries one).
@@ -332,13 +450,26 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
       const pending = store.pendingCard(thread.thread.id);
       if (pending) about = [pending[0].thread, pending[0].n, pending[0].ts];
     }
-    await actor?.about(about);
-    await actor?.declare(kind);
+    if (checkingQuestion) {
+      if (actor && questionTurn !== null && ts !== null && questionThreads !== null && about !== null) {
+        try {
+          recorded = hub.actors.get(key) === actor && await recordQuestionForTurn(hub, key, actor, questionTurn, kind,
+            need, about, false, questionThreads, ts, `about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+        } catch (error) { recorded = false; stateError = (error as Error).message; }
+      }
+    } else {
+      await actor?.about(about);
+      await actor?.declare(kind);
+    }
   }
   const titled = typeof args.title === "string" ? nameChat(hub, thread.thread, args.title) : "";
   const place = threadAddress(thread.thread.channel, thread.thread.threadTs) + (opening !== null ? ` (added to the station's first message there, ts ${posted})` : "");
   const crossed = unreadBefore(hub, key, thread.thread.id, n);
-  return kind !== null ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${crossed}${titled}${offered}` : `Posted to ${place}.${crossed}${titled}${offered}`;
+  return kind !== null ? recorded
+    ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${crossed}${titled}${offered}`
+    : stateError !== null ? `Posted to ${place}, but its state was not recorded: ${stateError}.${crossed}${titled}${offered}`
+      : `Posted to ${place}, but its turn ended before its state was recorded.${crossed}${titled}${offered}`
+    : `Posted to ${place}.${crossed}${titled}${offered}`;
 }
 
 /// Messages said in the thread before the agent's post (entry `n`) that it had not read when it wrote it, as the post's
@@ -418,19 +549,35 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
     kind = given[0];
     words = needArg(args, given[0], given[1]);
   }
-  const about = stateAbout(hub, key, kind, args);
+  const ts = aboutTs(args);
+  const checkingQuestion = kind.kind === "need_help" && ts !== null && hub.stateQuestion != null;
+  const questionActor = checkingQuestion ? actorOf(hub, key) : undefined;
+  const questionTurn = questionActor?.currentTurnId() ?? null;
+  let about: [number, number, string] | null;
+  if (checkingQuestion) {
+    about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
+    if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
+  } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
     throw new Error(
       "need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person",
     );
   }
-  const actor = actorOf(hub, key);
-  if (words !== null) {
-    if (kind.kind === "waiting") await actor?.waitFor(words, watch);
-    else await actor?.need(words);
+  if (checkingQuestion) {
+    if (questionActor && questionTurn !== null &&
+      (hub.actors.get(key) !== questionActor || about === null || !await recordQuestionForTurn(hub, key, questionActor,
+        questionTurn, kind, words, about, watch, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts,
+        `about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`)))
+      throw new Error("the turn ended while checking its question; its state was not recorded");
+  } else {
+    const actor = actorOf(hub, key);
+    if (words !== null) {
+      if (kind.kind === "waiting") await actor?.waitFor(words, watch);
+      else await actor?.need(words);
+    }
+    await actor?.about(about);
+    await actor?.declare(kind);
   }
-  await actor?.about(about);
-  await actor?.declare(kind);
   if (kind.kind === "all_done") suggestArchive(hub, key);
   if (kind.kind !== "waiting") return `Recorded state ${saidAs(kind)}.`;
   return watch

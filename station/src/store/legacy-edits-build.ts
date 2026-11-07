@@ -6,23 +6,38 @@ const BATCH = 64;
 const exists = (db: DatabaseSync, type: string, name: string) =>
   db.prepare("SELECT 1 FROM sqlite_master WHERE type=? AND name=?").get(type,name) !== undefined;
 
-const mergedViews = new WeakMap<DatabaseSync, { version: number; legacy: boolean }>();
+type MergedView = { version: number; legacy: boolean; indexed: boolean; oldIndexMissing: boolean };
+const mergedViews = new WeakMap<DatabaseSync, MergedView>();
 const schemaStatements = new WeakMap<DatabaseSync, StatementSync>();
 
-/// A single merged-message lookup is bounded once the old scan has finished and at most one batch of changed keys
-/// remains. Inspect the actual view: another connection can create a native index before rebuilding that view.
-/// Call inside the same snapshot as the message read.
-export function legacyMergedReadReady(db: DatabaseSync): boolean {
+function mergedView(db: DatabaseSync): MergedView {
   let schema = schemaStatements.get(db);
   if (!schema) { schema = db.prepare("PRAGMA schema_version"); schemaStatements.set(db, schema); }
   const version = Number(schema.get()!.schema_version);
   let view = mergedViews.get(db);
   if (!view || view.version !== version) {
     const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get()?.sql;
-    view = { version, legacy: typeof sql === "string" && sql.includes("legacy_edit_meta") };
+    const legacy = typeof sql === "string" && sql.includes("legacy_edit_meta");
+    view = { version, legacy, indexed: exists(db, "index", "entries_edits"),
+      oldIndexMissing: legacy && typeof sql === "string" && sql.includes("INDEXED BY entries_target") && !hasOldEditIndex(db) };
     mergedViews.set(db, view);
   }
-  if (!view.legacy) return true;
+  return view;
+}
+
+/// A view whose required index disappeared must be switched before it can read edits safely.
+export function legacyMergedNeedsRepair(db: DatabaseSync): boolean {
+  const view = mergedView(db);
+  return view.oldIndexMissing || (!view.legacy && !view.indexed);
+}
+
+/// A single merged-message lookup is bounded once the old scan has finished and at most one batch of changed keys
+/// remains. Inspect the actual view: another connection can create a native index before rebuilding that view.
+/// Call inside the same snapshot as the message read.
+export function legacyMergedReadReady(db: DatabaseSync): boolean {
+  const view = mergedView(db);
+  if (view.oldIndexMissing) return false;
+  if (!view.legacy) return view.indexed;
   const row = db.prepare(`SELECT scanned=1 AND NOT EXISTS (SELECT 1 FROM legacy_edit_dirty LIMIT 1 OFFSET 64) AS ready
     FROM legacy_edit_meta WHERE id=1`).get();
   if (!row) throw new Error("legacy edit lookup metadata is missing");

@@ -6,6 +6,7 @@ import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/
 import { SAID_BATCH_SIZE, saidScanStep, type SaidScan } from "../store/said-state.ts";
 import { archiveLastStep } from "../store/archive-last.ts";
 import { legacyEditsMaintenanceStep, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
+import { repairMergedEditLookup } from "../store/schema.ts";
 import { hasLegacySaid, legacySaidScanReady, legacySaidStep } from "../store/legacy-said-build.ts";
 import { pageLetterStep } from "../store/page-letter-index.ts";
 import { TURN_COUNT_BATCH, turnCountStep, type TurnCountScan } from "../store/turn-state.ts";
@@ -54,7 +55,10 @@ parentPort!.on("message", async (message: { thread: number; cancel?: boolean; ar
       } else if (message.legacyEdits) {
         owns = takeBackfill(priority, threadId);
         if (owns) {
-          if (!legacyMergedReadReady(db)) legacyEditsMaintenanceStep(db);
+          if (!legacyMergedReadReady(db)) {
+            repairMergedEditLookup(db);
+            if (!legacyMergedReadReady(db)) legacyEditsMaintenanceStep(db);
+          }
           result = { done: legacyMergedReadReady(db) };
         }
       } else if (message.archiveLast) {
