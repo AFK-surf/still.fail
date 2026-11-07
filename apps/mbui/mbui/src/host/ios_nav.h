@@ -280,6 +280,9 @@ API_AVAILABLE(ios(18.0))
 @property(nonatomic, copy) NSString *spec;
 @property(nonatomic, copy) NSString *tabsKey;
 @property(nonatomic, copy) NSString *action;
+// (iOS 27: the accent the action's glass is washed with, and the wash, inside the system's own glass, nav_wash)
+@property(nonatomic, strong) UIColor *actionInk;
+@property(nonatomic, strong) UIView *actionWash;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UIButton *> *floatingButtons;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *floatingKeys;
 @property(nonatomic) BOOL shown;
@@ -319,18 +322,20 @@ static void nav_put(UIViewController *slot) {
   [the_view requestFrame];
 }
 
-// The action's icon: the app's icon in white on a disc of its accent, kept as drawn (the system's tab tints it not:
-// iOS 27's prominent tab has no API for its glass's colour, and its tint leaves a template glyph black; the user,
-// 2026-11-07: 染成橙色底的、主题色底的).
-static UIImage *nav_disc(NSString *icon, UIColor *ground, CGFloat size) {
-  UIImage *glyph = nav_icon(icon, size * 0.55);
-  UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size)];
-  UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-    [ground setFill];
-    [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, size, size)] fill];
-    [[glyph imageWithTintColor:UIColor.whiteColor] drawInRect:CGRectMake(size * 0.225, size * 0.225, size * 0.55, size * 0.55)];
-  }];
-  return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+// The system's own glass a tab is drawn on: the item's platter (`_UITabBarItemPlatterView`, in an iPhone Duo's column
+// and in the bar across the foot alike) whose place is the tab's, both in `v`'s room.
+static UIView *nav_platter(UIView *in, UIView *v, CGRect r) {
+  if ([NSStringFromClass(in.class) hasSuffix:@"TabBarItemPlatterView"]) {
+    CGRect f = [in convertRect:in.bounds toView:v];
+    if (fabs(CGRectGetMidX(f) - CGRectGetMidX(r)) < 2 && fabs(CGRectGetMidY(f) - CGRectGetMidY(r)) < 2 &&
+        fabs(f.size.width - r.size.width) < 2)
+      return in;
+  }
+  for (UIView *c in in.subviews) {
+    UIView *p = nav_platter(c, v, r);
+    if (p) return p;
+  }
+  return nil;
 }
 
 static UIColor *nav_rgba(id v) {
@@ -405,6 +410,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
 // composer at the foot of the card beside it).
 - (void)viewDidLayoutSubviews {
   [super viewDidLayoutSubviews];
+  [self washAction];
   UIView *v = the_view;
   CGRect r = CGRectZero;
   if (v && self.action.length && !self.tabBarHidden)
@@ -417,6 +423,36 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (CGRectEqualToRect(r, said)) return;
   said = r;
   say_system(@{@"nav_action" : @{@"x" : @(r.origin.x), @"y" : @(r.origin.y), @"w" : @(r.size.width), @"h" : @(r.size.height)}});
+}
+// iOS 27's prominent tab, the action's, on its glass washed with the accent (the user, 2026-11-07: 橙色背景太难看了，还是
+// 得用玻璃): the system has no API for its glass's colour, so the wash is a view of ours inside the system's own glass,
+// under its glyph; it moves, presses and turns with it as a part of it. (Laid over it from the tab's frame, it was
+// left off it as the column moved: 2026-10-28, 橙色圆形跑到了按钮右边.) Found again as the system makes its glass anew
+// (the column, the bar across the foot, a pose).
+- (void)washAction {
+  if (!self.actionInk || !self.action.length || self.tabBarHidden) {
+    [self.actionWash removeFromSuperview];
+    return;
+  }
+  UITab *x = self.tabsById[self.action];
+  CGRect r = x ? [x frameInView:self.view] : CGRectNull;
+  UIView *p = CGRectIsNull(r) || CGRectIsEmpty(r) ? nil : nav_platter(self.view, self.view, r);
+  if (!p) return;
+  if (!self.actionWash) {
+    self.actionWash = [UIView new];
+    self.actionWash.userInteractionEnabled = NO;
+    self.actionWash.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    // (round as the glass is: a continuous curve as wide as half its side is no circle, it bulges at four points)
+    self.actionWash.layer.cornerCurve = kCACornerCurveCircular;
+  }
+  UIView *w = self.actionWash;
+  // (the glass seen through it, the page's words bent under it: not a disc of paint)
+  w.backgroundColor = [self.actionInk colorWithAlphaComponent:0.6];
+  w.layer.cornerRadius = MIN(p.bounds.size.width, p.bounds.size.height) / 2;
+  if (w.superview == p) return;
+  [w removeFromSuperview];
+  w.frame = p.bounds;
+  [p insertSubview:w atIndex:0];
 }
 // What is pressed, not gone to, as the navigation bar's own items on every tab's page (the system lays them out:
 // down the side with the tabs where its vertical bar is, across the top upright), its title none: the action most
@@ -788,14 +824,17 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       [made addObject:tab];
     }
     // (the action a tab of its own the system sets apart at the bar's end, as Xiaohongshu's 发布 is, on the system's
-    // glass, with an accent glyph (iOS 27: white on a disc of the accent, nav_disc, its glass taking no colour of the
-    // app's): never chosen, shouldSelectTab says it)
+    // glass, with an accent glyph (iOS 27: white on its glass washed with the accent, washAction): never chosen,
+    // shouldSelectTab says it)
     self.action = act[@"id"];
+    self.actionInk = nil;
     if (act && ![seen containsObject:act[@"id"]]) {
       UIImage *image = [nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal];
-      // (iOS 27's prominent tab, 48 across: on a disc of the accent, a point of its glass round it)
 #ifdef __IPHONE_27_0
-      if (@available(iOS 27.0, *)) image = nav_disc(act[@"icon"], accent, 46);
+      if (@available(iOS 27.0, *)) {
+        image = [nav_icon(act[@"icon"], 26) imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
+        self.actionInk = accent;
+      }
 #endif
       UITab *x = [self tabFor:act[@"id"] title:act[@"title"] image:image];
       x.preferredPlacement = UITabPlacementPinned;
