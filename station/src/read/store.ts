@@ -24,6 +24,7 @@ import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsRea
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
+import { PAGE_LETTER_KEYS, pageLetterReady } from "../store/page-letter-index.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { hasLegacySaid, legacySaidPageState, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
@@ -684,6 +685,60 @@ export const LEGACY_SAID_PAGE_TAIL = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM 
 export const MESSAGES_FROM_KEYS = `SELECT * FROM merged WHERE thread=?1 AND n IN
   (SELECT CAST(value AS INTEGER) FROM json_each(?2)) ORDER BY n DESC`;
 
+export const PAGE_LETTER_PENDING = "page letter lookup pending: ";
+export class PageLetterUnavailable extends Refused {
+  constructor(thread: number) { super(503, PAGE_LETTER_PENDING + JSON.stringify([thread])); }
+}
+
+// Select ordered integer keys before casting: a text ORDER BY would sort every message in the chat.
+export const PAGE_ORDINARY_KEYS = `SELECT CAST(p.n AS TEXT) AS n FROM (
+  SELECT n FROM entries INDEXED BY entries_said WHERE thread=?1 AND n<?2 AND kind='message' AND letter IS NULL
+  ORDER BY n DESC LIMIT ?3) p ORDER BY p.n DESC`;
+export const LEGACY_PAGE_ORDINARY_KEYS = `SELECT CAST(p.n AS TEXT) AS n FROM (
+  SELECT n FROM legacy_said WHERE thread=?1 AND n<?2 ORDER BY n DESC LIMIT ?3) p ORDER BY p.n DESC`;
+export const PAGE_LETTER_CANDIDATES = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM entries e INDEXED BY entries_letters
+  WHERE e.thread=?1 AND e.n<?2 AND e.letter IS NOT NULL ORDER BY e.n DESC LIMIT ?3`;
+
+const letterIndexes = new WeakMap<DatabaseSync, { version: number; ready: boolean }>();
+function hasPageLetterIndex(db: DatabaseSync): boolean {
+  const version = Number(db.prepare("PRAGMA schema_version").get()!.schema_version);
+  let cached = letterIndexes.get(db);
+  if (!cached || cached.version !== version) {
+    cached = { version, ready: db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_letters'").get() !== undefined };
+    letterIndexes.set(db, cached);
+  }
+  return cached.ready;
+}
+
+const descendingKeys = (keys: string[]) => keys.sort((a, b) => BigInt(a) > BigInt(b) ? -1 : BigInt(a) < BigInt(b) ? 1 : 0);
+
+// With an indexed letter candidate tail, only non-message letters can make a page need more than its requested number
+// of keys. Never look below a truncated candidate tail: there could be an older letter-message above an ordinary key.
+function boundedMessagePageKeys(s: Store, thread: number, before: number | bigint, limit: number): string[] {
+  const token = pageLetterReady(s.db, thread);
+  if (!token && !hasPageLetterIndex(s.db)) {
+    const cap = limit + 64;
+    const tail = all(s, LEGACY_SAID_PAGE_TAIL, thread, before, cap);
+    const keys = tail.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
+    if (keys.length < limit && tail.length === cap) throw new PageLetterUnavailable(thread);
+    return keys;
+  }
+  const ordinary = all(s, s.legacySaid ? LEGACY_PAGE_ORDINARY_KEYS : PAGE_ORDINARY_KEYS, thread, before, limit)
+    .map((r) => r.n as string);
+  if (token) {
+    const letters = all(s, PAGE_LETTER_KEYS, thread, token, before, limit).map((r) => r.n as string);
+    return descendingKeys([...ordinary, ...letters]).slice(0, limit);
+  }
+  const cap = limit + 64;
+  const candidates = all(s, PAGE_LETTER_CANDIDATES, thread, before, cap);
+  const floor = candidates.length === cap ? BigInt(candidates.at(-1)!.n as string) : null;
+  const letters = candidates.filter((r) => r.kind === "message").map((r) => r.n as string);
+  const knownOrdinary = floor === null ? ordinary : ordinary.filter((key) => BigInt(key) >= floor);
+  const keys = descendingKeys([...knownOrdinary, ...letters]);
+  if (keys.length < limit && floor !== null) throw new PageLetterUnavailable(thread);
+  return keys.slice(0, limit);
+}
+
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
@@ -706,13 +761,25 @@ export function messagesBefore(s: Store, thread: number, n: number | null, limit
         return message === null ? [] : [message];
       }).reverse();
     }
+    // A negative limit is SQLite's request for every message. Preserve that existing contract; bounded pages use the
+    // two key lookups so non-message letters and an absent letter index cannot make the reader walk a long history.
+    if (limit < 0 || !Number.isSafeInteger(limit) || limit > Number.MAX_SAFE_INTEGER - 64) {
+      if (legacyMergedReadReady(s.db))
+        return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
+      const keys = s.legacySaid ? LEGACY_MESSAGE_KEYS_BEFORE : MESSAGE_KEYS_BEFORE;
+      const page = all(s, `SELECT CAST(p.n AS TEXT) AS n FROM (${keys}) p ORDER BY p.n DESC`, thread, before, limit);
+      return page.flatMap((r) => {
+        const message = mergedWithBoundedEdit(s, thread, r.n);
+        return message === null ? [] : [message];
+      }).reverse();
+    }
+    if (limit === 0) return [];
+    const page = boundedMessagePageKeys(s, thread, before, limit);
+    if (page.length === 0) return [];
     if (legacyMergedReadReady(s.db))
-      return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
-    // Order by the integer source, not its text alias; text preserves a 64-bit entry key for the individual lookup.
-    const keys = s.legacySaid ? LEGACY_MESSAGE_KEYS_BEFORE : MESSAGE_KEYS_BEFORE;
-    const page = all(s, `SELECT CAST(p.n AS TEXT) AS n FROM (${keys}) p ORDER BY p.n DESC`, thread, before, limit);
-    return page.flatMap((r) => {
-      const message = mergedWithBoundedEdit(s, thread, r.n);
+      return all(s, MESSAGES_FROM_KEYS, thread, JSON.stringify(page)).map(toMessage).reverse();
+    return page.flatMap((key) => {
+      const message = mergedWithBoundedEdit(s, thread, key);
       return message === null ? [] : [message];
     }).reverse();
   } finally { s.db.exec("RELEASE messages_before_read"); }

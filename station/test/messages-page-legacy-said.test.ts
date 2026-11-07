@@ -5,11 +5,10 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
-import { LEGACY_SAID_PAGE_TAIL, makeStore, messagesBefore } from "../src/read/store.ts";
+import { LEGACY_PAGE_ORDINARY_KEYS, LEGACY_SAID_PAGE_TAIL, makeStore, messagesBefore } from "../src/read/store.ts";
 import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
 import { installLegacySaid, legacySaidDrainThread, legacySaidStep } from "../src/store/legacy-said-build.ts";
 import { installSaidState } from "../src/store/said-state.ts";
-import { LEGACY_MESSAGES_BEFORE } from "../src/store/rows.ts";
 import { addClientColumn } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -115,7 +114,7 @@ test("a page and its changed-key readiness share one snapshot", () => {
     let changed = false;
     const observed = new Proxy(db, { get(target, property) {
       if (property === "prepare") return (sql: string) => {
-        if (sql === LEGACY_MESSAGES_BEFORE && !changed) {
+        if (sql === LEGACY_PAGE_ORDINARY_KEYS && !changed) {
           changed = true;
           writer.prepare("UPDATE entries SET kind='edit' WHERE thread=? AND n>1").run(thread);
         }

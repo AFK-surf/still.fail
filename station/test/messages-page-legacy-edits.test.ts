@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
-import { makeStore, messagesBefore } from "../src/read/store.ts";
+import { makeStore, messagesBefore, MESSAGES_FROM_KEYS } from "../src/read/store.ts";
 import { installLegacyEdits, legacyEditDrain, legacyEditStep } from "../src/store/legacy-edits-build.ts";
 import { addClientColumn } from "../src/store/schema.ts";
-import { MESSAGES_BEFORE, toMessage } from "../src/store/rows.ts";
+import { toMessage } from "../src/store/rows.ts";
 import { Store } from "../src/store/store.ts";
 
 function oldPage(size: number, path = ":memory:") {
@@ -105,7 +105,7 @@ test("a page and its edit readiness use one snapshot when an old writer changes 
     let changed = false;
     const observed = new Proxy(db, { get(target, property) {
       if (property === "prepare") return (sql: string) => {
-        if (sql === MESSAGES_BEFORE && !changed) {
+        if (sql === MESSAGES_FROM_KEYS && !changed) {
           changed = true;
           writer.prepare("UPDATE entries SET target=1 WHERE thread=? AND n>=4").run(thread);
         }
