@@ -65,6 +65,7 @@ import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION 
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installClosedCardsIndex } from "./legacy-closed-cards.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
+import { archiveLastRead, installArchiveLast } from "./archive-last.ts";
 import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
@@ -603,6 +604,7 @@ export class Store {
       addPendingCards(db);
       addTellIndexes(db);
       installSaidState(db);
+      installArchiveLast(db);
       installWidgetSources(db);
       installCcIndex(db);
       installSessionChatIndex(db);
@@ -1713,6 +1715,11 @@ export class Store {
   lastMessage(thread: number): MessageRow | null {
     const r = this.#one(this.#legacySaid ? LEGACY_LAST_MESSAGE : LAST_MESSAGE, thread);
     return r ? toMessage(r) : null;
+  }
+
+  /// The time used by auto-archive; an unknown answer waits for the requested chat's bounded preparation.
+  lastMessageAtForArchive(thread: number): { known: boolean; at: number | null } {
+    return archiveLastRead(this.db, thread);
   }
 
   /// How many letters the thread has (rows.ts isLetter), in either way.
