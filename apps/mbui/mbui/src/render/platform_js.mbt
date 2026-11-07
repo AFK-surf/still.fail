@@ -61,7 +61,7 @@ fn say(s : String) -> Unit {
 }
 
 ///|
-/// Nothing comes while the page's one thread is here: an image the browser decodes is told after main ends.
+/// The browser driver has already decoded the images before this synchronous program starts.
 fn spin(_ms : Double) -> Unit {
   ()
 }

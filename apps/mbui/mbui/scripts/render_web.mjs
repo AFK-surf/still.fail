@@ -1,6 +1,6 @@
 // mbui-render in headless Chromium (web/render.html: web/host.js's WebGL2 renderer, on SwiftShader): the draw list
 // given to the page (globalThis.__mbrender), the picture read back from the canvas and written as a PNG (pngjs).
-// The page's own main draws it as it loads; nothing is waited for but the load.
+// Decode the lists' images through the real host before loading the synchronous drawing program.
 //   node scripts/render_web.mjs SITE LIST.dl OUT.png      (SITE: render.html, host.js, render.js)
 //   node scripts/render_web.mjs SITE LIST.dl OUT.png FROM.dl   LIST drawn only where it differs from FROM drawn before
 //                                                              it (MBUI_DL_FROM), and whole: OUT and OUT.whole.png
@@ -44,6 +44,50 @@ await page.addInitScript(({ dl, out, from }) => {
   };
 }, { dl: fs.readFileSync(dlPath, 'utf8'), out: path.basename(outPath), from: fromPath ? fs.readFileSync(fromPath, 'utf8') : null });
 await page.goto(`http://127.0.0.1:${server.address().port}/render.html`);
+await page.evaluate(async () => {
+  const h = globalThis.__mbhost, r = globalThis.__mbrender;
+  const lists = [r.readText('from.dl'), r.readText('list.dl')].filter(Boolean);
+  const window = /^window (\S+) (\S+) (\S+)$/m.exec(lists[0]).slice(1).map(Number);
+  h.renderInit(...window);
+  h.renderInit = (...size) => {
+    if (size.some((v, i) => v !== window[i])) throw Error('draw lists have different windows');
+  };
+  const ready = new Map(), bytes = new Map(), sources = new Map();
+  h.setOutside((kind, id, state) => {
+    if (kind === 1 && ready.has(id)) {
+      const { resolve, reject } = ready.get(id);
+      ready.delete(id);
+      if (state === 1) resolve(); else reject(Error(`image ${id} failed to decode`));
+    }
+  });
+  const pending = [];
+  for (const list of lists) {
+    const carried = new Map([...list.matchAll(/^bytes (\d+) (\S+)$/gm)].map(m => [m[1], m[2]]));
+    for (const m of list.matchAll(/^image (\d+) (\S+) ("(?:[^"\\]|\\.)*")(?: (\d+))?$/gm)) {
+      const px = Number(m[2]), src = JSON.parse(m[3]), data = carried.get(m[1]);
+      if (m[4] !== undefined && !data) throw Error(`image ${m[1]} has no carried bytes`);
+      const cache = data ? bytes : sources, key = `${px}:${data || src}`;
+      const id = data ? h.imageLoadBytes(Uint8Array.from(atob(data), c => c.charCodeAt(0)), px) : h.imageLoad(src, px);
+      if (!cache.has(key)) cache.set(key, []);
+      cache.get(key).push(id);
+      pending.push(new Promise((resolve, reject) => ready.set(id, { resolve, reject })));
+    }
+  }
+  await Promise.all(pending);
+  h.setOutside(null);
+  const take = (cache, key) => {
+    const ids = cache.get(key);
+    if (!ids?.length) throw Error('drawing requested an image absent from its lists');
+    return ids.shift();
+  };
+  h.imageLoad = (src, px) => take(sources, `${px}:${src}`);
+  h.imageLoadBytes = (data, px) => {
+    let binary = '';
+    for (const v of data) binary += String.fromCharCode(v);
+    return take(bytes, `${px}:${btoa(binary)}`);
+  };
+});
+await page.addScriptTag({ url: `http://127.0.0.1:${server.address().port}/render.js` });
 const got = await page.evaluate((out) => {
   const r = globalThis.__mbrender;
   // every picture the page took (the one asked for, and with MBUI_DL_FROM the list drawn whole beside it)

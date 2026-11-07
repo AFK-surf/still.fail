@@ -9,6 +9,6 @@
 <!-- mbui-render (src/render) in the browser: scripts/render_web.mjs gives it globalThis.__mbrender first -->
 <canvas id="c"></canvas>
 <script src="host.js"></script>
-<script src="render.js"></script>
+<!-- The driver loads render.js after the host has decoded the draw lists' images. -->
 </body>
 </html>
