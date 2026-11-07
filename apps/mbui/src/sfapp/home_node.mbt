@@ -91,6 +91,23 @@ fn home_top_bar_node(
       .gap(Is(10.0))
       .lines_up(Is(Some(Middle)))
       |> ignore
+      // 待处理, first on the bar: as a system's bar has it (no rail here to hold its bell)
+      row.box(fn(k) {
+        @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
+          guard @signals.untracked(workspace) is Some(w) else { return }
+          let (x, y, wd, h) = k.placed_window_now()
+          @sfdesk.open_attention_panel(src, w, At(x, y, wd, h))
+        })
+        k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
+          m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
+          m.box(fn(at) {
+            at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
+            @sfpages.chat_mark_node(at, fn() { "done" })
+          })
+          |> ignore
+        })
+      })
+      |> ignore
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       row.show(fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(f) {
         let key : Ref[@view.View?] = Ref(None)
@@ -199,28 +216,6 @@ fn home_top_bar_node(
           s.show(fn() { field(marks(), "others") is Some(String(_)) }, fn(m) {
             m.says(By(fn() { Some(@view.said(Image, label=text(marks(), "othersLabel"))) })) |> ignore
             @sfpages.chat_mark_node(m, fn() { text(marks(), "others") })
-          })
-        })
-        |> ignore
-        // 待处理: there is no rail here to hold its bell
-        end.box(fn(k) {
-          @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
-            match workspace() {
-              Some(w) =>
-                @sfdesk.open_attention_panel(src, w, {
-                  let (x, y, kw, kh) = k.placed_window_now()
-                  @sf.Anchor::At(x, y, kw, kh)
-                })
-              None => ()
-            }
-          })
-          k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
-            m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
-            m.box(fn(at) {
-              at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
-              @sfpages.chat_mark_node(at, fn() { "done" })
-            })
-            |> ignore
           })
         })
         |> ignore
