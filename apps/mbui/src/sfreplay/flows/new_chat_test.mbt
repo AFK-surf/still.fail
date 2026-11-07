@@ -1,6 +1,6 @@
 // 30-new-chat (e2e/traces/new-chat.trace): a new chat from the app: 令 in the bottom bar's notch, the new chat rising
 // from the bottom; its first message makes the chat on the station (newChat.create, chat.send by its key) and the
-// page becomes that chat in place; the agent answers and names it; back on Home, its named row and status.
+// page becomes that chat in place; the agent answers there; back on Home, its row (新对话: named by no one).
 
 ///|
 test "30-new-chat" {
@@ -21,8 +21,8 @@ test "30-new-chat" {
     f.tap("icon:chevron-left")
     // the chat off, Home's bar back up (longer than the page's going)
     f.run_for(@ui.move_most_ms)
-    // The fake agent names the chat on its answer; the row and the turn's outcome are both shown.
-    f.see("=the question")
+    // its row: no one named it (新对话), how its agent's turn ended under it
+    f.see("=新对话")
     f.see("answered the question that was asked")
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end
