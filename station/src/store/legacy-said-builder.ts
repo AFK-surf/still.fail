@@ -6,13 +6,14 @@ import { hasLegacySaid, legacySaidMaintenanceStep, legacySaidNeedsWork } from ".
 import { hasLegacyAgent, legacyAgentMaintenanceStep, legacyAgentNeedsWork } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, legacyLoginCardsMaintenanceStep, legacyLoginCardsNeedsWork } from "./legacy-login-cards.ts";
 import { hasLegacyEdits, legacyEditsMaintenanceStep, legacyEditsNeedsWork } from "./legacy-edits-build.ts";
+import { pageLetterGcNeedsWork, pageLetterGcStep } from "./page-letter-index.ts";
 import { archivePolicyIndexNeedsWork, archivePolicyIndexStep, hasLegacyArchivePolicy } from "./archive-policy-index.ts";
 import { decisionTimeIndexNeedsWork, decisionTimeIndexStep, hasLegacyDecisionTime } from "./legacy-decision-time.ts";
 import { decisionSessionIndexNeedsWork, decisionSessionIndexStep, decisionSessionRepairNeedsWork, decisionSessionRepairStep,
   hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex } from "./legacy-decision-session.ts";
 import type { Store } from "./store.ts";
 
-type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time" | "legacy-decision-session" | "legacy-decision-session-repair";
+type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "legacy-policy" | "legacy-decision-time" | "legacy-decision-session" | "legacy-decision-session-repair" | "page-letter-gc";
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
@@ -45,6 +46,8 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     needsWork: () => legacyLoginCardsNeedsWork(store.db), step: () => legacyLoginCardsMaintenanceStep(store.db) });
   if (kinds.includes("legacy-edits") && hasLegacyEdits(store.db)) lookups.push({ kind: "legacy-edits",
     needsWork: () => legacyEditsNeedsWork(store.db), step: () => legacyEditsMaintenanceStep(store.db) });
+  if (kinds.includes("page-letter-gc")) lookups.push({ kind: "page-letter-gc",
+    needsWork: () => pageLetterGcNeedsWork(store.db), step: () => pageLetterGcStep(store.db) });
   if (kinds.includes("legacy-policy") && hasLegacyArchivePolicy(store.db) && archivePolicyIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-policy",
     needsWork: () => archivePolicyIndexNeedsWork(store.db), step: () => archivePolicyIndexStep(store.db) });
   if (kinds.includes("legacy-decision-time") && hasLegacyDecisionTime(store.db) && decisionTimeIndexNeedsWork(store.db)) lookups.push({ kind: "legacy-decision-time",
@@ -180,9 +183,14 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     send();
   };
   const wake = () => { requested = true; start(); };
+  // Garbage collection is ongoing maintenance, not an old lookup whose readiness delays startup.
+  if (lookups.every((lookup) => lookup.kind === "page-letter-gc")) resolve(true);
   if (lookups.length > 0) {
     off = store.subscribe((change) => {
-      if ((change.type === "thread" && change.entries.length > 0) || change.type === "threadRemoved") wake();
+      // Ordinary messages cannot add page-letter garbage. If that is the only maintenance left, do not probe the
+      // database on every message; thread deletion wakes it, and the periodic check covers older connections.
+      if ((change.type === "thread" && change.entries.length > 0 && lookups.some((lookup) => lookup.kind !== "page-letter-gc"))
+        || change.type === "threadRemoved") wake();
     });
     // An older connection's writes do not notify this Store. Probe one indexed key periodically once handover ends.
     periodicCancel = work.every(5_000, () => {
@@ -263,5 +271,5 @@ export function buildLegacySaid(store: Store, previous: Promise<void>, workerFil
 
 /// Prepare the old lookups a store needs after the old station has handed over.
 export function buildLegacyEntryLookups(store: Store, previous: Promise<void>, workerFile?: URL): ReturnType<typeof buildLookups> {
-  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy","legacy-decision-time","legacy-decision-session"],workerFile);
+  return buildLookups(store,previous,["legacy-said","legacy-agent","legacy-login","legacy-edits","legacy-policy","legacy-decision-time","legacy-decision-session","page-letter-gc"],workerFile);
 }

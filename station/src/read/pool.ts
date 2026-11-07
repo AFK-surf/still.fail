@@ -33,7 +33,7 @@ import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
+import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_LETTER_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -126,6 +126,7 @@ export class Readers {
   private archiveLast: RequestedBuilder<number> | null = null;
   private legacyEdits: RequestedBuilder<number> | null = null;
   private legacySaid: RequestedBuilder<number> | null = null;
+  private pageLetters: RequestedBuilder<number> | null = null;
   private turns: TurnBuilder | null = null;
   private recentChats: RecentChatBuilder | null = null;
   private sessionList: SessionListBuilder | null = null;
@@ -292,6 +293,14 @@ export class Readers {
     return this.covered(this.legacySaid.ready([0], signal), signal);
   }
 
+  /// Prepare only the requested old chats' letter-message keys, sharing progress and handover with other readers.
+  preparePageLetters(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.pageLetters ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
+      "old page letters", (thread, cancel) => ({ thread, pageLetters: true, cancel }));
+    return this.covered(this.pageLetters.ready(threads, signal), signal);
+  }
+
   /// Prepare the old connection bindings for session reads and auto-archiving together.
   prepareSessionBindings(signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -373,6 +382,13 @@ export class Readers {
         }
         if (error.message === LEGACY_SAID_PENDING) {
           await this.prepareLegacySaid(signal);
+          continue;
+        }
+        if (error.message.startsWith(PAGE_LETTER_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(PAGE_LETTER_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.preparePageLetters(threads, signal);
           continue;
         }
         if (error.message.startsWith(LAST_MESSAGE_PENDING)) {
@@ -654,6 +670,7 @@ export class Readers {
     if (this.archiveLast !== null) void this.archiveLast.close();
     if (this.legacyEdits !== null) void this.legacyEdits.close();
     if (this.legacySaid !== null) void this.legacySaid.close();
+    if (this.pageLetters !== null) void this.pageLetters.close();
     if (this.turns !== null) void this.turns.close();
     if (this.recentChats !== null) void this.recentChats.close();
     if (this.sessionList !== null) void this.sessionList.close();
