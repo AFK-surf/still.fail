@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { makeStore, saidOf } from "../src/read/store.ts";
+import { makeStore, saidOf, SaidUnavailable } from "../src/read/store.ts";
 import { installLegacySaid, legacySaidStep } from "../src/store/legacy-said-build.ts";
-import { installSaidState } from "../src/store/said-state.ts";
+import { installSaidState, saidScanStep, type SaidScan } from "../src/store/said-state.ts";
 import { Store } from "../src/store/store.ts";
 
 function traceWrites(db: DatabaseSync, trace: (sql: string) => string): void {
@@ -14,6 +14,20 @@ function traceWrites(db: DatabaseSync, trace: (sql: string) => string): void {
     if (traced !== original) { db.exec(`DROP TRIGGER ${name}; ${traced}`); replaced++; }
   }
   assert.ok(replaced > 0, "instrument the installed write triggers");
+}
+
+function saidAfterPreparation(db: DatabaseSync, thread: number): ReturnType<typeof saidOf> {
+  const read = makeStore(db,"/none");
+  try { return saidOf(read,thread); }
+  catch (error) { if (!(error instanceof SaidUnavailable)) throw error; }
+  let scan: SaidScan | null = null;
+  for (let i=0;i<100;i++) {
+    const step = saidScanStep(db,thread,scan);
+    assert.ok(step.visited <= 64);
+    scan = step.scan;
+    if (step.done) return saidOf(read,thread);
+  }
+  throw new Error("sidebar preparation did not finish");
 }
 
 for (const scenario of ["changed-away", "ignored"] as const) test(`an old writer's append skips ${scenario} messages`, () => {
@@ -47,7 +61,7 @@ for (const scenario of ["changed-away", "ignored"] as const) test(`an old writer
       put.run(thread,size+2,"new",size+2);
       visits.push(visited);
       assert.ok(visited > 0, "the append executed the traced lookup");
-      assert.deepEqual(saidOf(makeStore(db,"/none"),thread),
+      assert.deepEqual(saidAfterPreparation(db,thread),
         { n:size+2,authorKind:"person",author:"alice",other:null });
     } finally { store.close(); }
   }
@@ -106,7 +120,7 @@ for (const dirty of [0, 63, 64, 65]) test(`a prepared old lookup handles ${dirty
     put.run(thread,1000,"message","person","alice","new",1000);
     assert.equal(db.prepare("SELECT said_other_known FROM thread_state WHERE thread=?").get(thread)?.said_other_known,dirty<=64 ? 1 : 0);
     assert.equal(db.prepare("SELECT token FROM said_state_guard WHERE thread=?").get(thread)?.token,dirty<=64 ? "existing" : undefined);
-    assert.deepEqual(saidOf(makeStore(db,"/none"),thread),{ n:1000,authorKind:"person",author:"alice",other:1 });
+    assert.deepEqual(saidAfterPreparation(db,thread),{ n:1000,authorKind:"person",author:"alice",other:1 });
   } finally { store.close(); }
 });
 
