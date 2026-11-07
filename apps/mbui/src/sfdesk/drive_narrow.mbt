@@ -174,35 +174,11 @@ let chip_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, c
 
 
 ///|
-/// How tall a row is taken to be before it is laid out.
-let narrow_row_est : Double = 62.0
-
-///|
-/// Under the list, 30 over the frame's foot (contentPadding).
-let narrow_list_foot : Double = 30.0
-
-///|
 /// Back's words at least 80 wide, at most what the bar has beside the title (half less 120).
 let narrow_back_least : Double = 80.0
 
 ///|
 let narrow_back_room : Double = 120.0
-
-///|
-/// The bar's buttons (NavButton: 34, its icon 18; ＋'s 20).
-let narrow_bar_button_w : Double = 34.0
-
-///|
-let narrow_bar_icon : Double = 18.0
-
-
-///|
-/// The rows' marks (22), a folder's chevron (14), a crumb's (12), the empty folder's mark (40), a row's spinner (12), a
-/// row's key (34).
-let narrow_kind_icon : Double = 22.0
-
-///|
-let narrow_chevron_icon : Double = 14.0
 
 ///|
 let narrow_crumb_chevron : Double = 12.0
@@ -240,15 +216,6 @@ let narrow_link_words : @ui.TextStyle = @ui.text_style(size=Body, color=Link, wr
 let narrow_failed_words : @ui.TextStyle = @ui.text_style(size=Body, color=Danger, w=Full)
 
 ///|
-/// What it holds in a line (mCount): 28 in, 2 over, 8 under, the meta's words, muted.
-// kept across runs: a value (no field of it changes)
-let narrow_count_box : @ui.Style = @ui.css("w=Full px=S7 pt=S0_5 pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_count_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
 /// The crumbs (mCrumbs): 20 in, a crumb 4 round, the way's muted, where it is in the words' colour.
 // kept across runs: a value (no field of it changes)
 let narrow_crumbs_row : @ui.Style = @ui.css("row pl=S5 pr=S5 pt=S0_5 pb=S1 align=ACenter")
@@ -279,29 +246,3 @@ let narrow_empty_box : @ui.Style = @ui.css("w=Full px=S8 py=S14 gap=S3 align=ACe
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
-
-///|
-/// A row (mRow): 12 by 11 in (the card's 8 and its own), its mark, its words, what is at its end 12 apart.
-// kept across runs: a value (no field of it changes)
-let narrow_entry : @ui.Style = @ui.css("row w=Full px=S2 py=S2_5 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_entry_words : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-/// Its name (mName: the body's 15 on 20), what it is under it (mMeta: 12 on 16, muted).
-// kept across runs: a value (no field of it changes)
-let narrow_entry_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_entry_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_trouble : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, weight=Semibold, color=Danger, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_trouble_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, w=Full)

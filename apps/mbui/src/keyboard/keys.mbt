@@ -8,10 +8,6 @@
 pub let unit_width : Double = 1080.0
 
 ///|
-/// The bar's height (what is being typed and its candidates, or the bar's own buttons).
-pub let bar_h : Double = 160.0
-
-///|
 /// The keyboard's height without the system's bars at its foot: the bar and four rows of keys.
 pub let board_h : Double = 788.0
 

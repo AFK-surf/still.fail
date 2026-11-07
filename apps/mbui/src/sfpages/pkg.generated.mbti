@@ -176,8 +176,6 @@ pub fn find_chat() -> String
 
 pub fn find_close() -> Unit
 
-pub let find_faint : Double
-
 pub let find_field_h : Double
 
 pub fn find_forget() -> Unit
@@ -296,13 +294,9 @@ pub let lines_ms : Double
 
 pub fn link_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, agent? : String, chats? : Array[@sfbase.LinkedChat], link_to? : (String) -> @sf.LinkTo) -> Unit
 
-pub let link_size : Double
-
 pub let list_filters : Array[String]
 
 pub fn list_key(@sfbase.ChatRef) -> String
-
-pub let lists_top_in : Double
 
 pub fn local_menu_open() -> Bool
 
@@ -345,8 +339,6 @@ pub fn model_triple(@ui.Ctx, @sfbase.Source, String, String, up? : Bool, page? :
 pub let msg_name : @ui.TextStyle
 
 pub let msg_name_room : @ui.Style
-
-pub let narrow_note : @ui.TextStyle
 
 pub let narrow_row : @ui.Style
 
@@ -517,8 +509,6 @@ pub fn row_aside_w(@ui.Ctx, @sfbase.ChatItem, String) -> Double
 pub let row_last : @ui.Style
 
 pub fn row_mark(@ui.Ctx, String, String) -> Unit
-
-pub let row_more : @ui.Style
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 

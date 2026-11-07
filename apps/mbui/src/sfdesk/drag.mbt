@@ -766,16 +766,6 @@ let fdrag_says : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Accent")
 let fdrag_says_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
-/// 个人收藏 while a folder dragged over it would be kept there (keep: ringed in the accent).
-// kept across runs: a value (no field of it changes)
-let fdrag_keep : @ui.Style = @ui.css("w=Full radius=Xl")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fdrag_keep_on : @ui.Style = fdrag_keep.then(@ui.css("border=B1 border_color=Accent"))
-
-
-///|
 /// What is carried now (a row dragged), for what it goes over to show it (a chat's composer).
 pub fn dragged() -> Dragged? {
   fdrag.item.get()

@@ -122,10 +122,6 @@ fn open_chat() -> ChatRef? {
 }
 
 ///|
-/// The room over a list under its bar with keyboard and mouse's lists (navScroll: 4).
-pub let lists_top_in : Double = 4.0
-
-///|
 /// Each list's rows as given and as the list made of them (ListRows: what came, went, went ahead), by the list's key.
 // kept across runs: put back by sidebar_reset (reset)
 let list_rows : Map[String, @ui.ListRows[Line]] = {}
@@ -140,10 +136,6 @@ let lists_had : Map[String, Bool] = {}
 fn list_space(c : @ui.Ctx, h : Double) -> Unit {
   c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
 }
-
-///|
-/// How wide a list is at least for its empty state to be the phone's, with its illustration (240 wide, 30 each side).
-let illustrated_from : Double = 300.0
 
 ///|
 let illustration_w : Double = 240.0
@@ -179,16 +171,6 @@ let empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 ///|
 // kept across runs: a value (no field of it changes)
 let empty_link : @ui.TextStyle = @ui.text_style(size=Ui, color=Link)
-
-///|
-// kept across runs: a value (no field of it changes)
-let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-/// The window the track slides in (Sidebar.css.ts navSlider: overflow hidden): a list on its way out or in shows only
-/// in the lists' own box, never over what is beside it (the rail, beside a sidebar).
-// kept across runs: a value (no field of it changes)
-let lists_window : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
 /// The filter's menu last opened (its presenter).

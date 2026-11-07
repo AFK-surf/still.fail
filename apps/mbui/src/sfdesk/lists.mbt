@@ -486,10 +486,6 @@ fn archive_main(c : @ui.Ctx) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
 let arch_field_box : @ui.Style = @ui.css("w=Full pb=S1")
 
 ///|

@@ -3,12 +3,6 @@
 // Sheet.kt's frame).
 
 ///|
-/// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
-/// caller's (the workspace in use: the chips' grey).
-// kept across runs: a value (no field of it changes)
-let chip_list_card : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, clip=true)
-
-///|
 /// A phone menu's rows' ground menu_pad in from the panel's edge, rounded menu_row (Sheet.kt MenuHost MENU_PAD,
 /// MENU_ROW); their words menu_words_in from the panel's edge.
 let menu_pad : Double = 6.0

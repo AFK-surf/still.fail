@@ -2,7 +2,8 @@
 // and calls, a workspace, a chat's and the chats' views; the pages, what a chat, a drive's place and a screen are as
 // pages), taken in here by name.
 
-pub using @sfbase {  // the app's words (strings.mbt and its tables)
+pub using @sfbase {
+  // the app's words (strings.mbt and its tables)
   tr,
   fill,
   feel_hold,
@@ -312,7 +313,6 @@ pub using @sfbase {  // the app's words (strings.mbt and its tables)
   dismiss_turn_ms,
   turn_calm_ms,
   turn_most_ms,
-  unseen_at,
   absolute_times,
   words_runs,
   chat_params,

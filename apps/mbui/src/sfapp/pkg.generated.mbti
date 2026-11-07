@@ -930,8 +930,6 @@ pub fn turns_of(String) -> @sfbase.Turns
 
 pub fn under_rest() -> Double
 
-pub let unseen_at : Double
-
 pub let update : @sfbase.Update
 
 pub fn update_again(@ui.Ctx, @sfbase.Source) -> Unit

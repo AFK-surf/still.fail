@@ -2741,9 +2741,6 @@ let textarea_box_hot : @ui.Style = textarea_box.then(@ui.css("border_color=Field
 let input_size : Double = 14.0
 
 ///|
-let input_line : Double = 20.0
-
-///|
 /// A one-line field's height (the theme's controls': Theme::control_h), for what stands it concentric in a corner.
 pub fn input_height() -> Double {
   theme().control_h
@@ -2874,15 +2871,6 @@ let select_words : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, wrap=fa
 ///|
 // kept across runs: a value (no field of it changes)
 let select_placeholder : @ui.TextStyle = select_words.then(@ui.text_style(color=Subtle))
-
-///|
-/// An option's row (parts.css.ts selectItem: a menu's item, its check at its end 10 in).
-// kept across runs: a value (no field of it changes)
-let select_item : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let select_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// One of a few (a choice whose options need no sentence each: an account, a role): up to `one_of_listed_most` of
@@ -3410,23 +3398,6 @@ let panel_label_led : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let panel_text_box : @ui.Style = @ui.css("w=Full px=S2_5")
-
-///|
-/// A small panel's foot with a pill at its end (its one thing to do), or at both its ends (`panel_foot_ends`: who runs
-/// it at its start, buttons at its end): each in its foot corner, as far in as makes a pill concentric with it, past the
-/// panel's padding; its words where they are.
-// kept across runs: a value (no field of it changes)
-pub let panel_foot_end : @ui.Style = @ui.style(
-  pr=capsule_room(r_menu, panel_pill, less=panel_pad),
-  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let panel_foot_ends : @ui.Style = @ui.style(
-  px=capsule_room(r_menu, panel_pill, less=panel_pad),
-  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
-)
 
 ///|
 // kept across runs: a value (no field of it changes)

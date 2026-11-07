@@ -1403,19 +1403,12 @@ let st_mark_glyph : Double = 28.0
 let st_profile_glyph : Double = 18.0
 
 ///|
-let st_grant_glyph : Double = 18.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let st_mark_letter : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let st_fact : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
-
-///|
-/// Between the facts' lines (workspaceFacts: 4).
-let st_facts_line : Double = 4.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1444,17 +1437,7 @@ let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 bg=Neutral align=ACenter ju
 
 ///|
 // kept across runs: a value (no field of it changes)
-let st_grant_mark : @ui.Style = @ui.css("w=S9 h=S9 radius=Full bg=Neutral align=ACenter justify=JCenter")
-
-
-///|
-// kept across runs: a value (no field of it changes)
 let st_env_problems : @ui.Style = @ui.css("w=Full gap=S1")
-
-///|
-/// A card's buttons at its foot, at its end (cardActions: 8 apart).
-// kept across runs: a value (no field of it changes)
-let st_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
 
 ///|
 /// The variables' editor on its card: the field, what is wrong under it, its buttons, 12 apart.

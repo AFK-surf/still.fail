@@ -311,10 +311,6 @@ let find_button_w : Double = 26.0
 pub let find_field_h : Double = 32.0
 
 ///|
-/// How light the strokes under the words in the messages other than the one the reader is at are (ChatFind.css.ts: .45).
-pub let find_faint : Double = 0.45
-
-///|
 /// The bar (ChatFind.css.ts bar): before the field what it did not look in, said while it is so; the field 320 wide, 32
 /// high, a line round it on the raised ground, a capsule (so in a panel's corner where its shape is concentric); the
 /// words typed in 14, which of how many in 12, the one before, the next, close: 26 round, concentric in its end, the

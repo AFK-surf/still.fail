@@ -53,9 +53,6 @@ pub fn skill_tag(k : Json?, names : Map[String, String]) -> String {
 }
 
 ///|
-pub let memory_chevron : Double = 14.0
-
-///|
 /// Whether the built-in skills are folded open, by station: kept as one goes back and comes in again, the same for
 /// every page that shows that station's memory (builtin_open_of, builtin_turn).
 // kept across runs: put back as a run begins (on_reset)

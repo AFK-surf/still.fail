@@ -2621,14 +2621,6 @@ fn pg_card_now() -> @ui.Style {
 let pg_card_pane : @ui.Style = @ui.css("w=Full bg=Card clip").then(@ui.style(p=room(corner_inset), radius=card_radius))
 
 ///|
-// kept across runs: a value (no field of it changes)
-let pg_bleed : @ui.Style = @ui.style(mx=room(-pg_room_in))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pg_no_bleed : @ui.Style = @ui.css("")
-
-///|
 /// A card on a narrow page (in its room): 10 under each.
 // kept across runs: a value (no field of it changes)
 pub let pg_card_room : @ui.Style = @ui.css("w=Full pb=S2_5")
@@ -2647,9 +2639,6 @@ let pg_card : @ui.Style = @ui.style(w=Full, p=list_room, radius=list_card_radius
 /// A choice of a few on a narrow page: as far from what follows as a card is (pg_card_room's 10), a page's block.
 // kept across runs: a value (no field of it changes)
 let pg_choice_box : @ui.Style = @ui.css("w=Full pb=S2_5")
-
-///|
-let pg_choice_h : Double = 34.0
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -313,7 +313,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 28
+      "src/sf/tokens.mbt": 26
     },
     "style-text": {},
     "build-effect": {},
@@ -329,7 +329,6 @@
     "page-screen": {},
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,
-      "src/sfapp/settings/parts.mbt": 1,
       "src/sfdesk/add_profile.mbt": 19,
       "src/sfdesk/drive_dialogs.mbt": 2,
       "src/sfdesk/files_start.mbt": 4,
@@ -338,7 +337,6 @@
       "src/sfpages/account.mbt": 1,
       "src/sfpages/appearance.mbt": 2,
       "src/sfpages/automatic_decisions.mbt": 1,
-      "src/sfpages/connect.mbt": 1,
       "src/sfpages/connects.mbt": 14,
       "src/sfpages/local_station.mbt": 6,
       "src/sfpages/memory_doc.mbt": 3,

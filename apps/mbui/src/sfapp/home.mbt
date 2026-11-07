@@ -150,16 +150,6 @@ fn nav_button(
 }
 
 ///|
-/// The marks' colours (SettingParts.kt MarkBlue, MarkRed; Home.kt MarkYellow).
-let mark_blue : Int64 = 0x3B82F6FFL
-
-///|
-let mark_red : Int64 = 0xE5484DFFL
-
-///|
-let mark_yellow : Int64 = 0xF2B01EFFL
-
-///|
 /// What the others have waiting, beside the name: its mark alone.
 // kept across runs: a value (no field of it changes)
 let others_mark : @ui.Style = @ui.css("row align=ACenter")

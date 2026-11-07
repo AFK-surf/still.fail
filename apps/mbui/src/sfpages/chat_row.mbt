@@ -553,12 +553,6 @@ let lift_ms : Double = 480.0
 pub let touch_row_h : Double = @sf.touch_list_row_h
 
 ///|
-/// A row in its list with another under it, 2 over it (Sidebar.css.ts navSessionWrap + navSessionWrap: the computer's
-/// lists', ChatList::more).
-// kept across runs: a value (no field of it changes)
-pub let row_more : @ui.Style = @sf.mouse_chat_list.more
-
-///|
 // kept across runs: a value (no field of it changes)
 pub let row_last : @ui.Style = @ui.css("w=Full")
 

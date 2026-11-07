@@ -40,10 +40,6 @@ pub(all) struct StrokeShape {
 pub let line_stroke : StrokeShape = { up: -2.0, down: 1.5, end: -1.5, width: 2.0 }
 
 ///|
-/// A message's (TextMark.kt): 4 under the baseline.
-pub let message_stroke : StrokeShape = { up: -3.0, down: 2.0, end: -2.0, width: 2.5 }
-
-///|
 /// Where a stroke's picture is round its start (0, 0): how far left of it and above it its top left is.
 pub fn stroke_corner(s : StrokeShape) -> (Double, Double) {
   let top = dmin(dmin(0.0, s.up), dmin(s.down, s.end))

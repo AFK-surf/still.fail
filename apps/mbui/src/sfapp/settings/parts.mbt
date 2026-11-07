@@ -730,26 +730,6 @@ let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibol
 let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wide_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_section_note : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_inset : @ui.Style = @ui.css("w=Full px=S4")
-
-///|
-// kept across runs: a value (no field of it changes)
-let phone_inset : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).
 fn page_note(c : @ui.Ctx, words : String) -> Unit {
   if wide.val {
@@ -841,19 +821,6 @@ pub let settings_button_h : Double = 38.0
 /// words after it: its words where they were).
 // kept across runs: a value (no field of it changes)
 pub let foot_across : @ui.Style = @sf.foot_across(settings_button_h)
-
-///|
-// kept across runs: a value (no field of it changes)
-let foot_start : @ui.Style = @sf.foot_start(settings_button_h, button_pad)
-
-///|
-/// A block across a card's foot, its ground reaching past the card's words to the ladder's inset.
-// kept across runs: a value (no field of it changes)
-let block_across : @ui.Style = @sf.block_across
-
-///|
-/// A settings button's words in from its ends (button_box: 16).
-let button_pad : Double = 16.0
 
 ///|
 /// A card with a block in its foot corners: its foot the ladder's inset.
@@ -1094,18 +1061,9 @@ let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wra
 let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full, balance=true)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wide_value : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
 /// A row's title: the body's words on one line, as wide as the row lets them.
 // kept across runs: a value (no field of it changes)
 let row_title_words : @ui.TextStyle = @sf.body.then(row_title_strong).then(@sf.one_line).then(@sf.full_words)
-
-///|
-/// A row's title with a tag after it: its words' width, on one line.
-// kept across runs: a value (no field of it changes)
-let row_title_tagged : @ui.TextStyle = @sf.body.then(@sf.one_line)
 
 ///|
 /// A row's title as strong as the library's rows' titles (link_row's, a switch row's: Medium), so a page's rows of this
@@ -1196,11 +1154,6 @@ fn chevron(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   @sf.icon(c, "chevron-right", size=14.0, color=t.p.subtle) |> ignore
 }
-
-///|
-/// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
-// kept across runs: a value (no field of it changes)
-let near_beside : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// A connect's presence, a station's state (PageParts.kt PresenceDot): online green, at work the accent, failing red,
@@ -1426,33 +1379,6 @@ let wide_button_h : Double = 46.0
 let wide_button_box : @ui.Style = @ui.css("row w=Full px=S5 radius=Full gap=S2 align=ACenter justify=JCenter")
 
 ///|
-/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, rippled where it is pressed (not when off);
-/// its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
-/// 12 in and rounded concentric with the card, as a ListRow.
-// kept across runs: a value (no field of it changes)
-let pick_room : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line_off : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line : @ui.Style = pick_line_off
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_card_line_off : @ui.Style = pick_line_off.then(@ui.css("px=S3 radius=Inner"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_card_line : @ui.Style = pick_line.then(@ui.css("px=S3 radius=Inner"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_label_line : @ui.Style = near_beside.then(@sf.full_width)
-
-///|
 /// A text button's ground under the finger past its words (Controls.kt pressText: PRESS_OUT on each side, half that
 /// above and under), and its corner (PRESS_CORNER).
 let press_out : Double = 6.0
@@ -1518,28 +1444,11 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, s
 let round_button : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let body_box : @ui.Style = @ui.css("w=Full px=S4 py=S3_5 gap=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let body_on_card : @ui.Style = body_box.then(@ui.css("px=S3 py=S3"))
-
-///|
 /// A quiet note (Security.kt Note).
 fn note(c : @ui.Ctx, words : String) -> Unit {
   // Security.kt:110 (12sp, line 18)
   c.text(words, style=@sf.note.then(@sf.full_words)) |> ignore
 }
-
-///|
-/// TonePill: 6 in at its sides, 1 over and under, 6 round.
-// kept across runs: a value (no field of it changes)
-let tone_pill_box : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tone_pill_words : @ui.TextStyle = @sf.caption.then(@sf.one_line)
 
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
@@ -1590,43 +1499,6 @@ pub fn mono(
 /// What it holds in the middle of where it is, across.
 // kept across runs: a value (no field of it changes)
 let centre_column : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_line : @ui.Style = @ui.css("row align=ACenter")
-
-///|
-/// A state's words, as small as where they stand has them: 11, 12, 13 (Connects.kt), muted, on one line.
-// kept across runs: a value (no field of it changes)
-let status_xs2 : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_xs : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-/// A state's lead as an icon, as tall as the words (StatusText.kt: 14).
-let status_icon : Double = 14.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line_ground : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S1,
-  py=@sf.pick_line_y,
-  gap=S3,
-  align=ACenter,
-  radius=@sf.pick_line_r,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)
 
 ///|
 /// A page head's own action in the wide frame (ui.tsx Button with Plus): the library's button, its ＋ and words. True on

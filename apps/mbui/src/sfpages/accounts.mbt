@@ -1710,18 +1710,6 @@ let pf_device_code_words : @ui.TextStyle = @ui.text_style(size=Heading, weight=S
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pf_share_rows : @ui.Style = @ui.css("w=Full pt=S2_5 gap=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pf_share_value : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
 let pf_chips : @ui.Style = @ui.css("row w=Full gap=S1_5")
 
 ///|
@@ -1790,11 +1778,6 @@ let pf_env_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_env_name : @ui.Style = @ui.css("w=S48")
-
-///|
-/// How it runs: its switches 14 apart.
-// kept across runs: a value (no field of it changes)
-let pf_run_rows : @ui.Style = @ui.css("w=Full gap=S3_5")
 
 ///|
 /// A profile made up, for what its page shows while it is read (profile_view in its bones): its name, how it stands,

@@ -199,10 +199,6 @@ pub fn side_list() -> @ui.Style {
 let side_list_top : @ui.Style = @ui.css("pt=S1")
 
 ///|
-/// How far under the band a sidebar's list stands (side_list_top's).
-pub let side_list_top_in : Double = 4.0
-
-///|
 /// A sidebar's list under its band (side_list): what `rows` builds and the room under its last (list_foot_in),
 /// scrolling under the band when it is taller than the room (a list of one: `key` keeps where it is scrolled to);
 /// `top` the room over its first, scrolled with it.

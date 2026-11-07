@@ -77,7 +77,3 @@ priv struct Steady {
 
 ///|
 let steadies : Map[String, Steady] = {}
-
-///|
-/// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).
-let ring_room : Double = 3.0

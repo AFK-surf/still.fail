@@ -846,10 +846,6 @@ pub fn marks_any() -> Bool {
 pub let picture_key : Double = 16.0
 
 ///|
-// kept across runs: a value (no field of it changes)
-pub let marks_put_room : @ui.Style = @ui.css("pl=S1")
-
-///|
 /// How far over the tools (the window's tree's, marks_tools_node) the notes are, drawn without them: as far as from the
 /// tools here (8 under the notes, and the tools' column's 2 more).
 let marks_notes_over_tools : Double = 10.0

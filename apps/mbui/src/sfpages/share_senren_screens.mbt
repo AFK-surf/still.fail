@@ -406,10 +406,6 @@ let gc_round_cut : @ui.Style = @ui.css("radius=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let gc_full : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
 let gc_grow : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|

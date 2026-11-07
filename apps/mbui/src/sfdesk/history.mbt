@@ -384,10 +384,6 @@ let wh_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=fal
 let wh_details_box : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S3_5 gap=S2_5")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wh_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
-
-///|
 /// The quiet line 4 nearer what is over it (sessionQuiet: outsetTop(4)).
 // kept across runs: a value (no field of it changes)
 let wh_quiet_box : @ui.Style = @ui.css("w=Full").then(@sf.outset_top(4.0))

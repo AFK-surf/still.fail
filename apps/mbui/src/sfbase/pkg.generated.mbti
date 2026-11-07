@@ -246,8 +246,6 @@ pub let desk_text_side : Double
 
 pub let desk_wheel_rate : Double
 
-pub let desk_whole : Double
-
 pub let desktop_face : String
 
 pub fn direct_part(String, Map[String, Json], Double) -> String
@@ -882,8 +880,6 @@ pub fn marks_pick_color(Int64) -> Unit
 
 pub fn marks_put_down(@ui.Ctx) -> Unit
 
-pub let marks_put_room : @ui.Style
-
 pub fn marks_quotes(String, String, Double, Double) -> Array[(String, String, String)]
 
 pub fn marks_redo() -> Unit
@@ -1059,8 +1055,6 @@ pub let own_code_face : Int32
 pub fn own_screen(String, String) -> Bool
 
 pub let page_bridge_js : String
-
-pub let page_glass_blur : Double
 
 pub let page_js : String
 
@@ -1253,12 +1247,6 @@ pub fn reader_key(DriveAt) -> String
 pub fn reader_left(DriveAt) -> Unit
 
 pub fn reading_of(String) -> Reading
-
-pub let reading_pill_box : @ui.Style
-
-pub let reading_pill_words : @ui.TextStyle
-
-pub let reading_spinner : Double
 
 pub let readings : Map[String, Reading]
 
@@ -1581,8 +1569,6 @@ pub fn under_post(@ui.Ctx, String, Bool, enter? : @motion.Trans, open? : @motion
 pub fn under_reset() -> Unit
 
 pub fn under_rest() -> Double
-
-pub let unseen_at : Double
 
 pub let update : Update
 

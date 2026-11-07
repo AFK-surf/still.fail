@@ -2,11 +2,6 @@
 // Chat input is implemented by sfpages/composer.mbt and sfbase/compose.mbt.
 
 ///|
-/// The capsule's corner and its inset (ui/Glass.kt ComposerCorner, ComposerInset); what sits inside it is rounded
-/// concentric with it.
-let composer_corner : Double = @sf.card_corner
-
-///|
 /// What waits to go with the message, in the capsule's top left corner: a picture's tile (its remove button reaching
 /// `picture_remove_out` beyond its top right corner), each file's card as tall and as round. The row stands as far
 /// from the capsule's left edge as from its top (Glass.kt ComposerFilesIn, 10), its items' corner `Inner`: concentric
@@ -17,10 +12,6 @@ let picture_tile : Double = 56.0
 let picture_remove_out : Double = 5.0
 
 ///|
-///|
-/// A file's card and a pasted text's card in the files' row, how wide.
-let file_card_w : Double = 236.0
-
 ///|
 /// What waits in the files' row (a picture's tile, a file's card, a pasted text's): its corner concentric with the
 /// capsule's (Glass.kt InComposerFiles) where the row is the capsule's first (in its corner: `Inner`); under a quote
@@ -44,10 +35,6 @@ let files_card_set : @ui.Style = @ui.css("radius=Xl2")
 ///|
 /// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).
 let files_cornered : Ref[Bool] = Ref::new(false)
-
-///|
-/// A file's part going up (web/src/api.ts UPLOAD_PART), the biggest file taken (1 GB).
-let part_size : Int = 4 * 1024 * 1024
 
 ///|
 /// A file on its way to the station: going up, up (`done`, the station's Attachment), or failed. `image`: its picture

@@ -207,8 +207,6 @@ pub fn machine_sessions_offer(@ui.Ctx, Core, String, String) -> Unit
 
 pub fn mark_login(String, String) -> Unit
 
-pub let memory_chevron : Double
-
 pub fn memory_of(Core, String) -> MemoryRead
 
 pub fn meter_chips(@ui.Ctx, String, Array[Json], alerts? : Bool) -> Unit

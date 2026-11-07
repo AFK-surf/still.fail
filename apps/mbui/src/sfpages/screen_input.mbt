@@ -291,11 +291,6 @@ fn pad_gain(dp_per_ms : Double) -> Double {
 }
 
 ///|
-/// How long after the finger moved the pointer the station's word on it is taken again (its echo of the moves is
-/// behind).
-let pad_settle_ms : Double = 600.0
-
-///|
 /// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the
 /// station says it is once the finger has been still a moment (something else moved it, or the screen's edge held it).
 priv struct PadPointer {

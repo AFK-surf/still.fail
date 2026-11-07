@@ -1837,17 +1837,6 @@ pub fn Viewer::note(self : Viewer, c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-pub let reading_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=ACenter bg=Neutral radius=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let reading_pill_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false)
-
-///|
-pub let reading_spinner : Double = 12.0
-
-///|
 pub let file_progress_corner : Double = 14.0
 
 ///|
@@ -2614,9 +2603,6 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
 ///|
 /// Haze's blur of 24 dp and 20 dp as CSS's (glass.mbt: (px - 0.5) / 0.57735 dp).
 pub let dark_glass_blur : Double = 24.0 * 0.57735 + 0.5
-
-///|
-pub let page_glass_blur : Double = 20.0 * 0.57735 + 0.5
 
 ///|
 /// The frosted glass over a picture (FilePreview.kt darkGlass): 0x121214 at 62% over its blur; with transparency

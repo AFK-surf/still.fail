@@ -161,16 +161,6 @@ pub let columns : Columns = {
 pub let centred : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
-/// Centred across only (centredX).
-// kept across runs: a value (no field of it changes)
-pub let centred_x : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-/// Centred up and down only (centredY).
-// kept across runs: a value (no field of it changes)
-pub let centred_y : @ui.Style = @ui.css("h=Full justify=JCenter")
-
-///|
 /// Each after the first laid `x` over the one before (faces in a stack): overlap.
 pub fn overlap(x : Double) -> @ui.Style {
   @ui.style(ml=room(-x))

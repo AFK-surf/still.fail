@@ -7,8 +7,6 @@ import {
 }
 
 // Values
-pub let bar_h : Double
-
 pub let board_h : Double
 
 pub fn cap_at(Array[Cap], Double, Double) -> Int32

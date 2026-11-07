@@ -1,5 +1,6 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
-using @sfbase {  place_pick,
+using @sfbase {
+  place_pick,
   place_key,
   files_into,
   quoted_into,
@@ -25,7 +26,6 @@ using @sfbase {  place_pick,
   drive_reader,
   type PKind,
   type Viewer,
-  desk_whole,
   downloading,
   marking,
   marks_back,

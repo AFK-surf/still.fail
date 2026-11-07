@@ -197,10 +197,6 @@ pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms
 }
 
 ///|
-/// When what changed out of sight is said to have changed (Turns::in_turn): long before any frame, its motion over.
-pub let unseen_at : Double = -1.0e9
-
-///|
 /// The row of what the viewer just did here (a card's option picked: their answer, in the outbox) takes its turn as
 /// they do it, before what comes of it (the agent's line taking it up): the next row asked comes in it
 /// (web/src/listQueue.ts reserveRow), the options staying as they are, none pressed. No row by

@@ -1,5 +1,6 @@
 // What the pages read of sfbase, by their own names.
-using @sfbase {  place_pick,
+using @sfbase {
+  place_pick,
   place_key,
   fresh,
   pv,
@@ -239,7 +240,6 @@ using @settings {
   you,
   builtin_open,
   failing_of,
-  memory_chevron,
   memory_of,
   sections_of,
   skill_tag,

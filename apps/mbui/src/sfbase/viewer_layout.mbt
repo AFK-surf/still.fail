@@ -115,11 +115,6 @@ pub let desk_text_side : Double = 32.0
 pub let desk_text_foot : Double = 64.0
 
 ///|
-/// As it is (a zoom of 1).
-pub let desk_whole : Double = 1.0
-
-
-///|
 /// Under 640 (FilePreview.css.ts's phone widths): a page and a PDF 60 down, a PDF's pages 12 in and apart, a text 16 in
 /// and 48 under.
 pub let page_small_top : Double = 60.0

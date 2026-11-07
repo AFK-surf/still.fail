@@ -635,11 +635,6 @@ pub fn foot_start(height : Double, words_in : Double) -> @ui.Style {
 }
 
 ///|
-/// A block (a command's box, a table) across a card's foot, its ground reaching past the card's words to the
-/// ladder's inset: round by the ladder's next step there.
-pub let block_across : @ui.Style = @ui.style(mx=room(corner_inset - card_pad))
-
-///|
 /// A card's foot with a capsule `height` high in its corners: as far in as makes it concentric (card_foot_in).
 pub fn foot_pad(height : Double) -> @ui.Style {
   @ui.style(pb=room(card_foot_in(height)))
@@ -691,9 +686,6 @@ pub let list_room : @ui.Space = room(list_pad)
 
 ///|
 pub let list_words_room : @ui.Space = room(text_in)
-
-///|
-pub let corner_clear_room : @ui.Space = room(card_corner - card_pad)
 
 ///|
 /// How far in from a corner of `corner` a capsule `height` high stands concentric with it (capsule_in), as a style's
@@ -786,14 +778,6 @@ pub fn row_lead_out() -> @ui.Style {
 pub let card_foot_out : @ui.Style = @ui.style(mb=room(card_corner - small_corner - card_pad))
 
 ///|
-/// A line of small blocks with grounds that ends a card from its start (chips that narrow a page: 只看 10/3): out from
-/// the card's words at its start and its foot to where the ladder's small corner is concentric with the card's (16 in).
-pub let card_foot_start_out : @ui.Style = @ui.style(
-  ml=room(card_corner - small_corner - card_pad),
-  mb=room(card_corner - small_corner - card_pad),
-)
-
-///|
 /// How far in from a panel's sides its words stand (a dialog's, a sheet's: its title, what it says, its rows' words):
 /// as far as a card's words from its edge, cards in it or none; a card's own words as far in from the card, not on the
 /// panel's line (the user, 2026-11-03: 卡片里的字跟面板的字不需要对齐; 有卡片也应该这样).
@@ -802,11 +786,6 @@ pub let panel_words : Double = card_pad
 ///|
 /// A command's box's corner: a block's on a card, its copy button corner_inset in from its corner.
 pub let command_box_corner : Double = row_corner
-
-///|
-/// A button's height with keyboard and mouse (34, as everything pressed is: a row, a field; button_height): a capsule,
-/// @ui.capsule_in(card_corner, 34) in from a card's corner where it stands in one.
-pub let button_h : Double = menu_row_min
 
 ///|
 /// A card of pressable rows (a list card, a card of options): the rows this far in, as a menu's are in its panel
@@ -861,9 +840,6 @@ pub let fill_chip_corner : Double = small_corner
 /// Corners (--r-*): a field's, a card's, a dialog's, the nav's, a menu's,
 /// an option's.
 pub let r_field : Double = 12.0
-
-///|
-pub let r_card : Double = 20.0
 
 ///|
 pub let r_dialog : Double = 32.0
@@ -1838,36 +1814,9 @@ pub let group_corner : Double = list_card_corner
 pub let group_row_end_radius : @ui.Radius = rounded(@ui.concentric(group_corner, list_pad))
 
 ///|
-/// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
-/// worked out as Android does, no step of the scale.
-pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()
-
-///|
 /// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 24 wide at most (BAR), how far a line of the
 /// scale's words stand over it (their line, Xs3's 14, and 2), and a part's corner (4; 2 with many days: Base, Sm).
 pub let usage_plot : Double = 150.0
-
-///|
-pub let usage_plot_h : @ui.Len = Fixed(usage_plot)
-
-///|
-pub let usage_bar_max : @ui.Len = Fixed(24.0)
-
-///|
-/// The usage page's summary: 760 across at most (Codex keeps it 110 columns), its year's legend 10 a level.
-pub let usage_summary_w : @ui.Len = Fixed(760.0)
-
-///|
-pub let usage_level_side : @ui.Len = Fixed(10.0)
-
-///|
-pub let usage_tick_rise : Double = 16.0
-
-///|
-pub let usage_part_r : Double = 4.0
-
-///|
-pub let usage_part_r_many : Double = 2.0
 
 ///|
 /// A small dot's side, how a thing stands (7: PageParts.kt:465 PresenceDot, Security.kt:101 Dot).
@@ -1885,10 +1834,6 @@ pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 ///|
 /// A column a phone's width at most, in the middle (phone_column): its widest.
 pub let phone_max : @ui.Len = Fixed(420.0)
-
-///|
-/// A bar's round button (Parts.kt NavButton): 34 across.
-pub let nav_button_side : @ui.Len = Fixed(34.0)
 
 ///|
 /// A hairline across (0.5: a panel's rule over its foot).
@@ -1970,11 +1915,6 @@ fn ui_theme_of(t : Theme) -> @ui.Theme {
 }
 
 ///|
-/// The composer's files' row: the gap between what waits in it (Composer.kt: 6 and a remove button's reach past a
-/// picture), and the room kept at its end for the last button's reach (Composer.kt `beyond + PictureRemoveOut`).
-pub let files_gap : @ui.Space = Exact(11.0)
-
-///|
 pub let files_row_end : @ui.Space = Exact(7.0)
 
 ///|
@@ -1988,14 +1928,6 @@ pub let nav_sub_gap : @ui.Space = space_5
 /// 5, off the scale's 4 and 6: the gap in the line under a bar's title (nav_sub_gap), a row's room above and under in
 /// a sheet of chats (Composer.kt askToShare: padding(vertical = 5)).
 pub let space_5 : @ui.Space = S1_25
-
-///|
-/// A tag's widest (PageParts.kt StationTag: widthIn(max = 104)).
-pub let tag_max : @ui.Len = Fixed(104.0)
-
-///|
-/// A chat in the `@` menu at its lowest (Composer.kt ChatRefMenu: heightIn(min = 44)).
-pub let ref_row_min_h : @ui.Len = Fixed(44.0)
 
 ///|
 /// The sign-in page's (SignIn.kt): its title 28, bold, on the font's own line (28.sp), off the scale between Xl3's
@@ -2194,12 +2126,6 @@ pub let pick_sub_line : @ui.Leading = Exact(17.0)
 pub let search_ground : @ui.Color = A(Fg, Exact(0.06))
 
 ///|
-pub let found_row_h : @ui.Len = Fixed(66.0)
-
-///|
-pub let found_row_short_h : @ui.Len = Fixed(50.0)
-
-///|
 pub let found_line_h : @ui.Len = Fixed(22.0)
 
 ///|
@@ -2235,9 +2161,6 @@ pub let viz_paper : @ui.Color = Exact(0xF6F2EAFFL)
 
 ///|
 pub let viz_paper_dark : @ui.Color = Exact(0x26272BFFL)
-
-///|
-pub let viz_full_in : @ui.Space = S4_5
 
 ///|
 /// Marking a service's page (Preview.kt MarkMode, MarksOver, Note): its bar 30 high (a capsule), 添加到对话 (24 high)
@@ -2294,19 +2217,7 @@ pub let mark_said_h : @ui.Len = Fixed(26.0)
 pub let file_progress_w : @ui.Len = Fixed(220.0)
 
 ///|
-/// A size typed (Preview.kt CustomSize): its fields 72 wide, 10 round.
-pub let custom_field_w : @ui.Len = Fixed(72.0)
-
-///|
 pub let custom_field_r : @ui.Radius = Exact(10.0)
-
-///|
-/// The same field with keyboard and mouse (ViewportSize.css.ts field: 52 wide).
-pub let custom_field_dense_w : @ui.Len = Fixed(52.0)
-
-// ---------------------------------------------------------------------------
-// A station's screen, seen and driven (Android app/remote/ScreenViewer.kt): its sizes off the steps, as Android says
-// them.
 
 ///|
 /// A sidebar's row, every sidebar's (Sidebar.css.ts navRow, navSession; SidebarList.css.ts item): the ladder's row
@@ -2394,31 +2305,12 @@ pub let peek_card_in_px : Double = corner_inset
 pub let peek_frame_px : Double = peek_card_px - 2.0 * peek_card_in_px
 
 ///|
-/// A link's card's mark, 30 wide (36 high: S9), as the web's.
-pub let link_mark_w : @ui.Len = Fixed(30.0)
-
-///|
 /// A quiet ground under what is grouped on a sheet (Publish.kt: the ink at 4%).
 pub let faint_ground : @ui.Color = A(Fg, Exact(0.04))
 
 ///|
 /// How wide a face's status at its row's end may be (Fonts.kt:142).
 pub let face_status_most : @ui.Len = Fixed(140.0)
-
-///|
-/// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
-pub let app_icon_side : @ui.Len = Fixed(72.0)
-
-///|
-/// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
-/// its check in a room 18 wide at its end.
-pub let pick_line_y : @ui.Space = files_gap
-
-///|
-pub let pick_line_r : @ui.Radius = custom_field_r
-
-///|
-pub let check_room_w : @ui.Len = Fixed(18.0)
 
 ///|
 /// A person's initial on their colour (Parts.kt Avatar: Color.White), on every theme.
@@ -2467,16 +2359,8 @@ pub let file_sheet_w : @ui.Len = Fixed(30.0)
 pub let file_sheet_h : @ui.Len = Fixed(36.0)
 
 ///|
-/// A file card's own button (Chat.css.ts fileCardRemove: 22 round).
-pub let file_card_button : @ui.Len = Fixed(22.0)
-
-///|
 /// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
 pub let name_max : @ui.Len = Fixed(240.0)
-
-///|
-/// A small square button beside a line (the web's activityStop, a file card's remove: 22).
-pub let small_button : @ui.Len = Fixed(22.0)
 
 ///|
 /// The pill offering to quote what is picked (the web's Chat.css.ts quotePop: 26 high).
@@ -3095,10 +2979,6 @@ pub fn rail_ground_radius(corner : @ui.CornerOf, ground_in : Double, alone? : Do
 }
 
 ///|
-/// A small panel's corner (a menu's, a popover's: r_menu) as a style's, for one drawn by a style of its own.
-pub let panel_radius : @ui.Radius = rounded(r_menu)
-
-///|
 /// What sits in a small panel's corner (--panel-in: a menu's rows, a popover's), concentric with the panel's.
 pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
 
@@ -3185,9 +3065,6 @@ pub let side_tab_side : Double = 30.0
 pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
 
 ///|
-pub let code_big_tracking : @ui.Tracking = Exact(6.0)
-
-///|
 /// A chat's bar (the web's ChatPage.css.ts): its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
 /// most, in by .19 of its 20 tile and 1.
 pub let chat_station_most : @ui.Len = Fixed(160.0)
@@ -3260,15 +3137,6 @@ pub let message_avatar_down : @ui.Space = room(3.0)
 ///|
 /// A message's head in past its picture where the picture is over its start (Chat.css.ts inlineHeads: 25).
 pub let message_head_in : @ui.Space = room(25.0)
-
-///|
-/// What says a chat is archived or its station down, over its composer (Chat.css.ts offlineNotice: 760 at most, 64
-/// less than the pane).
-pub let notice_w : @ui.Len = Fixed(760.0)
-
-///|
-/// A service's address in its bar beside the chat (Preview.css.ts previewAddress: 30 high).
-pub let preview_address_h : @ui.Len = Fixed(30.0)
 
 ///|
 /// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its

@@ -297,12 +297,3 @@ let state_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let state_rest_cut : @ui.TextStyle = @ui.text_style(w=Cut)
-
-///|
-/// A card's lead word: a mouse's 600 (ChatMark.css.ts waitingLead), a finger's bold (Home.kt StateLine).
-// kept across runs: a value (no field of it changes)
-let lead_word : @ui.TextStyle = @ui.text_style(weight=Semibold, w=Hug)
-
-///|
-// kept across runs: a value (no field of it changes)
-let lead_word_touch : @ui.TextStyle = @ui.text_style(weight=Bold, w=Hug)

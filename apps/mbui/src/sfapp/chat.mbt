@@ -30,9 +30,6 @@ let composer_room : Double = 110.0
 let gap : Double = 20.0
 
 ///|
-let joined_gap : Double = 4.0
-
-///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
 /// row: 14 under the bar (Chat.kt).
 fn bar_foot() -> Double {
@@ -148,11 +145,6 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
 fn list_key(r : ChatRef) -> String {
   "chat/" + r.station + "/" + r.session
 }
-
-///|
-/// How far a row new to the list comes up as it fades in (Chat.kt rise: 14, over its turn's 320 ms, the standard
-/// curve).
-let rise_dy : Double = 14.0
 
 ///|
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at

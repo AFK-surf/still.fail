@@ -19,7 +19,6 @@ using @settings {
   lasts_choice,
   local_read_ms,
   lock_call,
-  memory_chevron,
   memory_of,
   mode_name,
   mono,
