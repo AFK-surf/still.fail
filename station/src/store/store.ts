@@ -370,6 +370,19 @@ export const CLOSED_CARD_AFTER = `SELECT
 export const CLOSED_CARD_AFTER_POSTS = `SELECT
   EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
   OR EXISTS (SELECT 1 FROM card_posts WHERE thread = ?1 AND n > ?2) AS ended`;
+// An older card before the latest person has already ended. Keep that person's own card at the boundary: the person
+// who posted it does not answer it. Both card formats and the boundary are read in the same SQLite snapshot.
+export const CARD_BEFORE_LATEST_PERSON = `WITH person(n) AS MATERIALIZED (
+  SELECT COALESCE((SELECT n FROM entries WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND author_kind = 'person'
+    ORDER BY n DESC LIMIT 1), -9223372036854775808)
+)
+SELECT MAX(n) AS n FROM (
+  SELECT (SELECT MAX(n) FROM entries WHERE thread = ?1 AND n < ?2 AND n >= (SELECT n FROM person)
+    AND kind = 'message' AND card IS NOT NULL) AS n
+  UNION ALL
+  SELECT (SELECT MAX(n) FROM entries WHERE thread = ?1 AND n < ?2 AND n >= (SELECT n FROM person)
+    AND kind = 'message' AND options IS NOT NULL)
+)`;
 /// Whether a pending delivery can actually be read by the session, without loading the message's text or edits.
 export const HAS_PENDING_MESSAGE = `SELECT 1 FROM deliveries d INDEXED BY deliveries_pending
   JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
@@ -2437,9 +2450,7 @@ export class Store {
   /// callers that tell a connect about this event must answer now, from the event's current state.
   #previousCard(thread: number, n: number): number | null {
     if (cardPostsReady(this.db, thread)) return this.#one(CARD_POST_BEFORE, thread, n).n;
-    const card: number | null = this.#one(CARD_BEFORE, thread, n).n;
-    const options: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-    return card === null ? options : options === null ? card : Math.max(card, options);
+    return this.#one(CARD_BEFORE_LATEST_PERSON, thread, n).n;
   }
 
   #cardEndedAfter(thread: number, n: number): boolean {
