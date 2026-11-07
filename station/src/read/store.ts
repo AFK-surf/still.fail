@@ -31,7 +31,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGES_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -448,6 +448,19 @@ export class LegacyEditsUnavailable extends Refused {
   constructor() { super(503, LEGACY_EDITS_PENDING); }
 }
 
+// The caller holds the message and edit lookup in one snapshot. Without a prepared lookup, a recent edit (or a
+// short chat) proves the latest edit; an old index can prove it when at most one bounded batch matches.
+function mergedWithBoundedEdit(s: Store, thread: number, n: string): MessageRow | null {
+  let edit = one(s, LAST_MESSAGE_RECENT_EDIT, thread, n) as { n: string | null; count: number };
+  if (edit.n === null && edit.count === 65) {
+    const meta = one(s, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1");
+    if (meta?.scanned === 0 && meta.old_index === 1) edit = one(s, LAST_MESSAGE_OLD_EDITS, thread, n);
+    if (edit.count === 65) throw new LegacyEditsUnavailable();
+  }
+  const r = one(s, LAST_MESSAGE_WITH_EDIT, thread, n, edit.n);
+  return r ? toMessage(r) : null;
+}
+
 /// The thread's latest message as merged. The key and edited text must come from the same snapshot.
 export function lastMessage(s: Store, thread: number): MessageRow | null {
   s.db.exec("SAVEPOINT last_message_read");
@@ -455,16 +468,7 @@ export function lastMessage(s: Store, thread: number): MessageRow | null {
     const last = archiveLastKey(s.db, thread);
     if (!last.known) throw new LastMessageUnavailable([thread]);
     if (last.n === null) return null;
-    if (!legacyMergedReadReady(s.db)) {
-      let edit = one(s, LAST_MESSAGE_RECENT_EDIT, thread, last.n) as { n: string | null; count: number };
-      if (edit.n === null && edit.count === 65) {
-        const meta = one(s, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1");
-        if (meta?.scanned === 0 && meta.old_index === 1) edit = one(s, LAST_MESSAGE_OLD_EDITS, thread, last.n);
-        if (edit.count === 65) throw new LegacyEditsUnavailable();
-      }
-      const r = one(s, LAST_MESSAGE_WITH_EDIT, thread, last.n, edit.n);
-      return r ? toMessage(r) : null;
-    }
+    if (!legacyMergedReadReady(s.db)) return mergedWithBoundedEdit(s, thread, last.n);
     const r = one(s, LAST_MESSAGE_KEYED, thread, last.n);
     return r ? toMessage(r) : null;
   } finally { s.db.exec("RELEASE last_message_read"); }
@@ -631,7 +635,18 @@ export function entriesBetween(s: Store, thread: number, from: bigint, to: bigin
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
-  return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
+  s.db.exec("SAVEPOINT messages_before_read");
+  try {
+    if (legacyMergedReadReady(s.db))
+      return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
+    // Order by the integer source, not its text alias; text preserves a 64-bit entry key for the individual lookup.
+    const keys = s.legacySaid ? LEGACY_MESSAGE_KEYS_BEFORE : MESSAGE_KEYS_BEFORE;
+    const page = all(s, `SELECT CAST(p.n AS TEXT) AS n FROM (${keys}) p ORDER BY p.n DESC`, thread, before, limit);
+    return page.flatMap((r) => {
+      const message = mergedWithBoundedEdit(s, thread, r.n);
+      return message === null ? [] : [message];
+    }).reverse();
+  } finally { s.db.exec("RELEASE messages_before_read"); }
 }
 
 // ── the archive review ──
