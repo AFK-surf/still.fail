@@ -121,6 +121,8 @@ pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
 pub fn chat_inputs_left(ChatRef) -> Unit
 
+pub fn chat_inputs_left_from(Source, ChatRef) -> Unit
+
 pub fn chat_item(@json.Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
@@ -131,9 +133,13 @@ pub fn chat_keep(Map[String, @json.Json], Double) -> Unit
 
 pub fn chat_kept(ChatRef) -> ChatView?
 
+pub fn chat_kept_from(Source, ChatRef) -> ChatView?
+
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
 
 pub fn chat_link(String, String) -> String
+
+pub fn chat_open_is_pending(Int32) -> Bool
 
 pub fn chat_params(ChatRef) -> Map[String, @json.Json]
 
@@ -439,6 +445,8 @@ pub fn entries_of(ChatView) -> Array[Entry]
 
 pub fn error_words(@json.Json) -> String
 
+pub fn exact_topic_key(String, Map[String, @json.Json]) -> String
+
 pub fn face_here(String) -> Bool
 
 pub fn faces(Source, Bool) -> Unit
@@ -669,6 +677,8 @@ pub let go_tos : Map[String, Double]
 
 pub fn halo_of(Int64) -> Int64
 
+pub fn handoff_chat_open(ChatRef, TopicLease) -> Unit
+
 pub fn head_as_nodes(Viewer, Double) -> Bool
 
 pub fn held_build(Int32) -> Unit
@@ -750,6 +760,8 @@ pub fn language_said(Source) -> Unit
 pub fn leaving_back() -> Unit
 
 pub fn leaving_done() -> Unit
+
+pub fn left_page_source(Source, Int32) -> (Source?, ChatView?)
 
 pub let left_pages : Array[Page]
 
@@ -1087,6 +1099,12 @@ pub fn own_screen(String, String) -> Bool
 
 pub let page_bridge_js : String
 
+pub fn page_chat_reader(Source, @view.View, Int32) -> (Page) -> Unit
+
+pub fn page_entry_read(Int32, Source, Page) -> Unit
+
+pub fn page_entry_source(Source, @view.View, Int32) -> Source
+
 pub fn page_glass() -> @paint.Glass
 
 pub let page_glass_blur : Double
@@ -1126,6 +1144,8 @@ pub fn page_say(ServicePage, String) -> Unit
 pub fn page_script_served(Bool) -> String
 
 pub let page_small_top : Double
+
+pub fn page_source_for_chat(Source, ChatRef) -> Source
 
 pub let page_way : PageWay
 
@@ -1238,6 +1258,8 @@ pub fn pose_clock(Double, Double?) -> @motion.Anim
 pub fn pose_ms(Pose, (Double, Double)?) -> Double
 
 pub fn poster_image_id(String, String, String) -> String
+
+pub fn prepare_chat_handoff(TopicLease) -> TopicLease?
 
 pub let preview_faces_from : Int32
 
@@ -1833,6 +1855,8 @@ pub fn window_text(Page) -> String?
 
 pub let window_zoom_levels : Array[(String, Double)]
 
+pub fn wire_topic_key(String, Map[String, @json.Json]) -> String
+
 pub fn with_lingering(Reading, Array[Entry]) -> Array[Entry]
 
 pub fn words_runs(Array[@json.Json], Int64, chat_title? : (String) -> String?) -> Array[@text.Run]
@@ -2172,6 +2196,7 @@ pub struct Derived[T] {
   // private fields
 }
 pub fn[T] Derived::kept(Self[T], Map[String, @json.Json]) -> T?
+pub fn[T] Derived::kept_from(Self[T], Source, Map[String, @json.Json]) -> T?
 pub fn[T] Derived::new(String, (@json.Json, T?) -> T) -> Self[T]
 pub fn[T] Derived::read(Self[T], Source, Map[String, @json.Json]) -> (T?, Topic)
 
@@ -3205,6 +3230,10 @@ pub(all) struct Sink {
 
 pub(all) struct Source {
   topic_read : (String, Map[String, @json.Json]) -> Topic
+  topic_key : (String, Map[String, @json.Json]) -> String
+  topic_scope : ((TopicReadMode, () -> TopicState) -> TopicState)?
+  topic_alive : () -> Bool
+  topic_lease_own : ((() -> Unit) -> (() -> Unit))?
   waits : (String, Map[String, @json.Json]) -> Bool
   generation : (String, Map[String, @json.Json]) -> (Int32, Bool)
   call : (String, @json.Json, (Result[@json.Json, @json.Json]) -> Unit) -> Unit
@@ -3223,11 +3252,14 @@ pub(all) struct Source {
   draft_picture : (String, String) -> String
   images : ChatImages
   now : () -> Double
-  leave : (String, Map[String, @json.Json]) -> Unit
+  leave : (String, Map[String, @json.Json], TopicLeave) -> Unit
   release : (String, Map[String, @json.Json]) -> Unit
   refresh : (String, Map[String, @json.Json]) -> Unit
   read_only : Bool
 }
+pub fn Source::lease_topic(Self, String, Map[String, @json.Json]) -> TopicLease
+pub fn Source::owned_by(Self, @view.View) -> Self
+pub fn Source::prefetch(Self, String, Map[String, @json.Json]) -> Topic
 pub fn Source::topic(Self, String, Map[String, @json.Json]) -> @signals.Computed[TopicState]
 
 pub(all) struct StageHold {
@@ -3308,6 +3340,29 @@ pub(all) struct Topic {
   value : @json.Json?
   error : @json.Json?
   version : Int32
+}
+
+pub struct TopicLease {
+  // private fields
+}
+pub fn TopicLease::alive(Self) -> Bool
+pub fn TopicLease::bind_to(Self, @view.View) -> Unit
+pub fn TopicLease::cancel(Self) -> Unit
+pub fn TopicLease::detach_to(Self, @view.View) -> Self?
+pub fn TopicLease::read(Self) -> TopicState?
+pub fn TopicLease::release(Self) -> Unit
+pub fn TopicLease::transfer_to(Self, Source, @view.View) -> Self?
+
+pub(all) enum TopicLeave {
+  Legacy
+  Owned(() -> Unit)
+}
+
+#derive(Eq)
+pub(all) enum TopicReadMode {
+  Raw
+  Graph
+  Lease
 }
 
 pub(all) struct TopicState {
