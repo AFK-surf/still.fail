@@ -1,5 +1,6 @@
 // Prepare an older store's edit lookup in bounded ranges without holding a writer over its whole history.
 import type { DatabaseSync, StatementSync } from "node:sqlite";
+import { legacyEntryBatch } from "./legacy-entry-batch.ts";
 
 const VERSION = 1;
 const BATCH = 64;
@@ -184,26 +185,7 @@ export function legacyEditStep(db: DatabaseSync, limit = BATCH): { ready: boolea
     if (m.version !== VERSION) throw new Error("unsupported legacy edit preparation");
     if (m.scanned) { db.exec("COMMIT"); return { ready: true,visited: 0 }; }
     const columns = "CAST(e.thread AS TEXT) thread,CAST(e.n AS TEXT) n";
-    const rows: Key[] = [];
-    if (m.end_thread !== null) {
-      if (m.cursor_thread !== null) {
-        const same = m.cursor_thread === m.end_thread;
-        const sql = `SELECT ${columns} FROM entries e WHERE e.thread=CAST(?1 AS INTEGER) AND e.n>CAST(?2 AS INTEGER)
-          ${same ? "AND e.n<=CAST(?3 AS INTEGER) ORDER BY e.n LIMIT ?4" : "ORDER BY e.n LIMIT ?3"}`;
-        rows.push(...(same ? db.prepare(sql).all(m.cursor_thread,m.cursor_n,m.end_n,limit)
-          : db.prepare(sql).all(m.cursor_thread,m.cursor_n,limit)) as Key[]);
-      }
-      if (rows.length < limit && m.cursor_thread !== m.end_thread) {
-        const sql = `SELECT ${columns} FROM entries e WHERE e.thread<CAST(?1 AS INTEGER)
-          ${m.cursor_thread === null ? "" : "AND e.thread>CAST(?2 AS INTEGER)"}
-          ORDER BY e.thread,e.n LIMIT ?${m.cursor_thread === null ? 2 : 3}`;
-        rows.push(...(m.cursor_thread === null ? db.prepare(sql).all(m.end_thread,limit-rows.length)
-          : db.prepare(sql).all(m.end_thread,m.cursor_thread,limit-rows.length)) as Key[]);
-        if (rows.length < limit) rows.push(...db.prepare(`SELECT ${columns} FROM entries e
-          WHERE e.thread=CAST(?1 AS INTEGER) AND e.n<=CAST(?2 AS INTEGER) ORDER BY e.n LIMIT ?3`)
-          .all(m.end_thread,m.end_n,limit-rows.length) as Key[]);
-      }
-    }
+    const rows = legacyEntryBatch<Key>(db,m,columns,limit);
     // Keep target values inside SQLite: old stores can contain non-integer values and integers outside JS's range.
     const put = db.prepare(`INSERT INTO legacy_edit_build(thread,target,n)
       SELECT e.thread,e.target,e.n FROM entries e WHERE e.thread=CAST(?1 AS INTEGER) AND e.n=CAST(?2 AS INTEGER)

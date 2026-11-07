@@ -1,5 +1,6 @@
 // An older store can keep its agent-message time lookup without building an index over every entry under one writer.
 import type { DatabaseSync } from "node:sqlite";
+import { legacyEntryBatch } from "./legacy-entry-batch.ts";
 
 const VERSION = 1;
 const BATCH = 64;
@@ -119,26 +120,7 @@ export function legacyAgentStep(db: DatabaseSync, limit = BATCH): { ready: boole
     if (m.version !== VERSION) throw new Error(`legacy agent version ${m.version} is incompatible with ${VERSION}`);
     if (m.scanned) { db.exec("COMMIT"); return { ready: true,visited: 0 }; }
     const columns = "CAST(e.thread AS TEXT) thread,CAST(e.n AS TEXT) n,CAST(e.at AS TEXT) at,e.kind,e.author_kind";
-    const rows: Entry[] = [];
-    if (m.end_thread !== null) {
-      if (m.cursor_thread !== null) {
-        const same = m.cursor_thread === m.end_thread;
-        const sql = `SELECT ${columns} FROM entries e WHERE e.thread=CAST(?1 AS INTEGER) AND e.n>CAST(?2 AS INTEGER)
-          ${same ? "AND e.n<=CAST(?3 AS INTEGER) ORDER BY e.n LIMIT ?4" : "ORDER BY e.n LIMIT ?3"}`;
-        rows.push(...(same ? db.prepare(sql).all(m.cursor_thread,m.cursor_n,m.end_n,limit)
-          : db.prepare(sql).all(m.cursor_thread,m.cursor_n,limit)) as Entry[]);
-      }
-      if (rows.length < limit && m.cursor_thread !== m.end_thread) {
-        const sql = `SELECT ${columns} FROM entries e WHERE e.thread<CAST(?1 AS INTEGER)
-          ${m.cursor_thread === null ? "" : "AND e.thread>CAST(?2 AS INTEGER)"}
-          ORDER BY e.thread,e.n LIMIT ?${m.cursor_thread === null ? 2 : 3}`;
-        rows.push(...(m.cursor_thread === null ? db.prepare(sql).all(m.end_thread,limit-rows.length)
-          : db.prepare(sql).all(m.end_thread,m.cursor_thread,limit-rows.length)) as Entry[]);
-        if (rows.length < limit) rows.push(...db.prepare(`SELECT ${columns} FROM entries e
-          WHERE e.thread=CAST(?1 AS INTEGER) AND e.n<=CAST(?2 AS INTEGER) ORDER BY e.n LIMIT ?3`)
-          .all(m.end_thread,m.end_n,limit-rows.length) as Entry[]);
-      }
-    }
+    const rows = legacyEntryBatch<Entry>(db,m,columns,limit);
     const put = db.prepare(`INSERT INTO legacy_agent_build(thread,at,n)
       SELECT CAST(?1 AS INTEGER),CAST(?2 AS INTEGER),CAST(?3 AS INTEGER)
       WHERE NOT EXISTS (SELECT 1 FROM legacy_agent_dirty WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?3 AS INTEGER))
