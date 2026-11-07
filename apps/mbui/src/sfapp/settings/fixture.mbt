@@ -1223,24 +1223,24 @@ fn fx_station(address : String) -> Json {
           ("identity", str(if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
           ("gpus", if fx.gpus {
             let cards : Array[Json] = [
-              obj([("big", str("63")), ("unit", str("%")), ("left", Json::number(63.0)), ("level", str("ok")), ("title", str("GPU 1 空闲")), ("total", str("显存剩 20/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
-              obj([("big", str("100")), ("unit", str("%")), ("left", Json::number(100.0)), ("level", str("ok")), ("title", str("GPU 2 空闲")), ("total", str("显存剩 23/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
+              obj([("big", str("63")), ("unit", str("%")), ("left", Json::number(63.0)), ("level", str("ok")), ("title", str("GPU 1 空闲率")), ("total", str("显存剩 20/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
+              obj([("big", str("100")), ("unit", str("%")), ("left", Json::number(100.0)), ("level", str("ok")), ("title", str("GPU 2 空闲率")), ("total", str("显存剩 23/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]),
             ]
             if fx.more_gpus {
-              cards.push(obj([("big", str("50")), ("unit", str("%")), ("left", Json::number(50.0)), ("level", str("ok")), ("title", str("GPU 3 空闲")), ("total", str("显存剩 12/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]))
-              cards.push(obj([("big", str("20")), ("unit", str("%")), ("left", Json::number(20.0)), ("level", str("amber")), ("title", str("GPU 4 空闲")), ("total", str("显存剩 5/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]))
+              cards.push(obj([("big", str("50")), ("unit", str("%")), ("left", Json::number(50.0)), ("level", str("ok")), ("title", str("GPU 3 空闲率")), ("total", str("显存剩 12/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]))
+              cards.push(obj([("big", str("20")), ("unit", str("%")), ("left", Json::number(20.0)), ("level", str("amber")), ("title", str("GPU 4 空闲率")), ("total", str("显存剩 5/24G")), ("model", str("NVIDIA GeForce RTX 4090"))]))
             }
             Json::array(cards)
           } else { [] }),
           (
             "meters",
             [
-              meter("CPU", if fx.low_meters { 8 } else { 72 }, if fx.low_meters { "red" } else { "ok" }, if fx.low_meters { "空闲 8%" } else { "空闲 72%" }, if fx.low_meters { "8" } else { "72" }, "%", "CPU 空闲", "负载 1.4"),
-              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "内存剩余", "共 32 GB"),
+              meter("CPU", if fx.low_meters { 8 } else { 72 }, if fx.low_meters { "red" } else { "ok" }, if fx.low_meters { "空闲 8%" } else { "空闲 72%" }, if fx.low_meters { "8" } else { "72" }, "%", "CPU 空闲率", "负载 1.4"),
+              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "可用内存", "总内存 32 GB"),
               if fx.low_meters {
-                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "磁盘剩余", "共 1 TB")
+                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "可用磁盘", "总磁盘 1 TB")
               } else {
-                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "磁盘剩余", "共 1 TB")
+                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "可用磁盘", "总磁盘 1 TB")
               },
             ],
           ),
