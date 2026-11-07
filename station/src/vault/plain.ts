@@ -107,6 +107,18 @@ export class PlainStore {
     return (this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND owner = ? ORDER BY id").all(ws, owner) as { body: string }[]).map((r) => JSON.parse(r.body));
   }
 
+  /// The first few of the same ordered list, including deleted versions.
+  firstItems(ws: string, owner: string, limit: number): { id: string; value: PlainItem }[] {
+    return (this.#db.prepare("SELECT id, body FROM vault_plain WHERE ws = ? AND owner = ? ORDER BY id LIMIT ?").all(ws, owner, limit) as { id: string; body: string }[])
+      .map((r) => ({ id: r.id, value: JSON.parse(r.body) }));
+  }
+
+  /// The rest of that list after a stored id, in the caller's snapshot.
+  itemsAfter(ws: string, owner: string, id: string): PlainItem[] {
+    return (this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND owner = ? AND id > ? ORDER BY id").all(ws, owner, id) as { body: string }[])
+      .map((r) => JSON.parse(r.body));
+  }
+
   item(ws: string, id: string): PlainItem | null {
     return this.itemSnapshot(ws, id)?.value ?? null;
   }
