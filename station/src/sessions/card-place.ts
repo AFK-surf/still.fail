@@ -30,7 +30,7 @@ export const CARD_OCCUPIED = "Another card is pending in that conversation. Reso
 /// What a long-lived operation posts its card through: the session's chat's surface, and the store it keeps it in.
 export type CardHub = {
   store: CardStore & { insertMessage(m: Record<string, unknown>, before?: () => void): readonly unknown[] };
-  prepareCardPosts?: ((threads: readonly number[]) => Promise<void>) | null;
+  prepareCardPosts?: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null;
   actors?: Map<string, { messageIdentity(): { model: string | null; effort: string | null; runtime: string } | null }>;
   chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: never[]): Promise<string> };
   shared(thread: number, n: number, session: string, text: string): void;
@@ -39,13 +39,25 @@ export type CardHub = {
 class CardPreparationNeeded extends Error {}
 class CardNoLongerNeeded extends Error {}
 
+async function waitForWriter(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return wall.sleep(ms);
+  signal.throwIfAborted();
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => { stop(); signal.removeEventListener("abort", abort); reject(signal.reason); };
+    const stop = wall.after(ms, () => { signal.removeEventListener("abort", abort); resolve(); });
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
+
 /// Once the surface has given the post its timestamp, record it only while the request and card are still valid.
 /// The second check runs inside the insert's write transaction. A busy writer or an old index is waited for outside it.
 export async function recordPostedCard(hub: CardHub, session: string, thread: SessionThread, text: string, card: unknown | null,
   posted: string, occupied: ((why: string) => Error) | null, needed?: () => boolean,
-  identity?: { model: string | null; effort: string | null; runtime: string }): Promise<string | null> {
+  identity?: { model: string | null; effort: string | null; runtime: string }, signal?: AbortSignal): Promise<string | null> {
   const message = { thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card, agentIdentity: identity };
   const check = () => {
+    signal?.throwIfAborted();
     if (needed && !needed()) throw new CardNoLongerNeeded();
     if (hub.store.sessionThreadById(session, thread.thread.id) === null)
       throw occupied!("the original conversation is no longer available to this session");
@@ -55,6 +67,7 @@ export async function recordPostedCard(hub: CardHub, session: string, thread: Se
   };
   let delay = 10;
   for (;;) {
+    signal?.throwIfAborted();
     let n: unknown;
     try {
       if (occupied !== null) check();
@@ -63,11 +76,11 @@ export async function recordPostedCard(hub: CardHub, session: string, thread: Se
       if (error instanceof CardNoLongerNeeded) return null;
       if (error instanceof CardPreparationNeeded) {
         if (!hub.prepareCardPosts) throw occupied!("card lookup is not ready");
-        await hub.prepareCardPosts([thread.thread.id]);
+        await hub.prepareCardPosts([thread.thread.id], signal);
         continue;
       }
       if (error instanceof MessageWriteBusy) {
-        await wall.sleep(delay);
+        await waitForWriter(delay, signal);
         delay = Math.min(delay * 2, 250);
         continue;
       }
@@ -81,9 +94,11 @@ export async function recordPostedCard(hub: CardHub, session: string, thread: Se
 /// Says `text` in `thread` as `session`'s agent, with `card` (null on a surface without cards): posted, then kept as
 /// the agent's message; when another card came meanwhile, `occupied`'s refusal (where given). The card's ts, or null
 /// with none.
-export async function postCard(hub: CardHub, session: string, thread: SessionThread, text: string, card: unknown | null, occupied: ((why: string) => Error) | null, needed?: () => boolean): Promise<string | null> {
+export async function postCard(hub: CardHub, session: string, thread: SessionThread, text: string, card: unknown | null, occupied: ((why: string) => Error) | null, needed?: () => boolean, signal?: AbortSignal): Promise<string | null> {
   const identity = hub.actors?.get(session)?.messageIdentity() ?? undefined;
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
+  signal?.throwIfAborted();
   const posted = await hub.chat(thread.connect).post(here, text, []);
-  return recordPostedCard(hub, session, thread, text, card, posted, occupied, needed, identity);
+  // A non-card surface has already delivered the message; finish recording it even if the caller leaves.
+  return recordPostedCard(hub, session, thread, text, card, posted, occupied, needed, identity, card === null ? undefined : signal);
 }

@@ -236,6 +236,29 @@ test("a secret reask rechecks its decision after old card preparation", async ()
   } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
 });
 
+test("a cancelled secret reask does not post after old card preparation", async () => {
+  const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (h.hub.store as any).pendingCardHeaderIfReady = () => ready ? h.hub.store.pendingCardHeader() : undefined;
+    (h.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_reask")!;
+    const reask = tool.run("s1", { request }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(h.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
 test("a secret reask does not record a card decided during final old-card preparation", async () => {
   const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   try {

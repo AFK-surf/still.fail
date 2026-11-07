@@ -225,6 +225,49 @@ test("a phone reask rechecks its request after old card preparation", async () =
   } finally { release.resolve(); w.db.close(); }
 });
 
+test("a cancelled phone reask does not post after old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = phoneTools(w.grants, async () => "ready")[0]!;
+    const reask = tool.run("s1", { reason: "debug the screen", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal, "the background preparation can release this caller's wait");
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); w.db.close(); }
+});
+
+test("a cancelled phone card check leaves old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = phoneTools(w.grants, async () => "ready")[0]!;
+    const checking = tool.run("s1", { reason: "debug the screen" }, controller.signal);
+    void checking.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), checking.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    await assert.rejects(checking, { name: "AbortError" });
+    assert.equal(w.cards.length, 1);
+  } finally { release.resolve(); w.db.close(); }
+});
+
 test("a phone reask does not record a card decided during final old-card preparation", async () => {
   const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
   try {
@@ -240,6 +283,27 @@ test("a phone reask does not record a card decided during final old-card prepara
     release.resolve();
     assert.equal((await reask).status, "granted");
     assert.equal(w.cards.length, 1, "a card for the decided request was not recorded");
+  } finally { release.resolve(); w.db.close(); }
+});
+
+test("a cancelled phone reask does not record a card after final old-card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let reads = 0, ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const tool = phoneTools(w.grants, async () => "ready")[0]!;
+    const reask = tool.run("s1", { reason: "debug the screen", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "no card was recorded after cancellation");
+    assert.equal(error?.name, "AbortError");
   } finally { release.resolve(); w.db.close(); }
 });
 

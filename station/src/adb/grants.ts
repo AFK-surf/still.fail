@@ -84,8 +84,8 @@ export type GrantsDeps = {
       threadSessions(thread: number): { session: string }[];
       subscribe(f: (c: { type: string; key?: string; id?: number; ws?: string | null }) => void): void;
     };
-    prepareLatestThreads?: ((sessions: readonly string[]) => Promise<void>) | null;
-    prepareCardPosts?: ((threads: readonly number[]) => Promise<void>) | null;
+    prepareLatestThreads?: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null;
+    prepareCardPosts?: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: string[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -275,7 +275,8 @@ export class PhoneGrants {
 
   /// phone_use: a grant of this session's already live, or a request asked in its chat: not waited for (the agent's turn
   /// goes on with the chat), its decision told to the session (#settle).
-  async ask(session: string, reason: string, reask = false): Promise<PhoneRequest> {
+  async ask(session: string, reason: string, reask = false, signal?: AbortSignal): Promise<PhoneRequest> {
+    signal?.throwIfAborted();
     const held = this.held(session)[0];
     if (held !== undefined) return held;
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
@@ -292,10 +293,11 @@ export class PhoneGrants {
       if (prepare && ready) {
         const found = ready.call(this.#d.hub.store, session);
         if (found === undefined) {
-          await prepare([session]);
+          await prepare([session], signal);
+          signal?.throwIfAborted();
           if (this.#ended(session)) throw new Refused("this chat is archived or gone");
           // A request, a grant, or a new delivery may have arrived while the old order was prepared.
-          return this.ask(session, reason, reask);
+          return this.ask(session, reason, reask, signal);
         }
         thread = found;
       } else thread = this.#d.hub.store.latestThread(session);
@@ -309,16 +311,17 @@ export class PhoneGrants {
       const place = cardPlace(this.#d.hub.store, session, r.thread, r.cardTs);
       if (place === undefined) {
         if (!this.#d.hub.prepareCardPosts || r.thread == null) throw new Refused("card lookup is not ready");
-        await this.#d.hub.prepareCardPosts([r.thread]);
+        await this.#d.hub.prepareCardPosts([r.thread], signal);
+        signal?.throwIfAborted();
         const current = this.get(r.id);
         if (current === null) throw new Refused("the phone request is no longer pending");
         if (current.status !== "pending") return current;
         if (this.#ended(session)) throw new Refused("this chat is archived or gone");
-        return this.ask(session, reason, reask);
+        return this.ask(session, reason, reask, signal);
       }
       if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
       if (place?.state === "none") {
-        const posted = await this.#post(session, place.thread, r, true);
+        const posted = await this.#post(session, place.thread, r, true, signal);
         const current = this.get(r.id);
         // A person may have decided the original request while the post was being sent.
         if (current === null || current.status !== "pending") {
@@ -347,19 +350,21 @@ export class PhoneGrants {
   }
 
   /// Whether the current card of a still-open request can be acted on; null for a surface without one.
-  async cardPending(r: PhoneRequest): Promise<boolean | null> {
+  async cardPending(r: PhoneRequest, signal?: AbortSignal): Promise<boolean | null> {
     let current = this.get(r.id);
     while (current !== null && current.status === "pending") {
+      signal?.throwIfAborted();
       const place = cardPlace(this.#d.hub.store, current.session, current.thread, current.cardTs);
       if (place !== undefined) return place === null ? null : place.state === "same";
       if (!this.#d.hub.prepareCardPosts || current.thread == null) throw new Refused("card lookup is not ready");
-      await this.#d.hub.prepareCardPosts([current.thread]);
+      await this.#d.hub.prepareCardPosts([current.thread], signal);
+      signal?.throwIfAborted();
       current = this.get(r.id);
     }
     return null;
   }
 
-  async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false): Promise<string | null> {
+  async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false, signal?: AbortSignal): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const text = [`申请调试你的手机：${r.reason}`, ...(stillfail ? [] : ["请在 still.fail 安卓 app 中批准。"])].join("\n\n");
     // The scopes its owner allows (their 默认最长授权), the longest recommended.
@@ -375,7 +380,7 @@ export class PhoneGrants {
         }
       : null;
     return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null,
-      requireEmpty ? () => this.get(r.id)?.status === "pending" && !this.#ended(session) : undefined);
+      requireEmpty ? () => this.get(r.id)?.status === "pending" && !this.#ended(session) : undefined, signal);
   }
 
   /// How the station's adb holds `owner`'s phone changed (null: offered here no longer): said on the cards of their

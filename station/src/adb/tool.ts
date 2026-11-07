@@ -82,15 +82,15 @@ export function phoneTools(grants: PhoneGrants, reach: (owner: string, grant: st
   return [
     {
       ...PHONE_USE,
-      run: async (session, args) => {
+      run: async (session, args, signal) => {
         if (args.done === true) {
           const ended = grants.release(session);
           return ended.length === 0 ? "This chat holds no phone grant or request: nothing to hand back." : `Handed back: ${ended.map((r) => `${r.id} (${r.owner}'s phone)`).join(", ")}. adb no longer reaches it; ask with phone_use again if you need it later.`;
         }
         const reason = typeof args.reason === "string" ? args.reason : "";
-        let r = await grants.ask(session, reason, args.reask === true);
+        let r = await grants.ask(session, reason, args.reask === true, signal);
         if (r.status === "pending") {
-          const pending = await grants.cardPending(r);
+          const pending = await grants.cardPending(r, signal);
           r = grants.get(r.id) ?? r;
           if (r.status === "pending" && pending === false) return `The phone request ${r.id} is still pending, but its card is no longer pending. If it is still needed, call phone_use again with the same reason and reask: true.`;
         }

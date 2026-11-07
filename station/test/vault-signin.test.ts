@@ -9,6 +9,7 @@ import { test } from "node:test";
 import type { Driven, FormField, FormValues } from "../src/browser/signin-form.ts";
 import type { Request } from "../src/vault/crypto.ts";
 import { SignIns, siteOf } from "../src/vault/signin.ts";
+import { vaultTools } from "../src/vault/tool.ts";
 import { installSigninSaveIndex, queueSigninSave, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 
@@ -131,6 +132,28 @@ test("a sign-in reask does not post after its chat is archived during old card p
     release.resolve();
     await assert.rejects(reask, /archived or gone/);
     assert.equal(w.cards.length, 1);
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a cancelled sign-in reask does not post after old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = vaultTools(null as never, () => "/chat/s1", w.signIns).find((t) => t.name === "sign_in")!;
+    const reask = tool.run("s1", { site: "github.com", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
   } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
 });
 

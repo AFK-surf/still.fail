@@ -163,6 +163,40 @@ test("a reasked card waits off the station thread for an external writer", async
   } finally { if (transaction) writer.exec("ROLLBACK"); writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a cancelled reasked card stops waiting for an external writer", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-place-cancel-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path), writer = new DatabaseSync(path);
+  const controller = new AbortController();
+  let transaction = false;
+  try {
+    const thread = store.openThread("ember", "CHAT", "card-cancel", null, null).id;
+    store.joinThread(thread, "s", "local");
+    const where = store.sessionThreadById("s", thread)!;
+    writer.exec("BEGIN IMMEDIATE"); transaction = true;
+    const posted = Promise.withResolvers<void>();
+    const hub = { store, chat: () => ({ post: async () => { posted.resolve(); return "reasked"; } }), shared: () => {} };
+    const reask = postCard(hub, "s", where, "ask again", { type: "text" }, (why) => new Error(why), undefined, controller.signal);
+    void reask.catch(() => {});
+    await posted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    controller.abort();
+    await assert.rejects(reask, { name: "AbortError" });
+    assert.deepEqual(dbRows(store, thread), [], "no card was recorded after cancellation");
+  } finally { if (transaction) writer.exec("ROLLBACK"); writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an external message already sent is recorded even if its caller cancels", async () => {
+  const store = Store.open(":memory:"), controller = new AbortController();
+  try {
+    const thread = store.openThread("slack", "C", "sent", null, null).id;
+    store.joinThread(thread, "s", "slack");
+    const where = store.sessionThreadById("s", thread)!;
+    const hub = { store, chat: () => ({ post: async () => { controller.abort(); return "sent"; } }), shared: () => {} };
+    await postCard(hub, "s", where, "ask again", null, (why) => new Error(why), undefined, controller.signal);
+    assert.deepEqual(dbRows(store, thread), ["sent"]);
+  } finally { store.close(); }
+});
+
 test("a reasked card continues after an unrelated external write", async () => {
   const dir = mkdtempSync(join(tmpdir(), "card-place-busy-unrelated-"));
   const path = join(dir, "stillfail.db"), store = Store.open(path), writer = new DatabaseSync(path);
