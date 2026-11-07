@@ -11,11 +11,11 @@ import * as css from "./login.css.ts";
 /** How long the sign-in's last step may take before the page offers a way out: it takes a second or two. */
 const SIGNING_IN_MS = 8000;
 
-const name = () => deviceName((browser, os) => t("web-login.device", { brand: NAME, browser: browser || t("web-login.browser"), more: os ? ` · ${os}` : "" }));
+export const name = () => deviceName((browser, os) => t("web-login.device", { brand: NAME, browser: browser || t("web-login.browser"), more: os ? ` · ${os}` : "" }));
 
-const start = (to: string) => begin(to, name());
+export const start = (to: string) => begin(to, name());
 
-function Page({ title, lead, children }: { title: string; lead?: string | undefined; children?: preact.ComponentChildren }) {
+export function Page({ title, lead, children }: { title: string; lead?: string | undefined; children?: preact.ComponentChildren }) {
   return (
     <main className={css.page}>
       <img className={css.illus} src="/illus-sign-in.svg" alt="" width={360} height={200} />
@@ -26,15 +26,14 @@ function Page({ title, lead, children }: { title: string; lead?: string | undefi
   );
 }
 
-function Button({ primary = false, onClick, children }: { primary?: boolean; onClick(): void; children: string }) {
+export function Button({ primary = false, onClick, children }: { primary?: boolean; onClick(): void; children: string }) {
   return <button type="button" className={`${css.button}${primary ? ` ${css.primary}` : ""}`} onClick={onClick}>{children}</button>;
 }
 
-/** /login: on to still.fail cloud's sign-in at once; should that fail, a way to try again. `admin`: the admin's
- * console's, said as its own. */
-export function SignIn({ admin = false }: { admin?: boolean }) {
-  const title = t(admin ? "web-login.adminTitle" : "web-login.title", { name: NAME });
-  const lead = admin ? t("web-login.adminLead", { name: NAME }) : t("web-login.lead");
+/** /login: on to still.fail cloud's sign-in at once; should that fail, a way to try again. */
+export function SignIn() {
+  const title = t("web-login.title", { name: NAME });
+  const lead = t("web-login.lead");
   const [error, setError] = useState<string | null>(null);
   const to = returnTo(location.search);
   useEffect(() => { start(to).catch((e: unknown) => setError(String(e))); }, []);

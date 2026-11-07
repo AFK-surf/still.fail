@@ -14,5 +14,11 @@
   "web-login.device": "{brand} Web · {browser}{more}",
   "web-login.browser": "Browser",
   "web-login.adminTitle": "{name} admin",
-  "web-login.adminLead": "Only {name} admins can use this. Sign in with an admin account."
+  "web-login.adminLead": "Only {name} admins can use this. Sign in with an admin account.",
+  "web-login.or": "or",
+  "web-login.password": "Sign in with a password",
+  "web-login.email": "Email",
+  "web-login.passwordField": "Password",
+  "web-login.passwordSubmit": "Sign in",
+  "web-login.wrongPassword": "Wrong email or password"
 }

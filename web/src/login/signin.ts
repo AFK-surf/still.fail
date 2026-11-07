@@ -15,7 +15,7 @@ export type Handed = { sub: string; email: string; name: string; picture: string
 
 /** Why a sign-in did not finish: its words' key (web-login.*), or what the cloud said. */
 export class SignInError extends Error {
-  constructor(readonly key: "cancelled" | "failed" | "expired" | "stateMismatch", message = key) {
+  constructor(readonly key: "cancelled" | "failed" | "expired" | "stateMismatch" | "wrongPassword", message = key) {
     super(message);
   }
 }
@@ -66,11 +66,25 @@ export async function complete(query: string): Promise<string> {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ code: params.get("code"), code_verifier: pending.verifier, redirect_uri: pending.redirectUri }),
   });
-  const tokens = answer.ok ? await answer.json() as Record<string, unknown> : null;
-  const { access_token, refresh_token, subject, email, name, expires_at } = tokens ?? {};
-  if (typeof access_token !== "string" || typeof refresh_token !== "string" || typeof subject !== "string" || typeof email !== "string" || typeof expires_at !== "number") throw new SignInError("expired");
-  hand({ sub: subject, email, name: typeof name === "string" ? name : "", picture: "", access: access_token, refresh: refresh_token, accessExpires: expires_at });
+  if (!handTokens(answer.ok ? await answer.json() : null)) throw new SignInError("expired");
   return pending.returnTo;
+}
+
+/** Signs in with an email and a password (the accounts still.fail cloud set up for it), the account handed on. */
+export async function password(email: string, password: string, name: string): Promise<void> {
+  const answer = await fetch("/v1/auth/password", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password, name }),
+  });
+  if (answer.status === 401) throw new SignInError("wrongPassword");
+  if (!handTokens(answer.ok ? await answer.json() : null)) throw new SignInError("failed");
+}
+
+/** The account the cloud's tokens say, handed on; false when they are not tokens. */
+function handTokens(tokens: unknown): boolean {
+  const { access_token, refresh_token, subject, email, name, expires_at } = (tokens ?? {}) as Record<string, unknown>;
+  if (typeof access_token !== "string" || typeof refresh_token !== "string" || typeof subject !== "string" || typeof email !== "string" || typeof expires_at !== "number") return false;
+  hand({ sub: subject, email, name: typeof name === "string" ? name : "", picture: "", access: access_token, refresh: refresh_token, accessExpires: expires_at });
+  return true;
 }
 
 function hand(account: Handed): void {

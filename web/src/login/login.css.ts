@@ -12,7 +12,7 @@ export const title = style({ margin: "8px 0 0", fontSize: vars.textTitle, fontWe
 export const lead = style({ margin: "0", color: vars.muted, maxWidth: "30em" });
 export const actions = style({ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px", marginTop: "4px" });
 export const button = style({
-  display: "inline-flex", alignItems: "center", height: "36px", padding: "0 16px", borderRadius: "999px", textDecoration: "none", border: `1px solid ${vars.lineStrong}`, background: vars.canvas,
+  display: "inline-flex", alignItems: "center", justifyContent: "center", height: "36px", padding: "0 16px", borderRadius: "999px", textDecoration: "none", border: `1px solid ${vars.lineStrong}`, background: vars.canvas,
   color: vars.text, fontSize: vars.textUi, fontWeight: "500", cursor: "pointer",
   selectors: { "&[aria-busy=\"true\"]": { cursor: "progress", opacity: ".7" } },
 });
