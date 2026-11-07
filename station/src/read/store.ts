@@ -1143,6 +1143,13 @@ function answersOf(s: Store, thread: number, since: number, mode: AnswerMode): {
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
 export function answersSince(s: Store, since: number, threads: number[]): CardAnswer[] {
+  if (threads.length === 0) return [];
+  s.db.exec("SAVEPOINT answers_since_read");
+  try { return answersSinceInSnapshot(s, since, threads); }
+  finally { s.db.exec("RELEASE answers_since_read"); }
+}
+
+function answersSinceInSnapshot(s: Store, since: number, threads: number[]): CardAnswer[] {
   const out: CardAnswer[] = [];
   // Only the requested chats (the items a sidebar change touched) are read.
   const scope = [...new Set(threads)];
@@ -1220,12 +1227,19 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
   const askedBefore = (thread: number, n: number): number | null => {
     return one(s, CARD_POST_BEFORE, thread, n).n as number | null;
   };
+  let mergedReady: boolean | undefined;
+  const messageAt = (thread: number, n: number): MessageRow | null => {
+    mergedReady ??= legacyMergedReadReady(s.db);
+    if (!mergedReady) return mergedWithBoundedEdit(s, thread, String(n));
+    const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+    return m ? toMessage(m) : null;
+  };
   const cardAt = (thread: number, n: number): [MessageRow, Json] | null => {
     const row = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
     const card = row ? cardOf(row.card, row.options) : undefined;
     if (card === undefined) return null;
-    const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-    return m ? [toMessage(m), card] : null;
+    const m = messageAt(thread, n);
+    return m ? [m, card] : null;
   };
   for (const { thread, n } of said) {
     const asked = askedBefore(thread, n);
@@ -1236,10 +1250,9 @@ export function answersSince(s: Store, since: number, threads: number[]): CardAn
     if (earlier || closed) continue;
     const found = cardAt(thread, asked);
     if (!found) continue;
-    const answer = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+    const answer = messageAt(thread, n);
     if (!answer) continue;
-    const a = toMessage(answer);
-    out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
+    out.push({ question: found[0], card: found[1], by: answer.author, at: answer.createdAt, answer });
   }
   let closedRows: Json[];
   try {

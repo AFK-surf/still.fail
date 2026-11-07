@@ -27,6 +27,7 @@ test("a scoped chat update reads marks and answers only for those chats", () => 
   for (let i = 1; i <= 2000; i++) { mark.run(i); keep.run(i); close.run(i); }
   const counts: Record<string, number> = {};
   const observed = {
+    exec(sql: string) { db.exec(sql); },
     prepare(sql: string) {
       const statement = db.prepare(sql);
       const table = /\bFROM (dismissed|kept_chats|closed_cards)\b/i.exec(sql)?.[1];
