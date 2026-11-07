@@ -5,6 +5,7 @@
 // decisions and ends are told in the chat; the owner's devices hear of the grants (`adb-grants`), and their phone lends
 // itself to the station while one is live.
 import type { DatabaseSync } from "node:sqlite";
+import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
@@ -69,6 +70,7 @@ CREATE TABLE IF NOT EXISTS adb_lasts (
 /// What it needs of the station: the chats (`hub`), its time (ms), and who hears of a change (the owner's devices).
 export type GrantsDeps = {
   db: DatabaseSync;
+  cardOutcomes?: CardOutcomeSaver;
   hub: {
     store: {
       getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
@@ -395,8 +397,7 @@ export class PhoneGrants {
       r.link = link;
       const tell = (link === "connected" || link === "unpaired") && r.toldLink !== link;
       if (tell) r.toldLink = link;
-      this.#save(r);
-      this.#restate(r);
+      this.#saveAndRestate(r, false);
       if (tell) {
         try {
           this.#d.hub.notify(r.session, linkSaid(r));
@@ -412,6 +413,20 @@ export class PhoneGrants {
     if (r.thread === undefined || r.cardTs === undefined) return;
     const outcome = { status: r.status, ...(r.scope ? { scope: r.scope } : {}), ...(r.why ? { why: r.why } : {}), ...(r.status === "granted" && r.link ? { link: r.link } : {}) };
     this.#d.hub.store.restateCard(r.session, r.thread, r.cardTs, (card) => ({ ...card, adb: { ...card?.adb, outcome } }));
+  }
+
+  #saveAndRestate(r: PhoneRequest, close: boolean) {
+    if (r.thread !== undefined && r.cardTs !== undefined && this.#d.cardOutcomes) {
+      const outcome = { status: r.status, ...(r.scope ? { scope: r.scope } : {}), ...(r.why ? { why: r.why } : {}),
+        ...(r.status === "granted" && r.link ? { link: r.link } : {}) };
+      this.#d.cardOutcomes.save({ thread: r.thread, ts: r.cardTs, agent: r.session, field: "adb", close, outcome }, () => this.#save(r));
+      return;
+    }
+    this.#save(r);
+    if (r.thread !== undefined && r.cardTs !== undefined) {
+      if (close) this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
+      this.#restate(r);
+    }
   }
 
   /// The owner (`email`) decides request `id`: `scope` grants it, null refuses it. Why it is refused, or null.
@@ -477,11 +492,7 @@ export class PhoneGrants {
     r.status = status;
     // Last use is only needed while the grant can appear in the person's list.
     if (status === "ended" || status === "denied") delete r.lastUsedAt;
-    this.#save(r);
-    if (r.thread !== undefined && r.cardTs !== undefined) {
-      this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
-      this.#restate(r);
-    }
+    this.#saveAndRestate(r, true);
     if (status !== "pending" && notify) {
       try {
         this.#d.hub.notify(r.session, said(r));

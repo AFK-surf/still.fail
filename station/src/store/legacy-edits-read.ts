@@ -29,3 +29,27 @@ export function boundedEditKey(db: DatabaseSync, thread: number, n: string): str
   }
   return edit.n;
 }
+
+/// Find the latest card-bearing edit without walking either the whole target history or all cards in a chat.
+/// A full page with no answer is inconclusive; the caller must prepare it elsewhere. The caller holds a snapshot.
+export function boundedCardEdit(db: DatabaseSync, thread: number, n: string, native: boolean): string | null | undefined {
+  const probe = (index: "edits" | "cards" | "tail") => {
+    const from = index === "edits"
+      ? "entries INDEXED BY entries_edits WHERE thread=?1 AND target=CAST(?2 AS INTEGER)"
+      : index === "cards"
+        ? "entries INDEXED BY entries_cards WHERE thread=?1 AND card IS NOT NULL"
+        : "entries WHERE thread=?1";
+    return db.prepare(`WITH candidates AS MATERIALIZED (
+      SELECT n,kind,target,card FROM ${from} ORDER BY n DESC LIMIT 65
+    ) SELECT (SELECT card FROM candidates WHERE kind='edit' AND target=CAST(?2 AS INTEGER)
+      AND card IS NOT NULL ORDER BY n DESC LIMIT 1) AS card,(SELECT COUNT(*) FROM candidates) AS count`)
+      .get(thread, n) as { card: string | null; count: number };
+  };
+  if (native) {
+    const target = probe("edits");
+    if (target.card !== null || target.count < 65) return target.card;
+  }
+  const hasCards = db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_cards'").get() !== undefined;
+  const cards = probe(hasCards ? "cards" : "tail");
+  return cards.card !== null || cards.count < 65 ? cards.card : undefined;
+}

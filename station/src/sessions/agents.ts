@@ -78,6 +78,7 @@ import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 import { readAgentEnvFrom } from "../ops/agent-env.ts";
+import { CardOutcomeWorker } from "../store/card-outbox-worker.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -88,6 +89,7 @@ const SWEEP_MS = 3 * 60_000;
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
   previousGone: Promise<void>;
+  cardOutcomes: CardOutcomeWorker;
   hub: Hub;
   jobs: Jobs;
   remote: Remote;
@@ -156,7 +158,14 @@ export const AgentsLive = (control: Control) =>
       const own = yield* Own;
       const up = yield* Up;
       const parts = yield* Parts;
-      const previous = (yield* Previous).gone;
+      const prior = yield* Previous;
+      const previous = prior.gone;
+      const cardOutcomes = yield* Effect.acquireRelease(
+        Effect.sync(() => new CardOutcomeWorker(store, prior.exited,
+          (thread, target, before, signal) => readers.cardEditPage(thread, target, before, signal),
+          (thread, target, before, signal) => readers.cardMessagePage(thread, target, before, signal))),
+        (worker) => Effect.promise(() => worker.close()),
+      );
       const run = join(data, "run");
       const config = yield* StationConfig;
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
@@ -835,7 +844,7 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      const self = Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      const self = Agents.of({ pageOf, previousGone: previous, cardOutcomes, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
       // The admin API asks for the agents' side as a request comes (services.ts AgentsSide); its routes are a part.
       (yield* AgentsSide).current = self;
       // And what the mesh asks of it (services.ts MeshSide).
