@@ -55,6 +55,7 @@ jobs:
       mac_beta: ${{ steps.plan.outputs.mac_beta }}
       win_beta: ${{ steps.plan.outputs.win_beta }}
       natives: ${{ steps.natives.outputs.natives }}
+      natives_main: ${{ steps.natives.outputs.natives_main }}
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
       mbui: ${{ steps.plan.outputs.mbui }}
       release_smoke: ${{ steps.plan.outputs.release_smoke }}
@@ -72,6 +73,10 @@ jobs:
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then missing=$(node scripts/native.ts missing)
           else missing=$(node scripts/native.ts missing $BRANCH_NATIVES); fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            node scripts/native.ts missing > "$RUNNER_TEMP/natives-main"
+            node -e 'const fs=require("fs"); console.log("natives_main=" + JSON.stringify(fs.readFileSync(process.argv[1], "utf8").split(/\s+/).filter(Boolean)))' "$RUNNER_TEMP/natives-main" >> "$GITHUB_OUTPUT"
+          fi
           echo "missing: ${missing:-none}"
           echo "natives=$([ -n "$missing" ] && echo needed || echo ready)" >> "$GITHUB_OUTPUT"
       - id: plan
@@ -118,22 +123,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
-  # A branch's the rest of what main builds (scripts/native.ts ensure, all of macos-ci's), into macos-ci's cache, which main's
-  # natives job takes them from: not built there, every job of main's run waiting on them. Beside the branch's checks,
-  # which need none of them (BRANCH_NATIVES). main a4967d00 built four, one after another, its natives job 197 s of a
-  # 566 s run (mesh linux-arm64 40 s, station-load 27, shell-apple ios 21 and ios-sim 18), 2026-11-01.
+  # Cold targets build independently: compiling both iOS targets serially exceeded the five-minute job budget.
+  # Use the registry's missing list so new native parts remain covered without a second list in this workflow.
   natives-main:
     needs: [plan, natives]
-    if: needs.plan.outputs.natives == 'needed' && github.ref != 'refs/heads/main' && needs.natives.result == 'success'
+    if: always() && github.ref != 'refs/heads/main' && needs.plan.result == 'success' && needs.plan.outputs.natives_main != '[]' && contains(fromJSON('["success","skipped"]'), needs.natives.result)
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ fromJSON(needs.plan.outputs.natives_main) }}
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
-      - name: Build what main builds besides the branch's (into macos-ci's cache)
+      - name: Build the target into macos-ci's cache
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/native.ts ensure
+          NATIVE_PART: ${{ matrix.part }}
+        run: node scripts/native.ts ensure "$NATIVE_PART"
 
   # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt, by the prebuild workflow when asked
   # (.github/workflows/prebuild.yml) or on a Mac, and fetched by their keys; nothing else builds them. Here, on GitHub's
@@ -233,6 +241,10 @@ jobs:
   # check.sh), through sccache. The native parts come from macos-ci's cache, the release or the natives job running beside
   # it (scripts/native.ts).
   check:
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [station, core]
     needs: plan
     runs-on: [self-hosted, macos-ci]
     # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
@@ -240,12 +252,12 @@ jobs:
     # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
     timeout-minutes: 5
     env:
-      STILLFAIL_CHECK_PART: station core
+      STILLFAIL_CHECK_PART: ${{ matrix.part }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
-      - name: Full check (station, core)
+      - name: Full check (${{ matrix.part }})
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep '^\.github/' | grep -qv -e '^\.github/workflows/mbui-' -e '^\.github/workflows/preview\.yml$'; then range=all; fi
