@@ -1,8 +1,9 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { firstText, getSession, getThread, lastSaid, LegacyEditsUnavailable, listThreads, messagesBefore, threadSessions } from "./store.ts";
+import { firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, threadSessions } from "./store.ts";
 import { searchChats } from "../store/chat-list.ts";
+import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
@@ -28,7 +29,17 @@ export const sessionOps: Record<string, ReadOp> = {
     });
     return { threads, sessions, total };
   },
-  searchChatList: (s, a) => searchChats(s.db, a.ws, a.home, a.limit, a.query, (id) => lastSaid(s, id)),
+  searchChatList: (s, a) => {
+    const last = (id: number) => lastSaid(s, id);
+    if (a.limit === 0) return searchChats(s.db, a.ws, a.home, a.limit, a.query, last);
+    // Keep the readiness decision and all the texts tested by this search in the same snapshot.
+    s.db.exec("SAVEPOINT search_chat_list_read");
+    try {
+      const summary = legacyMergedReadReady(s.db) ? undefined
+        : (id: number) => ({ saidText: lastSaidText(s, id), firstText: firstText(s, id) });
+      return searchChats(s.db, a.ws, a.home, a.limit, a.query, last, summary);
+    } finally { s.db.exec("RELEASE search_chat_list_read"); }
+  },
   /// A thread's latest `limit` messages, oldest first: the archive review's (sessions/review.ts).
   latestMessages: (s, a) => messagesBefore(s, a.thread, null, a.limit),
   /// One session as lists and events have it (views.rs `summary`).
