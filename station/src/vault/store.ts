@@ -80,6 +80,16 @@ export class VaultStore {
     return parse(this.#db.prepare("SELECT body FROM vaults WHERE ws = ? ORDER BY id").all(ws));
   }
 
+  /// A short ordered prefix and its database keys, followed by the rest only when a search needs it.
+  firstVaults(ws: string, limit: number): { id: string; value: Vault }[] {
+    const rows = this.#db.prepare("SELECT id, body FROM vaults WHERE ws = ? ORDER BY id LIMIT ?").all(ws, limit) as { id: string; body: string }[];
+    return rows.map((row) => ({ id: row.id, value: JSON.parse(row.body) as Vault }));
+  }
+
+  vaultsAfter(ws: string, id: string): Vault[] {
+    return parse(this.#db.prepare("SELECT body FROM vaults WHERE ws = ? AND id > ? ORDER BY id").all(ws, id));
+  }
+
   vault(ws: string, id: string): Vault | null {
     return this.vaultSnapshot(ws, id)?.value ?? null;
   }
@@ -114,6 +124,15 @@ export class VaultStore {
   /// A vault's items, latest versions (deleted ones too: a version saying so).
   items(ws: string, vault: string): Item[] {
     return parse(this.#db.prepare("SELECT body FROM vault_items WHERE ws = ? AND vault = ? ORDER BY id").all(ws, vault));
+  }
+
+  firstItems(ws: string, vault: string, limit: number): { id: string; value: Item }[] {
+    const rows = this.#db.prepare("SELECT id, body FROM vault_items WHERE ws = ? AND vault = ? ORDER BY id LIMIT ?").all(ws, vault, limit) as { id: string; body: string }[];
+    return rows.map((row) => ({ id: row.id, value: JSON.parse(row.body) as Item }));
+  }
+
+  itemsAfter(ws: string, vault: string, id: string): Item[] {
+    return parse(this.#db.prepare("SELECT body FROM vault_items WHERE ws = ? AND vault = ? AND id > ? ORDER BY id").all(ws, vault, id));
   }
 
   item(ws: string, vault: string, id: string): Item | null {
