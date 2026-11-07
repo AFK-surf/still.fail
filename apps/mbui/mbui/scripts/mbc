@@ -4,7 +4,7 @@
 # content: a checkout's mtimes are all new): CI keeps it built for each change of them (.github/actions/mbui-moonbit).
 D=$(cd "$(dirname "$0")" && pwd)
 T=$D/../tools
-B=$T/_build/native/release/build/mbc/mbc.exe
+B=$T/_build/native/release/build/mbctools/mbc/mbc.exe
 src=$(cd "$T" && find mbc moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
 # (`key`: what it is built from, said: the key CI keeps the tool by, .github/actions/mbui-moonbit)
 [ "${1:-}" != key ] || { echo "$src" | tr ' ' -; exit 0; }

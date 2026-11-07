@@ -86,8 +86,8 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe
-          apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe.src
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/mbc/mbc.exe
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/mbc/mbc.exe.src
         key: mbui-tool-mbc-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.mbc }}
     - if: steps.tools.outputs.testexe != ''
       uses: actions/cache@v4
@@ -100,20 +100,20 @@ runs:
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/chk/chk.exe
-          apps/mbui/mbui/tools/_build/native/release/build/chk/chk.exe.src
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/chk/chk.exe
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/chk/chk.exe.src
         key: mbui-tool-chk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.chk }}
     - if: steps.tools.outputs.detlint != ''
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/detlint/detlint.exe
-          apps/mbui/mbui/tools/_build/native/release/build/detlint/detlint.exe.src
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/detlint/detlint.exe
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/detlint/detlint.exe.src
         key: mbui-tool-detlint-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.detlint }}
     - if: steps.tools.outputs.apk != ''
       uses: actions/cache@v4
       with:
         path: |
-          apps/mbui/mbui/tools/_build/native/release/build/apk/apk.exe
-          apps/mbui/mbui/tools/_build/native/release/build/apk/apk.exe.src
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/apk/apk.exe
+          apps/mbui/mbui/tools/_build/native/release/build/mbctools/apk/apk.exe.src
         key: mbui-tool-apk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.apk }}
