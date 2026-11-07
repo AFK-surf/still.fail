@@ -40,7 +40,20 @@ pub(all) enum Live[T] {
 pub(all) struct NodeId {
   at : Int
   gen : Int
-} derive(Eq, Hash, Debug)
+} derive(Eq, Debug)
+
+///|
+pub impl Hash for NodeId with hash_combine(self, hasher) {
+  hasher.combine_int(self.at)
+  hasher.combine_int(self.gen)
+}
+
+///|
+/// Its hash as a map's key, worked out from its two numbers: the default made a Hasher for each, an allocation (a
+/// frame of a page sliding in hashed ~3,700 of them).
+pub impl Hash for NodeId with hash(self) {
+  (self.at * 31 + self.gen).hash()
+}
 
 ///|
 /// What a node is drawn as, kept by the node: its ground (0: none), its words and their ink, how opaque, and how far it
