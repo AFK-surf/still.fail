@@ -16,5 +16,7 @@ cargo test --manifest-path "$upstream" --locked --offline --release -p resvg --t
 cargo test --manifest-path "$root/Cargo.toml" --locked --offline --release
 cargo build --manifest-path "$root/Cargo.toml" --locked --offline --release --lib
 export MOON_CC="$root/test-cc.sh" SVG_TEST_LIB="$CARGO_TARGET_DIR/release/libmbui_svg.a"
+# Linux MoonBit otherwise looks for ar beside the compiler wrapper.
+export MOON_AR="${MOON_AR:-$(command -v ar)}"
 cd "$root/../.."
 moon test --target native --release -p mbui/svgrender -p mbui/media
