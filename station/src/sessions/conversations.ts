@@ -6,6 +6,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { copyFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
+import { wall } from "../ops/fibers.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
 import { LegacyEditsUnavailable, makeStore as makeReadStore, stateQuestion as readStateQuestion } from "../read/store.ts";
@@ -154,7 +155,7 @@ async function recordQuestionForTurn(hub: Hub, key: string, actor: SessionActor,
       }));
     } catch (error) {
       if (error instanceof StateWriteBusy) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await wall.sleep(delay);
         delay = Math.min(delay * 2, 250);
         continue;
       }
