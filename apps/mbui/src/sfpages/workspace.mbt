@@ -96,35 +96,51 @@ let workspaces_tall : Double = 0.7
 
 ///|
 /// The list: the one in use (checked) on a card, the invitations waiting, the others to switch to, then signing in
-/// another account and a new one.
+/// another account and a new one. Filling a share of the window, the list scrolls in it (@sf.panel_list), its foot
+/// staying under it: more workspaces than the share holds are reached by scrolling, not cut off.
 fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], close : () -> Unit, compact~ : Bool) -> Unit {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let by_ws = field(marks.value, "workspaces")
-  c.box(style=if compact { ws_list_compact } else { ws_list }, fn() {
-    ws_label(c, @sf.t("android-misc.workspace.current"))
-    c.box(style=ws_current.then(@sf.panel_card_out()), fn() {
-      c.box(style=ws_card.then(@ui.style(bg=Data(@sf.theme().p.chip))), fn() {
-        if workspace_row(c, "ws/" + w.id, w.name, w.email, true, Some(w), "", Json::null(), on_card=true) {
-          close()
-        }
+  let rows : Array[() -> Unit] = [
+    fn() {
+      ws_label(c, @sf.t("android-misc.workspace.current"))
+      c.box(style=ws_current.then(@sf.panel_card_out()), fn() {
+        c.box(style=ws_card.then(@ui.style(bg=Data(@sf.theme().p.chip))), fn() {
+          if workspace_row(c, "ws/" + w.id, w.name, w.email, true, Some(w), "", Json::null(), on_card=true) {
+            close()
+          }
+        })
+        |> ignore
       })
       |> ignore
-    })
-    |> ignore
-    invitations(c, src, close)
-    let others = all.filter(fn(x) { x.id != w.id })
-    if others.length() > 0 {
-      ws_label(c, @sf.t("android-misc.workspace.others"))
-    }
-    for o in others {
-      let mark = field(by_ws, o.id).unwrap_or(Json::null())
+      invitations(c, src, close)
+    },
+  ]
+  let others = all.filter(fn(x) { x.id != w.id })
+  if others.length() > 0 {
+    rows.push(fn() { ws_label(c, @sf.t("android-misc.workspace.others")) })
+  }
+  for o in others {
+    let mark = field(by_ws, o.id).unwrap_or(Json::null())
+    rows.push(fn() {
       if workspace_row(c, "ws/" + o.id, o.name, o.email, false, Some(o), "", mark) {
         close()
         switch_workspace(src, o.id)
       }
-    }
-  })
-  |> ignore
+    })
+  }
+  if compact {
+    c.box(style=ws_list_compact, fn() { rows.each(fn(r) { r() }) }) |> ignore
+  } else {
+    // (the panel its share whatever the list holds, as when the list did not scroll: fills)
+    c.box(style=ws_list, fn() {
+      @sf.panel_list(c, "ws-list", rows.length(), 64.0, fills=true, fn(i) {
+        c.box(style=ws_list_row, fn() { (rows[i])() }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
   c.box(style=ws_foot, fn() {
     if workspace_row(
         c,
@@ -149,9 +165,14 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
 }
 
 ///|
-/// The list: what it holds, 24 over its foot, cut at its edges.
+/// The list: the room it scrolls in, 24 over its foot.
 // kept across runs: a value (no field of it changes)
-let ws_list : @ui.Style = @ui.css("w=Full h=Full pb=S6 clip")
+let ws_list : @ui.Style = @ui.css("w=Full h=Full pb=S6")
+
+///|
+/// A row of the list, across it.
+// kept across runs: a value (no field of it changes)
+let ws_list_row : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

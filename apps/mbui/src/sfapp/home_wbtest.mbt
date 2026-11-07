@@ -998,3 +998,74 @@ fn words_seen(t : @ui.Tester, s : String) -> Bool {
     seen.iter().any(fn(g) { g.0 < w.1 + w.3 && g.2 > w.1 && g.1 < w.2 + w.4 && g.3 > w.2 })
   })
 }
+
+///|
+test "the workspaces' sheet: more workspaces than it holds are reached by scrolling it, the last one switched to" {
+  new_run()
+  let base = fixture("home")
+  let many : Array[Json] = []
+  for i = 1; i <= 20; i = i + 1 {
+    many.push({ "id": Json::string("ws\{i}"), "name": Json::string("工作区 \{i}"), "stations": 1 })
+  }
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "workspaces" {
+        {
+          value: Some([{ "account": { "email": "lin@example.com" }, "workspaces": Json::array(many), "invitations": [], "loaded": true }]),
+          error: None,
+          version: 1,
+        }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@sf.later_ms + @kit.presence_in_ms)
+  t.tap_text("工作区 1")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting())
+  let last = "工作区 20"
+  let (_, foot_y) = t.find("登录其他账号").unwrap()
+  let in_view = fn() {
+    match t.find(last) {
+      Some((_, y)) => y < foot_y
+      None => false
+    }
+  }
+  assert_true(!in_view(), msg="the last workspace starts out of the sheet's room")
+  // (the sheet dragged up through the list, held still before it is let go (nothing flung), until the list's end is in the sheet)
+  // (a row's height or so at a time, so the list's end is not pulled past, bouncing back as it is pressed)
+  let (x, from_y) = t.find("工作区 4").unwrap()
+  for _ in 0..<40 {
+    if in_view() {
+      break
+    }
+    held_drag(t, x, from_y, from_y - 60.0)
+    sheet_rested(t, "sf-present")
+  }
+  assert_true(in_view(), msg="the last workspace scrolled into the sheet")
+  t.tap_text(last)
+  assert_true(!@sf.presenting())
+  let (_, bar_y) = t.find(last).unwrap()
+  assert_true(bar_y < 100.0, msg="the workspace in view is the last one: \{bar_y}")
+}
+
+///|
+/// A finger down at (`x`, `y0`), moved to `y1` a step a frame and held there still before it is let go: nothing flung.
+fn held_drag(t : @ui.Tester, x : Double, y0 : Double, y1 : Double) -> Unit {
+  t.touch(0, x, y0)
+  for i = 1; i <= 12; i = i + 1 {
+    t.advance(@ui.drag_step_ms)
+    t.touch(1, x, y0 + (y1 - y0) * i.to_double() / 12.0)
+    t.draw()
+  }
+  for _ in 0..<12 {
+    t.advance(@ui.drag_step_ms)
+    t.touch(1, x, y1)
+    t.draw()
+  }
+  t.touch(2, x, y1)
+  t.draw()
+}
