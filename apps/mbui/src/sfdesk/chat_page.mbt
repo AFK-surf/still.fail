@@ -352,14 +352,34 @@ fn chat_bar(
             } else {
               None
             }
+            // (the short column, no room in it for their own buttons: the first rows of its "…", a line under them; the
+            // user, 2026-11-07: 右上角那两个按钮应该收到右侧边栏)
+            let rows = if @sf.native_on() && column_short.get() {
+              let firsts : Array[@sf.MenuItem?] = []
+              match screen {
+                Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.screen"), icon="monitor", act)))
+                None => ()
+              }
+              match jobs {
+                Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.services"), icon="web", act)))
+                None => ()
+              }
+              if firsts.length() > 0 {
+                firsts.push(None)
+              }
+              firsts + rows
+            } else {
+              rows
+            }
             let in_bars = bar_chat(src, r, view.agents, info, rows, more, jobs, screen, if archivable { Some(archive) } else { None })
             if !in_bars &&
               archivable &&
               @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
               archive()
             }
-            // (in the system's bars where the chat's actions are, the column not short: bar_chat)
-            if !in_bars || column_short.get() {
+            // (in the system's bars where the chat's actions are: their own buttons, or rows of the short column's "…",
+            // bar_chat)
+            if !in_bars {
               jobs_trigger(c, jobs_view)
               screen_trigger(c, r, view)
             }
