@@ -1077,7 +1077,7 @@ export const SHAPES: Record<string, Shape> = {
     ["remaining", "String", { doc: "What is left in words, in its chip: 剩 6.0 G, 空闲 89%." }],
     ["big", "String", { doc: "What is left, large on the machine's own page: 22.8, 89." }],
     ["unit", "String", { doc: "Beside `big`, small: GB, %." }],
-    ["title", "String", { doc: "Under `big`: 内存剩, CPU 空闲." }],
+    ["title", "String", { doc: "Under `big`: 内存剩余, CPU 空闲." }],
     ["total", "String", { doc: "Under `title`, quiet: 共 64 GB, 负载 1.4." }],
     ["note", opt("String")],
   ], { doc: "CPU, memory or disk: how full (and how bad: ok | amber | red), in words." }),
