@@ -83,6 +83,10 @@ struct FakeHost {
   // its glyphs' generation (@hostapi.atlas_generation): moved on by Tester::glyphs_moved_on, as a host's is once a face
   // it was given is in (a page's, loaded after it is asked for), its scale changes or its atlas is lost
   mut generation : Int
+  // Number of times a frame asks this fake host for its glyph generation.
+  mut generation_asks : Int
+  // Let a test model a host that advances its generation while installing a face.
+  generation_on_face_add : Ref[Bool]
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
@@ -764,7 +768,13 @@ fn h_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
   match fake.val {
     Some({ live: Some(l), .. }) => l.host.face_add(face, path, weight)
-    Some(f) => !f.unreadable_fonts.contains(path)
+    Some(f) => {
+      let ok = !f.unreadable_fonts.contains(path)
+      if ok && f.generation_on_face_add.val {
+        f.generation += 1
+      }
+      ok
+    }
     None => @hostapi.face_add(face, path, weight)
   }
 }
@@ -802,9 +812,27 @@ fn h_face_clear(face : Int) -> Unit {
 ///|
 fn h_atlas_generation() -> Int {
   match fake.val {
-    Some({ live: Some(l), .. }) => l.host.atlas_generation()
-    Some(f) => f.generation
+    Some(f) => {
+      f.generation_asks += 1
+      match f.live {
+        Some(l) => l.host.atlas_generation()
+        None => f.generation
+      }
+    }
     None => @hostapi.atlas_generation()
+  }
+}
+
+///|
+/// The host's glyph generation, read at the start of a frame and updated when a face changes it mid-frame.
+// kept across runs: said as each frame begins, reset by Ctx::let_go
+let atlas_said : Ref[Int?] = Ref(None)
+
+///|
+fn atlas_now() -> Int {
+  match atlas_said.val {
+    Some(g) => g
+    None => h_atlas_generation()
   }
 }
 

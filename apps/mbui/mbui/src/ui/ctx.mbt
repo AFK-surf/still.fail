@@ -1055,6 +1055,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.focusables.shrink_to_fit()
   self.last_focusables.clear()
   self.last_focusables.shrink_to_fit()
+  atlas_said.val = None
   self.groups.clear()
   self.layers.clear()
   self.layers.shrink_to_fit()

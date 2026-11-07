@@ -141,7 +141,7 @@ fn text_frame() -> Bool {
       None => ()
     }
   }
-  let g = h_atlas_generation()
+  let g = atlas_now()
   if g != text_cache.generation {
     // (a host moves it on as its faces or its scale change, a face it was given is here (a page's, loaded later than
     // asked), its atlas is lost: what was measured in the face before is forgotten with the glyphs)

@@ -107,7 +107,9 @@ fn words_forgotten() -> Unit {
   // (the frame drawn whole, its glyphs other pixels; the host's glyphs as they are now: a face it has later than it is
   // given (a page's, loaded) moves them on again, and what was laid out till then is laid out again (text_frame))
   presented.forget()
-  text_cache.generation = h_atlas_generation()
+  let g = h_atlas_generation()
+  atlas_said.val = Some(g)
+  text_cache.generation = g
   view_words_rescaled()
 }
 
