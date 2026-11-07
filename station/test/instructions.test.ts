@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import * as ts from "../src/agents/instructions.ts";
-import { NOTES, latest, untold } from "../src/agents/migrations.ts";
+import { NOTES, latest, untold, REWRITTEN } from "../src/agents/migrations.ts";
 
 test("the session instructions name the session's places, and a project only when it has one", () => {
   const plain = ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md");
@@ -37,7 +37,9 @@ test("the migration notes are numbered 1, 2, 3…, and told once", () => {
   assert.ok(NOTES.every(([, note]) => note.length > 0 && !note.includes("\n")));
   assert.equal(untold(latest(), "/w/i.md"), "");
   const all = untold(0, "/w/i.md");
-  assert.ok(all.startsWith("[still.fail changed how you work") && all.includes("need_human") && all.includes("/w/i.md"));
+  assert.ok(all.startsWith("[still.fail changed how you work") && all.includes("rewritten") && all.includes("/w/i.md"));
+  // A session from before the rewrite hears that it happened, not the notes it replaced.
+  assert.ok(!all.includes(NOTES[REWRITTEN - 2]![1]));
   assert.ok(!untold(latest() - 1, "/w/i.md").includes(NOTES[0]![1]));
 });
 

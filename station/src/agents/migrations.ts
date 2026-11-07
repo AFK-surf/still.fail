@@ -125,7 +125,12 @@ export const NOTES: [number, string][] = [
   [118, "station_task preserves remote-only changes in a synced mirror and refuses conflicting local changes. The mirror stays busy while results are brought back; if the notice says retrieval was incomplete, save the files with station_file before action release on that task allows the next one there."],
   [119, "In Slack a login card now also goes with a device code (gh, docker), not only a code to paste back: post the login's link alone with its card, which shows a button to the sign-in page and the code (or a field for the code that page gives)."],
   [120, "When Codex is too old for a selected model, the station updates it and resumes the interrupted conversation once; check prior work before continuing."],
+  [121, "The instructions were rewritten whole and much shorter; every earlier note is void. Follow only the current instructions (the file named below): one state per turn, cards only for real choices, details of other chats, agents, Slack and Feishu in the new skill stillfail-chats."],
 ];
+
+/// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only
+/// the notes from it on, not a pile of changes to instructions it no longer has.
+export const REWRITTEN = 121;
 
 /// The latest note's number: what a session that knows everything has been told.
 export const latest = () => NOTES.at(-1)?.[0] ?? 0;
@@ -133,7 +138,7 @@ export const latest = () => NOTES.at(-1)?.[0] ?? 0;
 /// The notes a session told up to `told` has yet to hear, as one block before its messages, and where today's whole
 /// instructions are (`full`); empty when there are none.
 export function untold(told: number, full: string): string {
-  const notes = NOTES.filter(([n]) => n > told).map(([, note]) => `- ${note}`);
+  const notes = NOTES.filter(([n]) => n > told && n >= REWRITTEN).map(([, note]) => `- ${note}`);
   if (notes.length === 0) return "";
   return `[still.fail changed how you work since this session began]\n${notes.join("\n")}\nToday's whole instructions, tool parameters included, are in ${full}: read them when you need the details (your tool list may not show the new parameters; pass them anyway).`;
 }
