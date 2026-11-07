@@ -33,7 +33,7 @@ import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
+import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -125,6 +125,7 @@ export class Readers {
   private said: SaidBuilder | null = null;
   private archiveLast: RequestedBuilder<number> | null = null;
   private legacyEdits: RequestedBuilder<number> | null = null;
+  private legacySaid: RequestedBuilder<number> | null = null;
   private turns: TurnBuilder | null = null;
   private recentChats: RecentChatBuilder | null = null;
   private sessionList: SessionListBuilder | null = null;
@@ -283,6 +284,14 @@ export class Readers {
     return this.covered(this.legacyEdits.ready([0], signal), signal);
   }
 
+  /// Share the initial old-message scan between pages waiting for it.
+  prepareLegacySaid(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.legacySaid ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
+      "legacy said", (thread, cancel) => ({ thread, legacySaid: true, cancel }));
+    return this.covered(this.legacySaid.ready([0], signal), signal);
+  }
+
   /// Prepare the old connection bindings for session reads and auto-archiving together.
   prepareSessionBindings(signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -360,6 +369,10 @@ export class Readers {
         if (!(error instanceof HttpError)) throw error;
         if (error.message === LEGACY_EDITS_PENDING) {
           await this.prepareLegacyEdits(signal);
+          continue;
+        }
+        if (error.message === LEGACY_SAID_PENDING) {
+          await this.prepareLegacySaid(signal);
           continue;
         }
         if (error.message.startsWith(LAST_MESSAGE_PENDING)) {
@@ -640,6 +653,7 @@ export class Readers {
     if (this.said !== null) void this.said.close();
     if (this.archiveLast !== null) void this.archiveLast.close();
     if (this.legacyEdits !== null) void this.legacyEdits.close();
+    if (this.legacySaid !== null) void this.legacySaid.close();
     if (this.turns !== null) void this.turns.close();
     if (this.recentChats !== null) void this.recentChats.close();
     if (this.sessionList !== null) void this.sessionList.close();
