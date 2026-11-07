@@ -605,7 +605,7 @@ export class Hub {
     const here: ThreadRef = { channel: message.channel, threadTs: message.threadTs };
     // Archived by hand: it takes no messages until someone shows it again; told so, once per message.
     if (existing && this.store.manuallyArchived(existing.id)) {
-      if (this.store.messageAt(existing.id, message.ts) === null) {
+      if (this.store.messageNumberAt(existing.id, message.ts) === null) {
         await chat.post(here, `⚠️ ${tr(stationLang(), "station.chat.archived")}`, []).catch((error) => log.warn("hub", "archived notice not posted", { thread: existing.id, error: (error as Error).message }));
       }
       return;
@@ -632,7 +632,7 @@ export class Hub {
     if (wanted) this.store.joinThread(thread.id, key, connect.id);
     // Its files go where a session of the thread reads them; once (Slack sends a message again it was slow to hear of).
     const into = wanted ? key : (members[0]?.session ?? key);
-    const said = this.store.messageAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    const said = this.store.messageNumberAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
     const [n, fresh] = this.store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, ...said });
     // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
     const targets = fresh ? this.store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
