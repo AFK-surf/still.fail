@@ -828,7 +828,7 @@ fn job_detail_at(running : Bool) -> @ui.Style {
   if !running {
     return job_detail_alone
   }
-  let d = @sf.capsule_in(@sf.card_corner, job_stop_side)
+  let d = @ui.capsule_in(@sf.card_corner, job_stop_side)
   // (the head's middle the stop's: as much less over it as the choice is taller)
   let over = d - (dmax(@sf.segmented_height(), job_stop_side) - job_stop_side) / 2.0
   @ui.style(pt=@sf.room_of(over), pr=@sf.room_of(d))

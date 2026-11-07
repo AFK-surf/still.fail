@@ -766,7 +766,7 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
 /// copied_ms.
 fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
   let over = native_input() is Mouse
-  let key_inset = capsule_in(row_corner, code_key_h)
+  let key_inset = @ui.capsule_in(row_corner, code_key_h)
   let copied = @signals.signal(false)
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
   p.owns(fn() { (copied_off.val)() }) |> ignore

@@ -440,7 +440,7 @@ pub fn seg_fill_node(
       // a corner of the track's: the rule's own conditions, here, are these)
       let thumb_corners = fn(r : (Double, Double, Double, Double)) -> (Double, Double, Double, Double)? {
         let (x, _, w, h) = r
-        let own = inner_corner(seg_radius, seg_inset)
+        let own = @ui.concentric(seg_radius, seg_inset)
         let room = track.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
         let (l, t, rr, d) = (x, seg_inset, room - x - w, seg_inset)
         let half = dmin(w, h) / 2.0
@@ -473,7 +473,7 @@ pub fn seg_fill_node(
         .offset(By(fn() { (rect().map(fn(r) { r.0 }).unwrap_or(seg_inset) - seg_inset, 0.0) }))
         .width(By(fn() { rect().map(fn(r) { r.2 }) }))
         .height(Is(Some(segmented_narrow_h - 2.0 * seg_inset)))
-        .radius(Is(inner_corner(seg_radius, seg_inset)))
+        .radius(Is(@ui.concentric(seg_radius, seg_inset)))
         .corners(By(fn() {
           match rect() {
             Some(r) => thumb_corners(r)

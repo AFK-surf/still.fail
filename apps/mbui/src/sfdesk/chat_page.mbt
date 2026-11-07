@@ -1182,7 +1182,7 @@ let via_dot_side : Double = 8.0
 ///|
 /// How far in from the tag's edge its dot stands: concentric with its round end (@sf.capsule_in; the line round it is
 /// drawn over its padding, not in it).
-let chat_station_dot_in : Double = @sf.capsule_in(chat_station_h / 2.0, via_dot_side, room=chat_station_h / 2.0)
+let chat_station_dot_in : Double = @ui.capsule_in(chat_station_h / 2.0, via_dot_side, room=chat_station_h / 2.0)
 
 ///|
 // kept across runs: a value (no field of it changes)

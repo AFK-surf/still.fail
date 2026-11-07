@@ -109,7 +109,7 @@ pub fn native_foot_set(foot : Double, keyboard? : Double = 0.0) -> Bool {
       if d < corner_fit.near || d > h {
         None
       } else {
-        Some(@ui.round_like_out(h / 2.0 + d))
+        Some((h / 2.0 + d))
       }
     }
     _ => None

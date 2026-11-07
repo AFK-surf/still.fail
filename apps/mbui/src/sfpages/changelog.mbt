@@ -57,7 +57,7 @@ let news_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L
 // kept across runs: a value (no field of it changes)
 let news_close_place : @ui.Style = @ui.style(
   w=Full,
-  p=@sf.room_of(@sf.capsule_in(@sf.card_corner, news_close_side)),
+  p=@sf.room_of(@ui.capsule_in(@sf.card_corner, news_close_side)),
   align=AEnd,
 )
 

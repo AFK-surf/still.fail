@@ -293,7 +293,7 @@ test "an iPhone Duo, folded or on its side: the composer's end concentric with t
     // (the page on under the column, the composer ending before it: where the cards stand across, the list's or the
     // page's in view)
     assert_true(b.x + b.w <= p.x + p.w - size.2 + 0.5, msg="the composer \{b.x}..\{b.x + b.w}, the page \{p.x}..\{p.x + p.w}")
-    let concentric = @sf.capsule_in(p.radii.3, b.h)
+    let concentric = @ui.capsule_in(p.radii.3, b.h)
     let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
     assert_true(
       (at.0 - concentric).abs() < 0.01 && (at.1 - concentric).abs() < 0.01,
@@ -324,7 +324,7 @@ test "an iPhone Duo, folded or on its side: the cards as far from the screen's f
     assert_true(near(b.y + b.h / 2.0, ay + a / 2.0), msg="\{size}: the composer's middle at \{b.y + b.h / 2.0}")
     let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
     assert_true(near(at.0, at.1), msg="\{size}: the composer \{at} from the page's side and foot")
-    assert_true(near(at.1, @sf.capsule_in(p.radii.3, b.h)), msg="\{size}: not concentric with \{p.radii.3}")
+    assert_true(near(at.1, @ui.capsule_in(p.radii.3, b.h)), msg="\{size}: not concentric with \{p.radii.3}")
     // (the list's card beside it as round at its foot, the gap between them even)
     assert_true(near(@sf.tape_side_corners()[2].radius(@ui.corner_roots()), p.radii.3), msg="\{size}: the list's foot corner")
     assert_eq(t.corner_faults(), [])

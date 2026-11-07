@@ -2231,7 +2231,7 @@ fn phone_controls_box() -> @ui.Style {
 }
 
 ///|
-let phone_keys_in : Double = capsule_in(card_corner, 40.0)
+let phone_keys_in : Double = @ui.capsule_in(card_corner, 40.0)
 
 ///|
 /// Under the keys' row: as much less than phone_keys_in as the row is taller than its keys (phone_keys_row), the keys

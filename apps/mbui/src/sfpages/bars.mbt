@@ -267,7 +267,7 @@ let bar_remove : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Neutral align=ACe
 // kept across runs: a value (no field of it changes)
 let bar_remove_at : @ui.Style = @ui.style(
   w=Full,
-  p=@sf.room_of(@sf.capsule_in(@sf.group_corner, bar_remove_side) - @sf.list_pad),
+  p=@sf.room_of(@ui.capsule_in(@sf.group_corner, bar_remove_side) - @sf.list_pad),
   align=AEnd,
 )
 

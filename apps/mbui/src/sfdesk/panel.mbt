@@ -174,7 +174,7 @@ pub fn side_bar_tape() -> @ui.Style {
   @ui.style(
     row=true,
     w=Full,
-    pt=@sf.room_of(@sf.capsule_in(@sf.tape_corner, side)),
+    pt=@sf.room_of(@ui.capsule_in(@sf.tape_corner, side)),
     pb=S1_5,
     pl=@sf.room_of(@sf.line_end_in(left, side_bar_start, side=@sf.side_tab_side)),
     pr=@sf.room_of(@sf.line_end_in(right, side_bar_end, side~)),

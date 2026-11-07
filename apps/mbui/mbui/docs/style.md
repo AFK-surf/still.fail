@@ -84,42 +84,8 @@ Rich text (`Ctx::rich`) has both: letter spacing in every run, and `max_lines` (
 follows). Behaviour is not a style (`id`, `glass`, `notch_*`,
 `aspect`, `tx`/`ty`, a place in the parent: `left` `top` `right` `bottom`, `moves`).
 
-A box's corner is the one it has standing alone. Where the layout puts it in the corners of a rounded container that
-shows (the nearest round it with a ground, an edge, glass or a cut: `Tester::corner_faults`'s), filling it (in all four
-of its corners, as far from each edge), its corner is worked out after layout, concentric with the container's
-(smooth.mbt `concentric`: corners.mbt `corners_in_corners`). In only some of its corners it keeps its own, all four
-alike: concentric there alone it would have corners unlike each other, which mbui never makes by the way (only a
-design says them, below); `corner_faults` says where it is not concentric, and the page gives it the corner, or the
-place, that is. Not a capsule or a circle (its corner half its shorter
-side): its shape is its height's, and where it stands is what makes it concentric (the container's corner its distance
-and its half), which the page lays out and `corner_faults` checks; nor one too small for the corner it would have there,
-nor one at different distances from the two edges: each keeps its own and `corner_faults` says so.
-
-`radius=Inner`: the corner of the container the corner rule measures against, as above, for a box near only one pair
-of its edges too (a row across a card, near its sides), drawn square where it cannot be (in no rounded container, near
-none of its edges, nearer one edge than another) and said so by `corner_faults`: a test fails, a person's screen does not
-stop. `InnerOr(own)`: the same, its own corner where it stands alone, or where following would leave its corners
-unlike. `Around`: the other way, the container's corner round what lies in its corner.
-
-Each corner is its own (`Corners(tl, tr, br, bl)`, CSS's border-radius of four; every renderer draws a box's corner by
-the quarter it is in), and the rule works corner by corner. Corners unlike each other are a design's, said
-(`Corners`, `LinkedEach`: a panel whose corners at the window's edge follow the window's and whose others stand alone),
-each looked at and kept by a person (an app's detlint `corners-each`); what mbui works out is unlike only as the
-container's corners are, where it fills it (an `Inner` one, with none of its own, follows the container's matching
-corner in all four). A box whose own corner is rounder than any it could have concentric in a corner it stands in (a
-card's 26 in a window's 16) keeps it, alone. `Tester::mixed_corners` lists every box drawn with corners unlike, and how.
-
-A theme may say its corner ladder (`Theme::corner_ladder`, outermost first): the corners nested things are round by,
-each the next in at one inset. `corner_faults` then holds a rounded container with something in its corner, and a
-smooth box there, to its steps (a capsule or a circle round by its shape; a control's own parts hugging its edge and
-what is in the last step only concentric). Under such a theme the Tester holds every frame a test draws with nothing
-moving to the rule: a fault fails the test there, with what and where (`Tester::new(corners_held=false)` for one that
-draws a fault on purpose, to find it). So every state a test walks through keeps to it, not only the screens a test of
-corners looks at.
-
-Not the rule's: what scrolls in the container (a list, a box kept to a height, a strip scrolled sideways: where it is
-from the container's corner is not fixed; `Inner` in one is near only the edges it does not scroll past), and what is
-in a picture (said to be one: Role `Image`, a drawing of another system's screen, whose corners are what it draws).
+Corners: `src/ui/corners.mbt` says what a box's corner is where it stands, `src/paint/smooth.mbt` how it is drawn,
+`src/paint/corner.mbt` what a linked one follows.
 
 ## Short of room
 
@@ -198,24 +164,6 @@ intentional ellipsis. Where a row's last resort is intended without changing the
 A fixed-width box is the boundary: a cut said outside it does not permit cutting everything inside it.
 In the window tree the corresponding declarations are `View::shrink`, `View::max_width`, or
 `View::allow_ellipsis` where the sizing itself stays unchanged.
-
-## Corners linked
-
-A corner says where its radius comes from (`CornerOf`, ui/corner_of.mbt), not a number worked out where it is used:
-
-- the roots: `Window`, the window's corner as the system draws it now (`@hostapi.window_corner`: 0 square, maximized,
-  filling the screen), and `Own(r)`, a number of its own (a theme's ladder);
-- every other corner `Follow(from, inset, alone)`: `from` followed `inset` in from its edges, concentric with it where
-  the theme's ranges let a corner be so round and stand so far in (`Theme::corner_fit`), else `alone`, as round as it
-  is standing alone.
-
-A box takes one as its radius (`Radius::Linked`, each corner its own with `Radius::LinkedEach`); its radius is read
-each frame, so the window's corner changing (maximized, another system) changes the whole chain. Where a linked box
-lies in its container's corner, the corner rule (corners.mbt `corner_faults`) holds it to its link: as far in from the
-container's edges as its link's inset, and the container's corner there the one it follows. So a panel and what is
-drawn in it can not drift apart: still.fail's tape panels and closed bar follow the window, the rail's grounds follow
-the bar or the panel they stand in (src/sf/tokens.mbt `window_follow`, `tape_corners`, `closed_bar_of`,
-`rail_ground_radius`).
 
 ## The four rules
 

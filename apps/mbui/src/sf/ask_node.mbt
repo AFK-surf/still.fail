@@ -107,7 +107,7 @@ pub fn ask_node(
       |> ignore
       // (its foot: its buttons at its end, 8 apart, 24 over them; as far from its foot and sides as its corner has them)
       d.box(fn(f) {
-        let at = capsule_in(dialog_r, button_height())
+        let at = @ui.capsule_in(dialog_r, button_height())
         f.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).padding(Is((at, @ui.Space::px(S6), at, at))).alpha(By(words_in)) |> ignore
         f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
         button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost) |> ignore

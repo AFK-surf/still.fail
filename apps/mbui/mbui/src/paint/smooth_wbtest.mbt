@@ -128,15 +128,10 @@ test "concentric: a corner moved in is as much smaller, whole numbers kept whole
 test "a circle in a corner stands its corner's whole radius in, as in a round one: the smoothing is the drawing's alone" {
   // (the user, 2026-11-03: 平滑圆角没道理影响这个; 平滑圆角只是在原有圆角的描述上做平滑: what lies in a corner is laid out by
   // the corner said, no smooth scale in the arithmetic)
-  assert_eq(round_like(28.0), 28.0)
+  assert_eq(capsule_in(28.0, 20.0), 18.0)
   // a capsule's end is itself; in a box short of the corner, its half
-  assert_eq(round_like(20.0, room=20.0), 20.0)
-  assert_eq(round_like(28.0, room=20.0), 20.0)
-  // and back
-  for c in [(28.0, 1.0e30), (20.0, 20.0), (34.0, 1.0e30)] {
-    let (r, room) = c
-    assert_true((round_like_out(round_like(r, room~), room~) - r).abs() < 1.0e-9)
-  }
+  assert_eq(capsule_in(20.0, 20.0, room=20.0), 10.0)
+  assert_eq(capsule_in(28.0, 20.0, room=20.0), 10.0)
 }
 
 ///|
@@ -294,7 +289,17 @@ test "a capsule's end is Apple's: the circle's at its middle, easing into the lo
 }
 
 ///|
-test "how far a capsule's end eases in goes with the room it has: a circle round, none at once as it grows" {
+test "a capsule's end is the same curve however long it is: only a box too short to hold it has less, a circle none" {
+  // (the user, 2026-11-07: 这跟长度有个屁的关系) a button 58 by 36 and a bar 600 by 36: their ends alike, with 0.4 r
+  // past the circle's and no more of room
+  for i in 0..=140 {
+    let d = i.to_double() * 0.01 * 18.0
+    for y in [12.0, 16.0, 17.5, 18.5] {
+      for hx in [25.2, 29.0, 300.0] {
+        assert_true((sd_box(hx - d, y, hx, 18.0, 18.0) - sd_box(300.0 - d, y, 300.0, 18.0, 18.0)).abs() < 1.0e-9, msg="\{hx} at \{d}, \{y}")
+      }
+    }
+  }
   // a circle 80 across: a circle's distance
   for j in 0..=40 {
     let a = 1.5707963267948966 * j.to_double() / 40.0

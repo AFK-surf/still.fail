@@ -1079,7 +1079,7 @@ pub fn group_row(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit, id? 
         c.box(style=if first || last { group_row_ground_end } else { group_row_ground }, bg?=ground, id~, fn() {
           body()
           if id != 0 {
-            press_ripple(c, id, if first || last { inner_corner(group_corner, list_pad) } else { row_corner })
+            press_ripple(c, id, if first || last { @ui.concentric(group_corner, list_pad) } else { row_corner })
           }
         })
         |> ignore
@@ -1292,7 +1292,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// one that acts, a ＋ before its title. `note_cut`: its note one line, cut short (what is in a memory, how a connect
 /// runs). `face`: its `lead` is a round picture (a person's, a connect's: 28), which stands across the row's middle on
 /// every width: by its first line it stands in the row's corner, 10 from both its edges, its 14 round in the row's 18,
-/// which would want a corner of 24, on no step of the ladder (docs/ui-panels.md 圆角阶梯); a mark (an icon, a dot) is
+/// which would want a corner of 24, on no step of the ladder (pane_corner); a mark (an icon, a dot) is
 /// by its first line.
 /// `title_style` supplies a wide row's title size and other properties; its weight follows the shared row-title role.
 /// `title_after` after its title on its line (a pill: 你, 当前; a team's name), dropped before the title where
@@ -1900,7 +1900,7 @@ pub fn dialog_foot_rows(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Un
 /// stands concentric with its corner.
 fn foot_rows_out() -> Double {
   // (and across the room a panel's dialog stands what it holds in from its padding: column_in_now)
-  dialog_pad - capsule_in(dialog_r, desk_row_least()) + column_in_now.val
+  dialog_pad - @ui.capsule_in(dialog_r, desk_row_least()) + column_in_now.val
 }
 
 ///|

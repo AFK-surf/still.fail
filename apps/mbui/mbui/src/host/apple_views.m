@@ -1414,25 +1414,23 @@ static void prime_webm_grab(MBNative *v) {
 #endif
 }
 
-// How much further in than a circle a capsule's end lies, in r, u r from its tip (mbui's capsule_ease, src/paint/
-// smooth.mbt, and corner.sl's mb_capsule_ease): 0 but from 1 - 0.675 k to 1 + 0.4 k.
-static double capsule_ease(double u, double k) {
-  double u0 = 1 - 0.675 * k, u1 = 1 + 0.4 * k;
-  if (k <= 0 || u <= u0 || u >= u1) return 0;
-  double h = u1 - u0, t = (u - u0) / h, t2 = t * t, t3 = t2 * t, t4 = t3 * t, m = 1 - t, m2 = m * m;
-  double s = sqrt(u0 * (2 - u0)), v = 1 - u0, s3 = s * s * s;
-  double c0 = 1 - s, c1 = -v / s * h, c2 = h * h / s3, c3 = -3 * v * h * h * h / (s3 * s * s);
-  double w0 = 1 - t4 * (35 - 84 * t + 70 * t2 - 20 * t3), w1 = t - t4 * (20 - 45 * t + 36 * t2 - 10 * t3),
-         w2 = (t2 - t4 * (10 - 20 * t + 15 * t2 - 4 * t3)) / 2, w3 = (t3 - t4 * (4 - 6 * t + 4 * t2 - t3)) / 6;
-  double eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;
-  return eased - (u < 1 ? 1 - sqrt(u * (2 - u)) : 0);
-}
+// The corner's numbers, corner.sl's own (its scalar part as C).
+#define MB_CORNER_SCALARS
+#define float double
+#define min fmin
+#define max fmax
+#define clamp(x, a, b) fmin(fmax(x, a), b)
+#include "corner.sl"
+#undef clamp
+#undef max
+#undef min
+#undef float
 
-// How far a corner of R (given r, s smooth) eases into the edge along a side of half `ha`, the other `hc` (mbui's
+// How far a corner of R (s smooth) eases into the edge along a side of half `ha`, the other `hc` (smooth.mbt
 // capsule_tail's weight; its share k of the room it needs in *k): as far as it has no room across.
-static double ease_weight(double r, double R, double s, double ha, double hc, double *k) {
-  *k = R > 0 ? fmin((ha - R) / R, 1) : 0;
-  double tight = 1 - (R <= 0 ? 0 : fmin(1, fmax(0, (hc - R) / (0.25 * R))));
+static double ease_weight(double R, double s, double ha, double hc, double *k) {
+  *k = R > 0 ? mb_capsule_room(ha, R) : 0;
+  double tight = 1 - mb_smoothness(R, hc);
   return s >= 1 || *k <= 0 || tight <= 0 ? 0 : (1 - s) * tight;
 }
 
@@ -1447,10 +1445,10 @@ static void corner_point(CGMutablePathRef p, double x, double y) {
 // across the edge as far as the ease says there, and on along the edge until the ease is done.
 static void smooth_corner(CGMutablePathRef p, double r, double room, double hx, double hy, double cx, double cy,
                           double sx, double sy, BOOL from_x) {
-  double s = r <= 0 ? 0 : fmin(1, fmax(0, (room - r) / (0.25 * r)));
+  double s = mb_smoothness(r, room);
   double R = fmin(r * (1 + 0.25 * s), room), n = 2 + 0.8284271247461903 * s;
   double kx, ky;
-  double wx = ease_weight(r, R, s, hx, hy, &kx), wy = ease_weight(r, R, s, hy, hx, &ky);
+  double wx = ease_weight(R, s, hx, hy, &kx), wy = ease_weight(R, s, hy, hx, &ky);
   const int steps = 24, on = 12;
   // (the way it goes: along the edge at x's end towards the corner, round it, along the edge at y's end away; or back)
   for (int part = 0; part < 3; part++) {
@@ -1463,20 +1461,20 @@ static void smooth_corner(CGMutablePathRef p, double r, double room, double hx, 
         y = R * pow(fmax(0, sin(t)), 2 / n);
         // (in across the edge it ends along: the end's point at the same place along it)
         double ux = 1 - x / R, uy = 1 - y / R;
-        double ex = wx * capsule_ease(ux, kx) * R, ey = wy * capsule_ease(uy, ky) * R;
+        double ex = wx * mb_capsule_ease(ux, kx) * R, ey = wy * mb_capsule_ease(uy, ky) * R;
         x -= ey;
         y -= ex;
       } else if (which == 0) {
         // along the edge at x's end (the side running along y), from where the ease ends to the corner, or back
         if (wy <= 0) continue;
         double u = 1 + ky * (from_x ? 1 - (double)j / on : (double)j / on);
-        x = R - wy * capsule_ease(u, ky) * R;
+        x = R - wy * mb_capsule_ease(u, ky) * R;
         y = R - u * R;
       } else {
         if (wx <= 0) continue;
         double u = 1 + kx * (from_x ? (double)j / on : 1 - (double)j / on);
         x = R - u * R;
-        y = R - wx * capsule_ease(u, kx) * R;
+        y = R - wx * mb_capsule_ease(u, kx) * R;
       }
       corner_point(p, cx + sx * x, cy + sy * y);
     }

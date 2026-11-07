@@ -206,8 +206,6 @@ pub fn capsule_fit_room(Double, Double, Double, less? : Double) -> @ui.Space
 
 pub fn capsule_fits(Double, Double) -> Bool
 
-pub fn capsule_in(Double, Double, room? : Double) -> Double
-
 pub fn capsule_room(Double, Double, less? : Double) -> @ui.Space
 
 pub let caption : @ui.TextStyle
@@ -331,8 +329,6 @@ pub fn composer_radius() -> @ui.Radius
 pub let composer_round : @ref.Ref[Double]
 
 pub fn composer_round_in() -> Double
-
-pub fn concentric_out(Double, Double) -> Double
 
 pub fn confirm(String, String, String, () -> Unit, danger? : Bool, warning? : String, from? : Anchor) -> Unit
 
@@ -829,8 +825,6 @@ pub fn initial(String) -> String
 pub let ink_read : @ref.Ref[((String, String, (String?) -> Unit) -> Unit)?]
 
 pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
-
-pub fn inner_corner(Double, Double) -> Double
 
 pub fn inner_or(Surface?, Double) -> Double
 
@@ -2115,8 +2109,6 @@ pub fn style_node(@view.View, () -> @ui.Style, in_row? : Bool) -> Unit
 pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?], icon? : String, side? : @view.Side) -> Unit
 
 pub fn surface(Double, Double) -> Surface
-
-pub fn surface_corner(Double, Double) -> Double
 
 pub fn switch(@ui.Ctx, String, Bool, label? : String, disabled? : Bool, small? : Bool, busy? : Bool) -> Bool
 

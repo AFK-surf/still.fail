@@ -10,7 +10,7 @@
 /// showed the chats' list, its fixture naming no page, and shows the notifications page now: the chats' list's 10 room
 /// and 7 apart gone from it, the settings' list's 21 apart beside it in the wide windows come, the ones every settings
 /// screen there has: its rows 32 high, 34 apart. The same day the pages' rows the library's: 2 apart fewer. And a
-/// capsule in a smooth corner standing as a circle reads it (smooth.mbt round_like): a tablet's composer on the tape
+/// capsule in a smooth corner standing as a circle reads it (capsule_in): a tablet's composer on the tape
 /// 6 lower, the chat's list showing more of the message at its top, its time under its words as every message's: 1
 /// apart more. (2026-10-27: a chat row's state line and the marks in it parts of the row, only pointed at,
 /// not targets of their own: 2090 room fewer. The same day one room for the hit test, a finger's and a pointer's,

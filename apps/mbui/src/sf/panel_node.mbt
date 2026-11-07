@@ -266,7 +266,7 @@ fn panel_node(
                 if x.ruled {
                   c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad))), fn() {  }) |> ignore
                 }
-                let at = if x.ruled { panel_corner_foot().then(@ui.style(pt=room(capsule_in(r_menu, button_height())))) } else { panel_corner_foot() }
+                let at = if x.ruled { panel_corner_foot().then(@ui.style(pt=room(@ui.capsule_in(r_menu, button_height())))) } else { panel_corner_foot() }
                 c.box(style=panel_foot_at.then(at), fn() { f(c, close) }) |> ignore
               })
               beside_given.val = was

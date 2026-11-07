@@ -605,7 +605,7 @@ pub fn link_row_node(
     .row(Is(true))
     .gap(Is(12.0))
     .padding(Is((text_in, text_in, text_in, text_in)))
-    .radius(Is(inner_corner(group_corner, list_pad)))
+    .radius(Is(@ui.concentric(group_corner, list_pad)))
     .min_height(By(fn() { Some(theme().items.least) }))
     .lines_up(By(fn() { Some(if under() { Start } else { Middle }) }))
     |> ignore
@@ -950,7 +950,7 @@ pub fn switch_row_node(
     .row(Is(true))
     .gap(Is(12.0))
     .padding(Is((text_in, text_in, text_in, text_in)))
-    .radius(Is(inner_corner(group_corner, list_pad)))
+    .radius(Is(@ui.concentric(group_corner, list_pad)))
     .min_height(By(fn() { Some(theme().items.least) }))
     .lines_up(Is(Some(Middle)))
     |> ignore

@@ -531,7 +531,7 @@ let coming_ring_in : Double = (coming_pill_h - coming_ring) / 2.0
 ///|
 /// How far the pill is from the picture's sides and foot: concentric with its corner (26 less its half: 17; 8 in, its
 /// ends were rounder than that corner left room for, which the corners' check refused).
-let coming_in : Double = @sf.capsule_in(@sf.message_file_corner, coming_pill_h)
+let coming_in : Double = @ui.capsule_in(@sf.message_file_corner, coming_pill_h)
 
 ///|
 /// How far the pill is from the picture's sides and foot where no corner leads it.

@@ -81,7 +81,7 @@ pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota") -> Unit 
     Some(Array(a)) => a
     _ => []
   }
-  let inset = capsule_in(row_corner, fill_chip_small_h)
+  let inset = @ui.capsule_in(row_corner, fill_chip_small_h)
   let side = theme().chat_list.band_pad
   // A capsule reaches the corner until it is past the outer corner's circle-equivalent radius.
   let clear = dmax(0.0, inset + fill_chip_small_h / 2.0 - side)

@@ -432,7 +432,7 @@ let station_tag_h : Double = 20.0
 
 ///|
 /// Where the dot leading a station's tag stands in its round end (a capsule's: round, @sf.capsule_in's room its half).
-let station_dot_in : Double = @sf.capsule_in(station_tag_h / 2.0, via_dot_side, room=station_tag_h / 2.0)
+let station_dot_in : Double = @ui.capsule_in(station_tag_h / 2.0, via_dot_side, room=station_tag_h / 2.0)
 
 ///|
 let station_tag_end : Double = 8.0

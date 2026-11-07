@@ -92,7 +92,7 @@ fn page_over(t : @ui.Tester, w : Double) -> Unit {
 }
 
 ///|
-/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, smooth.mbt round_like).
+/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, capsule_in).
 fn near_at(a : Double?, b : Double) -> Bool {
   match a {
     Some(x) => (x - b).abs() < 1.0e-9
@@ -824,11 +824,11 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // panel's corner less its half (the user, 2026-10-26: a finger's, 52 high, stood where keyboard and mouse's 48 would)
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
-  let concentric = @sf.capsule_in(panel, h)
+  let concentric = @ui.capsule_in(panel, h)
   assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
   // (as high as its buttons 4 in its ends need, a finger's 44: 52; in the tape's 42, as a circle reads it
-  // (@ui.round_like), that stands concentric no nearer than the ranges let (4))
-  let r = @ui.round_like(panel)
+  // (the radius as given), that stands concentric no nearer than the ranges let (4))
+  let r = panel
   assert_true(h >= side + 2.0 * @sf.corner_fit.near - 1.0e-9, msg="\{h} for \{side}")
   assert_true(h <= 2.0 * (r - @sf.corner_fit.near) + 1.0e-9, msg="\{h} in \{r}")
   assert_eq(t.corner_faults(), [])

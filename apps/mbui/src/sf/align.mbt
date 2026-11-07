@@ -16,33 +16,19 @@
 // 8. A round mark hung on another's corner (a picture's remove button): its centre on that corner's curve, reaching
 //    past both its edges alike (`on_corner`); on the corner, not in it, so no corner of its own to keep concentric.
 //
-// still.fail's corner rule (docs/ui-panels.md, "所有带圆角的东西"): what lies in a rounded container's corner stands as
+// still.fail's corner rule (mbui's ui/corners.mbt): what lies in a rounded container's corner stands as
 // far from its two edges, and its own corner is concentric with the container's. Corners here are mbui's smooth ones
-// (the web's superellipse(1.5), Android's Corners.kt Smooth), laid out by the radius they are given and smoothed only
+// (paint/smooth.mbt), laid out by the radius they are given and smoothed only
 // as they are drawn (the user, 2026-11-03: 「平滑圆角只是在原有圆角的描述上做平滑」「边距应该是整数」): the web's
 // `calc(inner + pad)` is `inner + pad` here and its `calc(outer - pad)` is `@ui.concentric(outer, pad)`, `outer - pad`;
 // a circle or a capsule in a corner stands its half less than the corner in (`around`, `capsule_in`).
 
 ///|
-/// The corner of a smooth box round one of corner `inner`, `inset` in from its edges (align.ts surfaceCorner): the two
-/// together.
-pub fn concentric_out(inner : Double, inset : Double) -> Double {
-  @ui.concentric_out(inner, inset)
-}
-
-///|
-/// The corner of what sits `pad` in from a smooth corner `outer` (the web's `calc(outer - pad)`, smallPanelInner): concentric
-/// with it.
-pub fn inner_corner(outer : Double, pad : Double) -> Double {
-  @ui.concentric(outer, pad)
-}
-
-///|
 /// The corner of a container whose corner holds a whole circle (or a capsule) of `inner` radius `inset` in from both
-/// edges: round with it, the container's corner as a circle reads it (@ui.round_like) its inset plus its radius (a
+/// edges: round with it, the container's corner its inset plus its radius (a
 /// circle is not cut to the container: the container is drawn round it).
 pub fn around(inset : Double, inner : Double) -> Double {
-  @ui.round_like_out(inset + inner)
+  (inset + inner)
 }
 
 ///|
@@ -74,7 +60,7 @@ pub fn surface(pad : Double, inner : Double) -> Surface {
 ///|
 /// Its own corner (surfaceCorner): what sits in it and its padding together, concentric.
 pub fn Surface::corner(self : Surface) -> Double {
-  concentric_out(self.inner, self.pad)
+  @ui.concentric_out(self.inner, self.pad)
 }
 
 ///|
@@ -102,13 +88,6 @@ pub fn inner_or(s : Surface?, fallback : Double) -> Double {
     Some(s) => s.inner
     None => fallback
   }
-}
-
-///|
-/// A surface's corner as a value, for one whose padding is drawn otherwise (rows reaching its edge, a bar on top):
-/// surfaceCorner.
-pub fn surface_corner(pad : Double, inner : Double) -> Double {
-  concentric_out(inner, pad)
 }
 
 ///|
@@ -246,7 +225,7 @@ pub fn neg(x : Double) -> Double {
 /// case 1): as far from the surface's sides as from its top (`first`) or foot (`last`), its corner the surface's inner
 /// one and that distance together, concentric, whatever the surface's padding is (edgeRow).
 pub fn edge_row(s : Surface, x : Double, first? : Bool = false, last? : Bool = false) -> @ui.Style {
-  let row = @ui.style(px=room(x), mx=room(-x), radius=rounded(concentric_out(s.inner, x)))
+  let row = @ui.style(px=room(x), mx=room(-x), radius=rounded(@ui.concentric_out(s.inner, x)))
   let row = if first { row.then(@ui.style(mt=room(-x))) } else { row }
   if last {
     row.then(@ui.style(mb=room(-x)))
@@ -276,5 +255,5 @@ pub let panel_pill : Double = 24.0
 ///|
 /// The corner of what sits in a small panel of corner `outer`, its padding in (smallPanelInner): concentric.
 pub fn small_panel_inner(outer : Double) -> Double {
-  inner_corner(outer, panel_pad)
+  @ui.concentric(outer, panel_pad)
 }

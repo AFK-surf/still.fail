@@ -598,7 +598,7 @@ fn list_card_in(v : @view.View) -> (Double, Double) {
 /// The corner of a row of a wide list card (list_card_in), concentric with it.
 fn list_row_corner(v : @view.View) -> Double {
   let (pad, corner) = list_card_in(v)
-  inner_corner(corner, pad)
+  @ui.concentric(corner, pad)
 }
 
 ///|
