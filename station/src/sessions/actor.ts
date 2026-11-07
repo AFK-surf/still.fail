@@ -459,6 +459,45 @@ export class SessionActor {
     });
   }
 
+  /// Bind an asynchronous tool read to the turn that asked for it.
+  currentTurnId(): string | null { return this.turn?.id ?? null; }
+
+  postedForTurn(id: string): Promise<void> {
+    return this.enqueue(async () => { if (this.turn?.id === id) this.posted = true; });
+  }
+
+  /// The question may have taken long enough for its turn to end. Record its state as one queue action only if that
+  /// same turn still runs, so its result cannot be applied to a later one.
+  async stateForTurn(id: string, state: DeclaredState, words: string | null, about: [number, number, string] | null,
+    watch = false, record?: (write: (about: [number, number, string] | null) => void) => void): Promise<boolean> {
+    let recorded = false;
+    let failed = false;
+    let failure: unknown;
+    await this.enqueue(async () => {
+      const turn = this.turn;
+      if (!turn || turn.id !== id) return;
+      try {
+        const write = (current: [number, number, string] | null) => {
+          if (words !== null) {
+            if (state.kind === "waiting") this.deps.store.setWaitFor(id, words, watch);
+            else this.deps.store.setNeed(id, words);
+          }
+          this.deps.store.setAbout(id, current);
+          this.deps.store.declareTurn(id, state.kind, state.kind === "waiting" ? state.seconds : null);
+        };
+        if (record) record(write);
+        else write(about);
+        turn.declared = state;
+        recorded = true;
+      } catch (error) {
+        failed = true;
+        failure = error;
+      }
+    });
+    if (failed) throw failure;
+    return recorded;
+  }
+
   /// The station's tools are at `url` now. A process told another address (taken up from a station that had its tools
   /// elsewhere) cannot reach them: idle, it ends (the next turn starts one, resuming); running, it starts again once
   /// its turn ends.

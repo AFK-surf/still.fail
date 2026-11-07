@@ -122,6 +122,175 @@ test("an answer during a question read cannot leave the state waiting for that a
   } finally { release.resolve(); await r.close(); }
 });
 
+test("an answer after the question read but before the state queue cannot leave the turn waiting", async () => {
+  const r = new Rig(), release = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    await r.call(key, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "May I continue?" });
+    const question = r.said(thread.id).at(-1)!;
+    const read = readStore.makeStore(r.store.db, r.dir), started = Promise.withResolvers<void>();
+    r.hub.stateQuestion = async (session, threads, ts) => readStore.stateQuestion(read, session, threads, ts);
+    const actor = r.hub.actors.get(key)!;
+    const record = actor.stateForTurn.bind(actor);
+    actor.stateForTurn = async (...args) => { started.resolve(); await release.promise; return record(...args); };
+    const pending = r.call(key, "chat_state", { kind: "need_human", need: "permission", about: question.ts });
+    void pending.catch(() => {});
+    await started.promise;
+    say(r.hub, thread.id, "ada@x.com", "yes");
+    release.resolve();
+    await assert.rejects(pending, /no longer pending/);
+    assert.equal(r.store.db.prepare("PRAGMA busy_timeout").get()?.timeout, 5000);
+    r.store.db.exec("BEGIN IMMEDIATE; ROLLBACK");
+  } finally { release.resolve(); await r.close(); }
+});
+
+test("a posted update reports when its question was answered before its state was recorded", async () => {
+  const r = new Rig(), release = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    const to = `CHAT/${thread.threadTs}`;
+    await r.call(key, "chat_post", { to, text: "May I continue?" });
+    const question = r.said(thread.id).at(-1)!;
+    const read = readStore.makeStore(r.store.db, r.dir), started = Promise.withResolvers<void>();
+    r.hub.stateQuestion = async (session, threads, ts) => readStore.stateQuestion(read, session, threads, ts);
+    const actor = r.hub.actors.get(key)!, record = actor.stateForTurn.bind(actor);
+    actor.stateForTurn = async (...args) => { started.resolve(); await release.promise; return record(...args); };
+    const pending = r.call(key, "chat_post", { to, text: "Still waiting", kind: "need_human", need: "permission", about: question.ts });
+    void pending.catch(() => {});
+    await started.promise;
+    say(r.hub, thread.id, "ada@x.com", "yes");
+    release.resolve();
+    assert.match(await pending, /Posted to .*state was not recorded: .*no longer pending/);
+    assert.equal(r.said(thread.id).some((m) => m.text === "Still waiting"), true);
+    const turn = r.store.db.prepare("SELECT declared FROM turns WHERE session_key=? AND ended_at IS NULL").get(key);
+    assert.equal(turn?.declared, null);
+  } finally { release.resolve(); await r.close(); }
+});
+
+test("a busy external writer is waited for off the actor queue and its answer is rechecked", async () => {
+  const r = new Rig();
+  await r.hub.shutdown();
+  r.store.close();
+  const path = join(r.dir, "stillfail.db");
+  r.store = Store.open(path);
+  r.hub = r.newHub({ chats: () => undefined });
+  const readers = new Readers(r.dir, 1, undefined, 1), writer = new DatabaseSync(path);
+  const original = r.store.db, blocked = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    await r.call(key, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "May I continue?" });
+    const question = r.said(thread.id).at(-1)!;
+    r.hub.stateQuestion = async (session, threads, ts) => JSON.parse(await readers.read("stateQuestion", { key: session, threads, ts }, "en"));
+    const last = writer.prepare("SELECT max(n) AS n FROM entries WHERE thread=?").get(thread.id)!.n as number;
+    writer.exec("BEGIN IMMEDIATE");
+    writer.prepare(`INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at)
+      VALUES(?,?,'message','external-answer','person','ada','yes',?)`).run(thread.id, last + 1, Date.now());
+    (r.store as { db: typeof original }).db = new Proxy(original, { get(target, property) {
+      if (property === "exec") return (sql: string) => {
+        try { return target.exec(sql); }
+        catch (error) { if (sql === "BEGIN IMMEDIATE") blocked.resolve(); throw error; }
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const pending = r.call(key, "chat_state", { kind: "need_human", need: "permission", about: question.ts });
+    void pending.catch(() => {});
+    const wasBlocked = await Promise.race([blocked.promise.then(() => true), pending.then(() => false, () => false)]);
+    assert.equal(wasBlocked, true, "the state write must yield instead of waiting for the writer on the station thread");
+    assert.equal(original.prepare("PRAGMA busy_timeout").get()?.timeout, 5000);
+    writer.exec("COMMIT");
+    await assert.rejects(pending, /no longer pending/);
+    original.exec("BEGIN IMMEDIATE; ROLLBACK");
+  } finally {
+    (r.store as { db: typeof original }).db = original;
+    try { writer.exec("ROLLBACK"); } catch { /* no transaction remains */ }
+    writer.close(); readers.close(); await r.close();
+  }
+});
+
+for (const tool of ["chat_state", "chat_post"] as const) {
+  test(`${tool} cannot apply a named question read to a later turn`, async () => {
+    const r = new Rig(), release = Promise.withResolvers<void>();
+    try {
+      const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+      say(r.hub, thread.id, "ada@x.com", "please do this");
+      await settle();
+      const to = `CHAT/${thread.threadTs}`;
+      await r.call(key, "chat_post", { to, text: "May I continue?" });
+      const question = r.said(thread.id).at(-1)!;
+      const read = readStore.makeStore(r.store.db, r.dir), started = Promise.withResolvers<void>();
+      const active = () => r.store.db.prepare("SELECT id FROM turns WHERE session_key=? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1").get(key);
+      const old = active();
+      assert.ok(old);
+      r.hub.stateQuestion = async (session, threads, ts) => {
+        const found = readStore.stateQuestion(read, session, threads, ts);
+        started.resolve(); await release.promise; return found;
+      };
+      const args = { kind: "need_human", need: "permission", about: question.ts };
+      const pending = tool === "chat_state" ? r.call(key, tool, args) : r.call(key, tool, { ...args, to, text: "Still waiting" });
+      void pending.catch(() => {});
+      await started.promise;
+      r.claude.last().end({ kind: "aborted" });
+      await settle();
+      r.hub.notify(key, "a background job ended");
+      await settle();
+      const next = active();
+      assert.ok(next, "the notice starts a later turn");
+      assert.notEqual(next.id, old.id, "the original turn ended while reading");
+      release.resolve();
+      await assert.rejects(pending, /turn ended while checking/);
+      const after = r.store.db.prepare("SELECT declared,need,about_n FROM turns WHERE id=?").get(next.id);
+      assert.equal(after?.declared, null);
+      assert.equal(after?.need, null);
+      assert.equal(after?.about_n, null);
+      assert.equal(r.said(thread.id).some((m) => m.text === "Still waiting"), false);
+    } finally { release.resolve(); await r.close(); }
+  });
+}
+
+test("a post sent after its turn ends does not declare a later turn", async () => {
+  const r = new Rig(), release = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    const to = `CHAT/${thread.threadTs}`;
+    await r.call(key, "chat_post", { to, text: "May I continue?" });
+    const question = r.said(thread.id).at(-1)!;
+    const read = readStore.makeStore(r.store.db, r.dir);
+    r.hub.stateQuestion = async (session, threads, ts) => readStore.stateQuestion(read, session, threads, ts);
+    const chat = r.hub.chat(r.store.sessionThreadById(key, thread.id)!.connect), post = chat.post.bind(chat);
+    const started = Promise.withResolvers<void>();
+    chat.post = async (...args) => { started.resolve(); await release.promise; return post(...args); };
+    const active = () => r.store.db.prepare("SELECT id FROM turns WHERE session_key=? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1").get(key);
+    const old = active();
+    assert.ok(old);
+    const pending = r.call(key, "chat_post", { to, text: "Still waiting", kind: "need_human", need: "permission", about: question.ts });
+    void pending.catch(() => {});
+    await started.promise;
+    r.claude.last().end({ kind: "aborted" });
+    await settle();
+    r.hub.notify(key, "a background job ended");
+    await settle();
+    const next = active();
+    assert.ok(next);
+    assert.notEqual(next.id, old.id);
+    release.resolve();
+    assert.match(await pending, /Posted to .*turn ended before its state was recorded/);
+    const after = r.store.db.prepare("SELECT declared,need,about_n FROM turns WHERE id=?").get(next.id);
+    assert.equal(after?.declared, null);
+    assert.equal(after?.need, null);
+    assert.equal(after?.about_n, null);
+    assert.equal(r.said(thread.id).some((m) => m.text === "Still waiting"), true);
+  } finally { release.resolve(); await r.close(); }
+});
+
 for (const change of ["edit", "withdraw"] as const) {
   test(`${change} during a question read is checked before a state is recorded`, async () => {
     const r = new Rig(), release = Promise.withResolvers<void>();
