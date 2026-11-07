@@ -40,7 +40,7 @@ pub fn chat_row_node(
   // (pressed by a finger, shown so once it has stayed tap_indication_ms: one going on to scroll lights nothing)
   let press_lit : @signals.Signal[Bool] = @signals.signal(false)
   let press_due : Ref[() -> Unit] = Ref(fn() {  })
-  // (what a finger going down on it read ahead, let go as it is let go without opening it: a scroll, a hold)
+  // (what a finger pressing it read ahead, let go as it is let go without opening it: a hold)
   let primed = Ref(false)
   let opened = Ref(false)
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
@@ -413,7 +413,7 @@ pub fn chat_row_node(
       })
     }
     // pressed: its chat; right clicked, its menu at the pointer; held long by a finger, its menu from the row (its
-    // time shown meanwhile); a finger going down reads its chat ahead
+    // time shown meanwhile); a finger that stays down as long as it takes to show pressed reads its chat ahead then
     row
     .says(By(fn() { Some(@view.said(Link, label=item().title)) }))
     .on_menu(fn(m) { open_menu(m.wx, m.wy, false) })
@@ -432,11 +432,16 @@ pub fn chat_row_node(
         down_at.val = Some((d.wx, d.wy))
         opened.val = false
         (press_due.val)()
-        press_due.val = row.at_moment(row.cause_at() + @ui.tap_indication_ms, fn() { press_lit.set(true) })
-        if finger && !src.read_only {
-          primed.val = true
-          (src.topic)("chat", chat_params(@signals.untracked(r))) |> ignore
-        }
+        // (not as it goes down: each finger that scrolls the list goes down on a row, and would have its chat read,
+        // the core's whole answer taken in as the drag begins, and let go again; a tap quicker than that opens its
+        // chat as it is let go)
+        press_due.val = row.at_moment(row.cause_at() + @ui.tap_indication_ms, fn() {
+          press_lit.set(true)
+          if finger && !src.read_only {
+            primed.val = true
+            (src.topic)("chat", chat_params(@signals.untracked(r))) |> ignore
+          }
+        })
       },
       up=fn() {
         held.set(false)
