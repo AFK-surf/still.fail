@@ -56,12 +56,14 @@ export type SignInDeps = {
       latestThreadIfReady?(session: string): SessionThread | null | undefined;
       sessionThreadById(session: string, thread: number): SessionThread | null;
       pendingCardHeader(thread: number): [{ ts: string }, unknown] | null;
+      pendingCardHeaderIfReady?(thread: number): [{ ts: string }, unknown] | null | undefined;
       insertMessage(m: Record<string, unknown>): readonly unknown[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
       subscribe(f: (c: { type: string; key?: string }) => void): void;
     };
     prepareLatestThreads?: ((sessions: readonly string[]) => Promise<void>) | null;
+    prepareCardPosts?: ((threads: readonly number[]) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: never[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -197,6 +199,17 @@ export class SignIns {
     }
     if (open !== undefined) {
       const place = cardPlace(this.#d.hub.store, session, open.thread, open.cardTs);
+      if (place === undefined) {
+        if (!this.#d.hub.prepareCardPosts || open.thread == null) throw new Refused("card lookup is not ready");
+        await this.#d.hub.prepareCardPosts([open.thread]);
+        const sessionRow = this.#d.hub.store.getSession(session);
+        if (sessionRow === null || sessionRow.archivedAt != null) throw new Refused("This chat is archived or gone.");
+        const current = this.get(open.id);
+        if (current === null) return `The sign-in to ${site} is no longer pending.`;
+        if (!OPEN.includes(current.status)) return `The sign-in to ${site} (${current.id}) is ${current.status}.`;
+        if (current.status === "left") return this.#waiting(current);
+        return this.ask(session, a);
+      }
       if (a.reask && open.status !== "left") {
         if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
         if (place?.state === "none") {
@@ -295,7 +308,11 @@ export class SignIns {
           signin: { id: x.id, site: x.site, reason: x.reason, screen: `browser:${x.tab}` },
         }
       : null;
-    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null);
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null,
+      requireEmpty ? () => {
+        const current = this.get(x.id), chat = this.#d.hub.store.getSession(session);
+        return current !== null && OPEN.includes(current.status) && current.status !== "left" && chat !== null && chat.archivedAt == null;
+      } : undefined);
   }
 
   /// The ask's card as it stands now (`signin.outcome`): where it is, why a person is needed, whether it is kept.

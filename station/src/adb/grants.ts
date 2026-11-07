@@ -77,6 +77,7 @@ export type GrantsDeps = {
       latestThreadIfReady?(session: string): SessionThread | null | undefined;
       sessionThreadById(session: string, thread: number): SessionThread | null;
       pendingCardHeader(thread: number): [{ ts: string }, unknown] | null;
+      pendingCardHeaderIfReady?(thread: number): [{ ts: string }, unknown] | null | undefined;
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
@@ -84,6 +85,7 @@ export type GrantsDeps = {
       subscribe(f: (c: { type: string; key?: string; id?: number; ws?: string | null }) => void): void;
     };
     prepareLatestThreads?: ((sessions: readonly string[]) => Promise<void>) | null;
+    prepareCardPosts?: ((threads: readonly number[]) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: string[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -305,6 +307,15 @@ export class PhoneGrants {
     };
     if (pending !== undefined && reask) {
       const place = cardPlace(this.#d.hub.store, session, r.thread, r.cardTs);
+      if (place === undefined) {
+        if (!this.#d.hub.prepareCardPosts || r.thread == null) throw new Refused("card lookup is not ready");
+        await this.#d.hub.prepareCardPosts([r.thread]);
+        const current = this.get(r.id);
+        if (current === null) throw new Refused("the phone request is no longer pending");
+        if (current.status !== "pending") return current;
+        if (this.#ended(session)) throw new Refused("this chat is archived or gone");
+        return this.ask(session, reason, reask);
+      }
       if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
       if (place?.state === "none") {
         const posted = await this.#post(session, place.thread, r, true);
@@ -336,9 +347,16 @@ export class PhoneGrants {
   }
 
   /// Whether the current card of a still-open request can be acted on; null for a surface without one.
-  cardPending(r: PhoneRequest): boolean | null {
-    const place = cardPlace(this.#d.hub.store, r.session, r.thread, r.cardTs);
-    return place === null ? null : place.state === "same";
+  async cardPending(r: PhoneRequest): Promise<boolean | null> {
+    let current = this.get(r.id);
+    while (current !== null && current.status === "pending") {
+      const place = cardPlace(this.#d.hub.store, current.session, current.thread, current.cardTs);
+      if (place !== undefined) return place === null ? null : place.state === "same";
+      if (!this.#d.hub.prepareCardPosts || current.thread == null) throw new Refused("card lookup is not ready");
+      await this.#d.hub.prepareCardPosts([current.thread]);
+      current = this.get(r.id);
+    }
+    return null;
   }
 
   async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false): Promise<string | null> {
@@ -356,7 +374,8 @@ export class PhoneGrants {
           adb: { request: r.id, reason: r.reason, lasts },
         }
       : null;
-    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null);
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null,
+      requireEmpty ? () => this.get(r.id)?.status === "pending" && !this.#ended(session) : undefined);
   }
 
   /// How the station's adb holds `owner`'s phone changed (null: offered here no longer): said on the cards of their
