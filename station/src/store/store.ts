@@ -2378,6 +2378,22 @@ export class Store {
     return card === undefined ? null : [{ n, ts: row!.ts ?? "" }, card];
   }
 
+  /// A bounded header read, or undefined when an old thread needs its card-post index prepared first.
+  pendingCardHeaderIfReady(thread: number): [{ n: number; ts: string }, Json] | null | undefined {
+    this.db.exec("SAVEPOINT pending_card_header");
+    try {
+      if (!cardPostsReady(this.db, thread)) {
+        // These probes examine one index entry each. If an old index is absent, the builder uses primary-key pages.
+        const indexes = this.#one("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='index' AND name IN ('entries_cards','entries_options')")?.n;
+        if (indexes === 2 &&
+          !this.#one("SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL LIMIT 1", thread) &&
+          !this.#one("SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL LIMIT 1", thread)) return null;
+        return undefined;
+      }
+      return this.pendingCardHeader(thread);
+    } finally { this.db.exec("RELEASE pending_card_header"); }
+  }
+
   #pendingCardNumber(thread: number): number | undefined {
     let n: number | undefined;
     if (cardPostsReady(this.db, thread)) n = this.#one(CARD_POST_LATEST, thread)?.n;
