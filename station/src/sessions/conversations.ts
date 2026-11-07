@@ -336,9 +336,9 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
 /// Messages said in the thread before the agent's post (entry `n`) that it had not read when it wrote it, as the post's
 /// result says them: they come to it next, written without seeing the post. Empty when none.
 function unreadBefore(hub: Hub, key: string, thread: number, n: number): string {
-  const pending = hub.store.pendingMessages(key).filter((m) => m.message.apart !== true && m.message.thread === thread && m.message.n < n);
-  const unread = [...pending, ...(actorOf(hub, key)?.unreadIn(thread, n) ?? [])];
-  const ts = [...new Set(unread.map((m) => m.message.ts))];
+  const pending = hub.store.pendingBefore(key, thread, n);
+  const unread = (actorOf(hub, key)?.unreadIn(thread, n) ?? []).map((m) => m.message.ts);
+  const ts = [...new Set([...pending, ...unread])];
   if (ts.length === 0) return "";
   const one = ts.length === 1;
   return ` Before this post went up, ${one ? "a message" : "messages"} you had not read yet came in this thread (ts ${ts.join(", ")}): written without seeing your post, ${one ? "it comes" : "they come"} to you next.`;

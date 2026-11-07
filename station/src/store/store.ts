@@ -2195,6 +2195,16 @@ export class Store {
     return out;
   }
 
+  /// The timestamps needed to tell an agent what arrived before its post, without reading messages or their edits.
+  pendingBefore(session: string, thread: number, n: number): string[] {
+    return this.#all(`SELECT m.ts FROM deliveries d INDEXED BY deliveries_pending
+      JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
+      JOIN threads t ON t.id = d.thread
+      JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+      WHERE d.session = ? AND d.delivered_at IS NULL AND d.thread = ? AND d.n < ? ORDER BY d.rowid`, session, thread, n)
+      .map((r) => r.ts ?? "");
+  }
+
   /// Whether `pendingMessages` would find anything, stopping at the first message or letter.
   hasPending(session: string): boolean {
     return this.#one(HAS_PENDING_MESSAGE, session) !== undefined || this.#one(HAS_PENDING_LETTER, session) !== undefined;

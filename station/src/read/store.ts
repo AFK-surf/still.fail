@@ -32,9 +32,9 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  type CardAnswer, type DeliveryCardState, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  type CardAnswer, type DeliveryCardState, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow, type PendingMessage,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
-  ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
+  ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, letterMessage, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
 
 export type Json = any;
@@ -464,6 +464,43 @@ function boundedEditKey(s: Store, thread: number, n: string): string | null {
 function mergedWithBoundedEdit(s: Store, thread: number, n: string): MessageRow | null {
   const r = one(s, LAST_MESSAGE_WITH_EDIT, thread, n, boundedEditKey(s, thread, n));
   return r ? toMessage(r) : null;
+}
+
+/// A session's undelivered messages and letters, in the order the actor gives them to its runtime. A key and its
+/// merged text, and both delivery logs, must describe the same snapshot.
+export function pendingDeliveries(s: Store, session: string): PendingMessage[] {
+  s.db.exec("SAVEPOINT pending_delivery_read");
+  try {
+    let said: PendingMessage[];
+    if (legacyMergedReadReady(s.db)) {
+      said = all(s, `SELECT m.*, t.surface, t.channel, t.thread_ts, ts.connect FROM deliveries d
+        JOIN merged m ON m.thread = d.thread AND m.n = d.n JOIN threads t ON t.id = d.thread
+        JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+        WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY d.rowid`, session)
+        .map((r) => ({ message: toMessage(r), surface: r.surface, channel: r.channel, threadTs: r.thread_ts, connect: r.connect }));
+    } else {
+      const keys = all(s, `SELECT d.thread, CAST(d.n AS TEXT) AS n, t.surface, t.channel, t.thread_ts, ts.connect FROM deliveries d
+        JOIN entries e ON e.thread = d.thread AND e.n = d.n AND e.kind = 'message' JOIN threads t ON t.id = d.thread
+        JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+        WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY d.rowid`, session);
+      said = keys.flatMap((r) => {
+        const message = mergedWithBoundedEdit(s, r.thread, r.n);
+        return message === null ? [] : [{ message, surface: r.surface, channel: r.channel, threadTs: r.thread_ts, connect: r.connect }];
+      });
+    }
+    const letters = all(s, `SELECT l.*, t.surface, t.channel, t.thread_ts, ts.connect FROM letter_deliveries d
+      JOIN letters l ON l.thread = d.thread AND l.n = d.n JOIN threads t ON t.id = d.thread
+      JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+      WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY d.rowid`, session)
+      .map((r) => ({ message: letterMessage(r), surface: r.surface, channel: r.channel, threadTs: r.thread_ts, connect: r.connect }));
+    const out: PendingMessage[] = [];
+    let i = 0, j = 0;
+    while (i < said.length || j < letters.length) {
+      if (j >= letters.length || (i < said.length && said[i]!.message.createdAt <= letters[j]!.message.createdAt)) out.push(said[i++]!);
+      else out.push(letters[j++]!);
+    }
+    return out;
+  } finally { s.db.exec("RELEASE pending_delivery_read"); }
 }
 
 /// The thread's latest message as merged. The key and edited text must come from the same snapshot.
