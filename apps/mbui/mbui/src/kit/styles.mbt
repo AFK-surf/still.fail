@@ -65,20 +65,6 @@ pub(all) enum Indent {
 } derive(Eq, Show, Debug)
 
 ///|
-/// What heads a section of a page (its words: section_title).
-pub fn section_header(indent? : Indent = Page) -> @ui.Style {
-  @ui.style(
-    w=Full,
-    pt=S6,
-    pb=S2,
-    px=match indent {
-      Page => S0
-      Inset => S5
-    },
-  )
-}
-
-///|
 pub(all) enum ButtonSize {
   Sm
   Md
@@ -86,8 +72,8 @@ pub(all) enum ButtonSize {
 } derive(Eq, Show, Debug)
 
 ///|
-/// A button (button.mbt's Variant its tone): a pill of its size, its ground by its tone, tinted pointed at and held, faded when disabled; its words
-/// button_text. A small ghost button has no padding at its sides (it sits in line with words).
+/// A button (button.mbt's Variant its tone): a pill of its size, its ground by its tone, tinted pointed at and held, faded when disabled.
+/// A small ghost button has no padding at its sides (it sits in line with words).
 pub fn button_style(size? : ButtonSize = Md, tone? : Variant = Solid) -> @ui.Style {
   let base = @ui.style(
     row=true,
@@ -137,24 +123,6 @@ pub fn button_style(size? : ButtonSize = Md, tone? : Variant = Solid) -> @ui.Sty
     _ => @ui.style()
   }
   base.then(sized).then(toned).then(compound)
-}
-
-///|
-/// A button's words, by its size and tone.
-pub fn button_text(size? : ButtonSize = Md, tone? : Variant = Solid) -> @ui.TextStyle {
-  @ui.text_style(
-    size=match size {
-      Sm => Xs
-      Md | Lg => Sm
-    },
-    weight=Medium,
-    wrap=false,
-    color=match tone {
-      Solid => OnPrimary
-      Soft | Outline | Ghost => Fg
-      Danger => OnDanger
-    },
-  )
 }
 
 ///|
@@ -286,10 +254,4 @@ pub fn row_value(tone? : RowTone = Normal) -> @ui.TextStyle {
       Bad => Danger
     },
   )
-}
-
-///|
-/// A section's heading's words (section_header).
-pub fn section_title() -> @ui.TextStyle {
-  @ui.text_style(size=Xs, weight=Semibold, color=Muted, wrap=false)
 }

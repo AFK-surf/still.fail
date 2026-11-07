@@ -177,8 +177,7 @@ In the window tree the corresponding declarations are `View::shrink`, `View::max
    `focus_shown`: the inputs the last frame took); `selected`, `disabled` are said in the call; `dark` is the theme's,
    `narrow` the width's. Words have `dark` and `narrow` alone.
 4. What answers the hand is a tint laid over what is there, never a ground in its place: the ground `hovered` and
-   `pressed` say goes over the ground under it (the box's own, its `selected` one: `Over(under, top)`), as the kit's
-   `tinted` does, so `hovered{bg=Hover}` is a step more on any ground, pressed a step more again. A box pointed at
+   `pressed` say goes over the ground under it (the box's own, its `selected` one: `Over(under, top)`), so `hovered{bg=Hover}` is a step more on any ground, pressed a step more again. A box pointed at
    is pointed at while the pointer is on what is drawn in it (`Ctx::hovered`, as CSS's `:hover`): a tab and its ×,
    the × pointed at, are both lit, the × a step more than the tab (still.fail's docs/ui-panels.md 悬停).
 
@@ -187,9 +186,8 @@ Nothing cascades: no selectors, words do not inherit from the boxes round them. 
 
 ## kit's recipes
 
-`card(tone)`, `list_card()`, `list_row(density)`, `section_header(indent)`, `button_style(size, tone)` with
-`button_text`, `field(size)`, `badge(tone)` with `badge_text`, `panel()`; words `row_title`, `row_sub`, `row_value`,
-`section_title`. Tokens alone: an app's theme is their look. What does not fit goes in the app's own styles.
+`card(tone)`, `list_card()`, `list_row(density)`, `button_style(size, tone)`,
+`field(size)`, `badge(tone)` with `badge_text`, `panel()`; words `row_title`, `row_sub`, `row_value`. Tokens alone: an app's theme is their look. What does not fit goes in the app's own styles.
 
 ## The lint
 

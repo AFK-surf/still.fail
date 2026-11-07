@@ -345,7 +345,7 @@ priv struct ListMo {
   reborn : Map[Int, Int]
   /// what moves its rows lifted over others (read where a row reads how long ago it was lifted: `lifted`)
   lift_mover : @ui.Mover
-  /// rows let go without a copy left behind (swiped away: list_unghost)
+  /// rows let go without a copy left behind
   unghost : Map[Int, Bool]
   mut seen : Int
 }
@@ -1119,22 +1119,6 @@ pub fn list_keys(
     lm.reborn.remove(k)
   }
   id
-}
-
-///|
-/// Row `key` of list `list` leaves without a copy (it went out of sight already: swiped away) when it leaves; `off`
-/// false: with one again (its archiving refused, it came back).
-pub fn list_unghost(c : @ui.Ctx, list : Int, key : String, off? : Bool = true) -> Unit {
-  ignore(c)
-  match mo.lists.get(list) {
-    Some(lm) =>
-      if off {
-        lm.unghost[motion_key(key)] = true
-      } else {
-        lm.unghost.remove(motion_key(key))
-      }
-    None => ()
-  }
 }
 
 ///|

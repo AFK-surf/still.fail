@@ -39,8 +39,6 @@ pub fn button_look(@ui.Ctx, ButtonState) -> Unit
 
 pub fn button_style(size? : ButtonSize, tone? : Variant) -> @ui.Style
 
-pub fn button_text(size? : ButtonSize, tone? : Variant) -> @ui.TextStyle
-
 pub fn card(tone? : CardTone) -> @ui.Style
 
 pub fn checkbox(@ui.Ctx, String, @view.Check, label? : String, disabled? : Bool, look? : (@ui.Ctx, CheckboxState) -> Unit) -> @ui.Changed[@view.Check]
@@ -247,10 +245,6 @@ pub fn row_value(tone? : RowTone) -> @ui.TextStyle
 
 pub fn scroll_area(@ui.Ctx, String, Double, () -> Unit, label? : String) -> Unit
 
-pub fn section_header(indent? : Indent) -> @ui.Style
-
-pub fn section_title() -> @ui.TextStyle
-
 pub fn select(@ui.Ctx, String, String, Array[Item], placeholder? : String, w? : Double, label? : String, disabled? : Bool, look? : (@ui.Ctx, SelectState) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit) -> @ui.Changed[String]
 
 pub fn select_look(@ui.Ctx, SelectState) -> Unit
@@ -296,8 +290,6 @@ pub fn switch_rest(String) -> Double
 pub fn tabs(@ui.Ctx, String, Array[Item], String, (String) -> Unit, orientation? : @ui.Orientation, manual? : Bool, label? : String, look? : (@ui.Ctx, ToggleState) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit) -> @ui.Changed[String]
 
 pub fn text_field(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], w? : @ui.Size, disabled? : Bool, secret? : Bool, enter_sends? : Bool, size? : Double, line? : Double, look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit, leaves? : Array[Int32], field? : @ui.Field) -> Field
-
-pub fn tinted(@ui.Ctx, Int64, Bool, Bool) -> Int64
 
 pub fn tip_claim(TipOwner) -> Unit
 

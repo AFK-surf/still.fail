@@ -91,17 +91,3 @@ pub fn Keep::kept(self : Keep) -> Kept {
 pub fn Keep::end(self : Keep) -> Unit {
   kp_end(self.id)
 }
-
-///|
-/// `data`, all here, kept as a file named `name`: None when this host keeps none.
-pub fn keep(name : String, mime : String, data : Bytes, way? : KeepWay = Downloads) -> Keep? {
-  match keep_begin(name, mime, way~) {
-    Some(k) => {
-      if k.append(data) {
-        k.finish()
-      }
-      Some(k)
-    }
-    None => None
-  }
-}

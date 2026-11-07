@@ -1,4 +1,4 @@
-// Motion's numeric utilities (motion-utils: clamp, progress, wrap, velocityPerSecond, pipe, time conversion;
+// Motion's numeric utilities (motion-utils: clamp, progress, wrap, velocityPerSecond, time conversion;
 // motion-dom: mixNumber, interpolate), for numbers. Ported from Motion (motion.dev): Copyright (c) 2024 Motion B.V.,
 // MIT licence. Motion's mixers of colours, strings and objects are not here: what mbui animates are numbers (a
 // colour is animated by its channels).
@@ -57,18 +57,6 @@ pub fn ms_to_seconds(ms : Double) -> Double {
 /// The value `p` of the way from `from` to `to` (Motion's mixNumber, mix for numbers; not clamped).
 pub fn mix(from : Double, to : Double, p : Double) -> Double {
   from + (to - from) * p
-}
-
-///|
-/// The functions one after another (Motion's pipe).
-pub fn pipe(fs : Array[(Double) -> Double]) -> (Double) -> Double {
-  fn(v) {
-    let mut x = v
-    for f in fs {
-      x = f(x)
-    }
-    x
-  }
 }
 
 ///|

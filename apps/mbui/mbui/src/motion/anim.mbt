@@ -491,30 +491,3 @@ fn sweep_anims(c : @ui.Ctx) -> Unit {
     anims.remove(id)
   }
 }
-
-///|
-/// How much the pressed look of the thing with `id` shows (0 … 1): in over 75 ms as a finger goes down, out over 150
-/// once it lifts, a press however short shown whole first (the timing of Android's ripple, RippleDrawable, as the
-/// app's `clickable`s have it). Only a look: the tap is the thing's own, at once.
-pub fn pressing(c : @ui.Ctx, id : Int) -> Double {
-  let down = c.pressed(id)
-  let key = "\u{1}press/\{id}"
-  let a = match anims.get(motion_key(key)) {
-    Some(a) => a
-    None => {
-      if !down {
-        return 0.0
-      }
-      anim(c, key, 0.0, global=true)
-    }
-  }
-  a.used = c.frame_number()
-  @ui.built_used(fn() { a.used = @ui.current().frame_number() })
-  a.step(c)
-  if down {
-    a.follow(1.0, tween(75.0, ease=Linear))
-  } else if !(a.running && a.target == 1.0) {
-    a.follow(0.0, tween(150.0, ease=Linear))
-  }
-  a.get()
-}

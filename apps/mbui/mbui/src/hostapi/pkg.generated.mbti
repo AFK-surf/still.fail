@@ -199,8 +199,6 @@ pub fn ime_inset() -> Double
 
 pub fn install_package(String, Bytes) -> Unit
 
-pub fn keep(String, String, Bytes, way? : KeepWay) -> Keep?
-
 pub fn keep_awake(Bool) -> Unit
 
 pub fn keep_begin(String, String, way? : KeepWay) -> Keep?

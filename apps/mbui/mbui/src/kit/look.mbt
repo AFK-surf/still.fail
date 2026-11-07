@@ -25,19 +25,6 @@ pub fn focus_ring(c : @ui.Ctx, shown : Bool, radius : Double) -> Unit {
 }
 
 ///|
-/// `ground` as it shows pointed at (`hovered`) or held (`pressed`): the theme's tint over it, twice when held.
-pub fn tinted(c : @ui.Ctx, ground : Int64, hovered : Bool, pressed : Bool) -> Int64 {
-  let t = c.theme()
-  if pressed {
-    @ui.over(@ui.over(ground, t.hover), t.hover)
-  } else if hovered {
-    @ui.over(ground, t.hover)
-  } else {
-    ground
-  }
-}
-
-///|
 /// How opaque what is disabled is drawn.
 pub let disabled_alpha : Double = 0.4
 

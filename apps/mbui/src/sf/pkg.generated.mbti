@@ -320,7 +320,6 @@ pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> St
 
 pub let confirm_w : Double
 
-
 pub let copied_ms : Double
 
 pub fn copy_command(@ui.Ctx, String, String, copy~ : String, copied~ : String) -> Unit
@@ -466,8 +465,6 @@ pub let diff_line_in : @ui.Space
 pub let diff_mark_in : @ui.Space
 
 pub fn done_waiting(@ui.Ctx, String) -> Unit
-
-pub fn donut(@ui.Ctx, Array[(Double, Int64)], Double, Double, Int64) -> Int32
 
 pub let dot_size : @ui.Len
 
@@ -793,7 +790,6 @@ pub fn input_node(@view.View, @ui.Field, placeholder? : String, shorter? : Array
 
 pub let inset_room : @ui.Space
 
-
 pub fn is_subtitle(String) -> Bool
 
 pub fn item_row(@ui.Ctx, () -> Unit) -> Unit
@@ -1068,7 +1064,6 @@ pub let medium_from : Double
 
 pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @view.Along, gone? : () -> Unit) -> Unit
 
-
 pub fn menu_held(@ui.Ctx, String) -> Bool
 
 pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool) -> Bool
@@ -1078,7 +1073,6 @@ pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled
 pub fn menu_node(@view.View, () -> Bool, (@view.View) -> @view.View, () -> Array[MenuItem?], String, @view.Along, Double, Bool, Bool, (MenuItem) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit, extras? : (Int32) -> MenuExtra, min_w? : Double) -> Unit
 
 pub fn menu_of(@ui.Ctx, String, Array[MenuItem?], label~ : String, size? : Double) -> Bool
-
 
 pub fn menu_open_key() -> String
 

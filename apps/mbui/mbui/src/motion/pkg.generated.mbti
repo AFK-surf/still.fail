@@ -138,8 +138,6 @@ pub fn linear_easing((Double) -> Double, Double, resolution? : Double) -> String
 
 pub fn list_keys(@ui.Ctx, String, Array[String], liftable? : (String) -> Bool) -> Int32
 
-pub fn list_unghost(@ui.Ctx, Int32, String, off? : Bool) -> Unit
-
 pub fn log_frame(@ui.Ctx, String, String) -> Unit
 
 pub let max_generator_duration : Double
@@ -180,8 +178,6 @@ pub fn ms_to_seconds(Double) -> Double
 
 pub fn offsets_to_times(Array[Double], Double) -> Array[Double]
 
-pub fn pipe(Array[(Double) -> Double]) -> (Double) -> Double
-
 pub fn placed(@ui.Ctx, Int32, () -> @ui.Look) -> Unit
 
 pub fn pregenerate_keyframes(Generator) -> (Array[Double], Double)
@@ -189,8 +185,6 @@ pub fn pregenerate_keyframes(Generator) -> (Array[Double], Double)
 pub fn presence(@ui.Ctx, String, Bool, enter? : Trans, exit? : Trans, initial? : Bool, start_at? : Double) -> @ui.Look?
 
 pub let press_sink : Double
-
-pub fn pressing(@ui.Ctx, Int32) -> Double
 
 pub fn progress(Double, Double, Double) -> Double
 
