@@ -992,7 +992,10 @@ export function pendingCardNumber(s: Store, thread: number): number | null {
   s.db.exec("SAVEPOINT pending_card_number_read");
   try {
     if (!cardPostsReady(s.db, thread)) {
-      if (threadsWithCards(s, [thread]).length === 0) return null;
+      // An older connection can remove either old index while this thread is still being prepared. In that case
+      // prepare the card-post index by bounded primary-key pages instead of probing an index that no longer exists.
+      const indexed = one(s, "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' AND name IN ('entries_cards', 'entries_options')")?.n === 2;
+      if (indexed && threadsWithCards(s, [thread]).length === 0) return null;
       throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify([thread]));
     }
     const asked = one(s, CARD_POST_LATEST, thread);

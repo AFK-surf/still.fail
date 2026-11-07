@@ -8,9 +8,32 @@ import { Readers } from "../src/read/pool.ts";
 import * as readStore from "../src/read/store.ts";
 import { newSession, say } from "../src/sessions/lifecycle.ts";
 import { installLegacyEdits } from "../src/store/legacy-edits-build.ts";
+import { CARD_POSTS_PENDING } from "../src/store/card-post-index.ts";
 import { addClientColumn } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
 import { Rig, settle } from "./hub-fakes.ts";
+
+for (const index of ["entries_cards", "entries_options"] as const) {
+  test(`a named card question prepares an old thread when ${index} is removed`, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "question-no-card-index-"));
+    const store = Store.open(join(dir, "stillfail.db"));
+    const readers = new Readers(dir, 1, undefined, 1);
+    try {
+      const thread = store.openThread("ember", "CHAT", "old", null, null).id;
+      store.db.prepare(`INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,options,at)
+        VALUES(?,1,'message','ask','agent','worker','ask',?,?,1)`).run(thread,
+        index === "entries_cards" ? JSON.stringify({ type: "options", options: [{ label: "yes" }] }) : null,
+        index === "entries_options" ? JSON.stringify([{ label: "yes" }]) : null);
+      store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
+      store.db.exec(`DROP INDEX ${index}`);
+      const read = readStore.makeStore(store.db, dir);
+      assert.throws(() => readStore.stateQuestion(read, "worker", [thread], "ask"),
+        (error: Error) => error.message.startsWith(CARD_POSTS_PENDING));
+      assert.deepEqual(JSON.parse(await readers.read("stateQuestion", { key: "worker", threads: [thread], ts: "ask" }, "en")),
+        { kind: "found", about: [thread, 1, "ask"] });
+    } finally { readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+}
 
 test("named questions retain their visibility and pending-card rules through the reader", async () => {
   const r = new Rig();
