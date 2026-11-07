@@ -208,3 +208,61 @@ test "the tree let go of from inside a walk of its scene: the walk ends there, a
   assert_eq(after, 0)
   assert_eq(t.drawn().length(), 0)
 }
+
+///|
+test "a walk of the scene inside another's: each where the walk alone puts it, the outer's places its own after it" {
+  let t = @view.Tree::new(fn(root) {
+    for w in ["甲", "乙", "丙"] {
+      root.box(fn(b) { b.padding(Is((4.0, 4.0, 4.0, 4.0))).box(fn(c) { c.words(Is(w)) |> ignore }) |> ignore })
+      |> ignore
+    }
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let alone : Array[(Double, Double)] = []
+  t.each_drawn(fn(_, x, y, _) { alone.push((x, y)) })
+  let outer : Array[(Double, Double)] = []
+  let inner : Array[Array[(Double, Double)]] = []
+  t.each_drawn(fn(_, x, y, _) {
+    let these = []
+    t.each_drawn(fn(_, ix, iy, _) { these.push((ix, iy)) })
+    inner.push(these)
+    outer.push((x, y))
+  })
+  assert_true(alone.length() >= 3, msg="the three words walked: \{alone.length()}")
+  assert_eq(outer, alone)
+  assert_eq(inner.length(), alone.length())
+  assert_true(inner.iter().all(fn(i) { i == alone }))
+}
+
+///|
+test "the scene's order made again from inside a walk of it (more of it built, laid out): the walk goes no further than the order is long, a walk after it walks all of it" {
+  let more = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(b) { b.words(Is("甲")) |> ignore }) |> ignore
+    root.show(fn() { more.get() }, fn(s) {
+      for w in ["乙", "丙", "丁"] {
+        s.box(fn(b) { b.words(Is(w)) |> ignore }) |> ignore
+      }
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let mut before = 0
+  t.each_drawn(fn(_, _, _, _) { before += 1 })
+  let mut seen = 0
+  t.each_drawn(fn(_, _, _, _) {
+    seen += 1
+    if seen == 1 {
+      more.set(true)
+      t.frame(390.0, 844.0) |> ignore
+    }
+  })
+  let words : Array[String] = []
+  t.each_drawn(fn(c, _, _, _) { words.push(c.words) })
+  let after = words.length()
+  assert_true(seen <= after, msg="walked \{seen}, the order now \{after}")
+  // (the three it built drawn, each its words)
+  assert_true(after >= before + 3, msg="walked \{before} before it, \{after} after")
+  for w in ["甲", "乙", "丙", "丁"] {
+    assert_true(words.contains(w), msg="\{w} walked: \{words}")
+  }
+}
