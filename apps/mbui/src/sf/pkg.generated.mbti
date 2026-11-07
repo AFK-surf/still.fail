@@ -2682,6 +2682,8 @@ pub fn way_in_title_node(@view.View, () -> String) -> @view.View
 
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit, last_link? : Bool) -> Unit
 
+pub fn way_line_node(@view.View, () -> Array[String], () -> WayLook, (Int32) -> Unit, last_link? : Bool, in_row? : Bool, width? : () -> Double?) -> @view.View
+
 pub let way_more : String
 
 pub fn way_row_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
