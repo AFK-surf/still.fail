@@ -22,7 +22,6 @@ import type { MemberAsk } from "../parts.ts";
 import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
-import { isModulePath } from "../modules/modules.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
 // Keep old clients admitted until protocol-2 clients have reached the stable channel.
@@ -507,10 +506,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     if (readOnly(viewer)) return answer(403, { error: "read-only members cannot change this station" });
     return socket(m, stream, reader, head, path);
   }
-  // A module's request goes on to it as it comes (modules/forward.ts): a video uploaded is not held here whole, nor
-  // bound by MAX_BODY.
-  const streamed = isModulePath(path.slice("/admin/api".length));
-  const body = streamed ? Buffer.alloc(0) : await reader.rest();
+  const body = await reader.rest();
   // The caller's headers go on, but not those of the hop, nor any of the station's own: who is asking is only what
   // the credential says.
   const headers: Record<string, string> = {};
@@ -540,7 +536,6 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     search: at < 0 ? "" : rest.slice(at),
     headers,
     body,
-    ...(streamed ? { upload: reader.chunks() } : {}),
     viewer,
     lang: langOfCore(headers),
     ...(controller ? { signal: controller.signal } : {}),

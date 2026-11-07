@@ -28,10 +28,9 @@ permissions:
   contents: read
 env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
-  # Linux check's mesh addon is built on a branch that changed it). ffmpeg, all three, on a branch that changed
-  # scripts/ffmpeg.ts: nothing on a branch runs it, but its build there is the evidence for the merge; so the Apple shell
-  # (shell-apple), the macOS one, on a branch that changed it (#1365 went to main untried and failed there).
-  BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell shell-apple:darwin-arm64 engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 screen:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
+  # Linux check's mesh addon is built on a branch that changed it). The Apple shell (shell-apple), the macOS one, on a
+  # branch that changed it (#1365 went to main untried and failed there).
+  BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell shell-apple:darwin-arm64 engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 screen:win32-x64 helper:darwin-arm64
 jobs:
   # What can runs on macos-ci; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
   # changelog, timing) on GitHub's own runners, free for a public repository, not on Blacksmith's (2026-10-15, as asked).
@@ -50,7 +49,6 @@ jobs:
       static: ${{ steps.plan.outputs.static }}
       relay: ${{ steps.plan.outputs.relay }}
       station: ${{ steps.plan.outputs.station }}
-      modules: ${{ steps.plan.outputs.modules }}
       android_beta: ${{ steps.plan.outputs.android_beta }}
       mac_beta: ${{ steps.plan.outputs.mac_beta }}
       win_beta: ${{ steps.plan.outputs.win_beta }}
@@ -1011,39 +1009,9 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
-  # The modules' packages stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): when what one
-  # packs changed. Each one's archive, named by its version, is put at once (one already out is checked to be the same
-  # bytes: scripts/release.sh), its beta feed signed and put by `put` once the check passed. On GitHub's runner: plain
-  # files, nothing of a machine's in them. After natives: a module carrying a native part (the media service's ffmpeg,
-  # one archive a platform) takes the build the release native-artifacts has, which natives publishes first.
-  modules:
-    needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.modules == 'true' }}
-    runs-on: ubuntu-24.04
-    environment: production
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v5
-        with: { fetch-depth: 0, filter: "blob:none" } # its version is the build of the last commit that changed what it packs
-      - uses: ./.github/actions/setup
-      - name: Pack and sign the modules' packages
-        env:
-          # The key the feeds are signed with (docs/release-signing.md): none is an error.
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-          RELEASE_DIR: ${{ runner.temp }}/release
-        run: sh .github/release.sh modules
-      - name: Put their archives (named by their version, nothing points at them until put writes the feeds)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
-      - uses: actions/upload-artifact@v4
-        with: { name: "release-modules-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
-
-  # What was built put in the bucket, once the check passed and the API and the web are out; nothing when a build
-  # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
-    needs: [plan, check, check-linux, api, static, station, modules, android, desktop-build, desktop, desktop-win]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
+    needs: [plan, check, check-linux, api, static, station, android, desktop-build, desktop, desktop-win]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1113,8 +1081,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, api, static, monoid-api, monoid-static, station, modules, android, desktop-build, desktop, desktop-win, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
+    needs: [plan, natives, check, check-linux, api, static, monoid-api, monoid-static, station, android, desktop-build, desktop, desktop-win, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 5
     permissions:
@@ -1139,7 +1107,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, modules, android, desktop-build, desktop, desktop-win, put, changelog, done]
+    needs: [plan, natives, check, check-linux, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -1169,7 +1137,6 @@ jobs:
           planned '${{ needs.plan.outputs.api }}' '${{ needs.api.result }}' api
           planned '${{ needs.plan.outputs.static }}' '${{ needs.static.result }}' static
           planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
-          planned '${{ needs.plan.outputs.modules }}' '${{ needs.modules.result }}' modules
           planned '${{ needs.plan.outputs.android_beta }}' '${{ needs.android.result }}' android
           planned '${{ needs.plan.outputs.mac_beta }}' '${{ needs.desktop.result }}' desktop
           planned '${{ needs.plan.outputs.win_beta }}' '${{ needs.desktop-win.result }}' desktop-win

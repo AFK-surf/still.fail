@@ -32,7 +32,6 @@ import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { connectRoutes } from "./routes/connects.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
-import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import type { StationParts } from "../parts.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
@@ -105,8 +104,6 @@ export type AdminDeps = {
   grants?: HelperGrants | null;
   /// The station's drive (services.ts StationDrive); one is made for the routes when none is given.
   drive?: Drive;
-  /// The modules beside the station (modules/modules.ts): `/m/<id>/…` passed on to them; none, no such route.
-  modules?: ModuleSet;
   /// The station's parts in its own process (parts.ts): their routes after the platform's, and what of theirs a
   /// read-only member may write.
   parts?: StationParts;
@@ -166,7 +163,7 @@ export class Admin {
       ...(config && data !== undefined
         ? drive({
             config,
-            // The station's, shared with the modules' local API (services.ts StationDrive); made here when not given (tests).
+            // The station's (services.ts StationDrive); made here when not given (tests).
             drive:
               deps.drive ??
               stationDrive(
@@ -296,7 +293,7 @@ export class Admin {
   private async answer(r: Request): Promise<Answer> {
     // A viewer reads: no message sent, nothing changed (previews included); a module says what of its own a viewer
     // changes too (their reading progress, say: its manifest's `viewerWrites`).
-    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.modules?.viewerMay(r) !== true && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
+    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
     if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
     // A session, chat or job of another workspace than the viewer's is none for them (api/seen.ts).
     const hidden = this.deps.store ? elsewhere(this.deps.store, r.path, r.viewer) : null;
@@ -311,9 +308,6 @@ export class Admin {
       for (const [name, value] of answer.headers) joined[name] = name in joined ? `${joined[name]}, ${value}` : value;
       return { status: answer.status, headers: joined, body: answer.body };
     }
-    // A module's (modules/forward.ts): any method, its answer as it comes.
-    const module = moduleOf(r.path);
-    if (module !== null && this.deps.modules) return this.deps.modules.forward(r, module);
     for (const route of [...this.routes, ...(this.deps.parts?.allRoutes(this.tools) ?? [])]) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) return route.handle(r, found.slice(1));

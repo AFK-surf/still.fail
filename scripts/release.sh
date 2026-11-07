@@ -11,9 +11,7 @@
 # `android` (the Android app: apps/mbui's in the Kotlin one's place, scripts/beta.sh build, MBUI_VARIANT=stable or
 # beta: its APK and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
-# And `modules`: the packages of the modules stations install themselves (scripts/module-bundle.ts: each one's archive
-# in modules/<id>/, and its feed, modules/<id>/<id>.json or with --beta <id>-beta.json; any machine builds them).
-#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop, android and modules only when named)
+#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop and android only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
 # beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/mbui's MBUI_VARIANT=beta, its
@@ -92,7 +90,7 @@ for platform in $platforms; do
     case "$(uname -s)" in MINGW* | MSYS*) continue ;; esac
     echo "the Windows app's release requires Windows (Git Bash, MSVC's environment: apps/mbui/scripts/win.sh)" >&2; exit 1
   fi
-  if [ "$platform" != android ] && [ "$platform" != modules ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
+  if [ "$platform" != android ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
     echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
   fi
 done
@@ -249,30 +247,6 @@ for platform in $platforms; do
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
       put "$out/latest.json" "android/${beta:+beta/}latest.json" application/json
-      ;;
-    modules)
-      # Each module's package (scripts/module-bundle.ts, docs/station-modules.md): its archive, named by its version, and
-      # its feed on this channel, signed as the station's is. The archive is the same bytes whenever its version is packed
-      # (the other channel's, a later commit's): one already out is checked to be these, never put over (it is kept for
-      # good where it is served: cloud/src/releases.ts). A module with native parts (the media service's ffmpeg) has an
-      # archive per platform, each carrying the parts the release native-artifacts has (the natives job published them).
-      ids=$(node "$root/scripts/module-bundle.ts" list)
-      for id in $ids; do
-        node "$root/scripts/module-bundle.ts" pack "$id" "$out/module" ${beta:+--beta} ${RELEASE_DIR:+--unsigned-ok} > "$out/module.names"
-        names=$(cat "$out/module.names")
-        feed=${names##* }
-        for archive in ${names% *}; do
-          if released "$archive"; then
-            { { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$archive" ] && cp "$RELEASE_DIR/$archive" "$out/module.was"; } || curl -fsS -o "$out/module.was" "$releases/$archive"; } &&
-              cmp -s "$out/module.was" "$out/module/$archive" ||
-              { echo "$archive is out already, with other bytes than packed here: not put over (a change to how modules are packed, or to a native part they carry, is a new version)" >&2; exit 1; }
-            echo "$archive is out already, the same"
-          else
-            put "$out/module/$archive" "$archive" application/gzip
-          fi
-        done
-        put "$out/module/$feed" "$feed" application/json
-      done
       ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"

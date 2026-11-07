@@ -4,7 +4,7 @@
 # and is removed after: POSTHOG_JSON (the key the station and the Android app report errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
 # every Android release is signed with: test station's ~/.android/debug.keystore; another would stop installed apps updating),
 # CLOUDFLARE_API_TOKEN (the bucket; without it, the machine's own `wrangler login`).
-#   sh .github/release.sh [--product monoid] [--stable] station|android|modules
+#   sh .github/release.sh [--product monoid] [--stable] station|android
 # --product monoid: monoid's app (scripts/release.sh --product), for monoid's bucket.
 set -eu
 product=""
@@ -13,7 +13,7 @@ beta=--beta
 if [ "${1:-}" = --stable ]; then beta=""; shift; fi
 cd "$(dirname "$0")/.."
 # An Android package needs the core's packages (installed by its build), not the website's. Its staging job
-# prepares the uploader after building. The station and modules still prepare their own uploader here.
+# prepares the uploader after building. The station still prepares its own uploader here.
 [ "${1:-}" = android ] || pnpm install --frozen-lockfile --prefer-offline > /dev/null
 { [ "${1:-}" = android ] && [ -n "${RELEASE_DIR:-}" ]; } || (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
 dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/stillfail-release.XXXXXX")
@@ -21,7 +21,7 @@ trap 'rm -rf "$dir"' EXIT
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || unset CLOUDFLARE_API_TOKEN
 if [ -n "${POSTHOG_JSON:-}" ]; then (umask 077 && printf '%s' "$POSTHOG_JSON" > "$dir/posthog.json"); export STILLFAIL_POSTHOG="$dir/posthog.json"; fi
 
-case "${1:?usage: release.sh station|android|modules}" in
+case "${1:?usage: release.sh station|android}" in
   station)
     # The station in TypeScript, bundled for each platform (scripts/station-bundle.sh) with its native parts prebuilt:
     # the natives job before this one built and published those of this commit (all four platforms).
@@ -43,12 +43,6 @@ case "${1:?usage: release.sh station|android|modules}" in
     # before putting it, and prints the certificate)
     # shellcheck disable=SC2086 # --product and its value, two words
     sh scripts/release.sh $product ${beta:+$beta} android
-    ;;
-  modules)
-    # The modules' packages (scripts/module-bundle.ts): plain files, signed; nothing of the machine's in them. Each
-    # entry bundled by the station's esbuild (its packages installed for it).
-    (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-    sh scripts/release.sh ${beta:+$beta} modules
     ;;
   *) echo "no such release: $1"; exit 2 ;;
 esac
