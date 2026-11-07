@@ -1,7 +1,8 @@
 // A web service in the app in a browser, end to end: a dev cloud (cloud/test/dev.ts), a station of this checkout (a fake
 // claude) in alice's workspace, the app signed in as alice, and a service an agent started (job_start, through the
 // station's MCP endpoint), opened by its link on a desktop's page and a phone's. Its page is pressed as a person presses
-// it (so the canvas over it must let the press through), its POST's body and its WebSocket go to the service and back.
+// it (so the canvas over it must let the press through), scrolled by a wheel and by a finger (Chromium's scrolling must
+// find it too), its POST's body and its WebSocket go to the service and back.
 // Pictures of each go to SHOTS.
 //
 //   pnpm run build:cloud && (cd station && pnpm run build) && SHOTS=<dir> node test/browser/service-frame.mjs
@@ -51,6 +52,7 @@ const server = createServer((req, res) => {
     <h1>the service's page</h1>
     <button id=go style="font-size:20px;padding:12px 24px">press</button>
     <p id=post>not pressed</p><p id=sock>no socket</p>
+    <div style="height:3000px"></div>
     <script>
       const ws = new WebSocket("ws://" + location.host + "/echo");
       ws.onopen = () => ws.send("hello");
@@ -166,6 +168,13 @@ async function main() {
     await until(async () => (await frame.locator("#post").innerText()) === "posted pressed", `${name}: the press's POST`);
     await p.screenshot({ path: join(SHOTS, `${name}.png`) });
     console.log(`PASS ${name}: the page shown, a press through the canvas, its POST and its socket`);
+    // A wheel over the page moves the page, and no more than the page.
+    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 100);
+    await p.mouse.wheel(0, 300);
+    await until(async () => (await frame.evaluate(() => scrollY)) >= 300, `${name}: the wheel's scroll`, 50);
+    await frame.evaluate(() => scrollTo(0, 0));
+    console.log(`PASS ${name}: a wheel scrolls the page`);
+    return frame;
   };
   await check(page, "desktop");
   // Its bar's reload (the canvas's, over the frame's page): the service's page anew.
@@ -183,6 +192,34 @@ async function main() {
   await page.evaluate(() => globalThis.__mbhost.viewControl(1, 8, 1));
   await page.setViewportSize({ width: 390, height: 844 });
   await check(page, "phone");
+  // A finger on a phone's page scrolls it; beside it, in the app's bar, it is the app's and the page stays.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 2 });
+  const swipe = async (x, from, to) => {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y: from }] });
+    for (let i = 1; i <= 20; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: from + ((to - from) * i) / 20 }] });
+      await sleep(16);
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  };
+  const phone = await check(page, "phone-touch");
+  await swipe(195, 600, 200);
+  await until(async () => (await phone.evaluate(() => scrollY)) > 100, "a finger's scroll on the phone's page", 50);
+  await page.screenshot({ path: join(SHOTS, "phone-scrolled.png") });
+  console.log(`PASS phone: a finger scrolls the page, to ${await phone.evaluate(() => scrollY)}`);
+  // The bar's ⋯: a sheet over the page, a finger there the app's (it puts the sheet away); the page stays where it was.
+  await swipe(368, 822, 822);
+  await until(() => page.evaluate(() => [...document.body.children].some((e) => e.style.zIndex === "2")), "the sheet's box over the page", 50);
+  const sheet = await page.evaluate(() => { const r = [...document.body.children].find((e) => e.style.zIndex === "2").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await page.screenshot({ path: join(SHOTS, "phone-sheet.png") });
+  // (read now: the finger's fling goes on until the tap on ⋯ comes down, a scrollTo does not stop it)
+  const at = await phone.evaluate(() => scrollY);
+  await swipe(sheet.x, sheet.y, sheet.y - 40);
+  await until(() => page.evaluate(() => ![...document.body.children].some((e) => e.style.zIndex === "2")), "the sheet put away", 50);
+  const after = await phone.evaluate(() => scrollY);
+  if (after !== at) throw new Error(`a finger on the sheet moved the page: ${at} to ${after}`);
+  console.log("PASS phone: a finger on a sheet over the page is the app's");
   return true;
 }
 
