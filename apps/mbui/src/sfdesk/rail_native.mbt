@@ -224,7 +224,9 @@ fn bar_chat(
     nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
     bar_chat_carried.clear()
   }
-  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
+  // (the short column: its services and screens rows of the "…" (chat_page.mbt), their dot on it)
+  let dot = column_short.get() && (jobs is Some((_, true)) || screen is Some((_, true)))
+  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }, dot~) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
   // (the panel's switch, whatever is in it: a screen alone there has a × of its own in its bar, as any panel has; the

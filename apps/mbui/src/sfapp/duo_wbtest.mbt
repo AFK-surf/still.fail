@@ -1245,9 +1245,11 @@ test "an iPhone Duo: the chat's station's screens a button of the system's bars,
   assert_true(said.contains("\"id\":\"page/chat/screen\",\"title\":\"" + @sf.t("web-pages.chat.screen") + "\",\"icon\":\"" + @sf.icon_path("monitor") + "\",\"dot\":true"), msg=said)
   // (none of the page's own)
   assert_true(said_at(t, @sf.t("web-pages.chat.screen")) is None)
-  // the short column (the chat narrow: its screens from its agent's sheet, sheets.mbt): none handed
+  // the short column (the outer screen): no button of its own there, the first row of the chat's …, its dot on that
   let s = native_chat(466.0, 678.0, true, side=70.0, mode="chat-agent-screens")
-  assert_false(s.nav_said().contains("page/chat/screen"))
+  assert_false(s.nav_said().contains("\"id\":\"page/chat/screen\""))
+  assert_eq(nav_icon_of(s, "page/chat/more/0", field="title"), Some(@sf.t("web-pages.chat.screen")))
+  assert_true(s.nav_said().contains("\"id\":\"page/chat/more\",\"title\":\"" + @sf.t("common.more") + "\",\"icon\":\"" + @sf.icon_path("more") + "\",\"dot\":true"), msg=s.nav_said())
 }
 
 ///|
@@ -1266,14 +1268,19 @@ test "Duo chat's services go in the system's column, opening beside it" {
 }
 
 ///|
-test "Duo's short column keeps the chat's services in the page" {
+test "Duo's short column has the chat's services in its …, none in the page" {
   let t = native_chat(469.0, 681.0, true, side=84.0, mode="chat-jobs")
   @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_true(nav_icon_of(t, "page/chat/jobs") is None)
   let services = @sf.t("web-pages.chat.services")
-  assert_true(t.semantics().iter().any(fn(s) { s.label == services }))
+  assert_false(t.semantics().iter().any(fn(s) { s.label == services }), msg="the page's own button left in the title bar")
+  assert_eq(nav_icon_of(t, "page/chat/more/0", field="title"), Some(services), msg=t.nav_said())
+  // chosen: its popover
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/more/0\"}")
+  t.frames_owed()
+  assert_true(@sfdesk.chat_pops_open().1)
 }
 
 ///|
