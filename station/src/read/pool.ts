@@ -37,6 +37,16 @@ import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_L
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
+// Each pending thread-index request carries the same nonempty list of safe integer IDs.
+const THREAD_PREPARATIONS = [
+  [PAGE_LETTER_PENDING, "preparePageLetters"],
+  [LAST_MESSAGE_PENDING, "prepareArchiveLast"],
+  [CARD_POSTS_PENDING, "prepareCardPosts"],
+  [CLOSED_CARDS_PENDING, "prepareClosedCards"],
+  [PEOPLE_TIME_PENDING, "preparePeopleSince"],
+  [SAID_PENDING, "prepareSaid"],
+] as const;
+
 /// How long a reader with nothing to do is kept.
 const IDLE_MS = 60_000;
 /// A read that waited or took longer than this is logged, with what it was.
@@ -384,20 +394,6 @@ export class Readers {
           await this.prepareLegacySaid(signal);
           continue;
         }
-        if (error.message.startsWith(PAGE_LETTER_PENDING)) {
-          let threads: unknown;
-          try { threads = JSON.parse(error.message.slice(PAGE_LETTER_PENDING.length)); } catch { throw error; }
-          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-          await this.preparePageLetters(threads, signal);
-          continue;
-        }
-        if (error.message.startsWith(LAST_MESSAGE_PENDING)) {
-          let threads: unknown;
-          try { threads = JSON.parse(error.message.slice(LAST_MESSAGE_PENDING.length)); } catch { throw error; }
-          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-          await this.prepareArchiveLast(threads, signal);
-          continue;
-        }
         if (error.message === SESSION_BINDINGS_PENDING) {
           await this.prepareSessionBindings(signal);
           continue;
@@ -409,27 +405,6 @@ export class Readers {
           await this.prepareCcSessions(sessions, signal);
           continue;
         }
-        if (error.message.startsWith(CARD_POSTS_PENDING)) {
-          let threads: unknown;
-          try { threads = JSON.parse(error.message.slice(CARD_POSTS_PENDING.length)); } catch { throw error; }
-          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-          await this.prepareCardPosts(threads, signal);
-          continue;
-        }
-        if (error.message.startsWith(CLOSED_CARDS_PENDING)) {
-          let threads: unknown;
-          try { threads = JSON.parse(error.message.slice(CLOSED_CARDS_PENDING.length)); } catch { throw error; }
-          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-          await this.prepareClosedCards(threads, signal);
-          continue;
-        }
-        if (error.message.startsWith(PEOPLE_TIME_PENDING)) {
-          let threads: unknown;
-          try { threads = JSON.parse(error.message.slice(PEOPLE_TIME_PENDING.length)); } catch { throw error; }
-          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-          await this.preparePeopleSince(threads,signal);
-          continue;
-        }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
           let sessions: unknown;
           try { sessions = JSON.parse(error.message.slice(TURN_COUNT_PENDING.length)); } catch { throw error; }
@@ -438,11 +413,13 @@ export class Readers {
           await this.covered(this.turns.ready(sessions, signal), signal);
           continue;
         }
-        if (!error.message.startsWith(SAID_PENDING)) throw error;
+        const preparation = THREAD_PREPARATIONS.find(([prefix]) => error.message.startsWith(prefix));
+        if (!preparation) throw error;
+        const [prefix, prepare] = preparation;
         let threads: unknown;
-        try { threads = JSON.parse(error.message.slice(SAID_PENDING.length)); } catch { throw error; }
+        try { threads = JSON.parse(error.message.slice(prefix.length)); } catch { throw error; }
         if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
-        await this.prepareSaid(threads, signal);
+        await this[prepare](threads, signal);
       }
     }
     throw new HttpError(502, "station stopping");
