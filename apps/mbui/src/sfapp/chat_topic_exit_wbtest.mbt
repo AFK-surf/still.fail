@@ -9,14 +9,14 @@ test "leaving an unobserved chat does not subscribe again, and reopening reads i
   let after_reopen = Ref(0)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" && text(Some(Json::object(params)), "session") == "s-c1" {
         changed.get() |> ignore
         if left.val {
           if reopening.val { after_reopen.val += 1 } else { after_leave.val += 1 }
         }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
     leave: fn(name, params) {
       if name == "chat" && text(Some(Json::object(params)), "session") == "s-c1" {

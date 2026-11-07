@@ -209,7 +209,7 @@ pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Arr
   if here != "" {
     params["here"] = Json::string(here)
   }
-  let t = (src.topic)("stations", params)
+  let t = src.topic("stations", params).get().snapshot()
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None

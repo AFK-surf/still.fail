@@ -20,7 +20,7 @@ let open_jobs_shown : Int = 3
 ///|
 /// The workspace's long jobs (OpenJobs): each group under its heading; nothing while there are none.
 fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let groups = items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups")
+  let groups = items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups")
   if groups.length() == 0 {
     return
   }

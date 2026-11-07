@@ -7,7 +7,12 @@
 /// product they name (its `product`): told
 /// each frame (appearance) and as the app's tree is made, before any page of nodes says a word.
 pub fn language_said(src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  language_from_prefs(src.topic("prefs", {}).get().value)
+}
+
+///|
+/// The language and product named by a prefs value already read.
+pub fn language_from_prefs(prefs : Json?) -> Unit {
   @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
   // and the product the words name, its cloud's (still.fail, monoid)
   @sf.set_product(text(prefs, "product"))
@@ -18,7 +23,7 @@ pub fn language_said(src : Source) -> Unit {
 /// when it follows it; the host told when it changes (its bars follow, or are as dark as the frame's page says:
 /// `page_dark`).
 pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
   language_said(src)
   // motion as this device is set (the prefs' `motion`: reduce, full), else as the system's
@@ -237,8 +242,8 @@ pub let share_over : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b
 /// answered; None while none is known yet: the prefs, which say the one last open, not read yet among them), every
 /// workspace, whether every account has answered, whether invitations wait.
 pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, Bool) {
-  let ws = (src.topic)("workspaces", {})
-  let prefs = (src.topic)("prefs", {})
+  let ws = src.topic("workspaces", {}).get().snapshot()
+  let prefs = src.topic("prefs", {}).get().snapshot()
   let (all, answered, invited) = workspaces_of(ws.value)
   // (the first before the prefs are read, the one last open once they are: a workspace shown, then another)
   if app.picked.get() == "" && prefs.value is None && prefs.error is None {
@@ -271,7 +276,7 @@ let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a ==
 /// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
 /// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
 pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
   let badge = match field(marks, "badge") {
     Some(Number(_, ..)) => count(marks, "badge")
     _ =>

@@ -1164,7 +1164,7 @@ fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   !s.simulator() &&
   (match u.mouse_set {
     Some(on) => on
-    None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"
+    None => text(s.src.topic("prefs", {}).get().value, "screenMouse") != "off"
   })
 }
 

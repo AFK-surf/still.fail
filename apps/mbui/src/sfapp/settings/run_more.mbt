@@ -9,7 +9,7 @@
 /// (`pick.save`), or, another station's model, borrows it once asked again.
 fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -> Unit {
   let of = "session:" + key
-  let topic = (core.topic)("pick", { "station": str(station), "of": str(of) })
+  let topic = (core.topic)("pick", { "station": str(station), "of": str(of) }).get()
   let v = topic.value
   let pick = fn(more : Array[(String, Json)]) {
     let p = [("station", str(station)), ("of", str(of))]

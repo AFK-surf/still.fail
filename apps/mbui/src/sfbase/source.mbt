@@ -10,6 +10,21 @@ pub(all) struct Topic {
 }
 
 ///|
+/// A topic as a value a signal can carry, including whether its first value waits on a station.
+pub(all) struct TopicState {
+  value : Json?
+  error : Json?
+  version : Int
+  waiting : Bool
+}
+
+///|
+/// The fields used by older page code after reading a topic signal.
+pub fn TopicState::snapshot(self : TopicState) -> Topic {
+  { value: self.value, error: self.error, version: self.version }
+}
+
+///|
 /// Where signing in to still.fail stands, as the sign-in page says it: nothing under way; its page being opened; out in
 /// the browser, the app waiting for it to come back; what it brought back being checked; or failed, why in the person's
 /// words ("" when there are none).
@@ -42,10 +57,12 @@ pub(all) struct Source {
   /// the topic `name` with its params (the core's `subscribe`): the same each frame. Read in a computed (mbui/signals:
   /// derived.mbt), followed: the computed is worked out again as the topic changes, a signal of its changes set as
   /// they come (the core client's Sub.changes; a made-up core's own as its state changes)
-  topic : (String, Map[String, Json]) -> Topic
+  topic_read : (String, Map[String, Json]) -> Topic
   /// whether the core said that topic, which has no value yet, waits on a station for it: none of what it shows is on
   /// the device (a chat whose messages are still to come), not the core still reading what is. Read as `topic` is.
   waits : (String, Map[String, Json]) -> Bool
+  /// The core's lifetime and whether a retained topic value came from it; does not acquire the topic.
+  generation : (String, Map[String, Json]) -> (Int, Bool)
   /// a call to the core; `done` gets its answer or its error
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   /// a call with bytes beside it (a file's part going up: `station.upload.part`)
@@ -88,9 +105,94 @@ pub(all) struct Source {
   now : () -> Double
   /// a topic no page shows any more (`unsubscribe`)
   leave : (String, Map[String, Json]) -> Unit
+  /// a signal reader ended; another graph reader or a legacy untracked hold may still need the topic
+  release : (String, Map[String, Json]) -> Unit
+  /// ask an already held topic for a fresh value without dropping its readers
+  refresh : (String, Map[String, Json]) -> Unit
   /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept, nothing sent, no
   /// draft kept, no file put up
   read_only : Bool
+}
+
+///|
+/// A read-only signal of one core subscription. Readers of the same source, name and params share its subscription;
+/// the graph releases it when the last reader leaves. An immediate-mode page holds its untracked frame read until it leaves.
+pub fn Source::topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
+  let key = params.copy()
+  @signals.computed_scoped(fn(_) {
+    followed_topic(src, name, key).get()
+  }, untracked_read=Some(fn() {
+    if !held_building.val {
+      return None
+    }
+    // An event in a build can read a topic the graph already holds. Use that value without adding a manual hold.
+    match existing_followed_topic(src, name, key) {
+      Some(holder) if holder.watched() => return Some(holder.get())
+      _ => ()
+    }
+    let topic = (src.topic_read)(name, key)
+    Some({ value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, key) })
+  }))
+}
+
+///|
+/// A page scope already has a graph reader and must not also acquire an untracked frame hold.
+fn scoped_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
+  let key = params.copy()
+  @signals.computed_scoped(fn(_) { followed_topic(src, name, key).get() })
+}
+
+///|
+/// A shared topic's computed and its lifetime, shared by every reader of the same source and parameters.
+priv struct FollowedTopic {
+  source : Source
+  key : String
+  holder : @signals.Computed[TopicState]
+  token : Ref[Bool]
+}
+
+///|
+// kept across runs: an active graph reader may outlive an app reset; its last reader removes the entry.
+let followed_topics : Ref[Array[FollowedTopic]] = Ref([])
+
+///|
+fn existing_followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState]? {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key }).map(fn(i) { followed_topics.val[i].holder })
+}
+
+///|
+fn followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  match followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key }) {
+    Some(i) => followed_topics.val[i].holder
+    None => {
+      // Read first and on every evaluation, so the lifetime ends only when the holder loses its last reader.
+      let lifetime = @signals.signal(0)
+      let token = Ref(true)
+      lifetime.on_unwatched(fn() {
+        // A reader can go before its replacement reads in the same frame. Keep the wire subscription until that
+        // frame finishes; outside a frame the final reader's release is immediate.
+        @ui.after_frame(fn() {
+          match followed_topics.val.search_by(fn(t) { physical_equal(t.token, token) }) {
+            Some(i) if !followed_topics.val[i].holder.watched() => {
+              // A removed Array slot keeps its old value alive; replace the array before releasing.
+              followed_topics.val = followed_topics.val.filter(fn(t) { !physical_equal(t.token, token) })
+              (src.release)(name, params)
+            }
+            _ => ()
+          }
+        })
+      })
+      let holder = @signals.computed(fn(_) {
+        lifetime.get() |> ignore
+        let topic = (src.topic_read)(name, params)
+        { value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, params) }
+      })
+      followed_topics.val.push({ source: src, key, holder, token })
+      holder
+    }
+  }
 }
 
 ///|
@@ -145,13 +247,14 @@ pub fn made_source(
   },
 ) -> Source {
   {
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match topic(name, params) {
         Some(v) => { value: Some(v), error: None, version: 1 }
         None => { value: None, error: None, version: 0 }
       }
     },
     waits: fn(_, _) { false },
+    generation: fn(_, _) { (0, true) },
     call,
     call_bytes: fn(name, params, _, done) { call(name, params, done) },
     read_bytes: fn(name, _, done) { done(Err({ "code": "unknown_call", "message": Json::string("no " + name) })) },
@@ -172,6 +275,8 @@ pub fn made_source(
     images: ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
+    release: fn(_, _) {  },
+    refresh: fn(_, _) {  },
     read_only: false,
   }
 }

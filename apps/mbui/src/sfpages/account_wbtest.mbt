@@ -34,8 +34,8 @@ fn own_picture_tester(
   setting_tester(Me, w, platform~, over=fn(s) {
     {
       ..s,
-      topic: fn(name, params) {
-        let got = (s.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = s.topic(name, params).get().snapshot()
         match got.value {
           Some(Array(accounts)) if name == "accounts" => { ..got, value: Some(Json::array(accounts + others)) }
           Some(Array(entries)) if name == "workspaces" && own =>
@@ -153,8 +153,8 @@ test "账号's devices, narrow: this one's 当前 whole on its line beside a nam
     let t = setting_tester(Me, 360.0, platform~, over=fn(s) {
       {
         ..s,
-        topic: fn(name, params) {
-          let got = (s.topic)(name, params)
+        topic_read: fn(name, params) {
+          let got = s.topic(name, params).get().snapshot()
           match got.value {
             Some(Array(list)) if name == "loginSessions" => {
               let long = list.map(fn(d) {

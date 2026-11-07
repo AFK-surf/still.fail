@@ -10,7 +10,7 @@
 /// A connect's page (ConnectPage, ConnectScreen), by its station and id: a wait until the connects are read (its
 /// station's among them); one gone, that it is not there.
 pub fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, station : String, id : String) -> Unit {
-  let connects = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(false) })
+  let connects = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(false) }).get()
   let found = items(connects.value, "items").iter().find_first(fn(i) {
     text(Some(i), "station") == station && text(field(Some(i), "connect"), "id") == id
   })

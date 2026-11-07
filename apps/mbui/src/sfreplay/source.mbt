@@ -108,12 +108,13 @@ fn replay_topic_params(name : String, params : Map[String, Json]) -> Map[String,
 /// The app's source over @core, as src/stillfail's (without its logs and its read-only runs).
 pub fn source() -> @sfapp.Source {
   {
-    topic: fn(name, params) {
-      let s = @core.subscribe(name, params=replay_topic_params(name, params)).followed()
+    topic_read: fn(name, params) {
+      let s = @core.follow_topic(name, params=replay_topic_params(name, params))
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
-    waits: fn(name, params) { @core.subscribe(name, params=replay_topic_params(name, params)).followed().waiting },
+    waits: fn(name, params) { @core.follow_topic(name, params=replay_topic_params(name, params)).waiting },
+    generation: fn(name, params) { @core.client.topic_generation(name, params=replay_topic_params(name, params)) },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
@@ -203,7 +204,9 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.unsubscribe_topic(name, params=replay_topic_params(name, params)) },
+    leave: fn(name, params) { @core.leave_topic(name, params=replay_topic_params(name, params)) },
+    release: fn(name, params) { @core.release_topic(name, params=replay_topic_params(name, params)) },
+    refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,
   }
 }

@@ -87,7 +87,7 @@ fn peek_read(
 ) -> Unit {
   let drawn = Ref(false)
   if c.hovered(id) {
-    ignore(@sfbase.hold(src, scope, name, params))
+    ignore(@sfbase.hold(src, scope, name, params).get().snapshot())
   }
   card(fn() { drawn.val = true })
   if !c.hovered(id) && !drawn.val {
@@ -134,7 +134,7 @@ fn link_card(
   peek? : String = "",
   copy? : () -> Unit = fn() {  },
 ) -> Unit {
-  let read = @sfbase.hold(src, scope, "linkPreview", params)
+  let read = @sfbase.hold(src, scope, "linkPreview", params).get().snapshot()
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -460,7 +460,7 @@ fn file_peek(
       hovered_file.val = Some(visit)
       // A card can stay open as the pointer leaves its chip. Subscribe again even in that case: the file may have
       // been written or removed since the last time the pointer was here.
-      (src.leave)("filePeek", params)
+      (src.refresh)("filePeek", params)
     }
   } else if hovered_file.val is Some((key, _)) && key == hover_key {
     hovered_file.val = None
@@ -495,7 +495,7 @@ fn file_peek_params(station : String, session : String, path : String, line : In
 /// directory's first entries; and its foot: how big it is (or how many entries), and its path to copy. Why not, read
 /// and refused; bars while it is read.
 fn file_card(c : @ui.Ctx, src : Source, scope : String, params : Map[String, Json], path : String) -> Unit {
-  let read = @sfbase.hold(src, scope, "filePeek", params)
+  let read = @sfbase.hold(src, scope, "filePeek", params).get().snapshot()
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -921,7 +921,7 @@ fn chat_card_of(c : @ui.Ctx, item : ChatItem, elsewhere : Bool, history : Bool, 
 /// its words (six lines at most). That it can't be read, for one gone or a station that won't say; bones while it is read.
 fn message_said(c : @ui.Ctx, src : Source, scope : String, station : String, thread : Double, seq : Double) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "thread": Json::number(thread), "seq": Json::number(seq) }
-  let read = @sfbase.hold(src, scope, "messagePeek", params)
+  let read = @sfbase.hold(src, scope, "messagePeek", params).get().snapshot()
   match read.value {
     Some(Object(_)) as v => {
       let ago = text(field(field(v, "time"), "at"), "ago")
@@ -1215,4 +1215,3 @@ let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then
 
 ///|
 let peek_button_in : Double = @ui.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in
-

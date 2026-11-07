@@ -46,7 +46,7 @@ fn tabs_of(v : Json?) -> FilesTabs? {
 ///|
 /// The workspace's tabs as kept: None until the core says, Some(None) before any.
 pub fn files_tabs(src : Source, ws : String) -> FilesTabs?? {
-  let t = (src.topic)("filesTabs", { "workspace": Json::string(ws) })
+  let t = src.topic("filesTabs", { "workspace": Json::string(ws) }).get().snapshot()
   match t.value {
     None => None
     Some(Null) => Some(None)

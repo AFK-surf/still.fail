@@ -43,7 +43,7 @@ pub fn login_card(
   marked? : Bool = false,
   place? : String = "chat",
 ) -> Unit {
-  let l = match (core.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) }).value {
+  let l = match (core.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) }).get().value {
     Some(Object(_)) as v => v
     _ => return
   }
@@ -59,7 +59,7 @@ pub fn login_card(
     c.text(words, style=if text(l, "state") == "failed" { lc_ended_failed } else { lc_ended }) |> ignore
     return
   }
-  let all = (core.topic)("machineLogins", { "station": Json::string(station) }).value
+  let all = (core.topic)("machineLogins", { "station": Json::string(station) }).get().value
   c.box(style=lc_room, fn() {
     c.box(style=if marked { lc_card_marked } else { lc_card }, fn() {
       if flag(all, "canLogin") {

@@ -21,7 +21,7 @@ fn rows_follow_run(made : Bool, period : Double) -> Array[Array[String]] {
   let changes = @signals.signal(1)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
         changes.get() |> ignore
         let chat : Json = {
@@ -34,7 +34,7 @@ fn rows_follow_run(made : Bool, period : Double) -> Array[Array[String]] {
         }
         { value: Some(chat), error: None, version: version.val }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

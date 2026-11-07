@@ -33,8 +33,8 @@ test "用量 as a place on a phone: its days and its share in the place's top ba
     let base = topic_asked(base, "usage", "days", days)
     let s : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         if name == "workspaces" && !listed.get() {
           return { ..got, value: Some(Json::array([])) }
         }

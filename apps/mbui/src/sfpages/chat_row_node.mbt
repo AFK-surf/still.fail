@@ -439,7 +439,7 @@ pub fn chat_row_node(
           press_lit.set(true)
           if finger && !src.read_only {
             primed.val = true
-            (src.topic)("chat", chat_params(@signals.untracked(r))) |> ignore
+            (src.topic_read)("chat", chat_params(@signals.untracked(r))) |> ignore
           }
         })
       },
@@ -735,4 +735,3 @@ let row_renaming : @signals.Signal[String] = @signals.signal("")
 /// The row last gone back from by a finger (its name: row_name), the one whose ground stays a while.
 // kept across runs: put back by chat_rows_reset
 let row_left_said : @signals.Signal[String] = @signals.signal("")
-

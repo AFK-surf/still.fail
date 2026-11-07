@@ -211,7 +211,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
     "station": Json::string(at.station),
     "root": Json::string(at.root),
     "path": Json::string(at.path),
-  })
+  }).get().snapshot()
   let entries = @sfbase.dv_entries(src, at.station, at.root, at.path).unwrap_or([])
   let shown = @sfbase.dv_shown(src, at.station, at.root, at.path, entries).unwrap_or([])
   let whole : Dragged = {

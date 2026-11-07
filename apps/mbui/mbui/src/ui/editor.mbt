@@ -1029,6 +1029,21 @@ pub fn Field::composed_said(self : Field) -> String {
 }
 
 ///|
+/// Whether the input method currently holds nonempty marked text. Followed independently of displayed words: a
+/// commit can leave those words unchanged while ending composition. Told together with the field's text.
+pub fn Field::composing(self : Field) -> Bool {
+  let st = self.st
+  match st.said_composing {
+    Some(s) => s.get()
+    None => {
+      let s = @signals.signal(st.marked != "", same=fn(a, b) { a == b })
+      st.said_composing = Some(s)
+      s.get()
+    }
+  }
+}
+
+///|
 /// What a plain field (Ctx::editor's `plain`, no look of its own, nothing secret) shows and how its words are set, as
 /// it is laid out by (FieldLaid::size): its words with what is composed in them, their size and line (as said to
 /// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at least
@@ -1740,6 +1755,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     placed_y: 0.0,
     said_words: None,
     said_composed: None,
+    said_composing: None,
     written: @signals.signal(0),
   }
 }
@@ -1766,6 +1782,10 @@ fn EditorState::words_told(self : EditorState) -> Unit {
   }
   match self.said_composed {
     Some(s) => s.set(self.display())
+    None => ()
+  }
+  match self.said_composing {
+    Some(s) => s.set(self.marked != "")
     None => ()
   }
   @signals.end_batch()

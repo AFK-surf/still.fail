@@ -52,8 +52,8 @@ fn held_core(
         _ => (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       let made = match params.get("session") {
         Some(String(s)) => s.has_prefix("new:")
         _ => false
@@ -229,8 +229,8 @@ test "a new chat's restored picture travels from its composer into its first mes
       @ui.add_image("mem:test/new-restored", png_head())
       "mem:test/new-restored"
     },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" { return now }
       // The fixture's draft comes with an in-memory picture, as one picked here. After a restart the app keeps none:
       // its source is the kept draft's, from the first read of it on.
@@ -433,7 +433,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
       }
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "newChat" && reading.get() {
         {
           value: Some({
@@ -449,7 +449,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
           version: 0,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

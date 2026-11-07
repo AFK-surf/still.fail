@@ -40,7 +40,7 @@ fn native_workspace(c : @ui.Ctx, src : Source, w : Workspace, node : Int, id : I
     floating_installed.val = true
     @ui.on_after_layout(native_workspace_placed)
   }
-  let others = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "others") is Some(String(_))
+  let others = field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "others") is Some(String(_))
   native_sidebar_items[id] = {
     id: "workspace-switch", title: w.name, icon: ws_badge(w),
     dot: others || @sfpages.invitations_waiting(src).length() > 0, prominent: true, menu: [],

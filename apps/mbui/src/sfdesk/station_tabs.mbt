@@ -58,12 +58,12 @@ pub fn station_page_beside(src : Source, r : ChatRef, p : Page) -> Bool {
 fn station_tab_name(src : Source, tab : String) -> String? {
   guard station_tab(tab) is Some((kind, station, screen)) else { return None }
   if kind == "screen" {
-    let card = (src.topic)("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).value
+    let card = src.topic("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).get().value
     let name = text(card, "title")
     return Some(if name == "" { @sf.t("web-pages.screen.section") } else { name })
   }
   let scope = station.split("/").next().unwrap_or("").to_string()
-  let stations = (src.topic)("stations", { "scope": Json::string(scope) }).value
+  let stations = src.topic("stations", { "scope": Json::string(scope) }).get().value
   let mut name = station
   match stations {
     Some(Array(xs)) => for s in xs {

@@ -93,6 +93,29 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
 }
 
 ///|
+// Resources whose readers change during one frame may finish their handover at its end.
+let frame_afters : Ref[Array[() -> Unit]] = Ref([])
+
+///|
+/// Run at the end of the current frame, or immediately when no frame is being drawn.
+pub fn after_frame(f : () -> Unit) -> Unit {
+  if frame_running.val {
+    frame_afters.val.push(f)
+  } else {
+    f()
+  }
+}
+
+///|
+fn frame_afters_run() -> Unit {
+  while !frame_afters.val.is_empty() {
+    let pending = frame_afters.val
+    frame_afters.val = []
+    for f in pending { f() }
+  }
+}
+
+///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let z = window_zoom_wanted.get()
   if z != window_zoom_drawn.val {
@@ -167,6 +190,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   c.motion_read = false
   // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
   view_frame_end(c)
+  frame_afters_run()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -194,6 +218,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     let what = rt.awaited().map(fn(a) { a.0 }).join(", ")
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
+  frame_afters_run()
   frame_running.val = false
   frame_moment.val = -1.0
   frame_built.val = false

@@ -171,9 +171,9 @@ pub fn[T] Derived::new(name : String, work : (Json, T?) -> T) -> Derived[T] {
 ///|
 /// Topic `name` with `params` (Source.topic), and what `work` makes of its value: None while it has none.
 pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Json]) -> (T?, Topic) {
-  let topic = (src.topic)(self.name, params)
+  let topic = src.topic(self.name, params).get().snapshot()
   let value = self.kept.read(Json::object(params).stringify(), fn(was) {
-    match (src.topic)(self.name, params).value {
+    match src.topic(self.name, params).get().value {
       Some(v) =>
         Some(
           (self.work)(v, match was {

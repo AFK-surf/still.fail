@@ -65,7 +65,7 @@ fn letters_sample() -> Array[Json] {
 /// as the chat draws one, its files kept by the chat's sessions; a chat's title pressed opened as a link in it is.
 fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Double) -> Unit {
   let key = chat_key(r)
-  let view = (src.topic)("chatLetters", { "station": Json::string(r.station), "thread": Json::number(thread) }).value
+  let view = src.topic("chatLetters", { "station": Json::string(r.station), "thread": Json::number(thread) }).get().value
   let chats = items(view, "chats")
   let whole = flag(view, "whole")
   if !(view is Some(Object(_))) || (chats.length() == 0 && !whole) {

@@ -246,8 +246,8 @@ test "a station with many profiles can search within one kind" {
   let many = fn(base : Source) -> Source {
     {
       ..base,
-      topic: fn(name, params) {
-        let read = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let read = base.topic(name, params).get().snapshot()
         match (name, read.value) {
           ("stations", Some(Array(stations))) => {
             let shaped = stations.map(fn(station) {
@@ -445,8 +445,8 @@ test "an older station's cache switch does not imply that it has a cost threshol
   let over = fn(base : Source) -> Source {
     {
       ..base,
-      topic: fn(name, params) {
-        let v = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let v = base.topic(name, params).get().snapshot()
         match v.value {
           Some(x) => { ..v, value: Some(old(x)) }
           None => v
@@ -474,8 +474,8 @@ test "a workspace member can see the cache threshold but cannot change it" {
     over=fn(s) {
       {
         ..s,
-        topic: fn(name, params) {
-          let v = (s.topic)(name, params)
+        topic_read: fn(name, params) {
+          let v = s.topic(name, params).get().snapshot()
           match (name, v.value) {
             ("workspace", Some(Object(o))) => {
               let p = o.copy()
@@ -815,7 +815,7 @@ test "the variables' field follows the core's text that comes after the page ope
   let over = fn(base : Source) -> Source {
     {
       ..base,
-      topic: fn(name, params) {
+      topic_read: fn(name, params) {
         if name == "agentEnvForm" {
           let (words, v) = env.get()
           {
@@ -832,7 +832,7 @@ test "the variables' field follows the core's text that comes after the page ope
             version: v,
           }
         } else {
-          (base.topic)(name, params)
+          base.topic(name, params).get().snapshot()
         }
       },
     }
@@ -865,12 +865,12 @@ test "two station variables editors share the draft without sharing editor state
   let base = @sffixture.fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "agentEnvForm" {
         let (words, version, dirty) = env.get()
         { value: Some({ "text": Json::string(words), "lines": [], "errors": 0, "dirty": Json::boolean(dirty), "pending": Json::boolean(saving.get()) }), error: None, version }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

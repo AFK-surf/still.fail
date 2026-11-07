@@ -34,7 +34,7 @@ fn station_name(src : Source, station : String) -> String {
     Some(i) => station.view(end_offset=i).to_owned()
     None => station
   }
-  match stations_of((src.topic)("stations", { "scope": Json::string(scope) }).value).iter().find_first(fn(s) {
+  match stations_of(src.topic("stations", { "scope": Json::string(scope) }).get().value).iter().find_first(fn(s) {
     s.address == station
   }) {
     Some(s) => s.name
@@ -46,7 +46,7 @@ fn station_name(src : Source, station : String) -> String {
 /// The service `job` of `station`'s page.
 pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -> Unit {
   let t = @sf.theme()
-  let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
+  let found = src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().snapshot()
   let j = found.value
   let name = match text(j, "name") {
     "" => svc("android-chat.preview.service")

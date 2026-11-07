@@ -169,10 +169,10 @@ test "a folder opened in the columns while its station has not said what it hold
   // (设计稿 never read: as a station slow to answer)
   let held : @sfbase.Source = {
     ..src,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match params.get("path") {
         Some(String(p)) if name == "drive" && p == "设计稿" => { value: None, error: None, version: 0 }
-        _ => (src.topic)(name, params)
+        _ => src.topic(name, params).get().snapshot()
       }
     },
   }

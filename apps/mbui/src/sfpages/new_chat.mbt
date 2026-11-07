@@ -61,7 +61,7 @@ pub fn new_chat_ask(what : String) -> Unit {
 /// station it last started on, its composer taking words but sending nothing; with none at all, the first to add;
 /// with none up, said so; nothing to run a chat with yet, its first step; else the page on the station it starts on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFrame) -> Unit {
-  let topic = (src.topic)("newChat", { "scope": Json::string(w.id) })
+  let topic = src.topic("newChat", { "scope": Json::string(w.id) }).get().snapshot()
   let v = topic.value
   c.box(style=new_ground, fn() {
     c.box(style=new_bar_room, frame.bar) |> ignore

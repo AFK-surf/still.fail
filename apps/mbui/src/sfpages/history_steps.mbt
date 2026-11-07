@@ -123,7 +123,7 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
   let mut go_to = ""
   match steps_own.focus.get(fk) {
     Some(e) => {
-      let loaded = items((src.topic)("history", params).value, "items")
+      let loaded = items(src.topic("history", params).get().value, "items")
       match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
         Some(at) => {
           if steps_own.only_io.get() && flag(loaded.get(at), "work") {
@@ -267,7 +267,7 @@ fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> Ste
   steps_head.read(
     lkey,
     fn(_) {
-      let h = (src.topic)("history", params).value
+      let h = src.topic("history", params).get().value
       let empty = flag(h, "empty")
       let waiting = !(h is Some(Object(_))) || (empty && !flag(h, "loaded"))
       let (all, rows) = if waiting || empty { ([], []) } else { steps_rows_of_topic(src, params, lkey) }
@@ -291,7 +291,7 @@ fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> Ste
 /// Agent `key`'s history's rows (steps_rows).
 fn steps_rows_of_topic(src : Source, params : Map[String, Json], lkey : String) -> (Array[Json], Array[StepsRow]) {
   steps_rows.read(lkey, fn(_) {
-    let h = (src.topic)("history", params).value
+    let h = src.topic("history", params).get().value
     steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
   })
 }
@@ -1793,7 +1793,7 @@ pub fn history_usage_line(src : Source, station : String, key : String) -> Strin
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   steps_usage_line.read(
     station + "\u{1}" + key,
-    fn(_) { text((src.topic)("history", params).value, "usageLine") },
+    fn(_) { text(src.topic("history", params).get().value, "usageLine") },
     same=fn(a, b) { a == b },
   )
 }
@@ -1804,7 +1804,7 @@ pub fn history_usage(src : Source, station : String, key : String) -> Array[Json
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   let usage = steps_usage.read(
     station + "\u{1}" + key,
-    fn(_) { field((src.topic)("history", params).value, "usage") },
+    fn(_) { field(src.topic("history", params).get().value, "usage") },
     same=fn(a, b) {
       match (a, b) {
         (Some(x), Some(y)) => physical_equal(x, y)

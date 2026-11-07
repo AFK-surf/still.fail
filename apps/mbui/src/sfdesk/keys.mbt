@@ -9,7 +9,7 @@
 /// chat's side panel's Esc) does nothing laid out Small; what opens something opens it where the shell has it.
 pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let framed = is_wide(c)
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
   // ⌘K: laid out Medium or Large its panel over the page (switcher.mbt); Small, the search's page in the lists' box,
   // over the page open when it is not the lists (sfpages' search.mbt), what the panel offers in it
@@ -126,5 +126,5 @@ pub fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
 ///|
 /// An action's keys as the core's prefs keep them (settings' keymap), "" none: what a tip says after its words.
 pub fn tip_keys(src : Source) -> (String) -> String {
-  fn(action) { @settings.keys_text((src.topic)("prefs", {}).value, action) }
+  fn(action) { @settings.keys_text(src.topic("prefs", {}).get().value, action) }
 }

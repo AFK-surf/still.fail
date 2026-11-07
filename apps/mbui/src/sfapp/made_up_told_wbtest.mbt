@@ -5,7 +5,7 @@
 ///|
 /// The words of the made-up chat's agent's step (chat-working's `live`), as `src` has them by now: none till it came.
 fn live_step(src : Source) -> String? {
-  match (src.topic)("live", { "station": "ws1/st1", "key": "s-c1" }).value {
+  match src.topic("live", { "station": "ws1/st1", "key": "s-c1" }).get().value {
     Some(v) => opt_text(field(field(Some(v), "activity"), "now"), "text")
     None => None
   }

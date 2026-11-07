@@ -96,7 +96,7 @@ fn narrow_empty(c : @ui.Ctx, words : String, action : (String, () -> Unit)?) -> 
 ///|
 /// How far a text has been read on this device, once opened (the core's `drivePlace`): its share, 读完 at its end.
 fn read_share(c : @ui.Ctx, src : Source, station : String, root : String, path : String) -> Unit {
-  let place = (src.topic)("drivePlace", { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) }).value
+  let place = src.topic("drivePlace", { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) }).get().value
   let of = number(place, "of")
   if of <= 0.0 {
     return

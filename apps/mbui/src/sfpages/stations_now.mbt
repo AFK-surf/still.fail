@@ -146,7 +146,7 @@ fn share_stand(src : Source) -> @sfbase.LooksStand {
 ///|
 /// What the card to share of workspace `w` says (the core's `fleet` view), whatever look draws it.
 fn share_fleet(src : Source, w : Workspace) -> Json? {
-  (src.topic)("fleet", { "scope": Json::string(w.id) }).value
+  src.topic("fleet", { "scope": Json::string(w.id) }).get().value
 }
 
 ///|

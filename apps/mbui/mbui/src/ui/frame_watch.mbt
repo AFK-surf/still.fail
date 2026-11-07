@@ -514,13 +514,8 @@ let paints_alone : Ref[Int] = Ref(0)
 let laid_otherwise = "the one before it laid out otherwise"
 
 ///|
-/// Put back as a run begins (reset_globals): the run's watches let go, the first frame built whole.
-fn looks_reset() -> Unit {
-  nodes_forget()
-  list_hand_forget()
-  layout_said.val = ""
-  frame_told_at.val = ""
-  layout_clock_at.val = ""
+/// Release the run's frame readers while the resources they read still belong to that run.
+fn frame_watches_let_go() -> Unit {
   for w in [frame_watch, layout_watch, paint_watch] {
     match w.val {
       Some(w) => w.stop()
@@ -528,6 +523,17 @@ fn looks_reset() -> Unit {
     }
     w.val = None
   }
+}
+
+///|
+/// Put back as a run begins (reset_globals): the run's watches let go, the first frame built whole.
+fn looks_reset() -> Unit {
+  nodes_forget()
+  list_hand_forget()
+  layout_said.val = ""
+  frame_told_at.val = ""
+  layout_clock_at.val = ""
+  frame_watches_let_go()
   looks_base.n = 0
   looks_base.looks = false
   looks_base.ok = false

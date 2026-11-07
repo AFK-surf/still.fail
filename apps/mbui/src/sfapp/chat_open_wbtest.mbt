@@ -23,19 +23,20 @@ fn chat_open_tester(slow : Ref[Bool], waiting : Ref[Bool]) -> @ui.Tester {
   let key = fn(name : String, params : Map[String, Json]) { name + " " + Json::object(params).stringify() }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       open_changes.get() |> ignore
       if slow.val && !asked.contains(key(name, params)) {
         return { value: None, error: None, version: 0 }
       }
       asked[key(name, params)] = true
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
     waits: fn(name, _) {
       open_changes.get() |> ignore
       name == "chat" && waiting.val
     },
     leave: fn(name, params) { asked.remove(key(name, params)) },
+    release: fn(name, params) { asked.remove(key(name, params)) },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(first_page_ms + @ui.move_most_ms)
@@ -59,11 +60,11 @@ fn chat_prefetch_tester(asked : Array[String], left : Array[String]) -> @ui.Test
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" {
         asked.push(Json::object(params).stringify())
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
     leave: fn(name, params) {
       if name == "chat" {
