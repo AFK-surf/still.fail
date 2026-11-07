@@ -250,7 +250,7 @@ pub fn history_usage_line(@sfbase.Source, String, String) -> String
 
 pub let hold_ms : Double
 
-pub fn hover(@ui.Ctx, String, Int32, tile? : Bool, tap? : Bool, side? : @view.Side, along? : @view.Along, padded? : Bool, () -> Unit) -> Bool
+pub fn hover(@ui.Ctx, String, Int32, tile? : Bool, tap? : Bool, side? : @view.Side, along? : @view.Along, padded? : Bool, words_along? : Bool, () -> Unit) -> Bool
 
 pub let hover_close_ms : Double
 

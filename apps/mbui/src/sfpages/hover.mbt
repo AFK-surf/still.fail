@@ -10,8 +10,9 @@
 /// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`; to a finger, as it
 /// holds the trigger, or with `tap` (a trigger that does nothing else) as it taps it (@kit.hover_card). Under it and at
 /// its start, or on `side` lined up `along` it (beside the rail's places: their right, their tops); what it holds 10
-/// in from its padding, or (`padded` false) at its padding, for rows to lie there (a station's card's ways on). Whether
-/// it is open.
+/// in from its padding, or (`padded` false) at its padding, for rows to lie there (a station's card's ways on).
+/// `words_along`: a trigger that is words, the card's words starting where they start, its edge out to the side of them
+/// (the user, 2026-11-07). Whether it is open.
 pub fn hover(
   c : @ui.Ctx,
   key : String,
@@ -21,6 +22,7 @@ pub fn hover(
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   padded? : Bool = true,
+  words_along? : Bool = false,
   body : () -> Unit,
 ) -> Bool {
   @kit.hover_card(
@@ -33,6 +35,7 @@ pub fn hover(
     close_delay=hover_close_ms,
     side~,
     along~,
+    along_offset=if words_along { -@sf.panel_pad - (if padded { hover_words_in } else { 0.0 }) } else { 0.0 },
     offset=hover_offset,
     enter=hover_in,
     exit=hover_out,

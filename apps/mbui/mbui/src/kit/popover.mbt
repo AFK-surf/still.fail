@@ -123,7 +123,8 @@ pub let hover_card_close_ms : Double = 300.0
 /// trigger `open_delay` ms (its button up: one held, dragging something across it, rests on nothing), closed `close_delay` ms after it has left both, and by Escape and a press outside. A finger
 /// rests on nothing: it holds the trigger (long_press_ms) to open it, or with `tap` (a trigger that does nothing else
 /// when tapped) taps it, and it stays until a press outside or another tap on the trigger. `held`: kept open by the app
-/// while it is (what was pressed in it opened something beside it, which the pointer goes on to). Whether it is open.
+/// while it is (what was pressed in it opened something beside it, which the pointer goes on to). `along_offset`: moved
+/// that much further along its side (Ctx::place). Whether it is open.
 pub fn hover_card(
   c : @ui.Ctx,
   key : String,
@@ -132,6 +133,7 @@ pub fn hover_card(
   close_delay? : Double = hover_card_close_ms,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Middle,
+  along_offset? : Double = 0.0,
   offset? : Double = 6.0,
   tap? : Bool = false,
   held? : Bool = false,
@@ -183,7 +185,7 @@ pub fn hover_card(
   }
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
     let o = c.overlay(key, anchor=trigger, initial_focus=0, inert=!open, fn() {
-      beside(c, key, trigger, side, along, offset, shows, Group, "", look, body)
+      beside(c, key, trigger, side, along, offset, shows, Group, "", look, body, along_offset~)
     })
     if o.dismissed is Some(_) && !(held && was) {
       open = false
@@ -380,6 +382,7 @@ fn beside(
   look : (@ui.Ctx, PopState, () -> Unit) -> Unit,
   body : () -> Unit,
   at? : (Double, Double, Double, Double),
+  along_offset? : Double = 0.0,
 ) -> Unit {
   let pid = c.id(key + "/panel")
   let ar = match at {
@@ -395,7 +398,7 @@ fn beside(
   let went = went_side(c, pid, ar, side, along, offset)
   let i = c.box(id=pid, fn() { look(c, { side: went, room: c.place_most(), panel: pid }, body) })
   c.place_by_size(i, fn(pw, ph) {
-    let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~)
+    let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~, along_offset~)
     (x, y)
   })
   c.semantics(i, role, label~)
