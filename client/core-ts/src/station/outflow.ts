@@ -1,4 +1,4 @@
-// The programs of a station's machine granted its data (docs/data-outflow.md), as the `outflowGrants` topic shows
+// The programs of a station's machine granted its data, as the `outflowGrants` topic shows
 // them: each with who it is as the system said it, what it said of itself, what it may read (of this station or of
 // the whole workspace), who allowed it, when it was granted and what it read lately, the times in words. Revoked with
 // `outflow.revoke`. And the requests waiting for an admin, the same way, answered with `outflow.answer`.

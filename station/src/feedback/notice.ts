@@ -1,5 +1,5 @@
 // A failure notice reported from the chat (its 上报): a person who takes what went wrong for still.fail's own sends it
-// to the team as a bug report (docs/feedback.md), made here of what the station knows of it. POST
+// to the team as a bug report, made here of what the station knows of it. POST
 // /threads/:id/report `{n}` (the notice's entry), answered `{number, duplicate?}`; a read-only member may report too,
 // as nothing on the station changes.
 import { createHash } from "node:crypto";

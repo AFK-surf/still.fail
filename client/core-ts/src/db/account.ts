@@ -1,4 +1,4 @@
-// One signed-in account's database (docs/core-db.md): the tables of db/schema.ts, read by indexed queries, written by
+// One signed-in account's database: the tables of db/schema.ts, read by indexed queries, written by
 // one writer. Everything here is synchronous (the host's SQLite is), on the core's one thread.
 //
 // The writer: every change opens the burst's transaction (BEGIN IMMEDIATE) if none is open and runs in it, so what

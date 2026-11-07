@@ -1,4 +1,4 @@
-// What of the station's chats a viewer sees (docs/multi-workspace.md): those of their own workspace. A request that names
+// What of the station's chats a viewer sees: those of their own workspace. A request that names
 // a session, a chat or a job of another workspace is answered as one naming what is not there.
 import { percentDecode } from "./request.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";

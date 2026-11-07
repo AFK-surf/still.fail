@@ -14,7 +14,7 @@ export interface WayView { id: string; kind: "relay" | "lan" | "tailnet" | "dire
 /**
  * last_seen: when it last connected to still.fail cloud or left it (whether it is up, each device finds out over the mesh).
  * name, emoji, icon, enrolled_*: in this workspace. joined: the station is in another workspace too, which it joined
- * first (its home, whose owners and admins manage the machine: docs/multi-workspace.md); absent where this is its home.
+ * first (its home, whose owners and admins manage the machine); absent where this is its home.
  */
 export interface StationView { id: string; name: string; emoji: string | null; icon?: string | null; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null; joined?: true }
 export interface MemberView extends UserView { role: Role; added_at: number }
@@ -25,7 +25,7 @@ export interface PendingInvitation { id: string; workspace: string; name: string
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
 export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
 
-/** How far the workspace's lock goes as the cloud keeps it (docs/workspace-lock.md): null, none. */
+/** How far the workspace's lock goes as the cloud keeps it: null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }
 /** A device that asked for a member credential in a workspace: its endpoint, and (a newer client) its base key, which
  * proved it holds the endpoint. What turning the lock on lists for its owner to check. */

@@ -1,8 +1,8 @@
-// What a frame does again, by what it read (docs/incremental.md). A frame's work, from taking what came from outside
+// What a frame does again, by what it read. A frame's work, from taking what came from outside
 // to the end of its paint, runs under one watch (mbui/signals' Watch): all it reads of signals is followed, and that is
 // all it is built from: the core's data and the app's state, the frames' clock (frame_clock: Ctx::now), the host's
 // settings it is drawn by (frame_env), what came from outside that is no signal yet (outside_said: what
-// docs/determinism.md records, a message, a host's event, a step of the runtime's, a frame asked for between frames)
+// records, a message, a host's event, a step of the runtime's, a frame asked for between frames)
 // and the hand as what reads it reads it (hand.mbt: what the pointer is over, what is pressed, clicked, focused, the
 // hand's events; a pointer moved over what lights nothing changes none of it). So the next frame is built anew where
 // any of it changed (the watch is stale), where a moment it read the clock as came (a wake: Ctx::wake_in, Ctx::every,

@@ -122,7 +122,7 @@ pub fn chat_row(
   at? : @sf.ListAt = Whole,
 ) -> Int {
   let t = @sf.theme()
-  // (its sizes the theme's, by the screen; how it answers by the hand: docs/architecture.md)
+  // (its sizes the theme's, by the screen; how it answers by the hand)
   let look = @sf.theme().chat_list
   // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
   let finger = !@sf.pointer_rests()
@@ -780,7 +780,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
       ),
     )
   }
-  // relayed to a channel (docs/relay.md): a chat with an agent to go on there
+  // relayed to a channel: a chat with an agent to go on there
   match item.thread {
     Some(th) if item.agents.length() > 0 =>
       items.push(

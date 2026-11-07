@@ -1,5 +1,5 @@
-// Archives of plain files, as releases that are not a station's carry them: a module's package (docs/station-modules.md:
-// written by scripts/module-bundle.ts, read by the station's modules/packages.ts). A gzipped tar of plain files, so
+// Archives of plain files, as releases that are not a station's carry them: a module's package.
+// A gzipped tar of plain files, so
 // neither side depends on a tar program and what is in it is only ever files under the directory it is opened into.
 import { gunzipSync, gzipSync } from "node:zlib";
 

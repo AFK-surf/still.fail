@@ -24,12 +24,12 @@ export function slackSurface(connect: string, teamId: string | null): string {
   return teamId ? `slack:${teamId}` : `slack:${connect}`;
 }
 
-/// Where a Feishu connect's threads live: the connect's own (docs/feishu.md).
+/// Where a Feishu connect's threads live: the connect's own.
 export const feishuSurface = (connect: string): string => `feishu:${connect}`;
 
 export type SessionScope = "thread" | "all";
 
-/// Who looks, as far as the station's workspaces go (docs/multi-workspace.md): their workspace, and whether it is the
+/// Who looks, as far as the station's workspaces go: their workspace, and whether it is the
 /// station's home one (absent: it is, as on a station in one workspace).
 export type InWorkspace = { workspace: string; home?: boolean };
 
@@ -49,7 +49,7 @@ export type SessionRow = {
   /// whole window; null: none over).
   contextBefore: number | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
-  /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
+  /// Which of the station's workspaces its chat is in: null is its home workspace (sessions
   /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
   ws: string | null;
   /// Not for the pages (serde skip).
@@ -164,7 +164,7 @@ export function isLetter(m: { authorKind: string; author: string; text: string; 
 /// addLetterColumn).
 export const LETTER_SQL = "(letter IS NOT NULL)";
 
-/// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`, docs/relay.md
+/// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`
 /// "抄送"): every one its agents are in, the one said in last first, at most 20; with a connect that posts there. One
 /// `?`: the chat's thread id. When each was said in last is its last entry's time (schema.ts thread_state): as the
 /// latest of all its entries, each thread's every entry was read, at each telling of the chat.
@@ -417,14 +417,14 @@ export function toOpened(r: Json): Opened {
   };
 }
 
-/// How long a chat stays shared with a workspace whose agents neither read it nor write to it (docs/chat-share.md):
+/// How long a chat stays shared with a workspace whose agents neither read it nor write to it:
 /// after that a person must share it again.
 export const XSHARE_IDLE_MS = 6 * 60 * 60_000;
 
 /// Why a chat once shared with an agent's workspace is not now.
 export const LAPSED = "that chat's share with your workspace lapsed, unused for 6 hours: a person of its workspace must share it again (by @-mentioning it in a message to you, or in its chat info)";
 
-/// A chat shared with other workspaces (chat_shares, docs/chat-share.md): each workspace with when its agents last read
+/// A chat shared with other workspaces (chat_shares): each workspace with when its agents last read
 /// it or wrote to it, or it was shared with them (`used`).
 export type ChatShare = { to: { workspace: string; name: string; used: number }[]; write: boolean; by: string; at: number };
 

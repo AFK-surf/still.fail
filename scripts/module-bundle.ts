@@ -1,4 +1,4 @@
-// A module's package (docs/station-modules.md): what a station installs itself when its config.json names the module by
+// A module's package: what a station installs itself when its config.json names the module by
 // `package` rather than by a command. A module's directory says how it is packed, in its module.json:
 //   { "id": "media", "entry": "src/main.ts", "files": [], "needsStation": 3530 }
 // `entry` and all it imports are bundled by esbuild into one plain ES module, main.mjs, which the station's own Node runs
@@ -39,7 +39,7 @@ export const BUNDLE = "main.mjs";
 /// How a module is packed, as its module.json says it.
 export type ModuleSpec = { id: string; entry: string; files: string[]; needsStation: number; native: string[] };
 
-/// The platforms a station runs modules on (not Windows: docs/station-modules.md).
+/// The platforms a station runs modules on (not Windows).
 export const PLATFORMS = ["darwin-arm64", "linux-x64", "linux-arm64"];
 /// Where a package's native parts are, in it.
 export const BIN = "bin";

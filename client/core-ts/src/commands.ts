@@ -1,5 +1,5 @@
 
-// What ⌘K's list offers besides what a search finds (`commands.find`, docs/client-core.md): of what a client can do
+// What ⌘K's list offers besides what a search finds (`commands.find`): of what a client can do
 // now (a key's action some page answers, updating, a settings page), those whose name, id or other words have what was
 // typed, by part, in the parts' order. The core names what every client offers alike (the keys' actions, updating,
 // relaying a chat) and which are worth a key alone; a client says which it can do now and names what is its own (its

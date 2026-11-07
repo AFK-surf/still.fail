@@ -735,7 +735,7 @@ test("a stream that follows the sessions at work is told what each its viewer se
     // A client that does not know yet names the sessions too: they are not followed by name then.
     live: (key) => (named.push(key), () => {}),
   });
-  // Only the viewer's sessions (docs/multi-workspace.md).
+  // Only the viewer's sessions.
   (events as any).deps.seen = (v: any, of: any) => !("session" in of) || seen[of.session] === v.email;
   const answer = await events.open(viewer("a@x"), "zh", false, [["k", 0, 200]], [], null, true, [], true);
   assert.equal(answer.headers?.["stillfail-follows"], "running");

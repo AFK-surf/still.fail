@@ -8,7 +8,6 @@
 <a href="https://still.fail">官网</a> ·
 <a href="https://app.still.fail">网页版</a> ·
 <a href="#开始使用">开始使用</a> ·
-<a href="docs/design.md">架构</a> ·
 <a href="README.md">English</a>
 </p>
 
@@ -40,8 +39,6 @@ still.fail 把你选定的机器连到你在的任何地方。每台机器运行
 - **workspace** 把人和 station 组织在一起。cloud 服务（`cloud/`，Cloudflare Workers）负责账号、workspace 和成员凭证，并运行中继。对话内容不经过它的数据库。
 - **客户端**（网页版、桌面版和安卓）共用一个 TypeScript 写的客户端 core（`client/core-ts`），它缓存 workspace 的数据，并与各 station 保持同步。
 
-详见 [docs/design.md](docs/design.md) 和 [docs/cloud.md](docs/cloud.md)。
-
 ## 开始使用
 
 1. 打开[网页版](https://app.still.fail)，或在 [still.fail](https://still.fail) 下载桌面版（Apple 芯片的 Mac、Windows x64）或安卓版。
@@ -67,7 +64,7 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 
 ## 隐私和遥测
 
-桌面版和安卓版默认连接托管服务 `app.still.fail`。客户端向所配置的 cloud 发送操作 trace（名称、耗时和错误，不含消息内容）。产品分析（PostHog）只在构建时提供了 key 才会包含，因此从本仓库构建的版本不带；station 的错误报告默认关闭，由 station 的管理者决定是否开启。见 [docs/telemetry.md](docs/telemetry.md) 和[隐私政策](https://still.fail/privacy)。
+桌面版和安卓版默认连接托管服务 `app.still.fail`。客户端向所配置的 cloud 发送操作 trace（名称、耗时和错误，不含消息内容）。产品分析（PostHog）只在构建时提供了 key 才会包含，因此从本仓库构建的版本不带；station 的错误报告默认关闭，由 station 的管理者决定是否开启。见[隐私政策](https://still.fail/privacy)。
 
 ## 仓库结构
 
@@ -79,17 +76,13 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 | `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`apps/mbui/mbui`）写 |
 | `cloud/` | Cloudflare 上的账号、workspace、中继和发布 |
 | `media/` | 基于同一平台的照片、影视和书架 app，开发中 |
-| `docs/` | 设计和运维文档；发布说明在 `docs/releases/` |
+| `docs/` | 开发和运维文档；发布说明在 `docs/releases/` |
 | `test/`、`spike/` | 集成测试和浏览器测试；验证 runtime 假设的实验 |
 | `vendor/` | 打过补丁的第三方 Rust crate |
 
 ## 文档
 
 - [开发环境](docs/development.md)和[贡献指南](CONTRIBUTING.md)
-- [架构](docs/design.md)、[客户端 core](docs/client-core.md)、[cloud](docs/cloud.md)、[station 存储](docs/station-storage.md)、[station 模块](docs/station-modules.md)
-- [station 互联和远程任务](docs/station-peers.md)、[station 之间分享](docs/station-share.md)、[搜索](docs/search.md)、[文件](docs/drive.md)、[屏幕](docs/remote-screens.md)
-- [飞书](docs/feishu.md)、[Grok Build](docs/grok.md)、[DeepSeek Harness](docs/dsh.md)
-- [安全模式](docs/workspace-lock.md)、[密钥库](docs/vault.md)、[通知](docs/notifications.md)、[遥测](docs/telemetry.md)
 - [运维](docs/operations.md)：维护者如何在自己的基础设施上构建和部署托管服务
 - [安全](SECURITY.md)：私下报告漏洞的方式，以及 station 的信任边界
 

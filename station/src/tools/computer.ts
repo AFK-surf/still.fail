@@ -1,4 +1,4 @@
-// computer: the agents operate the station's screens themselves (docs/remote-screens.md, "Agents on a screen"): a
+// computer: the agents operate the station's screens themselves ("Agents on a screen"): a
 // screenshot of one (a JPEG, the source's own frame), and a person's input on it (clicks, drags, the wheel, keys, text),
 // given in the screenshot's pixels and posted as the screen contract's 0..1. Built on the ScreenSource contract only:
 // a session keeps one view of a screen open while it uses it (closed after IDLE_MS unused), joined to the screen's

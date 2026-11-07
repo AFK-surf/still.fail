@@ -1,4 +1,4 @@
-// One view of a station's screen (still.fail apps/android app/remote/ScreenSession.kt; docs/remote-screens.md, docs/client-core.md
+// One view of a station's screen (still.fail apps/android app/remote/ScreenSession.kt
 // `screen.view`): the core's call kept open while the viewer is in sight, its values taken apart (the state, a config,
 // frames with their bytes), frames handed to the decoder (@ui.Stream: H.264 or JPEG, drawn as the picture the viewer
 // shows), each acknowledged once shown (the stream says so) or dropped; input, 只看/控制 and key frames told back to
@@ -980,7 +980,7 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     Some(Object(_) as s) => {
       // the pointer alone moved, drawn on a picture's layer: the host told, nothing built (screen_value_quiet)
       let moved = self.pointer_layer is Some(_) && cursor_moved_only(self.state, s)
-      // made to only look from elsewhere (docs/remote-screens.md "Who is on a screen"): 只看 as if chosen, 控制 a tap away
+      // made to only look from elsewhere: 只看 as if chosen, 控制 a tap away
       if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
         self.wants_control = Some(false)
       }

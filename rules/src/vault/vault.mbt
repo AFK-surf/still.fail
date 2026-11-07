@@ -1,4 +1,4 @@
-// The vault's rules (docs/vault.md, 实现约定) as station/src/vault/crypto.ts has them: whether a box certificate is a
+// The vault's rules (实现约定) as station/src/vault/crypto.ts has them: whether a box certificate is a
 // lock app device's, whether a vault or item version may follow the one kept, whether a listing is one. The same
 // answers, the same words (station/test/rules-vault.test.ts runs both on the same records). What the lock says is
 // read off `LockView` (who the members are, each device's person, kind, signing keys and whether their own); the

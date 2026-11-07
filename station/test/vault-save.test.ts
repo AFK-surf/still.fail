@@ -1,4 +1,4 @@
-// Agents asking to keep a secret in the vault (docs/vault.md agent 存入; src/vault/secrets.ts `save`): sealed to the
+// Agents asking to keep a secret in the vault ( agent 存入; src/vault/secrets.ts `save`): sealed to the
 // devices of whoever started the chat and decided by them alone, kept once their app wrote it into their vault (or,
 // without security mode, written into their plain library here), sealed to a device set up later, a command's output
 // taken without being shown, or one its owner types in on the card. Nothing waits on time: a request's answer is awaited

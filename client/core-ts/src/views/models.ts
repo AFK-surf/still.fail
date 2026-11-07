@@ -230,7 +230,7 @@ function profileLines(profiles: J[], runtime: string, m: string | null, current:
   });
 }
 
-/// The overview as the chats of `workspace` run on it (docs/multi-workspace.md): with the profiles the station says
+/// The overview as the chats of `workspace` run on it: with the profiles the station says
 /// they may (`serves`), else (a station of before it) those whose `workspaces` name it in one it joined (`joined`), every
 /// one in its home.
 export function servingIn(overview: J, workspace: string, joined: boolean): J {
@@ -366,7 +366,7 @@ export function machineMeta(session: J, now: number, offsetMin = 0): J {
   };
 }
 
-// ── the workspace's models on a station (docs/station-share.md 借用) ──
+// ── the workspace's models on a station ( 借用) ──
 
 /// A station of the workspace as `stations` lists it: its address, id, name, whether it is up, and its overview.
 type StationOf = { station: string; id: string; name: string; online: boolean; joined: boolean; overview: J; emoji: string | null; icon: string | null };

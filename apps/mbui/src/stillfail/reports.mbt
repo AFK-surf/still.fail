@@ -1,4 +1,4 @@
-// still.fail's crash reports and timings, as its own Android app sends them (docs/telemetry.md → 安卓: Crashes.kt,
+// still.fail's crash reports and timings, as its own Android app sends them (Crashes.kt,
 // BarTiming.kt): the host's (android/app/src/main/java/dev/mbui: Crashes.java, BarTiming.java), told here what only
 // the app knows: the account signed in (the crashes kept since the last report go as it), the core failing and started
 // again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. iOS's

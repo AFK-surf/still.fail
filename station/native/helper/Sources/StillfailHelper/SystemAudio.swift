@@ -1,4 +1,4 @@
-// The Mac's system output for a view that asks for it (`screen.view` with `audio: true`, docs/remote-screens.md,
+// The Mac's system output for a view that asks for it (`screen.view` with `audio: true`,
 // "System audio"): ScreenCaptureKit's audio of the display's stream (every app's sound but this helper's own; never the
 // microphone), 48 kHz stereo, made into 20 ms packets of interleaved PCM16 as Windows' stillfail-screen makes them
 // (native/screen/src/audio.rs). Nothing more of macOS's than Screen Recording, which the view has already.

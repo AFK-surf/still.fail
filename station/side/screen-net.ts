@@ -1,4 +1,4 @@
-// A screen's view over a link made worse on purpose (docs/remote-screens.md, "Wire"): a station endpoint and a member's
+// A screen's view over a link made worse on purpose ("Wire"): a station endpoint and a member's
 // on this machine, iroh between them through a UDP proxy that delays, drops and limits what it carries, the view's frames
 // from a source that makes a picture of the size an encoder would (BITRATE, 60 a second, a key frame first) whenever one
 // is asked. For each link it says the frames a second the device drew, how late they were (from capture to drawn), how

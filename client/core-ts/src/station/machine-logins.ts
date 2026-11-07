@@ -1,4 +1,4 @@
-// A station's logins to the command-line tools its agents use (docs/remote-login.md): what the core holds of them and
+// A station's logins to the command-line tools its agents use: what the core holds of them and
 // shows (the `machineLogins`, `machineLogin` and `machineLoginScreen` topics), and the loopback relay (`machineLogin.open`
 // on a host that can listen: the desktop app). Held in the link's memory as the station says them (kept, memory.ts:
 // there as the app opens again): read when its stream opens (GET /machine-logins; a station from before answers 404,

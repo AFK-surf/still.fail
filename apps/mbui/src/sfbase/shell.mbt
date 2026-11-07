@@ -11,7 +11,7 @@ pub(all) struct Shell {
   open_invite : (String) -> Unit
   /// the app gone behind, between frames (what lives only while it is shown let go)
   behind : (Source) -> Unit
-  /// a page opened where the layout has it (docs/architecture.md, the pane table): what pages, links and the app's
+  /// a page opened where the layout has it (the pane table): what pages, links and the app's
   /// own doings call (open), never the stack themselves
   open : (Page) -> Unit
   /// a page opened from the page in view (a chat's link in a message): over it where the layout keeps pages, back
@@ -20,7 +20,7 @@ pub(all) struct Shell {
   /// a detail of a chat opened where the layout has it (an agent's history by its key, jobs, letters, files, a
   /// service: the side panel's tabs on the wide frame, toggled): what a page asks of its chat (open_detail)
   detail : (Source, ChatRef, String) -> Unit
-  /// what back does where the layout has it (docs/architecture.md, the tiers' table), none where back is the
+  /// what back does where the layout has it (the tiers' table), none where back is the
   /// system's: what the keys, the frames and the pages' back call (back_step, go_back), never the stack themselves
   back : () -> (() -> Unit)?
   /// what was chosen in a list (a row of a place's list, a pick) shown where the layout has the page: on the tape the

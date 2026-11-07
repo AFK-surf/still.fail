@@ -1,4 +1,4 @@
-// FFmpeg for the media service (the native part `ffmpeg` of scripts/native.ts, carried in the media service's package: docs/station-modules.md): ffmpeg and
+// FFmpeg for the media service (the native part `ffmpeg` of scripts/native.ts, carried in the media service's package): ffmpeg and
 // ffprobe built from FFmpeg's release tarball, as LGPL-2.1-or-later only (no --enable-gpl, no --enable-nonfree, no
 // --enable-version3: nothing GPL, nothing unredistributable), with only what the media service uses (--disable-everything,
 // then the formats, codecs and filters below). Static but for the system's own libraries: on macOS its frameworks and

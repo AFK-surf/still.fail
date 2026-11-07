@@ -185,7 +185,7 @@ pub fn prepare_local_links(text: String, paths: Vec<String>, workspace: String) 
     Ok(Prepared { text: result, paths })
 }
 
-/// The process at the other end of a connected Unix socket (docs/data-outflow.md): its pid, and on macOS its audit
+/// The process at the other end of a connected Unix socket: its pid, and on macOS its audit
 /// token (`LOCAL_PEERTOKEN`, hex: the pid with its generation, which the code signature is looked up by so a pid used
 /// again by another process is not mistaken for it). Taken when the other end connected, not now.
 #[napi(object)]

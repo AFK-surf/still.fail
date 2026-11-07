@@ -52,15 +52,15 @@ export function ofMessage(m: J): J | null {
 export function cardShown(card: J): J {
   const v: J = { type: kind(card) };
   for (const field of ["assignee", "assigneeText"]) if (get(card, field) !== undefined) v[field] = card[field];
-  // An agent's request for a vault item: its id, for an app to approve it (docs/vault.md).
+  // An agent's request for a vault item: its id, for an app to approve it.
   const request = trimmed(get(get(card, "vault"), "request"));
   if (request !== null) v.vault = request;
   const ask = vaultAsk(get(card, "vault"));
   if (ask !== null) v.vaultAsk = ask;
-  // An agent's ask to sign in to a site (docs/vault.md 登录态): which, why, on which tab, how it goes.
+  // An agent's ask to sign in to a site ( 登录态): which, why, on which tab, how it goes.
   const signin = signinAsk(get(card, "signin"));
   if (signin !== null) v.signinAsk = signin;
-  // An agent's request for its person's phone (docs/adb-share.md): what it asks, and once decided, how.
+  // An agent's request for its person's phone: what it asks, and once decided, how.
   const phone = phoneAsk(get(card, "adb"));
   if (phone !== null) v.phoneAsk = phone;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
@@ -68,7 +68,7 @@ export function cardShown(card: J): J {
     const p = trimmed(get(card, "placeholder"));
     if (p !== null) v.placeholder = p;
   } else if (kind(card) === "login") {
-    // A login a person finishes from the card (docs/remote-login.md): its id, and its station when another's.
+    // A login a person finishes from the card: its id, and its station when another's.
     const login = trimmed(get(card, "login"));
     const station = trimmed(get(card, "station"));
     if (login !== null) v.login = login;

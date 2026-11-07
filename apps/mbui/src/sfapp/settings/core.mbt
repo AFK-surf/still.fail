@@ -136,7 +136,7 @@ pub(all) enum Route {
   Archive
   /// this device's adb lent to a station's agents (AdbShare.kt), by the station's address
   AdbShare(String)
-  /// the person's own lock (docs/personal-lock.md), from 安全
+  /// the person's own lock, from 安全
   PersonalLock
   /// a new profile on a station (NewProfileScreen), by its address
   NewProfile(String)

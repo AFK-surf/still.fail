@@ -251,7 +251,7 @@ for platform in $platforms; do
       put "$out/latest.json" "android/${beta:+beta/}latest.json" application/json
       ;;
     modules)
-      # Each module's package (scripts/module-bundle.ts, docs/station-modules.md): its archive, named by its version, and
+      # Each module's package (scripts/module-bundle.ts): its archive, named by its version, and
       # its feed on this channel, signed as the station's is. The archive is the same bytes whenever its version is packed
       # (the other channel's, a later commit's): one already out is checked to be these, never put over (it is kept for
       # good where it is served: cloud/src/releases.ts). A module with native parts (the media service's ffmpeg) has an

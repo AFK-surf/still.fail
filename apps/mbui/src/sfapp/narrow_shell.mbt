@@ -1,5 +1,5 @@
 // Signed in with a workspace in view, laid out Small: the shell as nodes of the window's tree (mbui's view package,
-// docs/retained.md, the way there's 4), made once and changed as the app's state does, the pages and what floats over
+// the way there's 4), made once and changed as the app's state does, the pages and what floats over
 // them old views (islands) in it:
 //
 //   - under all of it, what the frame does in every tier before its pages (signed_in_frame: what is told as the frame
@@ -281,7 +281,7 @@ fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
     // where it stands in the stack and the way a place came in
     let key = narrow_page_key(c, w)
     // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the frame is
-    // built anew; docs/retained.md, the way there's 3)
+    // built anew, the way there's 3)
     c.kept_part(
       c.id("page/kept"),
       key,

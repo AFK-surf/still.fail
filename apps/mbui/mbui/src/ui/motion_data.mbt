@@ -1,4 +1,4 @@
-// Motion as data, not commands (docs/determinism.md): a motion is said once, as it starts (or anew when its target
+// Motion as data, not commands: a motion is said once, as it starts (or anew when its target
 // changes): where it goes, by what curve, from when, and so until when. Its value at a frame is a function of that
 // frame's time. What moves says so itself, once, as it sets out (Ctx::moving: a spring's way as it is sent somewhere,
 // an Anim as it is told to go); the framework asks it at each frame's end when it is at rest, draws frames until then

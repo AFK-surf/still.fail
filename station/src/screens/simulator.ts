@@ -1,4 +1,4 @@
-// The iOS Simulators booted on this Mac as screen sources (`simulator:<udid>`, docs/remote-screens.md "Simulators"):
+// The iOS Simulators booted on this Mac as screen sources (`simulator:<udid>`):
 // people see and drive one from their app as they do the desktop, agents with the `computer` tool, while they build and
 // debug an app on it. still.fail Helper's `simulator.view` (native/helper's SimulatorView.swift, serve-sim's capture and
 // HID in vendor/serve-sim) reads the device's framebuffer and posts touches, keys and buttons to it; nothing of macOS's is

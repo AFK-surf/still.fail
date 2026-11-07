@@ -1,4 +1,4 @@
-// What a device kept before the databases per account (docs/core-db.md, Import), brought into an account's database
+// What a device kept before the databases per account (Import), brought into an account's database
 // once, when it is first opened: the former records store (the KV `records` table of `core.db`, IndexedDB `records` on
 // the web; data.ts before) and what the Rust core kept of threads and transcripts in storage chunks (`kept`). Each
 // account takes what is its own and what is of the workspaces it reaches (the first account in sign-in order whose

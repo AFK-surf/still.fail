@@ -1,4 +1,4 @@
-// A simulator's device as Apple draws it (docs/remote-screens.md "Simulators"): the case and buttons Xcode has for its device
+// A simulator's device as Apple draws it: the case and buttons Xcode has for its device
 // type (DeviceKit's .devicechrome: chrome.json, PDFs), read on this Mac and never kept anywhere but this Mac's temporary
 // files or in the repository: they are Apple's. Each panel (an iPhone Duo's two) is told clients as geometry in the case's
 // own points; its pictures, turned as the device stands, are made as a client asks. The case is one picture with the panel's

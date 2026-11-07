@@ -1,4 +1,4 @@
-// Time a view waits on, by a length it declares, on the frames' clock (docs/determinism.md): whether something has
+// Time a view waits on, by a length it declares, on the frames' clock: whether something has
 // held so long (a menu opening once the pointer rests on it, a toast's time), whether something happened less than so
 // long ago (letters typed together, a tip closed just now). The framework reads its clock for them; the view says only
 // the length, and a wake comes at the moment a wait ends, no frames between.

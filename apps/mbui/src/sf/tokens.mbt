@@ -140,7 +140,7 @@ pub(all) struct Bars {
 }
 
 ///|
-/// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
+/// A row's roles on the screen in force (the same on every screen and what differs): how high it
 /// is at least (the items' least: one height for a row by the native input), its title's words and its note's, a
 /// tick's box, a short field and a switch in it. Touch's: a finger's (the phone's mRowTitle, its body's 15, the
 /// scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by 36, a switch 44 by 26, its mSwitch); keyboard and
@@ -1265,7 +1265,7 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// The native input (原生操控: docs/architecture.md, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
+/// The native input (原生操控, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
 /// the app is started, the same the whole run: the theme's sizes (words, rows, what a press reaches), how what shows
 /// only under a pointer is reached, what Enter does, scroll bars, and with the screen's tier how the presenters show
 /// (a sheet or beside what opened it) and how search is opened (a field over the list or ⌘K). As the host tells it at
@@ -1335,7 +1335,7 @@ fn screen_layout(width : Double) -> Layout {
 }
 
 ///|
-/// The theme for this frame (docs/architecture.md, the terms): its sizes by the native input alone (rule 4: the screen
+/// The theme for this frame (the terms): its sizes by the native input alone (rule 4: the screen
 /// says how things are laid out, never how large they are), a finger's on a touch device (Android's app, a tablet's
 /// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
 /// or dark as set: call at the top of a view.
@@ -2531,7 +2531,7 @@ pub let quote_pop_h : @ui.Len = Fixed(26.0)
 
 ///|
 /// The widest a page is laid out as the web's narrow app lays its pages out (max-width 640, where its narrow app takes
-/// over): wider, as its desktop pages are. A page's own width, not the tier (docs/architecture.md Pages).
+/// over): wider, as its desktop pages are. A page's own width, not the tier ( Pages).
 pub let page_narrow_most : Double = 640.0
 
 ///|
@@ -2892,7 +2892,7 @@ pub let menu_row_min : Double = 36.0
 
 ///|
 /// A small panel's row (a menu's item, the `@` menu's chat, a picker's) as high as the screen's at least (Theme::rows
-/// pick: keyboard and mouse's 34, a finger's 44, docs/architecture.md: touch targets 44 at least with touch), for a row
+/// pick: keyboard and mouse's 34, a finger's 44, touch targets 44 at least with touch), for a row
 /// given as a style.
 pub fn pick_high() -> @ui.Style {
   if theme().touch {

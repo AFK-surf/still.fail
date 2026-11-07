@@ -1,5 +1,5 @@
 // What a person does on the device, as a station's screen takes it (still.fail apps/android app/remote/Input.kt;
-// docs/remote-screens.md, `screen.input`): points in 0..1 of the frame, buttons as the DOM's bit mask, keys by the DOM's
+// `screen.input`): points in 0..1 of the frame, buttons as the DOM's bit mask, keys by the DOM's
 // KeyboardEvent names, typed text as it is committed. And the frame's own zoom and the trackpad's pointer, on this
 // device only (ScreenViewer.kt ViewZoom: mbui's @kit.Zoom; PadPointer).
 
@@ -166,7 +166,7 @@ fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
 }
 
 ///|
-/// The station's pointer's shape (a CSS cursor's name: docs/remote-screens.md `cursor`) as this device draws its own.
+/// The station's pointer's shape (a CSS cursor's name) as this device draws its own.
 fn cursor_of_shape(shape : String) -> @ui.Cursor {
   match shape {
     "pointer" => Hand

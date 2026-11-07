@@ -1,5 +1,4 @@
-// smooth.mbt's corners for the renderers, number for number; scripts/chk corner-sl makes corner_sl.h and web/host.js
-// from it and checks the numbers. MB_CORNER_SCALARS takes the scalar part alone, as C (apple_views.m).
+// smooth.mbt's corners for the renderers; scripts/chk corner-sl makes corner_sl.h and web/host.js from it.
 //
 // How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1
 // superellipse(1.5) over r a quarter longer; between, as far as the room goes.

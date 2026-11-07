@@ -1,4 +1,4 @@
-// This Windows machine's display as a screen source (`desktop`, docs/remote-screens.md): stillfail-screen
+// This Windows machine's display as a screen source (`desktop`): stillfail-screen
 // (station/native/screen) captures the main display with Windows.Graphics.Capture, encodes H.265 or H.264 with Media
 // Foundation (the hardware encoder where there is one), or a JPEG a picture for a view that takes no H.264, and posts
 // the input with SendInput. Each view is a process of its own, started with `view` and spoken to on its standard input

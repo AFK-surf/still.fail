@@ -1,5 +1,5 @@
 // The bar floating at the top of a file opened in the Small tier (viewer_head's, fpHead) as nodes of the window's tree
-// (the way there, docs/retained.md 4): what it shows bound to what says it as that changes (the file's name, its kind
+// (the way there 4): what it shows bound to what says it as that changes (the file's name, its kind
 // and size, the window's width, its theme, how far the viewer is in), its tools nodes of their own (tool_node), never
 // narrower once open: as wide as it is laid out at each change that sets how wide it is (View::keeps_width: another
 // tool, another name, the window, the theme, the system's size of words), whatever frames come between.

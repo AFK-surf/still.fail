@@ -81,7 +81,7 @@ pub fn Ctx::semantics(
   if node < 0 || node >= self.count {
     return
   }
-  // (held by its node, docs/retained.md the way there's 1: the frame's `sems` are found from the nodes, sems_found)
+  // (held by its node the way there's 1: the frame's `sems` are found from the nodes, sems_found)
   self.nodes[node].sem = Some({
     node,
     id,

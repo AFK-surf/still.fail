@@ -396,9 +396,9 @@ export function linkTarget(url: string, origin: string): J {
   if (s.length === 5 && s[0] === "w" && s[2] === "s" && s[4] === "adb") return { opens: "adbShare", workspace: s[1], station: s[3] };
   // A station's web service on a page of its own (its "open on its own"): the service over the app.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "services" && s[5] !== "") return { opens: "service", workspace: s[1], station: s[3], service: s[5] };
-  // One of a station's screens (docs/remote-screens.md), as its agents' `screen` tool links it.
+  // One of a station's screens, as its agents' `screen` tool links it.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "screen" && s[5] !== "") return { opens: "screen", workspace: s[1], station: s[3], screen: s[5] };
-  // A login an agent started on a station (docs/remote-login.md), as its `login` tool links it: its card on the
+  // A login an agent started on a station, as its `login` tool links it: its card on the
   // station's page.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "login" && s[5] !== "") return { opens: "login", workspace: s[1], station: s[3], login: s[5] };
   if (s.length === 4 && s[0] === "o") {

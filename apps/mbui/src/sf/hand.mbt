@@ -1,4 +1,4 @@
-// How a thing answers the hand (docs/architecture.md: the input only says how a thing answers it, never what is shown
+// How a thing answers the hand (the input only says how a thing answers it, never what is shown
 // where): what a pointer over a thing shows, a press's ripple, a menu held. The pages ask these, never @ui.pointing().
 
 ///|
@@ -20,7 +20,7 @@ pub fn pointed_or_finger(c : @ui.Ctx, pointed : Bool) -> Bool {
 
 ///|
 /// Whether what a row's ⋯ would offer is had by holding the row, its ⋯ not drawn (touch's: the native input,
-/// docs/architecture.md, what only a pointer's hover would show), else by its ⋯ under the pointer or a right click.
+/// what only a pointer's hover would show), else by its ⋯ under the pointer or a right click.
 /// The same for either hand on one screen: the boxes never follow the hand (hand_layout_wbtest).
 pub fn more_held() -> Bool {
   (native_input() is Finger)
@@ -28,7 +28,7 @@ pub fn more_held() -> Bool {
 
 ///|
 /// Whether this device types on a keyboard raised on asking and short of a computer's keys (Esc, Tab, the arrows, ⌘
-/// held), and points with a finger resting on nothing (touch's: the native input, docs/architecture.md). What drives
+/// held), and points with a finger resting on nothing (touch's: the native input). What drives
 /// another machine's screen from it makes up for both: a keyboard to raise, a keys row, a finger as a trackpad, its
 /// tools under the thumb, and a page of the machine's browser laid out as this device's own browser would lay it out.
 /// With keyboard and mouse none of that: the keyboard types into the screen as it is, the mouse is its pointer, and its

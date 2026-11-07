@@ -1,4 +1,4 @@
-// Apple Push Notification service (docs/notifications.md), for the iOS app: APNs' HTTP/2 API, straight from the
+// Apple Push Notification service, for the iOS app: APNs' HTTP/2 API, straight from the
 // worker, as the team's APNs key (APNS_KEY, its JSON: { keyId, teamId, key: the .p8's PEM, topic? the app's bundle id }).
 // The key signs an ES256 JWT, which APNs takes for 20 to 60 minutes: kept for 40.
 import { importPKCS8, SignJWT } from "jose";

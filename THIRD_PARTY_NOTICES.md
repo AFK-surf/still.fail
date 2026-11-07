@@ -20,7 +20,7 @@ still.fail Helper (the station's macOS app) builds in the simulator capture and 
 
 ## scrcpy's server in the station's release
 
-The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`, docs/remote-screens.md "Android").
+The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`).
 
 ## agent-desktop in the station's release
 

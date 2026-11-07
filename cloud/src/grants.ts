@@ -5,7 +5,7 @@
 // until it runs out. It lasts MEMBER_TTL_SEC and a device asks for a new one each day it can; what is revoked
 // meanwhile (a member removed, a role changed, a session signed out) stations learn from still.fail cloud (directory.ts).
 // Stations accept both generations of issuer/type. Newly issued credentials use stillfail; already issued
-// credentials remain valid until expiry or revocation (see docs/rename-still-fail.md).
+// credentials remain valid until expiry or revocation.
 import { importJWK, SignJWT, type JWK } from "jose";
 import { nowSeconds } from "./auth";
 import type { Env } from "./env";

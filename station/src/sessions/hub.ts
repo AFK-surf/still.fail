@@ -14,7 +14,7 @@
 // read in their chats), others.ts (other chats), messages.ts (session_send), titles.ts, lifecycle.ts (sessions and
 // chats made, archived, deleted), review.ts (the archive suggestion). The tools (src/tools/) are built on it.
 //
-// Redesigned where docs/station-ts.md asks: no settle-by-polling and no handing over of processes: at a handover the
+// Redesigned where asks: no settle-by-polling and no handing over of processes: at a handover the
 // hub holds turns, waits until every actor's queue has run what it had (`flushed`, pushed, not polled), and snapshots
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
@@ -121,7 +121,7 @@ export type HubOptions = {
   places?: Places;
   /// A session's page in still.fail (its /o/ link), when the station is in a workspace.
   link?: (key: string) => string | undefined;
-  /// The workspaces the station is in now, its home one first (docs/multi-workspace.md); none outside any.
+  /// The workspaces the station is in now, its home one first; none outside any.
   workspaces?: () => string[];
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
@@ -344,7 +344,7 @@ export class Hub {
     return ws === null || all.includes(ws);
   }
 
-  /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
+  /// The station left one of its workspaces but is still in others: that workspace's
   /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
   async leftWorkspace(ws: string) {
     // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
@@ -1115,7 +1115,7 @@ export class Hub {
   }
 
   /// Where a connect's threads live; the rule the v10 migration follows too. A Feishu connect's are its own (its people's
-  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md).
+  /// ids are the app's own, so another bot's in the same chat are other people).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
     if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
@@ -1144,7 +1144,7 @@ export class Hub {
     return s?.ws ?? this.workspaces()[0] ?? null;
   }
 
-  /// The profiles sessions of workspace `ws` may run on (docs/multi-workspace.md): every one for the home workspace's.
+  /// The profiles sessions of workspace `ws` may run on: every one for the home workspace's.
   profilesIn(ws: string | null): Profile[] {
     const home = this.workspaces()[0] ?? null;
     return this.config().profiles.filter((p) => p.enabled !== false && allowedIn(p, ws, home));

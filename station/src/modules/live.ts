@@ -1,4 +1,4 @@
-// The modules' lives (docs/station-modules.md): each one config.json names started beside the station once the station
+// The modules' lives: each one config.json names started beside the station once the station
 // process before it is gone (at a handover two would share the module's data), with the station's local API (local.ts)
 // listening for it; started again whenever it ends, a second after at first, at most a minute apart; ended as the
 // station stops, or as config.json stops naming it (or names it otherwise: then started again as it now says, config.json

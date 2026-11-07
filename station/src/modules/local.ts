@@ -1,4 +1,4 @@
-// The station's local API for a module (docs/station-modules.md): HTTP/1.1 on a socket of its own
+// The station's local API for a module: HTTP/1.1 on a socket of its own
 // (STILLFAIL_STATION_SOCKET, mode 600), each request with the module's token (`authorization: Bearer <token>`) and the
 // member it acts for (`stillfail-viewer`, as the station told it: modules.ts viewerHeader). The drive is the station's,
 // with its rules for that member (a viewer reaches the folders pinned in their workspace only, a member who may write

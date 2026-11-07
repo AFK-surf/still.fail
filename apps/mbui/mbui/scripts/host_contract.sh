@@ -1,5 +1,5 @@
 #!/bin/bash
-# The host's contract and the text's (docs/determinism.md, "What is compared, and where"), on one host:
+# The host's contract and the text's ("What is compared, and where"), on one host:
 #
 #   scripts/host_contract.sh HOST build         kitdemo built for the host
 #   scripts/host_contract.sh HOST record        kitdemo's controls page run on the host, with test/host/controls.drive's

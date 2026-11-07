@@ -1,4 +1,4 @@
-// Signing in on the web without the core (docs/client-core.md): this page goes to still.fail cloud's sign-in itself
+// Signing in on the web without the core: this page goes to still.fail cloud's sign-in itself
 // (PKCE: GET /v1/auth/google/start, then POST /v1/auth/token with the code it brings back) and leaves the account
 // it got for the page that comes next, whose core takes it in as its own (`take`, the core's `migrate`), as a page
 // before the core handed over the accounts it kept. The cloud is this page's own origin (its /v1 routes).

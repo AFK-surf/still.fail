@@ -1,5 +1,5 @@
 // What another app shares into still.fail (a link from a browser or a video app, some text): the chat it goes to
-// (docs/share-in.md). The `shareIn` view lists the chats it can go to (the workspace's own chats on still.fail's page,
+//. The `shareIn` view lists the chats it can go to (the workspace's own chats on still.fail's page,
 // as the sidebar has them, newest first), the one it went to last time from the same site first; `shareIn.open` puts
 // it in the composer of the one picked (or of a new chat on a station), where the person adds to it and sends it as
 // anything written there: the page opens that chat. One composer, not one of the sheet's own beside the chat's.

@@ -1,5 +1,5 @@
 // The still.fail client core (client/core-ts) in Hermes on its Rust shell (client/shell), for the native hosts:
-// apple_core.mm (macOS, iOS), android_core.c. See core/README.md.
+// apple_core.mm (macOS, iOS), android_core.c..
 //
 // One core, one UI client. What the UI says goes in with mb_core_send as the protocol's JSON (protocol.ts:
 // {id, call, params}, {id, subscribe: {topic, ...}}, {id, unsubscribe: true}, ...), with bytes beside it when a call

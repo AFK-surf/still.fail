@@ -3,6 +3,6 @@
 export type Offered = { id: string; package: string };
 
 export const CATALOG: readonly Offered[] = [
-  // Photos, videos and books on the station (docs/media-app.md, media/service).
+  // Photos, videos and books on the station (media/service).
   { id: "media", package: "media" },
 ];

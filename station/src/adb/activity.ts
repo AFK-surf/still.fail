@@ -1,4 +1,4 @@
-// Observe adb's unencrypted transport (the phone's own adb session, docs/adb-share.md) without keeping its contents.
+// Observe adb's unencrypted transport (the phone's own adb session) without keeping its contents.
 // A station's adb server holds one connection while many commands run over it. A connection or its CNXN is not use:
 // OPEN starts a service; WRTE/OKAY on that service show a long-running one still in use. The two services the station
 // opens itself to keep lending enabled are excluded. An older phone's STLS makes the rest opaque, so stop observing.

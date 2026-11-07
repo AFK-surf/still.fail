@@ -1,4 +1,4 @@
-// Playing a video (docs/media-service.md 影视): directly (the client reads the file through the drive) when it decodes
+// Playing a video ( 影视): directly (the client reads the file through the drive) when it decodes
 // the file's container and codecs, else HLS made here on demand: 6-second fragmented-MP4 segments, each made by its
 // own ffmpeg run when asked (the next few after it too), the video remuxed when the client decodes its codec (the
 // segments then begin at its keyframes), else made H.264 by the encoder there is (VideoToolbox, openh264; x264 in a

@@ -1,4 +1,4 @@
-// The station's accounts (docs/station-ts.md `accounts`): its profiles as the pages edit them, their checks and
+// The station's accounts: its profiles as the pages edit them, their checks and
 // allowances, sign-ins, profiles on the machine's own login, the machine login's renewed token, and the models the
 // automatic decisions may use (the Rust station's admin/edits.rs and decision.rs, the profile parts of admin/mod.rs and
 // views.rs, and what server.rs wires for them).
@@ -130,7 +130,7 @@ export type AccountsDeps = {
   checkOnStart?: boolean;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
-  /// The workspaces the station is in, its home one first (docs/multi-workspace.md); none by default.
+  /// The workspaces the station is in, its home one first; none by default.
   workspaces?: () => string[];
   /// Profiles other stations share with this one (share/index.ts): how they are doing is their host's to say, and
   /// what the overview says of each profile's sharing.
@@ -432,7 +432,7 @@ export class Accounts {
   }
 
   /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background). `workspaces`: the
-  /// joined workspaces whose sessions may run on it (docs/multi-workspace.md; [] or null: the home one's only), set by
+  /// joined workspaces whose sessions may run on it ([] or null: the home one's only), set by
   /// those who manage the station only; kept as those of the station's joined workspaces withheld from it, so one it
   /// joins later runs on it too.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
@@ -1452,7 +1452,7 @@ export class Accounts {
   }
 
   /// The overview's `profiles`: all of them, to the members of every workspace the station is in alike
-  /// (docs/multi-workspace.md); `workspaces` says which joined ones' chats run on each.
+  ///; `workspaces` says which joined ones' chats run on each.
   profilesView(viewer?: Viewer): Json[] {
     const raw = this.deps.config.raw();
     const config = hubConfig(raw, this.deps.data, this.found);

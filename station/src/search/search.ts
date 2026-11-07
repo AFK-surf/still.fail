@@ -1,4 +1,4 @@
-// What the station finds for a search (docs/search.md): looked for by a thread of its own (search/worker.ts) in the
+// What the station finds for a search: looked for by a thread of its own (search/worker.ts) in the
 // station's data as it is then; nothing indexed. The thread is started with the station and stays; one that dies is
 // started again when next asked. The machine's files are asked beside it (search/files.ts).
 import { Worker } from "node:worker_threads";

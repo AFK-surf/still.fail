@@ -1,6 +1,6 @@
 # still.fail for Chrome and Edge
 
-Sends what is in front of you to one of your still.fail chats (docs/share-in.md): the toolbar button sends the page;
+Sends what is in front of you to one of your still.fail chats: the toolbar button sends the page;
 right-click a page, a link, a video or selected words for the same. A small window opens on still.fail's `/share`
 (signed in as your still.fail page is, in the same browser) listing your chats (the one the same site's links went to
 last is first). Pick one, or a new chat, and it opens in your still.fail tab (a new tab if none is open) with what you

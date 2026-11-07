@@ -60,7 +60,7 @@ export function checkConfig(raw: any, _data: string): void {
     if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);
     const roots = raw.drive.roots;
     if (roots !== undefined && roots !== null && (!Array.isArray(roots) || roots.some((r: unknown) => typeof r !== "string"))) throw new Error("drive.roots: a list of paths");
-    // Those of the workspaces the station joined (docs/multi-workspace.md), by workspace id.
+    // Those of the workspaces the station joined, by workspace id.
     const joined = raw.drive.workspaces;
     if (joined !== undefined && joined !== null && (!isObject(joined) || Object.values(joined).some((l) => !Array.isArray(l) || l.some((r: unknown) => typeof r !== "string")))) throw new Error("drive.workspaces: a list of paths for each workspace");
   }
@@ -87,7 +87,7 @@ export function checkConfig(raw: any, _data: string): void {
     if (p.env !== undefined && p.env !== null && (!isObject(p.env) || Object.values(p.env).some((v) => typeof v !== "string"))) {
       throw new Error("invalid type: expected a map of strings");
     }
-    // The joined workspaces kept from it (docs/multi-workspace.md).
+    // The joined workspaces kept from it.
     if (p.withheld !== undefined && p.withheld !== null && (!Array.isArray(p.withheld) || p.withheld.some((w: unknown) => typeof w !== "string"))) {
       throw new Error("invalid type: expected a sequence of strings");
     }

@@ -2,7 +2,7 @@
 # Lays out the client core for an app that embeds it on Node (an Electron main process, as Comma's desktop app does)
 # in DIR/stillfail-core for PLATFORM (default darwin-arm64): client/core-ts's Node host bundled as one CommonJS file,
 # the mesh addon it connects to stations with (prebuilt: scripts/native.ts), and typings for what the embedding app
-# calls. Nothing is published here. How an app uses it: docs/core-ts.md, "Account providers and embedding".
+# calls. Nothing is published here. How an app uses it, "Account providers and embedding".
 #   stillfail-core/core-ts.js       (hosts/node.ts: `start`, `commaAccountProvider` with `bearer` or `transport`, `stillfailAccountProvider`)
 #   stillfail-core/core-ts.d.ts     (their types)
 #   stillfail-core/mesh.node        (the addon; the app sets STILLFAIL_MESH_NATIVE to it before `start`)
@@ -36,7 +36,7 @@ cat > "$dir/package.json" <<EOF
   "name": "@stillfail/core-node",
   "version": "0.1.$build",
   "private": true,
-  "description": "The still.fail client core on Node, for apps that embed it (docs/core-ts.md)",
+  "description": "The still.fail client core on Node, for apps that embed it",
   "main": "core-ts.js",
   "types": "core-ts.d.ts",
   "os": ["${platform%%-*}"],
@@ -78,7 +78,7 @@ export declare const stillfailAccountProvider: AccountProviderFactory;
 export type CoreHandle = {
   /** A UI connected: its id, for `receive` and the listener. */
   connect(): ClientId;
-  /** A UI's message (the core protocol, docs/client-core.md), as JSON. */
+  /** A UI's message (the core protocol), as JSON. */
   receive(client: ClientId, json: string): void;
   disconnect(client: ClientId): void;
   close(): Promise<void>;

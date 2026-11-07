@@ -1,4 +1,4 @@
-// What is made once (docs/retained.md, the way there's 2): a node made by what it is filled with (`fill`, a call of
+// What is made once (the way there's 2): a node made by what it is filled with (`fill`, a call of
 // Ctx::box or Ctx::text that makes that one node and nothing in it), what it holds made the same way, each followed by
 // a watch of its own (mbui/signals' Watch). Each frame what is made is put among the frame's nodes where its holder is
 // built (Ctx::made), each node as it was made where nothing its fill read changed, filled anew in its place where
@@ -72,7 +72,7 @@ pub fn made_box(fill : (Ctx) -> Unit, kids? : Array[Made] = []) -> Made {
 /// holds it, kept as its nodes by a watch of its own (Ctx::kept_as_nodes): built again only as what it read changes or
 /// what it is built from besides (`key`, worked out where it is put) does. Made once where it is (`name`), whatever
 /// else of the frame is built anew: what is made once holds it, and what it reads it reads itself, never what was
-/// handed it as it was made (docs/retained.md, the way there's 3: the old view as an island). `read_out`: what reads
+/// handed it as it was made (the way there's 3: the old view as an island). `read_out`: what reads
 /// the widgets reads it.
 pub fn made_island(
   name : String,
@@ -96,7 +96,7 @@ pub fn made_island(
 
 ///|
 /// What `body` builds the old way (Ctx::box and the rest), built each time it is put, kept as nothing: the frame's
-/// watch follows what it reads, as it follows the rest of the frame built the old way (docs/retained.md, the way
+/// watch follows what it reads, as it follows the rest of the frame built the old way (the way
 /// there's 3: the old view in what is made once, its islands kept as they are where it is the frame's).
 pub fn made_old(body : (Ctx) -> Unit) -> Made {
   let held = Ref(None)
@@ -367,7 +367,7 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
 
 ///|
 /// Node `n`, made and kept, put in `slot` (the next of the frame's) under what is being built, as alloc_part would
-/// put one made there; what the frame is told of it said again (docs/retained.md, the way there's 1: what its node
+/// put one made there; what the frame is told of it said again (the way there's 1: what its node
 /// does not hold).
 fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
   while self.nodes.length() <= slot {
@@ -413,7 +413,7 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 
 ///|
 /// A press on target `id` (a tap, a click, Enter or Space where it takes the focus), let go on it, does `f`: then, as it
-/// is let go, outside any build, not read as the next frame is built (docs/retained.md, the model's 5: acting is a
+/// is let go, outside any build, not read as the next frame is built (the model's 5: acting is a
 /// callback). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
 /// hand over it). What a frame read of the press (Ctx::clicked) it reads as before.
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {

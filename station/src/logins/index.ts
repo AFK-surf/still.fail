@@ -1,4 +1,4 @@
-// The station's logins to the command-line tools its agents use (docs/remote-login.md): each station logs in itself,
+// The station's logins to the command-line tools its agents use: each station logs in itself,
 // the login landing in its own user's home and keychain (machine-wide: every chat's agent uses it); a person finishes it
 // from their client, in their own browser. One way for every tool (用户定: no service supported one by one): the tool's
 // own login command is run (run.ts), and what it asks of a person is read from what it does. Only agents start one (用户

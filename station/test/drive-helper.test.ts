@@ -1,4 +1,4 @@
-// The drive's protected folders through still.fail Helper (src/drive/fs.ts, src/helper/files.ts; docs/drive.md): which
+// The drive's protected folders through still.fail Helper (src/drive/fs.ts, src/helper/files.ts): which
 // path goes through the helper, the bytes streamed both ways, what the station checks before asking and what the helper
 // is told, a grant missing (the window, once an attempt), and the helper ending in the middle of a read. The helper is a
 // fake in this process, speaking native/helper's `files.*` as Files.swift does, on the real file system (macOS's

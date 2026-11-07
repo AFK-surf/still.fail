@@ -1,4 +1,4 @@
-// A sign-in for a new profile (the overview's `logins`, docs/client-core.md): a step the station answers for (started,
+// A sign-in for a new profile (the overview's `logins`): a step the station answers for (started,
 // its code taken) shows as the call answers, not once the overview is next told; what the station tells after it is
 // what shows, and an answer that comes after the station told more is not shown over it.
 import assert from "node:assert/strict";

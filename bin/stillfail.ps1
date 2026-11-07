@@ -5,7 +5,7 @@
 #   stillfail update [--beta|--stable]            updates this station to its cloud's latest release, on its channel
 #   stillfail station enroll <cloud-origin> <token> [--provider comma]
 #   stillfail station id
-#   stillfail lock status|reset                   the workspace lock on this station (docs/workspace-lock.md)
+#   stillfail lock status|reset                   the workspace lock on this station
 # The data is in $env:STILLFAIL_DATA, default ~\.stillfail.
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSScriptRoot

@@ -184,9 +184,9 @@ export class Admin {
             stage: (name) => uploadPath(join(data, "uploads"), name),
           })
         : []),
-      // What macOS lets still.fail Helper do here, a grant asked for from a member's app (docs/remote-screens.md "Grants").
+      // What macOS lets still.fail Helper do here, a grant asked for from a member's app.
       ...(deps.grants ? permissions({ grants: deps.grants }) : []),
-      // The screens members see and drive (docs/remote-screens.md); a view of one is a stream of its own (mesh/screens.ts).
+      // The screens members see and drive; a view of one is a stream of its own (mesh/screens.ts).
       ...(deps.screens
         ? [
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
@@ -393,7 +393,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
 
 /// A simulator's logs, apps and restart: only for those who may drive it (what apps log may be private; a read-only
 /// member only sees the screen). 404 no such screen, 405 nothing to debug on it, 502 simctl failed.
-/// What a person does of a device as Device Hub would (docs/remote-screens.md "Simulators"), each with what it is told.
+/// What a person does of a device as Device Hub would, each with what it is told.
 function simActions(screens: ScreenHub) {
   const route = (path: string, act: (d: SimDebug, said: Record<string, unknown>) => Promise<void>) => ({
     method: "POST",

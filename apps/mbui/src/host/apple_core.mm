@@ -1,4 +1,4 @@
-// The still.fail client core in Hermes, for the macOS and iOS hosts (core_api.h; core/README.md): the same engine
+// The still.fail client core in Hermes, for the macOS and iOS hosts (core_api.h): the same engine
 // still.fail's Android app runs it in (React Native 0.81.4's Hermes, its JSI; apps/android/core/src/main/cpp/engine.cpp,
 // whose loop this is, without JNI), on the same Rust shell (client/shell), the same bytecode (core.hbc: scripts/core.sh
 // hermes). Built by scripts/core.sh engine into out/core/<target>/libmbui_core.a (Objective-C++, ARC), which the apps

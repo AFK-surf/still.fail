@@ -1,4 +1,4 @@
-// A chat shared with another workspace, as the agents there use it (docs/chat-share.md): two stations of different
+// A chat shared with another workspace, as the agents there use it: two stations of different
 // workspaces, their hubs and chat shares wired as agents.ts wires them, the transport between them a direct call.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";

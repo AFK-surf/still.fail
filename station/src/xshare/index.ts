@@ -1,4 +1,4 @@
-// Chats shared with other workspaces (docs/chat-share.md). As stations share profiles and skills (share/index.ts), it
+// Chats shared with other workspaces. As stations share profiles and skills (share/index.ts), it
 // is between the stations only, over the station transport; the control plane says nothing of it beyond each
 // workspace's own stations.
 //
@@ -16,7 +16,7 @@
 // - Each of these lapses once unused for XSHARE_IDLE_MS (6 hours): a chat's share with a workspace whose agents neither
 //   read it nor wrote to it (store/store.ts `used`; a person shares it again), and an answer to a session that neither
 //   wrote nor was answered (`answered`).
-// - A station in several workspaces (docs/multi-workspace.md): a chat shared from here is its own workspace's (what its
+// - A station in several workspaces: a chat shared from here is its own workspace's (what its
 //   link names); one shared with this station is the workspace's that took it (`as`: the workspace a member of which
 //   said to take chats from its host, which its sessions alone see), the home one for what was kept before. Requests
 //   for a session of one of those say so (`as`), as the host may share this station's other workspaces too. A chat

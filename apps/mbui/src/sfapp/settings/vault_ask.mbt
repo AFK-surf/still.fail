@@ -1,5 +1,5 @@
 // An agent's request about a vault item as a card (VaultAsk.tsx AskCard, VaultApproval.tsx VaultActions): to use one
-// or to keep one (docs/vault.md 申请和授权, agent 存入). One card wherever such a request is answered: in place of the
+// or to keep one ( 申请和授权, agent 存入). One card wherever such a request is answered: in place of the
 // agent's post in its chat (src/sfapp/vault_approval.mbt) and among the vault page's waiting requests. A card of words
 // (@sf.card): what is asked in its title, the command it is for, a risk only where there is one, and the answer at its
 // foot: the answer most give as the one solid button (允许 / 存入), the other beside it (拒绝 / 不存), how long a use is

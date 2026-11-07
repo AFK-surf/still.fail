@@ -1,5 +1,5 @@
 // A device not yet confirmed in the workspace's safe mode (its lock): what it shows in the workspace's place
-// (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen; docs/workspace-lock.md「新设备」).
+// (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen;「新设备」).
 // Every station of a locked workspace refuses such a device, so its chats would only say they are offline. Nothing is
 // asked by itself (the person who will compare the codes asks: 发送批准请求, the core's `lock.pair`); the core finds the
 // person's trusted devices, one of them shows a code, it is typed here into six boxes (`lock.pairCode`), and how that

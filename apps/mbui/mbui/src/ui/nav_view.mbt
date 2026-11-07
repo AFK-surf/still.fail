@@ -1,4 +1,4 @@
-// A stack of pages (Nav) held by the window's tree (src/view; docs/retained.md, the way there's 4): the stack a node of
+// A stack of pages (Nav) held by the window's tree (src/view, the way there's 4): the stack a node of
 // its own, each page in it a node made as the page is put on the stack and let go as it leaves it (what the page made
 // for it forgotten then: Nav's on_leave), and in it, while the page shows (the top; the one beside it as one moves),
 // the page itself, an old view (`old`) built the old way. Which pages show and where they are drawn are bindings of

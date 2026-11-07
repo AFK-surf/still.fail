@@ -1,4 +1,4 @@
-// 个人锁 (docs/personal-lock.md), a page of settings' 安全: which devices of the person's sign for them, on any app (a phone
+// 个人锁, a page of settings' 安全: which devices of the person's sign for them, on any app (a phone
 // or a computer alike). It is turned on here, and what asks for it (a request for the person's phone) sends people here. What
 // it has to say comes on the core's `adbShare`.
 

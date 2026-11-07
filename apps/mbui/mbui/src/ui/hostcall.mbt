@@ -858,7 +858,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
       let c = g()
       let (r, gg, b) = c.clear
       // what of it differs from the frame presented before, the part a host that keeps its picture draws again
-      // (docs/partial-redraw.md)
+      //
       let t0 = h_now()
       let parts = presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
       presented_ms.val = h_now() - t0

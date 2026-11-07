@@ -5,7 +5,7 @@
 //   MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
 //   MBUI_DL_BENCH=<n> MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
 //
-// With MBUI_DL_FROM, partial redraw (docs/partial-redraw.md): the list before drawn whole, then this one only where it
+// With MBUI_DL_FROM, partial redraw: the list before drawn whole, then this one only where it
 // differs from it (@damage, @hostapi.render_dirty), as a window's frames are drawn, then this one again (nothing of it
 // differing); the picture is what the target holds then (<out.png>), and this list drawn whole again into it
 // (<out>.whole.png): the two the same to the byte.

@@ -1,4 +1,4 @@
-// A login's loopback listener on a shell's bridge (hosts/bridge.ts `listen`; docs/remote-login.md), the shell here in
+// A login's loopback listener on a shell's bridge (hosts/bridge.ts `listen`), the shell here in
 // JavaScript (node-shell.ts) as the Android app's is in Kotlin (Loopback.kt): what comes to it, a request at a time with
 // its method, path, headers and body, answered once; the port taken there refused; closed with its scope.
 import assert from "node:assert/strict";

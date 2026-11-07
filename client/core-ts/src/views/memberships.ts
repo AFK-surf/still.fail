@@ -1,4 +1,4 @@
-// One station in several workspaces (docs/multi-workspace.md), as the clients show it: which stations of the viewer's
+// One station in several workspaces, as the clients show it: which stations of the viewer's
 // other workspaces could be added to this one, the workspaces a station is in, and `station.join`, which adds one.
 //
 // Topics:

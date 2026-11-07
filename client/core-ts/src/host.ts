@@ -136,7 +136,7 @@ export interface Host {
   /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
   savedRead?(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError>;
 
-  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the Apple
+  /// Values the system keeps sealed ("设备上的钥匙"): an app's only (Android's Keystore; the Apple
   /// Keychain; Windows' DPAPI; the Electron app's safeStorage); a web page has none. `user: true`: reading it takes the
   /// person (biometrics or the device's credential: on Apple's systems Touch ID, Face ID or the device's password; the
   /// Electron app's Touch ID on a Mac that has it), `reason` said in the prompt; `user: false`: sealed at rest, read
@@ -157,7 +157,7 @@ export interface Host {
   secureAsk?(reason: string): Effect.Effect<void, HostError>;
 
   /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in
-  /// account (docs/core-db.md). Fails when it cannot be opened, or another process holds it (`SqlError` "busy").
+  /// account. Fails when it cannot be opened, or another process holds it (`SqlError` "busy").
   /// A host without one keeps nothing on the device.
   openDb?(name: string): Effect.Effect<Sql, HostError | SqlError>;
   /// A database in memory, for an account whose file cannot be opened (another process holds it): kept this run only
@@ -165,7 +165,7 @@ export interface Host {
   memoryDb?(): Sql | undefined;
   /// An account's database gone (it signed out, or its file was damaged and is made again).
   deleteDb?(name: string): Effect.Effect<void, HostError>;
-  /// An error the core goes on after, told to the host's error tracking (the web's goes to its page's, docs/telemetry.md):
+  /// An error the core goes on after, told to the host's error tracking (the web's goes to its page's):
   /// one that says why the device keeps less than it should (an account's database that cannot be opened, or was made
   /// again). Its message names no one's content. A host without error tracking has none.
   report?(error: Error): void;
@@ -197,7 +197,7 @@ export interface Host {
   /// native host has one.
   tcp?(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
 
-  /// This device's own adb (the shell's adb.rs, docs/adb-share.md): paired once with adbd's pairing port, one session
+  /// This device's own adb (the shell's adb.rs): paired once with adbd's pairing port, one session
   /// held to adbd's port, and a station's session carried on it, read and written as a socket is (`open`, failing while
   /// none is held). `hold` fails with `unpaired` while adbd does not take this device's key. Only a native host has it.
   adb?: {
@@ -207,7 +207,7 @@ export interface Host {
   };
 
   /// An HTTP listener on this machine's loopback `host` (127.0.0.1 or ::1, nothing else) at `port`, open while the scope
-  /// is: what comes to it, a request at a time (a login's browser coming back, docs/remote-login.md). Fails when the port
+  /// is: what comes to it, a request at a time (a login's browser coming back). Fails when the port
   /// is taken there. Only a native host has one (a web page cannot listen).
   listen?(port: number, host: "127.0.0.1" | "::1" | string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope>;
 }

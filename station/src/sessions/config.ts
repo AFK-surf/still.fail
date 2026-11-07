@@ -25,7 +25,7 @@ export type Profile = RuntimeProfile & {
   backgroundOnMessage: boolean;
   /// A stopped profile keeps its credentials and models but cannot be chosen for work.
   enabled?: boolean;
-  /// The joined workspaces kept from it (docs/multi-workspace.md): every workspace the station is in runs on it but these.
+  /// The joined workspaces kept from it: every workspace the station is in runs on it but these.
   withheld?: string[];
 };
 
@@ -43,7 +43,7 @@ export type Connect = {
   requireMention: boolean;
   slack: { botName?: string; [key: string]: unknown };
   bind: { runtime: Runtime; profile?: string; model?: string; effort?: string };
-  /// The workspace it was added in, whose chats its sessions are (docs/multi-workspace.md); absent: the home one.
+  /// The workspace it was added in, whose chats its sessions are; absent: the home one.
   workspace?: string;
 };
 
@@ -173,7 +173,7 @@ export const runs = (profile: Profile, model: string): boolean => spelling(profi
 /// shapes model.rs `same`: two spellings are one model.
 export const sameModel = (a: string, b: string): boolean => a === b || modelKey(a) === modelKey(b);
 
-/// Whether sessions of workspace `ws` (null: the home one's) may run on a profile (docs/multi-workspace.md): those of
+/// Whether sessions of workspace `ws` (null: the home one's) may run on a profile: those of
 /// the home workspace (`home`; null outside any, when there is no telling) on every profile, those of a joined one on
 /// every profile not withheld from it. A copy of another station's profile (share/index.ts) only in the workspaces that
 /// station shares it in, as it says (`share.workspaces`): its account is for those workspaces' people alone.

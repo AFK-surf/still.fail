@@ -643,7 +643,7 @@ pub fn station_of(core : Core, here : Here, address : String) -> Json? {
 }
 
 ///|
-/// Settings' 共享调试 (docs/adb-share.md, 2026-10-29: as the vault's page): a chat's agent asks for the phone and its
+/// Settings' 共享调试 (2026-10-29: as the vault's page): a chat's agent asks for the phone and its
 /// person grants it on the card in the chat. Here: on a phone, its switch (2026-10-30: off at first, on until turned
 /// off, `adb.on`), lent to no chat while off; what the phone lacks for it (本机设置) and requests waiting; the stations
 /// and chats it is granted to now, each chat taken back with 收回.
@@ -728,7 +728,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
     }
     // The first thing to do on this device, with its action and any later missing prerequisites in view: what the phone
     // lacks, else what a station it is lent to waits on of it (pairing: the phone's own, once, for every station;
-    // docs/adb-share.md, the phone's own adb session), rather than a list of stations each a page away (2026-11-06,
+    // the phone's own adb session), rather than a list of stations each a page away (2026-11-06,
     // 左子健: 共享给的 station 应该删掉吧)
     let (next, next_at) = match adb_next(None, phone, false) {
       Some(step) => (Some(step), "")

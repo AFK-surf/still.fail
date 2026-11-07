@@ -1,4 +1,4 @@
-// ffmpeg and ffprobe, as the media service's package ships them (docs/media-service.md 影视): where they are
+// ffmpeg and ffprobe, as the media service's package ships them ( 影视): where they are
 // (MEDIA_FFMPEG / MEDIA_FFPROBE, else $MODULE_BIN_DIR, else PATH), what ffprobe says of a video (its streams, their
 // codecs and languages, its length, HDR), which H.264 encoder there is, and running them with a time limit.
 import { execFile, spawn } from "node:child_process";

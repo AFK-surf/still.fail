@@ -466,7 +466,7 @@ let mark_blocks_selection : Int = 32
 let mark_cursor_at : Int = 6
 
 ///|
-/// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
+/// What is said of the target `id` as it is built, marked on its node (the way there's 1: what a frame
 /// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
 /// (Ctx::id_built). The shape said last is the one.
 fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {

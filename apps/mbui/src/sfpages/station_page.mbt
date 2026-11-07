@@ -395,7 +395,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       })
     })
   }
-  // its screens (docs/remote-screens.md); one from before them says so quietly
+  // its screens; one from before them says so quietly
   match (core.topic)("screens", { "station": str(address) }).value {
     Some(Object(_)) as v => {
       let screens = items(v, "screens")
@@ -840,7 +840,7 @@ fn grant_icon(id : String) -> String {
 }
 
 ///|
-/// Who is on one of its screens now (docs/remote-screens.md "Who is on a screen"): a row a view, whose and on which
+/// Who is on one of its screens now: a row a view, whose and on which
 /// device, whether it drives it and since when; 转为只看 and 断开 at its end for one the viewer may let go of, and 全部断开
 /// once there is more than one.
 fn screen_views(c : @ui.Ctx, core : Core, here : Here, address : String, screen : Json?) -> Unit {

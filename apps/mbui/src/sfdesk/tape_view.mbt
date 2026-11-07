@@ -1,5 +1,5 @@
 // Laid out Medium with a sidebar to show (or beside the system's bars: rail_native.mbt), the wide frame's tape as nodes
-// of the window's tree (mbui's view package; docs/retained.md, the way there's 4: from the outside in), made once:
+// of the window's tree (mbui's view package, the way there's 4: from the outside in), made once:
 //
 //   - a row as wide as the tape, drawn moved as far as the tape has got (its offset, worked out as it is drawn from the
 //     tape's move, committed once at its cause: tape_goes), holding the panels side by side as the tree lays them out:

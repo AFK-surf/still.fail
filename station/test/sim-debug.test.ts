@@ -1,4 +1,4 @@
-// A simulator's logs and apps (screens/sim-debug.ts, docs/remote-screens.md "Simulators") with simctl played: its lines
+// A simulator's logs and apps (screens/sim-debug.ts) with simctl played: its lines
 // read as a person reads them, what it says of its own left out, the stream started as it is first asked for and only
 // once, only an app a person installed started again. side/screen-simulator-debug.test.ts has the real one.
 import assert from "node:assert/strict";

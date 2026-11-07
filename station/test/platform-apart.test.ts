@@ -1,4 +1,4 @@
-// The station's platform makes nothing of the agents' side (docs/station-modules.md, 进程内的部分): the mesh, the drive,
+// The station's platform makes nothing of the agents' side (进程内的部分): the mesh, the drive,
 // the modules beside it, the services and the admin API take what they need of it through the platform's services
 // (AgentsSide, MeshSide, Parts), never by importing it. Only main.ts, the composition root, and the parts name it.
 import assert from "node:assert/strict";

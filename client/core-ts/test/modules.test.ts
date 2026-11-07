@@ -1,4 +1,4 @@
-// An app's modules in the core (src/module.ts, docs/core-modules.md): their calls answered by them, their topics computed
+// An app's modules in the core (src/module.ts): their calls answered by them, their topics computed
 // by them from what they keep of a station, their requests under the station's `/m/<module>`; the core's own calls stay
 // the core's.
 import assert from "node:assert/strict";

@@ -1,4 +1,4 @@
-// The Feishu connects as a part of the agents' side (docs/feishu.md; connects/part.ts says what every platform's
+// The Feishu connects as a part of the agents' side (connects/part.ts says what every platform's
 // connects are there): a Feishu connect as the overview shows it and the pages edit it, the apps being made by a scan,
 // the Feishu routes, and feishu_api for the agents.
 import { Effect, Layer } from "effect";

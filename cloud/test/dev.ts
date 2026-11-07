@@ -16,7 +16,7 @@
 //                                takes (a browser stand-in signing a native app in through its loopback redirect)
 //   /__dev/credential?device=hex  a mstill.fail's credential for alice's first workspace
 //   /__dev/move?station=hex&token=t  what a compromised cloud can do: the station moved into the token's workspace,
-//                                    without its signature (the workspace lock's tests, docs/workspace-lock.md)
+//                                    without its signature (the workspace lock's tests)
 // PERSIST=<dir> keeps what the cloud holds there, and AUTH_KEY=<k> (43 characters or more) keeps sign-ins good, across restarts: a restart is a
 // cloud with a new grant key (what the workspace lock's tests swap). With RESUME=1 as well, a restart is the same cloud
 // again (apps/mbui's e2e: a run's starting point restored, scripts/e2e-local.sh restore): its grant key and its "Dev"

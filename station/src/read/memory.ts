@@ -1,6 +1,6 @@
 // The agents' memory, for the pages to show (GET /memory; the agents write it): the global one, and the shared skills
 // (projects' memories among them). admin/mod.rs's route over agent_home.rs `agent_home_paths` and `list_skills`. A
-// workspace the station joined has its own (docs/multi-workspace.md): <agent home>/workspaces/<ws>.
+// workspace the station joined has its own: <agent home>/workspaces/<ws>.
 import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
 import { joinPath } from "../ops/paths.ts";
 import type { Json } from "./store.ts";

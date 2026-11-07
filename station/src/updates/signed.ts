@@ -36,7 +36,7 @@ export type Release = {
   builds: Record<string, Build>;
 };
 
-/// A module's package (docs/station-modules.md): what its feed (releases/modules/<id>/<id>[-beta].json) signs. The archive
+/// A module's package: what its feed (releases/modules/<id>/<id>[-beta].json) signs. The archive
 /// of each platform it is built for (`any`: one for every machine, as a module in TypeScript is), and the oldest
 /// station it runs beside (`needsStation`: that station's build).
 export type ModuleRelease = {

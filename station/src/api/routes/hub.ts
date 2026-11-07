@@ -621,7 +621,7 @@ export const routes = (tools: Tools): Route[] => {
           const client = typeof i.client === "string" ? chars([...i.client.trim()].filter((c) => !/\p{Cc}/u.test(c)).join(""), 80) : "";
           const kept = await keep(files, thumbsDir(a.hub.config().dataDir));
           const n = say(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
-          // Copied to the Slack and Feishu threads of the chat its sender picked (docs/relay.md "抄送"): after the answer,
+          // Copied to the Slack and Feishu threads of the chat its sender picked: after the answer,
           // not waited on.
           const ccTo = Array.isArray(i.cc) ? i.cc.filter((x: unknown): x is number => typeof x === "number") : [];
           if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, r.viewer.email, said, kept, ccTo);
@@ -645,7 +645,7 @@ export const routes = (tools: Tools): Route[] => {
         }),
     },
     // The people of where the chat would be relayed (`?connect=&channel=`, or `?link=` of a Slack message), for its note
-    // to mention (docs/relay.md「附言里 @ 人」).
+    // to mention (「附言里 @ 人」).
     {
       method: "GET",
       pattern: /^\/*threads\/+([^/]+)\/+relay\/+people\/*$/,
@@ -659,7 +659,7 @@ export const routes = (tools: Tools): Route[] => {
           return ok({ people: await as(400, () => relayPeople(a.hub, t, target)) });
         }),
     },
-    // Where the chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in.
+    // Where the chat can be relayed: each connect's channels and groups its bot is in.
     {
       method: "GET",
       pattern: /^\/*threads\/+([^/]+)\/+relay(?:\/.*)?$/,

@@ -45,7 +45,7 @@ export type OverviewDeps = {
 };
 
 /// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
-/// (docs/multi-workspace.md), its home one for no one in particular.
+///, its home one for no one in particular.
 export function meshStatus(cloud: Cloud, viewer?: Viewer): Record<string, unknown> {
   const s = cloud.state;
   if (s === null) return { state: "off", origin: null, station: null, workspace: null, workspaceId: null, name: null };
@@ -97,7 +97,7 @@ function diskRoom(path: string): unknown {
 
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
-  // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
+  // What is of the viewer's workspace: its chats, and the connects added in it.
   // (Counted by connect from the viewer's workspace in the index; the processes not cold are the hub's few.)
   const visibleConnects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null));
   const ids = visibleConnects.map((c: any) => c.id);
@@ -182,12 +182,12 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     diagnostics: diagnosticsView(raw),
     network: networkView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
-    // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or walked as asked, and
+    // What its search finds of the machine: its files through Spotlight (macOS) or walked as asked, and
     // whether the person's own mail, messages and the like too.
     search: { files: platform.hasSpotlight ? "spotlight" : "walk", personal: raw?.search?.personal === true },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
-    // The modules beside it (docs/station-modules.md), for clients to show theirs: said only where there is one.
+    // The modules beside it, for clients to show theirs: said only where there is one.
     ...withModules(d),
   };
 }
@@ -232,7 +232,7 @@ function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unkno
 }
 
 /// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of
-/// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
+/// their workspace (one each), which its owners and admins edit (`canEditPolicy`). The rest
 /// (the rule, its model) is the station's, its workspaces' managers' alike.
 async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> {
   // Made again only once a check or the policy is written, the rule or its models change, or DECISIONS_KEPT_MS on (the

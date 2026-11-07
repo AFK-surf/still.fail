@@ -1,5 +1,5 @@
-// A column that scrolls (View::scrolls) holding blocks by their keys, each made only while it shows (retained.md's
-// lists; as an old view's list builds only the rows in view, ui's Ctx::list): which show is worked out from where the
+// A column that scrolls (View::scrolls) holding blocks by their keys, each made only while it shows:
+// which show is worked out from where the
 // column is scrolled to, how tall it shows and each block's height (as laid out while it showed, kept by its key as wide
 // as the column was then; one never laid out counted as `est`), so a block that does not show is not made and nothing of
 // it measured. As what is over what shows changes height (a block laid out again taller than it was counted, one come

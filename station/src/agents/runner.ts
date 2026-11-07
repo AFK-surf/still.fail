@@ -1,4 +1,4 @@
-// Agent processes kept by runners (native/runner, docs/station-ts-native.md §1): each claude or codex process is the
+// Agent processes kept by runners (native/runner §1): each claude or codex process is the
 // child of a `stillfail-runner` that outlives this station, restarting or crashing. Starting one gives a handle; a
 // station starting finds those of before (<data>/run/runners/*.json) and takes them up again where it stopped reading:
 // what it has handled is acknowledged line by line, so nothing is read twice and nothing is lost.

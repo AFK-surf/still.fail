@@ -464,7 +464,7 @@ pub fn animate(
 /// The number kept as `key` (anim), told as it is built that it goes to `target` by `spec` (animate's way: at the
 /// target the first time, then on to each new target from where it is): read where it is shown (Anim::get as it is
 /// painted: Ctx::bg_by, Ctx::look_by), not as it is built, so what builds it is not built again each frame it goes
-/// (docs/retained.md, motion in what is made once). Telling it reads no clock.
+/// (motion in what is made once). Telling it reads no clock.
 #callsite(autofill(loc))
 pub fn told(c : @ui.Ctx, key : String, target : Double, spec? : Spec = spring(), loc~ : SourceLoc) -> Anim {
   @signals.untracked(fn() {

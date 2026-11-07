@@ -139,7 +139,7 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
       }
     },
   };
-  // In its home workspace "ws", and in "w2" it joined (docs/multi-workspace.md).
+  // In its home workspace "ws", and in "w2" it joined.
   const cloud: any = Object.assign(Object.create(Cloud.prototype), {
     state: { origin: "http://x", station: "s", workspace: "ws", workspace_name: "ws", name: "s", peers: [], revocations: [], joined: [{ workspace: "w2", workspace_name: "W2", name: "s", peers: [], revocations: [] }] },
     lock: null,

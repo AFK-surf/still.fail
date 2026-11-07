@@ -1,4 +1,4 @@
-// The media app's module of the core (docs/core-modules.md, docs/media-service.md): the bookshelf of a station's media
+// The media app's module of the core (): the bookshelf of a station's media
 // service, what each book holds, where the viewer is in it and what they marked. Topics are read from what is kept on
 // the device and brought up to date as they are shown; while any is shown, the service's events stream says what
 // changed. Calls ask the service and keep what it says.
@@ -8,7 +8,7 @@ import type { CoreModule, ModuleEnv, ModuleParts } from "../../client/core-ts/sr
 import { Beside, type Topic } from "../../client/core-ts/src/protocol.ts";
 import { SseParser } from "../../client/core-ts/src/station/sse.ts";
 
-/// A place in a book: the chapter, and how far into its text in UTF-16 code units (docs/media-service.md), as of `at`.
+/// A place in a book: the chapter, and how far into its text in UTF-16 code units, as of `at`.
 export type Place = { chapter: number; offset: number; at: number };
 
 const T = {

@@ -1,4 +1,4 @@
-// The vault on the station (docs/vault.md, src/vault/): its formats, on the values the core is tested on too
+// The vault on the station (src/vault/): its formats, on the values the core is tested on too
 // (fixtures/vault-vectors.json, made from fixed keys: `VAULT_VECTORS=write` makes it anew); who may write a vault or an
 // item, in which order; what a member sees and is told. Keys are fixed or made per run; nothing waits on time.
 import assert from "node:assert/strict";

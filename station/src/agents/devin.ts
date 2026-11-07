@@ -1,7 +1,7 @@
 // Devin driver: one `devin acp` per session (Cognition's Devin CLI, its local agent), spoken to in ACP (acp.ts) with one
 // ACP session in it.
 //
-// Behaviour pinned against the Devin CLI 3000.11 (docs/devin.md), beside what ACP says:
+// Behaviour pinned against the Devin CLI 3000.11, beside what ACP says:
 // - `authenticate` with the profile's key (`_meta.api_key`, read from the credentials its sign-in left in the profile's
 //   home), not the CLI's own sign-in on this machine;
 // - `session/load` takes up a session it keeps (its store: DEVIN_SESSIONS_DIR);

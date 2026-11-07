@@ -501,7 +501,7 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 /// `titlesOnly`: the items' ids, titles and agents alone (what names a job's chat, read/jobs.ts `openJobs`): none of their
 /// latest messages, cards, needs, answers or the review's marks read for them.
 export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
-  // Only the chats of the viewer's workspace (docs/multi-workspace.md).
+  // Only the chats of the viewer's workspace.
   const rows = sharedChats(station, archived, scope, titlesOnly).filter((row) => sees(viewer, row.ws));
   const api = apiOf(station);
   const s = api.store;
@@ -742,7 +742,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const children = opened.get(row.id);
     if (children) row.opened = children.map(named);
   }
-  // Which other workspaces each is shared with (docs/chat-share.md), only those that are.
+  // Which other workspaces each is shared with, only those that are.
   const shares = store.chatShares(s, ids);
   for (const row of rows) {
     const shared = typeof row.id === "string" ? shares.get(row.id) : undefined;

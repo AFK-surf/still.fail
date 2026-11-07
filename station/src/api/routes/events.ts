@@ -36,7 +36,7 @@ export const routes = ({ events, sessionExists, store }: Tools): Route[] => [
         .filter(([id]) => store === undefined || jobSeen(store, r.viewer, id));
       // `since=<id>`: the last id of the stream this one takes over from; what came after it is told first. `brief=1`: the
       // sessions' transcript entries in brief (what a history shows unopened).
-      // `login=<id>`, repeated: those logins' terminals as they change (docs/remote-login.md); not for a read-only member.
+      // `login=<id>`, repeated: those logins' terminals as they change; not for a read-only member.
       const logins = readOnly(r.viewer) ? [] : all(r, "login").filter((id) => /^[0-9a-z]{1,40}$/.test(id));
       // `running=1`: every session at work the viewer sees, as it runs, the station's to follow (no `live` named then).
       // `views=1`: its client makes a thread's summary from what is said in it (no `thread-view` made for it). `rows=1`:

@@ -27,7 +27,7 @@ export type SlackConnect = {
   botImage: string | null;
   /// Who added or was handed the connect: only their configuration token maintains its app.
   owner: string | null;
-  /// The still.fail workspace it was added in (docs/multi-workspace.md); null: the station's home one.
+  /// The still.fail workspace it was added in; null: the station's home one.
   workspace?: string | null;
 };
 

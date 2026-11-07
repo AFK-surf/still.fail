@@ -1,4 +1,4 @@
-// The station's logins to command-line tools (src/logins/; docs/remote-login.md): what a login command's output and
+// The station's logins to command-line tools (src/logins/): what a login command's output and
 // page say, and logins run for real with stand-in login commands in a temp HOME (shell and Node scripts in a pseudo-
 // terminal, as the station runs them), the browser's callback relayed to a loopback port the stand-in listens on (only
 // [::1], only 127.0.0.1, a form posted), and refused when it is not the one it waits for. Time is a TestClock: what waits

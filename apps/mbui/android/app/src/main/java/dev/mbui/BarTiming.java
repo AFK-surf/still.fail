@@ -33,7 +33,7 @@ import java.util.UUID;
 
 /**
  * How long a switch between places on the bottom bar takes, and where the time goes, as still.fail's Android app times
- * it (BarTiming.kt; docs/telemetry.md → 安卓 {@code bar_switch}): from the finger lifted to the place's page on the
+ * it (BarTiming.kt {@code bar_switch}): from the finger lifted to the place's page on the
  * stack (src/sfapp go_place, told by src/stillfail/reports.mbt), to the end of the first frame's build that had it and
  * the frame after (handed to the display); and for each topic the page subscribed anew, how long the core took to give
  * its first value (taken and decoded on the UI's thread) and how big it was. Logged on the device ({@code adb logcat -s

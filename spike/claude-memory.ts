@@ -41,7 +41,7 @@ try {
 
   sampler = peakSampler(proc.child.pid!);
   run = await turn(
-    "Read package.json and docs/design.md, run `ls -la` and `git log --oneline -5`, " +
+    "Read package.json and README.md, run `ls -la` and `git log --oneline -5`, " +
     "then reply with a three-line summary of this repository. Do not modify anything.",
   );
   record("turn 2 (tools) peak", sampler.stop(), { outcome: run.result.is_error ? `ERROR: ${String(run.result.result).slice(0, 60)}` : "ok", tools: run.tools });

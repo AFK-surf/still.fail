@@ -1,4 +1,4 @@
-// What the native launcher hands this process (docs/station-ts-native.md §2): `--launcher-fds a,b,c`: the MCP
+// What the native launcher hands this process ( §2): `--launcher-fds a,b,c`: the MCP
 // listener, the loopback listener (bound by the launcher, so a handover has no gap on them) and the control channel,
 // one JSON line each way. Run without a launcher (a checkout), there is no channel and this process binds for itself.
 import { Socket, createConnection } from "node:net";

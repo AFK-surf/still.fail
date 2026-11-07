@@ -159,7 +159,7 @@ fn pages_shell(src : Source) -> Shell {
 }
 
 ///|
-/// What back does where the layout has it (the tiers' table, docs/architecture.md): the wide frame's (sfdesk's
+/// What back does where the layout has it (the tiers' table): the wide frame's (sfdesk's
 /// wide_back); laid out Small, a page of the stack popped, a place's top page other than the chats back to the chats
 /// in place (from no side), none at the chats' (the system's: the app left).
 fn back_where(src : Source) -> (() -> Unit)? {
@@ -177,7 +177,7 @@ fn back_where(src : Source) -> (() -> Unit)? {
 }
 
 ///|
-/// Page `p` opened where the layout has it (the pane table, docs/architecture.md): on the wide frame the page pushed,
+/// Page `p` opened where the layout has it (the pane table): on the wide frame the page pushed,
 /// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
 /// main_page), on the tape shown in the page pane (sfdesk's show_page: brought over with the side panel in use, also
 /// the chat already shown, chosen again); laid out Small on the phone's stack (a new chat risen from the foot).
@@ -371,7 +371,7 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     over_view(c, src)
     return
   }
-  // under it all, the app's ground, made once (mbui's made.mbt; docs/retained.md, the way there's 4): what it holds is
+  // under it all, the app's ground, made once (mbui's made.mbt, the way there's 4): what it holds is
   // the state the app is in, built the old way
   // (the state it is in, a node of the window's tree where the app runs as one (app_tree): its old view put here;
   // else made once among the frame's)
@@ -476,7 +476,7 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 }
 
 ///|
-/// The window as a tree made once (mbui's view_host.mbt; docs/retained.md, the way there's 4: from the outside in): the
+/// The window as a tree made once (mbui's view_host.mbt, the way there's 4: from the outside in): the
 /// state the app is in (app_is) a node picked by it, made as it comes and let go as it goes, the app in that state an old
 /// view in it, built the old way on the window's ground (`view` the old frame around it: what every state shares, the
 /// theme, the window's sides, the layers over it).

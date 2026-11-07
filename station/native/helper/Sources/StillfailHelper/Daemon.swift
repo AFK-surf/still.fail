@@ -129,7 +129,7 @@ final class Daemon {
       }
       channel.line(Ui.run(arguments))
     case "outflow.identify":
-      // Who a program at the other end of the station's outflow socket is (docs/data-outflow.md).
+      // Who a program at the other end of the station's outflow socket is.
       channel.line(Outflow.identify(request["auditToken"] as? String ?? ""))
     case "screen.view":
       // Granted since this process started: it starts again to have it (the station asks again once it is back).

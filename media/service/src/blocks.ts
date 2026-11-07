@@ -1,4 +1,4 @@
-// A chapter's text as the readers get it (docs/media-service.md): blocks, and how a place in a chapter is counted.
+// A chapter's text as the readers get it: blocks, and how a place in a chapter is counted.
 //
 // Offsets: a chapter is read as the concatenation of its blocks with nothing between them. A `p` counts the UTF-16
 // length of its text (a run's `text` only: a ruby's reading is not counted, its base is); an `h` its text; an `img` and

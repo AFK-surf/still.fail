@@ -194,7 +194,7 @@ export function cardArg(card: Json, options: Json): Json | null {
     kept = { type: "text" };
     if (placeholder !== "") kept.placeholder = placeholder;
   } else if (kind === "login") {
-    // A login a person finishes from the card (docs/remote-login.md): its id only; the page and code are the client's to
+    // A login a person finishes from the card: its id only; the page and code are the client's to
     // ask the station for, so they never travel with the message.
     const login = typeof given.login === "string" ? given.login.trim() : "";
     if (!/^[0-9a-z]{1,40}$/.test(login)) throw new Error('a login card names the login: {"type": "login", "login": "<the id login start answered>"}');

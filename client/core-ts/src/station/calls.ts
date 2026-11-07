@@ -479,7 +479,7 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "driveRefresh" }>;
     return Effect.andThen(parse(c.station), Effect.as(inner.stations.driveRefresh(c.station, c.root, c.path), null));
   };
-  // A login's page to open (docs/remote-login.md): its device code's page, the page to open, or a loopback login's,
+  // A login's page to open: its device code's page, the page to open, or a loopback login's,
   // whose callback this device listens for first (on a host that can: the desktop app), unless the station is this
   // machine. Answers what to open; fails (the port taken here) before anything is.
   handlers.machineLoginOpen = (inner, call) => {

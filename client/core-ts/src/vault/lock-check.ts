@@ -1,4 +1,4 @@
-// The workspace lock, checked on the device by the stations' own rules (rules/, MoonBit, docs/rules.md): what the
+// The workspace lock, checked on the device by the stations' own rules (rules/, MoonBit): what the
 // vault trusts to say which device a box key is and whose. The rest of the core shows the lock as the cloud keeps it
 // (views/lock.ts `fold`, unchecked); before a vault's key is sealed to a device, every entry's signature and signer is
 // checked here, so neither the cloud nor a station can put a device of their own in it.

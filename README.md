@@ -8,7 +8,6 @@
 <a href="https://still.fail">Website</a> ·
 <a href="https://app.still.fail">Web app</a> ·
 <a href="#get-started">Get started</a> ·
-<a href="docs/design.md">Architecture</a> ·
 <a href="README.zh-CN.md">简体中文</a>
 </p>
 
@@ -40,8 +39,6 @@ still.fail connects the machines you choose to wherever you are. Each runs a **s
 - A **workspace** groups people and stations. The cloud service (`cloud/`, Cloudflare Workers) handles accounts, workspaces and member credentials, and runs the relays. Conversation content does not pass through its database.
 - **Clients** (web, desktop and Android) share one client core in TypeScript (`client/core-ts`), which caches the workspace's data and keeps it in sync with the stations.
 
-See [docs/design.md](docs/design.md) and [docs/cloud.md](docs/cloud.md) for details.
-
 ## Get started
 
 1. Open the [web app](https://app.still.fail), or download the desktop app (macOS on Apple silicon, Windows x64) or the Android app from [still.fail](https://still.fail).
@@ -67,7 +64,7 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 
 ## Privacy and telemetry
 
-Desktop and Android builds connect to the hosted service at `app.still.fail` by default. Clients send operation traces (names, timings and errors, without message content) to the configured cloud. Product analytics (PostHog) are only included when a key is supplied at build time, so builds from this repository have none; station error reports are off unless the station's operator enables them. See [docs/telemetry.md](docs/telemetry.md) and the [privacy policy](https://still.fail/en/privacy).
+Desktop and Android builds connect to the hosted service at `app.still.fail` by default. Clients send operation traces (names, timings and errors, without message content) to the configured cloud. Product analytics (PostHog) are only included when a key is supplied at build time, so builds from this repository have none; station error reports are off unless the station's operator enables them. See the [privacy policy](https://still.fail/en/privacy).
 
 ## Repository
 
@@ -79,7 +76,7 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | `apps/mbui/` | The apps (Android, iOS, macOS, Windows, Linux), written in mbui (`apps/mbui/mbui`) |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |
 | `media/` | Photos, video and books apps built on the same platform, in development |
-| `docs/` | Design and operation notes; release notes in `docs/releases/` |
+| `docs/` | Development and operation notes; release notes in `docs/releases/` |
 | `test/`, `spike/` | Integration and browser tests; experiments that verified runtime assumptions |
 | `vendor/` | Patched third-party Rust crates |
 
@@ -88,10 +85,6 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 Some design notes are only in Chinese for now.
 
 - [Development setup](docs/development.md) and [contributing](CONTRIBUTING.md)
-- [Architecture](docs/design.md), [client core](docs/client-core.md), [cloud](docs/cloud.md), [station storage](docs/station-storage.md), [station modules](docs/station-modules.md)
-- [Station peers and remote tasks](docs/station-peers.md), [sharing between stations](docs/station-share.md), [search](docs/search.md), [files](docs/drive.md), [screens](docs/remote-screens.md)
-- [Feishu](docs/feishu.md), [Grok Build](docs/grok.md), [DeepSeek Harness](docs/dsh.md)
-- [Security mode](docs/workspace-lock.md), [vault](docs/vault.md), [notifications](docs/notifications.md), [telemetry](docs/telemetry.md)
 - [Operations](docs/operations.md): how the maintainers build and deploy the hosted service, on their own infrastructure
 - [Security](SECURITY.md): private reporting and the station's trust boundary
 

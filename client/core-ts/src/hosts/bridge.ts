@@ -16,14 +16,14 @@
 //     Android: CoreHost; Windows: win_core.c)
 //   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key};
 //     secure.ask {reason} — answered by the app (Kotlin: the Keystore, and the prompt when `user` or asked), not the
-//     shell (docs/vault.md, "设备上的钥匙")
+//     shell ("设备上的钥匙")
 //   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
 //   adb.pair {port, code}; adb.hold {port} (fails `unpaired` while adbd does not take the key); adb.state {} → {port};
 //     adb.open {} → {id}, read and written as a tcp one: this device's own adb session (the shell's adb.rs)
 //   listen.open {port, host} → {id} (fails when the port is taken there); listen.next {id} → {request, method, path,
 //     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
-//     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
+//     listen.close {id} — a login's loopback listener, answered by the app (Kotlin:
 //     Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   picked.read {file, start, end} → bytes; picked.hash {file} → {sha256}; picked.release {file} — a file picked in
 //     the app, read a part at a time as it goes up (`composer.add` with `blob: {hostFile, size, type}`) and named by
@@ -292,7 +292,7 @@ export class BridgeHost implements Host {
     };
   }
 
-  /// A loopback listener (a login's browser coming back, docs/remote-login.md), the app's: a request at a time, each
+  /// A loopback listener (a login's browser coming back), the app's: a request at a time, each
   /// answered once (the app closes its connection then).
   listen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
     const bridge = this.#bridge;

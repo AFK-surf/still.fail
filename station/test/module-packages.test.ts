@@ -1,4 +1,4 @@
-// Modules the station installs itself (src/modules/packages.ts, docs/station-modules.md「包」), against a fake release
+// Modules the station installs itself (src/modules/packages.ts,「包」), against a fake release
 // server: a module packed and its feed signed as CI does it (scripts/module-bundle.ts, scripts/release-sign.ts) with the
 // tests' key, installed from the feed, run by the station's own Node, updated to a newer build and gone back from one
 // that never comes up; and refused: a signature by a key it does not take, words that are not this module's release,

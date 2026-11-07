@@ -1,4 +1,4 @@
-// The agents' `login` tool (docs/remote-login.md, agent 的 login 工具): a command failed for want of a login, or a person
+// The agents' `login` tool (agent 的 login 工具): a command failed for want of a login, or a person
 // asked for one, and the agent runs the tool's own login command on this station. The agent drives the command's
 // terminal (用户定: CLI 的交互由 agent 操作): it reads the screen and answers its prompts (Y/n, menus, a host to pick) itself;
 // a person does only the step that needs them, in their own browser (a code to enter, a page to sign in on), reached by a

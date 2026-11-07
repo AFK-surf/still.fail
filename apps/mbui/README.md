@@ -1,9 +1,9 @@
 # still.fail's apps
 
-still.fail's apps for Android, iOS, macOS, Windows and Linux, one app on every device (docs/architecture.md),
+still.fail's apps for Android, iOS, macOS, Windows and Linux, one app on every device,
 written in mbui (`mbui/`), the MoonBit UI framework. The released apps are built from here: the Android app since
 2026-10-24, the Mac and Windows apps since 2026-10-26, each in the place of the one before it (its ids, its data and
-sign-in kept: docs/client-core.md in the repository's docs).
+sign-in kept).
 
 mbui is the framework (layout, text, the UI tree, motion, Markdown, the platform hosts, the build's C step), at
 `apps/mbui/mbui` (zzj3720/mbui merged in with its history, 2026-10-21): a change to the framework and the app is one

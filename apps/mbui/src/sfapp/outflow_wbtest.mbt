@@ -1,4 +1,4 @@
-// A station page's 数据外流 (sfpages/station_outflow.mbt, docs/data-outflow.md): the programs asking for its data,
+// A station page's 数据外流 (sfpages/station_outflow.mbt): the programs asking for its data,
 // which an admin answers kind by kind, confirming what is given before it is; and those granted it, each with who
 // signed it and what it may read; 取消授权 asks first.
 

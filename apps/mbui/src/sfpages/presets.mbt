@@ -1,4 +1,4 @@
-// Presets (docs/presets.md): what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
+// Presets: what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
 // runs on (the core's `newChat` view: the station's presets, the one picked and its name; `newChat.pick {preset}`). Its
 // control opens a menu of them (不用预设 and each preset, the one picked checked; 编辑 the one picked, 新预设). A preset is
 // made or changed in a short dialog, as a key's is: its name, its folders (each a row with its × to let go, 添加目录

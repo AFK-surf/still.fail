@@ -6,7 +6,7 @@ applies here as well. In short, and what is particular to this app:
 
 ## The terms (术语)
 
-Four things decide how the app looks and answers (docs/architecture.md, the terms):
+Four things decide how the app looks and answers:
 
 - **屏幕** (the screen): 小屏 / 中屏 / 大屏 (`@sf.layout`: `Small`, `Medium`, `Large`), plus the special screens (a fold
   half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged, and
@@ -53,9 +53,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## One app: tiers, input, pages, shell
 
-- `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
+- How the app is built, in short:
   - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
-  - Six principles come first (the user, 2026-10-26; docs/architecture.md): every function as easy with either
+  - Six principles come first (the user, 2026-10-26): every function as easy with either
     input; what always shows is pressed in 44×44 at least, overlapping none; menus and picks from the foot on Small,
     beside what opened them on Medium and Large; the screen decides the arrangement, the input only how things
     answer and the size they are drawn at; the same content and actions on the three screens, each arranged as is
@@ -72,7 +72,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
   - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
     `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
-  - Both go into `sfpages` and `sfshell` as pages merge (`docs/architecture.md`, the way there).
+  - Both go into `sfpages` and `sfshell` as pages merge.
 - **What doesn't change:**
   - Something both need moves down into `sfbase` or the library, once.
   - Logic is the core's, never a page's.
@@ -81,7 +81,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
     width. Nor on the native input (`@sf.native_input()`): what differs by it is the theme's, the library
-    parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
+    parts', the presenters' and the shell's (the same on every screen and what differs); a page
     that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
     library's primitives (`c.lit`, `c.menu_asked`, tips).
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked

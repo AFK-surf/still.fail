@@ -1,4 +1,4 @@
-// An app being debugged on an iOS Simulator (docs/remote-screens.md "Simulators"): what its page is about is the device
+// An app being debugged on an iOS Simulator: what its page is about is the device
 // and the app, not the link, so these are beside the picture and not in 控制中心: its device's buttons (Simulator.app's
 // shortcuts, as the station takes them: sim-input.ts), 截图, 重启 App (the apps installed on it), 日志 (the apps' log, asked
 // again every moment while it shows, the newest first) and 设备 (how it is set). What is done with it comes round what a

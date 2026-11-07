@@ -1,5 +1,5 @@
 // The views (views.rs): what one screen shows, put together from the account and station topics so the UI does no
-// joining, filtering or grouping (docs/client-core.md, Views). A view watches the topics it is built from; any change
+// joining, filtering or grouping (Views). A view watches the topics it is built from; any change
 // of them only invalidates it, and the store has it computed when its coalesced emission goes out. What a person did
 // here and their station has not confirmed yet (local.ts) is laid over what the stations hold.
 import { Effect, type Fiber } from "effect";
@@ -83,7 +83,7 @@ export const chatDerive: Derive = {
 };
 
 /// A station of a scope, as the workspace lists it.
-/// `joined`: the station's home is another workspace (docs/multi-workspace.md), this one it joined.
+/// `joined`: the station's home is another workspace, this one it joined.
 export type StationInfo = { address: string; id: string; name: string; emoji: string | null; icon: string | null; online: boolean; lastSeen: J; version: J; joined: boolean };
 
 /// Whether a station is taken for down: its link found it so, or — not found out yet this time — it was, last.
@@ -1434,7 +1434,7 @@ export class Views implements Owner {
     // how many chats are left to bring the latest of.
     let checking = false;
     let behind = 0;
-    // The first screen first (docs/core-db.md): while the stations' rows are not loaded, and they are more than a list
+    // The first screen first: while the stations' rows are not loaded, and they are more than a list
     // shows on top, those are read by one query, and the rest are loaded after, a station at a time.
     const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
     const unloaded = known.filter((s) => !data.loaded({ topic: "chatRows", station: s }));
@@ -2647,7 +2647,7 @@ function asShaped(ty: Ty, value: J): J {
   return out.ok;
 }
 
-/// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): the chats it
+/// What a chat's page draws by each message, decided here so the page only draws it: the chats it
 /// links to (`linked`: each its title and whether it is archived), whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its

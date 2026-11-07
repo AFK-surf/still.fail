@@ -1,4 +1,4 @@
-// The grants of data outflow (docs/data-outflow.md), for the members of the station's home workspace: which programs
+// The grants of data outflow, for the members of the station's home workspace: which programs
 // of this machine may read what, what they read lately, and which ask (GET /outflow/grants); an admin's answer to a
 // request (POST /outflow/requests/:id, `{allow, scopes, workspace}`); revoking a grant (DELETE /outflow/grants/:id),
 // which its program's next read is refused for.

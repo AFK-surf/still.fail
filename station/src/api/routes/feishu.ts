@@ -1,4 +1,4 @@
-// Feishu connects through the pages (docs/feishu.md「管理 API」): an app made by a scan (its registration begun,
+// Feishu connects through the pages (「管理 API」): an app made by a scan (its registration begun,
 // followed in the overview, dropped), an app's id and secret checked, a connect made of either, and a Feishu connect's
 // part of its config entry (`feishuEntry`). Editing, deleting and reconnecting a connect are every connect's
 // (routes/connects.ts).

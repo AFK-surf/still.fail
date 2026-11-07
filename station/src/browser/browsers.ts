@@ -1,12 +1,12 @@
-// Each chat's own environment in the station's browser (docs/remote-screens.md, "A chat's own environment"): one
+// Each chat's own environment in the station's browser ("A chat's own environment"): one
 // Chrome for the station (browser.ts), and in it a browser context per chat, made over DevTools when the chat's agent
 // first asks for the browser. A context is kept in memory only, as Chrome keeps one it is asked to make: no cookie of a
 // chat is written to the station's disk, and none of another chat's reaches it (the gate on its agent's connection,
-// gate.ts). What a chat is signed in to comes from the vault (docs/vault.md 登录态): a sign-in granted is put into its
+// gate.ts). What a chat is signed in to comes from the vault ( 登录态): a sign-in granted is put into its
 // context (signins.ts) and taken out again when its grant ends, its cookies as they were then given back to the vault.
 // The context goes when its chat is archived or deleted, and with Chrome when Chrome ends (idle, a crash): a chat asking
 // again then has a new one, its sign-ins still granted put in again. The default context is the station's own, for the
-// tabs it opens itself (a login's page: docs/remote-login.md), no chat's.
+// tabs it opens itself (a login's page), no chat's.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Fibers } from "../ops/fibers.ts";

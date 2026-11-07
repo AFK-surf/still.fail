@@ -2,7 +2,7 @@
 // machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
 // bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` into
 // ~/.local/bin, joins the workspace the token is for (a station already in one
-// stays in it and joins this one beside it, `enroll --stay`: docs/multi-workspace.md), and runs the station as
+// stays in it and joins this one beside it, `enroll --stay`), and runs the station as
 // a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
 // it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
@@ -94,7 +94,7 @@ const APP_FILES: [RegExp, string][] = [
   // feed and the archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
   [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
-  // The packages of the modules stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): each
+  // The packages of the modules stations install themselves (scripts/module-bundle.ts): each
   // module's signed feeds, stable and beta, and the archives they name (one for every machine, or a platform's).
   [/^modules\/([a-z][a-z0-9]{0,31})\/\1(-beta)?\.json$/, "application/json"],
   [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],

@@ -41,8 +41,8 @@ Time over alien-signals', geometric mean (lower is better):
 | SolidJS | 4.24× | 2.21× | 3.67× | 3.48× | 3.16× |
 | MobX | 3.94× | 4.88× | 2.35× | 2.58× | 3.48× |
 
-Before the port kept a node as one object, its stacks as arrays and its reads' checks in place (docs/signals.md,
-"Under reference counting"), native was 1.23× (create 1.83×). The machine's other work moves a run's JS engines by
+Before the port kept a node as one object, its stacks as arrays and its reads' checks in place:
+native was 1.23× (create 1.83×). The machine's other work moves a run's JS engines by
 up to a third (alien-signals' own times from run to run): compare runs by alien-signals' times before reading ratios.
 What is left on kairo is mostly its numbers: a computed of a Double boxes its value in an Option each time it changes.
 

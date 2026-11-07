@@ -1011,7 +1011,7 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
-  # The modules' packages stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): when what one
+  # The modules' packages stations install themselves (scripts/module-bundle.ts): when what one
   # packs changed. Each one's archive, named by its version, is put at once (one already out is checked to be the same
   # bytes: scripts/release.sh), its beta feed signed and put by `put` once the check passed. On GitHub's runner: plain
   # files, nothing of a machine's in them. After natives: a module carrying a native part (the media service's ffmpeg,

@@ -3,7 +3,7 @@
 // way, on the hardware only (Main; where the machine has no HEVC encoder, the view goes on in H.264). Low latency (a
 // picture out for each in), no B-frames, constrained baseline where the encoder has it, a key frame when asked for and
 // at least every 10 s besides. One picture is in it at a time: the view asks for the next only once one went. A still
-// screen's picture sent again as a key frame (docs/remote-screens.md "Still") is encoded finer than the moving ones: its
+// screen's picture sent again as a key frame is encoded finer than the moving ones: its
 // QP no higher than STILL_QP and twice the bit rate for it, where the link carries STILL_FROM or more. That is another
 // encoder of the same kind, made for that picture with those set before it starts (`still`): an encoder takes them
 // once it started without heeding them (NVIDIA's, both codecs: the same picture again the same size to the byte).

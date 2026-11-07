@@ -1,4 +1,4 @@
-// A person's own lock as the cloud keeps it (src/personal-lock.ts, docs/personal-lock.md): each entry following the last
+// A person's own lock as the cloud keeps it (src/personal-lock.ts): each entry following the last
 // and signed by a device on it; a chain begun anew is taken (all of a person's devices lost), and devices decide whether
 // to follow it. Hashes and signatures are the stations' and the core's.
 import assert from "node:assert/strict";

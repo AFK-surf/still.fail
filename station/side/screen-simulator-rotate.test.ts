@@ -1,4 +1,4 @@
-// A device turned from a view (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator of this test's own
+// A device turned from a view on a real Mac with Xcode: a simulator of this test's own
 // (SIM_TYPE: its type's name, as "iPhone Duo"; the runtime's first iPhone otherwise), a small app that says the shape of its window, turned all the way round through
 // still.fail Helper's view as a person's button does; the app turning, and the view's picture with it. SIM_OUT: its pictures.
 // STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper. A side test.

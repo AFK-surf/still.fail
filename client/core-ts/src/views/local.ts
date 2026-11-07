@@ -1,4 +1,4 @@
-// What a person did here that their station has not confirmed yet (docs/core-ts.md, rules 3 and 4): messages on
+// What a person did here that their station has not confirmed yet (rules 3 and 4): messages on
 // their way (the outbox), chats asked for and not made (pending), messages to an agent before it has a chat (firsts),
 // chats renamed, pinned, kept or archived (changing, archiving). Each is held here and kept in its account's database
 // (tables outbox, pending, first, changing: written again on their own if the rest could not be), so it shows at once,

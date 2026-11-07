@@ -1,6 +1,6 @@
 #!/bin/sh
 # Lays out the still.fail station's release in DIR/stillfail for PLATFORM (default darwin-arm64): the station in
-# TypeScript (station/, docs/station-ts.md) with its native parts, prebuilt (scripts/native.ts: launcher, mesh, runner),
+# TypeScript (station/) with its native parts, prebuilt (scripts/native.ts: launcher, mesh, runner),
 # and the version of the Node it runs on, which is not in it: the installer gets that once per version
 # (scripts/node-dist.sh, cloud/src/install.ts) and links it at stillfail/node. scripts/release.sh packs it for
 # install.sh. The layout:
@@ -12,9 +12,9 @@
 #                                                          services run)
 #   stillfail/station/{main.js, built workers and assets, mesh.node, stillfail-runner, package.json}
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
-#                                                          macOS app for what macOS grants, docs/station-ts-native.md §4;
+#                                                          macOS app for what macOS grants §4;
 #                                                          on win32-x64 stillfail-screen.exe: the desktop's screen,
-#                                                          docs/remote-screens.md, and agent-desktop.exe: its apps'
+#                                                          and agent-desktop.exe: its apps'
 #                                                          accessibility trees, which the Helper carries on macOS)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when

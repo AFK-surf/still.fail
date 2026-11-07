@@ -1,4 +1,4 @@
-// The media service as the station starts it (its module `media`, docs/media-service.md): where its data is, the socket
+// The media service as the station starts it (its module `media`): where its data is, the socket
 // it answers on, and the station's local API, all from the environment (and the photos' backup folder,
 // MEDIA_BACKUP_DIR, when it is not ~/Pictures/still.fail). Stops cleanly on SIGTERM (and SIGINT).
 import { startService } from "./server.ts";

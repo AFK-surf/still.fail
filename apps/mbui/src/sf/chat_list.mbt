@@ -1,4 +1,4 @@
-// The chats' lists' sizes on the screen in force (docs/architecture.md: sizes, row heights and density are the
+// The chats' lists' sizes on the screen in force (sizes, row heights and density are the
 // theme's, by the native input): keyboard and mouse's the web's sidebar (Sidebar.css.ts navSession…, RowPicture.css.ts,
 // ChatMark.css.ts), touch's the phone's home (mobile/Home.css.ts mChatRow…, Home.kt). The rows, their second
 // line, what stands at its end, the days' headings, the list's waiting and how its rows and panes move. One set of

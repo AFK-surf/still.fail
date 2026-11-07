@@ -7,7 +7,7 @@
 //   release-sign.ts file FILE --kind stillfail-desktop-win --build N
 //       FILE.sig: the signed words naming FILE (the Windows desktop app's installer)
 //   release-sign.ts module FEED --id ID --build N --needs-station M PLATFORM=ARCHIVE …
-//       the feed of a module's package (scripts/module-bundle.ts, docs/station-modules.md): its version, the oldest
+//       the feed of a module's package (scripts/module-bundle.ts): its version, the oldest
 //       station it runs beside (M, that station's build) and the signed words naming each archive (PLATFORM `any`:
 //       one for every machine)
 //   release-sign.ts keygen PRIVATE_FILE

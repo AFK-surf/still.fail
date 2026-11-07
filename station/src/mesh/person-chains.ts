@@ -1,4 +1,4 @@
-// The longest chain of each person's own lock this station has heard (docs/personal-lock.md): a device taken off a lock
+// The longest chain of each person's own lock this station has heard: a device taken off a lock
 // could bring the chain from before, so an older one brought is judged as the longer one kept. A chain that is neither
 // goes on from nor is part of the one kept is another's word against it: refused. Kept in memory: a restarted station has
 // only what is brought next.

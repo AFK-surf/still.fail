@@ -1,4 +1,4 @@
-// Chats shared with other workspaces (src/xshare/index.ts, docs/chat-share.md): two workspaces' stations, each told only
+// Chats shared with other workspaces (src/xshare/index.ts): two workspaces' stations, each told only
 // its own workspace's roster, and the station transport as a direct call that checks what peer.ts checks (a station of
 // another workspace is asked only when this one shares chats with it or from it).
 import assert from "node:assert/strict";
@@ -234,7 +234,7 @@ test("a session that wrote to another workspace may be answered by it, no other"
   await assert.rejects(outside(x, p, { method: "session.message", session: "c1", to: "s2", text: "unasked" }), /shares no chat/);
   // A station of this workspace is asked as before: nothing added.
   assert.deepEqual(p.xshare.address(P, { method: "session.read" }), { method: "session.read" });
-  // One asking for a workspace of its own it says (`as`, docs/multi-workspace.md) reaches what is shared with that one.
+  // One asking for a workspace of its own it says (`as`) reaches what is shared with that one.
   await outside(p, x, { method: "session.read", args: { chat: "c1" }, as: W2 });
   await assert.rejects(outside(p, x, { method: "session.read", args: { chat: "c1" }, as: "01W9" }), /shares no chat/);
 });

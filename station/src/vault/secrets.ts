@@ -1,4 +1,4 @@
-// Agents asking for the vault's secrets (docs/vault.md, agent 用密钥): a request from a session, its card in the
+// Agents asking for the vault's secrets (agent 用密钥): a request from a session, its card in the
 // session's chat for the vault's owner, the grant or refusal the owner's app sends back (checked by the keeper, which
 // alone ever holds the secret), and the commands run with a grant. Without security mode, the secrets are the plain
 // library's (plain.ts): the same request and card, decided by the item's owner, the value read from the station. An
@@ -200,7 +200,7 @@ export type Use = { item: string; at: number; session: string; chatTitle: string
 export class Secrets {
   readonly keeper: Keeper;
   readonly proxy: Proxy;
-  /// The plain library's items (docs/vault.md 不加锁的库).
+  /// The plain library's items ( 不加锁的库).
   readonly plain: PlainStore;
   readonly #d: SecretsDeps;
   readonly #uses: UseIndex;
@@ -856,7 +856,7 @@ export class Secrets {
     return `The card for request ${id} is in the chat again. It is the same request; no secret was read again. ${UNDECIDED}`;
   }
 
-  // ── secrets agents ask to keep (secret_save, docs/vault.md agent 存入) ──
+  // ── secrets agents ask to keep (secret_save agent 存入) ──
 
   /// The person a session works for, as the lock has them (their sub), where security mode is on.
   #memberOf(lock: LockState, email: string): string | null {
@@ -1267,7 +1267,7 @@ export class Secrets {
 
   /// A vault's sign-in's newer cookies: the station cannot write its item (only its members' apps can), so they are
   /// sealed to its members' devices set up and kept (the latest only) until a grant of it carries them: the app that
-  /// grants the next request for it writes them as the item's next version (docs/vault.md 登录态 写回).
+  /// grants the next request for it writes them as the item's next version ( 登录态 写回).
   #renewSealed(r: Request, cookies: string) {
     const lock = this.#d.lock(r.ws);
     const vault = lock === null ? null : this.#d.vaults.vault(lock.ws, r.vault);
@@ -1399,7 +1399,7 @@ export class Secrets {
     return said(ran);
   }
 
-  // ── commands on another station of the workspace (docs/vault.md 在另一台 station 上用) ──
+  // ── commands on another station of the workspace ( 在另一台 station 上用) ──
 
   /// Station `given` (its name or id): another of the workspace, or null for this one.
   #peer(given: string): { id: string; name: string } | null {

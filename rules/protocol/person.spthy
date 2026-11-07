@@ -1,5 +1,5 @@
 /*
- * A person's own lock (docs/personal-lock.md) and how a workspace's lock takes it, apart from lock.spthy: put in there, it
+ * A person's own lock and how a workspace's lock takes it, apart from lock.spthy: put in there, it
  * left that theory's lemmas searching past their minute. The adversary holds the network and any device it takes.
  *
  * What is modelled:

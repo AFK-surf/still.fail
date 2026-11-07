@@ -1,4 +1,4 @@
-// Web Push (docs/notifications.md): a browser's subscription is an endpoint of its push service and two keys; a
+// Web Push: a browser's subscription is an endpoint of its push service and two keys; a
 // message to it is encrypted for those keys (RFC 8291, `aes128gcm` of RFC 8188) and signed for with still.fail
 // cloud's VAPID key (RFC 8292). WebCrypto only: ECDH P-256, HKDF-SHA-256, AES-128-GCM, ECDSA P-256.
 

@@ -1,4 +1,4 @@
-// still.fail Helper: the station's macOS app (station/src/helper/app.ts starts it, docs/station-ts-native.md §4). What
+// still.fail Helper: the station's macOS app (station/src/helper/app.ts starts it §4). What
 // macOS grants (Screen Recording, Accessibility) is granted to this app, which LaunchServices starts as its own
 // process: a grant that takes effect only once the process starts again restarts this app, never the station.
 //

@@ -140,7 +140,7 @@ pub(all) struct Card {
 }
 
 ///|
-/// An agent's ask to sign in to a site as its card says it (SignInAsk, still.fail docs/vault.md 登录态): its id, the site,
+/// An agent's ask to sign in to a site as its card says it (SignInAsk 登录态): its id, the site,
 /// why, the chat's tab it is on (a screen of the chat's station), and how it goes (`status`: "" waiting, filling, code,
 /// person, left, done, denied, expired, ended; `why` a person is needed; what the agent `said` is left; whether it is
 /// to be kept, `keep`; the vault request keeping it, `save`, and how that went, `kept`).
@@ -158,7 +158,7 @@ pub(all) struct SignInAsk {
 }
 
 ///|
-/// An agent's request to debug its person's phone as its card says it (PhoneAsk, docs/adb-share.md): its id, the
+/// An agent's request to debug its person's phone as its card says it (PhoneAsk): its id, the
 /// agent's reason, and once decided how (`status`: granted, denied, ended; `scope`: hour, chat; `why` it ended).
 pub(all) struct PhoneAsk {
   request : String
@@ -684,7 +684,7 @@ pub(all) struct ChatScreen {
 }
 
 ///|
-/// A thread a chat's messages can be copied to (the chat view's `cc`, docs/relay.md "抄送"): its id (`chat.cc`'s `to`),
+/// A thread a chat's messages can be copied to (the chat view's `cc`): its id (`chat.cc`'s `to`),
 /// where it is (#channel, 私信, the Feishu group), its platform for its mark ("slack" or "feishu"), and whether it is
 /// ticked.
 pub(all) struct ChatCcTo {

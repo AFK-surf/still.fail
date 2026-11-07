@@ -1,5 +1,5 @@
 // A remote screen's pointer, as still.fail's Android viewer draws it over the frame (app/remote/ScreenViewer.kt
-// Pointer), in the shape the station says its pointer has (a CSS cursor's name: docs/remote-screens.md `cursor`), as
+// Pointer), in the shape the station says its pointer has (a CSS cursor's name), as
 // a Mac draws its own: the arrow white with a dark edge (1.2 wide) as it was; a hand white with a dark edge; the
 // others (a text cursor, a cross, the resizing arrows…) dark with a white edge round them. At its own size however the
 // frame is zoomed, `pointer_size` square; the point it points with (its hot spot: the arrow's tip, a hand's

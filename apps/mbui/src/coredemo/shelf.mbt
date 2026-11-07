@@ -1,4 +1,4 @@
-// The shelf over the core's media module (still.fail docs/media-service.md): the
+// The shelf over the core's media module: the
 // `media.shelf` and `media.book` topics, `media.chapter` for a chapter's
 // blocks, `media.image` for covers and pictures, `media.place.set` as pages
 // turn. The station is $MBUI_MEDIA_STATION ("<workspace>/<station>"), else

@@ -1,4 +1,4 @@
-// The station's logins to command-line tools (docs/remote-login.md, 接口): under /machine-logins (/logins/<id> is a new
+// The station's logins to command-line tools (接口): under /machine-logins (/logins/<id> is a new
 // profile's sign-in). Whoever may make things run on the station may start, cancel and finish one, in any workspace it is
 // in (a joined workspace's members too: their agents could run `gh auth login` all the same); a read-only member sees
 // how they stand only (the admin API refuses their writes; their reads lose the pages, codes and callbacks).
@@ -74,7 +74,7 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
 };
 
 /// A login's page opened in the station's own browser (logins/pages.ts) for the person asking, who finishes it there:
-/// `{screen}`, the screen of its tab (docs/remote-screens.md). A login to a command-line tool; a profile's sign-in; a
+/// `{screen}`, the screen of its tab. A login to a command-line tool; a profile's sign-in; a
 /// sign-in for a new profile (`/logins/<id>`, accounts.ts). Not for a read-only member.
 export const pageRoutes = (logins: () => Logins | undefined, accounts: () => Accounts | undefined): Route[] => {
   const answer = async (r: Request, f: () => Promise<string>): Promise<Answer> => {

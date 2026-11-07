@@ -1,5 +1,5 @@
 // What a station reads of another of its workspace's for a program granted the whole workspace there, and how it
-// answers one that asks it (docs/data-outflow.md, docs/station-peers.md: `outflow.read`).
+// answers one that asks it (`outflow.read`).
 import { type Bytes, withBytes } from "../mesh/bus.ts";
 import { oneBytes } from "../mesh/files.ts";
 import type { Lang } from "../ops/i18n.ts";

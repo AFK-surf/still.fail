@@ -1,4 +1,4 @@
-// What a topic's value looks like as it goes out (docs/core-ts.md, rule 7): decorated (present.ts) and put through its
+// What a topic's value looks like as it goes out (rule 7): decorated (present.ts) and put through its
 // shape (conform.ts), item by item for its keyed lists (collections.ts). An item that is as it was (the same object a
 // view keeps for it, or one equal to it) within the same minute (times in words are a minute's) is the very object
 // that went out before: not copied, decorated, shaped or compared again, so a list of 2000 rows with one changed costs

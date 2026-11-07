@@ -337,8 +337,7 @@
   // corner.sl begin (scripts/chk corner-sl: not edited here)
   #define float2 vec2
   #define float4 vec4
-  // smooth.mbt's corners for the renderers, number for number; scripts/chk corner-sl makes corner_sl.h and web/host.js
-  // from it and checks the numbers. MB_CORNER_SCALARS takes the scalar part alone, as C (apple_views.m).
+  // smooth.mbt's corners for the renderers; scripts/chk corner-sl makes corner_sl.h and web/host.js from it.
   //
   // How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1
   // superellipse(1.5) over r a quarter longer; between, as far as the room goes.
@@ -995,7 +994,7 @@
     gl.uniform4f(PU.u_b, (sw - 0.5) / src.w, (sh - 0.5) / src.h, dx, dy);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
-  // ---- partial redraw (docs/partial-redraw.md) ----
+  // ---- partial redraw ----
   // A frame is drawn into a canvas of its own (cv, a framebuffer), kept across frames, and copied onto the page's
   // canvas (whose drawing buffer is gone once shown); where the app says only some parts differ from the frame before
   // (H.renderDirty, @hostapi.render_dirty), only those parts of it are drawn again, each cut to it (the scissor, `cut`:

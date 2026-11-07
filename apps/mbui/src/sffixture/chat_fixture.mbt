@@ -1377,7 +1377,7 @@ pub let fix_phone : Ref[String] = Ref("")
 pub let fix_phone_link : Ref[String] = Ref("")
 
 ///|
-/// chat-phone's last post: an agent asking to debug the person's phone (docs/adb-share.md), its card as the core says
+/// chat-phone's last post: an agent asking to debug the person's phone, its card as the core says
 /// it, answered here; decided, how it went.
 pub fn phone_post() -> Json {
   let ask : Map[String, Json] = { "request": "p-1", "reason": "装上刚编好的测试包，看首屏在折叠屏展开时排得对不对" }
@@ -1397,7 +1397,7 @@ pub fn phone_post() -> Json {
 }
 
 ///|
-/// chat-signin's last post: an agent asking the person to sign in to github.com on the chat's tab (docs/vault.md 登录态),
+/// chat-signin's last post: an agent asking the person to sign in to github.com on the chat's tab ( 登录态),
 /// its card as the core says it; how it stands by the mode (chat-signin-code: a code asked; -person: a captcha, the
 /// person's; -done: signed in, its keeping waiting for this device; -kept: kept).
 pub fn signin_post(mode : String) -> Json {

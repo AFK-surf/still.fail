@@ -1,4 +1,4 @@
-// A view made once (docs/retained.md, the model; the way there's 2). Each node is made when it first shows and stays
+// A view made once (the model; the way there's 2). Each node is made when it first shows and stays
 // until what holds it lets it go; what of it changes is a binding of one property (one a property: bound again, the
 // one before is let go), marked as what it read changes and worked out again as the next frame begins (Tree::queued:
 // however often it changed meanwhile, once; nothing is laid out or drawn as a value is set), and that property alone
@@ -14,7 +14,7 @@
 // too. The scope of a node made by a structure's binding (what `show` shows) is its own, not that binding's: the
 // binding running again leaves it be.
 //
-// Nodes are a pool by index (retained.md: no pointer cycles under reference counting): a node holds what holds it and
+// Nodes are a pool by index (no pointer cycles under reference counting): a node holds what holds it and
 // what it holds as indexes, and a `View` is a handle (the tree, the index, the node's making there). A handle on a node
 // let go does nothing (View::live, where every handle's use begins): its index made again since is another node.
 //
@@ -6942,7 +6942,7 @@ pub fn Tree::on_modals(self : Tree, f : () -> Unit) -> Unit {
 
 ///|
 /// A node drawn by what hosts the tree (the old view, built its own way, in this node's place, as it is laid out, drawn
-/// off and drawn in order: retained.md's way there, 3), made by `make` as any node is (its size, its place; by default
+/// off and drawn in order), made by `make` as any node is (its size, its place; by default
 /// the room its holder leaves it).
 pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)) |> ignore }) -> View {
   let tree = self.tree

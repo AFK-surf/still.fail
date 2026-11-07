@@ -326,7 +326,7 @@ fn lint_mbt(
       add("cursor-hand", c.at, f.line_text(c.at))
     }
     // what was built said by hand to be built again: what changed is a signal, and what read it is built again by
-    // itself (docs/incremental.md); the framework's own not counted
+    // itself; the framework's own not counted
     if built_by_hand.contains(c.name) && c.kind == "method" && app && !in_t {
       add("built-by-hand", c.at, f.line_text(c.at))
     }

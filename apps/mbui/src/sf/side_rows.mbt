@@ -22,7 +22,7 @@ pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int
 ///|
 /// Node `i`'s ground as nav_ground has it, worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
 /// ground and to the selected one read as it is drawn, so the row is not built again each frame it eases
-/// (docs/retained.md, motion in what is made once).
+/// (motion in what is made once).
 pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool, lit? : Int64) -> Unit {
   c.bg_by(i, nav_ground_by(c, key, hover, on, lit?))
 }

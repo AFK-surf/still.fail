@@ -1,6 +1,6 @@
 // A set read by its members (SolidJS's createSelector): `has(k)` is whether k is in it, and what reads it is told only
 // as k comes into it or leaves it, never as another does. So "is this row pointed at" changes as the pointer crosses
-// its edge, not as it moves, and a row's change tells that row alone (docs/incremental.md, the model's 2).
+// its edge, not as it moves, and a row's change tells that row alone (the model's 2).
 
 ///|
 /// A set of keys, read by member.

@@ -1,4 +1,4 @@
-// A page's parts (docs/architecture.md, the library: a page's parts): its frame, sections, groups of rows, rows (to
+// A page's parts (the library: a page's parts): its frame, sections, groups of rows, rows (to
 // another page, a value, a switch), cards, notes, choices. A page is drawn into whatever box it is given and laid out
 // by that box's width, once, by its frame (`page`): narrower than the web's narrow app (640), as the web's mobile pages
 // are (web/src/mobile/parts.tsx TopBack, LargeTitle, SectionHeader, ListCard, ListRow): back over a large title, its

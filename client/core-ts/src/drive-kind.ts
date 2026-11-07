@@ -20,7 +20,7 @@ put("subtitle", "srt vtt ass ssa sub");
 /// How an entry is opened: entered, read in the reader, played, previewed as a chat's files are, or saved to the device.
 export type DriveOpener = "folder" | "read" | "play" | "preview" | "save";
 
-/// What a press on an entry of a kind does (every client's, docs/drive.md).
+/// What a press on an entry of a kind does (every client's).
 export function opensOf(kind: DriveKind): DriveOpener {
   switch (kind) {
     case "folder": return "folder";

@@ -1,4 +1,4 @@
-// The station's browser (docs/remote-screens.md): one real Chrome, kept for the agents, its tabs screens a person can
+// The station's browser: one real Chrome, kept for the agents, its tabs screens a person can
 // see and drive. Started when an agent asks for it (the `browser` tool), started again if it dies while in use, closed
 // after a long idle. It outlives a station process, as jobs do: the next one (a handover, a restart) finds it by its
 // DevToolsActivePort and takes it up, its tabs and logins as they were.

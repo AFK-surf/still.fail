@@ -1,4 +1,4 @@
-// A folder of a station's drive: one page on every screen (docs/architecture.md: the same on every screen, and what
+// A folder of a station's drive: one page on every screen (the same on every screen, and what
 // differs). What it is for: a person comes to find a file and open it (read, played, previewed, saved), and to put
 // files in and keep them in order (up, a new folder, a name changed, deleted, dragged into a folder, 收藏). So,
 // top to bottom: its bar (back where its frame has one, its name, what can be done to it), its way down from its root

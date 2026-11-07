@@ -197,7 +197,7 @@ export function parsePrompt(text: string): [Sourced[], string] {
       ts: attr(attrs, "ts") ?? "",
       text: b[0],
       thread: attr(attrs, "thread"),
-      // A person in a Feishu chat is told as one in Slack is (docs/feishu.md).
+      // A person in a Feishu chat is told as one in Slack is.
       slack: attr(attrs, "via") === "slack" || attr(attrs, "via") === "feishu",
       station: isStationAuthor(attr(attrs, "via")),
       agent: bare(attrs, "bot"),

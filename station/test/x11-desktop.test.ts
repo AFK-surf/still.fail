@@ -30,7 +30,7 @@ test("Linux desktop reports the reason when it cannot reach an X11 session", asy
   await assert.rejects(desktop.open({ maxWidth: 640, maxHeight: 480, codecs: ["jpeg"] }), /ffmpeg with X11 support and xdotool/);
 });
 
-/// This test is run on a disposable X11 display, not a person's desktop (docs/remote-screens.md).
+/// This test is run on a disposable X11 display, not a person's desktop.
 test("an X11 desktop over the screen wire carries a decodable frame and drives pointer and keyboard", { skip: process.env.STILLFAIL_TEST_X11 !== "1", timeout: 30_000 }, async () => {
   const env = { ...process.env };
   const observer = spawn("stdbuf", ["-oL", "xev", "-event", "keyboard"], { env });

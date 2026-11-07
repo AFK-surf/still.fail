@@ -1,4 +1,4 @@
-// Modules (docs/station-modules.md): programs beside the station, each its own process, that add to what members reach
+// Modules: programs beside the station, each its own process, that add to what members reach
 // on it without being part of it (a media library, say). config.json `modules` names them (by a command, or by a
 // package the station installs itself: modules/packages.ts); the station starts each
 // (modules/live.ts), passes it the admin API's `/m/<id>/…` with who asks (modules/forward.ts), lets a viewer make the

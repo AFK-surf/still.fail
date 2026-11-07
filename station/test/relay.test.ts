@@ -1,4 +1,4 @@
-// A chat relayed to a channel (docs/relay.md): the places a connect's bot is in, the conversation the station starts
+// A chat relayed to a channel: the places a connect's bot is in, the conversation the station starts
 // there, the agent going on in it, and Slack's side of it against Slack's stand-in (test/slack-fake.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -1,9 +1,4 @@
-// The corners' algorithm; src/host/corner.sl is the renderers' copy (scripts/chk corner-sl).
-//
-// The radius lays things out, the smoothing only draws (the user, 2026-11-07: 「圆角是圆角，平滑是平滑」; 2026-11-03:
-// 「平滑圆角只是在原有圆角的描述上做平滑」). Every corner is smooth (「所有圆角都有平滑」), a capsule by its own curve
-// (「胶囊有胶囊的平滑」; 2026-10-31: 「苹果的那个按钮就看不出直线和半圆的接点」), whatever its length (「这跟长度有个屁的
-// 关系」), and the two are interpolated between so nothing jumps (「还是要插值」).
+// Corners as drawn; host/corner.sl is the renderers' copy. A corner's radius places things, its smoothing only draws.
 
 ///|
 /// How much longer a smooth corner's radius is (the web's --corner-scale), and its exponent (CSS superellipse(1.5): 2^1.5).

@@ -1,4 +1,4 @@
-// The video library (docs/media-service.md 影视): the folders it is made of, each of films or of shows, indexed
+// The video library ( 影视): the folders it is made of, each of films or of shows, indexed
 // through the station's local API as the owner or admin who last set them (as the photo library is: a recursive walk,
 // drive/watch on the folders it knows, a whole pass every hour). What each file is comes from its names and the .nfo
 // beside it (videoname.ts); what is in it from ffprobe, run on the file itself when the service may read it (not a

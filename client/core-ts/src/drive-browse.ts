@@ -1,4 +1,4 @@
-// How a station's files are worked with, as a local file browser does (docs/drive.md "Clients"), worked out once for
+// How a station's files are worked with, as a local file browser does, worked out once for
 // every client: the order a folder's entries are shown in and the names a change gives; the files' page's tabs; a
 // folder typed by its path; what is chosen in a folder and where a press or a key takes it; and what a device holds of
 // it (`Browsing`: the `driveBrowse` and `filesTabs` topics' values and the calls, given what it runs in — the core's

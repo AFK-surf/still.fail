@@ -3,7 +3,7 @@
 // web lists them) and sets out once (Ctx::move_state). From then the view builds the new state as usual, and each box
 // so named is shown from what it showed as the move set out to what it is built as now, all of them on one clock and
 // curve. What the view builds stays the truth: a move holds nothing once it ends. Said again over one going on, it
-// goes on from wherever that had got to. Motion as data (docs/determinism.md): what is shown at a moment is a
+// goes on from wherever that had got to. Motion as data: what is shown at a moment is a
 // function of that moment, however many frames came between.
 //
 // Its first frame builds the new state, which may take longer than the display's frame (a page built for the first

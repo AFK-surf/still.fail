@@ -1,5 +1,5 @@
 // What the core keeps in sync with still.fail cloud (or the account provider in its place: account-provider.ts), by
-// itself, whatever the UI shows (docs/core-ts.md, rule 6): each signed-in account's `/v1/events` socket, held for as long as the account is signed in; its `/v1/me` (whom it
+// itself, whatever the UI shows (rule 6): each signed-in account's `/v1/events` socket, held for as long as the account is signed in; its `/v1/me` (whom it
 // reaches), each workspace it reaches, its signed-in devices, and an operator's lists. The topics that show them only
 // read the records (data.ts). Every time a socket opens, the account is read again (nothing is replayed); its events
 // say what changed. A write to still.fail cloud answers once what it changed is read again.
@@ -549,7 +549,7 @@ export class CloudSync {
     else if (event.type === "workspace" && typeof event.id === "string") {
       if (core.workspaces.owner(event.id) !== null) core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {
-      // A station came online or went: in place, no request (docs/client-core.md).
+      // A station came online or went: in place, no request.
       const online = event.online;
       const id = event.id;
       core.data.update({ topic: "workspace", workspace: event.workspace }, (w) => {

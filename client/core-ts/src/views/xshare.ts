@@ -1,4 +1,4 @@
-// A chat shared with the viewer's other workspaces (docs/chat-share.md): what its "…" shows of it, and `chat.xshare`,
+// A chat shared with the viewer's other workspaces: what its "…" shows of it, and `chat.xshare`,
 // which changes it. The chat's station keeps who it is shared with (`PUT /sessions/:key/xshare`); each workspace newly
 // given it is told, through one of its own stations, to trust that station (`PUT /xshare/hosts`). Each workspace's part
 // stays its own: what was asked here and not answered yet is kept in the chat's workspace (workspace.ts `part`), and

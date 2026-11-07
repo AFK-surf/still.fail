@@ -1,4 +1,4 @@
-// Android emulators and phones on this machine's adb as screen sources (`android:<id>`, docs/remote-screens.md
+// Android emulators and phones on this machine's adb as screen sources (`android:<id>`
 // "Android"): a touchscreen as an iOS Simulator is (kind `simulator`), its pictures and input through scrcpy's program
 // on the device (./scrcpy-server, its version pinned: its protocol is its own and changes between releases). A phone
 // lent to a chat is in that grant's adb server (adb/servers.ts), not here.
@@ -285,7 +285,7 @@ export class ScrcpyStream {
 }
 
 /// How adb is run here: a server this starts does not connect by itself to every phone paired with this machine's key
-/// it finds on the network, a phone lent to one chat among them (docs/adb-share.md: that chat's server alone has it).
+/// it finds on the network, a phone lent to one chat among them (that chat's server alone has it).
 export const adbEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => ({ ...env, ADB_MDNS_AUTO_CONNECT: "0" });
 
 /// adb started: a .cmd (a shim) through what runs it, no window on Windows.

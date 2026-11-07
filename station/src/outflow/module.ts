@@ -1,4 +1,4 @@
-// Data outflow as a part of the station (parts.ts, docs/data-outflow.md): its socket for the programs of this machine
+// Data outflow as a part of the station (parts.ts): its socket for the programs of this machine
 // (macOS, where still.fail Helper says who a program is; Linux, by its executable), its grants and the requests the
 // workspace's admins answer, the routes the members list them with and the admins answer and revoke them with
 // (GET /outflow/grants, POST /outflow/requests/:id, DELETE /outflow/grants/:id) and the event that tells them

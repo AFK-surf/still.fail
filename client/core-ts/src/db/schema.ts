@@ -1,4 +1,4 @@
-// An account's database (docs/core-db.md): its tables, and the migrations that bring a database to this version, in
+// An account's database: its tables, and the migrations that bring a database to this version, in
 // order, by `PRAGMA user_version`. A database a newer core wrote (its version past ours) is opened to be read only.
 //
 // Each table keeps the station's payload of a row as JSON (`json`), passed through as it is, so a field a station adds

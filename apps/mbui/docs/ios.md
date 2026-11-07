@@ -3,7 +3,7 @@
 `APP=stillfail scripts/ios.sh build | run` builds still.fail for the iOS simulator and runs it on a simulator of
 its own (`MBUI_IOS_DEVICE`, default ios-mbui-sf): the same pages as Android and macOS, the core in Hermes (the same
 `core.hbc`, src/host/apple_core.mm built for aarch64-apple-ios-sim with the Rust shell built for that target, Hermes's
-xcframework slice in the app's Frameworks; core/README.md, "iOS"). mbui's scripts/ios.sh takes an app of this module
+xcframework slice in the app's Frameworks). mbui's scripts/ios.sh takes an app of this module
 (MBUI_APP_MOD, a hook as Android's: scripts/ios-core.sh) and its host (ios_app.m) does what still.fail asks of it:
 
 The app on iOS is Android's, as on an Android phone (2026-10-23):

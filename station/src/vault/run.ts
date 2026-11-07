@@ -1,4 +1,4 @@
-// A command run with a grant (secret_run, docs/vault.md 三种用法): through the proxy, with the grant's SSH key in an
+// A command run with a grant (secret_run 三种用法): through the proxy, with the grant's SSH key in an
 // agent, with the secret in its environment, or with a file kept in the vault written out for it. The station runs it, in the session's workspace, and gives back what it
 // said with the secret hidden (scrub.ts) and cut to a size an agent reads, and how it ended.
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";

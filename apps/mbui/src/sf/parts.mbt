@@ -3998,7 +3998,7 @@ let options_card_pad : Double = list_pad
 let option_row_corner : Double = row_corner
 
 ///|
-/// An option's measures, the theme's for the screen (decided once: docs/architecture.md): its number's disc a list
+/// An option's measures, the theme's for the screen (decided once): its number's disc a list
 /// item's mark, as far in from the row's top and side as makes it concentric with the row (its corner less the disc's
 /// half); its label in the controls' words, what it leads to in the meta's. Keyboard and mouse's as the web's
 /// (Decisions.css.ts choice: a 20 disc 8 in, 13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7

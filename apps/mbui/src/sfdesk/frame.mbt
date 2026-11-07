@@ -645,7 +645,7 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
 }
 
 ///|
-/// Back on the wide frame (docs/architecture.md, the tiers' table): what is over the whole window (a screen, a file
+/// Back on the wide frame (the tiers' table): what is over the whole window (a screen, a file
 /// read or played) put away first, a page of the stack popped. On the tape, with a chat's side panel in use, the page
 /// brought over; with the page in use, what was opened over it from there taken off (Nav::push_over), else the
 /// sidebar brought over (the page it chose: the chats' place's chat, a settings page); with the sidebar in use, the chats' from another place's (or the

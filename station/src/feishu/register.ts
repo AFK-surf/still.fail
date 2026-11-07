@@ -1,4 +1,4 @@
-// Feishu apps made by a scan (docs/feishu.md「建机器人」): Feishu's one-click app registration, an OAuth device flow
+// Feishu apps made by a scan (「建机器人」): Feishu's one-click app registration, an OAuth device flow
 // (RFC 8628) as its SDKs' `register_app` runs it. The person opens the link (or scans it as a QR code) in Feishu and
 // confirms; the station asks until the app's id and secret come back, and keeps them for the connect made of them.
 // Registrations live in memory: one not finished within its ten minutes, or across a restart, is begun again.
@@ -13,7 +13,7 @@ type Json = any;
 
 const ENDPOINT = "/oauth/v1/app/registration";
 
-/// What a connect's app is given, as the person confirms it (docs/feishu.md).
+/// What a connect's app is given, as the person confirms it.
 export const ADDONS = {
   scopes: {
     tenant: [

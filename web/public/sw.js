@@ -1,4 +1,4 @@
-// still.fail's service worker: pushes (docs/notifications.md). A notice is shown when no page of the app is looked
+// still.fail's service worker: pushes. A notice is shown when no page of the app is looked
 // at (an open page shows it itself, from the client core); clicking one opens its chat, in a page already open when
 // there is one.
 // And a station's drive played as it comes (web/src/drive/stream.ts): `/__drive/<token>` is answered here, a range at

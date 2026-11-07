@@ -1,6 +1,6 @@
 // The station's services: what its parts are given, each a Context key with the layer that makes it. Async and
 // long-lived work is Effect (fibers in scopes: a part stopped stops all it started); computing what to answer is plain
-// functions (src/read). docs/station-ts.md, 「模块划分」.
+// functions (src/read). 「模块划分」.
 import { Context, Effect, Layer, Queue, Stream, SubscriptionRef } from "effect";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -155,7 +155,7 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
 /// Start the store before the usage-index worker, and keep the same store available to the station's other parts.
 export const ReadersAndStore = Readers.layer.pipe(Layer.provideMerge(Store.layer));
 
-/// still.fail Helper (macOS; docs/station-ts-native.md §4), installed and talked to under <data>/helper: this Mac's
+/// still.fail Helper (macOS §4), installed and talked to under <data>/helper: this Mac's
 /// screen (the desktop's) and the drive's protected folders (helper/files.ts); null where there is none.
 export class Helper extends Context.Service<Helper, HelperApp | null>()("stillfail/Helper") {
   static readonly layer = Layer.effect(
@@ -180,7 +180,7 @@ export class Grants extends Context.Service<Grants, HelperGrants | null>()("stil
   );
 }
 
-/// The screens members see and drive (docs/remote-screens.md): the registry the station's parts add their sources to
+/// The screens members see and drive: the registry the station's parts add their sources to
 /// (`add`), with this machine's display among them from the start; views of them end as the station stops.
 export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()("stillfail/Screens") {
   static readonly layer = Layer.effect(
@@ -276,7 +276,7 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   );
 }
 
-/// The modules beside the station (docs/station-modules.md): which there are and how each is now, for the admin API
+/// The modules beside the station: which there are and how each is now, for the admin API
 /// (passed on to them), the overview and modules/live.ts (which starts them). Their changes told as the overview's.
 export class Modules extends Context.Service<Modules, ModuleSet>()("stillfail/Modules") {
   static readonly layer = Layer.effect(
@@ -392,7 +392,7 @@ export class HelperFolders extends Context.Service<HelperFolders, HelperFiles | 
   );
 }
 
-/// The station's drive (drive/drive.ts, docs/drive.md): one, for the admin API's routes and the modules' local API.
+/// The station's drive (drive/drive.ts): one, for the admin API's routes and the modules' local API.
 /// config.json's roots; what is the station's own never reached; the folders macOS protects through still.fail Helper.
 export class StationDrive extends Context.Service<StationDrive, Drive>()("stillfail/Drive") {
   static readonly layer = Layer.effect(

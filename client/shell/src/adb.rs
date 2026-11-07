@@ -1,4 +1,4 @@
-//! This phone's own adb session (docs/adb-share.md, 2026-10-31, user: 「按理说不是应该 app 自己连接然后给 station 用吗」):
+//! This phone's own adb session (2026-10-31, user: 「按理说不是应该 app 自己连接然后给 station 用吗」):
 //! the app pairs with its own adbd once, with a key of its own (`adb/adbkey` in the data directory), and holds one
 //! session to it (TLS, as Wireless debugging speaks) for as long as its process lives. A station's adb reaches the phone
 //! through a session of its own here (`adb.open`): it says CNXN and is answered at once with the phone's banner (no

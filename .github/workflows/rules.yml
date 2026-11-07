@@ -1,4 +1,4 @@
-# The workspace lock's rules in MoonBit (rules/, docs/rules.md): the JS committed in rules/js is what its source
+# The workspace lock's rules in MoonBit (rules/): the JS committed in rules/js is what its source
 # builds to (station, cloud and the core take that JS as it is), and what is proved there still proves (`moon prove`).
 name: rules
 on:

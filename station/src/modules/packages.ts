@@ -1,4 +1,4 @@
-// Modules the station installs itself (docs/station-modules.md, 「包」): config.json names one by `package` rather than by
+// Modules the station installs itself (「包」): config.json names one by `package` rather than by
 // a command, and the station gets the package where it gets its own releases (the control plane's release base, on
 // the station's channel), signed the same way (docs/release-signing.md). The feed, releases/modules/<p>/<p>.json
 // (<p>-beta.json on the beta), is verified (signed.ts verifyModule) and taken only when it is newer than what is

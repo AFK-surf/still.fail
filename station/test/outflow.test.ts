@@ -1,4 +1,4 @@
-// Data outflow (docs/data-outflow.md): a program on this machine asks over the station's socket, an admin of the
+// Data outflow: a program on this machine asks over the station's socket, an admin of the
 // workspace answers in still.fail, and that program alone reads what it was granted, in the shape of /v1, of this
 // station or of every station of the workspace, until the grant is revoked.
 import assert from "node:assert/strict";

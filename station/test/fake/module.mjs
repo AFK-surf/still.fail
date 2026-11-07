@@ -1,4 +1,4 @@
-// A fake module for test/modules.test.ts (docs/station-modules.md): HTTP/1.1 on STILLFAIL_MODULE_SOCKET. Each start is
+// A fake module for test/modules.test.ts: HTTP/1.1 on STILLFAIL_MODULE_SOCKET. Each start is
 // a JSON line in <STILLFAIL_MODULE_DIR>/starts (its pid and what it was told), so a test knows its token. It answers:
 //   GET /manifest        {viewerWrites: ["/progress/[^/]+"]}
 //   * /echo              what it was asked: method, path, the viewer it was told, the headers, the body's size and sha256

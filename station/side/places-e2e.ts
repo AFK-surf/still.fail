@@ -1,4 +1,4 @@
-// A directory in a folder macOS protects, named to a station launchd runs (src/ops/places.ts; docs/drive.md
+// A directory in a folder macOS protects, named to a station launchd runs (src/ops/places.ts
 // "Directories and files the station is given"), end to end on a Mac: a dev cloud (cloud/test/dev.ts), a station of
 // this checkout started as launchd starts one (a job in the GUI session running the launcher itself; macOS keeps
 // Desktop and the rest from it), still.fail Helper started by it, and a member's device on iroh. A Codex session of

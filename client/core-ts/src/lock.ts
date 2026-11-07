@@ -1,4 +1,4 @@
-// The workspace lock on this device (docs/workspace-lock.md): what the device signs and how it says which device it
+// The workspace lock on this device: what the device signs and how it says which device it
 // is. The stations decide (station/src/cloud/lock.ts); the cloud only keeps and carries the chain. The hashing is the
 // same forms as the stations' and the cloud's (lock-form.ts), tested on the same values (test/lock.test.ts).
 import { ed25519 } from "@noble/curves/ed25519.js";

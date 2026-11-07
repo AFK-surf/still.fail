@@ -1,4 +1,4 @@
-// What a program granted data outflow reads (docs/data-outflow.md), in the shape of its version (`/v1`): written out
+// What a program granted data outflow reads, in the shape of its version (`/v1`): written out
 // field by field here, so that what the station keeps changing never changes what such a program is answered. The
 // chats of one workspace of the station's (its home one, unless another station of a workspace it joined asks),
 // a message only when asked for.

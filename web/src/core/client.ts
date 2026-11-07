@@ -1,8 +1,8 @@
 import { UNTRACKED_OPERATIONS } from "./operations.ts";
-// The UI's side of the core (docs/client-core.md): one channel to the worker
+// The UI's side of the core: one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. Each tab has a dedicated Worker; one of them runs the
-// core and the others' relay to it (worker.ts, docs/core-db.md).
+// core and the others' relay to it (worker.ts).
 import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
@@ -40,7 +40,7 @@ export type Topic =
   | { topic: "jobs"; station: string }
   // A job's last `lines` lines of output and when it last grew, current as it grows.
   | { topic: "jobLog"; station: string; job: string; lines: number }
-  // A station's logins to its command-line tools (docs/remote-login.md): the services it knows and its logins, one
+  // A station's logins to its command-line tools: the services it knows and its logins, one
   // login as it stands, and that login's terminal (only while it is looked at).
   | { topic: "machineLogins"; station: string }
   | { topic: "machineLogin"; station: string; id: string }
@@ -71,7 +71,7 @@ export type Topic =
   | { topic: "status"; workspace?: string }
   // What a chat on a station says of its connection, when it says it all decided (client/core-ts/src/pill.ts).
   | { topic: "connection"; station: string }
-  // What a person hears about while the client runs (docs/notifications.md): a workspace's, or every one's.
+  // What a person hears about while the client runs: a workspace's, or every one's.
   | { topic: "notices"; workspace?: string }
   // What is written to a chat on this device, until sent: `chat` its key, `thread:<id>`, or `new` (a new chat there).
   | { topic: "draft"; station: string; chat: string }
@@ -81,14 +81,14 @@ export type Topic =
   // The chats of a scope a few words find, titles first (not `exclude`, `limit` at most; written on `station`, the
   // other stations' say so): the composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
-  // What a few words find in a workspace, on the device and on every station (docs/search.md, views/search.ts): ⌘K and
+  // What a few words find in a workspace, on the device and on every station (views/search.ts): ⌘K and
   // the phone's search. With `kind`, that kind alone, more of it.
   | { topic: "search"; scope: string; query: string; kind?: string; limit?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
   | { topic: "archive"; scope: string; q?: string; limit?: number }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
-  // Where something another app shares goes (`source` what is shared, `query` narrowing the chats): docs/share-in.md.
+  // Where something another app shares goes (`source` what is shared, `query` narrowing the chats).
   | { topic: "shareIn"; scope: string; source: string; query?: string }
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
   | { topic: "pick"; station: string; of: string }
@@ -118,7 +118,7 @@ export type Topic =
   | { topic: "resources"; scope: string; station?: string }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
-  // A folder of a station's drive (docs/drive.md): `root` one of its roots' paths, `path` under it ("" the root itself).
+  // A folder of a station's drive: `root` one of its roots' paths, `path` under it ("" the root itself).
   // Read again each time it is shown; what is held shows meanwhile, a refusal is the topic's error.
   | { topic: "drive"; station: string; root: string; path: string }
   // Where a file of a drive was left on this device (a text's offset, a video's time in ms): null before.
@@ -152,12 +152,12 @@ export type Topic =
   // workspaces that could be added to this one, and the workspaces a station is in. A core from before has neither.
   | { topic: "joinable"; workspace: string }
   | { topic: "memberships"; station: string }
-  // A station's screens a person can see and drive (docs/remote-screens.md): a core from before it answers an error.
+  // A station's screens a person can see and drive: a core from before it answers an error.
   | { topic: "screens"; station: string }
   | { topic: "screenCard"; station: string; screen: string }
   // A link to a station's 共享调试 as a message shows it (AdbLink.tsx).
   | { topic: "adbCard"; station: string }
-  // The vault (docs/vault.md, client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
+  // The vault (client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
   // them; a vault's items. A core from before has neither.
   | { topic: "vaults"; workspace: string }
   | { topic: "vaultItems"; workspace: string; vault: string }

@@ -1,4 +1,4 @@
-// The hand as what is built reads it (docs/incremental.md, the way there's 3): what the pointer is over, what is
+// The hand as what is built reads it (the way there's 3): what the pointer is over, what is
 // pressed and what the press went down on, what was clicked or clicked twice since the frame before, what was held
 // long, what has the focus, the current input, where the pointer is and whether it is down, the discrete events of the
 // hand (a key, words typed, a press going down or up, a menu, what a reader asked). Each is said as each frame

@@ -26,7 +26,7 @@ export type DriveRouteDeps = {
 const manages = (r: { viewer: { role: string } }) => r.viewer.role === "owner" || r.viewer.role === "admin";
 /// Whether the asker reaches every folder of the machine: a member who may write, whose agents could reach them anyway.
 const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
-/// The drive as the asker's workspace has it: the folders that workspace pinned (docs/multi-workspace.md).
+/// The drive as the asker's workspace has it: the folders that workspace pinned.
 export const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
 
 /// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any). One for a folder macOS

@@ -1,4 +1,4 @@
-// A screen view's frames on its stream (docs/remote-screens.md, Wire): a kind byte, the payload's length (4 bytes,
+// A screen view's frames on its stream (Wire): a kind byte, the payload's length (4 bytes,
 // big-endian), the payload. The station sends `config`, `video` and `state`; the client `input`, `ack`, `keyframe` and
 // `look` (the part of the screen it shows, zoomed in); the screen's clipboard goes both ways (`clipboard`) while the
 // view drives it.

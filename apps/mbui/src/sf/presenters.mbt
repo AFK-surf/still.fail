@@ -1,6 +1,6 @@
-// The presenters (docs/architecture.md, Presenters): a menu, a pick (one of a list, searched when long), a small panel,
+// The presenters (Presenters): a menu, a pick (one of a list, searched when long), a small panel,
 // a confirm and a question with a line to write. A page says what it shows and what opened it, once, as it is pressed;
-// the presenter decides how, by the screen alone (docs/architecture.md, rule 3: the steps one after another near each
+// the presenter decides how, by the screen alone (rule 3: the steps one after another near each
 // other): on Small (@sf.layout) a sheet from the window's foot (the phone's: its grabber, dragged down or back to
 // close); on Medium and Large, with either hand, the web's, a small panel beside what opened it (a menu, a pick, a
 // panel) or a dialog in the middle of the window (a confirm, a question). One host draws them all over
@@ -20,7 +20,7 @@ pub(all) enum Anchor {
 } derive(Eq)
 
 ///|
-/// What opened a menu or a pick, which stand beside it on Medium and Large (docs/architecture.md, rule 3: the steps one
+/// What opened a menu or a pick, which stand beside it on Medium and Large (rule 3: the steps one
 /// after another near each other): the box pressed (its id) or a rectangle of the window (a right click's point). Never
 /// nothing: no page can open one beside nothing, as a dialog in the middle of the window.
 pub(all) enum Beside {
@@ -1282,7 +1282,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   presented_alone.val = alone
   presented_how.clear()
   let (ww, _) = c.window_size()
-  // a sheet on Small, the web's otherwise (docs/architecture.md, rule 3): by the screen, never the hand
+  // a sheet on Small, the web's otherwise (rule 3): by the screen, never the hand
   let sheet = layout(ww) is Small
   let gone : Array[Int] = []
   // (sheets closing at once, one pushed up under another (a confirm's 删除 closing what it was asked from): all as far

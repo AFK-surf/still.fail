@@ -1,5 +1,5 @@
-// Films and series over the core's media module (still.fail docs/media-service.md,
-// the third part): `media.videos` for the library, `media.video` for one's
+// Films and series over the core's media module:
+// `media.videos` for the library, `media.video` for one's
 // page, `media.video.poster` for the posters. Playing (`media.video.play`)
 // waits for the player (the host's).
 

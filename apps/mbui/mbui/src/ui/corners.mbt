@@ -1,5 +1,4 @@
-// The corner rule, checked on every frame a test draws (Tester::corner_faults, hold_corners). Corners unlike each other
-// are only ever a design's (the user, 2026-10-26: 「每个四边圆角不一致的都应该手动确认是否 by design」).
+// The corner rule, checked on every frame a test draws (Tester::corner_faults).
 
 ///|
 /// Whether node `n` shows a ground of its own (a fill or an edge) and is drawn.

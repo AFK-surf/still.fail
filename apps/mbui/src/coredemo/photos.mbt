@@ -1,4 +1,4 @@
-// Photos over the core's media module (still.fail docs/media-service.md, the
+// Photos over the core's media module (the
 // second part): `media.timeline` for the days, newest first, more of them
 // as the timeline is scrolled down; `media.thumbs` for the grid's pictures,
 // asked for together (up to 64 a call) as they come into view;

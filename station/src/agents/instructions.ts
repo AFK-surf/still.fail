@@ -134,7 +134,7 @@ export function parseThreadAddress(value: string): [string, string] | null {
   const at = v.indexOf("/");
   if (at < 0) return null;
   const [channel, ts] = [v.slice(0, at), v.slice(at + 1)];
-  // A Feishu chat's: its chat id and the message or topic it began with (docs/feishu.md).
+  // A Feishu chat's: its chat id and the message or topic it began with.
   if (/^oc_[A-Za-z0-9]+$/.test(channel) && /^om(t)?_[A-Za-z0-9]+$/.test(ts)) return [channel, ts];
   const dot = ts.indexOf(".");
   if (dot < 0) return null;

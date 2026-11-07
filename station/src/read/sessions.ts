@@ -164,7 +164,7 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
 /// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
 export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null, now = false): Json {
   setLang(lang);
-  // One of another workspace is none (docs/multi-workspace.md).
+  // One of another workspace is none.
   const row = store.getSession(s, key);
   if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
   const listed = store.listTurns(s, key, turns);
@@ -210,13 +210,13 @@ function threadView(
   // A Slack channel's name, as far as known.
   v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
-  // A still.fail chat's Slack and Feishu threads, where what people send can be copied (docs/relay.md "抄送"), the one
+  // A still.fail chat's Slack and Feishu threads, where what people send can be copied, the one
   // said in last first; left out when none.
   if (t.thread.surface === store.STILLFAIL_SURFACE) {
     const to = store.ccThreads(s, t.thread.id);
     if (to.length > 0) v.cc = to.map((o) => ({ thread: o.thread.id, surface: o.thread.surface, channel: o.thread.channel, threadTs: o.thread.threadTs, channelName: knownChannel(s, o.connect, o.thread.channel) }));
   }
-  // Which other workspaces it is shared with (docs/chat-share.md), by the session key its link names.
+  // Which other workspaces it is shared with, by the session key its link names.
   const shared = shares.get(t.thread.home ?? t.sessions[0]?.session ?? "");
   v.xshare = shared === undefined ? null : shared;
   return v;

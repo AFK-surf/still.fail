@@ -1,4 +1,4 @@
-// What the station's Node process hands the launcher at a handover (src/ops/launcher.ts, docs/station-ts-native.md):
+// What the station's Node process hands the launcher at a handover (src/ops/launcher.ts):
 // what it holds only in memory goes on the control channel only to a launcher that carries it over (one from before
 // would write the line to its log), and what the launcher carries over from the process before is taken as it comes.
 import assert from "node:assert/strict";

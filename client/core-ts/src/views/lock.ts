@@ -1,4 +1,4 @@
-// The workspace lock on this device (docs/workspace-lock.md): what the pages show of it and what a person does with
+// The workspace lock on this device: what the pages show of it and what a person does with
 // it, so the pages only draw. The cloud keeps the chain and carries it; the stations check every entry and decide.
 // An app signs (lock.ts `Signer`) and brings what it signed to the cloud and to each station it reaches.
 //
@@ -394,7 +394,7 @@ function unconfirmed(inner: Inner, ws: string): CoreError {
 /// What this device brings a station of the workspace as it connects (its hello's `lock.entries`): the entries from the
 /// one that put it in the lock on (from the one that made its person a member, lately too: a station takes no device of
 /// someone it has not heard of), as held here, while that was lately (RECENT_SECS): a station that has not heard of
-/// them yet takes them and lets it in (docs/workspace-lock.md 新设备), the approval coming with the device that needs
+/// them yet takes them and lets it in ( 新设备), the approval coming with the device that needs
 /// it. None when it is not in the lock, was put there long ago or by the genesis, or they would not fit a first line.
 function carried(inner: Inner, ws: string): Entry[] | null {
   const h = held(inner, ws);
@@ -784,7 +784,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         result = yield* lock.append("device.remove", { id: param("device") });
         break;
       case "disable": {
-        // The person's own secrets opened while the lock still says whose they are (docs/vault.md 一个库): once it is
+        // The person's own secrets opened while the lock still says whose they are ( 一个库): once it is
         // off they go into the plain library, as the dialog said. Turned down there, nothing is turned off.
         // (the person asked once, for this: the box key's prompt says it, the vaults' keys unsealed with it; asked by
         // itself only where none was needed. Two prompts in a row for one tap: found on Android, 2026-11-05)
@@ -845,7 +845,7 @@ export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): 
   });
 }
 
-/// A station that joined a locked workspace from its home (docs/multi-workspace.md) taken into that workspace's lock, as
+/// A station that joined a locked workspace from its home taken into that workspace's lock, as
 /// one enrolled with its hash is, by this device's signature: its code is worked out here, the same person having asked
 /// it to join.
 export function takeInJoined(inner: Inner, sub: string, ws: string, station: string): Effect.Effect<unknown, CoreError> {

@@ -1,4 +1,4 @@
-// The station's control plane: what it is told by, and tells, whoever keeps its workspace (docs/cloud.md, "Control planes").
+// The station's control plane: what it is told by, and tells, whoever keeps its workspace ("Control planes").
 // One shape for every provider (provider.ts): cloud.json and its changes, the presence socket, notices, traces, where
 // its releases are and which member credentials it takes. still.fail cloud's is what the station always did; Comma's
 // speaks its contract (v1). The service (services.ts `ControlPlane`) follows cloud.json's provider, read anew at each
@@ -22,7 +22,7 @@ export type ControlPlaneShape = {
   /// The presence socket, kept for good (until interrupted) while the station answers.
   readonly presence: Effect.Effect<never>;
   /// A batch of notices (at most 50) for people's devices.
-  /// `workspace`: a joined one's notices (docs/multi-workspace.md); absent, the home one's, as planes before that read.
+  /// `workspace`: a joined one's notices; absent, the home one's, as planes before that read.
   readonly notify: (notices: Notice[], workspace?: string) => Effect.Effect<void, Error>;
   /// A batch of the mesh's spans; dropped where the provider takes none.
   readonly traces: (spans: unknown[]) => Effect.Effect<void, Error>;

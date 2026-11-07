@@ -1,4 +1,4 @@
-// A chat's grant of a person's phone (docs/adb-share.md, 2026-10-29: as vault grants are): an agent asks with
+// A chat's grant of a person's phone (2026-10-29: as vault grants are): an agent asks with
 // `phone_use {reason}`, a card in its chat asks the person it works for (whoever started the chat), and they approve it
 // for this chat for an hour or until the chat is archived, or refuse it, from their app. Only that chat's session holds
 // the grant; it ends as its scope does, as the chat is archived or deleted, or as its owner takes it back. Asks,
@@ -29,7 +29,7 @@ export type PhoneRequest = {
   lastUsedAt?: number;
   /// The chat's current title, filled when sent (not kept in the record).
   chatTitle?: string | null;
-  /// What the person's device signed as it approved this (docs/personal-lock.md): their phone lends only on it, and
+  /// What the person's device signed as it approved this: their phone lends only on it, and
   /// checks it itself. Carried, not read, here.
   signed?: { body: unknown; sig: unknown };
   /// Granted, how this station's adb holds the phone (link.ts `AdbState.adb`: `connected`, `unpaired`, `off`,
@@ -410,7 +410,7 @@ export class PhoneGrants {
     return null;
   }
 
-  /// What the owner's device signed for a grant live from before signatures (docs/personal-lock.md): carried from now on.
+  /// What the owner's device signed for a grant live from before signatures: carried from now on.
   sign(email: string, id: string, signed: unknown, workspace: string): string | null {
     const r = this.get(id);
     if (r === null || this.#workspace(r) !== workspace) return "no such request";

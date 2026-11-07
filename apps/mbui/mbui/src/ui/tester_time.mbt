@@ -1,4 +1,4 @@
-// Time in a test is said by the test (docs/determinism.md): an input is handed in and the frames it causes drawn, at
+// Time in a test is said by the test: an input is handed in and the frames it causes drawn, at
 // its own moment; time goes on by `run_for` (a declared duration: a motion's, a timer's), straight to its end, a frame
 // there (and at each wake the view asked for on the way); `frame()` draws the display's next frame (1000/60 ms apart
 // by default). How many frames come before a moment changes nothing of what is so at it: MBUI_TEST_FPS draws the

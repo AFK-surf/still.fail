@@ -1,4 +1,4 @@
-// The workspace's lock (docs/workspace-lock.md): a hash-chained record of who belongs, each entry signed by a device or
+// The workspace's lock: a hash-chained record of who belongs, each entry signed by a device or
 // passkey the record itself names. Once a station pins it, the control plane only stores and carries it: who may
 // connect, with what role, which stations are peers, which gateways and grant keys count, all come from here. Pure:
 // what is kept and when it is told is cloud/state.ts's.
@@ -18,7 +18,7 @@ export type Member = { sub: string; email: string; role: Role };
 /// A device: its base iroh key (`id`), whose person, the client it is, the key it signs with (an app's only), the
 /// endpoint ids an older client connects with (it proves none), until when (a web page's).
 /// `by`: whose signature put it in the lock (the genesis's devices the owner's). `own`: the person's own, which alone
-/// signs anything (docs/workspace-lock.md 本人的设备): named in the genesis, put in by an own device or passkey of the
+/// signs anything ( 本人的设备): named in the genesis, put in by an own device or passkey of the
 /// same person, or put in by an owner or admin while the person had never had an own one that signs (their first,
 /// approved face to face). An admin may put a device or passkey in under anyone's name: that one connects, but its
 /// signature counts for nothing, in the lock or the vault, so it can neither act as the person nor be given their keys.
@@ -50,7 +50,7 @@ export type LockState = {
   signed: Set<string>;
   stations: Map<string, Station>;
   gateways: Set<string>;
-  /// The person's own lock each member bound themselves to (`person` entries, docs/personal-lock.md): its genesis's hash.
+  /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
   persons: Map<string, string>;
   disabled: boolean;
 };
@@ -156,7 +156,7 @@ export function endpointProof(ws: string, base: string, endpoint: string, proof:
   }
 }
 
-// The rules themselves (who may sign what, what each entry does) are rules/'s, in MoonBit (docs/rules.md): what they
+// The rules themselves (who may sign what, what each entry does) are rules/'s, in MoonBit: what they
 // hold for each state is theirs, given back to them for the next entry; the state here is a copy to read.
 const crypto = { sha256Hex: (s: string) => sha256(s).toString("hex"), sigValid, validKeyId, endpointProof };
 const held = new WeakMap<LockState, unknown>();
@@ -254,7 +254,7 @@ export function admit(s: LockState, who: { sub: string; endpoint: string; base?:
   return { device: s.devices.get(out.device)!, role: out.role };
 }
 
-/// A person's own lock as its chain says it (docs/personal-lock.md, rules/src/lock/person.mbt).
+/// A person's own lock as its chain says it (rules/src/lock/person.mbt).
 export type PersonDevice = { key: string; id: string; label: string };
 export type Person = { sub: string; genesis: string; head: string; seq: number; devices: PersonDevice[] };
 

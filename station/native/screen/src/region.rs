@@ -1,4 +1,4 @@
-// A part of the display a view frames alone (a client zoomed in: docs/remote-screens.md, "Regions"): as the station
+// A part of the display a view frames alone (a client zoomed in, "Regions"): as the station
 // says it in `bounds`, and cut from a picture on even pixels (what 4:2:0 crops at), said back as the part it is.
 use serde_json::{Value, json};
 

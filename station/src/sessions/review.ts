@@ -18,7 +18,7 @@ type Json = any;
 const ARCHIVE_REVIEW_MESSAGES = 400;
 const ARCHIVE_REVIEW_BYTES = 80_000;
 
-/// Whose archive policy a session's chat is under (docs/multi-workspace.md): its workspace's, null for the station's home
+/// Whose archive policy a session's chat is under: its workspace's, null for the station's home
 /// one (whose policy is kept as null).
 export function policyWs(hub: Hub, key: string | SessionRow): string | null {
   const ws = hub.wsOf(key);

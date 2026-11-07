@@ -1,4 +1,4 @@
-// A person's own lock as still.fail cloud keeps it (docs/personal-lock.md): one chain per account, of the devices that
+// A person's own lock as still.fail cloud keeps it: one chain per account, of the devices that
 // person signs with. The cloud stores it and carries it to their devices, and takes only entries that follow the kept
 // chain and are signed by a device on it (the rules' own check, station/src/cloud/lock.ts `personFold`), so a stolen
 // login cannot write into a lock; it may start one anew (all of a person's devices lost), which the devices that pinned

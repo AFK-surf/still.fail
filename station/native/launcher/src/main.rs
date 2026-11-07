@@ -1,4 +1,4 @@
-//! stillfail-station: the native launcher of the TypeScript station (docs/station-ts-native.md §2), with the Rust
+//! stillfail-station: the native launcher of the TypeScript station ( §2), with the Rust
 //! station's command line (bin/stillfail, the desktop app and the installer call it).
 //!
 //! `run` is the launcher's own: it holds the data directory's lock, the two listening ports and the pid that

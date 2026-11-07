@@ -22,7 +22,7 @@ the same.
     is left out.
 
 - **serve-sim** (Swift, EvanBacon/serve-sim at 0193e65, `packages/serve-sim/Sources`, Apache-2.0; still.fail Helper's
-  `simulator.view` uses it, docs/remote-screens.md "Simulators"): only the iOS Simulator's capture and input,
+  `simulator.view` uses it): only the iOS Simulator's capture and input,
   `SimDuoHID/main.m`, `SimNative/{FrameCapture,HIDInjector,DeviceHubKeyboardBridge,DuoHIDBridge,PixelBufferUtils,SimFrameworks,Xcode}.swift`
   and the `SimNativeSupport` they use; not its Node module, encoders, recorder or accessibility dumps. Package.swift is
   ours (no node-swift).
@@ -70,7 +70,7 @@ the same.
 
 - **noq-udp 1.3.0** (src/linux.rs): no UDP segmentation offload (GSO) on Android, each datagram sent on its own. An
   Android emulator's network accepts a segmented burst and drops all of it; QUIC on a direct path then got nothing
-  through once it sent more than a packet or two at once, until iroh dropped the path 15 s later (docs/mesh-lan.md).
+  through once it sent more than a packet or two at once, until iroh dropped the path 15 s later.
 - **noq-udp 1.3.0** (src/unix.rs): on Apple platforms a datagram's source address is set with `IP_PKTINFO`. It was
   set with `IP_RECVDSTADDR`, which macOS ignores on send, so a reply left from the address the routing table picked.
   On a machine with two addresses on one network, a device that had dialed one got the answer from the other, and

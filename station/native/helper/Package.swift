@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
-// still.fail Helper (docs/station-ts-native.md §4): the station's macOS app for what macOS grants an app, not a
+// still.fail Helper ( §4): the station's macOS app for what macOS grants an app, not a
 // process the station starts (a grant then needs only this app restarted, never the station): this Mac's screen
-// first (docs/remote-screens.md). scripts/native.ts builds it and puts it in its bundle with Info.plist.
+// first. scripts/native.ts builds it and puts it in its bundle with Info.plist.
 import PackageDescription
 
 let package = Package(

@@ -27,7 +27,7 @@ import { holds } from "./data.ts";
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
 /// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
-/// docs/telemetry.md): how long a chat took to show, and how much of that the core spent making it.
+///): how long a chat took to show, and how much of that the core spent making it.
 const OPENED = new Set(["chat"]);
 /// Rounds of emissions that held the core this long are told (`core.flush`): what made the core busy as a page waited
 /// for it. At most one a minute, saying how many there were and the worst of them: one a round was 1375 spans a phone

@@ -30,7 +30,7 @@ export class Station {
   lateMs = 0;
   /// The paths of the requests the device let go of before their answers ended (their streams stopped by it).
   letGo: string[] = [];
-  /// Screen views (docs/remote-screens.md) as it served them: the head, what the client sent, the most frames it ever
+  /// Screen views as it served them: the head, what the client sent, the most frames it ever
   /// had sent and not acknowledged. A view sends `screenFrames` (a config first), each once fewer than 2 are
   /// unacknowledged, then ends.
   views: { head: J; got: J[]; mostUnacked: number }[] = [];

@@ -1,4 +1,4 @@
-// Modules beside the station (src/modules, docs/station-modules.md) against a fake module (test/fake/module.mjs, a Node
+// Modules beside the station (src/modules) against a fake module (test/fake/module.mjs, a Node
 // script on its socket): started with what it is told, the admin API's `/m/<id>/…` passed on to it, directly and over
 // the mesh (a body streamed in, a long answer and an event stream streamed out, let go of when the caller goes), who asks told and a forged teller
 // dropped, a viewer's writes refused but those its manifest declares, started again after it crashes, ended as config.json

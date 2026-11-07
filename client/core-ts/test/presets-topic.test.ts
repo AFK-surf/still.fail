@@ -1,4 +1,4 @@
-// A workspace's presets on a station (the `presets` topic, docs/presets.md): read as a page shows them and again once
+// A workspace's presets on a station (the `presets` topic): read as a page shows them and again once
 // one is made; the one picked for a new chat there is kept on this device and goes with the chat as it is made.
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -1,4 +1,4 @@
-# mbui (apps/mbui/mbui): the host's and the text's contracts on Linux (docs/determinism.md, "What is compared, and
+# mbui (apps/mbui/mbui): the host's and the text's contracts on Linux ("What is compared, and
 # where"; scripts/host_contract.sh), as mbui-host-windows.yml has Windows': kitdemo built for the GTK 4 host
 # (src/host/linux_*, scripts/linux.sh), its controls page run in a window of Xvfb's (Mesa's llvmpipe draws it: no GPU)
 # with its scripted taps, its tape made a Tester's test and run here (every frame the same), then the committed tape's

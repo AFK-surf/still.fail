@@ -1,4 +1,4 @@
-// The core's data (docs/core-db.md): one SQLite database per signed-in account (db/account.ts, its tables in
+// The core's data: one SQLite database per signed-in account (db/account.ts, its tables in
 // db/schema.ts), and the few values that are the device's (preferences, the changelog seen) in the host's storage.
 // What is a station's or a workspace's is kept in the database of the account that reaches it (Workspaces' owner);
 // what an account did is in its own. Signing out removes the account's database.

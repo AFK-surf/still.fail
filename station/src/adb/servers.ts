@@ -1,4 +1,4 @@
-// An adb server of each grant's own (docs/adb-share.md, 2026-10-29): a phone granted to a chat is connected in that
+// An adb server of each grant's own (2026-10-29): a phone granted to a chat is connected in that
 // grant's server alone, its port given to that chat's agent (phone_use), and the phone's listener takes connections
 // from those servers' processes alone (`allowed`). An agent of another chat, though it knows the ports, reaches neither:
 // the phone is not in the station's own server (5037), a connection of its to the phone's port is turned away, and the

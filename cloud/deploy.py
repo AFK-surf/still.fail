@@ -34,8 +34,8 @@ else ~/stillfail-deploy:
             the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
             stations distrust new grants until they re-enroll.
   posthog   <deploy>/posthog.json, {host, key}: PostHog's project key, built into the web app
-            (docs/telemetry.md). Without it the web app is built without analytics.
-  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
+. Without it the web app is built without analytics.
+  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go.
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
@@ -83,7 +83,7 @@ DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
 AXIOM = DEPLOY / "axiom.json"
-# Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}), Firebase's service account
+# Push notifications: the VAPID key ({public, private, subject}), Firebase's service account
 # and the APNs key ({keyId, teamId, key, topic?}).
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"

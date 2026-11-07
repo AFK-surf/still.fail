@@ -1,8 +1,7 @@
 // src/host/corner.sl as a C string (scripts/chk corner-sl makes it: edit corner.sl, then run it). The shaders
 // write float2; GLSL's take it with `#define float2 vec2` and `#define float4 vec4` before it.
 #define MB_CORNER_SL \
-  "// smooth.mbt's corners for the renderers, number for number; scripts/chk corner-sl makes corner_sl.h and web/host.js\n" \
-  "// from it and checks the numbers. MB_CORNER_SCALARS takes the scalar part alone, as C (apple_views.m).\n" \
+  "// smooth.mbt's corners for the renderers; scripts/chk corner-sl makes corner_sl.h and web/host.js from it.\n" \
   "//\n" \
   "// How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1\n" \
   "// superellipse(1.5) over r a quarter longer; between, as far as the room goes.\n" \

@@ -1,4 +1,4 @@
-// Phones lent to this station's agents (docs/adb-share.md; the Rust station's adb.rs): a phone offers its adbd over its
+// Phones lent to this station's agents (the Rust station's adb.rs): a phone offers its adbd over its
 // member link, and the station reaches it at `127.0.0.1:<port>`, a listener of its own whose every TCP connection is a
 // stream it opens on the phone's connection (the phone's core takes it on to adbd). `adb connect` as the offer comes,
 // `adb disconnect` as it goes; `adb pair` through the phone's pairing port when its person types the code. The agents
@@ -96,7 +96,7 @@ export class Share {
   onSet: ((state: AdbState) => void) | null = null;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
-  /// Whether it turned it down as not paired with its own adbd (a phone that holds its own adb session, docs/adb-share.md
+  /// Whether it turned it down as not paired with its own adbd (a phone that holds its own adb session
   /// 2026-10-31): it is paired on the phone, once, not by this station.
   refusedUnpaired = false;
   private refusalWaiters: (() => void)[] = [];

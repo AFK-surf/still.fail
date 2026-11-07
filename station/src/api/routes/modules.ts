@@ -1,4 +1,4 @@
-// The modules beside the station (docs/station-modules.md) as its members see them, and turned on or off by its owners
+// The modules beside the station as its members see them, and turned on or off by its owners
 // and admins without anyone writing config.json: GET /modules, each still.fail makes (modules/catalog.ts) and each
 // config.json names, `{id, offered, enabled, installed, running, version}`; PUT /modules/<id> `{enabled}`, the station
 // writing config.json itself (a package of the catalog named by its id, or one named turned off or on again), its

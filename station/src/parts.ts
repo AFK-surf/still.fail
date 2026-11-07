@@ -1,4 +1,4 @@
-// The station's parts that are modules of it, in its own process (docs/station-modules.md, 「进程内的模块」): each a
+// The station's parts that are modules of it, in its own process (「进程内的模块」): each a
 // layer the composition root (main.ts) lists, made after the platform and the agents' side, saying here what it adds to
 // what the station answers: its routes of the admin API, the writes a read-only member may make of them, its own kinds
 // of request on a member's link, its fields of the overview and its tools for the agents. Nothing registers itself: a part is in the station because main.ts names

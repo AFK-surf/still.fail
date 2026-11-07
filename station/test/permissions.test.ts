@@ -1,5 +1,5 @@
 // What macOS lets still.fail Helper do, as the station's page and the agents see it and ask for it (src/helper/grants.ts,
-// src/api/routes/permissions.ts, src/tools/permissions.ts; docs/remote-screens.md "Grants"): the grants as the helper
+// src/api/routes/permissions.ts, src/tools/permissions.ts): the grants as the helper
 // says them, told again as they change; one asked for puts the helper's window up once (not again while it is up, nor
 // within AGAIN_MS when an agent or the drive asks; a person's own ask puts it up again); the answer says whether the screen can be driven (the
 // client then opens it) or the person has to go to the Mac. The helper is a fake in this process speaking main.swift's

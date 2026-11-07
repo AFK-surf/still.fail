@@ -1,4 +1,4 @@
-// A view made once does only the work a change asks for (docs/retained.md, the model): counted as work done or not
+// A view made once does only the work a change asks for (the model): counted as work done or not
 // (Tree::work), never by how long it took.
 
 ///|

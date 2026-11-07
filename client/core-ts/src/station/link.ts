@@ -1,5 +1,5 @@
 // A station's link: its `/admin/api/events` stream, held open for as long as the station is reached, and opened again
-// with backoff when it drops (docs/core-ts.md, rule 6). Every station of every workspace an account reaches has one.
+// with backoff when it drops (rule 6). Every station of every workspace an account reaches has one.
 //
 // This is the way to a station only: when its stream is opened, tried again, or taken over by another that follows
 // something else. What comes on it and what is read as it opens is the sync's (sync.ts), told here as `Told`: a stream
@@ -51,7 +51,7 @@ export const MEMORY = "agentMemory";
 /// The workspace's presets on the station as it answered GET /presets last (the `presets` topic), in the link's memory.
 export const PRESETS = "presets";
 /// The programs granted the station's data as it answered GET /outflow/grants last (the `outflowGrants` topic,
-/// docs/data-outflow.md), in the link's memory; `{unsupported: true}` from a station from before.
+///), in the link's memory; `{unsupported: true}` from a station from before.
 export const OUTFLOW = "outflowGrants";
 /// What a web link in a message is, as the station answered GET /link-preview for it last (the `linkPreview` topic), in
 /// the link's memory: the latest few kept (each may carry its page's icon and picture inline).
@@ -522,7 +522,7 @@ export class Links {
     // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
     if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
-    // The logins' terminals shown (docs/remote-login.md).
+    // The logins' terminals shown.
     for (const id of wants.logins ?? []) query.push(`login=${encode(id)}`);
     if (since !== null) query.push(`since=${encode(since)}`);
     return `/events?${query.join("&")}`;

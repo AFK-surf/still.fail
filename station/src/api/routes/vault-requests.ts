@@ -1,15 +1,15 @@
-// What agents asked of the vault (docs/vault.md, agent 用密钥): GET vault/requests, those still waiting that the viewer
+// What agents asked of the vault (agent 用密钥): GET vault/requests, those still waiting that the viewer
 // may decide (they are a member of the request's vault, or own the plain library's item); POST vault/grants and
 // vault/denials, the decision as the viewer's app signed it. The grant's secret is sealed to the request's box and opened
 // only by the keeper; a refused one says why. GET vault/uses: the requests decided, as a vault's uses.
 //
-// The plain library (vault/plain.ts, docs/vault.md 不加锁的库), a workspace's without security mode: GET vault/plain (the
+// The plain library (vault/plain.ts 不加锁的库), a workspace's without security mode: GET vault/plain (the
 // viewer's items, without their fields, and their longest grant), GET vault/plain/item?id= (one, with them), PUT
 // vault/plain (a version; security mode on, only a deletion: the items are moved into the viewer's vault), PUT
 // vault/plain/lasts ({lasts, at}: the longest grant of the viewer's items that say none), and POST vault/plain/grants and
 // vault/plain/denials (its requests decided by the item's owner, not signed: nothing here is encrypted).
 //
-// A secret an agent asked to keep (secret_save, docs/vault.md agent 存入), approved: POST vault/saves `{request, vault}`
+// A secret an agent asked to keep (secret_save agent 存入), approved: POST vault/saves `{request, vault}`
 // once the viewer's app wrote it into their vault (and brought its copy here), POST vault/plain/saves `{request}` to
 // write it into their plain library here (`{request, fields}`: one they typed in on its card). Turned down: vault/denials or vault/plain/denials, as any request.
 import { admit, type LockState } from "../../cloud/lock.ts";

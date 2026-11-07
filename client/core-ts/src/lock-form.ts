@@ -1,4 +1,4 @@
-// The workspace lock's forms (docs/workspace-lock.md), one for the stations (station/src/cloud/lock.ts), the cloud
+// The workspace lock's forms, one for the stations (station/src/cloud/lock.ts), the cloud
 // (cloud/src/lock.ts, which takes the stations') and devices (lock.ts): what is hashed and how a short code is read off
 // a hash. Pure: each side hashes with its own SHA-256 (node's, or @noble's where there is no node).
 

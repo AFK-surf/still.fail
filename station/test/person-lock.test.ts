@@ -1,4 +1,4 @@
-// A person's own lock in a workspace's (rules/src/lock/person.mbt, docs/personal-lock.md): only a member's own device
+// A person's own lock in a workspace's (rules/src/lock/person.mbt): only a member's own device
 // binds a lock to them, a chain holds only as signed by a device on it, and a device is let in on it only as the
 // lock bound there says, not on one taken off since, nor on another lock.
 import assert from "node:assert/strict";

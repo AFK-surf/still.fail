@@ -2609,7 +2609,7 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
   assert.deepEqual(v.elsewhere.map((s: J) => s.attachments ?? []), [[{ name: "shot.png", path: "/ws/k/uploads/shot.png", size: 13, owner: "k" }], [], [], []]);
 });
 
-// ── What is shared is never written on (docs/core-ts.md「谁能改什么」) ──
+// ── What is shared is never written on (「谁能改什么」) ──
 
 /// mulberry32: the same draws for the same seed.
 function draws(seed: number) {

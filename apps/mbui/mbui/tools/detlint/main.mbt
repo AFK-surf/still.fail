@@ -10,7 +10,7 @@
 // The bar (a ratchet): detlint.json keeps each rule's count of findings, file by file, and each file is held to its
 // own: one more in any file fails (a finding moved to another file too), naming it and its lines; fewer fails too,
 // until --update lowers the bar (the migration's own commit: what was moved off stays off). A rule whose bar is 0 is
-// simply forbidden. docs/detlint.md says each rule; rule_words (rules.mbt) is what a failure prints.
+// simply forbidden. says each rule; rule_words (rules.mbt) is what a failure prints.
 //
 // An exception is written on the line itself or on the line above it, with its reason:
 //
@@ -24,7 +24,7 @@
 // What it reads: MoonBit through a lexer of its own (file.mbt), a call being NAME ( … ) with what is before it (a
 // receiver `.`, a package `@pkg.`, a type `T::`) and its arguments split at the top level, the enclosing top-level
 // item (a `test` block, a `fn`) and blocks with their headers (if / while / match / guards). It does not know types:
-// `x.request_frame()` is the Ctx's for any x. Where that is wrong, see "Limits" in docs/detlint.md.
+// `x.request_frame()` is the Ctx's for any x.
 
 ///|
 let drive_wait : @re.Regex = rx("^\\s*(wait|linger)\\s+[0-9]")
@@ -390,7 +390,7 @@ fn tally(findings : Array[Finding], excused : Bool) -> Map[String, Counts] {
 }
 
 ///|
-/// the rules where an exception may take the place of a finding there was (docs/detlint.md: a time shown is right);
+/// the rules where an exception may take the place of a finding there was (a time shown is right);
 /// elsewhere an exception's count only goes down, apart from the findings'
 let swappable : Array[String] = ["app-clock"]
 

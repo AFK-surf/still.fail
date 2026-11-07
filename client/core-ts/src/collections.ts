@@ -1,4 +1,4 @@
-// Keyed collections (docs/core-ts.md, rule 7 and 按 key 的增量): where a topic's value holds lists of items with a
+// Keyed collections (rule 7 and 按 key 的增量): where a topic's value holds lists of items with a
 // stable id, and the delta that changes them item by item. A row that changed is one `patch` of that row, wherever it
 // is; a row that moved is a `move`; a new one a `put` before its neighbour; one gone a `drop`. The rest of the value
 // changes by the old ops (delta.ts). A list whose keys are not each once there (or not all there) goes the old way.

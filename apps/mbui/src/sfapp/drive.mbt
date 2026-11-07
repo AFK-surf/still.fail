@@ -1,4 +1,4 @@
-// A station's drive on the phone's stack (docs/drive.md): 文件 (the files' places, the wide frame's sidebar's list) and a
+// A station's drive on the phone's stack: 文件 (the files' places, the wide frame's sidebar's list) and a
 // page of a station's drive (the files' page, laid out by its width: @sfdesk files_start.mbt, drive_narrow.mbt), each in
 // the stack's frame; a folder gone into is a page pushed over it. ＋ adds a folder to the personal shortcuts.
 

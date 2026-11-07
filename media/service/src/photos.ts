@@ -1,4 +1,4 @@
-// The photo library (docs/media-service.md 照片): the folders it is made of, each an album, and the backup folder the
+// The photo library ( 照片): the folders it is made of, each an album, and the backup folder the
 // phones upload to; indexed through the station's local API as the member who last set the folders (an owner or admin;
 // until one has, as the last member who may write who asked for photos, and the backup folder only), followed by the
 // station's drive/watch on the folders it knows (non-recursive: the folders, then the ones changed lately, up to

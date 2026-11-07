@@ -859,7 +859,7 @@ export class Store {
   }
 
   /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
-  /// one's): when the station's home workspace changes (docs/multi-workspace.md).
+  /// one's): when the station's home workspace changes.
   setSessionsWs(from: string | null, to: string | null): void {
     this.#with((changes) => {
       const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
@@ -2510,7 +2510,7 @@ export class Store {
     });
   }
 
-  /// The login cards of a login (docs/remote-login.md: `{"type": "login", "login": <id>}`) still waiting: closed for
+  /// The login cards of a login (`{"type": "login", "login": <id>}`) still waiting: closed for
   /// everyone as the login ends, as their agent would withdraw them (nobody answered, nobody is woken: the station tells
   /// the agent itself). The sessions whose cards they were.
   closeLoginCards(login: string): string[] {

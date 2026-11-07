@@ -1,4 +1,4 @@
-// The still.fail station, in TypeScript (docs/station-ts.md). This file is the composition root: every part is a layer
+// The still.fail station, in TypeScript. This file is the composition root: every part is a layer
 // made here and given what it needs (src/services.ts); nothing registers itself anywhere. Stopping the station is
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
@@ -62,7 +62,7 @@ import { keepRunnerIn } from "./platform/processes.ts";
 // otherwise (Windows: USERPROFILE).
 if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);
 // An adb server anything here starts (a chat's grant's, one an agent's command brings up) connects by itself to no phone
-// it finds on the network: with this machine's key a phone lent to one chat would be in them all (docs/adb-share.md).
+// it finds on the network: with this machine's key a phone lent to one chat would be in them all.
 process.env.ADB_MDNS_AUTO_CONNECT = "0";
 // The launcher's malloc setting (native/launcher/src/run.rs) is this process's: read by malloc as it started, it goes
 // no further, to the agents and their tools.
@@ -178,13 +178,13 @@ function run() {
     // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.
     Layer.provideMerge(StationDrive.layer),
     Layer.provideMerge(HelperFolders.layer),
-    // The modules beside the station (docs/station-modules.md), started by ModulesLive.
+    // The modules beside the station, started by ModulesLive.
     Layer.provideMerge(Modules.layer),
     // The packages of those the station installs itself (modules/packages.ts), read with its updates.
     Layer.provideMerge(ModulePackages.layer),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
-    // The station's browser, its tabs screens (docs/remote-screens.md).
+    // The station's browser, its tabs screens.
     Layer.provideMerge(Browser.layer),
     // config.json, what is the station's own, and the process before this one: the platform's, for every part.
     Layer.provideMerge(Own.layer),
@@ -290,7 +290,7 @@ switch (command) {
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
     const lock = flag(args, "--lock");
     if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
-    // One more workspace, staying in those it is in (docs/multi-workspace.md): at the control plane it is enrolled with.
+    // One more workspace, staying in those it is in: at the control plane it is enrolled with.
     // --stay (the installers'): joins when the station is in a workspace already, else enrolls; at the control plane it
     // is enrolled with whatever host the command names (the test channel's app.youdid.wtf is still.fail's API too), a
     // token that plane does not know refused there.
@@ -313,7 +313,7 @@ switch (command) {
     await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);
     break;
   }
-  // The workspace lock on this machine (docs/workspace-lock.md): what is pinned, or taking it away.
+  // The workspace lock on this machine: what is pinned, or taking it away.
   case "lock": {
     const [, what] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
     if (what !== "status" && what !== "reset") usage();

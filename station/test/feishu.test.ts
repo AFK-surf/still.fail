@@ -1,4 +1,4 @@
-// The Feishu connect (docs/feishu.md): its frames, what its events say, its cards, its threads, its app registration,
+// The Feishu connect: its frames, what its events say, its cards, its threads, its app registration,
 // and its surface against Feishu's stand-in (test/feishu-fake.ts), through a hub with scripted runtimes.
 import assert from "node:assert/strict";
 import { gunzipSync } from "node:zlib";

@@ -1,5 +1,5 @@
 // The accounts signed in on this browser (signed in on the sign-in page, login/). The core keeps them, with their
-// still.fail cloud sessions (docs/client-core.md): the page sees who is signed in and signs out; tokens never reach it.
+// still.fail cloud sessions: the page sees who is signed in and signs out; tokens never reach it.
 import { useCallback } from "preact/compat";
 import { core, useTopic } from "../core/react.ts";
 import { doingMatches, failed, useDoingList } from "../doing.ts";

@@ -164,7 +164,7 @@ export class Choose implements Owner {
   readonly #adding = new Map<string, J>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
-  /// The presets of each scope's stations, followed while its new chat page is (docs/presets.md): by station address.
+  /// The presets of each scope's stations, followed while its new chat page is: by station address.
   readonly #presets = new Map<string, Map<string, Watch>>();
 
   constructor(env: ChooseEnv) {
@@ -298,7 +298,7 @@ export class Choose implements Owner {
     const r = resolve(options, this.#choice(scope, id));
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
     const overview = isObject(station.overview) ? station.overview : null;
-    // A station this workspace joined runs its chats on the profiles open to it (docs/multi-workspace.md): with some, but
+    // A station this workspace joined runs its chats on the profiles open to it: with some, but
     // none open, one is turned on rather than added.
     const joined = station.joined === true;
     const all = overview !== null ? arr(overview.profiles) : [];
@@ -569,7 +569,7 @@ export class Choose implements Owner {
     return [...sourced(own, overview, stations), ...borrowable(stations, station, own, runtime, this.#env.now())];
   }
 
-  /// Whether the viewer may have another station share a profile with this one (docs/station-share.md: managers).
+  /// Whether the viewer may have another station share a profile with this one (managers).
   #manages(station: string): boolean {
     const role = get(this.#env.data.shared({ topic: "workspace", workspace: ofAddress(station) }), "role");
     return role === "owner" || role === "admin";

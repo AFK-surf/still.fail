@@ -1,7 +1,7 @@
 // The agents' side of the station (server.rs `App::start`): the hub with its drivers, background jobs, tasks for other
 // stations, the agents' tools and their door (/mcp). Made here and given to the rest; nothing else starts an agent.
 //
-// What the previous station process ran goes on (docs/station-ts.md, 已定 1): a station that stops hands its sessions
+// What the previous station process ran goes on (已定 1): a station that stops hands its sessions
 // over (run/handover.json) and the next takes them up, runtimes and all, from their runners. Under the launcher the
 // next process is up before the previous one hands over: it takes up only once that one is gone (run/hub.json says
 // which process holds the sessions), and opens the agents' door only then, so no call reaches a hub without its session.
@@ -120,7 +120,7 @@ export type AgentsParts = {
   pageOf(key: string): string | undefined;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
-  /// Where the station stands with its control plane: the workspaces it is in (docs/multi-workspace.md).
+  /// Where the station stands with its control plane: the workspaces it is in.
   cloud: CloudState;
   /// Its relay as the mesh sees it, for what other stations are told of its load (jobs/load.ts).
   net: Net;
@@ -170,7 +170,7 @@ export const AgentsLive = (control: Control) =>
       };
       const bound = () => place() !== null;
       // Session pages are still.fail cloud's (`<origin>/o/…`); other control planes have none to link to.
-      // In the workspace its chat is in (docs/multi-workspace.md).
+      // In the workspace its chat is in.
       const pageOf = (key: string) => {
         const s = place();
         const ws = store.getSession(key)?.ws ?? s?.workspace;
@@ -391,12 +391,12 @@ export const AgentsLive = (control: Control) =>
             return fromPeer(hub, peer, request, ws);
         }
       };
-      // A station of the workspace asking for a session of another of its workspaces (`as`, docs/multi-workspace.md)
+      // A station of the workspace asking for a session of another of its workspaces (`as`)
       // reaches what is shared with that one only.
       const inbox = async (peer: string, request: any, workspace?: string) =>
         typeof request?.as === "string" && workspace !== undefined && request.as !== workspace ? xshare.outside(peer, request, workspace) : local(peer, request, workspace ?? null);
       remote.setInbox(inbox);
-      // Chats shared with other workspaces, and theirs shared with this one (docs/chat-share.md): their stations are
+      // Chats shared with other workspaces, and theirs shared with this one: their stations are
       // asked and heard through it, for those chats only.
       const shareIndex = new ChatShareIndexBuilder(store, previous);
       yield* Effect.addFinalizer(() => Effect.promise(() => shareIndex.close()));
@@ -450,7 +450,7 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }, agentName),
-        // What macOS lets still.fail Helper do here, and a grant asked of a person (docs/remote-screens.md "Grants").
+        // What macOS lets still.fail Helper do here, and a grant asked of a person.
         ...permissionTools(grants, () => {
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
@@ -476,7 +476,7 @@ export const AgentsLive = (control: Control) =>
       control.on("hup", () => updates.answerChannelAsk());
 
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
-      // So are those of a session of a workspace the station has left (docs/multi-workspace.md).
+      // So are those of a session of a workspace the station has left.
       const inItsWorkspace = (session: string) => {
         const ws = store.getSession(session)?.ws ?? null;
         return ws === null || cloud.membership(ws) !== null;
@@ -606,7 +606,7 @@ export const AgentsLive = (control: Control) =>
         cloud.listen(() => events.overviewChanged()),
       ];
 
-      // In a workspace, or out of it, as cloud.json says, from now on; and in which of them (docs/multi-workspace.md).
+      // In a workspace, or out of it, as cloud.json says, from now on; and in which of them.
       let inWorkspace = bound();
       let joinedNow = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
       let homeNow = cloud.home();

@@ -1,4 +1,4 @@
-// The media service's HTTP (docs/media-service.md), on the unix socket the station forwards `/admin/api/m/media/…` to:
+// The media service's HTTP, on the unix socket the station forwards `/admin/api/m/media/…` to:
 // each request comes with its member (`stillfail-viewer`, verified by the station), JSON in and out, refusals as
 // `{error, code}`. Books are the member's workspace's; places and notes the member's own; the photo library (photos.ts)
 // and the video library (videos.ts, played by hls.ts) the station's, for the members who may write.

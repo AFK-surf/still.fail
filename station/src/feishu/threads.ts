@@ -1,4 +1,4 @@
-// Where a Feishu chat's words go (docs/feishu.md「会话怎么分」), kept in <data>/feishu-threads.json: for each chat, the
+// Where a Feishu chat's words go (「会话怎么分」), kept in <data>/feishu-threads.json: for each chat, the
 // message its conversation began with (the thread's ts: what is said in the chat outside topics is one conversation,
 // until someone starts a new one), and for each topic its first message (what the station replies to, to answer in it).
 import { readFileSync, renameSync, writeFileSync } from "node:fs";

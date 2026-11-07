@@ -1,10 +1,10 @@
-// The vault end to end (docs/vault.md), on a dev cloud (cloud/test/dev.ts), a real station and the owner's real core
+// The vault end to end, on a dev cloud (cloud/test/dev.ts), a real station and the owner's real core
 // (desktop's Node host, with a sealer in memory): the owner turns the lock on, sets up the vault and keeps a token in
 // it, open to agents through the proxy for one host; an agent (the fake claude's own MCP token, as a real agent calls
 // the station's tools) asks for it, the owner's core approves, and the command run with the grant reaches an HTTPS host
 // with the token in its Authorization header, while the agent sees only the placeholder and, in the environment's
-// mode, the value hidden. A refusal and a spent grant are refused. Before the lock, the plain library (docs/vault.md
-// 不加锁的库): a token kept on the station as it is, asked for and approved with nothing to unseal, used through the
+// mode, the value hidden. A refusal and a spent grant are refused. Before the lock, the plain library:
+// a token kept on the station as it is, asked for and approved with nothing to unseal, used through the
 // proxy; once the lock is on, moved into the vault by `vault.migrate`.
 //
 //   node station/side/vault-e2e.ts         (from a worktree with `pnpm run build` done in station/, the iroh dev relay

@@ -1,10 +1,10 @@
-// The station's Chrome as a process (docs/remote-screens.md, "The station's browser"): found on the machine, started as
+// The station's Chrome as a process ("The station's browser"): found on the machine, started as
 // a normal browser on a profile of its own with a DevTools port, found again by a station process that did not start
 // it (it outlives a handover, as jobs do), and ended. What it is used for is browser.ts's.
 //
 // It is started as a person's browser would be, so that sites let it sign in: no --enable-automation, no
 // --remote-debugging-pipe; headless, so that it opens no window on the machine at all (its tabs are seen and driven
-// from people's apps, docs/remote-screens.md; headful only when asked). Two things still tell a site it is
+// from people's apps; headful only when asked). Two things still tell a site it is
 // driven, and are undone: Chrome says navigator.webdriver = true of any browser it lets be debugged (undone by
 // --disable-blink-features=AutomationControlled), and a headless one says HeadlessChrome in its user agent (given
 // the headful one's). With either, Google refuses to sign in ("This browser or app may not be secure"; checked on

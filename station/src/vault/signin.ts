@@ -1,4 +1,4 @@
-// Signing in to a site from a card (docs/vault.md 登录态, "Signing in from a card"; chat EMBER/1793439516.811000,
+// Signing in to a site from a card ( 登录态, "Signing in from a card"; chat EMBER/1793439516.811000,
 // 2026-11-01: 「agent 那边只剩一个动作」). An agent that needs a site signed in to in its chat's browser asks once
 // (`sign_in {site, reason}`): a sign-in the vault keeps for the site is asked for as any secret is (secret_use, mode
 // browser); none, a card asks the person it works for to sign in. On the card their app asks their own password manager

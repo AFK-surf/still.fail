@@ -1,4 +1,4 @@
-// A station's screens, seen and driven from a client (docs/remote-screens.md): the `screens` topic (what the sync holds
+// A station's screens, seen and driven from a client: the `screens` topic (what the sync holds
 // of each station's `GET /screens` and its `screens` events, station/sync.ts) and the `screen.*` calls. A view is a
 // stream to the station (screen-frames.ts); its frames go to the UI as they come, their bytes beside the JSON
 // (protocol.ts), and the UI acknowledges each one it decoded, which is what lets the station send the next: a slow link
@@ -412,7 +412,7 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
       ...(controlledBy.some((n) => n.startsWith(AGENT)) ? { agent: true } : {}),
       // Closed from here by a member who may drive it (a read-only one only looks).
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
-      // Its apps' logs and restart, for one who may drive it (a simulator's; docs/remote-screens.md).
+      // Its apps' logs and restart, for one who may drive it (a simulator's).
       ...(get(s, "debug") === true && control ? { debug: true } : {}),
       // Where a file to install on it goes up to (`screen.install`).
       ...(typeof get(s, "install") === "string" && control ? { install: get(s, "install") } : {}),
@@ -516,7 +516,7 @@ type Next = { socket: WireSocket; scope: Scope.Closeable; asked: ScreenAsk };
 type Outcome = { ended: string | null; gone?: true } | { reopen: Next } | { dropped: true; seen: boolean } | { failed: CoreError };
 
 /// What a failure to open a view says the view is now: done for good (a phase), or worth trying again (null). The
-/// station's statuses (docs/remote-screens.md): 404 no such screen, 400/415 no codec in common, 501 not supported here,
+/// station's statuses: 404 no such screen, 400/415 no codec in common, 501 not supported here,
 /// 503 not now (no grant, the capture failed), 403 not this member's.
 function verdict(error: CoreError, outdated: boolean): { phase: string; message: string } | null {
   if (error.status === 404) {
@@ -742,7 +742,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       tell();
       return null;
     }
-    // A view is opened only of a screen the station listed (docs/remote-screens.md): not listed as it was held, its
+    // A view is opened only of a screen the station listed: not listed as it was held, its
     // list is read again first.
     if (listedItem() === undefined) yield* Effect.ignore(inner.stations.readScreens(station), { log: "Unhandled", message: "screens read" });
     if (listedItem() === undefined && inner.stations.screens(station) !== undefined) {

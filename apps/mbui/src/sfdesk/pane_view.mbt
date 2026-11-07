@@ -1,5 +1,5 @@
 // Laid out Large (or Medium with no sidebar to show: a device waiting to be confirmed in the workspace's safe mode, 连接,
-// 用量), the wide frame off the tape as nodes of the window's tree (mbui's view package; docs/retained.md, the way
+// 用量), the wide frame off the tape as nodes of the window's tree (mbui's view package, the way
 // there's 4), made once:
 //
 //   - a row: the rail and the sidebar's column (as wide as the block takes, open or folded: col), the page's pane in

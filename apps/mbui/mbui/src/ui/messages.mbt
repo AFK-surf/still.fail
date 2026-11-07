@@ -1,4 +1,4 @@
-// Messages from outside the frames (docs/determinism.md, rule 1): what a core answers, posted on its channel by the
+// Messages from outside the frames (rule 1): what a core answers, posted on its channel by the
 // host from any thread (src/host/post.h `mb_post`, web/host.js `post`) or by a test (Tester::post), is the
 // framework's to keep until a frame begins. Then all that came are taken and handed, in the order posted, to their
 // channel's handler (`on_message`), before the frame reads anything: how much of it a frame sees depends on frames,

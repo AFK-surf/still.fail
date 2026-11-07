@@ -1,7 +1,7 @@
-// Modules: what an app adds to the core besides what every app has (docs/core-modules.md). The core is the platform:
+// Modules: what an app adds to the core besides what every app has. The core is the platform:
 // accounts, still.fail cloud, the links to stations, the device's databases, calls and topics. An app gives its
 // modules to `Core.create(host, { modules })`; each is installed once the platform is up and owns the calls and topics
-// named `<module>.…`, and reaches its own part on a station (`/admin/api/m/<module>/…`, docs/station-modules.md).
+// named `<module>.…`, and reaches its own part on a station (`/admin/api/m/<module>/…`).
 import { Effect, type Fiber, type Scope } from "effect";
 import { type Spec, addSpec } from "./collections.ts";
 import type { Inner, Progress } from "./core.ts";

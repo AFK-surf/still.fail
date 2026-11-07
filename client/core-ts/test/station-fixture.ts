@@ -38,7 +38,7 @@ export function stationReplies(host: FakeHost, reply: (req: HttpRequest) => unkn
   replies.set(host, reply);
 }
 
-/// Station answers that take a while (a real station behind it, docs/core-modules.md's end-to-end test): asked first;
+/// Station answers that take a while (a real station behind it end-to-end test): asked first;
 /// `undefined`, the others'.
 const later = new WeakMap<FakeHost, (req: HttpRequest) => Promise<HttpResponse> | undefined>();
 export function stationLater(host: FakeHost, reply: (req: HttpRequest) => Promise<HttpResponse> | undefined): void {

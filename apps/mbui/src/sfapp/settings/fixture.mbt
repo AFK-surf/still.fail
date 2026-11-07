@@ -20,7 +20,7 @@ priv struct SettingsFixture {
   mut afresh_above : Double
   /// the station sending its log to still.fail
   mut logs : Bool
-  /// a program granted Willow's data and another asking for it (docs/data-outflow.md: its overview's
+  /// a program granted Willow's data and another asking for it (its overview's
   /// `outflowGrants`), as a test sets it
   mut outflow : Bool
   /// what an admin answered the program asking (`outflow.answer`'s params)
@@ -1862,7 +1862,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
-    // Willow's programs granted its data (sfpages/station_outflow.mbt, docs/data-outflow.md): Comma's; and Comma for
+    // Willow's programs granted its data (sfpages/station_outflow.mbt): Comma's; and Comma for
     // Teams asking for the whole workspace's, until answered
     "outflowGrants" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
       Some(
@@ -3434,7 +3434,7 @@ fn fx_adb_share() -> Json {
     )
   }
   match fx_adb.val {
-    // the person's own lock on the page (docs/personal-lock.md): this device on it, outside it, or asked for a code
+    // the person's own lock on the page: this device on it, outside it, or asked for a code
     "lock-member" =>
       lent("connected", [
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("devices", Json::array([
@@ -3494,7 +3494,7 @@ fn fx_adb_share() -> Json {
           obj([("station", str("ws1/st1")), ("id", str("p-long-3")), ("session", str("s-c3")), ("chatTitle", str("检查登录页面")), ("reason", str("检查登录页面")), ("status", str("granted")), ("scope", str("hour"))]),
         ]),
       ])
-    // a grant from before the person's own lock (docs/personal-lock.md): signed by no device on it, so the phone
+    // a grant from before the person's own lock: signed by no device on it, so the phone
     // lends nothing on it; no reason given, and its station not lent yet
     "unsigned" =>
       obj([

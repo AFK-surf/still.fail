@@ -1,6 +1,6 @@
 // Grok Build driver: one `grok agent stdio` per session, spoken to in ACP (acp.ts) with one ACP session in it.
 //
-// Behaviour pinned against Grok Build 1.0 (docs/grok.md), beside what ACP says:
+// Behaviour pinned against Grok Build 1.0, beside what ACP says:
 // - `session/load` takes up a persisted session (its directory under the home's sessions/, one directory per working
 //   directory);
 // - the prompt's answer carries the turn's usage in its `_meta`;

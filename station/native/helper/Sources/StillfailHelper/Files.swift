@@ -1,4 +1,4 @@
-// The drive's folders macOS protects (docs/drive.md): Documents, Desktop, Downloads, removable and network volumes,
+// The drive's folders macOS protects: Documents, Desktop, Downloads, removable and network volumes,
 // which a station launchd runs may not open, are opened here, by this app, which holds the grants (Files and Folders,
 // or Full Disk Access). The station decides what goes through here and checks every path first; this side refuses
 // anything outside the roots a request names or in what it protects, and never touches a protected folder it has no

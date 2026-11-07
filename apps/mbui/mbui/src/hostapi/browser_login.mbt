@@ -6,7 +6,7 @@
 // another host name, a second time). Checking what came back
 // (its state) and exchanging it are the app's: the host knows nothing of the service.
 //
-// Opening is $BROWSER, else `open`, on macOS, so a station's remote login (still.fail docs/remote-login.md) can run such an
+// Opening is $BROWSER, else `open`, on macOS, so a station's remote login can run such an
 // app as its login command: it takes the page from BROWSER, sees the loopback `redirect_uri`, and the person's phone
 // relays the browser's way back to this process. The system opens it on iOS. On Android (android/…/BrowserLogin.java)
 // it opens in a Custom Tab on the app's task, the app holds itself up while it listens (a frozen process answers

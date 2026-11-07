@@ -241,7 +241,7 @@ sim("streams_a_reply_as_it_comes", async (s) => {
   await close(s, station, mesh);
 });
 
-/// A screen view over the mesh (docs/remote-screens.md): its head line carries `screen`, its frames come whole however
+/// A screen view over the mesh: its head line carries `screen`, its frames come whole however
 /// the network cuts them, and the station sends only as the client acknowledges (never more than 2 ahead).
 sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
   const { mesh, station } = await setup(s);
@@ -376,7 +376,7 @@ sim("a_dial_tells_the_station_its_trace", async (s) => {
   await close(s, st, mesh);
 });
 
-/// docs/multi-workspace.md: a station in two workspaces is reached in each on a link of its own (one station id, two
+/// a station in two workspaces is reached in each on a link of its own (one station id, two
 /// addresses), opened and renewed with that workspace's credential; one dropped leaves the other.
 sim("a_station_in_two_workspaces_has_a_link_in_each_with_its_own_credential", async (s) => {
   const { mesh, station } = await setup(s);
@@ -967,7 +967,7 @@ sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
 });
 
 /// Every relay's speed as devices get it is told (`mesh.speed`), with the relay and its paths: the relays are compared
-/// network by network from these (docs/telemetry.md), where before a way's speed was only kept on the device and told
+/// network by network from these, where before a way's speed was only kept on the device and told
 /// nowhere. Once a minute at most for a station and relay: a video's every part would be far too many.
 sim("a_ways_speed_is_told_once_a_minute", async (s) => {
   const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
@@ -1101,7 +1101,7 @@ sim("a_station_on_the_lan_is_dialled_at_its_lan_addresses_and_the_requests_stay_
   await close(s, station, mesh);
 });
 
-/// A station on the device's tailnet (docs/mesh-lan.md, Tailscale), at home on a (far) and held on b (near), its
+/// A station on the device's tailnet (Tailscale), at home on a (far) and held on b (near), its
 /// Tailscale address `ms` away: no hole punched, Tailscale carrying it.
 async function onTailnet(s: Sim, ms: number) {
   s.net.direct = { ms };
@@ -1234,7 +1234,7 @@ function echoTcp(_port: number) {
   });
 }
 
-/// A chat's grant of this person's phone (docs/adb-share.md): heard from its station, the phone lends itself there with the
+/// A chat's grant of this person's phone: heard from its station, the phone lends itself there with the
 /// ports its app found (`adb.ports`); the grant ended, it is let go. No switch: the grants decide.
 sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async (s) => {
   const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });

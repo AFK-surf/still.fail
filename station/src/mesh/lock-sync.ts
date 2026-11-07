@@ -1,8 +1,8 @@
-// The workspace lock between the workspace's stations (docs/workspace-lock.md): so that a control plane holding back
+// The workspace lock between the workspace's stations: so that a control plane holding back
 // entries (a member removed, a device taken away) holds them back from nobody. Over `stillfail/station/1`, only with
 // stations the lock names: `lock.head` says how far one is, `lock.get {after}` gives its entries after that, `lock.put
 // {entries}` offers some. Each station checks every entry itself (cloud/state.ts `takeLock`). A station in several
-// workspaces (docs/multi-workspace.md) does this for each of their locks, with each one's stations, asked in it.
+// workspaces does this for each of their locks, with each one's stations, asked in it.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";

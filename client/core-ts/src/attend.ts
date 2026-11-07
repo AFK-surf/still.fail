@@ -18,7 +18,7 @@ const KEY = "notify";
 /// A notice no page took this long is not shown any more.
 const SHOW_FOR_MS = 30_000;
 
-/// Which notices are shown (docs/notifications.md): a card or an agent needing them (wait, block), something gone
+/// Which notices are shown: a card or an agent needing them (wait, block), something gone
 /// wrong, a turn done (never, only while no page of the app is in front, or always), someone else saying something.
 export type Kinds = { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean };
 export const ALL_KINDS: Kinds = { wait: true, failed: true, done: "away", message: true };

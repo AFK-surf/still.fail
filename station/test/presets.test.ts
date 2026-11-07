@@ -1,4 +1,4 @@
-// Presets (src/sessions/presets.ts, docs/presets.md): what a chat starts knowing, chosen as it is opened, kept with it.
+// Presets (src/sessions/presets.ts): what a chat starts knowing, chosen as it is opened, kept with it.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";

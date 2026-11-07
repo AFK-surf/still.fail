@@ -1,4 +1,4 @@
-// A chat's grant of a person's phone (adb/grants.ts, docs/adb-share.md): asked with a card in the chat, decided by the
+// A chat's grant of a person's phone (adb/grants.ts): asked with a card in the chat, decided by the
 // person the chat's agent works for, ended as its scope runs out, as its chat is archived or as it is taken back; and
 // a grant's adb server alone let into the phone's port (adb/servers.ts `allowed`).
 import assert from "node:assert/strict";

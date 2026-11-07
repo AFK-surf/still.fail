@@ -1,4 +1,4 @@
-// The Mac's clipboard for a view a person drives (docs/remote-screens.md `clipboard`, ScreenView.swift's messages 4–6):
+// The Mac's clipboard for a view a person drives (ScreenView.swift's messages 4–6):
 // set from the viewer and pasted with ⌘V, watched while the view asks (its changeCount looked at every half a second,
 // on the main queue, nothing else read until it changes), and a file shown in Finder. Text first, else a picture as
 // PNG (from PNG or TIFF), each within its bound; what this view set itself is not said back to it, nor what was said
