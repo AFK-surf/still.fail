@@ -194,12 +194,11 @@ pub(all) struct Reading {
 }
 
 ///|
-/// What row_keys made of a chat's entries (`all`, of view `v`, the list following its end or not, nothing sent from
-/// here waiting for its row, no row waiting its turn), and the rows it knew then.
+/// What row_keys made of a chat's entries (`all`, of view `v`, nothing sent from here waiting for its
+/// row, no row waiting its turn), and the rows it knew then.
 pub struct RowsMade {
   all : Array[Entry]
   v : ChatView
-  following : Bool
   rise_ms : Double
   known : Int
   list : Array[Entry]
@@ -1015,14 +1014,16 @@ pub fn row_keys(
   }
   rd.list_read = Some(c.list_reader(key))
   rd.foot_sign = if ask_clears(v) { "+ask" } else { "" }
-  // the same entries of the same view as the last frame's, the list following as it did, nothing sent from here
-  // waiting for its row and no row for its turn (then and now): what it made then, its rows not gone over again
+  // the same entries of the same view as the last frame's, nothing sent from here waiting for its row and no row for
+  // its turn (then and now): what it made then, its rows not gone over again. Whether the list follows its end is not
+  // asked: it only lets in rows not known yet, and with the same entries every row was made known then (a reader
+  // scrolling away from the end, or back to it, made every row's sign again and looked them all over: two builds of
+  // ~80M instructions each in a long chat's frame)
   let sending = sending_of(rk)
   match rd.rows_made {
     Some(m) if rd.drawn &&
       physical_equal(m.all, all) &&
       physical_equal(m.v, v) &&
-      m.following == following &&
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
@@ -1253,7 +1254,7 @@ pub fn row_keys(
   }
   rd.drawn = true
   rd.rows_made = if made_whole && turns.waiting.is_empty() {
-    Some({ all: given, v, following, rise_ms, known: rd.known.length(), list, keys })
+    Some({ all: given, v, rise_ms, known: rd.known.length(), list, keys })
   } else {
     None
   }
