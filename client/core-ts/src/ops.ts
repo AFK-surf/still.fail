@@ -327,7 +327,7 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/tools/access", null, NONE);
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
-    // The variables everything the station starts for its agents runs with (docs/agent-env.md), set by the workspace's
+    // The variables everything the station starts for its agents runs with, set by the workspace's
     // owners and admins: `text`, all of them as `NAME=value` lines; or `env`, a patch (a string sets one, null removes it).
     case "agentEnv.set":
       return op("PUT", () => "/agent-env", p.pick(["env", "text"]), OVERVIEW);

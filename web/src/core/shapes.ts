@@ -566,7 +566,7 @@ export interface FeishuApp {
 	appSecret: string;
 	/** feishu | lark */
 	domain: string;
-	/** Thread mode: each thread of a group its own conversation, answered in it (docs/feishu.md). */
+	/** Thread mode: each thread of a group its own conversation, answered in it. */
 	threads?: boolean;
 	/** The app's page in the developer console (core). */
 	console?: string;
@@ -636,7 +636,7 @@ export interface Connect {
 	bind: Bind;
 	/** A Slack connect's tokens, masked (empty for another kind: a station sends them for clients from before). */
 	slack: SlackTokens;
-	/** A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind. */
+	/** A Feishu (Lark) connect's app; absent for another kind. */
 	feishu?: FeishuApp;
 	connection: ConnectState;
 	createdBy?: Owner;
@@ -775,7 +775,7 @@ export interface ModelSeries {
 	models: string[];
 }
 
-/** How a profile is shared between the workspace's stations (docs/station-share.md). */
+/** How a profile is shared between the workspace's stations. */
 export interface ProfileShare {
 	/** The share's id: the same on every station that has the profile. */
 	id: string;
@@ -879,7 +879,7 @@ export interface Profile {
 	/** Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing). */
 	share?: ProfileShare;
 	/**
-	 * The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's
+	 * The workspaces the station joined whose chats may run on it too (none: its home's
 	 * only), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one.
 	 */
 	workspaces?: string[];
@@ -966,7 +966,7 @@ export interface MadeSlackApp {
 	installedTeam?: string;
 }
 
-/** A Feishu bot being made by scanning (docs/feishu.md), as its station follows it: only its starter sees it. */
+/** A Feishu bot being made by scanning, as its station follows it: only its starter sees it. */
 export interface FeishuRegistration {
 	id: string;
 	/** The page that creates the app, opened on a phone signed in to Feishu (its QR code). */
@@ -1135,7 +1135,7 @@ export interface DriveRoot {
 	state: DriveRootState;
 }
 
-/** A station's drive (docs/drive.md): the folders pinned, and how far the viewer reaches. */
+/** A station's drive: the folders pinned, and how far the viewer reaches. */
 export interface DriveRoots {
 	/** The folders pinned: the list everyone sees first, and all a read-only member reaches. */
 	roots: DriveRoot[];
@@ -1157,7 +1157,7 @@ export interface DriveRoots {
 	zip?: boolean;
 	/**
 	 * Files can be copied and moved into it, from its own folders or another station's, and it grants another
-	 * station reads of its own (`drive.transfer`; docs/drive.md "Copying between stations"); absent from a station from before.
+	 * station reads of its own (`drive.transfer` "Copying between stations"); absent from a station from before.
 	 */
 	transfers?: boolean;
 }
@@ -1217,7 +1217,7 @@ export interface StationGrant {
 	asking: boolean;
 }
 
-/** What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as its page shows it. */
+/** What macOS lets a Mac station's still.fail Helper do ( "Grants"), as its page shows it. */
 export interface StationPermissions {
 	/**
 	 * Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that
@@ -1235,7 +1235,7 @@ export interface StationPermissions {
 	canRequest: boolean;
 }
 
-/** Whether a Windows station runs as the machine's administrator (docs/station-ts-native.md), as its page shows it. */
+/** Whether a Windows station runs as the machine's administrator, as its page shows it. */
 export interface StationElevation {
 	/** Where its switch stands: the setting, or what a change under way goes to (`elevation.set`). */
 	on: boolean;
@@ -1281,7 +1281,7 @@ export interface Overview {
 	slackTeams: SlackTeam[];
 	slackApps?: MadeSlackApp[];
 	/**
-	 * The Feishu bots the viewer is making by scanning (docs/feishu.md). Absent from a station without the Feishu
+	 * The Feishu bots the viewer is making by scanning. Absent from a station without the Feishu
 	 * connect, which is then not offered.
 	 */
 	feishuRegistrations?: FeishuRegistration[];
@@ -1289,7 +1289,7 @@ export interface Overview {
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */
 	machineLogins?: MachineLogin[];
-	/** It can share profiles and skills with the workspace's other stations (docs/station-share.md). */
+	/** It can share profiles and skills with the workspace's other stations. */
 	sharing?: boolean;
 	/**
 	 * An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station
@@ -1308,7 +1308,7 @@ export interface Overview {
 	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
 	footprint?: FootprintBrief;
 	/**
-	 * The variables everything it starts for its agents runs with (docs/agent-env.md), by name, a secret's value
+	 * The variables everything it starts for its agents runs with, by name, a secret's value
 	 * masked (none from a station older than them, which then does not offer them).
 	 */
 	agentEnv?: EnvVar[];
@@ -1317,7 +1317,7 @@ export interface Overview {
 	 * than the drive, which then is not offered).
 	 */
 	drive?: DriveRoots;
-	/** What its search finds of the machine (docs/search.md). None from a station older than it. */
+	/** What its search finds of the machine. None from a station older than it. */
 	search?: StationSearch;
 	/** Advanced network settings, applied on station restart. Absent on older stations. */
 	network?: StationNetwork;
@@ -1339,7 +1339,7 @@ export interface Overview {
 	 */
 	elevation?: StationElevation;
 	/**
-	 * How many programs of its machine hold or ask for a grant of its data (docs/data-outflow.md): its page reads
+	 * How many programs of its machine hold or ask for a grant of its data: its page reads
 	 * them (`outflowGrants`) only when there are some. None from a station older than them.
 	 */
 	outflowGrants?: number;
@@ -1349,7 +1349,7 @@ export interface Overview {
 	 */
 	outflowAnswers?: boolean;
 	/**
-	 * Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an
+	 * Its Tailcat link, which lets programs of other machines ask for its data: for an
 	 * admin of its home workspace only. None for others, or from a station older than it.
 	 */
 	outflowTailcat?: OutflowTailcat;
@@ -1860,7 +1860,7 @@ export interface PhoneAsk {
 }
 
 /**
- * What an agent asks to keep in the person's vault (secret_save, docs/vault.md agent 存入): approving it writes it into their
+ * What an agent asks to keep in the person's vault (secret_save agent 存入): approving it writes it into their
  * vault (`vault.approve`, turning it on first where it is not).
  */
 export interface VaultSave {
@@ -1955,7 +1955,7 @@ export interface MessageCard {
 	options?: DecisionOption[];
 	placeholder?: string;
 	/**
-	 * An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
+	 * An agent's request to use a vault item: the request's id. An app shows approving it (the options,
 	 * then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
 	 * a web page says to approve it in the app. Absent where a later post of the chat asks the same request again (its card
 	 * alone).

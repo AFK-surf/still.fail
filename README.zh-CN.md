@@ -76,7 +76,7 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 | `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`apps/mbui/mbui`）写 |
 | `cloud/` | Cloudflare 上的账号、workspace、中继和发布 |
 | `docs/` | 开发和运维文档；发布说明在 `docs/releases/` |
-| `test/`、`spike/` | 集成测试和浏览器测试；验证 runtime 假设的实验 |
+| `test/` | 集成测试和浏览器测试 |
 | `vendor/` | 打过补丁的第三方 Rust crate |
 
 ## 文档

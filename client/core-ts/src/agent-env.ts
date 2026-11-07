@@ -1,4 +1,4 @@
-// A station's variables for its agents (docs/agent-env.md) as one page edits them: a .env file's lines, each read as it
+// A station's variables for its agents as one page edits them: a .env file's lines, each read as it
 // is typed (its name, value and comment, for the page to colour; what is wrong with it, said beside it), saved whole as
 // the station takes them (`PUT /agent-env {text}`, station/src/ops/agent-env.ts `parseEnvText`, the same rules). A
 // secret shows masked; left so, the station keeps it.

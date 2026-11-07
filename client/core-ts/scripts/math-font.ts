@@ -1,4 +1,4 @@
-// MathJax's TeX font split by who uses which half (client/math/README.md): the core lays formulas out with the
+// MathJax's TeX font split by who uses which half: the core lays formulas out with the
 // glyphs' sizes alone (src/math-font.ts: the font's tables, each outline in its place replaced by the outline's id);
 // the UIs draw the outlines, each once: font.json (the web's) and the app's packed copy
 // (apps/mbui/src/sf/math_glyphs.mbt). Run from core-ts after a MathJax TeX font update: node scripts/math-font.ts [--check]

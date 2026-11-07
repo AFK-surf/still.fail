@@ -1,7 +1,7 @@
 // Claude Code driver (the Rust station's runtime/claude.rs): one `claude -p` stream-json process per session, under a
 // runner whose id comes from the session key.
 //
-// Behaviour pinned by spikes (spike/README.md):
+// Behaviour pinned by spikes:
 // - a turn is framed by system/init … result; `result.is_error` decides success, not `subtype` (an auth failure ends
 //   as subtype "success");
 // - 401/403 is retried silently for minutes, visible only as system/api_retry frames, so the first one fails the turn

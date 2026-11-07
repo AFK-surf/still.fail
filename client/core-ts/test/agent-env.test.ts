@@ -1,4 +1,4 @@
-// A station's variables for its agents as one page edits them (src/agent-env.ts, docs/agent-env.md): each line read
+// A station's variables for its agents as one page edits them (src/agent-env.ts): each line read
 // into parts that together are the line as written (the pages colour them; Android's field maps offsets one to one),
 // what keeps a line from being saved and what is only said; the draft follows the station's until edited, is not saved
 // with a line wrong, and does not show the old text back between a save and the station telling what it has now.
