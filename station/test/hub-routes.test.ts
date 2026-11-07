@@ -326,12 +326,28 @@ test("a pending card: an option chosen by an old client is refused; an answer qu
     r.store.insertMessage(newMessage(id, "1700000000.000200", "agent", made.key, "later"));
     const quote = [{ text: "deploy?", ts: "1700000000.000100" }];
     assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: quote }), [409, { error: en("station.admin.updateClientForOption") }]);
+    // The old-client check uses raw quotes, even those omitted from the message by quotesOf.
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: quote[0]!.ts }] }), [409, { error: en("station.admin.updateClientForOption") }]);
+    const laterQuote = [...Array.from({ length: 20 }, () => ({ text: "other" })), ...quote];
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: laterQuote }), [409, { error: en("station.admin.updateClientForOption") }]);
     const [status] = await r.ask("POST", `/threads/${id}/messages`, { text: "yes", quotes: quote });
     assert.equal(status, 200);
     assert.equal(r.store.readPosition("a@x", id), n, "read up to the card, not past it");
   } finally {
     await r.close();
   }
+});
+
+test("an old card without a timestamp still matches an empty raw quote timestamp", async () => {
+  const r = rig();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "old-card-without-ts", null, null).id;
+    const [n] = r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"),
+      card: { type: "options", options: [{ label: "no", action: "close" }] } });
+    r.store.db.prepare("UPDATE entries SET ts=NULL WHERE thread=? AND n=?").run(id, n);
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "" }] }),
+      [409, { error: en("station.admin.updateClientForOption") }]);
+  } finally { await r.close(); }
 });
 
 test("a person can send without looking up a card when no quote names a message", async () => {

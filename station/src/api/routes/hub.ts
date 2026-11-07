@@ -608,12 +608,16 @@ export const routes = (tools: Tools): Route[] => {
           const quotes = quotesOf(i.quotes);
           if (said === "" && files.length === 0 && quotes.length === 0) throw new Refused(400, tr(r.lang, "station.admin.emptyMessage"));
           let answeredCard: number | null = null;
-          const pending = s.pendingCard(t.id);
+          // Only a quote naming a message can match a pending card. Use the original input here, as the legacy
+          // option check also considers quotes that quotesOf omits (including ones beyond its display limit).
+          const originalQuotes: unknown[] = Array.isArray(i.quotes) ? i.quotes : [];
+          const named = originalQuotes.some((q: any) => q !== null && typeof q === "object" && typeof q.ts === "string");
+          const pending = named ? s.pendingCard(t.id) : null;
           if (pending !== null) {
             const [asked, card] = pending;
             const options: unknown[] = Array.isArray(card?.options) ? card.options : [];
             const selected = options.some((o: any) => o !== null && typeof o === "object" && o.label === said && o.action === "close");
-            const quoted = Array.isArray(i.quotes) && i.quotes.some((q: any) => q !== null && typeof q === "object" && q.ts === asked.ts);
+            const quoted = originalQuotes.some((q: any) => q !== null && typeof q === "object" && q.ts === asked.ts);
             if (files.length === 0 && selected && quoted) throw new Refused(409, tr(r.lang, "station.admin.updateClientForOption"));
             if (quoted) answeredCard = asked.n;
           }
