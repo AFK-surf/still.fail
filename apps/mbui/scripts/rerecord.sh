@@ -148,14 +148,18 @@ NODE
   moon_tests "$test" > "$TMP/$name.after.log" 2>&1
   ok=$?
   for _ in 1 2 3 4 5 6 7 8; do
-    [ $ok = 0 ] && break
-    grep -aq 'kept-answers-ask' "$TMP/$name.after.log" || break
+    # A replay can pass while its made-up core still lacks answers. Treat those as unfinished even when moon exits 0.
+    grep -aq 'kept-answers-ask {' "$TMP/$name.after.log" || break
     grep -a 'kept-answers-ask {' "$TMP/$name.after.log" > "$TMP/$name.asks"
     [ -s "$TMP/$name.asks" ] || break
     node "$A/../../client/core-ts/scripts/kept-answers.ts" "$TMP/$name.asks" > /dev/null || break
     moon_tests "$test" > "$TMP/$name.after.log" 2>&1
     ok=$?
   done
+  if grep -aq 'kept-answers-ask {' "$TMP/$name.after.log"; then
+    echo "  $test: core answers are still missing ($TMP/$name.after.log)"
+    ok=1
+  fi
   if [ $ok = 0 ]; then echo "  $test: passes"; else
     echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
     # (the new trace is the run's; the test does not hold over it: the old one back, said; KEEP_NEW=1 keeps the new
