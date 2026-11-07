@@ -1098,7 +1098,8 @@ fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
   guard now is Some(w) else { return }
   let r = tape_room_now()
   let s = dmax(0.0, c.width - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
-  tape_behind(c, Side, fn() {
+  // (in the sidebar's theme, the rail's: drawn in a colour theme's hue, @sf.side_scope)
+  @sf.in_side(c, fn() { tape_behind(c, Side, fn() {
     dock(
       c,
       src,
@@ -1117,7 +1118,7 @@ fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
       0.0,
       held=true,
     )
-  })
+  }) })
 }
 
 ///|

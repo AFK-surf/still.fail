@@ -28,14 +28,18 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
     assert_eq(@sf.accent_key(), "blue")
     assert_eq(@sf.theme().p.accent, blue.light)
     assert_eq(@sf.theme().p.accent_text, blue.light_text)
-    // the grounds in its hue (the page's, the sidebar's, what is chosen), as Slack's themes tint the frame
-    let blue_day = blue.light_grounds.unwrap()
-    assert_eq(@sf.theme().p.bg, blue_day.bg)
-    assert_eq(@sf.theme().p.sidebar, blue_day.sidebar)
-    assert_eq(@sf.ui_theme().sidebar, blue_day.sidebar)
-    assert_eq(@sf.ui_theme().bg, blue_day.bg)
-    assert_eq(@sf.ui_theme().faint, blue_day.faint)
-    assert_eq(@sf.ui_theme().selected, blue_day.selected)
+    // the page's grounds neutral (no warmth, no hue), the rail and the sidebar deep in its hue with white words, as
+    // Slack's themes draw them
+    let page = @sf.theme().p
+    assert_true(page.bg != bg_orange, msg="\{w}: the warm paper gone")
+    assert_true(neutral(page.bg), msg="\{w}: the page neutral")
+    assert_eq(@sf.ui_theme().bg, page.bg)
+    let side = @view.in_scope(@sf.side_scope, fn() { @sf.theme() })
+    assert_true(side.dark, msg="\{w}")
+    assert_true(@ui.contrast_ratio(0xFFFFFFFFL, side.p.sidebar) >= 9.0, msg="\{w}: the sidebar deep")
+    assert_true(blue_ish(side.p.sidebar), msg="\{w}: the sidebar in its hue")
+    assert_eq(@view.in_scope(@sf.side_scope, fn() { @sf.ui_theme() }).sidebar, side.p.sidebar)
+    assert_eq(@view.in_scope(@sf.side_scope, fn() { @sf.ui_theme() }).bg, side.p.bg)
     // what a style's Accent and AccentText say, mbui's theme's
     assert_eq(@sf.ui_theme().accent, blue.light)
     assert_eq(@sf.ui_theme().accent_text, blue.light_text)
@@ -45,7 +49,8 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
     assert_eq(@sf.theme().p.accent, blue.dark)
     assert_eq(@sf.theme().p.accent_text, blue.dark_text)
     assert_eq(@sf.palette_of(true).accent, blue.dark)
-    assert_eq(@sf.theme().p.bg, blue.dark_grounds.unwrap().bg)
+    assert_true(neutral(@sf.theme().p.bg), msg="\{w}: the night's page neutral")
+    assert_true(blue_ish(@view.in_scope(@sf.side_scope, fn() { @sf.theme() }).p.sidebar), msg="\{w}: by night too")
     @sf.set_dark(Some(false))
     t.click(Radio, label="橙色")
     t.frame()
@@ -55,6 +60,8 @@ test "主题色 蓝色 chosen, laid out narrow and wide, with touch and with a m
     assert_eq(@sf.accent_key(), "")
     assert_eq(@sf.theme().p.accent, orange.light)
     assert_eq(@sf.theme().p.bg, bg_orange, msg="the warm paper back")
+    // the orange's sidebar its own, as it was: the warm paper's a step under the page
+    assert_eq(@view.in_scope(@sf.side_scope, fn() { @sf.theme() }).p.sidebar, @sf.theme().p.sidebar)
   }
 }
 
@@ -87,7 +94,7 @@ test "主题色 自定义: a hue of one's own, its slider under the dots; a step
     assert_eq(text(Some(set[set.length() - 1].params), "accent"), "custom:210")
     assert_eq(@sf.accent_key(), "custom:210")
     assert_eq(@sf.theme().p.accent, @sf.custom_tone(210).light)
-    assert_eq(@sf.theme().p.bg, @sf.custom_tone(210).light_grounds.unwrap().bg)
+    assert_true(neutral(@sf.theme().p.bg), msg="\{w}")
     assert_eq(t.get(Radio, label="自定义").selected, Some(true))
     // its hues, as wide as the dots: a step along
     let hue = t.get(Slider, label="色相")
@@ -112,5 +119,82 @@ test "主题色 自定义: a hue of one's own, its slider under the dots; a step
     t.frame()
     t.frame()
     assert_eq(@sf.accent_key(), "custom:215")
+  }
+}
+
+///|
+/// Whether a colour is a grey (its channels within 5 of each other).
+fn neutral(c : Int64) -> Bool {
+  let (r, g, b) = ((c >> 24) & 0xFFL, (c >> 16) & 0xFFL, (c >> 8) & 0xFFL)
+  let most = r.max(g).max(b)
+  let least = r.min(g).min(b)
+  most - least <= 5L
+}
+
+///|
+/// Whether a colour is a blue (its blue well over its red and green).
+fn blue_ish(c : Int64) -> Bool {
+  let (r, g, b) = ((c >> 24) & 0xFFL, (c >> 16) & 0xFFL, (c >> 8) & 0xFFL)
+  b > r + 30L && b > g + 20L
+}
+
+///|
+test "主题色 蓝色, wide: the rail and the sidebar drawn deep in its hue, the page beside them neutral; 橙色, the sidebar the warm paper's again" {
+  for dark in [false, true] {
+    let calls : Array[Made] = []
+    let t = wide_tester(calls, w=1280.0, h=800.0)
+    @sf.set_dark(Some(dark))
+    // (chosen as a person does: the prefs' accent, which the frame applies)
+    app.nav.push(Settings)
+    app.nav.push(Setting(@settings.Route::Appearance))
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    t.click(Radio, label="蓝色")
+    t.frame()
+    t.frame()
+    // the settings' sidebar (an old view in the block) in the hue
+    let side = @view.in_scope(@sf.side_scope, fn() { @sf.theme() }).p
+    assert_true(blue_ish(side.sidebar), msg="dark \{dark}")
+    assert_true(
+      t.drawn_rects().iter().any(fn(r) { r.4 == side.sidebar && r.0 < 80.0 && r.3 >= 700.0 }),
+      msg="dark \{dark}: no rect of the sidebar's hue beside the settings",
+    )
+    // 外观 lit in the settings' list (its rows built as the list lays them out) on what is chosen in the hue
+    assert_true(
+      t.drawn_rects().iter().any(fn(r) { r.4 == side.selected && r.0 < 80.0 && r.2 > 150.0 && r.0 + r.2 < 300.0 }),
+      msg="dark \{dark}: 外观 not lit in the sidebar's hue",
+    )
+    app.nav.pop() |> ignore
+    app.nav.pop() |> ignore
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    let side = @view.in_scope(@sf.side_scope, fn() { @sf.theme() }).p
+    let page = @sf.theme().p
+    let rects = t.drawn_rects()
+    // the block's ground, the window's height, from its left
+    assert_true(
+      rects.iter().any(fn(r) { r.4 == side.sidebar && r.0 < 80.0 && r.3 >= 700.0 }),
+      msg="dark \{dark}: no rect of the sidebar's hue down the window's left",
+    )
+    // its words (新建对话) on it
+    let (nx, _) = t.find("新建对话").unwrap()
+    assert_true(
+      rects.iter().any(fn(r) { r.4 == side.sidebar && r.0 <= nx && r.0 + r.2 >= nx }),
+      msg="dark \{dark}: 新建对话 off the sidebar's hue",
+    )
+    // the page neutral beside it
+    assert_true(rects.iter().any(fn(r) { r.4 == page.bg && r.0 >= 200.0 }), msg="dark \{dark}: no neutral page")
+    assert_true(neutral(page.bg), msg="dark \{dark}: \{page.bg.to_string(radix=16)}")
+    app.nav.push(Settings)
+    app.nav.push(Setting(@settings.Route::Appearance))
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    t.click(Radio, label="橙色")
+    t.frame()
+    t.frame()
+    let orange = @sf.theme().p
+    assert_true(!t.drawn_rects().iter().any(fn(r) { r.4 == side.sidebar }), msg="dark \{dark}: the hue left over")
+    assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == orange.sidebar && r.0 < 80.0 }), msg="dark \{dark}")
+    @sf.set_dark(Some(false))
   }
 }

@@ -495,6 +495,7 @@ pub fn Ctx::list(
         sel: false,
         theme: self.theme,
         direction: self.direction,
+        scope: @view.scope_now(),
         stint: self.stint,
         layer: self.layer_cur,
         causes: None,
@@ -534,6 +535,7 @@ pub fn Ctx::list(
   st.sel = desk.selecting
   st.theme = self.theme
   st.direction = self.direction
+  st.scope = @view.scope_now()
   st.stint = self.stint
   st.layer = self.layer_cur
   // (rows that show only what they read are kept however what builds them was built: their own watches say when
@@ -619,7 +621,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   // (what its content reads of its rows' way: Ctx::row_way)
   let laid_by = rows_laid_by.val
   rows_laid_by.val = st.causes.map(fn(c) { (c, k) })
-  self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) })
+  self.with_parent(r, fn() { self.scope(k, fn() { @view.in_scope(st.scope, fn() { row(k) }) }) })
   rows_laid_by.val = laid_by
   self.id_seed = saved_seed
   self.cur = saved_cur

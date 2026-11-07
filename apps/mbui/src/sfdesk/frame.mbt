@@ -504,7 +504,8 @@ fn dock(
   held? : Bool = false,
   fold? : (FoldLook, Bool)? = None,
 ) -> Unit {
-  let t = @sf.theme()
+  // (its shadow the page's, what it casts on: the block's own theme the sidebar's)
+  let t = @view.in_scope(0, @sf.theme)
   // on the tape (open, apart from the page), a panel of its own as the closed bar is: 6 from the window's edges, 8 from
   // the page's panel
   let apart = wide.tape && !bar
@@ -525,7 +526,11 @@ fn dock(
     Some(r) => dock_look.then(@ui.style(radius=r))
     None => dock_look
   }
-  let look = look.then(@ui.style(bg=Data(if apart { dock_ground(bar) } else { f.ground })))
+  let ground = if apart { dock_ground(bar) } else { f.ground }
+  let look = look.then(@ui.style(bg=Data(ground)))
+  // (open, its clear line its ground's too: no line of the window's ground left round a sidebar in a theme's hue,
+  // @sf.side_scope; its line drawn over it by the tree, dock_edge_node)
+  let look = if !bar && !apart && @sf.side_hued() { look.then(@ui.style(border_color=Data(ground))) } else { look }
   let (dock_w, dock_h) = dock_size(bar, f, col, top, foot, c.height)
   // (over the page, as the web's block is; `held`, in an island of its own: tape_view.mbt, pane_view.mbt)
   let column = fn() {

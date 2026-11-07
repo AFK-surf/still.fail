@@ -6,6 +6,8 @@
 /// The sidebar the block holds now in node `n` (as large as what holds the block, over it), where `at` says the block
 /// has it: cut to the block's room inside its line, its corners the block's; shown while what is in it is drawn.
 fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
+  // (in the sidebar's theme, the rail's: drawn in a colour theme's hue, @sf.side_scope)
+  n.scope(@sf.side_scope) |> ignore
   n.show(fn() { side_made(side_place()) }, fn(cut) {
     cut
     // (not shown, as the device waits in the lock: laid out nowhere, the same nodes, what had the focus in it given

@@ -801,6 +801,13 @@ fn fold_bars(f : FoldLook) -> Unit {
 fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
   let (now, all, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
+  // (in the sidebar's theme, the rail's: drawn in a colour theme's hue, @sf.side_scope)
+  @sf.in_side(c, fn() { pane_block_in(c, src, w, all) })
+}
+
+///|
+/// The block off the tape (pane_block_built's) in workspace `w`, built in the sidebar's theme.
+fn pane_block_in(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   let (r, target) = fold_target(src, w, c.width)
   let f = fold_built(c, target)
   fold_bars(f)

@@ -27,6 +27,8 @@ struct CoverAsk {
   // the theme and the direction where it was asked for: it is built after layout, theirs ended (as a list's rows)
   theme : Theme
   direction : Direction
+  // the scope of the window's tree it was asked in (@view.View::scope)
+  scope : Int
 }
 
 ///|
@@ -166,6 +168,7 @@ pub fn Ctx::cover(
     look,
     theme: self.theme,
     direction: self.direction,
+    scope: @view.scope_now(),
   })
 }
 
@@ -193,7 +196,7 @@ fn Ctx::covers_after_layout(self : Ctx) -> Unit {
     let i = self.alloc(kind_box)
     self.nodes[i].w = Px(bw)
     self.nodes[i].h = Px(bh)
-    self.with_parent(i, fn() { (a.look)(self, bw, bh) })
+    self.with_parent(i, fn() { @view.in_scope(a.scope, fn() { (a.look)(self, bw, bh) }) })
     self.cur = saved
     self.theme = saved_theme
     self.direction = saved_dir

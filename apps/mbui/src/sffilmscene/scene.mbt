@@ -37,6 +37,10 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
         } else { s }
         let s = if arg("MBUI_SAID") == "1" { @sffixture.said_longest_source(s) } else { s }
         if dark { @sf.set_dark(Some(true)) }
+        // (a colour theme chosen before the scene, as 外观 › 主题色 chooses it: the prefs' `accent`)
+        if arg("MBUI_ACCENT") != "" {
+          (s.call)("prefs.set", { "accent": Json::string(arg("MBUI_ACCENT")) }, fn(_) {  })
+        }
         @sf.give_faces()
         src.val = Some(s)
         s

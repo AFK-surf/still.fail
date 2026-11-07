@@ -134,7 +134,7 @@ jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
   --arg allow_incomplete "${MBUI_FILM_ALLOW_INCOMPLETE:-}" --arg allow_corner_faults "${MBUI_FILM_ALLOW_CORNER_FAULTS:-}" \
   --arg station_sha "$local_station_hash" --arg hold "${MBUI_HOLD:-}" --arg failed "${MBUI_FAILED:-}" \
   --arg failed_why "${MBUI_FAILED_WHY:-}" --arg window "${MBUI_WINDOW:-}" --arg said "${MBUI_SAID:-}" \
-  --arg core_ms "${MBUI_CORE_MS:-}" --arg update "${MBUI_UPDATE:-}" --arg updates_ms "${MBUI_UPDATES_MS:-}" \
+  --arg core_ms "${MBUI_CORE_MS:-}" --arg update "${MBUI_UPDATE:-}" --arg updates_ms "${MBUI_UPDATES_MS:-}" --arg accent "${MBUI_ACCENT:-}" \
   --arg autofill "${MBUI_FILM_AUTOFILL:-}" --argjson extra "${MBUI_MEDIA_RECORD:-null}" \
   '{version: 1, kind: $kind, made_utc: $made, source: ({app: $app, revision: $revision, dirty: $dirty, runtime_key: $runtime_key, executable_sha256: $exe_sha} +
     (if $wasm_sha == "" then {} else {wasm_sha256: $wasm_sha, host_sha256: $host_sha, runner_sha256: $runner_sha, compact_sha256: $compact_sha} end)),
@@ -147,7 +147,7 @@ jq -n --rawfile drive "$work/drive" --rawfile prepare "$work/prepare" \
       inset: $inset, window_corner: $corner, nav_able: $nav, max_frames: $max, at_ms: $at, frame: $frame,
       transparent: $transparent, allow_incomplete: $allow_incomplete, allow_corner_faults: $allow_corner_faults, local_station_sha256: $station_sha,
       fixture_options: {hold: $hold, failed: $failed, failed_why: $failed_why, window: $window, said: $said,
-        core_ms: $core_ms, update: $update, updates_ms: $updates_ms, autofill: $autofill}}, extra: $extra}' > "$work/scene.json"
+        core_ms: $core_ms, update: $update, updates_ms: $updates_ms, autofill: $autofill, accent: $accent}}, extra: $extra}' > "$work/scene.json"
 
 # The result is only published after the complete render and its record have succeeded. Each file is renamed on the
 # same filesystem; the hash in the record lets a reader detect a mismatched file if publication was interrupted.
