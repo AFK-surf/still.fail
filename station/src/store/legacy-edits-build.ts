@@ -202,7 +202,7 @@ export function legacyEditDrain(db: DatabaseSync, limit = BATCH): number {
     const m = meta(db);
     if (m.version !== VERSION) throw new Error("unsupported legacy edit preparation");
     if (!m.scanned) { db.exec("COMMIT"); return 0; }
-    const first = db.prepare("SELECT CAST(thread AS TEXT) thread,CAST(n AS TEXT) n FROM legacy_edit_dirty ORDER BY thread,n LIMIT 1");
+    const first = db.prepare("SELECT CAST(d.thread AS TEXT) thread,CAST(d.n AS TEXT) n FROM legacy_edit_dirty d ORDER BY d.thread,d.n LIMIT 1");
     // A key can have arbitrarily many proposed targets. Remove at most this batch's budget before folding the key.
     const extras = db.prepare(`SELECT target FROM legacy_edit_targets INDEXED BY legacy_edit_targets_by_key
       WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER)
