@@ -407,7 +407,7 @@ pub fn decision_options(
   ]
   // the one on its way (the core's doing: its option)
   let mut busy : Int? = None
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let dv = Some(d)
     if text(dv, "call") == "decision.answer" && text(dv, "stage") != "failed" {
       let params = field(dv, "params")

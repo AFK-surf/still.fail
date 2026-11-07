@@ -51,8 +51,8 @@ fn jobs_tester() -> @ui.Tester {
   let base = fixture("home-jobs")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("prefs", Some(Object(m))) => {
           let p = m.copy()

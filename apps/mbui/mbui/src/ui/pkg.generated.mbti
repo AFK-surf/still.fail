@@ -19,6 +19,8 @@ pub fn add_image(String, Bytes) -> Unit
 
 pub fn add_vector_image(String, Bytes, (Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?) -> Unit
 
+pub fn after_frame(() -> Unit) -> Unit
+
 pub fn alpha(Int64, Double) -> Int64
 
 pub fn app_awake() -> Bool
@@ -1507,6 +1509,7 @@ type FakeHost
 type Field
 pub fn Field::colors(Self, placeholder~ : Int64, caret~ : Int64) -> Unit
 pub fn Field::composed_said(Self) -> String
+pub fn Field::composing(Self) -> Bool
 pub fn Field::focus(Self) -> Unit
 pub fn Field::follow(Self, String, generation? : Int32) -> Unit
 pub fn Field::laid(Self, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, trim? : Bool) -> FieldLaid

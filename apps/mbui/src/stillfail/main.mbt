@@ -12,7 +12,7 @@ let dumped : Map[String, Int] = {}
 ///|
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
   // (read in a computed, followed: Sub.changes)
-  let s = @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed()
+  let s = @core.follow_topic(name, params=@sfbase.core_topic_params(name, params))
   if dump {
     let key = name + " " + Json::object(params).stringify()
     if dumped.get(key) != Some(s.version) {
@@ -157,8 +157,9 @@ fn refused(name : String) -> Json {
 
 ///|
 let core_source : @sfapp.Source = {
-  topic: core_topic,
-  waits: fn(name, params) { @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed().waiting },
+  topic_read: core_topic,
+  waits: fn(name, params) { @core.follow_topic(name, params=@sfbase.core_topic_params(name, params)).waiting },
+  generation: fn(name, params) { @core.client.topic_generation(name, params=@sfbase.core_topic_params(name, params)) },
   call: fn(name, params, done) {
     if read_only && !read_only_calls.contains(name) {
       done(Err(refused(name)))
@@ -290,7 +291,9 @@ let core_source : @sfapp.Source = {
   draft_picture,
   images: chat_images,
   now: fn() { @ui.wall_ms() },
-  leave: fn(name, params) { @core.unsubscribe_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  leave: fn(name, params) { @core.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  release: fn(name, params) { @core.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
 }
 

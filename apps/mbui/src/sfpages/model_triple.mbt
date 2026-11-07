@@ -50,7 +50,7 @@ fn TriplePanel::pick_now(self : TriplePanel, src : Source, station : String, of 
   if @sf.presented_open_of(self.serial) {
     // (until its own is read, what the page that opened it has: the same pick, so it opens as it stays, not first
     // in its bones somewhere else)
-    match (src.topic)("pick", pick_params(station, of)).value {
+    match src.topic("pick", pick_params(station, of)).get().value {
       Some(_) as v => self.pick = v
       None => ()
     }
@@ -185,7 +185,7 @@ pub fn model_triple(
   let t = @sf.theme()
   let v = match page {
     Some(_) => page
-    None => (src.topic)("pick", pick_params(station, of)).value
+    None => src.topic("pick", pick_params(station, of)).get().value
   }
   guard v is Some(Object(_)) else { return }
   let value = field(v, "value")
@@ -1247,7 +1247,7 @@ fn triple_option(
 /// now (and at its end, a chat's, what has the station pick again now: `pick.repick`, which account it took said in a
 /// toast), then each account with what is left of it; picked, back to the pick's panel.
 fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, close : () -> Unit) -> Unit {
-  let v = (src.topic)("pick", pick_params(station, of)).value
+  let v = src.topic("pick", pick_params(station, of)).get().value
   let draft = field(v, "draft")
   c.box(style=triple_accounts_box, fn() {
     match text(v, "dropped") {

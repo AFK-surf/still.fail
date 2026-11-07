@@ -5,11 +5,11 @@ test "the search read last is let go of as the next words are read and as the se
   let made = @sfbase.made_source()
   let src : Source = {
     ..made,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "search" {
         read.push(params.get("query").unwrap().as_string().unwrap())
       }
-      (made.topic)(name, params)
+      made.topic(name, params).get().snapshot()
     },
     leave: fn(name, params) {
       if name == "search" {

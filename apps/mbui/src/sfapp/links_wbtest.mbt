@@ -80,11 +80,11 @@ fn links_core(
   let base = fixture(mode)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match (name, history, accounts) {
         ("history", Some(h), _) => { value: Some(h), error: None, version: 1 }
         ("accounts", _, Some(a)) => { value: Some(a), error: None, version: 1 }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -381,7 +381,7 @@ test "a login's page on this device: the notice that holds the app up says which
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "machineLogins" => { value: Some({ "canLogin": true, "canRelay": true }), error: None, version: 1 }
         "machineLogin" =>
@@ -397,7 +397,7 @@ test "a login's page on this device: the notice that holds the app up says which
             error: None,
             version: 1,
           }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

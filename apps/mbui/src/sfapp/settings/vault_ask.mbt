@@ -764,7 +764,7 @@ pub fn vault_foot(
 ///|
 /// The workspace's vaults as the core has them (`vaults`: its requests, whether keys are kept here).
 fn vaults_of(core : Core, ws : String) -> Json? {
-  (core.topic)("vaults", { "workspace": str(ws) }).value
+  (core.topic)("vaults", { "workspace": str(ws) }).get().value
 }
 
 ///|

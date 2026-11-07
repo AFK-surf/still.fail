@@ -176,7 +176,7 @@ let outflow_answer : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justif
 /// The programs granted the station's data, and those asking for it, as the core holds them: none from a station from
 /// before them.
 fn outflow_view(core : Core, station : String) -> Json? {
-  let view = (core.topic)("outflowGrants", { "station": str(station) }).value
+  let view = (core.topic)("outflowGrants", { "station": str(station) }).get().value
   if flag(view, "supported") { view } else { None }
 }
 

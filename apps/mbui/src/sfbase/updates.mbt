@@ -249,7 +249,7 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
 /// Whether newer builds are downloaded by themselves here (the prefs' `appUpdate`: 自动更新, on unless turned off),
 /// else only at the person's word.
 pub fn update_auto(src : Source) -> Bool {
-  text((src.topic)("prefs", {}).value, "appUpdate") != "off"
+  text(src.topic("prefs", {}).get().value, "appUpdate") != "off"
 }
 
 ///|

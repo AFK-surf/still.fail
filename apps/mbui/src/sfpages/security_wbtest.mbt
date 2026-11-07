@@ -16,8 +16,8 @@ test "安全码: a wrong code keeps the keyboard for another try; approval puts 
           (base.call)(name, params, done)
         }
       },
-      topic: fn(name, params) {
-        let topic = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let topic = base.topic(name, params).get().snapshot()
         if name == "lock" && approved.val {
           {
             ..topic,
@@ -125,8 +125,8 @@ test "a station's protect button follows its request through failure, retry and 
             (base.call)(name, params, done)
           }
         },
-        topic: fn(name, params) {
-          let read = (base.topic)(name, params)
+        topic_read: fn(name, params) {
+          let read = base.topic(name, params).get().snapshot()
           if name == "doing" && running.val {
             { ..read, value: Some({ "doing": [{ "call": "lock.joinStation", "stage": "running", "params": { "workspace": "ws1", "station": "st2" } }] }) }
           } else if name == "lock" && joined.val {

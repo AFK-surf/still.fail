@@ -12,8 +12,8 @@ test "an agent's card offers its jobs when a compact chat says it has them" {
     let base = fixture("chat-agent")
     let src : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         guard name == "chat" && got.value is Some(Object(chat)) else { return got }
         let out = chat.copy()
         out["agents"] = Json::array(items(got.value, "agents").map(fn(a) {
@@ -45,8 +45,8 @@ fn work_source(mode : String, on? : @signals.Signal[Bool] = @signals.signal(true
   let base = fixture(mode)
   {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       guard on.get() && name == "agentCard" && got.value is Some(Object(card)) else { got }
       let now = (base.now)()
       let task = fn(id : String, kind : String, words : String, kind_words : String, ago : Double) -> Json {

@@ -280,19 +280,19 @@ test "pick, long, 大屏 keyboard and mouse: words typed in its search, the lang
   new_run()
   let base = fixture("chat")
   // (the core's language as `lang` says it, where it says one: large_about_tester's)
-  let lang = Ref("")
+  let lang = @signals.signal("")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
-      if name != "prefs" || lang.val == "" {
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
+      if name != "prefs" || lang.get() == "" {
         return got
       }
       let o = match got.value {
         Some(Object(m)) => m.copy()
         _ => {}
       }
-      o["lang"] = Json::string(lang.val)
+      o["lang"] = Json::string(lang.get())
       { ..got, value: Some(Json::object(o)) }
     },
   }
@@ -305,14 +305,13 @@ test "pick, long, 大屏 keyboard and mouse: words typed in its search, the lang
   t.run_for(@ui.move_most_ms)
   t.type_text("第1")
   let before = t.get(TextField, label="搜索")
-  lang.val = "en"
-  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
-  // signal, said)
+  lang.set("en")
+  // The made-up prefs notify readers as the core would when the language changes.
   t.stepped()
   t.run_for(@ui.move_most_ms)
   let after = t.focused()
   let words = t.field_words()
-  lang.val = ""
+  lang.set("")
   @sf.set_language(None)
   t.stepped()
   t.run_for(@ui.move_most_ms)

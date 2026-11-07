@@ -94,7 +94,7 @@ fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked 
 ///|
 /// The station's presets and the folders it offers for one (the `presets` topic), read as they are shown.
 fn presets_of(src : Source, address : String) -> Json? {
-  (src.topic)("presets", { "station": Json::string(address) }).value
+  src.topic("presets", { "station": Json::string(address) }).get().value
 }
 
 ///|

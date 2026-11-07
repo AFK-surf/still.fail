@@ -5,37 +5,99 @@
 // read in the build it ended in (something still shown reads it).
 
 ///|
-/// What each thing read and has not let go of yet: by its name, each topic's name and params by its key.
-let held_topics : Map[String, Map[String, (String, Map[String, Json])]] = {}
+/// A legacy scope's reader, independent of the frame that last read it.
+priv struct HeldTopic {
+  source : Source
+  state : @signals.Computed[TopicState]
+  watch : @signals.Watch
+  mut read : Int
+}
+
+///|
+/// Each legacy scope holds its own graph reader, so leaving one scope does not end another scope's topic.
+let held_topics : Map[String, Map[String, HeldTopic]] = {}
 
 ///|
 /// The build each topic was last read in, and the build going on (held_build): what is read in the build its thing
 /// ended in is still shown by another (a chat that took a new one's place, its agent's line the same), and stays.
-let held_read : Map[String, Int] = {}
+let held_deferred : Ref[Array[(Int, HeldTopic)]] = Ref([])
 
 ///|
 let held_now : Ref[Int] = Ref::new(0)
 
 ///|
+let held_building : Ref[Bool] = Ref::new(false)
+
+///|
+/// This watch belongs to its legacy scope, not to the particular build which first read that scope.
+fn held_watch() -> @signals.Watch {
+  let owner = @signals.set_owner(None)
+  let watch = @signals.watch(fn() {  })
+  @signals.set_owner(owner) |> ignore
+  watch
+}
+
+///|
 /// A build begins (the app's view, each frame it builds).
 pub fn held_build(n : Int) -> Unit {
   held_now.val = n
+  held_building.val = true
+  let previous = held_deferred.val
+  held_deferred.val = []
+  for t in previous {
+    if t.0 == n {
+      held_deferred.val.push(t)
+    }
+  }
+  let mut i = previous.length() - 1
+  while i >= 0 {
+    if previous[i].0 != n {
+      previous[i].1.watch.stop()
+    }
+    i -= 1
+  }
+}
+
+///|
+/// Finish a frame's scope handovers now, even if no later frame is drawn.
+pub fn held_end() -> Unit {
+  held_building.val = false
+  // Drop the old backing array as well as its logical contents, so stopped watches no longer retain their sources.
+  let deferred = held_deferred.val
+  held_deferred.val = []
+  for t in deferred {
+    t.1.watch.stop()
+  }
 }
 
 ///|
 /// The topic `name` with `params`, read for `scope` (let go of with it: let_go).
-pub fn hold(src : Source, scope : String, name : String, params : Map[String, Json]) -> Topic {
+pub fn hold(src : Source, scope : String, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
   let key = name + "\u{1}" + Json::object(params).stringify()
-  held_read[key] = held_now.val
-  match held_topics.get(scope) {
-    Some(m) => if !m.contains(key) { m[key] = (name, params) }
+  let topics = match held_topics.get(scope) {
+    Some(m) => m
     None => {
-      let m : Map[String, (String, Map[String, Json])] = {}
-      m[key] = (name, params)
+      let m : Map[String, HeldTopic] = {}
       held_topics[scope] = m
+      m
     }
   }
-  (src.topic)(name, params)
+  let held = match topics.get(key) {
+    Some(t) if physical_equal(t.source, src) => t
+    old => {
+      let t = { source: src, state: scoped_topic(src, name, params), watch: held_watch(), read: held_now.val }
+      topics[key] = t
+      t.watch.read(fn() { t.state.get() }) |> ignore
+      match old {
+        Some(was) => was.watch.stop()
+        None => ()
+      }
+      t
+    }
+  }
+  held.read = held_now.val
+  held.watch.read(fn() { held.state.get() }) |> ignore
+  held.state
 }
 
 ///|
@@ -44,15 +106,11 @@ pub fn let_go(src : Source, scope : String) -> Unit {
   match held_topics.get(scope) {
     Some(m) => {
       held_topics.remove(scope)
-      for key, t in m {
-        if held_read.get(key) == Some(held_now.val) {
-          continue
-        }
-        held_read.remove(key)
-        (src.leave)(t.0, t.1)
-        // left for all: another that read it reads it again if it still shows it
-        for _, other in held_topics {
-          other.remove(key)
+      for _, t in m {
+        if held_building.val && t.read == held_now.val {
+          held_deferred.val.push((held_now.val, t))
+        } else {
+          t.watch.stop()
         }
       }
     }
@@ -71,9 +129,19 @@ pub fn let_go_all(src : Source, prefix : String) -> Unit {
 
 ///|
 fn held_reset() -> Unit {
+  for _, topics in held_topics {
+    for _, topic in topics {
+      topic.watch.stop()
+    }
+  }
+  let deferred = held_deferred.val
+  held_deferred.val = []
+  for t in deferred {
+    t.1.watch.stop()
+  }
   held_topics.clear()
-  held_read.clear()
   held_now.val = 0
+  held_building.val = false
 }
 
 ///|

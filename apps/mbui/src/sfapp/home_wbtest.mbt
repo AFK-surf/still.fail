@@ -231,7 +231,7 @@ test "small screen home: a long workspace name gives way to syncing and transfer
   let base = downloads_src("home-syncing", [listed("dist.zip", "going", 1.0, 50.0, "正在下载")], calls)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaces" {
         {
           value: Some([{
@@ -244,7 +244,7 @@ test "small screen home: a long workspace name gives way to syncing and transfer
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -695,14 +695,14 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   let read : Array[String] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chats" {
         let k = Json::object(params).stringify()
         if !read.contains(k) {
           read.push(k)
         }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -977,11 +977,11 @@ test "the wide frame's first page: shown once its pane has landed on what the co
   let slow = @signals.signal(true)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if slow.get() && name == "workspaceMarks" {
         return { value: None, error: None, version: 0 }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -1047,7 +1047,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaces" {
         {
           value: Some([{ "account": { "email": "lin@example.com" }, "workspaces": Json::array(many), "invitations": [], "loaded": true }]),
@@ -1055,7 +1055,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        (base.topic_read)(name, params)
       }
     },
   }

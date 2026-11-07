@@ -40,6 +40,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 pub fn run_let_go() -> Unit {
   made_forget()
   view_forget()
+  frame_watches_let_go()
 }
 
 ///|

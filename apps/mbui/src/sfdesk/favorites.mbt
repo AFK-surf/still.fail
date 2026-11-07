@@ -17,7 +17,7 @@ let favorites_most : Int = 40
 ///|
 /// A list of places kept in a preference (what does not hold together let go).
 fn favorites_read(src : Source, ws : String, key : String) -> Array[Favorite] {
-  let raw = text(field((src.topic)("prefs", {}).value, key), ws)
+  let raw = text(field(src.topic("prefs", {}).get().value, key), ws)
   let out : Array[Favorite] = []
   match (@json.parse(raw) catch { _ => Json::null() }) {
     Array(list) =>

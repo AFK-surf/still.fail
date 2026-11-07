@@ -23,7 +23,7 @@ pub fn decisions_node(
 ) -> Unit {
   // (what it says of itself to a frame's bar that names it, what it is for with it: its `about`)
   let told = said
-  let said = fn() { (core.topic)("settings", { "scope": Json::string(here().workspace) }).value }
+  let said = fn() { (core.topic)("settings", { "scope": Json::string(here().workspace) }).get().value }
   @sf.page_node(
     v,
     fn() { @sf.t("web-pages.automaticDecisions.title") },
@@ -215,7 +215,7 @@ fn completion_station_node(
       return
     }
     let form = form_of(station)
-    let topic = fn() { (core.topic)("decisionForm", { "station": str(station), "form": str(form) }) }
+    let topic = fn() { (core.topic)("decisionForm", { "station": str(station), "form": str(form) }).get() }
     p.pick(
       fn() {
         match (topic().value, topic().error) {
@@ -497,7 +497,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
       }
     })
   }
-  let d = (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value
+  let d = (core.topic)("policyForm", { "station": str(station), "form": str(form) }).get().value
   let busy = !(d is Some(Object(_))) || flag(d, "pending")
   let saving = is_doing(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
   let failed = failed_of(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
@@ -589,7 +589,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       done=@sf.t("web-pages.archivePolicy.saved"),
     )
   }
-  let draft = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value }
+  let draft = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).get().value }
   let serial = (desk_dialogs.val + 1).to_string()
   let filled : Map[String, Bool] = {}
   // a field's words put in once, as the dialog opens; then what is typed is the draft's

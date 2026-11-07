@@ -14,11 +14,11 @@ fn notify_over(
 ) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "notify" => { value: notify.get(), error: None, version: 1 }
         "workspaceMarks" if marks.get() is Some(_) => { value: marks.get(), error: None, version: 1 }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -74,7 +74,7 @@ test "通知 made once: a kind's banner turned shows at once, kept till the core
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
-      notify.set((base.topic)("notify", Map::new()).value)
+      notify.set(base.topic("notify", Map::new()).get().value)
       notify_over(base, notify, marks, calls)
     })
     let banner = @sf.t("web-pages.notifications.ways.banner")
@@ -118,8 +118,8 @@ test "通知 made once: the badge's tile turned shows at once and its kinds' swi
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform=0, h=2400.0, over=fn(base) {
-      notify.set((base.topic)("notify", Map::new()).value)
-      marks.set((base.topic)("workspaceMarks", { "workspace": Json::string("ws1") }).value)
+      notify.set(base.topic("notify", Map::new()).get().value)
+      marks.set(base.topic("workspaceMarks", { "workspace": Json::string("ws1") }).get().value)
       notify_over(base, notify, marks, calls)
     })
     let badge = @sf.t("web-pages.notifications.ways.badge")
@@ -158,7 +158,7 @@ test "通知 made once: the banner's tile turned while that is on its way: a spi
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
-      notify.set((base.topic)("notify", Map::new()).value)
+      notify.set(base.topic("notify", Map::new()).get().value)
       notify_over(base, notify, marks, calls)
     })
     let banner = @sf.t("web-pages.notifications.ways.banner")
@@ -194,7 +194,7 @@ test "通知 made once, as the system has notifications: not asked yet, asked of
       let marks : @signals.Signal[Json?] = @signals.signal(None)
       let calls = []
       let over = fn(base : Source) {
-        notify.set(notify_with((base.topic)("notify", Map::new()).value, [("permission", Json::string(state))]))
+        notify.set(notify_with(base.topic("notify", Map::new()).get().value, [("permission", Json::string(state))]))
         notify_over(base, notify, marks, calls)
       }
       // (the device's system as the core says it: asked of it only where it has not been)
@@ -222,7 +222,7 @@ test "通知 made once, its settings read the first time: their cards in their b
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let kept : Ref[Json?] = Ref(None)
     let t = setting_tester(Notifications, w, platform~, over=fn(base) {
-      kept.val = (base.topic)("notify", Map::new()).value
+      kept.val = base.topic("notify", Map::new()).get().value
       notify_over(base, notify, marks, [])
     })
     assert_true(t.find(@sf.t("web-pages.notifications.ways.title")) is None, msg=at)
@@ -243,7 +243,7 @@ test "通知 made once: each workspace's switch turns it; notifications off, the
     let marks : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(Notifications, w, platform~, h=2400.0, over=fn(base) {
-      notify.set((base.topic)("notify", Map::new()).value)
+      notify.set(base.topic("notify", Map::new()).get().value)
       notify_over(base, notify, marks, calls)
     })
     assert_eq(switch_said(t, "个人"), Some(Off), msg=at)

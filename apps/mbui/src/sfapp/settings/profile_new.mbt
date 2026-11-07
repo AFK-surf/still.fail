@@ -81,7 +81,7 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
 ///|
 /// A sign-in under way on a station, by its id (its overview's `logins`).
 pub fn pending_login(core : Core, station : String, id : String) -> Json? {
-  let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).value
+  let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).get().value
   match all {
     Some(Array(a)) =>
       match a.iter().find_first(fn(s) { text(Some(s), "station") == station }) {
@@ -127,7 +127,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     })
   }
   let s = station_of(core, here, station)
-  let topic = (core.topic)("profileFlow", { "station": str(station), "form": str(form) })
+  let topic = (core.topic)("profileFlow", { "station": str(station), "form": str(form) }).get()
   let d = topic.value
   let edit = fn(input : Array[(String, Json)]) {
     act(core, tr("web-pages.addProfile.editAction"), "profile.flow.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]))
@@ -456,7 +456,7 @@ let new_profile_pad : @ui.Style = @ui.css("w=Full px=S3 pt=S2 gap=S3")
 /// leading to its page there.
 fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> Unit {
   let t = @sf.theme()
-  let topic = (core.topic)("profiles", { "scope": str(here.workspace) })
+  let topic = (core.topic)("profiles", { "scope": str(here.workspace) }).get()
   let e = items(topic.value, "items").iter().find_first(fn(x) { text(Some(x), "key") == key })
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     match e {

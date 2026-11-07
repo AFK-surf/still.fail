@@ -13,27 +13,27 @@ fn large_about_tester(
   wait? : Double = @ui.move_most_ms,
   scale? : Double = 1.0,
   window_inset? : Bool = false,
-  lang? : Ref[String] = Ref(""),
+  lang? : @signals.Signal[String] = @signals.signal(""),
   topics? : Map[String, @signals.Signal[Json]] = {},
 ) -> @ui.Tester {
   let base = fixture_app(mode)
   // (the core's language as `lang` says it, where it says one)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match topics.get(name) {
         Some(v) => return { value: Some(v.get()), error: None, version: 1 }
         None => ()
       }
-      let got = (base.topic)(name, params)
-      if name != "prefs" || lang.val == "" {
+      let got = base.topic(name, params).get().snapshot()
+      if name != "prefs" || lang.get() == "" {
         return got
       }
       let o = match got.value {
         Some(Object(m)) => m.copy()
         _ => {}
       }
-      o["lang"] = Json::string(lang.val)
+      o["lang"] = Json::string(lang.get())
       { ..got, value: Some(Json::object(o)) }
     },
   }
@@ -158,7 +158,7 @@ test "记忆 made once, its page wide on a large screen and on the tape: its row
 
 ///|
 test "大屏 关于 made once over 更新日志, the language changed: its back says where it goes in the new one, the same page and the same back; its title too" {
-  let lang = Ref("")
+  let lang = @signals.signal("")
   let t = large_about_tester(true, 0, mode="settings-changelog", lang~)
   app.nav.push(Setting(@settings.Route::About))
   t.run_for(@ui.move_most_ms)
@@ -166,9 +166,8 @@ test "大屏 关于 made once over 更新日志, the language changed: its back 
   let page = @sfdesk.pane_made_seen()
   let back_node = tree_node_of(back)
   assert_true(page is Some(_) && back_node is Some(_), msg="its back the tree's: \{tree_words_drawn()}")
-  lang.val = "en"
-  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
-  // signal, said)
+  lang.set("en")
+  // The made-up prefs notify readers as the core would when the language changes.
   t.stepped()
   t.run_for(@ui.move_most_ms)
   let back_en = @sf.t("web-pages.settings.nav.changelog")
@@ -178,7 +177,57 @@ test "大屏 关于 made once over 更新日志, the language changed: its back 
   assert_true(words.contains(back_en) && words.contains(title_en), msg="said anew: \{words}")
   assert_true(@sfdesk.pane_made_seen() == page, msg="the same page")
   assert_true(tree_node_of(back_en) == back_node, msg="the same back")
-  lang.val = ""
+  lang.set("")
+  @sf.set_language(None)
+}
+
+///|
+test "a real client's prefs change the language of the existing settings page" {
+  let base = fixture_app("settings-changelog")
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name != "prefs" { return (base.topic_read)(name, params) }
+      let sub = client.follow_topic(name, params~)
+      { value: sub.value, error: sub.error, version: sub.version }
+    },
+    waits: fn(name, params) {
+      if name == "prefs" { client.follow_topic(name, params~).waiting } else { (base.waits)(name, params) }
+    },
+    leave: fn(name, params) {
+      if name == "prefs" { client.leave_topic(name, params~) } else { (base.leave)(name, params) }
+    },
+    release: fn(name, params) {
+      if name == "prefs" { client.release_topic(name, params~) } else { (base.release)(name, params) }
+    },
+  }
+  @sfdesk.pane_makes.val = true
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=900.0, platform=0, env=[("MBUI_LOCALE", "zh")])
+  guard client.peek_topic("prefs") is Some(sub) else { fail("prefs not subscribed") }
+  assert_eq(sent.length(), 1, msg="tree creation and the first frame share the prefs subscription")
+  let prefs = match (base.topic_read)("prefs", {}).value {
+    Some(Object(m)) => m.copy()
+    _ => fail("the fixture's prefs are missing")
+  }
+  prefs["lang"] = "zh"
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": Json::object(prefs) })
+  t.frame()
+  let chinese = @sf.t("web-pages.settings.nav.changelog")
+  assert_true(tree_words_drawn().contains(chinese), msg="the settings page is drawn in Chinese")
+  let node = tree_node_of(chinese)
+  let english_prefs = prefs.copy()
+  english_prefs["lang"] = "en"
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": Json::object(english_prefs) })
+  t.frame()
+  let english = @sf.t("web-pages.settings.nav.changelog")
+  assert_true(english != chinese && tree_words_drawn().contains(english), msg="the existing page follows the core's language")
+  assert_true(node is Some(_) && tree_node_of(english) == node, msg="the page kept the same node")
+  assert_eq(sent.length(), 1, msg="changing prefs does not resubscribe")
+  @ui.run_let_go()
+  assert_true(client.peek_topic("prefs") is None, msg="ending the run releases its prefs")
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
   @sf.set_language(None)
 }
 
@@ -427,22 +476,21 @@ test "大屏 一台 station 的记忆 made once, its own skills folded open and 
 
 ///|
 test "大屏 一台 station 的记忆 made once, the language changed and the station renamed: its words said anew in the same nodes" {
-  let lang = Ref("")
+  let lang = @signals.signal("")
   let t = large_about_tester(true, 0, mode="settings-memory", lang~)
   let global = @sf.t("web-main.memory.global")
   let section = tree_node_of(global)
   let row = tree_node_of("发布流程")
   let title = tree_node_of("Willow")
   assert_true(section is Some(_) && row is Some(_) && title is Some(_), msg="the tree's own: \{tree_words_drawn()}")
-  lang.val = "en"
-  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
-  // signal, said)
+  lang.set("en")
+  // The made-up prefs notify readers as the core would when the language changes.
   t.stepped()
   t.run_for(@ui.move_most_ms)
   let global_en = @sf.t("web-main.memory.global")
   assert_true(global_en != global, msg="in English: \{global_en}")
   assert_true(tree_node_of(global_en) == section && tree_node_of("发布流程") == row, msg="the same nodes")
-  lang.val = ""
+  lang.set("")
   @sf.set_language(None)
   t.stepped()
   t.run_for(@ui.move_most_ms)
@@ -527,8 +575,8 @@ fn archiving_pictures_asked(w : Double, url : String) -> (Array[Int], Array[Int]
       }
       core(u, s)
     },
-    topic: fn(name, params) {
-      let r = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let r = base.topic(name, params).get().snapshot()
       guard name == "stations" && r.value is Some(Array(a)) else { return r }
       let first = match a.get(0) {
         Some(Object(m)) => {
@@ -592,8 +640,8 @@ test "归档 made once, on every screen: a station's picture answered later, whi
         }
         key
       },
-      topic: fn(name, params) {
-        let r = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let r = base.topic(name, params).get().snapshot()
         guard name == "stations" && r.value is Some(Array(a)) else { return r }
         let first = match a.get(0) {
           Some(Object(m)) => {

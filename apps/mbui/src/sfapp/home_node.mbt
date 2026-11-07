@@ -33,7 +33,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     // what is left up a long while on the stations: nothing while there is none
     after: fn(_, _) {
       match workspace() {
-        Some(w) if items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").length() > 0 =>
+        Some(w) if items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").length() > 0 =>
           [{ key: "open-jobs", make: fn(p) { @ui.old(p, fn(c) { open_jobs(c, src, w) }, natural=true, unlaid=fn() { p.window().1 }) |> ignore } }]
         _ => []
       }
@@ -209,7 +209,7 @@ fn home_top_bar_node(
           |> ignore
           let marks = fn() {
             match workspace() {
-              Some(w) => (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+              Some(w) => src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
               None => None
             }
           }

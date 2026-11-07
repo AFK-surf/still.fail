@@ -288,7 +288,7 @@ pub fn chat_ref(station : String, session : String) -> ChatRef {
 /// Whether `session` is one of the agents of the chat `r` shows (AppState.chatAgents): a link to an agent's own item
 /// tapped in the chat it works in.
 fn works_in(src : Source, r : ChatRef, session : String) -> Bool {
-  agent_json((src.topic)("chat", chat_params(r)).value, session) is Some(_)
+  agent_json(src.topic("chat", chat_params(r)).get().value, session) is Some(_)
 }
 
 ///|

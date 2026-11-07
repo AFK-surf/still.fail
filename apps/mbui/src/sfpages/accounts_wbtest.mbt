@@ -57,8 +57,8 @@ test "returning to a Claude account's open login page does not ask again" {
         }
       }
       { ..s,
-        topic: fn(name, params) {
-          let r = (s.topic)(name, params)
+        topic_read: fn(name, params) {
+          let r = s.topic(name, params).get().snapshot()
           { ..r, value: r.value.map(with_open_screen) }
         },
         call: fn(name, params, done) {
@@ -134,7 +134,7 @@ test "a profile's workspace row shows its own mark, but no repeated initial with
       let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=fn(base) {
         {
           ..base,
-          topic: fn(name, params) {
+          topic_read: fn(name, params) {
             if name == "memberships" {
               {
                 value: Some({
@@ -145,7 +145,7 @@ test "a profile's workspace row shows its own mark, but no repeated initial with
                 version: 1,
               }
             } else {
-              (base.topic)(name, params)
+              base.topic(name, params).get().snapshot()
             }
           },
         }
@@ -189,8 +189,8 @@ fn alignment_places(s : Source) -> Source {
   }
   {
     ..s,
-    topic: fn(name, params) {
-      let v = (s.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = s.topic(name, params).get().snapshot()
       if name == "profiles" {
         match v.value {
           Some(x) => { ..v, value: Some(shaped(x)) }
@@ -237,8 +237,8 @@ fn unshared_claude(s : Source) -> Source {
   }
   {
     ..s,
-    topic: fn(name, params) {
-      let v = (s.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = s.topic(name, params).get().snapshot()
       match v.value {
         Some(x) => { ..v, value: Some(without_share(x)) }
         None => v
@@ -499,8 +499,8 @@ fn long_profile(s : Source) -> Source {
   }
   {
     ..s,
-    topic: fn(name, params) {
-      let v = (s.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = s.topic(name, params).get().snapshot()
       match v.value {
         Some(x) => { ..v, value: Some(shaped(x)) }
         None => v

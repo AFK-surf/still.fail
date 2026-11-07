@@ -533,7 +533,7 @@ fn side_panel(
     c.box(style=side_pane, fn() {
       if front == "jobs" {
         // a service up pressed: its own tab, in front (JobsTab onOpen)
-        jobs_tab(c, src, r.station, chat_key(r), (src.topic)("chatJobs", chat_params(r)).value, fn(job) {
+        jobs_tab(c, src, r.station, chat_key(r), src.topic("chatJobs", chat_params(r)).get().value, fn(job) {
           c.tell("jobs-open/" + job, fn() { side_change(src, r, "open", Some("service:" + job)) })
         })
       } else if front == "files" {
@@ -562,7 +562,7 @@ fn side_panel(
         ()
       } else if front != "" {
         // one of its agents' execution histories
-        agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
+        agent_history(c, src, r.station, front, agent_json(src.topic("chat", chat_params(r)).get().value, front))
       }
     })
     |> ignore
@@ -601,7 +601,7 @@ fn side_tab_names(src : Source, r : ChatRef, v : ChatView, tab : String) -> (Str
   }
   let agent = v.agents.iter().find_first(fn(a) { a.key == tab })
   let service = match tab_service(tab) {
-    Some(job) => Some((src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value)
+    Some(job) => Some(src.topic("job", { "station": Json::string(r.station), "id": Json::string(job) }).get().value)
     None => None
   }
   let file = tab_file(tab)
@@ -657,7 +657,7 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
   }
   match tab_service(tab) {
     Some(job) => {
-      let j = (src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value
+      let j = src.topic("job", { "station": Json::string(r.station), "id": Json::string(job) }).get().value
       c.box(style=side_tab_mark, fn() { job_dot(c, text(j, "tone")) }) |> ignore
       return
     }

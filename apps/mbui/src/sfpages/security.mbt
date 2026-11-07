@@ -10,7 +10,7 @@
 /// 安全 (SecuritySettings, SecurityScreen).
 pub fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
-  let topic = (core.topic)("lock", { "workspace": str(here.workspace) })
+  let topic = (core.topic)("lock", { "workspace": str(here.workspace) }).get()
   let lock = topic.value
   let blocks : Array[() -> Unit] = []
   match lock {
@@ -531,7 +531,7 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
 pub fn security_open_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
-  let topic = (core.topic)("lockDraft", { "workspace": str(ws) })
+  let topic = (core.topic)("lockDraft", { "workspace": str(ws) }).get()
   let draft = topic.value
   let blocks : Array[() -> Unit] = []
   if draft is None || flag(draft, "loading") {

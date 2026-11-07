@@ -379,7 +379,7 @@ fn agent_hover(
 ) -> Unit {
   let r = here_ref(here)
   hover(c, key, id, tile=true, words_along~, fn() {
-    match agent_json((src.topic)("chat", chat_params(r)).value, agent) {
+    match agent_json(src.topic("chat", chat_params(r)).get().value, agent) {
       Some(j) => agent_card(c, src, r, j)
       None => ()
     }

@@ -11,7 +11,7 @@
 /// is given; not given, what goes without it and the way to give it.
 pub fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
-  let notify = (core.topic)("notify", Map::new()).value
+  let notify = (core.topic)("notify", Map::new()).get().value
   let state = match text(notify, "permission") {
     "granted" | "denied" | "default" => text(notify, "permission")
     _ => "unknown"
@@ -142,7 +142,7 @@ pub fn archiving_node(
     }
   }
   let read = fn() { @settings.stations_of(core, here()).value }
-  let said = fn() { (core.topic)("settings", { "scope": str(here().workspace) }).value }
+  let said = fn() { (core.topic)("settings", { "scope": str(here().workspace) }).get().value }
   @sf.page_node(v, fn() { @sf.t("web-pages.archiving.title") }, on_back~, frame~, said?=told, width?, fn() { ["hint", "auto"] }, fn(b, key) {
     match key {
       "hint" =>

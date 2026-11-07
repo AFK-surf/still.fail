@@ -108,7 +108,7 @@ fn drag_carried(at : DriveAt, name : String) -> Bool {
 /// How `place` (page or tab) shows a folder, as last chosen there. The files page starts with the detailed list; a
 /// chat's narrower files tab starts with columns where they fit.
 pub fn drive_view(src : Source, place : String) -> String {
-  match text(field((src.topic)("prefs", {}).value, "driveViews"), place) {
+  match text(field(src.topic("prefs", {}).get().value, "driveViews"), place) {
     "columns" => "columns"
     "tree" => "tree"
     "list" => "list"
@@ -199,7 +199,7 @@ pub fn drive_folder(src : Source, station : String, root : String, path : String
     "station": Json::string(station),
     "root": Json::string(root),
     "path": Json::string(path),
-  })
+  }).get().snapshot()
   (
     t.value,
     match t.error {
@@ -506,7 +506,7 @@ fn cols_reset() -> Unit {
 /// Every column's width: as kept on this device (prefs `driveViews.column`), or as just dragged until the kept one
 /// comes back.
 fn every_column(src : Source) -> Double {
-  let kept = text(field((src.topic)("prefs", {}).value, "driveViews"), "column")
+  let kept = text(field(src.topic("prefs", {}).get().value, "driveViews"), "column")
   match cols.every {
     Some((was, w)) if was == kept => return w
     Some(_) => cols.every = None

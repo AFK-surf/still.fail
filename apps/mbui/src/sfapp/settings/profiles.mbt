@@ -157,7 +157,7 @@ pub fn group_mark(c : @ui.Ctx, group : String) -> Unit {
 /// under it; one whose station is away dimmed, said why.
 fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit] {
   let t = @sf.theme()
-  let topic = (core.topic)("profiles", { "scope": str(here.workspace) })
+  let topic = (core.topic)("profiles", { "scope": str(here.workspace) }).get()
   let v = topic.value
   let wait = field(v, "wait")
   let list = items(v, "items")

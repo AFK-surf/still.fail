@@ -93,7 +93,7 @@ fn notify_core(
   let base = fixture("home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "notify" =>
           if params.contains("workspace") {
@@ -101,7 +101,7 @@ fn notify_core(
           } else {
             { value: Some(notify.get()), error: None, version: 1 }
           }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

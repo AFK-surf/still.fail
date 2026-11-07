@@ -392,9 +392,9 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   let left : Array[(String, String)] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       asked.push((name, Json::object(params).stringify()))
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
     leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
   }

@@ -1,8 +1,10 @@
 import {
   "moonbitlang/core/double",
+  "moonbitlang/core/json",
   "stillfail/core",
   "stillfail/sfreplay",
   "stillfail/sfapp",
+  "stillfail/sfbase",
   "stillfail/sffixture",
   "stillfail/sfpages",
   "stillfail/sf",
