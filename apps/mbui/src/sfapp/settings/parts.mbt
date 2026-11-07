@@ -1322,9 +1322,9 @@ pub fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Doubl
 }
 
 ///|
-/// A word in the accent's wash (Settings.kt You: 你, 本机).
+/// A word in the accent's wash (Settings.kt You: 你, 本机), whole on its line: the words before it cut short instead.
 pub fn you(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=you_ground, fn() {
+  c.box(style=you_ground, keep=true, fn() {
     // Settings.kt:294 (12sp)
     c.text(words, style=you_words) |> ignore
   })

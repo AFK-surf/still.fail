@@ -23,14 +23,21 @@ test "账号, at each width and with either hand: who it is, where it is signed 
 
 ///|
 /// 账号 over the made-up core, its account's `workspaces` entry saying it shows a picture of its own where `own`, the
-/// calls made of the core kept in `calls` (`account.*` answered at once).
-fn own_picture_tester(w : Double, platform : Int, own : Bool, calls : Array[(String, Json)]) -> @ui.Tester {
+/// calls made of the core kept in `calls` (`account.*` answered at once), `others` signed in on this device as well.
+fn own_picture_tester(
+  w : Double,
+  platform : Int,
+  own : Bool,
+  calls : Array[(String, Json)],
+  others? : Array[Json] = [],
+) -> @ui.Tester {
   setting_tester(Me, w, platform~, over=fn(s) {
     {
       ..s,
       topic: fn(name, params) {
         let got = (s.topic)(name, params)
         match got.value {
+          Some(Array(accounts)) if name == "accounts" => { ..got, value: Some(Json::array(accounts + others)) }
           Some(Array(entries)) if name == "workspaces" && own =>
             {
               ..got,
@@ -115,5 +122,62 @@ test "账号's picture of its own, at each width and with either hand: its face 
     assert_eq(@sfbase.text(Some(removed[0].1), "account"), "u1", msg=at)
     assert_eq(@sfbase.toast_words(), "已恢复默认头像", msg=at)
     assert_eq(t.pick_asks().length(), 0, msg=at)
+  }
+}
+
+///|
+test "账号's other accounts, at each width and with either hand: each one's face pressed changes its own picture" {
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let calls : Array[(String, Json)] = []
+    let t = own_picture_tester(w, platform, false, calls, others=[{ "sub": "u2", "email": "lin@work.example", "name": "" }])
+    let faces = t.all(Button, label="更换头像")
+    assert_eq(faces.length(), 2, msg=at)
+    t.picks([("face.jpg", b"\xFF\xD8\xFF\xE0")])
+    let (x, y, fw, fh) = faces[1].rect
+    t.tap(x + fw / 2.0, y + fh / 2.0)
+    t.frame()
+    assert_eq(t.pick_asks().length(), 1, msg=at)
+    let put = calls.filter(fn(c) { c.0 == "account.setPicture" })
+    assert_eq(put.length(), 1, msg=at)
+    assert_eq(@sfbase.text(Some(put[0].1), "account"), "u2", msg=at)
+    assert_eq(@sfbase.toast_words(), "已更换头像", msg=at)
+  }
+}
+
+///|
+test "账号's devices, narrow: this one's 当前 whole on its line beside a name too long for it, the name cut short" {
+  for platform in [2, 0] {
+    let at = "platform \{platform}"
+    let t = setting_tester(Me, 360.0, platform~, over=fn(s) {
+      {
+        ..s,
+        topic: fn(name, params) {
+          let got = (s.topic)(name, params)
+          match got.value {
+            Some(Array(list)) if name == "loginSessions" => {
+              let long = list.map(fn(d) {
+                match d {
+                  Object(m) if m.get("current") == Some(Json::boolean(true)) => {
+                    let o = m.copy()
+                    o["name"] = Json::string("youdid.wtf Android · OPPO PLP110 · Android 15")
+                    Json::object(o)
+                  }
+                  _ => d
+                }
+              })
+              { ..got, value: Some(Json::array(long)) }
+            }
+            _ => got
+          }
+        },
+      }
+    })
+    scrolled_to(t, 360.0, "当前")
+    // (one line of it, as high as one line of the rows' own small words: wrapped, 当 over 前, it was 36)
+    let (_, _, _, pill_h) = t.rect_of("当前").unwrap()
+    let (_, _, _, note_h) = t.rect_of("Chrome · macOS").unwrap()
+    assert_true(pill_h <= note_h, msg="\{at}: 当前 \{pill_h} high")
   }
 }

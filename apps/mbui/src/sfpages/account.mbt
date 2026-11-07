@@ -1,8 +1,8 @@
 // 账号, one page in every frame (web/src/cloud/settings.tsx AccountSettings; the narrow app's mobile/Me.tsx), the same
 // on every width (the user, 2026-10-26: 「设置感觉很乱」; it was four sections and two cards wide, one card narrow): the
 // accounts on this device on one card, the one in view first with who it is (its picture, name, email and how it
-// signs in) and signing out of it, its picture changed by pressing it (one of its own from the system's photos, or its
-// sign-in's again), the others each signed out of by itself, another added; where it is signed in (each device,
+// signs in) and signing out of it, the others each signed out of by itself, another added, each one's picture changed
+// by pressing it (one of its own from the system's photos, or its sign-in's again); where it is signed in (each device,
 // signed out from here but this one); deleting the account, in red at the foot. Signing out and deleting asked first
 // (@sf.confirm).
 
@@ -79,11 +79,6 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       },
     )
   }
-  // its picture changed by pressing it (each change once at a time, spinning in its corner while it goes)
-  let setting = own_picture.asking ||
-    own_picture.reading != "" ||
-    is_doing(core, ["account.setPicture"], [("account", here.sub)])
-  let removing = is_doing(core, ["account.removePicture"], [("account", here.sub)])
   let blocks : Array[() -> Unit] = []
   // the accounts on this device on one card (Me.tsx): the one in view with who it is, then the others, each signed out
   // of by itself, another added
@@ -96,7 +91,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         note=here.email + " · " + how,
         strong=true,
         goes=false,
-        lead=fn() { own_face(c, core, here, name, setting, removing) },
+        lead=fn() { own_face(c, core, here.sub, here.email, name, here.picture) },
         control=fn() {
           let words = if others.length() > 0 {
             @sf.t("android-settings.me.signOut")
@@ -113,8 +108,8 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         let sub = text(Some(a), "sub")
         let email = text(Some(a), "email")
         let shown = if text(Some(a), "name") != "" { text(Some(a), "name") } else { email }
-        // each with their face, as the one in view
-        let lead = fn() { avatar(c, core, email, shown, acc_picture, picture=text(Some(a), "picture")) }
+        // each with their face, changed by pressing it as the one in view's
+        let lead = fn() { own_face(c, core, sub, email, shown, text(Some(a), "picture")) }
         @sf.link_row(c, "", email, goes=false, lead~, control=fn() {
           if @sf.button(c, @sf.t("android-settings.me.signOut"), key="sign-out/" + sub, tone=Ghost) {
             sign_out(sub, email)
@@ -144,16 +139,20 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
 }
 
 ///|
-/// The face of the account in view (`name`), pressed to change it: a camera in its corner says so, spinning while a
-/// change goes (`setting`, `removing`). Pressed, the system's photos at once; once it has a picture of its own, a menu
-/// beside it to pick another or to take its sign-in's again.
-fn own_face(c : @ui.Ctx, core : Core, here : Here, name : String, setting : Bool, removing : Bool) -> Unit {
+/// The face of an account on this device (`sub`, `email`, `name`, its `picture`), pressed to change it: a camera in its
+/// corner says so, spinning while a change of it goes (each change once at a time, of any account). Pressed, the
+/// system's photos at once; once it has a picture of its own, a menu beside it to pick another or to take its
+/// sign-in's again.
+fn own_face(c : @ui.Ctx, core : Core, sub : String, email : String, name : String, picture : String) -> Unit {
   let t = @sf.theme()
-  let id = c.id("own-picture")
+  let picking = own_picture.asking || own_picture.reading != ""
+  let busy = (picking && own_picture.sub == sub) ||
+    is_doing(core, ["account.setPicture", "account.removePicture"], [("account", sub)])
+  let id = c.id("own-picture/" + sub)
   c.box(style=own_face_room, id~, label=@sf.t("android-settings.me.picture"), fn() {
-    avatar(c, core, here.email, name, acc_picture, picture=here.picture)
+    avatar(c, core, email, name, acc_picture, picture~)
     c.box(style=own_face_badge, right=own_face_badge_out, bottom=own_face_badge_out, fn() {
-      if setting || removing {
+      if busy {
         @sf.spinner(c, size=own_face_mark) |> ignore
       } else {
         @sf.icon(c, "camera", size=own_face_mark, color=t.p.text) |> ignore
@@ -162,20 +161,20 @@ fn own_face(c : @ui.Ctx, core : Core, here : Here, name : String, setting : Bool
     |> ignore
   })
   |> ignore
-  if c.clicked(id) && !setting && !removing {
-    if !own_picture_of(core, here.sub) {
-      pick_own_picture(core, here.sub)
+  if c.clicked(id) && !busy && !picking {
+    if !own_picture_of(core, sub) {
+      pick_own_picture(core, sub)
     } else {
       @sf.menu(
         [
-          Some(@sf.menu_item_of(@sf.t("android-settings.me.picture"), icon="photo", fn() { pick_own_picture(core, here.sub) })),
+          Some(@sf.menu_item_of(@sf.t("android-settings.me.picture"), icon="photo", fn() { pick_own_picture(core, sub) })),
           Some(
             @sf.menu_item_of(@sf.t("android-settings.me.pictureDefault"), icon="user", fn() {
               @settings.act(
                 core,
                 @sf.t("android-settings.me.pictureDefaultWhat"),
                 "account.removePicture",
-                obj([("account", str(here.sub))]),
+                obj([("account", str(sub))]),
                 done=@sf.t("android-settings.me.pictureDefaultSet"),
               )
             }),
@@ -297,12 +296,12 @@ fn own_picture_reset() -> Unit {
 ///|
 /// The system's photo picker asked for a picture to be the account `sub`'s own; the one picked read by me_page.
 fn pick_own_picture(core : Core, sub : String) -> Unit {
+  own_picture.sub = sub
   let asked = (core.pick_picture)(fn(bytes) {
     own_picture.asking = false
     match bytes {
       Some(b) => {
         own_pictures.val += 1
-        own_picture.sub = sub
         own_picture.reading = "mem:own-picture/\{own_pictures.val}"
         @ui.add_image(own_picture.reading, b)
       }
