@@ -187,7 +187,8 @@ export class Requests {
   /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
   /// comes, in pieces of at least STREAM_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
   /// and head as they come, before its body. `json`: validate finite compression/JSON and bound each idle wait.
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
+  /// `flushCut`: hand the last short batch to the sink on failure or cancellation, for a download keeping its bytes.
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false, flushCut = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
     const idleMs = json ? JSON_IDLE_MS : 0;
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
@@ -222,8 +223,7 @@ export class Requests {
                 held.push(chunk);
                 if ((heldBytes += chunk.length) >= STREAM_STEP) hand();
               }
-            }, give === undefined);
-            hand();
+            }, give === undefined).pipe(Effect.onExit((exit) => Effect.sync(() => { if (exit._tag === "Success" || flushCut) hand(); })));
             span.set("http.response.body.size", came);
             if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
             const parsed = json ? timed("reply.parse", () => parseJson(bytes)) : undefined;
@@ -418,15 +418,15 @@ export class Requests {
   /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
   /// `heard`: the part's bytes so far, as they come; `sink`: its bytes handed over as they come, not kept (`bytes` empty);
   /// `said`: what the station says it is, as its answer begins (before its bytes). `quiet`: in the background, not said
-  /// to be waited on.
-  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void, quiet = false): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+  /// to be waited on; `flushCut`: hand a final short batch to the sink even when it is cut short.
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void, quiet = false, flushCut = false): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
     const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
     const onHead = said && ((status: number, headers: [string, string][]) => {
       if (status !== 200) return;
       const total = Number(headerOf(headers, "stillfail-total"));
       if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total });
     });
-    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, quiet, ctx, heard, undefined, sink, onHead), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, quiet, ctx, heard, undefined, sink, onHead, false, flushCut), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -467,7 +467,7 @@ export class Requests {
 
   /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
   /// `heard`, `sink`, `said`, `quiet`: as filePart's.
-  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void, quiet = false): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void, quiet = false, flushCut = false): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
     const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
     const onHead = said && ((status: number, headers: [string, string][]) => {
       if (status !== 200) return;
@@ -475,7 +475,7 @@ export class Requests {
       const mtime = Number(headerOf(headers, "stillfail-mtime"));
       if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total, mtime: Number.isSafeInteger(mtime) ? mtime : null });
     });
-    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, quiet, ctx, heard, undefined, sink, onHead), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, quiet, ctx, heard, undefined, sink, onHead, false, flushCut), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
