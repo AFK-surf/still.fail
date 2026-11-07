@@ -1102,15 +1102,14 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (then, after all it draws itself however it ends, as each of its own was done on the way out: written here, not
     // deferred, a deferred block being a closure made for each node drawn)
     // (what it holds cut to it, as an old view's clipping box cuts what it holds (push_round_clip's, after its own): at
-    // its edge's inside where it draws one over what it holds, its corners concentric with its own there)
+    // its own edge, its edge drawn over what it holds there, taking no room)
     if c.clips {
       let r = c.radius * s
       let corners = match c.corners {
         Some((tl, tr, br, bl)) => [tl * s, tr * s, br * s, bl * s]
         None => [r, r, r, r]
       }
-      let bw = if c.edge.0 > 0.0 && tree.holds_drawn(c.id) { c.edge.0 * s } else { 0.0 }
-      push_inset_clip(x, y, c.w * s, c.h * s, fn(j) { corners[j] }, bw)
+      push_box_clip(x, y, c.w * s, c.h * s, fn(j) { corners[j] })
       clipping.push(c.id)
     }
     // (what it draws, and an old view it hosts, faded out towards the edges of each that holds it so, each pixel by

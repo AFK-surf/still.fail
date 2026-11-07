@@ -4,7 +4,8 @@
 
 ///|
 /// The sidebar the block holds now in node `n` (as large as what holds the block, over it), where `at` says the block
-/// has it: cut to the block's room inside its line, its corners the block's; shown while what is in it is drawn.
+/// has it: cut to the block's room, its corners the block's (its line over it, dock_edge_node's); shown while what is in
+/// it is drawn.
 fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
   n.show(fn() { side_made(side_place()) }, fn(cut) {
     cut
@@ -15,7 +16,6 @@ fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideA
     .width(By(fn() { Some(at().block.2) }))
     .height(By(fn() { Some(at().block.3) }))
     .offset(By(fn() { (at().block.0, at().block.1) }))
-    .edge(By(fn() { (at().edge.0, 0L) }))
     |> ignore
     dock_round_node(cut, at)
     cut.box(fn(side) {

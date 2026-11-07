@@ -334,8 +334,8 @@ test "⌘K's scrolling results reach its curved foot and fade towards it" {
     let panels = t.boxes().filter(fn(b) { (b.x - px).abs() < 0.5 && (b.y - py).abs() < 0.5 && (b.w - pw).abs() < 0.5 && b.border_w > 0.0 })
     assert_eq(panels.length(), 1, msg="\{width}: panel")
     let inset = list.x - px
-    let line = panels[0].border_w
-    let r = @ui.concentric(panels[0].radius, line)
+    // (cut at the panel's own edge: its line takes no room and is drawn over what it holds)
+    let r = panels[0].radius
     // Its colour fades per pixel to the foot; the panel and its border stay whole.
     assert_true((row[54] - foot).abs() < 0.5 && (row[55] - inset).abs() < 0.5, msg="\{width}: fade \{row[54]}, \{row[55]}")
     let cover = fn(d : Double) { dmax(0.0, dmin(1.0, 0.5 - d * 2.0)) }
@@ -345,7 +345,7 @@ test "⌘K's scrolling results reach its curved foot and fade towards it" {
           let x = x0 + (i.to_double() + 0.5) / 2.0
           let y = foot - 22.0 + (j.to_double() + 0.5) / 2.0
           let own = cover(@ui.sd_box(x - (row[0] + row[2] / 2.0), y - (row[1] + row[3] / 2.0), row[2] / 2.0, row[3] / 2.0, row[4]))
-          let inside = cover(@ui.sd_clip(x, y, px + line, py + line, px + pw - line, py + ph - line, (r, r, r, r), (1.0, 1.0, 1.0, 1.0)))
+          let inside = cover(@ui.sd_clip(x, y, px, py, px + pw, py + ph, (r, r, r, r), (1.0, 1.0, 1.0, 1.0)))
           let have = corner_cover(row, x, y, 2.0)
           assert_true((have - own * inside).abs() < 0.06, msg="\{width}x\{height}: (\{x}, \{y}) covers \{have}, expected \{own * inside}")
         }

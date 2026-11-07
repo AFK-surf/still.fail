@@ -2568,6 +2568,7 @@ pub fn Tester::lines_of(Self, String) -> Array[String]
 pub fn Tester::list_moving(Self) -> Bool
 pub fn Tester::list_offset(Self) -> Double
 pub fn Tester::list_overscroll(Self) -> Double
+pub fn Tester::list_row_boxes(Self) -> Array[Array[(Double, Double, Double, Double)]]
 pub fn Tester::lit_all_faults(Self) -> Array[String]
 pub fn Tester::live_image(Self, Int32) -> Int32?
 pub fn Tester::local_acts(Self) -> Array[String]
