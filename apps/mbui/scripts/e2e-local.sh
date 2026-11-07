@@ -58,7 +58,9 @@ D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 ROOT=$PWD
-WORK=${E2E_WORK:-$(cd .. && pwd)/e2e-local}
+. "$D/e2e-paths.sh"
+e2e_paths "$ROOT"
+WORK=$E2E_WORK
 # (absolute: some steps run from elsewhere)
 mkdir -p "$WORK" && WORK=$(cd "$WORK" && pwd)
 PORT=${E2E_PORT:-18787}
@@ -68,7 +70,7 @@ E=$WORK/stillfail
 RUN=$WORK/run
 # the test station's own directory: short (its runners listen on sockets in it, whose paths may not be longer than
 # 104 bytes on macOS)
-STATION=${E2E_STATION:-/tmp/mbui-e2e-$(id -u)}
+STATION=$E2E_STATION
 mkdir -p $WORK $RUN
 
 say() { echo "e2e: $*"; }
