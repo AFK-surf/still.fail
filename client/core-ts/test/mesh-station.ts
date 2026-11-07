@@ -173,8 +173,9 @@ export class Station {
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
         // A large reply: how fast a way brings one, written a piece at a time (as the station's file reads are), so two at
         // once share their way's line.
-        if (parsed.path === "/admin/api/big") {
-          for (let i = 0; i < 16; i++) await stream.write(Buffer.alloc(64 * 1024, 7)).catch(() => {});
+        if (parsed.path.startsWith("/admin/api/big")) {
+          const pieces = 16 * Number(new URL(parsed.path, "https://station.test").searchParams.get("mb") ?? 1);
+          for (let i = 0; i < pieces; i++) await stream.write(Buffer.alloc(64 * 1024, 7)).catch(() => {});
           ended = true;
           await stream.finish().catch(() => {});
           return;

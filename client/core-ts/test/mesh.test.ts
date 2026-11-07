@@ -966,6 +966,24 @@ sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   await close(s, station, mesh);
 });
 
+/// A file's part of megabytes coming through a slow relay: the pings wait behind it on the line and come late, but the
+/// station is there, its reply still coming, and its one link is kept. A phone downloading through a slow relay had its
+/// link let go as dead every few seconds, each part cut (2026-11-07).
+sim("a_link_bringing_a_large_reply_slowly_is_not_let_go_for_its_late_pings", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20, bps: 128 * 1024 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60, bps: 128 * 1024 } });
+  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  await s.time.pass(60_000);
+  const wire = wireOf(s, mesh);
+  const read = Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/big?mb=4", headers: [] }, new Uint8Array()), (r) => readAll(r.body)));
+  const got = await s.run(Effect.result(read), 10 * 60_000);
+  assert.equal(got._tag, "Success", got._tag === "Failure" ? `cut: ${got.failure.message}` : "");
+  assert.equal(got._tag === "Success" ? got.success.length : 0, 4 * 1024 * 1024);
+  await close(s, station, mesh);
+});
+
 /// Every relay's speed as devices get it is told (`mesh.speed`), with the relay and its paths: the relays are compared
 /// network by network from these, where before a way's speed was only kept on the device and told
 /// nowhere. Once a minute at most for a station and relay: a video's every part would be far too many.
