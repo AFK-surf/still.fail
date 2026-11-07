@@ -35,7 +35,9 @@ esac
 APP=${APP:-stillfail}
 t0=$SECONDS
 log=$O/moon.log
-if ! moon build --target wasm --release src/$APP > "$log" 2>&1; then
+# (--no-strip: the program keeps its functions' names, so that a trap's stack says them: the Android shell's report,
+# wasm_shell.c; without it the name section holds the module's name alone)
+if ! moon build --target wasm --release --no-strip src/$APP > "$log" 2>&1; then
   awk '/^Error/ { n=9 } n>0 { print substr($0,1,300); n-- }' "$log" >&2
   exit 1
 fi
@@ -74,7 +76,17 @@ if [ "${PLATFORM:-mac}" = android ]; then
   wasmtime_cli
   case "${ABI:-arm64-v8a}" in x86_64) target=x86_64-linux-android ;; *) target=aarch64-linux-android ;; esac
   t0=$SECONDS
-  "$WT_CLI" compile $WT_SAME --target $target "$program" -o "$O/app-android.cwasm"
+  # (how its traps are taken, MBUI_WASM_TRAPS: "signals", a phone's development build, as ever (a trap ends the process,
+  # nothing said); "checked", in its code, each said with its stack (an emulator's, hunting a crash: its CPU +15% to
+  # +62%, #4008). Said beside it, app.traps, for the shell to take the same: wasm_shell.c)
+  traps=${MBUI_WASM_TRAPS:-signals}
+  case $traps in
+    signals) sbt=y ;;
+    checked) sbt=n ;;
+    *) echo "wasm-app: MBUI_WASM_TRAPS is signals or checked, not $traps" >&2; exit 2 ;;
+  esac
+  "$WT_CLI" compile $WT_SAME -O signals-based-traps=$sbt --target $target "$program" -o "$O/app-android.cwasm"
+  printf '%s' "$traps" > "$O/app-android.traps"
   echo "wasm-app: compiled for $target in $((SECONDS - t0)) s"
   if [ "${1:-build}" = run ]; then
     shift
@@ -84,6 +96,7 @@ if [ "${PLATFORM:-mac}" = android ]; then
       bash "$D/android.sh" install
       echo "$sum" > "$O/android.installed"
     fi
+    bash "$D/android.sh" put "$O/app-android.traps" app.traps
     bash "$D/android.sh" put "$O/app-android.cwasm" app.cwasm
     INSTALL=0 bash "$D/android.sh" run "$@"
   fi
