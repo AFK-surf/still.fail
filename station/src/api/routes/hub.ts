@@ -612,7 +612,13 @@ export const routes = (tools: Tools): Route[] => {
           // option check also considers quotes that quotesOf omits (including ones beyond its display limit).
           const originalQuotes: unknown[] = Array.isArray(i.quotes) ? i.quotes : [];
           const named = originalQuotes.some((q: any) => q !== null && typeof q === "object" && typeof q.ts === "string");
-          const pending = named ? s.pendingCardHeader(t.id) : null;
+          let pending = named ? s.pendingCardHeaderIfReady(t.id) : null;
+          while (pending === undefined) {
+            if (!a.hub.prepareCardPosts) throw new Refused(503, "card lookup is not ready");
+            await a.hub.prepareCardPosts([t.id]);
+            if (s.getThread(t.id) === null) throw new Refused(404, `unknown thread ${t.id}`);
+            pending = s.pendingCardHeaderIfReady(t.id);
+          }
           if (pending !== null) {
             const [asked, card] = pending;
             const options: unknown[] = Array.isArray(card?.options) ? card.options : [];
