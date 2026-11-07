@@ -310,7 +310,24 @@ test("main.ts: started as the station starts a module (its environment), answers
   const child = spawn(process.execPath, [join(import.meta.dirname, "../src/main.ts")], { env, stdio: ["ignore", "ignore", "pipe"] });
   const exited = new Promise<number | null>((done) => child.on("exit", (code) => done(code)));
   t.after(() => child.kill("SIGKILL"));
-  for (let i = 0; i < 100 && !existsSync(socket); i++) await wait(50);
+  // A bound socket can exist before it listens. main reports this only after startService's listen callback.
+  await new Promise<void>((done, fail) => {
+    let stderr = "";
+    const timeout = setTimeout(() => fail(new Error(`media did not start: ${stderr}`)), 5_000);
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+      if (stderr.includes(`media: module media listening on ${socket}\n`)) {
+        clearTimeout(timeout);
+        done();
+      }
+    });
+    child.once("error", (error) => { clearTimeout(timeout); fail(error); });
+    child.once("exit", (code, signal) => {
+      clearTimeout(timeout);
+      fail(new Error(`media exited before listening (code ${code}, signal ${signal}): ${stderr}`));
+    });
+  });
   assert.deepEqual((await call(socket, "GET", "/manifest", null)).json, { viewerWrites: VIEWER_WRITES });
   const imported = await call(socket, "POST", "/books/import", OWNER, { root: "/books", path: "a.txt" });
   assert.equal(imported.status, 200);
