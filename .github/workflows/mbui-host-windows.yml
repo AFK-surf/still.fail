@@ -8,6 +8,7 @@ on:
   pull_request:
     paths: &paths
       - "apps/mbui/mbui/src/host/glyph_cache.h"
+      - "apps/mbui/mbui/src/host/render_dirty.h"
       - "apps/mbui/mbui/src/ui/native.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"

@@ -670,52 +670,22 @@ static int canvas_w, canvas_h;
 // what the canvas holds is the last frame given; what the offscreen target holds, the frame drawn last
 static int canvas_ok, off_ok;
 // the parts of the next frame that differ (points: x, y, w, h), all of it (`dirty_whole`), and whether any was said
-#define MB_PARTS 8
-static double dirty[MB_PARTS][4];
-static int dirty_n, dirty_whole, dirty_told;
+#include "render_dirty.h"
 // a picture the frame drawn last had none of yet (drawn without it): the next drawn whole
 static int pictures_missing, encode_missing;
 static int cut_on;
 static D3D11_RECT cut;
 
-extern "C" void mb_host_render_dirty(double x, double y, double w, double h) {
-  dirty_told = 1;
-  if (w < 0 || h < 0) {
-    dirty_whole = 1;
-  } else if (w > 0 && h > 0) {
-    // (more than it keeps: the last one grown round it)
-    if (dirty_n == MB_PARTS) {
-      double *d = dirty[MB_PARTS - 1];
-      double x1 = fmax(d[0] + d[2], x + w), y1 = fmax(d[1] + d[3], y + h);
-      d[0] = fmin(d[0], x);
-      d[1] = fmin(d[1], y);
-      d[2] = x1 - d[0];
-      d[3] = y1 - d[1];
-    } else {
-      double *d = dirty[dirty_n++];
-      d[0] = x; d[1] = y; d[2] = w; d[3] = h;
-    }
-  }
-}
-
 // The parts of a target tw × th pixels the next frame draws, from what was said of them (taken: a frame nothing was
 // said for is drawn whole), into `r`: how many (0 none), -1 all of it. `kept`: the target holds the frame before.
 static int take_parts(int tw, int th, int kept, D3D11_RECT r[MB_PARTS]) {
-  int told = dirty_told, whole = dirty_whole, n = dirty_n;
-  dirty_told = dirty_whole = dirty_n = 0;
-  if (!told || whole || !kept || pictures_missing) return -1;
-  int k = 0;
+  int bounds[MB_PARTS][4];
+  int n = take_dirty(tw, th, kept, pictures_missing, vscale, bounds);
   for (int i = 0; i < n; i++) {
-    // (whole pixels round it, and one more)
-    int x0 = (int)floor(dirty[i][0] * vscale) - 1, y0 = (int)floor(dirty[i][1] * vscale) - 1;
-    int x1 = (int)ceil((dirty[i][0] + dirty[i][2]) * vscale) + 1, y1 = (int)ceil((dirty[i][1] + dirty[i][3]) * vscale) + 1;
-    if (x0 < 0) x0 = 0;
-    if (y0 < 0) y0 = 0;
-    if (x1 > tw) x1 = tw;
-    if (y1 > th) y1 = th;
-    if (x1 > x0 && y1 > y0) r[k++] = {x0, y0, x1, y1};
+    int *b = bounds[i];
+    r[i] = {b[0], b[1], b[2], b[3]};
   }
-  return k;
+  return n;
 }
 
 // The canvas a window's frames are drawn into, tw × th pixels: made again at another size, what it held lost.
