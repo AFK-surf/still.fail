@@ -703,7 +703,6 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
     key,
     a.name,
     a.size,
-    path=a.path,
     error=if failed && !active { text(dl, "statusText") } else { "" },
     download=if active { Some((number(dl, "progress"), text(dl, "statusText"))) } else { None },
     remove=active,
