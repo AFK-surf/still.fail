@@ -352,7 +352,7 @@ pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// `sending`: words sent from here on their way (flight.mbt): their declared landing, or -2 while their row is not laid
 /// out yet (-1: none). What is sent goes first: a message comes into the list (Spit) once they have landed, as the list
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
-pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
+pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
   let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
   // the words of what came out all in: drawn as laid out from here, what showed them built again (emit_out)
@@ -379,6 +379,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     }
     emit_next(c, e, "", at=turns.started_at(emits_turn))
   }
+  let sending = sending()
   // a pose's end reached: the next pose, from its own beginning in this frame
   let was = e.current
   let mut steps = 0
