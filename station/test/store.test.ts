@@ -1670,6 +1670,9 @@ test("what the station asks again and again is planned by an index, never a scan
     if (sql === LEGACY_SAID_DRAIN_THREAD)
       assert.ok(plan.some((line) => line.includes("SEARCH d USING PRIMARY KEY (thread=?)")), plan.join(" | "));
   }
+  const pageTail = oldSaidPlan(read.LEGACY_SAID_PAGE_TAIL,1,100,65);
+  assert.ok(pageTail.some((line) => line.startsWith("SEARCH e ") && line.includes("thread=?") && line.includes("n<?")), pageTail.join(" | "));
+  assert.ok(!pageTail.some((line) => line.includes("TEMP B-TREE")), pageTail.join(" | "));
   const store = memory();
   for (const [sql,args] of [
     [ARCHIVE_LAST_FIRST,[1]], [ARCHIVE_LAST_TAIL,[1]], [ARCHIVE_LAST_SLICE_FIRST,[1,64]],
@@ -1700,6 +1703,9 @@ test("what the station asks again and again is planned by an index, never a scan
   const lastMessage = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_KEYED}`).all(1, "100") as { detail: string }[])
     .map((r) => r.detail);
   assert.ok(lastMessage.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), lastMessage.join(" | "));
+  const pageKeys = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.MESSAGES_FROM_KEYS}`).all(1, '["1","2"]') as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(pageKeys.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), pageKeys.join(" | "));
   const recentEdit = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_RECENT_EDIT}`).all(1, "100") as { detail: string }[])
     .map((r) => r.detail);
   assert.ok(recentEdit.some((line) => line.startsWith("SEARCH entries ") && line.includes("thread=?")), recentEdit.join(" | "));

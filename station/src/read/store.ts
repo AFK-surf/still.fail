@@ -632,11 +632,33 @@ export function entriesBetween(s: Store, thread: number, from: bigint, to: bigin
   return (limit === undefined ? all(s, sql, thread, from, to) : all(s, `${sql} LIMIT ?`, thread, from, to, limit)).map(toEntry);
 }
 
+// While an old chat has a large changed-key backlog, the raw tail can still prove a page without walking that backlog.
+// Keep keys as text until the keyed reads: an unrelated entry may have a number beyond JavaScript's exact range.
+export const LEGACY_SAID_PAGE_TAIL = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM entries e
+  WHERE e.thread=?1 AND e.n<?2 ORDER BY e.n DESC LIMIT ?3`;
+export const MESSAGES_FROM_KEYS = `SELECT * FROM merged WHERE thread=?1 AND n IN
+  (SELECT CAST(value AS INTEGER) FROM json_each(?2)) ORDER BY n DESC`;
+
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
   s.db.exec("SAVEPOINT messages_before_read");
   try {
+    if (s.legacySaid && legacySaidThreadNeedsDrain(s.db, thread)) {
+      if (!Number.isSafeInteger(limit) || limit < 0 || limit > Number.MAX_SAFE_INTEGER - 64) throw new SaidUnavailable([thread]);
+      if (limit === 0) return [];
+      const cap = limit + 64;
+      const tail = all(s, LEGACY_SAID_PAGE_TAIL, thread, before, cap);
+      const keys = tail.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
+      if (keys.length < limit && tail.length === cap) throw new SaidUnavailable([thread]);
+      if (keys.length === 0) return [];
+      if (legacyMergedReadReady(s.db))
+        return all(s, MESSAGES_FROM_KEYS, thread, JSON.stringify(keys)).map(toMessage).reverse();
+      return keys.flatMap((key) => {
+        const message = mergedWithBoundedEdit(s, thread, key);
+        return message === null ? [] : [message];
+      }).reverse();
+    }
     if (legacyMergedReadReady(s.db))
       return all(s, s.legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
     // Order by the integer source, not its text alias; text preserves a 64-bit entry key for the individual lookup.
