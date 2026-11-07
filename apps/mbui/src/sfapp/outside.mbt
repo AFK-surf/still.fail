@@ -6,13 +6,6 @@
 // With none they may share, 仍然发送 sends it as it is. 取消 (or the scrim) leaves the draft as it was.
 
 ///|
-fn sharing_go(key : String) -> Unit {
-  @sfbase.sharing_go(key)
-}
-
-// ── the sheet (Composer.kt askToShare) ────────────────────────────────
-
-///|
 /// What it says first: 14/20, muted, 8 over the chats.
 // kept across runs: a value (no field of it changes)
 let outside_lead_box : @ui.Style = @ui.css("w=Full pb=S2")
@@ -85,19 +78,4 @@ let outside_shown : Map[String, Int] = {}
 /// No sheet asking (the app begun again).
 fn outside_reset() -> Unit {
   outside_shown.clear()
-}
-
-///|
-/// Its buttons: 取消, and 分享并发送 (仍然发送 with none that may be shared), turning while it shares.
-fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
-  guard @sfbase.outside_asking(key) is Some(s) else { return }
-  if dv_button(c, "outside/cancel", tr("common.cancel"), primary=false) {
-    @sfbase.outside_no(s)
-  }
-  let label = tr(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
-  if dv_button(c, "outside/go", label, primary=true, busy=s.busy.get()) {
-    @sfbase.outside_yes(src, s)
-    // (a core that answers at once has cleared it to go already)
-    sharing_go(s.key)
-  }
 }

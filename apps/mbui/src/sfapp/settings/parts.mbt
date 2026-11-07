@@ -1198,13 +1198,6 @@ fn chevron(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A settings row's icon, before its name (SettingParts.kt RowIcon): the line art in the muted ink.
-fn row_icon(c : @ui.Ctx, name : String) -> Unit {
-  let t = @sf.theme()
-  @sf.icon(c, name, size=@sf.row_icon, color=t.p.muted) |> ignore
-}
-
-///|
 /// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
 // kept across runs: a value (no field of it changes)
 let near_beside : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")

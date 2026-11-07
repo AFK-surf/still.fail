@@ -65,19 +65,6 @@ let opened_notices : Map[String, Bool] = {}
 let image_quoted_at : Ref[Int] = { val: -1 }
 
 ///|
-/// The session whose workspace keeps a file: as the core says it, else the chat's first agent's.
-fn owner_of(here : Here, a : Attachment) -> String {
-  if a.owner != "" {
-    a.owner
-  } else {
-    match here.view.agents.get(0) {
-      Some(ag) => ag.key
-      None => here.session
-    }
-  }
-}
-
-///|
 /// What an activity shows, steadied (Chat.kt steady): another thing replaces the shown one once it has stayed 700 ms
 /// (a passing 请求中 does not flicker by); the same thing's new words show at once. Per row: what shows (its key, its
 /// words), what showed before it, and when it came (the frames' clock).

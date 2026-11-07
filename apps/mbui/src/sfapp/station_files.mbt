@@ -33,45 +33,6 @@ priv struct DraftRef {
 let draft_refs : @sf.LiveMap[String, Array[DraftRef]] = @sf.LiveMap::new()
 
 ///|
-fn refs_of(key : String) -> Array[DraftRef] {
-  draft_refs.get(key).unwrap_or([])
-}
-
-///|
-/// Whether the chat `key` takes a station's files as files (StationFiles.kt dropsAsFiles: the core's prefs, the chat's
-/// own say in `dropFiles`, else `dropAs`).
-fn drops_as_files(src : Source, key : String) -> Bool {
-  let prefs = (src.topic)("prefs", {}).value
-  match field(field(prefs, "dropFiles"), key) {
-    Some(True) => true
-    Some(False) => false
-    _ => text(prefs, "dropAs") == "file"
-  }
-}
-
-///|
-/// The chat `key` set to take them as files or not (AppState.setDropsAsFiles: its own say dropped when it is the
-/// settings' anyway).
-fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  let own : Json = if on == (text(prefs, "dropAs") == "file") { Json::null() } else { Json::boolean(on) }
-  let files : Map[String, Json] = Map([])
-  files[key] = own
-  (src.call)("prefs.set", Json::object({ "dropFiles": Json::object(files) }), fn(_) {  })
-}
-
-///|
-/// Whether `id` is the file a station file of the draft goes up as.
-fn ref_upload(key : String, id : Int) -> Bool {
-  refs_of(key).iter().any(fn(r) {
-    match r.up {
-      Some(p) => p.id == id
-      None => false
-    }
-  })
-}
-
-///|
 /// A station file's card tapped: its sheet (the draft's key, the file), closed (drawn sinking away until it has gone).
 priv struct StationFilesUi {
   mut ref : (String, DraftRef)?

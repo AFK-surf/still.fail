@@ -107,14 +107,3 @@ pub fn menu_held(c : @ui.Ctx, key : String) -> Bool {
 /// The press each menu held was last felt for (menu_held), by what it is of.
 // kept across runs: let go as the app begins anew (parts_reset)
 let held_felt : Map[String, Int] = {}
-
-///|
-/// Where a menu asked of a thing on a line opens along it (`mid`: the line's middle): under the finger that held it,
-/// or, right clicked (a pointer, whose press is not the click's), at the line's middle.
-pub fn menu_along(c : @ui.Ctx, mid : Double) -> Double {
-  if pointer_rests() {
-    mid
-  } else {
-    c.press().x
-  }
-}

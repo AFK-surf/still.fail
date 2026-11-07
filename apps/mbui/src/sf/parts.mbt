@@ -1638,24 +1638,6 @@ pub fn tools_line() -> @ui.Style {
 let tools_line_look : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
-/// drawn there while it is open. Whether it is open.
-pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {
-  if menu_now() != key {
-    return false
-  }
-  let (x, y) = menu_open_at.val
-  menu_items(c, key, 0, items, offset=0.0, at=(x, y, 0.0, 0.0))
-}
-
-///|
-/// The menu `key` opened at (`x`, `y`): a right click there.
-pub fn menu_open_here(key : String, x : Double, y : Double) -> Unit {
-  menu_set(key)
-  menu_open_at.val = (x, y)
-}
-
-///|
 /// The key of the menu open now ("" none).
 pub fn menu_open_key() -> String {
   menu_now()

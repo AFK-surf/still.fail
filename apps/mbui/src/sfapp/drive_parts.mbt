@@ -27,63 +27,6 @@ fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0
 }
 
 ///|
-/// A button (Controls.kt Button): 38 high, a pill; the primary one in ink (red when it is a danger), the other on the
-/// chip's ground. True on the frame after it was tapped (not while busy or off).
-fn dv_button(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  primary~ : Bool,
-  enabled? : Bool = true,
-  busy? : Bool = false,
-  danger? : Bool = false,
-) -> Bool {
-  let t = @sf.theme()
-  let on = enabled && !busy
-  let id = c.id(key)
-  let ink = if primary && danger && enabled {
-    0xFFFFFFFFL
-  } else if primary {
-    t.p.bg
-  } else {
-    t.p.text
-  }
-  let ground = if primary {
-    if !enabled {
-      t.p.line
-    } else if danger {
-      t.p.red
-    } else {
-      t.p.text
-    }
-  } else {
-    t.p.chip
-  }
-  c.box(
-    dir=Row,
-    h=Px(38.0),
-    radius=19.0,
-    padx=16.0,
-    gap=8.0,
-    align=ACenter,
-    bg=ground,
-    id=if on { id } else { 0 },
-    fn() {
-      if busy {
-        @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
-      }
-      c.text(label, size=@sf.theme().t.ui, weight=600, color=ink, wrap=false) |> ignore
-      // Controls.kt Button: clickable over its capsule
-      if on {
-        @motion.ripple(c, id, 19.0)
-      }
-    },
-  )
-  |> ignore
-  on && c.clicked(id)
-}
-
-///|
 /// A sheet from the bottom over the page (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%, a tap beside
 /// it closes it), top corners of 26, frosted over the page and the scrim (@sf.sheet_look; `ground`: on that instead),
 /// only drawn while it closes; `h` tall (most of the screen at most), or with `fit` as tall as what it holds as this

@@ -156,12 +156,6 @@ pub let columns : Columns = {
 }
 
 ///|
-/// Moved back by a column's offset: a part that starts in the column before it (intoColumn).
-pub fn into_column(offset : Double) -> @ui.Style {
-  @ui.style(ml=room(-offset))
-}
-
-///|
 /// What a layer holds centred in it, both ways (centred: the web's by translate, placed absolutely).
 // kept across runs: a value (no field of it changes)
 pub let centred : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")

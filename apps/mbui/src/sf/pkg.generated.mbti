@@ -338,7 +338,6 @@ pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> St
 
 pub let confirm_w : Double
 
-pub fn context_items(@ui.Ctx, String, Array[MenuItem?]) -> Bool
 
 pub let copied_ms : Double
 
@@ -836,7 +835,6 @@ pub fn input_node(@view.View, @ui.Field, placeholder? : String, shorter? : Array
 
 pub let inset_room : @ui.Space
 
-pub fn into_column(Double) -> @ui.Style
 
 pub fn is_subtitle(String) -> Bool
 
@@ -1114,7 +1112,6 @@ pub let medium_from : Double
 
 pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @view.Along, gone? : () -> Unit) -> Unit
 
-pub fn menu_along(@ui.Ctx, Double) -> Double
 
 pub fn menu_held(@ui.Ctx, String) -> Bool
 
@@ -1128,7 +1125,6 @@ pub fn menu_node(@view.View, () -> Bool, (@view.View) -> @view.View, () -> Array
 
 pub fn menu_of(@ui.Ctx, String, Array[MenuItem?], label~ : String, size? : Double) -> Bool
 
-pub fn menu_open_here(String, Double, Double) -> Unit
 
 pub fn menu_open_key() -> String
 
