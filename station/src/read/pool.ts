@@ -36,6 +36,7 @@ import type { Answer, Ask, Ready } from "./worker.ts";
 import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_LETTER_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
+import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
 const IDLE_MS = 60_000;
@@ -283,6 +284,15 @@ export class Readers {
     this.legacyEdits ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
       "legacy edits", (thread, cancel) => ({ thread, legacyEdits: true, cancel }));
     return this.covered(this.legacyEdits.ready([0], signal), signal);
+  }
+
+  /// Read only one page for a guarded card outcome, behind interactive work and without a long-lived snapshot.
+  async cardEditPage(thread: number, target: string, before: string | null, signal?: AbortSignal): Promise<CardEditPage> {
+    return JSON.parse(await this.read("internalCardEditPage", { thread, target, before }, "zh", { background: true, signal })) as CardEditPage;
+  }
+
+  async cardMessagePage(thread: number, target: string, before: string | null, signal?: AbortSignal): Promise<CardMessagePage> {
+    return JSON.parse(await this.read("internalCardMessagePage", { thread, target, before }, "zh", { background: true, signal })) as CardMessagePage;
   }
 
   /// Share the initial old-message scan between pages waiting for it.

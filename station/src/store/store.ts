@@ -70,8 +70,10 @@ import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidTh
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
 import { legacyEditLatest, legacyMergedEditMode, legacyMergedNeedsRepair, legacyMergedReadReady } from "./legacy-edits-build.ts";
-import { boundedEditKey, LAST_MESSAGE_WITH_EDIT } from "./legacy-edits-read.ts";
+import { boundedCardEdit, boundedEditKey, LAST_MESSAGE_WITH_EDIT } from "./legacy-edits-read.ts";
 import { ensureRestateGuard, restateGuardSchema } from "./restate-guard.ts";
+import { ensureCardScanGuard } from "./card-scan-guard.ts";
+import { completeCardOutcome, saveWithCardOutcome, type CardEditScan, type CardOutcome } from "./card-outbox.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -740,6 +742,18 @@ export class Store {
     }
     this.db.exec("COMMIT");
     return result;
+  }
+
+  /// Background queue work yields when a different connection has the write lock, including while installing its guard.
+  #tryNow<T>(run: () => T): T {
+    const timeout = Number(this.db.prepare("PRAGMA busy_timeout").get()!.timeout);
+    this.db.exec("PRAGMA busy_timeout=0");
+    try { return run(); }
+    catch (error) {
+      const code = (error as { errcode?: number }).errcode;
+      if (code !== undefined && [5, 6].includes(code & 255)) throw new MessageWriteBusy();
+      throw error;
+    } finally { this.db.exec(`PRAGMA busy_timeout=${timeout}`); }
   }
 
   #stmt(sql: string): StatementSync {
@@ -2577,15 +2591,128 @@ export class Store {
   /// The author restates its card on the post at `ts` (an edit entry with the post's words and `card`): what became of
   /// it, said on the post itself (a vault request's outcome). Whether the post was found.
   restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json): boolean {
+    return this.#restateCard(agent, thread, ts, card)!;
+  }
+
+  /// Save the request, close its card when requested, and queue the outcome as one transaction. Announce the close
+  /// only after it commits; a missing card is checked again when the queued result is applied.
+  saveCardOutcome(item: Omit<CardOutcome, "id">, save: () => void): string {
+    // Store listeners cannot be deferred until an arbitrary caller's outer transaction commits.
+    if (this.db.isTransaction) throw new Error("card outcome save must run outside an existing transaction");
     return this.#with((changes) => {
+      let closed: number | null = null;
+      // Take the writer before inspecting the queue: a different connection committing after a deferred read would
+      // otherwise leave this request unable to promote its snapshot to a write transaction.
+      const id = this.#tx(() => saveWithCardOutcome(this.db, item, () => {
+        save();
+        if (item.close) {
+          const row = this.#one("SELECT n FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", item.thread, item.ts, item.agent);
+          if (row !== undefined && this.#run("INSERT OR IGNORE INTO closed_cards(thread,n,viewer,at) VALUES(?,?,?,?)",
+            item.thread, row.n, item.agent, this.now()) > 0) closed = row.n;
+        }
+      }));
+      if (closed !== null) changes.push({ type: "thread", id: item.thread, entries: [], closed });
+      return id;
+    });
+  }
+
+  /// Apply the oldest queued outcome to its card, or discard it if its post is gone. False means another consumer
+  /// has already advanced that card; undefined means its old edits need a guarded paged read. The edit, any close and the
+  /// queue advance commit together.
+  restateQueuedCard(item: CardOutcome, prepared?: { scan: CardEditScan; card: string | null; edit?: string | null }): boolean | undefined {
+    if (prepared && (prepared.scan.thread !== item.thread || prepared.scan.ts !== item.ts || prepared.scan.agent !== item.agent))
+      throw new Error("card scan belongs to a different outcome");
+    try {
+      return this.#tryNow(() => this.#restateCard(item.agent, item.thread, item.ts,
+        (card) => ({ ...card, [item.field]: { ...card?.[item.field], outcome: item.outcome } }), item, prepared));
+    } finally {
+      if (prepared) try { this.endCardEditScan(prepared.scan); }
+      catch (error) { log.warn("store", "a card scan guard could not be released", { error: (error as Error).message }); }
+    }
+  }
+
+  /// Guard the target before a worker pages through its older card edits. A stale scan is rejected at write time.
+  beginCardEditScan(item: CardOutcome): CardEditScan | null {
+    return this.#tryNow(() => {
+      const first = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", item.thread, item.ts, item.agent);
+      if (first === undefined) return null;
+      const checked = ensureCardScanGuard(this.db), token = randomBytes(16).toString("hex"), target = first.n as string;
+      const registered = this.#tx(() => {
+        if (restateGuardSchema(this.db) !== checked) return false;
+        const hasTs = this.#one("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_ts'") === undefined ? 0 : 1;
+        this.#run(`UPDATE card_scan_meta SET schema_version=?,has_ts_index=? WHERE id=1
+          AND (schema_version<>? OR has_ts_index<>?)`, checked, hasTs, checked, hasTs);
+        this.#run(`INSERT INTO card_scan_guard(thread,target,token,dirty) VALUES(?,CAST(? AS INTEGER),?,0)
+          ON CONFLICT(thread,target) DO UPDATE SET token=excluded.token,dirty=0`, item.thread, target, token);
+        return true;
+      }, true);
+      if (!registered) return null;
+      let keep = false;
+      try {
+        this.db.exec("SAVEPOINT card_edit_scan");
+        try {
+          const schema = restateGuardSchema(this.db);
+          const row = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", item.thread, item.ts, item.agent);
+          const guard = this.#one("SELECT token,dirty FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER)", item.thread, target);
+          if (schema !== checked || row === undefined || row.n !== target || guard?.token !== token || guard.dirty !== 0) return null;
+          keep = true;
+          return { thread: item.thread, ts: item.ts, agent: item.agent, target: row.n, token, schema };
+        } finally { this.db.exec("RELEASE card_edit_scan"); }
+      } finally {
+        if (!keep) this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", item.thread, target, token);
+      }
+    });
+  }
+
+  endCardEditScan(scan: CardEditScan): void {
+    this.#tryNow(() => this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", scan.thread, scan.target, scan.token));
+  }
+
+  #restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json, queued?: CardOutcome,
+    prepared?: { scan: CardEditScan; card: string | null; edit?: string | null }): boolean | undefined {
+    return this.#with((changes) => {
+      const postExists = () => this.#one("SELECT 1 FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", thread, ts, agent) !== undefined;
+      // A missing post is checked again under the write lock before its queued outcome can be discarded.
+      const discard = (): boolean | null => this.#tx(() => {
+        if (postExists()) return null;
+        return completeCardOutcome(this.db, queued!);
+      }, true);
       // A missing or foreign post needs neither a guard nor edit-index preparation.
-      if (this.#one("SELECT 1 FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", thread, ts, agent) === undefined)
-        return false;
+      if (!postExists()) {
+        if (!queued) return false;
+        const result = discard();
+        if (result !== null) return result;
+      }
       type Current = { message: MessageRow; card: Json; broken: boolean };
-      const read = (): Current | null => {
+      const read = (): Current | null | undefined => {
         const r = this.#one("SELECT CAST(n AS TEXT) AS n,card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
         if (r === undefined) return null;
+        if (prepared && prepared.scan.target !== r.n) return undefined;
         const mode = legacyMergedEditMode(this.db);
+        if (queued) {
+          let message: MessageRow | null;
+          let last: string | null | undefined;
+          if (legacyMergedReadReady(this.db)) {
+            message = this.#messageAt(thread, ts);
+          } else {
+            const edit = prepared ? prepared.edit : boundedEditKey(this.db, thread, r.n);
+            if (edit === undefined) return undefined;
+            const row = this.#one(LAST_MESSAGE_WITH_EDIT, thread, r.n, edit);
+            message = row === undefined ? null : toMessage(row);
+            // If the latest target entry itself carries a card, it is also the latest eligible card edit. If there
+            // is no target entry, there can be no card edit either.
+            if (edit === null) last = null;
+            else {
+              const entry = this.#one("SELECT kind,card FROM entries WHERE thread=? AND n=CAST(? AS INTEGER)", thread, edit);
+              if (entry?.kind === "edit" && entry.card !== null) last = entry.card;
+            }
+          }
+          if (message === null) return null;
+          if (prepared) last = prepared.card;
+          else if (last === undefined) last = boundedCardEdit(this.db, thread, r.n, mode === "native");
+          if (last === undefined) return undefined;
+          return { message, card: parsed(last ?? r.card), broken: false };
+        }
         const broken = mode === "repair";
         const latest = broken ? this.#one("SELECT CAST(MAX(n) AS TEXT) AS n FROM entries WHERE thread=?1 AND target=CAST(?2 AS INTEGER)", thread, r.n)?.n ?? null : null;
         const row = broken ? this.#one(LAST_MESSAGE_WITH_EDIT, thread, r.n, latest) : undefined;
@@ -2596,27 +2723,39 @@ export class Store {
           : this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, r.n);
         return { message, card: parsed(last?.card ?? r.card), broken };
       };
-      const retry = Symbol("restate changed"), repair = Symbol("restate repair"), missing = Symbol("restate missing");
-      const token = randomBytes(16).toString("hex");
-      let retries = 0, registered = false;
+      const retry = Symbol("restate changed"), repair = Symbol("restate repair"), missing = Symbol("restate missing"), stale = Symbol("restate consumed"), pending = Symbol("restate pending");
+      const token = prepared?.scan.token ?? randomBytes(16).toString("hex");
+      let retries = 0, registered = prepared !== undefined;
       try {
         for (;;) {
-          const checkedSchema = ensureRestateGuard(this.db);
-          try {
-            this.#run(`INSERT INTO restate_guard(thread,token,dirty) VALUES(?,?,0)
-              ON CONFLICT(thread) DO UPDATE SET token=excluded.token,dirty=0`, thread, token);
-          } catch (error) {
-            if (restateGuardSchema(this.db) !== checkedSchema) { retries++; continue; }
-            throw error;
+          const checkedSchema = prepared?.scan.schema ?? ensureRestateGuard(this.db);
+          if (!prepared) {
+            try {
+              this.#run(`INSERT INTO restate_guard(thread,token,dirty) VALUES(?,?,0)
+                ON CONFLICT(thread) DO UPDATE SET token=excluded.token,dirty=0`, thread, token);
+            } catch (error) {
+              if (restateGuardSchema(this.db) !== checkedSchema) { retries++; continue; }
+              throw error;
+            }
+            registered = true;
           }
-          registered = true;
           // A guard follows this thread while the message and card are read in one snapshot. The potentially long
           // old lookup stays outside the write transaction; a write elsewhere does not invalidate it.
           this.db.exec("SAVEPOINT restate_card_read");
-          let current: Current | null, schema: number;
-          try { schema = restateGuardSchema(this.db); current = read(); }
+          let current: Current | null | undefined, schema: number;
+          try {
+            schema = restateGuardSchema(this.db);
+            const guard = prepared ? this.#one("SELECT token,dirty FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER)", thread, prepared.scan.target) : null;
+            current = prepared && (schema !== checkedSchema || guard?.token !== token || guard.dirty !== 0) ? undefined : read();
+          }
           finally { this.db.exec("RELEASE restate_card_read"); }
-          if (current === null) return false;
+          if (current === undefined) return undefined;
+          if (current === null) {
+            if (!queued) return false;
+            const result = discard();
+            if (result !== null) return result;
+            continue;
+          }
           if (schema !== checkedSchema) { retries++; continue; }
           if (current.broken || widgetSourceBeforeAddNeedsRepair(this.db)) repairMergedEditLookup(this.db);
           const entry: EntryRow = {
@@ -2626,15 +2765,20 @@ export class Store {
             declared: null, client: null, profile: null, runtime: null, options: undefined, card: undefined, at: this.now(),
           };
           try {
+            let closed: number | null = null;
             this.#append(entry, changes, () => {
               if (restateGuardSchema(this.db) !== schema) throw retry;
               if (legacyMergedNeedsRepair(this.db) || widgetSourceBeforeAddNeedsRepair(this.db)) throw repair;
-              const guard = this.#one("SELECT token,dirty FROM restate_guard WHERE thread=?", thread);
+              const guard = prepared
+                ? this.#one("SELECT token,dirty FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER)", thread, prepared.scan.target)
+                : this.#one("SELECT token,dirty FROM restate_guard WHERE thread=?", thread);
               if (guard?.token !== token || guard.dirty !== 0) {
+                if (prepared) throw retry;
                 // Retry outside the lock first; after repeated changes to this thread, reread under the lock so two
                 // writers or two restatements cannot keep one another waiting indefinitely.
                 if (retries < 1) throw retry;
                 current = read();
+                if (current === undefined) throw pending;
                 if (current === null) throw missing;
                 if (current.broken) throw repair;
                 entry.target = current.message.n;
@@ -2644,21 +2788,39 @@ export class Store {
                 entry.attachments = current.message.attachments;
                 entry.quotes = current.message.quotes;
               }
-              this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token);
+              if (prepared) this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", thread, prepared.scan.target, token);
+              else this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token);
+              if (queued) {
+                if (!completeCardOutcome(this.db, queued)) throw stale;
+                if (queued.close && this.#run("INSERT OR IGNORE INTO closed_cards (thread,n,viewer,at) VALUES (?,?,?,?)",
+                  thread, current!.message.n, agent, this.now()) > 0) closed = current!.message.n;
+              }
               entry.card = card(current!.card);
-            }, false);
+            }, queued !== undefined, () => {
+              if (closed !== null) changes.push({ type: "thread", id: thread, entries: [], closed });
+            });
             registered = false;
             return true;
           } catch (error) {
-            if (error === missing) return false;
-            if (error === retry) { retries++; continue; }
-            if (error === repair) { repairMergedEditLookup(this.db); retries++; continue; }
+            if (error === pending) return undefined;
+            if (error === stale) return false;
+            if (error === missing) {
+              if (!queued) return false;
+              const result = discard();
+              if (result !== null) return result;
+              continue;
+            }
+            if (error === retry) { if (prepared) return undefined; retries++; continue; }
+            if (error === repair) { repairMergedEditLookup(this.db); if (prepared) return undefined; retries++; continue; }
             throw error;
           }
         }
       } finally {
         if (registered) {
-          try { this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token); }
+          try {
+            if (prepared) this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", thread, prepared.scan.target, token);
+            else this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token);
+          }
           catch (error) { log.warn("store", "a card restatement guard could not be released", { error: (error as Error).message }); }
         }
       }
@@ -3374,7 +3536,7 @@ export class Store {
   }
 
   /// Appends an entry as the thread's next.
-  #append(entry: EntryRow, changes: Changes, before?: () => void, tryWrite = before !== undefined): EntryRow {
+  #append(entry: EntryRow, changes: Changes, before?: () => void, tryWrite = before !== undefined, committed?: () => void): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
       const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
@@ -3385,6 +3547,7 @@ export class Store {
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
     }, tryWrite);
+    committed?.();
     // As a read of it gives it: what is told of it is made from this (api/events.ts), not read back.
     changes.push({ type: "thread", id: entry.thread, entries: [stored(entry)] });
     this.#bringBack(entry, changes);

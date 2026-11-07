@@ -25,7 +25,7 @@ export const AdbLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const plane = yield* ControlPlane;
     const parts = yield* Parts;
-    const { hub } = yield* Agents;
+    const { hub, cardOutcomes } = yield* Agents;
     const store = yield* Store;
     const events = yield* Events;
     const screens = yield* ScreenRegistry;
@@ -81,7 +81,7 @@ export const AdbLive = Layer.effectDiscard(
       (d) => Effect.sync(() => d.closeAll()),
     );
     const grants = new PhoneGrants({
-      db: store.db, hub: hub as any, home: () => plane.state.home(), now: () => wall.now(),
+      db: store.db, hub: hub as any, cardOutcomes, home: () => plane.state.home(), now: () => wall.now(),
       title: (r) => grantChatTitle(store, r),
       told: (r: PhoneRequest, workspace, change) => {
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
