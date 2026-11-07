@@ -90,7 +90,7 @@ jobs:
             base=${{ github.event.before }}
             [ -n "$branch" ] && base=$(git merge-base origin/main HEAD)
             if git cat-file -e "$base^{commit}" 2>/dev/null && git diff --name-only "$base" HEAD |
-              grep -qE '^(apps/mbui/windows/|apps/mbui/e2e/win/handoff\.sh$|apps/mbui/scripts/win\.sh$|apps/mbui/src/host/win_core\.c$|apps/mbui/src/host/win_electron_sealed\.h$|apps/mbui/mbui/src/host/win_(life|update)\.h$|scripts/(win-feeds|release)\.sh$|scripts/release-sign\.ts$|station/src/updates/)'; then v=yes; fi
+              grep -qE '^(apps/mbui/windows/|apps/mbui/e2e/win/handoff\.sh$|apps/mbui/scripts/win\.sh$|apps/mbui/src/host/win_core\.c$|apps/mbui/src/host/core_(json|listen)\.h$|apps/mbui/src/host/win_electron_sealed\.h$|apps/mbui/mbui/src/host/win_(life|update)\.h$|scripts/(win-feeds|release)\.sh$|scripts/release-sign\.ts$|station/src/updates/)'; then v=yes; fi
           fi
           echo "handoff=$v" >> "$GITHUB_OUTPUT"
           echo "handoff: $v"
