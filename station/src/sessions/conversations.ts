@@ -474,7 +474,7 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   }
   const pending = hub.store.pendingCard(thread.id)?.[0].n;
   const cards = new Map<number, { card: Json; pending: boolean }>();
-  for (const e of hub.store.entriesBetween(thread.id, messages[0]!.n, messages.at(-1)!.n)) {
+  for (const e of hub.store.messagePageEntries(thread.id, messages.map((m) => m.n))) {
     if (e.kind !== "message") continue;
     const card = e.card ?? (e.options != null ? { type: "options", options: e.options } : null);
     if (card !== null) cards.set(e.n, { card, pending: e.n === pending });
