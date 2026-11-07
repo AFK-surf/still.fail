@@ -1339,7 +1339,6 @@ test("an options card is kept as options too, and a choice that closes it ends t
   const t2 = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(t2.id, "a", "ember");
   const [k] = store.insertMessage({ ...newMessage(t2.id, "2.2", "agent", "a", "合并吗？"), card });
-  assert.equal(store.closeCard("local", t2.id, k, "合并"), false, "the agent is still composing (its turn runs)");
   store.setAbout("t1", [t2.id, k, "2.2"]);
   store.endTurn("t1", "completed", null, "need_help", null);
   assert.equal(store.closeCard("local", t2.id, k, "再看"), false, "a reply option does not close");
@@ -1354,6 +1353,30 @@ test("an options card is kept as options too, and a choice that closes it ends t
   const answers = referenceAnswersSince(store, 0);
   assert.deepEqual(answers.map((a) => [a.question.n, a.by, a.answer]), [[k, "local", null]]);
   h.stop();
+});
+
+test("a card closes while the agent that asked is still in its turn, and that turn ends final", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  const card = { type: "options", options: [{ label: "合并", action: "close" }, { label: "再看" }] };
+  store.startTurnFor("t1", "a", "input", { profile: "cc", person: "local", thread: thread.id });
+  const [k] = store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "合并吗？"), card });
+  store.setNeed("t1", "选一个");
+  store.setAbout("t1", [thread.id, k, "1.2"]);
+  store.declareTurn("t1", "need_human", null);
+  assert.equal(store.closeCard("local", thread.id, k, "合并", "en"), true, "its turn still runs");
+  assert.equal(store.pendingCard(thread.id), null);
+  store.endTurn("t1", "completed", null, "need_human", null);
+  const last = store.lastTurn("a")!;
+  assert.deepEqual([last.declared, last.ending, last.need], ["final", "all_done", "Chose “合并”"]);
+  // A later turn needing a person about another card is left as it ends.
+  store.startTurnFor("t2", "a", "input", { profile: "cc", person: "local", thread: thread.id });
+  const [j] = store.insertMessage({ ...newMessage(thread.id, "1.3", "agent", "a", "再来？"), card });
+  store.setAbout("t2", [thread.id, j, "1.3"]);
+  store.endTurn("t2", "completed", null, "need_human", null);
+  assert.equal(store.lastTurn("a")!.declared, "need_human");
 });
 
 test("the cards answered lately of some threads alone are those the whole station's has in them", () => {
