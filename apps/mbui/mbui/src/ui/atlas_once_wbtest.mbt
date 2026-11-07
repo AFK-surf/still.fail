@@ -19,7 +19,7 @@ test "a changing old-view frame asks the host its glyph generation once" {
 ///|
 test "a face installed between the frame's two readers moves the generation on at once" {
   let t = Tester::new(fn(c) { c.text("face") |> ignore })
-  t.fake.generation_on_face_add = true
+  t.fake.generation_on_face_add.val = true
   // Exercise the first-frame environment path again, with a host that advances on the face add.
   faces_env_read.val = false
   t.set_env("MBUI_FACES", "1:/fonts/ui.ttf")
@@ -31,4 +31,14 @@ test "a face installed between the frame's two readers moves the generation on a
   t.glyphs_moved_on()
   t.draw()
   assert_eq(text_cache.generation, 2)
+}
+
+///|
+test "an offscreen frame observes a host glyph generation change" {
+  let view = fn(c : Ctx) { c.text("offscreen") |> ignore }
+  let t = Tester::new(view)
+  frame_offscreen(view, 390.0, 844.0, 1.0, 100.0) |> ignore
+  t.glyphs_moved_on()
+  frame_offscreen(view, 390.0, 844.0, 1.0, 116.0) |> ignore
+  assert_eq(text_cache.generation, t.fake.generation)
 }

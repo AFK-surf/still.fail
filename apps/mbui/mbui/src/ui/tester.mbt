@@ -342,7 +342,7 @@ pub fn Tester::new(
     ui_face: 0.0,
     generation: 0,
     generation_asks: 0,
-    generation_on_face_add: false,
+    generation_on_face_add: Ref(false),
     tabular: 0.0,
     glyph_box: (6.0, 10.0),
     faces_wider: {},

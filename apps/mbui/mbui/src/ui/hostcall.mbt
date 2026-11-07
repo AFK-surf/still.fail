@@ -86,7 +86,7 @@ struct FakeHost {
   // Number of times a frame asks this fake host for its glyph generation.
   mut generation_asks : Int
   // Let a test model a host that advances its generation while installing a face.
-  mut generation_on_face_add : Bool
+  generation_on_face_add : Ref[Bool]
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
@@ -770,7 +770,7 @@ fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
     Some({ live: Some(l), .. }) => l.host.face_add(face, path, weight)
     Some(f) => {
       let ok = !f.unreadable_fonts.contains(path)
-      if ok && f.generation_on_face_add {
+      if ok && f.generation_on_face_add.val {
         f.generation += 1
       }
       ok
