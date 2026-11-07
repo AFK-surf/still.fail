@@ -14,7 +14,9 @@ import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
 import { PersonChains } from "./person-chains.ts";
-import { type Entry, LockRefusal, admit, admitPerson, asEntry, fold, lowerRole } from "../cloud/lock.ts";
+import { join } from "node:path";
+import { meshDir } from "../cloud/state.ts";
+import { type Entry, LockRefusal, admit, admitPerson, asEntry, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
 import type { ScreenHub } from "../screens/hub.ts";
@@ -129,8 +131,13 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
   }
 }
 
-/// The longest chain of each person's own lock heard here, by the lock's genesis.
-export const personChains = new PersonChains();
+/// The longest chain of each person's own lock this station heard, by the lock's genesis.
+const chains = new WeakMap<Cloud, PersonChains>();
+function chainsOf(cloud: Cloud): PersonChains {
+  let c = chains.get(cloud);
+  if (c === undefined) chains.set(cloud, (c = new PersonChains(join(meshDir(cloud.data), "person-chains.json"))));
+  return c;
+}
 
 /// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
 const joinedOf = (cloud: Cloud, ws: string) => (ws && ws !== cloud.home() ? ws : null);
@@ -194,12 +201,18 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
   if (method === "GET") {
     const after = Number(query.find(([k]) => k === "after")?.[1] ?? -1);
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws) }];
+    // (`takes`: the entry kinds this station knows beyond the first ones, for a device to ask before it writes one: an
+    // entry it did not know, it would refuse, and every entry after: docs/personal-lock.md)
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws), takes: ["person"] }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
   try {
-    const raw = JSON.parse(body.toString("utf8") || "{}")?.entries;
+    const said = JSON.parse(body.toString("utf8") || "{}");
+    // A person's own lock as it stands now (a device taken off it), told by their device: the longest heard is what a
+    // chain brought later is judged by.
+    if (Array.isArray(said?.person)) return personTold(cloud, ws, viewer, said.person);
+    const raw = said?.entries;
     entries = Array.isArray(raw) ? raw.map(asEntry) : [];
   } catch {
     return [400, { error: "invalid JSON" }];
@@ -218,6 +231,19 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     return [200, { taken, head: lockHead(cloud, ws) }];
   } catch (e) {
     return [409, { error: (e as Error).message, head: lockHead(cloud, ws) }];
+  }
+}
+
+function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"], chain: unknown[]): [number, unknown] {
+  const pin = cloud.locked(ws)?.state?.persons.get(viewer.sub);
+  if (pin === undefined) return [409, { error: "no lock of their own bound here" }];
+  try {
+    if (personFold(chain, viewer.sub).genesis !== pin) return [409, { error: "not the lock bound here" }];
+    const chains = chainsOf(cloud);
+    chains.keep(pin, chains.newest(pin, viewer.sub, chain));
+    return [200, {}];
+  } catch (e) {
+    return [409, { error: (e as Error).message }];
   }
 }
 
@@ -266,9 +292,10 @@ function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoin
   const state = cloud.locked(ws)?.state;
   if (!state || !state.persons.has(v.sub)) return null;
   const who = { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof };
-  const newest = personChains.newest(state.persons.get(v.sub)!, v.sub, raw);
+  const chains = chainsOf(cloud);
+  const newest = chains.newest(state.persons.get(v.sub)!, v.sub, raw);
   const { role } = admitPerson(state, who, newest);
-  personChains.keep(state.persons.get(v.sub)!, newest);
+  chains.keep(state.persons.get(v.sub)!, newest);
   return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
 }
 

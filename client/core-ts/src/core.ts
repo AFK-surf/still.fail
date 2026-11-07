@@ -61,6 +61,7 @@ import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { PersonalLock } from "./personal-lock.ts";
+import { bindPerson, tellStations } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -297,7 +298,14 @@ export class Core {
           cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
-          changed: () => inner.store.invalidate({ topic: "adbShare" }),
+          changed: () => {
+            inner.store.invalidate({ topic: "adbShare" });
+            for (const [ws] of inner.workspaces.owned()) {
+              inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
+              inner.runner.fork(bindPerson(inner, ws));
+            }
+          },
+          told: (sub, chain) => tellStations(inner, sub, chain),
         }),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),

@@ -17,12 +17,14 @@
 |---|---|
 | 个人锁本身、面对面加设备 | 已做 |
 | 手机授权签名、手机验签 | 已做 |
-| A：个人锁进 `rules/` 和 Tamarin；workspace 锁认识 `person` 条目；station 按个人锁放行（hello 的 `lock.person`） | 已做，还没有设备写 `person` 条目 |
-| B：stable 带上 A 后，app 自动绑定，个人锁加设备后各 workspace 都放行 | 没做 |
+| A：个人锁进 `rules/` 和 Tamarin；workspace 锁认识 `person` 条目；station 按个人锁放行（hello 的 `lock.person`） | 已做 |
+| B：app 自动绑定，个人锁加设备后各 workspace 都放行；移除设备告诉各 station | 已做 |
 | C：绑定的人不再接受设备条目，新成员由 admin 面对面钉个人锁 ID | 没做 |
 | D：密钥库迁到个人锁 | 没做，密钥库仍依赖 workspace 锁 |
 
-旧 station 拒收不认识的条目类型（`unknown entry kind`），之后整条链都接不上，所以 B 必须等 stable 的 station 都带上 A。
+旧 station 拒收不认识的条目类型（`unknown entry kind`），之后整条链都接不上。所以设备写 `person` 之前，先问这条锁的每台 station：`GET /lock` 的 `takes` 含 `person` 才写，有一台不答或不含就不写，下次再试。
+
+app 也一样：`vault/lock-check.ts` 用同一份规则严格校验整条链，旧 app 读到 `person` 会判定锁无效，密钥库和写锁都用不了。设备不报版本，所以这条问不到：B 要等带 A 的 stable app 发出去、大家更新之后才能上。
 
 ## 绑定（`person` 条目）
 
@@ -30,7 +32,7 @@
 
 绑定之后，这个人的设备不在 workspace 锁里，只要在绑定的个人锁里也放行。还没绑定的人继续按设备条目，所以没有所有人同时切换的时刻。
 
-station 记着每条个人锁听到过的最长链：拿旧链来的设备（已经被移除的）按记着的长链判断，和记着的对不上就拒绝。这份只在内存里，重启后只认下一次带来的；要防重启后的旧链，得让个人锁的更新也推给 station，放在 B 做。
+station 记着每条个人锁听到过的最长链（`<data>/mesh/person-chains.json`）：拿旧链来的设备（已经被移除的）按记着的长链判断，和记着的对不上就拒绝。移除设备时，这个人的设备把新链发给绑定了这条锁的各台 station（`POST /lock {person}`）；当时离线的 station 要等下一次有人带新链来，这段时间被移除的设备还能进。
 
 ## 记录
 
