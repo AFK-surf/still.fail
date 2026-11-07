@@ -3024,11 +3024,24 @@ pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
 /// How far node `id` turns what it draws itself, and whether about the middle of what it draws (View::turn; 0 for one
 /// let go).
 pub fn Tree::turn_of(self : Tree, id : NodeId) -> (Double, Bool) {
+  (self.turn_angle_of(id), self.turns_about_drawn(id))
+}
+
+///|
+/// How far node `id` turns what it draws itself (View::turn; 0 for one let go): Tree::turn_of's first, read alone with
+/// nothing made for it, as each node painted reads it.
+pub fn Tree::turn_angle_of(self : Tree, id : NodeId) -> Double {
   if self.alive_id(id) {
-    (self.nodes[id.at].look.turn, self.nodes[id.at].look.turn_drawn)
+    self.nodes[id.at].look.turn
   } else {
-    (0.0, false)
+    0.0
   }
+}
+
+///|
+/// Whether node `id` turns about the middle of what it draws, not of its box (View::turn; not for one let go).
+pub fn Tree::turns_about_drawn(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].look.turn_drawn
 }
 
 ///|
