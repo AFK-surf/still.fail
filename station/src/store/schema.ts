@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { hasLegacySaid, installLegacySaid } from "./legacy-said-build.ts";
 import { hasLegacyAgent, installLegacyAgent } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-cards.ts";
-import { hasLegacyEdits, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
+import { hasLegacyEdits, hasOldEditIndex, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
@@ -410,6 +410,27 @@ const hasEditIndex = (db: DatabaseSync) =>
   db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits'").get() !== undefined;
 
 export const usesLegacyEdits = (db: DatabaseSync): boolean => !hasEditIndex(db) && hasLegacyEdits(db);
+
+/// A view's index can be removed by another connection while this station is running. Switch it under a writer,
+/// installing the old-store lookup if necessary, without building an index over the whole store at once.
+export function repairMergedEditLookup(db: DatabaseSync): void {
+  const view = () => (db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get() as { sql: string } | undefined)?.sql ?? "";
+  const needsRepair = (sql: string) => sql.includes("legacy_edit_meta")
+    ? sql.includes("INDEXED BY entries_target") && !hasOldEditIndex(db) : !hasEditIndex(db);
+  if (!needsRepair(view())) return;
+  if (!hasEditIndex(db)) installLegacyEdits(db, true);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (needsRepair(view())) {
+      if (hasLegacyEdits(db) && legacyEditsUseOldIndex(db) && !hasOldEditIndex(db))
+        db.prepare("UPDATE legacy_edit_meta SET old_index=0 WHERE id=1").run();
+      const merged = usesLegacyEdits(db) ? MERGED.replace("SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n",
+        legacyEditLatest("m.thread", "m.n", "1", legacyEditsUseOldIndex(db))) : MERGED;
+      db.exec(`DROP VIEW IF EXISTS merged; ${merged}`);
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
 
 /// A small store can build the native lookup under one writer. Prepare a larger older store in bounded steps.
 export function addEditIndex(db: DatabaseSync): void {

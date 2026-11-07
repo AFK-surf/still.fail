@@ -25,7 +25,7 @@ import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
 import { PAGE_LETTER_KEYS, pageLetterReady } from "../store/page-letter-index.ts";
-import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
+import { hasLegacyEdits, hasOldEditIndex, legacyMergedNeedsRepair, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { hasLegacySaid, legacySaidPageState, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
@@ -454,8 +454,8 @@ export class LegacyEditsUnavailable extends Refused {
 function boundedEditKey(s: Store, thread: number, n: string): string | null {
   let edit = one(s, LAST_MESSAGE_RECENT_EDIT, thread, n) as { n: string | null; count: number };
   if (edit.n === null && edit.count === 65) {
-    const meta = one(s, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1");
-    if (meta?.scanned === 0 && meta.old_index === 1) edit = one(s, LAST_MESSAGE_OLD_EDITS, thread, n);
+    const meta = hasLegacyEdits(s.db) ? one(s, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1") : undefined;
+    if (meta?.scanned === 0 && meta.old_index === 1 && hasOldEditIndex(s.db)) edit = one(s, LAST_MESSAGE_OLD_EDITS, thread, n);
     if (edit.count === 65) throw new LegacyEditsUnavailable();
   }
   return edit.n;
@@ -1003,6 +1003,38 @@ export function pendingCardNumber(s: Store, thread: number): number | null {
     if (one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked.n)) return null;
     return asked.n;
   } finally { s.db.exec("RELEASE pending_card_number_read"); }
+}
+
+/// The visible question a need names, checked together with whether it is still answerable.
+export type StateQuestion =
+  | { kind: "missing" }
+  | { kind: "invalid" }
+  | { kind: "answered" }
+  | { kind: "found"; about: [number, number, string] };
+
+export function stateQuestion(s: Store, key: string, threads: number[], ts: string): StateQuestion {
+  s.db.exec("SAVEPOINT state_question_read");
+  try {
+    for (const thread of threads) {
+      const entry = one(s, "SELECT n, card, options FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts);
+      if (!entry) continue;
+      // A missing native index must be replaced even if the recent tail could answer this one question: confirmation
+      // after unrelated concurrent writes also needs a bounded lookup.
+      if (legacyMergedNeedsRepair(s.db)) throw new LegacyEditsUnavailable();
+      let m: MessageRow | null;
+      if (legacyMergedReadReady(s.db)) {
+        const row = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, entry.n);
+        m = row ? toMessage(row) : null;
+      } else m = mergedWithBoundedEdit(s, thread, String(entry.n));
+      if (!m) continue;
+      if (m.authorKind !== "agent" || m.author !== key || m.text.trim() === "") return { kind: "invalid" };
+      const carded = entry.card != null || entry.options != null;
+      const answered = carded ? pendingCardNumber(s, thread) !== m.n
+        : one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, m.n) !== undefined;
+      return answered ? { kind: "answered" } : { kind: "found", about: [m.thread, m.n, m.ts] };
+    }
+    return { kind: "missing" };
+  } finally { s.db.exec("RELEASE state_question_read"); }
 }
 
 /// The card state delivered with a person's message. Its author, timestamp and original card do not depend on edits.

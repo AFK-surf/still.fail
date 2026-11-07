@@ -8,7 +8,9 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
+import { LegacyEditsUnavailable, makeStore as makeReadStore, stateQuestion as readStateQuestion } from "../read/store.ts";
 import { iso } from "../read/transcript.ts";
+import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { type Attachment, type MessageRow, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import type { DeclaredState } from "./actor.ts";
 import {
@@ -67,6 +69,44 @@ function messageForAbout(hub: Hub, key: string, thread: number, ts: string, ques
   if (message === null) return null;
   checkQuestion(hub, key, message);
   return [message.thread, message.n, message.ts];
+}
+
+/// A reader's snapshot may have become stale before it answers. If so, confirm it with the bounded lookup in the
+/// current snapshot; when an old lookup is not prepared yet, let the reader prepare it and try again.
+async function questionForAbout(hub: Hub, key: string, threadsOf: () => number[], ts: string): Promise<[number, number, string] | null> {
+  const version = () => Number(hub.store.db.prepare("PRAGMA main.data_version").get()!.data_version);
+  // If a native edit index was removed after this station opened, its old merged view can scan the whole chat. That
+  // view is still safe on the reader; do not use it for this synchronous confirmation until the index returns.
+  const bounded = () => hub.store.db.prepare(`SELECT 1 WHERE
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits') OR
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='view' AND name='merged' AND instr(sql, 'legacy_edit_meta') > 0)`).get() !== undefined;
+  for (;;) {
+    const before = version();
+    const threads = threadsOf();
+    const included = new Set(threads);
+    let changed = false;
+    const stop = hub.store.subscribe((change) => {
+      if ((change.type === "thread" || change.type === "threadRemoved") && included.has(change.id)) changed = true;
+      if (change.type === "sessionRemoved" && change.key === key) changed = true;
+    });
+    let found: Awaited<ReturnType<NonNullable<Hub["stateQuestion"]>>>;
+    try { found = await hub.stateQuestion!(key, threads, ts); }
+    finally { stop(); }
+    const current = threadsOf();
+    const after = version();
+    if (changed || before !== after || current.length !== threads.length || current.some((id, i) => id !== threads[i])) {
+      if (!bounded()) continue;
+      try { found = readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, current, ts); }
+      catch (error) {
+        if (error instanceof LegacyEditsUnavailable || (error instanceof Error && error.message.startsWith(CARD_POSTS_PENDING))) continue;
+        throw error;
+      }
+    }
+    if (found.kind === "missing") return null;
+    if (found.kind === "invalid") throw new Error("need_human about must point to your visible question, not a person's message or another agent's post");
+    if (found.kind === "answered") throw new Error("that question is no longer pending. Read what the person said; if a decision is still needed, ask again with a new card");
+    return found.about;
+  }
 }
 
 /// A thread of this session the agent named with to=, and how the session posts there.
@@ -282,7 +322,14 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   let about: [number, number, string] | null = null;
   const ts = aboutTs(args);
   if (ts !== null) {
-    about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
+    if (kind?.kind === "need_help" && hub.stateQuestion) {
+      about = await questionForAbout(hub, key, () => {
+        const current = target(hub, key, args.to);
+        if (current.thread.id !== thread.thread.id || current.connect !== thread.connect) throw new Error("the conversation changed while checking the question; try again");
+        if (store.manuallyArchived(current.thread.id)) throw new Error(`${threadAddress(current.thread.channel, current.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
+        return [current.thread.id];
+      }, ts);
+    } else about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
     if (about === null) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
     if (kind?.kind === "need_help" && card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
   }
@@ -418,7 +465,12 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
     kind = given[0];
     words = needArg(args, given[0], given[1]);
   }
-  const about = stateAbout(hub, key, kind, args);
+  const ts = aboutTs(args);
+  let about: [number, number, string] | null;
+  if (kind.kind === "need_help" && ts !== null && hub.stateQuestion) {
+    about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
+    if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
+  } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
     throw new Error(
       "need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person",
