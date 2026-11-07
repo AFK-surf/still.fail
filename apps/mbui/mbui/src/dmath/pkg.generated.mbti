@@ -4,8 +4,6 @@ package "mbui/dmath"
 // Values
 pub fn acos(Double) -> Double
 
-pub fn asin(Double) -> Double
-
 pub fn atan(Double) -> Double
 
 pub fn atan2(Double, Double) -> Double
@@ -14,13 +12,7 @@ pub fn cos(Double) -> Double
 
 pub fn exp(Double) -> Double
 
-pub fn expm1(Double) -> Double
-
 pub fn ln(Double) -> Double
-
-pub fn ln_1p(Double) -> Double
-
-pub fn log10(Double) -> Double
 
 pub fn log2(Double) -> Double
 
