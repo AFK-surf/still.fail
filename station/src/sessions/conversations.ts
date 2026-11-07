@@ -420,6 +420,11 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const guarded = checkingQuestion || checkingDefault;
   const questionActor = guarded ? actorOf(hub, key) : undefined;
   const questionTurn = questionActor?.currentTurnId() ?? null;
+  const checkQuestionTurn = () => {
+    if (guarded && questionActor && questionTurn !== null &&
+      (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
+      throw new Error("the turn ended while checking its question; no message was posted");
+  };
   let questionThreads: (() => number[]) | null = null;
   if (ts !== null) {
     if (checkingQuestion) {
@@ -430,9 +435,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
         return [current.thread.id];
       };
       about = await questionForAbout(hub, key, questionThreads, ts);
-      if (questionActor && questionTurn !== null &&
-        (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
-        throw new Error("the turn ended while checking its question; no message was posted");
+      checkQuestionTurn();
     } else about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
     if (about === null) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
     if (kind?.kind === "need_help" && card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
@@ -451,16 +454,15 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     return link;
   };
   const files = await keep(paths.length === 0 ? [] : await attach(hub, key, paths), thumbsDir(hub.config().dataDir));
-  if (guarded && questionActor && questionTurn !== null &&
-    (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
-    throw new Error("the turn ended while checking its question; no message was posted");
+  checkQuestionTurn();
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   let posted: string;
   // A chat's first post where it was relayed goes into the station's first message there (relay.ts).
-  const opening = card === null && files.length === 0 ? await intoOpening(hub, key, chat, thread.thread, text) : null;
+  const opening = card === null && files.length === 0 ? await intoOpening(hub, key, chat, thread.thread, text, checkQuestionTurn) : null;
   let n: number;
   if (opening !== null) [posted, n] = opening;
   else {
+    checkQuestionTurn();
     if (slack) {
       try {
         posted = await chat.post(here, text, files, shown);
@@ -544,21 +546,58 @@ function unreadBefore(hub: Hub, key: string, thread: number, n: number): string 
 /// The agent's first post in a conversation its chat was relayed to (hub.openings): added under the station's first
 /// message there, which is what people see without opening the thread. That message's ts and number, or null where it
 /// is posted as a reply: not the first post, not the relaying agent's, too long to go into one message, or not changed.
-async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: ThreadRow, text: string): Promise<[string, number] | null> {
+async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: ThreadRow, text: string, checkTurn: () => void): Promise<[string, number] | null> {
   const pending = hub.openings.get(thread.id);
   if (pending === undefined || pending.session !== key) return null;
-  hub.openings.delete(thread.id);
-  const opening = hub.store.messageAt(thread.id, pending.ts);
-  if (opening === null || chat.edit === undefined) return null;
-  const whole = `${opening.text}\n\n${text}`;
+  // A second post still becomes a reply, as it did while the first was editing the opening.
+  if (pending.claimed) { hub.openings.delete(thread.id); return null; }
+  pending.claimed = true;
+  let retry = false, edited = false;
   try {
-    if (!(await chat.edit({ channel: thread.channel, threadTs: thread.threadTs }, pending.ts, whole))) return null;
+    const edit = chat.edit?.bind(chat);
+    if (edit === undefined) return null;
+    const prepare = hub.prepareLegacyEdits;
+    let opening = prepare ? hub.store.messageAtIfReady(thread.id, pending.ts) : hub.store.messageAt(thread.id, pending.ts);
+    let waited = false;
+    while (opening === undefined) {
+      waited = true;
+      await prepare!(hub.stoppingSignal);
+      hub.stoppingSignal.throwIfAborted();
+      opening = hub.store.messageAtIfReady(thread.id, pending.ts);
+    }
+    if (waited) {
+      const current = hub.store.sessionThread(key, thread.channel, thread.threadTs);
+      if (!current || current.thread.id !== thread.id || hub.chat(current.connect) !== chat)
+        throw new Error("the conversation changed while preparing its first message; try again");
+      if (hub.store.manuallyArchived(thread.id)) throw new Error("the conversation was archived while preparing its first message; restore it first");
+    }
+    if (opening === null) return null;
+    const whole = `${opening.text}\n\n${text}`;
+    checkTurn();
+    try {
+      if (!(await edit({ channel: thread.channel, threadTs: thread.threadTs }, pending.ts, whole))) return null;
+    } catch (error) {
+      log.warn("hub", "a relayed chat's first post did not go into the station's first message", { thread: thread.id, error: (error as Error).message });
+      return null;
+    }
+    edited = true;
+    if (prepare === null) hub.store.editMessage(thread.surface, thread.channel, thread.threadTs, pending.ts, whole);
+    else {
+      // The platform edit has happened: finish recording it even if the caller goes away meanwhile.
+      while (hub.store.editMessageIfReady(thread.surface, thread.channel, thread.threadTs, pending.ts, whole) === undefined)
+        await prepare();
+    }
+    return [pending.ts, opening.n];
   } catch (error) {
-    log.warn("hub", "a relayed chat's first post did not go into the station's first message", { thread: thread.id, error: (error as Error).message });
-    return null;
+    if (edited) throw new Error(`The first message was updated on the platform, but could not be recorded here: ${(error as Error).message}`, { cause: error });
+    retry = true;
+    throw error;
+  } finally {
+    if (hub.openings.get(thread.id) === pending) {
+      if (retry) pending.claimed = false;
+      else hub.openings.delete(thread.id);
+    }
   }
-  hub.store.editMessage(thread.surface, thread.channel, thread.threadTs, pending.ts, whole);
-  return [pending.ts, opening.n];
 }
 
 /// What a state recorded with chat_state is about: the message `about` names (by its ts, in one of the session's

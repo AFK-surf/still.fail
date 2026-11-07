@@ -1797,23 +1797,8 @@ export class Store {
     return this.#with((changes) => {
       const thread = this.threadAt(surface, channel, threadTs);
       if (thread === null) return null;
-      let message: MessageRow | null;
-      if (bounded) {
-        // Check readiness in the same snapshot as the merged read: another connection may replace an index or add
-        // changed keys. A missing message can be ignored without preparing old edits.
-        this.db.exec("SAVEPOINT platform_edit_read");
-        try {
-          if (!legacyMergedReadReady(this.db)) {
-            const found = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread.id, ts);
-            if (!found) return null;
-            if (legacyMergedNeedsRepair(this.db)) return undefined;
-            const edit = boundedEditKey(this.db, thread.id, found.n);
-            if (edit === undefined) return undefined;
-            const row = this.#one(LAST_MESSAGE_WITH_EDIT, thread.id, found.n, edit);
-            message = row ? toMessage(row) : null;
-          } else message = this.#messageAt(thread.id, ts);
-        } finally { this.db.exec("RELEASE platform_edit_read"); }
-      } else message = this.#messageAt(thread.id, ts);
+      const message = bounded ? this.messageAtIfReady(thread.id, ts) : this.#messageAt(thread.id, ts);
+      if (message === undefined) return undefined;
       if (message === null || message.text === text) return null;
       this.#append(
         {
@@ -2107,6 +2092,22 @@ export class Store {
   /// A message of the thread by its platform id, as merged.
   messageAt(thread: number, ts: string): MessageRow | null {
     return this.#messageAt(thread, ts);
+  }
+
+  /// A message as edited, or undefined when its old edit lookup needs preparation first.
+  messageAtIfReady(thread: number, ts: string): MessageRow | null | undefined {
+    // Read the readiness and the message in one snapshot; a missing message needs no old-index preparation.
+    this.db.exec("SAVEPOINT bounded_message_at");
+    try {
+      if (legacyMergedReadReady(this.db)) return this.#messageAt(thread, ts);
+      const found = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts);
+      if (!found) return null;
+      if (legacyMergedNeedsRepair(this.db)) return undefined;
+      const edit = boundedEditKey(this.db, thread, found.n);
+      if (edit === undefined) return undefined;
+      const row = this.#one(LAST_MESSAGE_WITH_EDIT, thread, found.n, edit);
+      return row ? toMessage(row) : null;
+    } finally { this.db.exec("RELEASE bounded_message_at"); }
   }
 
   /// A message's number without reading its text or edits.
