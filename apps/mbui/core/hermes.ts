@@ -4,5 +4,5 @@
 import { takeClock } from "./clock.ts";
 import { startHermes } from "@core/hosts/hermes-start.ts";
 
-startHermes([]);
+startHermes();
 takeClock();

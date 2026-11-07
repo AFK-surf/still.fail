@@ -25,7 +25,7 @@ key=$(node "$repo/scripts/native.ts" key "$part" darwin-arm64)
 mkdir -p "$(dirname "$job")"
 mkdir "$job" || { echo "media-job: job directory already exists: $job" >&2; exit 2; }
 mkdir "$job/scripts"
-cp "$repo/scripts/native.ts" "$repo/scripts/ffmpeg.ts" "$job/scripts/"
+cp "$repo/scripts/native.ts" "$job/scripts/"
 printf '%s\n' "$key" > "$job/runtime.key"
 printf '%s\n' "$part" > "$job/runtime.part"
 if [ "$kind" = figure ]; then cp "$input" "$job/scene.json"; else cp "$input" "$job/action.drive"; fi

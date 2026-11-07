@@ -24,13 +24,6 @@
 
 Windows 版（2026-10-26 起是 mbui 的，安装包没有代码签名）同样签：`desktop/<安装包>.exe.sig`，内容 `{kind: "stillfail-desktop-win", version, build, file, sha256, size}`。mac 版（同日起是 mbui 的）验代码签名：还没换过来的 Electron app 由 Squirrel 验（新 app 要满足旧 app 的 designated requirement），mbui 自己更新时由宿主验（`mac_app.m` Updates：同一个 team、同一个 id）；安卓由系统验 APK 签名，不另外签。
 
-station 自己装的模块包（[station-modules.md](station-modules.md)「包」）也签：`scripts/module-bundle.ts pack` 打出 `releases/modules/<id>/<id>-0.1.N.tar.gz`，再用 `release-sign.ts module` 签 feed `modules/<id>/<id>.json`（测试渠道 `<id>-beta.json`）：
-
-```json
-{"id": "media", "version": "0.1.N", "build": N, "needsStation": M, "release": "…", "signature": "…", "key": "…"}
-```
-
-签名内容是 `{kind: "stillfail-module-release", id, version, build, needsStation, builds: {"any": {sha256, size}}}`：`any` 是不分平台的包；带原生件的模块（媒体服务带 ffmpeg）分平台打，`builds` 的键是 `darwin-arm64`、`linux-x64`、`linux-arm64`，各对应 `<id>-0.1.N-<平台>.tar.gz`，station 取自己平台的那个。`needsStation` 是它要求的最旧 station 的 build。key 和流程与 station 完全一样（同一个 `RELEASE_SIGNING_KEY`，CI 里没有就失败）。
 
 ## 谁验、怎么验
 
@@ -39,13 +32,12 @@ station 自己装的模块包（[station-modules.md](station-modules.md)「包�
 - **`stillfail update`**（`bin/stillfail`、`bin/stillfail.ps1`）：用本版本的 Node 跑 `station/main.js update [--beta|--stable] --app … --data …`（`station/src/updates/command.ts`），它验签后只输出要运行的脚本和环境变量，由 shell 去运行（Windows 上安装脚本会结束从 `<app>` 跑的进程，包括这个 Node）。原生 launcher 不转发 `update`。
 - **Comma**：station 读的是 `<origin>/stations/releases/…`，一样要 still.fail 的 key 签过，Comma 只能原样转发我们签好的 feed。
 - **Windows 版**：mbui 的 core 读自己的 feed（`win/latest.json`、`win/beta/latest.json`，里面带 `.sig` 的签名内容）时验签（`client/core-ts/src/app-release.ts`），宿主下载时核字节（`win_update.h`）；不过就不装。还没换过来的 Electron app 由 electron-updater 下载完安装包后取同目录的 `.sig` 验签、核版本和字节，过了才运行 mbui 的安装包。
-- **模块包**（`station/src/modules/packages.ts`）：读 feed 用 `verifyModule` 验签（`verifySigned` 再加 kind、id、版本的检查），只装比已装的新、`needsStation` 不超过自己 build 的版本，而且永远不装比起来过的最新 build 更旧的（模块的数据可能已经迁到新版）；下载时核大小和 sha256，解压只接受目录里的普通文件。
 
 `STILLFAIL_RELEASE_KEYS`（逗号分隔的公钥）可以在 station 的环境里多加几把 key，只用于测试（dev cloud 上用测试 key 发的版本）。只有机器的用户能设这个环境变量。
 
 ## 密钥
 
-- 私钥（Ed25519，PKCS#8 PEM）放在 GitHub Environment `production` 的 secret `RELEASE_SIGNING_KEY`，备份在左子健的 1Password（个人账号的 Personal vault，「still.fail release signing key (release-1 …)」）。恢复 key 只在同一个 vault 里（「still.fail release recovery key …」），不进 CI。两把都是 2026-10-15 在 mba 上用 openssl 生成的，生成完本地文件已删。用到它的 job：`pipeline.yml` 的 `station`、`desktop`、`desktop-win`、`desktop-web`、`modules`，`stable.yml` 的 `station`、`desktop`、`modules`。CI 里没有 key、或者 key 不在 `RELEASE_KEYS` 里，`release-sign.ts` 直接失败，不发未签名的版本。
+- 私钥（Ed25519，PKCS#8 PEM）放在 GitHub Environment `production` 的 secret `RELEASE_SIGNING_KEY`，备份在左子健的 1Password（个人账号的 Personal vault，「still.fail release signing key (release-1 …)」）。恢复 key 只在同一个 vault 里（「still.fail release recovery key …」），不进 CI。两把都是 2026-10-15 在 mba 上用 openssl 生成的，生成完本地文件已删。用到它的 job：`pipeline.yml` 的 `station`、`desktop`、`desktop-win`、`desktop-web`，`stable.yml` 的 `station`、`desktop`。CI 里没有 key、或者 key 不在 `RELEASE_KEYS` 里，`release-sign.ts` 直接失败，不发未签名的版本。
 - 本地用 `RELEASE_DIR` 发到 dev cloud 时没有 key 只警告，产出未签名的 feed（station 不会更新到它）；要测签名就自己生成一把测试 key（下面），station 用 `STILLFAIL_RELEASE_KEYS` 认它。
 - 生成：`node scripts/release-sign.ts keygen <私钥文件>`，打印公钥和 key id。公钥加进 `signed.ts` 的 `RELEASE_KEYS`。
 - 恢复 key：`RELEASE_KEYS` 里再放一把离线保管的公钥。CI 的 key 泄露或丢失时，用恢复 key 签一个把 `RELEASE_KEYS` 换成新 key 的版本，station 就能继续更新。

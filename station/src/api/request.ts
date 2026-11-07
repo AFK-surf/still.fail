@@ -11,8 +11,6 @@ export type Request = {
   search?: string;
   headers: Record<string, string>;
   body: Buffer;
-  /// The body as it comes, for a request passed on as it is (a module's, modules/forward.ts): `body` is empty then.
-  upload?: AsyncIterable<Buffer>;
   viewer: Viewer;
   lang: Lang;
   /// Read in the background (a part of POST /batch: the history a client brings onto its device): after every other read

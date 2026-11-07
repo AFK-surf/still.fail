@@ -37,9 +37,6 @@ decide() {
   # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the rules it checks the lock and
   # vaults by (rules/js), what it shares with the core (client/core-ts/src: scripts/plan-covers.ts finds which), the words it says, the installer it carries (cloud/src/install*.ts: scripts/installers.ts).
   if has '^(station/(src|native)/|rules/js/|client/core-ts/src/(shapes/(dsl|schema|model)|lock-form|whitespace|titles|chat-row|cache-policy|codex-quota|mediaFacts|digest|redact)\.ts$|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
-  # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
-  # and signed: modules=….
-  if [ "${PLAN_MODULES:-1}" = 1 ]; then eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"; else modules=; fi
   # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
   # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
   # Java, the client's, media's, vendor's), or to how it is released.
@@ -76,7 +73,6 @@ print() {
     echo "api=$api"
     echo "relay=$relay"
     echo "station=$station"
-    echo "modules=$modules"
     echo "android_beta=$android_beta"
     echo "mac_beta=$mac_beta"
     echo "win_beta=$win_beta"

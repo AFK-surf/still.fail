@@ -29,8 +29,6 @@ import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
 import { LinuxDesktop } from "./screens/linux-desktop.ts";
 import { uiBinary } from "./screens/ui.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
-import { ModuleSet } from "./modules/modules.ts";
-import { Packages } from "./modules/packages.ts";
 import { stationVersion } from "./ops/version.ts";
 import { channelOf } from "./updates/versions.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
@@ -276,46 +274,6 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   );
 }
 
-/// The modules beside the station (docs/station-modules.md): which there are and how each is now, for the admin API
-/// (passed on to them), the overview and modules/live.ts (which starts them). Their changes told as the overview's.
-export class Modules extends Context.Service<Modules, ModuleSet>()("stillfail/Modules") {
-  static readonly layer = Layer.effect(
-    Modules,
-    Effect.gen(function* () {
-      const events = yield* Events;
-      return new ModuleSet((yield* Paths).data, () => events.overviewChanged());
-    }),
-  );
-}
-
-/// The packages of the modules the station installs itself (modules/packages.ts): from where its own releases are, on
-/// its channel, once the process before it is gone; started by ModulesLive, read and updated with the station's own
-/// updates (the agents' side adds them to its updates: a line each).
-export class ModulePackages extends Context.Service<ModulePackages, Packages>()("stillfail/ModulePackages") {
-  static readonly layer = Layer.effect(
-    ModulePackages,
-    Effect.gen(function* () {
-      const { data, app } = yield* Paths;
-      const plane = yield* ControlPlane;
-      const config = yield* StationConfig;
-      const previous = yield* Previous;
-      const version = stationVersion(app);
-      return yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          new Packages({
-            data,
-            station: version === undefined ? null : Number(version.slice("0.1.".length)),
-            base: () => plane.releaseBase(),
-            channel: () => channelOf(config.raw(), app),
-            previousGone: previous.gone,
-          }),
-        ),
-        (packages) => Effect.promise(() => packages.close()),
-      );
-    }),
-  );
-}
-
 /// config.json (ops/config.ts): one for the whole station. What an edit must pass is said by the parts that read it
 /// (the agents' side: accounts/check.ts).
 export class StationConfig extends Context.Service<StationConfig, ConfigFile>()("stillfail/Config") {
@@ -419,7 +377,7 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
       const config = yield* StationConfig;
       return new Admin(yield* Readers, {
         store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: () => side.current ?? undefined, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
-        drive: yield* StationDrive, modules: yield* Modules, parts: yield* Parts, config, data: (yield* Paths).data, cloud: (yield* ControlPlane).state,
+        drive: yield* StationDrive, parts: yield* Parts, config, data: (yield* Paths).data, cloud: (yield* ControlPlane).state,
       });
     }),
   );
