@@ -665,20 +665,20 @@ export const LEGACY_LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n
 /// A page of messages as merged, latest first. Merge the two ordered message indexes to select a page before reading
 /// the messages and their edits; a page does not walk the edits that followed its messages. Like LAST_MESSAGE, old
 /// letter metadata on non-messages, or a store missing entries_letters, can make the legacy lookup walk more entries.
-export const MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (
+export const MESSAGE_KEYS_BEFORE = `
   SELECT n FROM entries INDEXED BY entries_said
     WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NULL
   UNION ALL
   SELECT n FROM entries
     WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
-  ORDER BY n DESC LIMIT ?3
-) ORDER BY n DESC`;
-export const LEGACY_MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (
+  ORDER BY n DESC LIMIT ?3`;
+export const LEGACY_MESSAGE_KEYS_BEFORE = `
   SELECT n FROM legacy_said WHERE thread = ?1 AND n < ?2
   UNION ALL
   SELECT n FROM entries WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
-  ORDER BY n DESC LIMIT ?3
-) ORDER BY n DESC`;
+  ORDER BY n DESC LIMIT ?3`;
+export const MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (${MESSAGE_KEYS_BEFORE}) ORDER BY n DESC`;
+export const LEGACY_MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (${LEGACY_MESSAGE_KEYS_BEFORE}) ORDER BY n DESC`;
 
 /// The usage page's calls are kept added up by this much time (schema.ts USAGE_QUARTERS): a quarter of an hour, which
 /// every time zone's offset is a whole number of.
