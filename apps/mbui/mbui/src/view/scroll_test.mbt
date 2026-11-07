@@ -1013,3 +1013,19 @@ test "a column's bar in another along its edge where the pointer stays still, th
   let gone = thumbs_drawn(tree, now, 1500.0)
   assert_eq((out, gone), (["other"], []))
 }
+
+///|
+test "scrolls: what it holds moved says it scrolled, once, whatever frames came between; its first placing, and frames with nothing moved, do not" {
+  let k = scroll_case()
+  let first = k.tree.take_scrolled()
+  k.tree.frame(390.0, 844.0) |> ignore
+  let still = k.tree.take_scrolled()
+  k.tree.wheel_at(150.0, 150.0, 0.0, 60.0, 0, 10.0) |> ignore
+  k.tree.frame(390.0, 844.0) |> ignore
+  // (a frame after it with nothing moved: what it said stays till asked)
+  k.tree.frame(390.0, 844.0) |> ignore
+  let moved = k.tree.take_scrolled()
+  let again = k.tree.take_scrolled()
+  k.tree.frame(390.0, 844.0) |> ignore
+  assert_eq((first, still, moved, again, k.tree.take_scrolled()), (false, false, true, false, false))
+}

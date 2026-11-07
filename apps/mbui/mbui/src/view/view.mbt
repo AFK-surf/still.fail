@@ -725,6 +725,9 @@ pub struct Tree {
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
   changed : Array[NodeId]
   composed : Array[NodeId]
+  /// whether what a node that scrolls holds was moved from where it was placed since this was last taken
+  /// (Tree::take_scrolled)
+  mut scrolled_now : Bool
   /// the nodes let go since the host last took them (Tree::take_removed): what it keeps for them to let go too
   removed : Array[NodeId]
   /// the nodes whose content was made again since the host last took them (Tree::take_changed), and whether anything
@@ -901,6 +904,7 @@ pub fn Tree::new(
     downs: [],
     changed: [],
     composed: [],
+    scrolled_now: false,
     removed: [],
     pending: [],
     drawn_due: false,
@@ -6522,6 +6526,10 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
       self.outs_gone.push(at)
     }
   }
+  // (what a node that scrolls holds, moved from where it was placed: scrolled, Tree::take_scrolled)
+  if n.placed && (x != n.lx || y != n.ly) && n.parent >= 0 && self.nodes[n.parent].scroll_held == at {
+    self.scrolled_now = true
+  }
   let sized = !n.placed || w != n.lw || h != n.lh
   n.placed = true
   n.lx = x
@@ -6712,6 +6720,16 @@ pub fn Tree::take_removed(self : Tree) -> Array[NodeId] {
 /// What the last frame composed again: the nodes placed or faded otherwise (what they hold left as it was).
 pub fn Tree::composed(self : Tree) -> Array[NodeId] {
   self.composed
+}
+
+///|
+/// Whether what a node that scrolls holds (View::scrolls: its held, drawn off by how far it is scrolled) was moved from
+/// where it was placed since this was last asked, by any frame or bringing of the tree since: something of it
+/// scrolled. Asked once a paint (ui's view_paint), it is said no again till something scrolls again.
+pub fn Tree::take_scrolled(self : Tree) -> Bool {
+  let was = self.scrolled_now
+  self.scrolled_now = false
+  was
 }
 
 ///|
