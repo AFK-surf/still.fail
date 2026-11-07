@@ -15,6 +15,7 @@ import { t } from "./i18n.ts";
 import { type Entry, canonical, entryHash, signedBytes } from "./lock.ts";
 import type { Runner } from "./runtime.ts";
 import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
+import { ed25519Ok } from "./vault/verified.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -30,24 +31,15 @@ const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
 const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16)) : new Uint8Array());
 const asKey = (id: string) => (id.startsWith("ed25519:") ? unhex(id.slice(8)) : new Uint8Array());
 
-/// What each signature checked came to, by key, signature and what it signs: the same chain and grants are asked of
-/// at every grant a station tells of and each view of the lock, and one check in Hermes takes milliseconds.
-const verified = new Map<string, boolean>();
-const VERIFIED_MAX = 4096;
-
+/// Whether `id` signed `bytes` with `sig`: by the host's own check and kept on the device (vault/verified.ts), as the
+/// same chain and grants are asked of at every grant a station tells of, each view of the lock and each start, and one
+/// check in Hermes takes milliseconds.
 const verifies = (id: string, sig: string, bytes: Uint8Array) => {
-  const k = `${id}|${sig}|${hex(bytes)}`;
-  const was = verified.get(k);
-  if (was !== undefined) return was;
-  let ok: boolean;
   try {
-    ok = ed25519.verify(unhex(sig), bytes, asKey(id));
+    return ed25519Ok(unhex(sig), bytes, asKey(id));
   } catch {
-    ok = false;
+    return false;
   }
-  if (verified.size >= VERIFIED_MAX) verified.clear();
-  verified.set(k, ok);
-  return ok;
 };
 
 export type Device = { key: string; id: string; label: string };
