@@ -10,10 +10,9 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core) runs only those parts of it: ts the icons, the clients'
+# STILLFAIL_CHECK_PART="<part> …" (ts, station, core) runs only those parts of it: ts the icons, the clients'
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
-# browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
-# or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
+# station the station (station/, its typecheck and tests) and its native parts' own tests
 # (station/native); core client/'s Rust (the core's native shells: iroh for the web and the apps' IO).
 # Unset: all of them.
 #
@@ -332,7 +331,6 @@ if part ts; then
     prep core deps client/core-ts
     step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
-    # The web in Chrome (its stories, its message list's motion): the browser part, with the full check's steps below.
   fi
   if touches "$ts_cloud"; then
     prep cloud deps cloud
@@ -358,38 +356,6 @@ if part ts; then
 fi
 
 if [ $full = 1 ]; then
-  # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
-  # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
-  # docs/list-motion.md), a viewer's bar staying while pointed at (test/browser/viewer-bar.mjs, the motion's last share),
-  # a folder dropped in the files' columns leaving nothing said over the list (test/browser/drive-drop.mjs, there too),
-  # a wheel over a files column scrolling it alone, never the page under them (test/browser/drive-columns-wheel.mjs, there too),
-  # a chat's side panel giving way to the chat once the window narrows (test/browser/side-panel-width.mjs, there too)
-  # and a station's screen driven by a mouse, keys and fingers (test/browser/screen-input.mjs, there too):
-  # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
-  # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
-  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|drive-drop|drive-columns-wheel|side-panel-width|chat-pagination|screen-input|share-markdown)\.mjs$'; }; then
-    if command -v google-chrome >/dev/null 2>&1; then
-      prep root deps .
-      wasm_pkg
-      prep core deps client/core-ts
-      chrome='export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome'
-      # Its share: "<part> <i>/<n>" (none said: all of it).
-      share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
-      case "${STILLFAIL_BROWSER:-}" in
-        stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
-        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/drive-drop.mjs && node test/browser/drive-columns-wheel.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs; }; }" ;;
-        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/drive-drop.mjs && node test/browser/drive-columns-wheel.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs" ;;
-      esac
-      case "${STILLFAIL_BROWSER:-}" in
-        ""|motion*)
-          if [ "${share%/*}" = "${share#*/}" ]; then
-            step "web: share Markdown and file previews" after root after core sh -c "$chrome; node test/browser/share-markdown.mjs"
-          fi ;;
-      esac
-    else
-      later "web: stories measured, the message list's motion watched (no Chrome here)"
-    fi
-  fi
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi

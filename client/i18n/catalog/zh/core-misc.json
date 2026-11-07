@@ -44,8 +44,6 @@
   "core-misc.xshare.notRead": "尚未加载 {name} 的 station",
   "core-misc.xshare.oldStation": "此 station 需要更新",
   "core-misc.xshare.noStation": "{name} 没有在线的 station",
-  "core-misc.publish.oldStation": "此 station 需要更新",
-  "core-misc.publish.badReply": "station 的回复里没有快照",
   "core-misc.call.no_new_session": "station 的回复里没有新会话",
   "core-misc.call.no_option": "选项不存在",
   "core-misc.call.no_outbox": "待发消息不存在",

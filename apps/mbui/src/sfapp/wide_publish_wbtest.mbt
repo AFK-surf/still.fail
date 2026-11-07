@@ -34,7 +34,6 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=t.all(Checkbox, label="放进图片").map(fn(n) { n.rect }).to_string())
   t.click(Button, label="复制图片")
   t.frame()
-  assert_eq(named(calls, "chat.publish").length(), 0)
   assert_eq(t.shots().length(), 1)
   // the picture on the clipboard: as wide as the chat's column (760) at two pixels a point, as tall as it all is
   match t.clipboard_png() {

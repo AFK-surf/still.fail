@@ -1,66 +1,13 @@
-// The admin's console as an app of its own, on its own host (admin.still.fail).
-// Its origin gives it its own client core and so its own signed-in accounts:
-// signing in here signs in nowhere else. Sign-in goes through still.fail cloud like
-// the web app's and comes back to this host's /auth/callback.
-import "../renamed.ts";
+// The admin's console as an app of its own, on its own host (admin.still.fail). Its origin gives it its own client core
+// and so its own signed-in accounts: signing in here signs in nowhere else. It signs in on the web's sign-in pages
+// (login/, no core: /auth/callback the web's, /login its own, signin.tsx), which hand the account to the console's core
+// (pages/core.ts); the console (app.tsx) is loaded only past them.
 import "../styles/index.ts";
-import { followAppearance } from "../theme.ts";
-import { startScrollbars } from "../scrollbars.ts";
-import { Tooltip } from "radix-ui";
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { I18nRoot, t } from "../i18n.ts";
-import { BrowserRouter, Route, Routes } from "react-router";
 import "@fontsource-variable/inter";
-import { Illustration } from "../brand.tsx";
-import { useAccounts, useSignIn, useSignOut } from "../cloud/accounts.ts";
-import { Callback, SignInPage } from "../cloud/gate.tsx";
-import { ToastProvider } from "@stillfail/ui/toast.tsx";
-import { Button, WaitLine } from "../ui.tsx";
-import { Console, useAdminAccount } from "./console.tsx";
-import * as shellCss from "../styles/shell.css.ts";
+import { isSignIn, show } from "../login/page.tsx";
+import { AdminSignIn } from "./signin.tsx";
 
-import { NAME } from "../channel.ts";
-function AdminApp() {
-  return (
-    <ToastProvider>
-      <Tooltip.Provider delayDuration={400}>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth/callback" element={<Callback />} />
-            <Route path="*" element={<Home />} />
-          </Routes>
-        </BrowserRouter>
-      </Tooltip.Provider>
-    </ToastProvider>
-  );
-}
-
-function Home() {
-  const list = useAccounts();
-  const account = useAdminAccount();
-  if (list?.length === 0) return <SignInPage title={t("web-pages.admin.signIn.title", { name: NAME })} lead={t("web-pages.admin.signIn.lead", { name: NAME })} />;
-  if (account === undefined) return <div className={shellCss.gate}><WaitLine /></div>;
-  if (account === null) return <NoPermission />;
-  return <Console account={account} />;
-}
-
-/** Signed in, but with no account that is the admin's. */
-function NoPermission() {
-  const list = useAccounts() ?? [];
-  const signIn = useSignIn();
-  const signOut = useSignOut();
-  return (
-    <div className={shellCss.gate}>
-      <Illustration name="sign-in" />
-      <h1>{t("web-pages.admin.noPermission.title")}</h1>
-      <p>{t("web-pages.admin.noPermission.body", { emails: list.map((a) => a.email).join(t("web-pages.admin.noPermission.separator")), name: NAME })}</p>
-      <Button variant="primary" busy={signOut.busy()} onClick={() => { for (const a of list) void signOut.signOut(a.sub); }}>{t("web-pages.admin.signOut")}</Button>
-      <Button variant="ghost" busy={signIn.busy} onClick={() => void signIn.signIn()}>{t("web-pages.admin.switchAccount")}</Button>
-    </div>
-  );
-}
-
-followAppearance();
-startScrollbars();
-createRoot(document.getElementById("app")!).render(<StrictMode><I18nRoot><AdminApp /></I18nRoot></StrictMode>);
+const root = document.getElementById("app")!;
+const path = location.pathname.replace(/\/+$/, "");
+if (isSignIn(path)) show(root, path, <AdminSignIn />);
+else void import("./app.tsx").then((m) => m.show(root));

@@ -166,6 +166,24 @@ test "a link to this chat's own item with ?service=: only its web service over t
 }
 
 ///|
+test "a web service's own page's link (/w/…/s/…/services/<job>): the service over this chat; another workspace's, over its Home" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/w/ws1/s/st1/services/j-web")
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 3)
+  assert_true(pages[1] is Chat(_))
+  assert_true(pages[2] == Service("ws1/st1", "j-web"))
+  assert_eq(t.opened().length(), 0)
+  open_link("https://app.still.fail/w/ws2/s/st9/services/j-x")
+  assert_eq(app.picked.get(), "ws2")
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 2)
+  assert_true(pages[0] == Home)
+  assert_true(pages[1] == Service("ws2/st9", "j-x"))
+}
+
+///|
 test "a chat's link of another workspace: that workspace in view, the chat over its Home (openItem)" {
   let calls : Array[Made] = []
   let t = links_core(calls, "chat")

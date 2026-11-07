@@ -3,44 +3,17 @@ import { bindCloudOperations } from "../core/operations.ts";
 // accounts. Reads are the core's `workspaces` and `workspace` topics; after a
 // write the core refetches them, so nothing here keeps a cache.
 import { useAction as useOperation } from "../action.ts";
-import type { ErrorBody } from "../core/client.ts";
-import { core, useTopic, type TopicState } from "../core/react.ts";
+import type {  } from "../core/client.ts";
+import { core } from "../core/react.ts";
 import { prefs, setPrefs } from "../prefs.ts";
 import { t } from "../i18n.ts";
-import type { Account } from "./accounts.ts";
+import type {  } from "./accounts.ts";
 import type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WayView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
 export type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WayView, WorkspaceSummary, WorkspaceView };
 
-/** One account's `/v1/me`, as the `workspaces` topic lists it (`error` when that account could not be read). */
-export interface AccountWorkspaces {
-  account: Account;
-  workspaces: WorkspaceSummary[];
-  invitations: PendingInvitation[];
-  relay_url: string | null;
-  /** The account's `/v1/me` has answered; until then (or after a failure) an empty list says nothing. */
-  loaded: boolean;
-  /** still.fail cloud lets this account use the beta apps (its `/v1/me` says `user.beta`). */
-  beta?: boolean;
-  /** In the beta app, an account still.fail cloud has not let into the beta: what to say (the core's), with a way out. */
-  blocked?: string;
-  error?: ErrorBody;
-}
-
-/** Every signed-in account with its workspaces and the invitations waiting for its email. */
-export function useWorkspaces(): TopicState<AccountWorkspaces[]> {
-  return useTopic<AccountWorkspaces[]>({ topic: "workspaces" });
-}
-
-/** One workspace, read as whichever signed-in account belongs to it. */
-export function useWorkspace(id: string): TopicState<WorkspaceView> {
-  return useTopic<WorkspaceView>({ topic: "workspace", workspace: id });
-}
-
 /** Has the core do `name` (client/core-ts/src/ops.ts) on still.fail cloud as the account `sub`, with `params`. */
 const operations = (account: string) => bindCloudOperations((name, params) => core().call(name, { ...params, account }));
-
-export interface LoginSession { id: string; name: string; created_at: number; expires_at: number; current: boolean }
 
 export const cloud = {
   /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
@@ -119,9 +92,6 @@ const INVITE_ERRORS = (): Record<string, string> => ({
 });
 
 const codeOf = (error: Error | null) => (error as { code?: string } | null)?.code ?? "";
-
-/** Whether creating a workspace failed for want of a (good) invite code. */
-export const needsInviteCode = (error: Error | null): boolean => codeOf(error) in INVITE_ERRORS();
 
 // Its limits: what an account may create, and how many a workspace holds.
 const LIMIT_ERRORS = (): Record<string, string> => ({

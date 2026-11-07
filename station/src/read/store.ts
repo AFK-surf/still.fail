@@ -887,13 +887,12 @@ export function archiveVerdict(s: Store, thread: number): Json | null {
 // ── chats shared with other workspaces (chat_shares) ──
 
 // What a sidebar's items a change touched, or a chat, are read by: theirs alone, each by its key (`?`: a JSON list of
-// them). The rows of every chat ever shared, opened or published were read at each sidebar change and each chat told.
+// them). The rows of every chat ever shared or opened were read at each sidebar change and each chat told.
 export const SHARES_OF = "SELECT * FROM chat_shares WHERE session IN (SELECT value FROM json_each(?))";
 const OPENERS = "SELECT o.child, o.parent_station, o.parent, o.opener_title, p.title AS parent_title FROM opened_chats o LEFT JOIN sessions p ON o.parent_station = '' AND p.key = o.parent";
 export const OPENERS_OF = `${OPENERS} WHERE o.child_station = '' AND o.child IN (SELECT value FROM json_each(?))`;
 const OPENED = "SELECT o.parent, o.child_station, o.child, o.title, c.title AS child_title FROM opened_chats o LEFT JOIN sessions c ON o.child_station = '' AND c.key = o.child";
 export const OPENED_OF = `${OPENED} WHERE o.parent_station = '' AND o.parent IN (SELECT value FROM json_each(?)) ORDER BY o.created_at, o.rowid`;
-export const PUBLISHED_OF = "SELECT * FROM published WHERE thread IN (SELECT value FROM json_each(?)) ORDER BY created_at DESC, id";
 
 /// What each chat shared with other workspaces is shared with now (its shares not lapsed, store/rows.ts), by the
 /// session key its link names (none on a database from before the table): of those `sessions` name alone (a sidebar's
@@ -950,26 +949,6 @@ export function openedChats(s: Store, parents: string[] | null = null): Map<stri
     const list = out.get(r.parent) ?? [];
     list.push({ station: r.child_station === "" ? null : (r.child_station as string), session: r.child as string, title: (r.title ?? r.child_title ?? null) as string | null });
     out.set(r.parent, list);
-  }
-  return out;
-}
-
-// ── chats published as snapshots (published) ──
-
-/// Each chat's published snapshots, the latest first, by thread (none on a database from before the table): of those
-/// `threads` name alone (a chat), or of all.
-export function publishedByThread(s: Store, threads: number[] | null = null): Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]> {
-  let rows: Json[];
-  try {
-    rows = threads === null ? all(s, "SELECT * FROM published ORDER BY created_at DESC, id") : all(s, PUBLISHED_OF, JSON.stringify(threads));
-  } catch {
-    return new Map();
-  }
-  const out = new Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]>();
-  for (const r of rows) {
-    const list = out.get(r.thread) ?? [];
-    list.push({ id: r.id, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size });
-    out.set(r.thread, list);
   }
   return out;
 }

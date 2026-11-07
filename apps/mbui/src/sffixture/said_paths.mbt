@@ -245,7 +245,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "xshare.text",
     "xshare.to.*.name",
     "xshare.places.*.name",
-    "publish.links.*.byName",
     "opener.title",
     "opener.note",
     "opener.text",

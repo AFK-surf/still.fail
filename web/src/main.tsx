@@ -1,30 +1,18 @@
-import "./renamed.ts";
-import "./styles/index.ts";
-import "./viewer/whole.ts";
-import { followAppearance } from "./theme.ts";
-import { followFonts } from "./fonts.ts";
-import { startScrollbars } from "./scrollbars.ts";
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { I18nRoot } from "./i18n.ts";
-import "@fontsource-variable/inter";
-import { CloudApp } from "./cloud/CloudApp.tsx";
+// still.fail's web pages of their own, apart from the app (index.html, mbui's): each light, none loading the app.
+// Signing in (/login, /auth/callback: login/, no core) and, on the core but not the app, Slack sending back an app a
+// station made (/slack/installed) and a station's web service on a page of its own (/w/…/s/…/services/…). Any other
+// page is the app's (cloud/src/web.ts WEB_PAGES).
+import "./styles/global.css.ts";
 import { nameTitle } from "./cloud/beta.tsx";
-import { startTelemetry } from "./telemetry.ts";
-import { followPageLoads } from "./reloads.ts";
+import { isSignIn, show } from "./login/page.tsx";
 
-import { webUpdates } from "./core/webUpdates.ts";
-
-if (import.meta.env.PROD) webUpdates.start();
-// In development, what is off (a corner, a small panel's padding) outlined in red as it shows (dev/offs.ts).
-if (import.meta.env.DEV) void import("./dev/offs.ts").then((m) => m.watchOffs());
-followAppearance();
-followFonts();
-startScrollbars();
-
-// still.fail cloud's web app (sign-in, workspaces; stations over iroh). The data comes from the client core (core/); a
-// station serves no page of its own.
-startTelemetry("cloud");
-followPageLoads();
 nameTitle();
-createRoot(document.getElementById("app")!).render(<StrictMode><I18nRoot><CloudApp /></I18nRoot></StrictMode>);
+
+const root = document.getElementById("app")!;
+const path = location.pathname.replace(/\/+$/, "");
+const service = /^\/w\/([^/]+)\/s\/([^/]+)\/services\/([^/]+)$/.exec(path);
+
+if (isSignIn(path)) show(root, path);
+else if (path === "/slack/installed") void import("./pages/slack.tsx").then((m) => m.show(root));
+else if (service) void import("./pages/service.tsx").then((m) => m.show(root, `${decodeURIComponent(service[1]!)}/${decodeURIComponent(service[2]!)}`, decodeURIComponent(service[3]!)));
+else location.replace("/");

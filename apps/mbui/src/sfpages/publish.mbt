@@ -15,8 +15,7 @@
 // view, which no shot holds, so before the picture is taken each is brought into sight and grabbed (publish_walk), its
 // grab drawn in its place; one that cannot be (a browser's frame grabs nothing, a page that did not draw) is its card, as
 // are those left out on the page. Which files an agent's words place, and those words as Markdown, are the core's (the
-// list's `placed`, `md`). The frames draw it over their pages (publish_layer). (A link once made of a chat,
-// docs/public-share.md, is made no more; those made still open, and its info lists them.)
+// list's `placed`, `md`). The frames draw it over their pages (publish_layer).
 
 ///|
 /// The sharing as it stands: the chat it is of and its thread (None: closed), the preview as read (0 being read, 1

@@ -168,9 +168,6 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
   // What models can do and cost, for stations (models.ts): models.dev's, as still.fail reads it. No secret.
   if (path === "/v1/models" && method === "GET") return serveModels(request);
-  // still.fail's relays, for anyone: the page that shows a published chat (share.still.fail, src/share.ts) reaches the
-  // station through them, signed in to nothing (docs/public-share.md). From any page: what it says is no secret.
-  if (path === "/v1/relays" && method === "GET") return reply({ relay_urls: relayUrls(env) }, 200, { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
   // What still.fail/status shows (status.ts).
   if (path === "/v1/status" && method === "GET") return serveStatus(env);
   if (path === "/v1/status/incidents" && method === "POST") return receiveIncidents(request, env);

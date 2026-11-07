@@ -126,8 +126,6 @@ export type Call =
   | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
   /// A chat made public (views/publish.ts): what a snapshot would hold, one kept, one revoked.
   | { kind: "chatPublishPreview"; station: string; thread: number; turn: number | null }
-  | { kind: "chatPublish"; station: string; thread: number; upto: number; files: string[] }
-  | { kind: "chatUnpublish"; station: string; thread: number | null; id: string }
   | { kind: "chatRefsKeep"; links: [string, string][] }
   | { kind: "choose"; name: string; params: Record<string, unknown> }
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
@@ -250,8 +248,6 @@ export function counts(call: Call, name: string): boolean {
     case "chatXshare":
     case "chatXshareAdd":
     case "stationJoin":
-    case "chatPublish":
-    case "chatUnpublish":
     case "chatRetry":
     case "chatRetryIn":
     case "chatDiscard":
@@ -731,23 +727,6 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["turn", "u64", "opt"],
       ]);
       return { kind: "chatPublishPreview", station: p.station as string, thread: p.thread as number, turn: p.turn as number | null };
-    }
-    case "chat.publish": {
-      const p = read(params, [
-        ["station", S, "req"],
-        ["thread", "u64", "req"],
-        ["upto", "u64", "req"],
-        ["files", "strings", "default"],
-      ]);
-      return { kind: "chatPublish", station: p.station as string, thread: p.thread as number, upto: p.upto as number, files: [...new Set(p.files as string[])] };
-    }
-    case "chat.unpublish": {
-      const p = read(params, [
-        ["station", S, "req"],
-        ["thread", "u64", "opt"],
-        ["id", S, "req"],
-      ]);
-      return { kind: "chatUnpublish", station: p.station as string, thread: p.thread as number | null, id: p.id as string };
     }
     case "chat.refs":
       return { kind: "chatRefsKeep", links: read(params, [["links", "pairs", "req"]]).links as [string, string][] };

@@ -12,6 +12,7 @@
 //   entry; alone, over the chat the link is in.
 // - `invite` (/invite#<token>): what the invitation leads to, before it is accepted, as the frame shows it.
 // - `screen` (/w/…/s/…/screen/<id>): the station's screen in the viewer (open_screen).
+// - `service` (/w/…/s/…/services/<job>): a station's web service on its own, over the page open.
 //
 // A link the system opened the app with (@hostapi.system_channel `link`: one of the app's links tapped in another app,
 // the manifest's App Links) opens as from outside, once signed in and the workspaces known. What is over the pages,
@@ -244,6 +245,25 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
         @settings.mark_login(address, t.login)
       }
       open_page(Setting(route))
+    }
+    // a station's web service on a page of its own (its "open on its own", /w/…/s/…/services/<job>): the service over
+    // whatever page is open, its workspace's Home under it when it is another workspace's or from outside
+    "service" => {
+      if t.service == "" || t.station == "" {
+        return false
+      }
+      let away = ws != current
+      if away {
+        pick_workspace(src, ws)
+      }
+      (shell.val.close_overlays)()
+      if outside || away {
+        (shell.val.home)()
+        if app.nav.top() != Home {
+          app.nav.replace(Home)
+        }
+      }
+      open_page(Service(address, t.service))
     }
     // one of a station's screens, as its agent asks a person to take over (docs/remote-screens.md): the viewer over
     // whatever page is open (back comes back to it)

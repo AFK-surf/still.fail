@@ -417,13 +417,6 @@ export function toOpened(r: Json): Opened {
   };
 }
 
-/// A chat published as a snapshot (docs/public-share.md): its link's id and key, by whom and when, up to which message.
-export type Published = { id: string; thread: number; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number };
-
-export function toPublished(r: Json): Published {
-  return { id: r.id, thread: r.thread, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size };
-}
-
 /// How long a chat stays shared with a workspace whose agents neither read it nor write to it (docs/chat-share.md):
 /// after that a person must share it again.
 export const XSHARE_IDLE_MS = 6 * 60 * 60_000;

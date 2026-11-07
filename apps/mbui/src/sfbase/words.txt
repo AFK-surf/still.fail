@@ -1834,10 +1834,6 @@ web-pages.chat.publish.leaveOut
 web-pages.chat.publish.message
 web-pages.chat.publish.putBack
 web-pages.chat.publish.reading
-web-pages.chat.publish.revoke
-web-pages.chat.publish.revokeAsk
-web-pages.chat.publish.revokeNote
-web-pages.chat.publish.revokeVerb
 web-pages.chat.resizePanel
 web-pages.chat.serviceFailed
 web-pages.chat.serviceStopped

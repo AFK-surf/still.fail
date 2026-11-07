@@ -414,8 +414,6 @@ export type ViewsEnv = {
   places?: () => xshare.Place[];
   /// A chat's sharing asked here (`chat.xshare`) and not answered yet.
   xshareAsked?: (station: string, session: string) => xshare.Asked | undefined;
-  /// A chat's snapshot being revoked here (`chat.unpublish`) and not answered yet.
-  revoking?: (station: string, id: string) => boolean;
   /// The name of the home workspace of a station a workspace joined, when the viewer is in it (memberships.ts).
   homeName?: (workspace: string, id: string) => string | null;
   /// Whether a workspace's notices are heard of on this device (`notify.set` `workspaces`); every one where not given.
@@ -463,7 +461,6 @@ export function envOf(core: Inner): ViewsEnv {
     places: () => xshare.places(core),
     resume: (topic) => core.router.resume(topic),
     xshareAsked: (station, session) => xshare.asked(core, station, session),
-    revoking: (station, id) => publish.revoking(core, station, id),
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
     vaultAnswers: (workspace, asks) => askAnswers(core, workspace, asks),
     heard: (workspace) => core.attention?.attend.heard(workspace) ?? true,
@@ -1142,8 +1139,8 @@ export class Views implements Owner {
     // Its sharing with the viewer's other workspaces, as asked here meanwhile.
     const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
     if (shared !== null) v.xshare = shared;
-    // Its public snapshots, without those being revoked here meanwhile.
-    const published = publish.shown({ me: str(get(v.me, "email")), role: typeof role === "string" ? role : null, members: arr(get(workspace, "members")), revoking: (id) => this.#core.revoking?.(station, id) === true }, station, v.thread);
+    // Whether the viewer may draw it as a picture (分享图片).
+    const published = publish.shown(typeof role === "string" ? role : null, v.thread);
     if (published !== null) v.publish = published;
     return out;
   }
