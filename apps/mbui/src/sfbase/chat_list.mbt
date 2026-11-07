@@ -389,7 +389,32 @@ fn chat_entry_tail(out : Array[Entry], v : ChatView) -> Unit {
 /// Chat `r`'s view (chat_view), its list's entries and its topic's error: worked out once for each version of it,
 /// whoever reads it in a frame (the page, its side panel, the frame round it, the chats kept: linger_tick).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
-  let (read, topic) = chat_read.read(src, chat_params(r))
+  let key = chat_inputs_key(r)
+  match chat_inputs.peek(key) {
+    Some(input) if !physical_equal(input.source, src.topic) => chat_inputs.forget(key)
+    _ => ()
+  }
+  let live = match chat_inputs.peek(key) {
+    Some(input) => input.live
+    None => Ref(true)
+  }
+  let input = chat_inputs.read(key, fn(was) {
+    if !live.val {
+      // The page has left. Tell anything still following this computation to read again, without re-subscribing as
+      // the old subscription ends; a reader still in use obtains a new input on its next read.
+      match was {
+        Some(before) => { source: before.source, read: before.read, topic: before.topic, live }
+        None => abort("a chat input was left before it was read")
+      }
+    } else {
+      let (read, topic) = chat_read.read(src, chat_params(r))
+      { source: src.topic, read, topic, live }
+    }
+  }, same=fn(a, b) {
+    b.live.val && physical_equal(a, b)
+  })
+  let read = input.read
+  let topic = input.topic
   match (read, topic.value, fresh_view(r)) {
     // (the chat a new chat became is never said to be empty: its first message is in it from the frame it was sent,
     // sent_local, while the core has it made and not yet sent to)
@@ -401,6 +426,37 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
     (_, _, Some((v, list))) => (Some(v), list, None)
     _ => (None, [], topic.error)
   }
+}
+
+///|
+/// The topic and its derived messages are shared by reads of a chat until the topic changes. A different source gets
+/// its own reading. The fresh view is still read by each caller above: its full ChatRef can differ for the same topic.
+// kept across runs: the Kept is registered on first use and its stored inputs are cleared by kept_reset (derived.mbt)
+let chat_inputs : Kept[ChatInput] = Kept::new()
+
+///|
+priv struct ChatInput {
+  source : (String, Map[String, Json]) -> Topic
+  read : ChatRead?
+  topic : Topic
+  live : Ref[Bool]
+}
+
+///|
+/// A distinct key for each pair, without relying on a separator being absent from a station or session.
+fn chat_inputs_key(r : ChatRef) -> String {
+  r.station.length().to_string() + ":" + r.station + r.session
+}
+
+///|
+/// Let the computed go before the core's chat topic is left, so an ending topic cannot cause it to subscribe again.
+pub fn chat_inputs_left(r : ChatRef) -> Unit {
+  let key = chat_inputs_key(r)
+  match chat_inputs.peek(key) {
+    Some(input) => input.live.val = false
+    None => ()
+  }
+  chat_inputs.forget(key)
 }
 
 ///|

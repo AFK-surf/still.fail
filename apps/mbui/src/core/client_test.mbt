@@ -37,6 +37,96 @@ test "params make another subscription" {
 }
 
 ///|
+test "subscription lookup preserves the topic sent to the core and distinguishes its parameters" {
+  let (c, sent) = recorder()
+  // A parameter named topic replaces the supplied topic in the message to the core. Both ways to ask for that
+  // message must still share one subscription, including when it is ended by the other way.
+  let overridden = c.subscribe("unused", params={ "topic": "actual", "station": "ws/一\n:1" })
+  let direct = c.subscribe("actual", params={ "station": "ws/一\n:1" })
+  assert_true(physical_equal(overridden, direct))
+  assert_eq(sent.length(), 1)
+  c.unsubscribe_topic("actual", params={ "station": "ws/一\n:1" })
+  assert_eq(sent.length(), 2)
+  let asked_again = c.subscribe("unused", params={ "topic": "actual", "station": "ws/一\n:1" })
+  assert_true(asked_again.id != overridden.id)
+  // Values of different kinds and strings that could look like concatenated key parts are separate topics.
+  let text = c.subscribe("p", params={ "v": "1" })
+  let number = c.subscribe("p", params={ "v": 1 })
+  let one = c.subscribe("p", params={ "a": "bc", "d": "e" })
+  let other = c.subscribe("p", params={ "a": "b", "cd": "e" })
+  assert_true(text.id != number.id)
+  assert_true(one.id != other.id)
+  assert_true(physical_equal(one, c.subscribe("p", params={ "a": "bc", "d": "e" })))
+}
+
+///|
+test "subscriptions share exactly when their outgoing topic JSON is the same" {
+  let (c, _) = recorder()
+  let cases : Array[(String, Map[String, Json])] = [
+    ("a", {}),
+    ("unused", { "topic": "a" }),
+    ("a", { "x": "一\n:1" }),
+    ("unused", { "x": "一\n:1", "topic": "a" }),
+    ("a", { "x": "1" }),
+    ("a", { "x": 1 }),
+    ("a", { "x": null }),
+    ("a", { "topic": 1, "x": "1" }),
+    ("b", { "topic": 1, "x": "1" }),
+    ("a", { "x": "bc", "y": "d" }),
+    ("a", { "x": "b", "cy": "d" }),
+    ("a", { "x": "b", "y": "cd" }),
+    ("a", { "x": { "inner": [1, true, null] } }),
+    ("a", { "x": { "inner": [1, true, null] } }),
+    ("a", { "x": "inner", "y": "value" }),
+    ("a", { "y": "value", "x": "inner" }),
+    ("unused", { "topic": "z", "x": "1", "y": "2" }),
+    ("other", { "x": "1", "topic": "z", "y": "2" }),
+    ("z", { "x": "1", "y": "2" }),
+    ("z", { "y": "2", "x": "1" }),
+  ]
+  let seen : Array[(String, Int, String, Map[String, Json])] = []
+  for (topic, params) in cases {
+    let sent : Map[String, Json] = { "topic": Json::string(topic) }
+    for k, v in params { sent[k] = v }
+    let outgoing = Json::object(sent).stringify()
+    let sub = c.subscribe(topic, params~)
+    for (previous, id, previous_topic, previous_params) in seen {
+      assert_true(
+        (outgoing == previous) == (sub.id == id),
+        msg="the same outgoing topic must find the same subscription: \{outgoing} / \{previous}",
+      )
+      let (other, sent) = recorder()
+      let old_sub = other.subscribe(previous_topic, params=previous_params)
+      other.unsubscribe_topic(topic, params~)
+      assert_true(
+        (sent.length() == 2) == (outgoing == previous),
+        msg="unsubscribe must find exactly the outgoing topic: \{outgoing} / \{previous}",
+      )
+      let again = other.subscribe(previous_topic, params=previous_params)
+      assert_true(physical_equal(old_sub, again) == (outgoing != previous))
+    }
+    seen.push((outgoing, sub.id, topic, params))
+  }
+}
+
+///|
+test "a subscription with an overridden topic survives restart and is forgotten by reset" {
+  let (c, sent) = recorder()
+  let params : Map[String, Json] = { "station": "ws/a", "topic": "chat", "session": "s/a" }
+  let first = c.subscribe("unused", params~)
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 1)
+  assert_true(physical_equal(first, c.subscribe("unused", params~)))
+  c.reset()
+  let after_reset = c.subscribe("unused", params~)
+  assert_true(!physical_equal(first, after_reset))
+  assert_eq(after_reset.id, 1)
+  c.unsubscribe_topic("unused", params~)
+  assert_true(!physical_equal(after_reset, c.subscribe("unused", params~)))
+}
+
+///|
 test "a call's answer goes to its on_done" {
   let (c, sent) = recorder()
   let got : Array[String] = []
