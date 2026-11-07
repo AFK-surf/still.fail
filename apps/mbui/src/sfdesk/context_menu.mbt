@@ -69,28 +69,6 @@ fn context_reset() -> Unit {
 }
 
 ///|
-/// A link in a message right clicked (what its words' rich text tells as held): its menu at the pointer, with what is
-/// picked.
-pub fn context_link(c : @ui.Ctx, href : String) -> Unit {
-  let (x, y, _) = c.pointer()
-  // (in an image's link too: the image's said with it)
-  let image = if context.frame == c.frame_number() { context.image } else { "" }
-  context_asked(c, x, y, link=href, image~)
-}
-
-///|
-/// An image in a message right clicked (box `id`, its picture from `src`): its menu at the pointer.
-pub fn context_image(c : @ui.Ctx, id : Int, src : String) -> Unit {
-  match c.right_clicked(id) {
-    Some((x, y)) if src != "" && src != "!" => {
-      let link = if context.frame == c.frame_number() { context.link } else { "" }
-      context_asked(c, x, y, link~, image=src)
-    }
-    _ => ()
-  }
-}
-
-///|
 fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? : String = "") -> Unit {
   context.open = true
   context.x = x

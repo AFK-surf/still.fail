@@ -137,12 +137,6 @@ fn md_node_blocks(text : String, tree : Json?) -> Array[MdBlock] {
 }
 
 ///|
-/// Whether `text`'s blocks are 正在排版's (md_node_blocks): its words in the subtle tone.
-fn md_node_laying(text : String, tree : Json?) -> Bool {
-  text != "" && tree is None && markdown_read.val is Some(_) && !core_parsed.contains(text) && !md_held.contains(text)
-}
-
-///|
 /// Blocks (`blocks`, as they change) in `col`, one under another (stack's): each as far under the one before as the
 /// larger of the margins between them (Md::piece's), the first's top and the last's foot the column's own; `tight`: a
 /// tight list's item's (its paragraphs keep no margin of their own). Each by its place among them, made again where its

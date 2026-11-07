@@ -188,18 +188,6 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
 }
 
 ///|
-/// Whether a small screen's home's top bar has its key (transfers_key): what comes.
-pub fn transfers_key_shown(src : Source, ws : String) -> Bool {
-  transfers_shown(src, ws)
-}
-
-///|
-/// Whether there is anything that comes and goes (the sidebar's foot, a small screen's home show it then).
-pub fn transfers_shown(src : Source, ws : String) -> Bool {
-  !coming(src, ws).none()
-}
-
-///|
 /// The list open over the sidebar's foot (a fixture's: MBUI_FIXTURE=home-transfers).
 pub fn open_transfers() -> Unit {
   ftransfers.open.set(true)

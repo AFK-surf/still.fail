@@ -47,18 +47,6 @@ using @sfpages {
 }
 
 ///|
-/// What the option chosen above it does (chat.css.ts appearanceHint: 8 under it, the meta's 12 muted, 52em at most).
-fn desk_hint(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=desk_hint_box, fn() { c.text(words, style=desk_hint_words) |> ignore }) |> ignore
-}
-
-///|
-/// A choice of a few (Segmented) as wide as its options, at the column's start.
-fn desk_choice(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=desk_choice_row, fn() { body() }) |> ignore
-}
-
-///|
 // kept across runs: a value (no field of it changes)
 let desk_choice_row : @ui.Style = @ui.css("row w=Full")
 

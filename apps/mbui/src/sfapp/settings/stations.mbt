@@ -384,45 +384,6 @@ fn dial_figure(c : @ui.Ctx, big : String, unit : String, color : Int64) -> Unit 
 }
 
 ///|
-/// A machine's CPU, memory and disk on its page (Parts.kt MeterDials): each what is left large over ten cells (lit as
-/// far as is used), what it is and what it is out of; three sharing the width.
-fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
-    for m in meters {
-      let v = Some(m)
-      let level = text(v, "level")
-      let tone = @sf.level_color(level)
-      let low = level == "amber" || level == "red"
-      let lit = ((100 - clamp(count(v, "left"))).to_double() / 10.0 + 0.5).floor().to_int()
-      c.box(w=Fill(1.0), gap=2.0, fn() {
-        dial_figure(c, text(v, "big"), text(v, "unit"), if low { tone } else { t.p.text })
-        c.box(dir=Row, pt=4.0, pb=6.0, gap=2.0, fn() {
-          for i in 0..<10 {
-            c.box(w=Px(7.0), h=Px(14.0), radius=2.0, bg=if i < lit { tone } else { t.p.line }, fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-        c.text(text(v, "title"), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
-        c.text(
-          match text(v, "total") {
-            "" => " "
-            x => x
-          },
-          size=t.t.caption,
-          color=t.p.muted,
-          wrap=false,
-          line=17.0,
-        )
-        |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// What is left of it large, 4 down.
 // kept across runs: a value (no field of it changes)
 let figures_dials : @ui.Style = @ui.css("w=Full")

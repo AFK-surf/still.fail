@@ -32,17 +32,6 @@ let link_menu : LinkMenu = {
 }
 
 ///|
-/// What a message's words give their rich text for a link held by a finger, or right clicked: its menu opened there.
-fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)) -> Unit {
-  // under the piece of line: where the finger held it; right clicked (a mouse, whose press is not the click's), its
-  // middle
-  let press = c.press()
-  let x = @sf.menu_along(c, line.0 + line.2 / 2.0)
-  link_menu_at(href, x, line.1, line.1 + line.3)
-  link_menu.at = press.frame
-}
-
-///|
 /// The link's menu, open it or copy it, centred on `x` under (or over) the line from `top` to `bottom`.
 fn link_menu_at(href : String, x : Double, top : Double, bottom : Double) -> Unit {
   link_menu.href = href

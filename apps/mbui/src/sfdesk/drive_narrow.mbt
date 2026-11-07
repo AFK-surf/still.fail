@@ -45,12 +45,6 @@ fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) 
 }
 
 ///|
-/// A round button of the bar (NavButton): 34 across, its icon 18 (`size`), what it is said to be.
-fn narrow_bar_button(c : @ui.Ctx, key : String, icon : String, label : String, size? : Double = narrow_bar_icon) -> Bool {
-  @sf.icon_button(c, icon, key~, size=narrow_bar_button_w, icon_size=size, round=true, label~)
-}
-
-///|
 /// The crumbs (mCrumbs): 20 in, a crumb 4 round, the way's muted, where it is in the words' colour, the chevrons
 /// subtle.
 fn narrow_way() -> @sf.WayLook {
@@ -311,23 +305,3 @@ let narrow_trouble : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, weigh
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_trouble_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, w=Full)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

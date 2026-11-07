@@ -3,14 +3,6 @@
 // Sheet.kt's frame).
 
 ///|
-/// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
-fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
-  if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title, top=status_top()) {
-    @sfbase.go_back() |> ignore
-  }
-}
-
-///|
 /// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
 /// caller's (the workspace in use: the chips' grey).
 // kept across runs: a value (no field of it changes)
@@ -26,12 +18,6 @@ let menu_row : Double = 14.0
 
 ///|
 let menu_words_in : Double = 16.0
-
-///|
-/// A phone menu's height of `n` rows of 45 (MenuHost's menuHeight: 45 a row, its padding over and under).
-fn menu_height(n : Int) -> Double {
-  45.0 * n.to_double() + menu_pad * 2.0
-}
 
 ///|
 /// A phone menu's panel (Sheet.kt MenuHost) at (`tx`, `ty`): 180 wide, the surface, the menu's shadow, its rows
@@ -97,13 +83,4 @@ fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
   if !s.entry.disabled {
     @motion.ripple(c, s.id, menu_row)
   }
-}
-
-///|
-fn sheet_label(c : @ui.Ctx, label : String) -> Unit {
-  let t = @sf.theme()
-  c.box(pl=20.0, pr=20.0, pt=6.0, pb=2.0, fn() {
-    c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-  })
-  |> ignore
 }

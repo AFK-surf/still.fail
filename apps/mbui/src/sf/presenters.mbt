@@ -498,15 +498,6 @@ pub fn panel_back(to? : Int) -> Bool {
 }
 
 ///|
-/// How many steps in the panel that goes in steps being drawn is (1: its own, the first); 0 in none.
-pub fn panel_depth() -> Int {
-  match stepping() {
-    Some({ steps: Some(nav), .. }) => nav.depth()
-    _ => 0
-  }
-}
-
-///|
 /// The panel that goes in steps a step is told to (panel_go, panel_back): the one whose step is being drawn, or the
 /// topmost open one that goes in steps (what was pressed in it told between frames).
 fn stepping() -> Presented? {
@@ -959,26 +950,6 @@ pub fn panel_card_out() -> @ui.Style {
     return no_card_out
   }
   @ui.style(mx=room(panel_card_in - panel_sides_in.val))
-}
-
-///|
-/// What a page lays out itself in a panel's body that clips or scrolls what it holds, where that holds cards: out
-/// at the cards' line as a card is (panel_card_out), so what clips them is no nearer the panel's sides than they are;
-/// in it the panel's sides that near (its cards at its sides) and its words' line as far in as before (as a list's room
-/// is: panel_list). `style` its own (a clip, its height).
-pub fn panel_card_room(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Int {
-  let out = panel_card_out()
-  if physical_equal(out, no_card_out) {
-    return c.box(style~, body)
-  }
-  let (sides, words) = (panel_sides_in.val, words_in_now.val)
-  c.box(style=style.then(out), fn() {
-    panel_sides_in.val = panel_card_in
-    words_in_now.val = words + (sides - panel_card_in)
-    body()
-    panel_sides_in.val = sides
-    words_in_now.val = words
-  })
 }
 
 ///|

@@ -961,20 +961,6 @@ pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, ground? : I
 }
 
 ///|
-/// The words of a card: a title, what it says.
-pub fn card_text(c : @ui.Ctx, title : String, line? : String = "") -> Unit {
-  let t = theme()
-  c.box(gap=4.0, fn() {
-    c.text(title, size=t.t.title, weight=600, color=t.p.text, line=t.t.title_line)
-    |> ignore
-    if line != "" {
-      c.text(line, size=t.t.ui, color=t.p.muted, line=t.t.ui_line) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// A setting along a hairline with a knob (Reader.css.ts slider): mbui's slider (@kit.slider) in still.fail's look, the
 /// line 2 high on 16% of the ink, the part up to the knob in the accent, the knob 22 with a ring of the ground round
 /// it; dragged or tapped along, and with the keyboard. Returns the value, snapped to `step` (0: none).
@@ -1015,13 +1001,6 @@ let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 ///|
 // kept across runs: a value (no field of it changes)
 let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
-
-///|
-/// What a sheet holds (`body`), laid out as a sheet is on any screen: narrow, as the presenters lay theirs out (its
-/// parts read it: look).
-pub fn sheet_laid(body : () -> Unit) -> Unit {
-  with_look(Narrow, body)
-}
 
 ///|
 /// How tall a sheet's grabber stands at its top, all round it (sheet_grab: 8 and 4 over its 5, 4 and 4 under): where

@@ -5,14 +5,5 @@
 // its end, the way to the newest, telling the core what shows) is the same page's.
 
 ///|
-/// What the composer's column holds, in the pane's middle (the column and the capsule's curve each side, 804 wide at
-/// most, 12 from the pane's sides: dock.css.ts), in the wide frame; as it is elsewhere.
-fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  ignore(c)
-  body()
-}
-
-///|
 /// The message the chat's window was last moved about for what ⌘F found (`chat.around`, once each).
 let find_around : Ref[Double] = Ref(-1.0)
-

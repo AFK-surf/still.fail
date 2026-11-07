@@ -996,19 +996,6 @@ let cd_bullet : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wr
 let cd_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
 
 ///|
-/// A card with its buttons last (cd_foot_actions): its foot as far in as makes them concentric with its corners
-/// (@sf.card_foot_in).
-fn cd_footed_card() -> @ui.Style {
-  @sf.desk_card.then(@sf.foot_pad(@sf.button_height()))
-}
-
-///|
-/// A cd_footed_card's buttons at its end, reaching past its words to its foot corner's.
-fn cd_foot_actions() -> @ui.Style {
-  cd_card_actions.then(@sf.foot_across(@sf.button_height()))
-}
-
-///|
 /// How it runs (Connect.css.ts runCard: a card, its rows 14 apart; runCardRow: 14 apart, at their tops; runCardLabel:
 /// 36 wide, 2 down, the ui's 13 muted; runCardText: as wide as is left, 2 apart, the ui's 13; the feishu app's labels
 /// 84 wide; controls.css.ts cardFoot: the meta's 12 muted).

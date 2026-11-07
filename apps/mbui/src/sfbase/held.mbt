@@ -61,15 +61,6 @@ pub fn let_go(src : Source, scope : String) -> Unit {
 }
 
 ///|
-/// Every scope whose name starts with `prefix`, let go of.
-pub fn let_go_all(src : Source, prefix : String) -> Unit {
-  let scopes = held_topics.keys().filter(fn(s) { s.has_prefix(prefix) }).collect()
-  for s in scopes {
-    let_go(src, s)
-  }
-}
-
-///|
 fn held_reset() -> Unit {
   held_topics.clear()
   held_read.clear()
