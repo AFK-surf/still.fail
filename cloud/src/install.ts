@@ -85,7 +85,7 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
-  // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
+  // Its signature (scripts/release-sign.ts), which the app checks before installing it (scripts/release-sign.ts).
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
   // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
   // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
@@ -113,7 +113,7 @@ const APP_FILES: [RegExp, string][] = [
   // each machine's builds a feed of their own (x64's linux/mbui, arm64's linux-arm64/mbui)
   [/^linux(-arm64)?\/mbui\/latest\.json$/, "application/json"],
   [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz$/, "application/gzip"],
-  // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
+  // The faces the apps offer beside the system's (scripts/fonts.py): a page's stylesheet and its woff2
   // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9-]+\.woff2$/, "font/woff2"],

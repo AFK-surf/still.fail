@@ -1,4 +1,8 @@
 name: mbui TestFlight (manual)
+# Its environment `ios-testflight` is held to main by a deployment rule (no tags; a second person's approval where set).
+# Variables: IOS_TEAM_ID, IOS_APP_GROUP, IOS_RELEASE_REVIEWED (true only once the release is reviewed). Secrets:
+# IOS_DISTRIBUTION_P12_B64 and _PASSWORD, IOS_SIGNING_SHA1, IOS_APP_PROFILE_B64, IOS_SHARE_PROFILE_B64, ASC_KEY_ID,
+# ASC_ISSUER_ID, ASC_PRIVATE_KEY_B64: credentials made for CI alone.
 # The build number in the run's name: the next dispatch takes one above every number any run was given, failed ones too.
 run-name: mbui TestFlight ${{ inputs.version }} (${{ inputs.build }})
 on:

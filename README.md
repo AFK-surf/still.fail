@@ -76,7 +76,7 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | `apps/mbui/` | The apps (Android, iOS, macOS, Windows, Linux), written in mbui (`apps/mbui/mbui`) |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |
 | `docs/` | Development and operation notes; release notes in `docs/releases/` |
-| `test/`, `spike/` | Integration and browser tests; experiments that verified runtime assumptions |
+| `test/` | Integration and browser tests |
 | `vendor/` | Patched third-party Rust crates |
 
 ## Documentation

@@ -37,7 +37,7 @@ case "${1:-} ${2:-}" in
   "update "*)
     # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than
     # this one) and installed by the installer this release carries, told what it must hash to
-    # (docs/release-signing.md). Not the cloud's installer: whoever serves it could put anything here.
+    # (scripts/release-sign.ts). Not the cloud's installer: whoever serves it could put anything here.
     node=${STILLFAIL_NODE:-$here/node/bin/node}
     [ -x "$node" ] && [ -f "$here/station/main.js" ] || { echo "stillfail update: $here is not an installed release (no node/bin/node or station/main.js)" >&2; exit 1; }
     case "${2:-}" in --beta|--stable|"") ;; *) echo "usage: stillfail update [--beta|--stable]" >&2; exit 2 ;; esac

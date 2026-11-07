@@ -1,4 +1,4 @@
-// The changelog people read in the apps (docs/changelog.md), from main's history: each commit's `Changelog:` trailers
+// The changelog people read in the apps, from main's history: each commit's `Changelog:` trailers
 // (a line for people, in Chinese) and `Fixes: FB-<n>` (the bug reports it fixes), with the version it came in (the
 // commits up to it: 0.1.<n>, as every part numbers its builds) and the parts people see it in, as its agent says
 // (`Changelog-parts:`; one from before that did not, by the files it changed: partsOf). docs/changelog-notes.json adds
@@ -6,11 +6,14 @@
 // [...] } }.
 // That is the test channel's. The stable channel's is written once a release, for people who skip the steps between:
 // docs/releases/0.1.<n>.md, which an agent drafts from the test channel's entries since the last one (--draft) and a
-// person reads before the release goes out (docs/changelog.md).
+// person reads before the release goes out (scripts/changelog.ts).
 //   node scripts/changelog.ts [rev]           the test channel's entries as JSON, newest first (CI: changelog.json)
 //   node scripts/changelog.ts --stable        the stable channel's, one entry a release (CI: changelog-stable.json)
 //   node scripts/changelog.ts --draft [rev]   what the next release's notes are written from: the test channel's
 //                                             entries since the last release's, oldest first, as text
+// A stable release's notes are written, not generated: docs/releases/0.1.<n>.md (front matter: version, date, parts;
+// 新功能 / 改进 / 修复), rewritten from `--draft`'s lines since the last stable, shown to a person in the chat and merged
+// with the release; `--stable` joins them for the stable channel, and check.sh reads them as CI does.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -256,7 +259,7 @@ if (import.meta.main) {
     const arg = rev!;
     const messages = existsSync(arg) ? [["this commit", readFileSync(arg, "utf8")]]
       : execFileSync("git", ["log", "--format=%h%x1f%B%x1e", arg], { cwd: root, encoding: "utf8" }).split("\x1e").map((r) => r.trim()).filter(Boolean).map((r) => r.split("\x1f"));
-    const refusals = messages.flatMap(([commit, m]) => refused(m!).map((why) => `${commit}: ${why} (docs/changelog.md)`));
+    const refusals = messages.flatMap(([commit, m]) => refused(m!).map((why) => `${commit}: ${why} (scripts/changelog.ts)`));
     for (const why of refusals) console.error(why);
     process.exit(refusals.length ? 1 : 0);
   }

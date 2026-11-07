@@ -1,4 +1,4 @@
-// Signed releases (docs/release-signing.md): what verifies and what does not, the release signed by
+// Signed releases (scripts/release-sign.ts): what verifies and what does not, the release signed by
 // scripts/release-sign.ts as CI signs it, and `stillfail-station update` saying what to run.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";

@@ -1,4 +1,4 @@
-// A build of the Windows app that its updater takes only once its words verify (docs/release-signing.md), as the
+// A build of the Windows app that its updater takes only once its words verify (scripts/release-sign.ts), as the
 // Electron app it took the place of took its installer: the feed's release carries the installer's .sig (`signed`, scripts/release-sign.ts file --kind
 // stillfail-desktop-win), whose words say its version and build, its file, its SHA-256 and size; signed by one of the
 // release keys (station/src/updates/keys.ts; or one the app's environment adds, STILLFAIL_RELEASE_KEYS, as the station's

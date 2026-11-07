@@ -593,7 +593,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # its .sig, which the feed carries (the app takes a build only as it says it: docs/release-signing.md)
+          # its .sig, which the feed carries (the app takes a build only as it says it: scripts/release-sign.ts)
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           MBUI_CACHE: ${{ runner.temp }}/mbui-release
         run: |

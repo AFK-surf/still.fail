@@ -58,7 +58,7 @@ pub fn Mover::new() -> Mover {
 
 ///|
 /// What it moves is `what` (an Anim and its key, a Value), told at `loc` (the app's place that set it going): what the
-/// performance record says read the clock as it goes (docs/perf-record.md), never what moves. Said as it sets out, after
+/// performance record says read the clock as it goes (hostapi perf_state), never what moves. Said as it sets out, after
 /// Ctx::moving (which says its own `what`, with where to).
 pub fn Mover::told_as(self : Mover, what : String, loc : SourceLoc) -> Unit {
   self.what = what

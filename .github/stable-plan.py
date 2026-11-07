@@ -13,7 +13,7 @@ def output(*args):
 def plan(revision=''):
     entries = json.loads(output('node', 'scripts/changelog.ts', '--stable'))
     if not entries:
-        raise SystemExit('Write and review the stable release notes first (docs/changelog.md).')
+        raise SystemExit('Write and review the stable release notes first (scripts/changelog.ts).')
     if revision:
         if not re.fullmatch(r'[0-9a-f]{40}', revision):
             raise SystemExit('revision must be a full commit SHA.')

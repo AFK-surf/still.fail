@@ -1,7 +1,7 @@
 // The language the app's words are said in, as still.fail's Android app has it (data/I18n.kt): the core's (its prefs'
 // `lang`: as chosen, else as the device is, which it is told: sfcore's client.device `locale`), and until the core
 // says, the device's (MBUI_LOCALE, its host's: CoreHost.java, apple_engine.m). Chinese for a locale that is (zh…) or
-// none, else English (client/i18n/README.md).
+// none, else English.
 
 ///|
 /// What the core said ("zh", "en"; "" before it has), as it changes: what says words reads it (language, t), so what

@@ -1,5 +1,8 @@
 #!/bin/bash
 # Prepare a small, self-contained remote job. Source and build output stay here; only the scene and native-part client go.
+# The job: run it with `bash run.sh [OUT] [DRIVE] [PREPARE]` (the MBUI_* scene settings apply; MBUI_MEDIA_KIND=film for
+# a film), here or as station_task's `dir`, returning result.* and its scene record. It fetches the renderer by its
+# source key and never builds it: a new source state needs a new job, and a version not published fails.
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 repo=$(cd "$D/../../.." && pwd)

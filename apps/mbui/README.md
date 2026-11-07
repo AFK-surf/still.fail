@@ -14,7 +14,7 @@ What knows still.fail is the rest of this directory: its component library (`src
 frames (`src/sfpages`, `src/sfdesk`, `src/sfapp`, over the model in `src/sfbase`), the core client and its engine
 hosts (`src/core`, `src/sfcore`, `src/host/*_core.*`), the apps (`src/stillfail`; `src/sffix` over made-up data,
 `src/sfkit`, `src/coredemo`), the media screens (`src/gallery`), the core's bundling (`core/`, from
-this repository's `client/core-ts`), the end-to-end flows against a local still.fail (`e2e/`, e2e/README.md), and
+this repository's `client/core-ts`), the end-to-end flows against a local still.fail (`e2e/`, scripts/e2e-local.sh), and
 the platforms' projects (`android/`, `ios/`, `windows/`, `linux/`).
 
 ## Which app is built
@@ -31,7 +31,7 @@ The same code is built as each of still.fail's apps, by its variant (`MBUI_VARIA
 `preview` is the build of every push to main, out in minutes, an app beside the released ones to try a change on
 before it is checked (https://app.still.fail/releases/latest/win-mbui, `linux-mbui`, `linux-arm64-mbui`); on Android
 and the Mac the beta is the channel for that. Its feeds and id keep the name mbui: installed preview apps update by
-them. iOS: `scripts/ios.sh` (docs/ios.md), TestFlight by hand (docs/mbui-testflight.md in the
+them. iOS: `scripts/ios.sh`, TestFlight by hand (.github/workflows/mbui-testflight.yml in the
 repository's docs).
 
 ## Building

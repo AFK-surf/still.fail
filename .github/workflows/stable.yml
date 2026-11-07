@@ -97,7 +97,7 @@ jobs:
   # The Windows app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, its installer run by an installed
   # Electron app's updater, its data and sign-in kept), as the beta's became on 2026-10-26: built as the pipeline's
   # desktop-win job builds the beta's, from main's build as preview.yml's windows job left it in the Actions cache, its
-  # installer's .sig signed (docs/release-signing.md), not code-signed.
+  # installer's .sig signed (scripts/release-sign.ts), not code-signed.
   desktop-win:
     needs: plan
     runs-on: windows-2025
@@ -282,7 +282,7 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-          # The key the release is signed with (docs/release-signing.md): none is an error.
+          # The key the release is signed with (scripts/release-sign.ts): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: sh .github/release.sh --stable station
 

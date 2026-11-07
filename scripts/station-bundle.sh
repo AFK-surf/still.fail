@@ -6,7 +6,7 @@
 # install.sh. The layout:
 #   stillfail/bin/stillfail                               (the command people and services run)
 #   stillfail/bin/install.{zh,en}.sh                      (the installer the station updates itself by, verified with
-#                                                          the release: scripts/installers.ts, docs/release-signing.md)
+#                                                          the release: scripts/installers.ts, scripts/release-sign.ts)
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path:
 #                                                          what the installer, bin/stillfail, the desktop app and
 #                                                          services run)

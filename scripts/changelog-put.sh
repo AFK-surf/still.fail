@@ -1,5 +1,5 @@
 #!/bin/sh
-# The changelog people read in the apps (docs/changelog.md), from main's history, put in the releases bucket:
+# The changelog people read in the apps (scripts/changelog.ts), from main's history, put in the releases bucket:
 # changelog.json (the test channel's, a commit an entry) and changelog-stable.json (the stable channel's, a release an
 # entry: docs/releases), which still.fail cloud serves and marks bug reports fixed by. CI runs it once what it says is
 # out (.github/workflows/pipeline.yml: put, or changelog when nothing was released). Needs the whole history.

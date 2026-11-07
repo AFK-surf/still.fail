@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 export function replies(): string[] {
   const root = join(import.meta.dirname, "..", "..", "..");
-  const files = ["docs/development.md", "docs/operations.md", "docs/release-signing.md", "apps/mbui/docs/media.md", "apps/mbui/docs/figures.md", "apps/mbui/docs/perf-record.md"];
+  const files = ["README.md", "CONTRIBUTING.md", "docs/development.md", "docs/operations.md", "apps/mbui/README.md", "apps/mbui/AGENTS.md"];
   const out: string[] = [];
   for (const f of files) {
     let text: string;

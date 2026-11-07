@@ -1,5 +1,5 @@
 // What updating the station runs, from the pages (updates.ts) and from `stillfail update` (command.ts) alike
-// (docs/release-signing.md): the channel's feed read and its release verified (signed.ts), refused when it would put an
+// (scripts/release-sign.ts): the channel's feed read and its release verified (signed.ts), refused when it would put an
 // older release back, and the installer this release carries (bin/install.<lang>.<sh|ps1>) told where the release is
 // and what it and its Node must hash to.
 import { existsSync } from "node:fs";

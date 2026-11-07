@@ -1,5 +1,5 @@
 // The device's record of what its connections do, written into the app's performance record while it is on (the iOS
-// app's 设置 › 关于 › 诊断 › 性能记录: apps/mbui/docs/perf-record.md, "Connections"), so a weak network's day says what
+// app's 设置 › 关于 › 诊断 › 性能记录: apps/mbui/hostapi perf_state, "Connections"), so a weak network's day says what
 // the core did: each dial and how far it got, what was waited for and what woke it, the cloud's socket, each way's
 // packets. Off (or a host that keeps no record), nothing is formatted: each place asks `recording()` first, one call
 // to the host, and builds its line only then. Nothing here changes what the core does.

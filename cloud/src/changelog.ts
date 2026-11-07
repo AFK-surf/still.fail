@@ -1,4 +1,4 @@
-// What changed, for people (docs/changelog.md): the changelog CI makes from main's history (scripts/changelog.ts) and
+// What changed, for people (scripts/changelog.ts): the changelog CI makes from main's history (scripts/changelog.ts) and
 // keeps in the releases bucket as changelog.json, with what each part has released on a channel, so a client can say
 // what its version has and what is still to come. Bug reports an entry fixes (`Fixes: FB-<n>`) are marked fixed with
 // it, and once the fix is out on the channel the report came on, the station that sent it is told (POST

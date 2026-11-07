@@ -1,4 +1,4 @@
-// The station's releases are signed (docs/release-signing.md): what still.fail cloud serves as releases/station.json
+// The station's releases are signed (scripts/release-sign.ts): what still.fail cloud serves as releases/station.json
 // (station-beta.json) carries, beside the version it always said, `release`: the release's own words (its build, and
 // the sha256 and size of each platform's archive and of the Node binary each runs on), and `signature`: Ed25519 over
 // those words' bytes, by the key `key` names. The cloud stores and serves them but cannot make them: a station updates

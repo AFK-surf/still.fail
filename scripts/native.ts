@@ -1,4 +1,4 @@
-// The native parts the TypeScript station and clients use, prebuilt (docs/development.md, "Native parts"): each one
+// The native parts the TypeScript station and clients use, prebuilt: each one
 // is named by a key, the hash of all that goes into it (its sources, as git has them, not its tests, and every vendored
 // crate it uses; its Cargo.lock; the Rust toolchain; the target; how it is built), and found, in this order, in
 //   1. the cache on this machine, which every worktree shares: ~/Library/Caches/stillfail-native (macOS),
@@ -1273,7 +1273,7 @@ async function main(argv: string[]) {
           gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"]);
         } catch (e) {
           if (!/release not found/i.test(String(e))) throw e;
-          throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
+          throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once`);
         }
       }
       const work = join(tmpdir(), `stillfail-native-${process.pid}`);

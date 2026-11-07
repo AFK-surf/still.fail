@@ -1,7 +1,7 @@
 // Codex driver (the Rust station's runtime/codex.rs): one shared `codex app-server` per profile, under a runner whose id comes
 // from the profile, one thread per session.
 //
-// Pinned by spikes (spike/README.md):
+// Pinned by spikes:
 // - a thread adds <1MB to its app-server, so sessions share one process;
 // - per-session settings (the MCP endpoint and token) travel in the thread/start|resume `config`, not the process
 //   environment;
