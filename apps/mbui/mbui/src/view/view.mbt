@@ -6787,11 +6787,13 @@ fn Tree::each_drawn_in_order(
     if i >= self.order.length() {
       break
     }
-    let n = self.nodes[self.order[i]]
-    let h = self.order_holder[i]
+    // (each read and written unchecked: `i` within the order (above), the order's three arrays as long as it, each
+    // node it names one of the tree's, what holds it before it in the order, the walk's room fitted to `len`)
+    let n = self.nodes.unsafe_get(self.order.unsafe_get(i))
+    let h = self.order_holder.unsafe_get(i)
     // (left out: it and all it holds, the order's run of them passed over at once)
     if n.out {
-      i = self.order_end[i]
+      i = self.order_end.unsafe_get(i)
       continue
     }
     // (where it is in what holds it, drawn as big as that is; its own scale about its point: its origin drawn in as far
@@ -6805,26 +6807,32 @@ fn Tree::each_drawn_in_order(
       ox = (ox * g).round() / g
       oy = (oy * g).round() / g
     }
-    if h < 0 {
-      wx[i] = n.lx + ox + (1.0 - n.ls) * n.lpx
-      wy[i] = n.ly + oy + (1.0 - n.ls) * n.lpy
-      wa[i] = n.la
-      ws[i] = n.ls
-      // (and were nothing grown or shrunk nor drawn off: its words set on the pixels there, then drawn off by whole
-      // pixels, as an old view's are painted where they are laid out and then moved by its look)
-      ux[i] = n.lx
-      uy[i] = n.ly
-    } else {
-      let bs = ws[h]
-      wx[i] = wx[h] + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx)
-      wy[i] = wy[h] + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy)
-      wa[i] = wa[h] * n.la
-      ws[i] = bs * n.ls
-      ux[i] = ux[h] + n.lx
-      uy[i] = uy[h] + n.ly
+    // (numbers each its own, no tuple of them made for each node)
+    let mut x = n.lx + ox + (1.0 - n.ls) * n.lpx
+    let mut y = n.ly + oy + (1.0 - n.ls) * n.lpy
+    let mut a = n.la
+    let mut s = n.ls
+    // (and were nothing grown or shrunk nor drawn off: its words set on the pixels there, then drawn off by whole
+    // pixels, as an old view's are painted where they are laid out and then moved by its look)
+    let mut lx = n.lx
+    let mut ly = n.ly
+    if h >= 0 {
+      let bs = ws.unsafe_get(h)
+      x = wx.unsafe_get(h) + bs * x
+      y = wy.unsafe_get(h) + bs * y
+      a = wa.unsafe_get(h) * a
+      s = bs * s
+      lx = ux.unsafe_get(h) + lx
+      ly = uy.unsafe_get(h) + ly
     }
+    wx.unsafe_set(i, x)
+    wy.unsafe_set(i, y)
+    wa.unsafe_set(i, a)
+    ws.unsafe_set(i, s)
+    ux.unsafe_set(i, lx)
+    uy.unsafe_set(i, ly)
     match n.content {
-      Some(c) => f(i, c, wx[i], wy[i], wa[i], ws[i], ux[i], uy[i])
+      Some(c) => f(i, c, x, y, a, s, lx, ly)
       None => ()
     }
     i = i + 1
