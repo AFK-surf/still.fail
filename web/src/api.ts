@@ -98,15 +98,6 @@ interface StationCall {
 /** How much of a file has come. */
 interface FileProgress { loaded: number; total: number | null }
 
-/** A part of a file read, as the core takes it beside a call (never base64). */
-export async function bytesOf(file: Blob): Promise<Uint8Array<ArrayBuffer>> {
-  try {
-    return new Uint8Array(await file.arrayBuffer());
-  } catch (e) {
-    throw e instanceof Error ? e : new Error(t("web-main.file.unreadable"));
-  }
-}
-
 /** A session the machine's own Claude Code or Codex kept, run in a terminal. */
 export interface MachineSession {
   runtime: RuntimeKind;

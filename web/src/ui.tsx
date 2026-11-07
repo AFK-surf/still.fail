@@ -2,8 +2,8 @@
 // a connect's kind, a time, a page's way back, the splash, page changes. The tips' keys are the app's keymap's.
 import { shortcutOf, useKeymap } from "./keymap.ts";
 import { setPrefs, usePrefs } from "./prefs.ts";
-import type { RuntimeKind, Stamp } from "./api.ts";
-import { FeishuLogo, RuntimeLogo as RuntimeMark, SlackLogo } from "@stillfail/ui/brands.tsx";
+import type { Stamp } from "./api.ts";
+import { FeishuLogo, SlackLogo } from "@stillfail/ui/brands.tsx";
 export { FeishuLogo, SlackLogo };
 import { ChevronLeft } from "@stillfail/ui/icons.tsx";
 import { setShortcuts } from "@stillfail/ui/shortcuts.ts";
@@ -19,11 +19,6 @@ setShortcuts({ keys: shortcutOf, use: useKeymap });
 /** A back link that only phones show, where an opened page hides the sidebar. */
 export function MobileBack({ to, label }: { to: string; label: string }) {
   return <Link className={css.mobileBack} to={to}><ChevronLeft {...ICON} />{label}</Link>;
-}
-
-/** A runtime's mark (brands.tsx), as the app's rows and headings place it (cloud/settings.css.ts finds it by its class). */
-export function RuntimeLogo({ runtime, size = 16 }: { runtime: RuntimeKind; size?: number }) {
-  return <RuntimeMark runtime={runtime} size={size} className={css.runtimeLogo} />;
 }
 
 /** Every relative time on the page follows one switch, kept on this device (prefs.ts): a click on any of them flips all between "3 分钟前" and the date. */

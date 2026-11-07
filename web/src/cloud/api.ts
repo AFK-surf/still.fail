@@ -3,53 +3,13 @@ import { bindCloudOperations } from "../core/operations.ts";
 // accounts. Reads are the core's `workspaces` and `workspace` topics; after a
 // write the core refetches them, so nothing here keeps a cache.
 import { useAction as useOperation } from "../action.ts";
-import type {  } from "../core/client.ts";
 import { core } from "../core/react.ts";
-import { prefs, setPrefs } from "../prefs.ts";
-import { t } from "../i18n.ts";
-import type {  } from "./accounts.ts";
 import type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WayView, WorkspaceSummary, WorkspaceView } from "../../../cloud/src/types.ts";
 
 export type { AddedView, Admission, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, UserView, WayView, WorkspaceSummary, WorkspaceView };
 
 /** Has the core do `name` (client/core-ts/src/ops.ts) on still.fail cloud as the account `sub`, with `params`. */
 const operations = (account: string) => bindCloudOperations((name, params) => core().call(name, { ...params, account }));
-
-export const cloud = {
-  /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
-  createWorkspace: (sub: string, name: string, code?: string) => operations(sub).workspaceCreate<WorkspaceView>(code ? { name, invite_code: code } : { name }),
-  renameWorkspace: (sub: string, id: string, name: string) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, name }),
-  /** Its icon and emoji together, as a station's (../stationPick.ts); "" takes either away. */
-  setWorkspaceMark: (sub: string, id: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, emoji: mark.emoji, icon: mark.icon }),
-  /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
-  setRelays: (sub: string, id: string, relays: string[]) => operations(sub).workspaceSetRelays<WorkspaceView>({ workspace: id, relays }),
-  /** One way its devices reach its stations turned on or off (cloud directory.ts setWay). */
-  setWay: (sub: string, id: string, way: string, on: boolean) => operations(sub).workspaceSetWay<WorkspaceView>({ workspace: id, way, on }),
-  deleteWorkspace: (sub: string, id: string) => operations(sub).workspaceDelete<{ ok: true }>({ workspace: id }),
-  invite: (sub: string, id: string, role: Role, email: string) =>
-    operations(sub).workspaceInvite<{ token: string; url: string; expires_at: number }>({ workspace: id, role, email }),
-  /** Adds people by email: members at once, or from their first sign-in; no invitation to accept. */
-  addMembers: (sub: string, id: string, role: Role, emails: string[]) =>
-    operations(sub).workspaceAddMembers<{ joined: string[]; added: string[]; already: string[]; view: WorkspaceView }>({ workspace: id, role, emails }),
-  removeAdded: (sub: string, id: string, email: string) => operations(sub).workspaceRemoveAdded<WorkspaceView>({ workspace: id, email }),
-  revokeInvitation: (sub: string, id: string, invitation: string) => operations(sub).workspaceRevokeInvitation<{ ok: true }>({ workspace: id, invitation }),
-  previewInvitation: (sub: string, token: string) =>
-    operations(sub).invitationPreview<{ workspace: string; name: string; role: Role; inviter: string; email: string | null }>({ token }),
-  acceptInvitationById: (sub: string, id: string) => operations(sub).invitationAccept<WorkspaceView>({ id }),
-  declineInvitation: (sub: string, id: string) => operations(sub).invitationDecline<{ ok: true }>({ id }),
-  acceptInvitation: (sub: string, token: string) => operations(sub).invitationAccept<WorkspaceView>({ token }),
-  setRole: (sub: string, id: string, member: string, role: Role) => operations(sub).workspaceSetRole<WorkspaceView>({ workspace: id, member, role }),
-  removeMember: (sub: string, id: string, member: string) => operations(sub).workspaceRemoveMember<{ ok: true }>({ workspace: id, member }),
-  enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; installWindows?: string; command: string }>({ workspace: id, name }),
-  renameStation: (sub: string, id: string, station: string, name: string) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, name }),
-  /** Its icon and emoji together (../stationPick.ts); "" takes either away. */
-  setStationMark: (sub: string, id: string, station: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, emoji: mark.emoji, icon: mark.icon }),
-  removeStation: (sub: string, id: string, station: string) => operations(sub).workspaceRemoveStation<{ ok: true }>({ workspace: id, station }),
-  /** A station of another workspace (its address there, in its home workspace) added to `workspace` as it is: the core
-   * makes the enrollment here and has the station join with it (client/core-ts/src/views/memberships.ts). */
-  joinStation: (workspace: string, station: string) => core().call("station.join", { workspace, station }) as Promise<{ joined: { workspace: string; workspaceName: string; name: string } | null }>,
-  revokeLoginSession: (sub: string, id: string) => operations(sub).loginSessionRevoke<{ ok: true }>({ id }),
-};
 
 /** The admin's console (on its own host, src/admin/); every call is a 404 for other accounts. */
 export const admin = {
@@ -82,45 +42,6 @@ export const admin = {
   /** Where a bug report stands. */
   feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => operations(sub).adminFeedbackStatus<{ ok: true }>({ id, status }),
 };
-
-// still.fail cloud's invite-code errors in words; the core passes their codes through (see CoreError).
-const INVITE_ERRORS = (): Record<string, string> => ({
-  invite_code_required: t("web-pages.errors.inviteCodeRequired"),
-  invite_code_invalid: t("web-pages.errors.inviteCodeInvalid"),
-  invite_code_used: t("web-pages.errors.inviteCodeUsed"),
-  invite_code_expired: t("web-pages.errors.inviteCodeExpired"),
-});
-
-const codeOf = (error: Error | null) => (error as { code?: string } | null)?.code ?? "";
-
-// Its limits: what an account may create, and how many a workspace holds.
-const LIMIT_ERRORS = (): Record<string, string> => ({
-  too_many_workspaces: t("web-pages.errors.tooManyWorkspaces"),
-  too_many_members: t("web-pages.errors.tooManyMembers"),
-});
-
-export const errorText = (error: Error): string => INVITE_ERRORS()[codeOf(error)] ?? LIMIT_ERRORS()[codeOf(error)] ?? error.message;
-
-/** Where a tab kept the code before the core did (moved into it the first time it is read). */
-const INVITE_KEY = "stillfail.invite";
-
-/**
- * The invite code this device arrived with (`/?invite=CODE`), kept by the core (prefs.ts): the page it came to may
- * first send it to Google to sign in, or on to a workspace before the code is asked for. The core lets it go once a
- * workspace is made.
- */
-export function inviteCode(): string {
-  // None on a page built to HTML (the site's demo has the workspace's pages: demo/prerender.tsx).
-  if (typeof location === "undefined") return "";
-  let given = new URLSearchParams(location.search).get("invite");
-  try {
-    given ??= sessionStorage.getItem(INVITE_KEY);
-    sessionStorage.removeItem(INVITE_KEY);
-  } catch { /* no storage */ }
-  // Kept after this render (the prefs' watchers are redrawn by it).
-  if (given && prefs().invite !== given) queueMicrotask(() => setPrefs({ invite: given }));
-  return given ?? prefs().invite ?? "";
-}
 
 export interface Action<A, T> {
   run(arg: A): void;

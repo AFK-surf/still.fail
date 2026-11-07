@@ -19,11 +19,6 @@ function Themed({ name, width, height, alt = "", className }: { name: string; wi
   return <img className={className} src={`${BASE}${name}${dark ? "-dark" : ""}.svg`} alt={alt} width={width} height={height} />;
 }
 
-/** The mark, the face on its rounded square. */
-export function Mark({ size, className }: { size: number; className?: string }) {
-  return <Themed name="mark" width={size} height={size} className={className} />;
-}
-
 /** The name, still.fail (youdid.wtf on the test channel), `size` high as still.fail is drawn. */
 export function Wordmark({ size = 22, className }: { size?: number; className?: string }) {
   const k = size / WORD_HEIGHT;
