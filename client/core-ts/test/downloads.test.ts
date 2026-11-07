@@ -250,6 +250,119 @@ test("a part not answered while its station's link is up (a slow network's time 
   r.core.close();
 });
 
+test("a download goes on from bytes received within a part when its connection cuts out", async () => {
+  for (const source of ["chat", "chat-without-size", "drive"] as const) {
+    const file = bytesOf(4 * MB, 9);
+    const offsets: number[] = [];
+    let transferred = 0;
+    const t = await started(undefined, 0, (host) => {
+      const fallback = new HostWire(host);
+      return {
+        request: (station, head, body) => {
+          const u = new URL(head.path, "https://stillfail.test");
+          if (!u.pathname.endsWith(source === "drive" ? "/drive/read" : "/sessions/k1/parts")) return fallback.request(station, head, body);
+          const offset = Number(u.searchParams.get("offset"));
+          const length = Number(u.searchParams.get("length"));
+          offsets.push(offset);
+          const cut = offsets.length <= 3;
+          const size = Math.min(length, file.length - offset, cut ? MB : file.length);
+          const data = file.slice(offset, offset + size);
+          let sent = false;
+          return Effect.succeed({
+            status: 200,
+            headers: [["content-type", "application/octet-stream"], ["stillfail-total", String(file.length)], ...(source === "drive" ? [["stillfail-mtime", "7"] as [string, string]] : [])] as [string, string][],
+            via: null,
+            body: { take: Effect.suspend(() => {
+              if (!sent) { sent = true; transferred += data.length; return Effect.succeed(data); }
+              return cut ? Effect.fail(new HostError("connection lost")) : Effect.succeed(null);
+            }) },
+          });
+        },
+      };
+    });
+    const r = await watch(t);
+    const params = source === "drive"
+      ? { station: ST, root: "/drive", path: "film.mp4", name: "film.mp4", size: file.length, mtime: 7 }
+      : { station: ST, key: "k1", name: "film.mp4", size: source === "chat" ? file.length : 0 };
+    const id = (await r.ask("download.start", params)).ok.download.id;
+    for (let i = 0; i < 3; i++) await t.host.time.pass(AGAIN_MS + 50, 50);
+    assert.equal((await r.view())[0].state, "ready", source);
+    assert.deepEqual(offsets, [0, MB, 2 * MB, 3 * MB], source);
+    assert.equal(transferred, file.length, `${source}: no received bytes sent twice`);
+    const read = await r.ask("download.read", { id, offset: 0, length: file.length });
+    assert.deepEqual(read.bytes, file, source);
+    t.core.close();
+  }
+});
+
+test("a download cancelled during a part keeps the bytes already received", async () => {
+  const file = bytesOf(2 * MB, 3);
+  const first = 1024; // smaller than the streaming hand-off batch
+  let requests = 0;
+  const offsets: number[] = [];
+  const t = await started(undefined, 0, (host) => {
+    const fallback = new HostWire(host);
+    return { request: (station, head, body) => {
+      const u = new URL(head.path, "https://stillfail.test");
+      if (!u.pathname.endsWith("/sessions/k1/parts")) return fallback.request(station, head, body);
+      const offset = Number(u.searchParams.get("offset"));
+      offsets.push(offset);
+      const hold = ++requests === 1;
+      let sent = false;
+      return Effect.succeed({
+        status: 200,
+        headers: [["content-type", "application/octet-stream"], ["stillfail-total", String(file.length)]] as [string, string][],
+        via: null,
+        body: { take: Effect.suspend(() => {
+          if (!sent) { sent = true; return Effect.succeed(file.slice(offset, hold ? first : file.length)); }
+          return hold ? Effect.never : Effect.succeed(null);
+        }) },
+      });
+    } };
+  });
+  const r = await watch(t);
+  const params = { station: ST, key: "k1", name: "film.mp4", size: file.length };
+  const id = (await r.ask("download.start", params)).ok.download.id;
+  await r.ask("download.cancel", { id });
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.keptUntil(id, 0, file.length, 0, file.length)), first);
+  await r.ask("download.start", params);
+  assert.equal((await r.view())[0].state, "ready");
+  assert.deepEqual(offsets, [0, first]);
+  assert.deepEqual((await r.ask("download.read", { id, offset: 0, length: file.length })).bytes, file);
+  t.core.close();
+});
+
+test("a cut reply for a different file version is not kept beside the old one", async () => {
+  for (const source of ["chat", "drive"] as const) {
+    const file = bytesOf(2 * MB);
+    const t = await started(undefined, 0, (host) => {
+      const fallback = new HostWire(host);
+      return { request: (station, head, body) => {
+        const u = new URL(head.path, "https://stillfail.test");
+        if (!u.pathname.endsWith(source === "drive" ? "/drive/read" : "/sessions/k1/parts")) return fallback.request(station, head, body);
+        let sent = false;
+        return Effect.succeed({
+          status: 200,
+          headers: [["content-type", "application/octet-stream"], ["stillfail-total", String(source === "chat" ? file.length + 1 : file.length)], ...(source === "drive" ? [["stillfail-mtime", "8"] as [string, string]] : [])] as [string, string][],
+          via: null,
+          body: { take: Effect.suspend(() => {
+            if (!sent) { sent = true; return Effect.succeed(file.slice(0, MB)); }
+            return Effect.fail(new HostError("connection lost"));
+          }) },
+        });
+      } };
+    });
+    const r = await watch(t);
+    const params = source === "drive"
+      ? { station: ST, root: "/drive", path: "film.mp4", name: "film.mp4", size: file.length, mtime: 7 }
+      : { station: ST, key: "k1", name: "film.mp4", size: file.length };
+    const id = (await r.ask("download.start", params)).ok.download.id;
+    assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(id)), false, source);
+    await r.ask("download.cancel", { id });
+    t.core.close();
+  }
+});
+
 test("a download goes on from what a preview kept of it; one that failed starts again when asked again; one called off is gone", async () => {
   const film = bytesOf(9 * MB, 7);
   const broken = new Set(["bad.zip"]);
