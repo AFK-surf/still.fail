@@ -297,6 +297,9 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       moved.push("words_shape_of \"\{key}\" (laid out or gone)")
     }
   })
+  // Preserve the converged build's list reads for a possible scroll-only frame. The ordinary readback arrays are
+  // cleared below for the next build, including when the last build read nothing of any list.
+  self.list_fast_reads()
   self.laid_reads.clear()
   self.size_reads.clear()
   self.place_reads.clear()

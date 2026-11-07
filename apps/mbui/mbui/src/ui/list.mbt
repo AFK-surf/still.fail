@@ -660,6 +660,7 @@ fn Ctx::place_list(
     Some(st) => st
     None => return
   }
+  let was_position = (st.anchor, st.anchor_off, st.over_offset())
   st.vp_h = ih
   // (shown this frame: what its rows came, went and changed for, said from the next, ListRows::rows)
   match st.causes {
@@ -669,9 +670,8 @@ fn Ctx::place_list(
   // where its own motions have it at the frame's time (a wheel's ease, a fling, a glide to its end, an overscroll going
   // back), stepped at its first layout in a frame, and what the hand did to it between frames: read as it is laid out,
   // so that what is laid out again as they go is its layout, nothing built for them (frame_watch.mbt's layout watch)
-  st.hand_said.get() |> ignore
   self.list_step(st)
-  self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
+  self.list_hand_follow(n.id, st, self.clock)
   self.shows_motion(st.sizes_mover, st.sizes_rest() > self.clock)
   // laid out again in the same frame (built again from what its layout read: readback.mbt), from where it stood as
   // the frame's first layout of it began, unless something moved it since its last: a row laid there for the first
@@ -1008,6 +1008,9 @@ fn Ctx::place_list(
   self.rows_on_pixels(order)
   self.stick_in(li, order, iy)
   self.list_finds_field(st, order, iy)
+  if was_position != (st.anchor, st.anchor_off, st.over_offset()) {
+    scroll_paint_uncompared.val = true
+  }
   // (whether it moves, as laid out: what is built from it told as that changes, Ctx::list_moving)
   st.moving_said.set(st.held || st.moving() || st.glide)
 }

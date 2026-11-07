@@ -2077,23 +2077,22 @@ pub fn list_after(
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
-    let frame = c.frame_number()
     // (still: what goes out of sight goes only then, never shifting rows on their way: Reading::sees)
     let tu = turns_of(r.station + "\u{1}" + r.session)
     let still = !c.list_moving(key) && tu.asks.is_empty() && !tu.open
-    c.after_build("reading", fn() {
-      read_place(rd, v, list, lr, bar, room, frame)
+    c.after_build_or_scroll("reading", fn() {
+      read_place(rd, v, list, lr, bar, room, c.frame_number())
       rd.view_still = still
     })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
     // from memory never leaves the page)
     rd.scale = c.scale
     if rd.placed && !c.list_moving(key) {
-      c.after_build("place", fn() { tell_place(src, r, v, rd) })
+      c.after_build_or_scroll("place", fn() { tell_place(src, r, v, rd) })
     }
     // (told once the frame's builds are over, as the last says it: a build let go of, the frame built again, read the
     // list from before its layout)
-    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen, rd.seen_whole) })
+    c.after_build_or_scroll("focus", fn() { tell_focus(src, r, v, rd, seen, rd.seen_whole) })
     // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end (not
     // before the list is first laid out: until then nothing is in view, and the end is not far, only not known)
     let away = match info {

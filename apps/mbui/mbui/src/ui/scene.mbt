@@ -627,6 +627,97 @@ let words_alpha : Ref[Double] = Ref(1.0)
 let look_surface : Ref[(Double, Int)] = Ref((1.0, -1))
 
 ///|
+/// How many nodes the paint has left out as outside what cuts them, counted on (row_drawing.mbt: a row that left some
+/// out shows them once moved, so is not kept as drawn).
+// kept across runs: only counts on
+let paint_culled : Ref[Int] = Ref(0)
+
+///|
+/// A list's row painted to be kept whole, past its list's clip (row_drawing.mbt): from which instance on each is a
+/// node's (instance, node: pairs) and a line of words' (instance, top, height: triples; a height below 0, none), so
+/// that what a paint there would leave out (Ctx::paint_node's cull, a line's) is left out where it is drawn again.
+// kept across runs: off, and its marks cleared, between rows painted so
+let rec_whole : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: cleared as a row is painted to be kept whole
+let rec_node_at : Array[Int] = []
+
+///|
+// kept across runs: cleared as a row is painted to be kept whole
+let rec_line_at : Array[Double] = []
+
+///|
+// kept across runs: -1 between rows painted to be kept whole
+let rec_node_now : Ref[Int] = Ref(-1)
+
+///|
+/// The list's clip a row painted whole is in (its rect): a picture outside it is not asked for (left out, the row not
+/// kept so).
+// kept across runs: set as a row is painted whole
+let rec_real : Ref[(Double, Double, Double, Double)] = Ref((0.0, 0.0, 0.0, 0.0))
+
+///|
+/// From instance `at` on, node `node`'s (and no line's).
+fn rec_node(at : Int, node : Int) -> Unit {
+  rec_node_at.push(at)
+  rec_node_at.push(node)
+  rec_node_now.val = node
+  rec_line(at, 0.0, -1.0)
+}
+
+///|
+/// From instance `at` on, the line of words `top` down, `h` tall (`h` below 0: none).
+fn rec_line(at : Int, top : Double, h : Double) -> Unit {
+  let n = rec_line_at.length()
+  if n >= 3 && rec_line_at[n - 2] == top && rec_line_at[n - 1] == h {
+    return
+  }
+  rec_line_at.push(at.to_double())
+  rec_line_at.push(top)
+  rec_line_at.push(h)
+}
+
+///|
+/// Whether glyph `key`, at `sc` pixels a point, lying at (`x0`, `y0`)–(`x1`, `y1`), is one a row painted whole
+/// (rec_whole) would ask the host for outside its list's clip (rec_real), where a paint of the list alone would not: not
+/// drawn, and the row not kept so (painted as it is, its glyphs asked for as they show).
+fn rec_glyph_early(key : Int, sc : Double, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Bool {
+  if !rec_whole.val {
+    return false
+  }
+  let (rx0, ry0, rx1, ry1) = rec_real.val
+  if x1 >= rx0 && x0 <= rx1 && y1 >= ry0 && y0 <= ry1 {
+    return false
+  }
+  match text_cache.glyphs.get(key) {
+    Some(g) => glyph_other_scale(g, sc)
+    None => true
+  }
+}
+
+///|
+/// The clip a list's row is painted in while it is kept as drawn (row_drawing.mbt), or none.
+// kept across runs: none between rows kept, set as one is painted to be kept
+let row_band : Ref[Array[Double]?] = Ref(None)
+
+///|
+/// Something left out by what cuts it now (a node, a line of words): counted where that is the list's clip a row kept
+/// as drawn is painted in, or reaches its edge (a row's own clip wholly inside it moves with the row, so leaves out the
+/// same once moved).
+fn left_out() -> Unit {
+  match row_band.val {
+    Some(b) => {
+      let k = clip_top()
+      if !(clip_stack[k] > b[0] && clip_stack[k + 1] > b[1] && clip_stack[k + 2] < b[2] && clip_stack[k + 3] < b[3]) {
+        paint_culled.val += 1
+      }
+    }
+    None => ()
+  }
+}
+
+///|
 fn Ctx::push_inst(
   self : Ctx,
   x : Double,
@@ -899,7 +990,15 @@ fn Ctx::emit_text(
       _ => ()
     }
     if top > cy1 || top + tl.line_h < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      if rec_glyph_early(key, sc / zoom, ox + tl.xs[c], top, ox + tl.xs[c] + s.adv[c], top + tl.line_h) {
+        paint_culled.val += 1
+        continue
+      }
+      rec_line(self.ninst, top, tl.line_h)
     }
     // (made at the host's pixels a point)
     let g = glyph(key, sc / zoom)
@@ -969,6 +1068,9 @@ fn Ctx::emit_text(
       self.inst[b + 23] = glass_paint.ink_r
     }
   }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
+  }
 }
 
 ///|
@@ -995,7 +1097,11 @@ fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double, but? : (Int) -> Bool = 
     } else if dr.any && self.drawn_z(c) == 1 {
       over = true
     } else {
-      self.paint(c, alpha)
+      if n.kind == kind_list {
+        self.paint_list_row(c, alpha)
+      } else {
+        self.paint(c, alpha)
+      }
     }
     c = self.nodes[c].next
   }
@@ -1059,7 +1165,14 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   glyphs_carried.val = self.glyphs_carried_of(i)
   // (what comes after it as faint as before it: its own ground may have been drawn as its look's surface)
   let (words_was, surface_was) = (words_alpha.val, look_surface.val)
+  let rec_was = rec_node_now.val
+  if rec_whole.val {
+    rec_node(self.ninst, i)
+  }
   self.paint_node(i, alpha_in)
+  if rec_whole.val {
+    rec_node(self.ninst, rec_was)
+  }
   words_alpha.val = words_was
   look_surface.val = surface_was
   glyphs_carried.val = carried_was
@@ -1134,8 +1247,17 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // cull what is outside the clip: nothing of its own shows there, and nothing it cuts; what a box that does not cut
   // holds may lie past the box (a row squeezed to the room it has, wider than that, moved sideways: ＋'s recent
   // photos), each part of it culled where it is
+  // (a picture of a row painted whole, outside the list's clip: not asked for before it shows, rec_real)
+  if rec_whole.val && n.kind == kind_image {
+    let (rx0, ry0, rx1, ry1) = rec_real.val
+    if n.x > rx1 || n.y > ry1 || n.x + n.fw < rx0 || n.y + n.fh < ry0 {
+      paint_culled.val += 1
+      return
+    }
+  }
   if (n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0) &&
     !(dr.any && dr.mode != mode_hits && self.draw_carries(i)) {
+    left_out()
     if !n.clip && (n.kind == kind_box || n.kind == kind_scroll) {
       words_alpha.val = held_faint
       self.paint_held(n, alpha)
@@ -1492,4 +1614,3 @@ fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
   self.next_points[id] = true
   self.next_point_hits.push(self.next_hit_ids.length() - 1)
 }
-

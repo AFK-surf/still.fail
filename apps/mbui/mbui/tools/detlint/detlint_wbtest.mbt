@@ -1186,6 +1186,7 @@ test "build-effect" {
         #|  n.reload()
         #|  @hostapi.set_dark(true)
         #|  c.after_build("seen", fn() { (src.call)("seen", Json::null(), fn(_) {  }); n.seek(1.0) })
+        #|  c.after_build_or_scroll("place", fn() { (src.call)("place", Json::null(), fn(_) {  }) })
         #|  if c.clicked(7) {
         #|    send(src)
         #|    n.play()
@@ -1208,7 +1209,7 @@ test "build-effect" {
   // the core's calls (the ask itself, not its answer), a helper doing one, the native view's reload, the host's
   // effect, and the box's children's (built as the frame builds): not what after_build, an input, a handler or an
   // answer does, nor the Ctx's own
-  assert_eq(got.map(fn(f) { f.line }), [9, 10, 11, 12, 22, 24])
+  assert_eq(got.map(fn(f) { f.line }), [9, 10, 11, 12, 23, 25])
   assert_true(got[2].what.contains(".reload"))
 }
 
@@ -1230,15 +1231,20 @@ test "after-build-input: what an input took told by after_build, not what every 
         #|  if button(c, "go") {
         #|    c.tell("go", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
         #|  }
+        #|  c.after_build_or_scroll("place", fn() { (src.call)("place", Json::null(), fn(_) {  }) })
+        #|  if c.clicked(8) {
+        #|    c.after_build_or_scroll("pin", fn() { (src.call)("pin", Json::null(), fn(_) {  }) })
+        #|  }
         #|}
         #|
       ),
     ),
   ]
-  let got = found(files, "after-build-input", 2)
+  let got = found(files, "after-build-input", 3)
   got.sort_by(fn(a, b) { a.line.compare(b.line) })
-  // under the click and under the switch used; not what every build says, nor what tell tells
-  assert_eq(got.map(fn(f) { f.line }), [5, 8])
+  // under the click and under the switch used, and under the click told by after_build_or_scroll; not what every
+  // build says, nor what tell tells
+  assert_eq(got.map(fn(f) { f.line }), [5, 8, 15])
 }
 
 ///|
