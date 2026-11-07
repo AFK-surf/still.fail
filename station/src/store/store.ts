@@ -65,7 +65,7 @@ import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION 
 import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
 import { installClosedCardsIndex } from "./legacy-closed-cards.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
-import { hasLegacySaid, LEGACY_SAID_LATEST, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
+import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
 import { legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
@@ -1734,11 +1734,18 @@ export class Store {
     this.db.exec("SAVEPOINT archive_unread");
     try {
       const read = this.readPosition(viewer, thread);
-      const latest = this.#one(this.#legacySaid ? LEGACY_SAID_LATEST : SAID_LATEST, thread);
+      const head = this.#legacySaid ? legacySaidReadHead(this.db, thread)
+        : { known: true, row: this.#one(SAID_LATEST, thread) };
+      if (!head.known) return null;
+      const latest = head.row;
       if (!latest || latest.n <= read) return false;
       if (latest.author_kind !== "person" || latest.author !== viewer) return true;
       const boundary = saidBoundary(this.#one(SAID_STATE, thread), latest);
       if (boundary.known) return boundary.other !== null && boundary.other > read;
+      if (this.#legacySaid && legacySaidThreadNeedsDrain(this.db, thread)) {
+        const near = legacySaidReadBoundary(this.db, thread, latest.n, latest.author);
+        return near.known ? near.other !== null && near.other > read : null;
+      }
       const previous = this.#all(this.#legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
       if (previous.some((p) => p.n > read && (p.author_kind !== "person" || p.author !== viewer))) return true;
       if (previous.length < SAID_BATCH_SIZE || previous.at(-1)!.n <= read) return false;
