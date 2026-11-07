@@ -397,6 +397,10 @@ priv struct RideFrom {
 let ride_step_ms : Double = 16.0
 
 ///|
+/// The longest a ride is worked out over, step by step (Ride::new): the ball's springs rest in well under a second.
+let ride_most_ms : Double = 10000.0
+
+///|
 /// A ride from `x` (at `v` a second) at `t0`, by stiffness `k` and damping `c`, after `anchor` (where it is sent at a
 /// time) until `still` (when what it rides on is at rest; after it, where it is sent stays), at rest within `rest`.
 fn Ride::new(
@@ -417,6 +421,17 @@ fn Ride::new(
   let mut v = v
   let mut to = anchor(t0)
   legs.push((t, x, v, to))
+  // set out long before what it rides on comes to rest (a change caught up at its own moment, long after: the iPhone's
+  // clock is the time since it started, so days of 16 ms legs, gigabytes and a hang): long since at rest where it was
+  // sent then, it rides only the last of that way
+  let late = still - ride_most_ms
+  if late > t {
+    t = late
+    to = anchor(t)
+    x = to
+    v = 0.0
+    legs.push((t, x, v, to))
+  }
   while t < still {
     let next = t + ride_step_ms
     let (d, vel) = @motion.spring_at(ratio, k, x - to, v, (next - t) / 1000.0)
