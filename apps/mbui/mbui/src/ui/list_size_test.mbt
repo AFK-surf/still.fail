@@ -154,6 +154,50 @@ test "list: a row gone down past others is the one that moves: it leaves where i
 }
 
 ///|
+test "list: keys changed in place and given with new items still move their rows" {
+  let keys = ["r0", "r1", "r2"]
+  let items = Ref([0, 1, 2])
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(fn(c) {
+    let (shown, names) = rows.rows(c, keys, items.val, fn(_) { "" }, moves=fn(_) { true })
+    c.list("list", shown.length(), 50.0, fn(i) {
+      let b = c.box(h=Px(50.0), fn() { c.text("Row \{shown[i]}", wrap=false) |> ignore })
+      rows.enter(c, b, names[i])
+      rows.leave(c, b, names[i])
+    }, sized=rows.sized()) |> ignore
+  }, w=300.0, h=400.0)
+  keys[0] = "r1"
+  keys[1] = "r2"
+  keys[2] = "r0"
+  items.val = [1, 2, 0]
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  assert_eq(row_seen(t, 0).length(), 2)
+  t.run_for(@ui.row_size_ms)
+  assert_eq(row_seen(t, 0).length(), 1)
+}
+
+///|
+test "list: unchanged keys still follow a row's changed version" {
+  let changed = [false]
+  let t = @ui.Tester::new(
+    sized_rows(fn() { Array::makei(20, fn(i) { i }) }, tall=18, changed=fn() { changed[0] }),
+    w=300.0,
+    h=400.0,
+  )
+  assert_eq(t.row(18).unwrap().3, 50.0)
+  // Both arrays are made anew, but their keys have the same order. Only the version of row 18 changes.
+  changed[0] = true
+  t.draw()
+  assert_true((t.row(18).unwrap().3 - 50.0).abs() < 0.5)
+  t.run_for(@ui.row_size_ms / 2.0)
+  let halfway = t.row(18).unwrap().3
+  assert_true(halfway > 50.0 && halfway < 120.0, msg="halfway: \{halfway}")
+  t.run_for(@ui.row_size_ms / 2.0)
+  assert_true((t.row(18).unwrap().3 - 120.0).abs() < 0.5)
+}
+
+///|
 test "list: a row read from stays where it shows as one over it grows and one under it comes" {
   let n = [40]
   let changed = [false]

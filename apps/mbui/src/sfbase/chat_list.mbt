@@ -325,6 +325,12 @@ let state_key : String = "state"
 /// first unread and what went to Slack after each, the page after's spinner, the outbox, where it stands (said only at
 /// its end: none while an agent works), its agents at work.
 pub fn entries_of(v : ChatView) -> Array[Entry] {
+  chat_entries(v).0
+}
+
+///|
+/// The entries and where their messages end, before the live rows at the foot.
+fn chat_entries(v : ChatView) -> (Array[Entry], Int) {
   let out : Array[Entry] = [Top]
   if v.more {
     out.push(Older)
@@ -337,15 +343,27 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
     out.push(Sent(e))
   }
   for m in v.messages {
-    match v.unread_line {
-      Some(l) if l == m.seq => out.push(Line)
-      _ => ()
-    }
-    out.push(Said(m))
-    for e in m.elsewhere {
-      out.push(Sent(e))
-    }
+    chat_entry_message(out, m, v.unread_line)
   }
+  let end = out.length()
+  chat_entry_tail(out, v)
+  (out, end)
+}
+
+///|
+fn chat_entry_message(out : Array[Entry], m : Message, unread : Double?) -> Unit {
+  match unread {
+    Some(l) if l == m.seq => out.push(Line)
+    _ => ()
+  }
+  out.push(Said(m))
+  for e in m.elsewhere {
+    out.push(Sent(e))
+  }
+}
+
+///|
+fn chat_entry_tail(out : Array[Entry], v : ChatView) -> Unit {
   if v.newer {
     out.push(Newer)
   }
@@ -366,7 +384,6 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
     }
   }
   out.push(Foot)
-  out
 }
 
 ///|
@@ -401,9 +418,68 @@ pub fn chat_kept(r : ChatRef) -> ChatView? {
 /// A chat as chat_read made it: its view, its list's entries, and each message with the JSON it was read from (the
 /// next version's same JSON, a message that did not change, not read again: made_again).
 priv struct ChatRead {
+  message_json : Array[Json]
   view : ChatView
   list : Array[Entry]
+  message_end : Int
   read : Array[(Json, Message)]
+}
+
+///|
+/// Whether the messages are still the ones made last. A source can reuse its array and change its contents in place,
+/// so compare to the recorded messages, not just the array's identity.
+fn same_chat_messages(jsons : Array[Json], read : Array[(Json, Message)]) -> Bool {
+  if jsons.length() != read.length() {
+    return false
+  }
+  for i, j in jsons {
+    if !physical_equal(j, read[i].0) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// The rows are unchanged for a chat with no outbox, external messages or running activities when these inputs are
+/// unchanged. With any of those dynamic rows, make the list afresh from the new view.
+fn chat_entries_same(a : ChatView, b : ChatView) -> Bool {
+  physical_equal(a.messages, b.messages) &&
+  a.more == b.more &&
+  a.newer == b.newer &&
+  a.unread_line == b.unread_line &&
+  a.state == b.state &&
+  a.elsewhere.is_empty() && b.elsewhere.is_empty() &&
+  a.outbox.is_empty() && b.outbox.is_empty() &&
+  a.agents.iter().all(fn(agent) { agent.status != "running" }) &&
+  b.agents.iter().all(fn(agent) { agent.status != "running" })
+}
+
+///|
+/// Messages appended after an unchanged history keep its entries. The old array remains untouched, since a frame
+/// may still use it. Other list changes take the ordinary path.
+fn chat_entries_appended(v : ChatView, was : ChatRead) -> (Array[Entry], Int)? {
+  let before = was.view.messages
+  if before.is_empty() || before.length() >= v.messages.length() ||
+     was.view.more != v.more || was.view.unread_line != v.unread_line ||
+     !was.view.elsewhere.is_empty() || !v.elsewhere.is_empty() {
+    return None
+  }
+  for i, m in before {
+    if !physical_equal(m, v.messages[i]) {
+      return None
+    }
+  }
+  let out = was.list.copy()
+  while out.length() > was.message_end {
+    out.pop() |> ignore
+  }
+  for i in before.length()..<v.messages.length() {
+    chat_entry_message(out, v.messages[i], v.unread_line)
+  }
+  let end = out.length()
+  chat_entry_tail(out, v)
+  Some((out, end))
 }
 
 ///|
@@ -411,17 +487,34 @@ priv struct ChatRead {
 /// changed (one came: that one read).
 // kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
 let chat_read : Derived[ChatRead] = Derived::new("chat", fn(v, was) {
-  let read = made_again(
-    items(Some(v), "messages"),
-    match was {
-      Some(w) => w.read
-      None => []
-    },
-    message_key,
-    message_of,
-  )
-  let view = chat_view_of(v, read.map(fn(p) { p.1 }))
-  { view, list: entries_of(view), read }
+  let message_json = items(Some(v), "messages")
+  let (read, messages) = match was {
+    Some(w) if physical_equal(w.message_json, message_json) && same_chat_messages(message_json, w.read) =>
+      (w.read, w.view.messages)
+    _ => {
+      let read = made_again(
+        message_json,
+        match was {
+          Some(w) => w.read
+          None => []
+        },
+        message_key,
+        message_of,
+      )
+      (read, read.map(fn(p) { p.1 }))
+    }
+  }
+  let view = chat_view_of(v, messages)
+  let (list, message_end) = match was {
+    Some(w) if chat_entries_same(w.view, view) => (w.list, w.message_end)
+    Some(w) =>
+      match chat_entries_appended(view, w) {
+        Some(entries) => entries
+        None => chat_entries(view)
+      }
+    None => chat_entries(view)
+  }
+  { message_json, view, list, message_end, read }
 })
 
 ///|
@@ -523,10 +616,12 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     emit_take(c, em, v, showing)
     // words sent from here on their way: their landing as declared (-2: not laid out yet), -1 none or landed
     // (emit_step)
-    let sending = match send_flight.get() {
-      Some(f) if f.turns == rk && !f.placed => -2.0
-      Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
-      _ => -1.0
+    let sending = fn() {
+      match send_flight.get() {
+        Some(f) if f.turns == rk && !f.placed => -2.0
+        Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
+        _ => -1.0
+      }
     }
     emit_step(c, em, turns, sending)
   }
@@ -960,13 +1055,18 @@ pub fn row_keys(
   }
   rd.list_read = Some(c.list_reader(key))
   rd.foot_sign = if ask_clears(v) { "+ask" } else { "" }
-  // the same entries of the same view as the last frame's, the list following as it did, nothing sent from here
-  // waiting for its row and no row for its turn (then and now): what it made then, its rows not gone over again
+  // The same entries and the same message-to-outbox mapping as last time, the list following as it did, nothing sent
+  // from here waiting for its row and no row for its turn: what it made then, its rows not gone over again. Other
+  // view fields may change without changing those inputs (the chat's title, for example).
   let sending = sending_of(rk)
   match rd.rows_made {
     Some(m) if rd.drawn &&
       physical_equal(m.all, all) &&
-      physical_equal(m.v, v) &&
+      (physical_equal(m.v, v) ||
+       (physical_equal(m.v.messages, v.messages) &&
+        m.v.outbox.is_empty() && v.outbox.is_empty() &&
+        m.v.newer == v.newer &&
+        ask_clears(m.v) == ask_clears(v))) &&
       m.following == following &&
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
