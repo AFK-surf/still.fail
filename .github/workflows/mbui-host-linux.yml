@@ -35,6 +35,7 @@ on:
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/host/post.h"
       - "apps/mbui/mbui/src/host/listen_api.h"
+      - "apps/mbui/mbui/src/host/listen_http.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"
       - "apps/mbui/mbui/scripts/linux.sh"
