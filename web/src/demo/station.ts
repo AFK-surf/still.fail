@@ -51,8 +51,8 @@ export const host = () => withMeters(now(data.host));
 function withMeters<T extends { meters: { short: string; percent: number }[] }>(h: T): T {
   const more: Record<string, { remaining: string; big: string; unit: string; title: string; total: string }> = {
     CPU: { remaining: "空闲 81%", big: "81", unit: "%", title: "CPU 空闲", total: "负载 3.1" },
-    内存: { remaining: "剩 36.6 G", big: "36.6", unit: "GB", title: "内存剩", total: "共 64 GB" },
-    磁盘: { remaining: "剩 612 G", big: "612", unit: "GB", title: "磁盘剩", total: "共 994 GB" },
+    内存: { remaining: "剩 36.6 G", big: "36.6", unit: "GB", title: "内存剩余", total: "共 64 GB" },
+    磁盘: { remaining: "剩 612 G", big: "612", unit: "GB", title: "磁盘剩余", total: "共 994 GB" },
   };
   return { ...h, meters: h.meters.map((m) => ({ ...m, left: 100 - m.percent, ...more[m.short] })) };
 }
