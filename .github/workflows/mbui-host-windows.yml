@@ -18,6 +18,7 @@ on:
       - "apps/mbui/mbui/src/host/log_files.h"
       - "apps/mbui/mbui/scripts/win_logs_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/src/host/browser_login.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
       - "apps/mbui/mbui/scripts/done_runner.py"

@@ -26,6 +26,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/badgecheck.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
+      - "apps/mbui/mbui/src/host/browser_login.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/noticecheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/updatecheck.mbt"
