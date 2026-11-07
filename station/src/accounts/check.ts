@@ -12,8 +12,8 @@ import { checkSandbox } from "../agents/sandbox.ts";
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const RUNTIMES: string[] = RUNTIME_KINDS;
 const MODES = ["multi-session", "single-session"];
-/// The connects the station has a part for (slack/, feishu/).
-const CONNECT_KINDS = ["slack", "feishu"];
+/// The connects the station has a part for (slack/, feishu/, comma/).
+const CONNECT_KINDS = ["slack", "feishu", "comma"];
 
 /// config.rs `id_ok`: a lowercase letter or digit, then those and dashes.
 export const idOk = (id: string) => /^[a-z0-9][a-z0-9-]*$/.test(id);

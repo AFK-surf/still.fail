@@ -538,6 +538,27 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
 });
 
+test("a_comma_tasks_chat_is_marked_by_comma_as_a_slack_one_is_by_slack", async () => {
+  const t = setup();
+  const chats = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  await t.readAll([[chats, 1]]);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const task = row("k1", now - 1000);
+  task.connect = "cm";
+  task.origin = { surface: "comma:cm", channel: "TASK", channelName: null, threadTs: "1.000001", teamName: null };
+  t.set(rows("ws/st"), [task, row("k2", now - 2000)]);
+  await t.readAll([[chats, 1]]);
+  const all = chats.value.days.flatMap((d: J) => d.items);
+  const of = (id: string) => all.find((r: J) => r.id === id);
+  assert.deepEqual([of("k1").originKind, of("k1").originText], ["comma", "Comma"]);
+  assert.deepEqual([of("k2").originKind, of("k2").originText], [undefined, undefined]);
+});
+
 test("a_hidden_chat_that_needs_the_viewer_remains_in_attention", async () => {
   const t = setup();
   const [list, marks] = [ui(), ui()];

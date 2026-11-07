@@ -27,6 +27,9 @@ export function slackSurface(connect: string, teamId: string | null): string {
 /// Where a Feishu connect's threads live: the connect's own.
 export const feishuSurface = (connect: string): string => `feishu:${connect}`;
 
+/// Where a Comma connect's threads (its Comma Tasks) live: the connect's own.
+export const commaSurface = (connect: string): string => `comma:${connect}`;
+
 export type SessionScope = "thread" | "all";
 
 /// Who looks, as far as the station's workspaces go: their workspace, and whether it is the

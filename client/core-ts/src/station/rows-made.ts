@@ -127,7 +127,7 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
   const connectOf = (t: J): string | null => members(t).map((m) => str(m.connect)).find((c) => c !== null && !titles.isOwnSurface(c)) ?? null;
   const origin = (t: J): J => {
     const connect = connectOf(t);
-    return { teamName: connect === null ? null : (marks.teams[connect] ?? null), channel: t.channel ?? null, channelName: t.channelName ?? null, threadTs: t.threadTs ?? null };
+    return { teamName: connect === null ? null : (marks.teams[connect] ?? null), channel: t.channel ?? null, channelName: t.channelName ?? null, threadTs: t.threadTs ?? null, surface: t.surface ?? null };
   };
   const titleOf = (t: J, channelName: string | null) => titles.chatTitle(t, str(t.firstText), channelName, words);
   // Per agent: the Slack thread it came from (the latest it is in), whether it has a chat of its own, and whether the

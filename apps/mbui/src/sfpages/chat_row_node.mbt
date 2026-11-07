@@ -251,7 +251,15 @@ pub fn chat_row_node(
             _ => ""
           }
         }
-        h.pick(fn() { if away() != "" { if item().updating { 2 } else { 1 } } else if item().connect { 3 } else { 0 } }, fn(
+        h.pick(fn() {
+          if away() != "" {
+            if item().updating { 2 } else { 1 }
+          } else if item().connect {
+            if item().origin_kind == "comma" { 4 } else { 3 }
+          } else {
+            0
+          }
+        }, fn(
           a,
           which,
         ) {
@@ -259,7 +267,7 @@ pub fn chat_row_node(
           a.box(fn(s) {
             @sf.style_node(s, fn() { kind_slot }, in_row=true)
             let said = fn() {
-              if which == 3 {
+              if which >= 3 {
                 if item().origin_text != "" {
                   item().origin_text
                 } else {
@@ -273,6 +281,8 @@ pub fn chat_row_node(
             match which {
               2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
               1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
+              // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
+              4 => @sf.drawable_node(s, "comma", kind_mark, tint=fn() { Some(t().p.text) }) |> ignore
               _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
             }
             @sf.tip_node(tips, s, said, within=true) |> ignore

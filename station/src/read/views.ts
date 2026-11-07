@@ -172,12 +172,12 @@ function isMine(api: Api, viewer: Viewer): (person: Json | null) => boolean {
   };
 }
 
-/// Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel. No connection is up to name
-/// the workspace, nor knows the channel.
+/// Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel, and where its thread lives
+/// (a Feishu or Comma connect's own). No connection is up to name the workspace, nor knows the channel.
 function origin(t: ThreadSummary): Json {
   const connect = slackConnectOf(t);
   const s = currentStore!;
-  return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs };
+  return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs, surface: t.thread.surface };
 }
 
 /// An author's name; `picture`, where given, their picture's address (a Slack person's own, as their Slack shows it).

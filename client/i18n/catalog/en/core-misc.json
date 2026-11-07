@@ -111,6 +111,7 @@
   "core-misc.connect.title.feishuWay": "Create a Feishu bot",
   "core-misc.connect.title.feishuScan": "Scan to create",
   "core-misc.connect.title.feishuApp": "Use an existing app",
+  "core-misc.connect.title.commaLine": "Connect Comma",
   "core-misc.connect.token_changed": "Token changed. Verify again",
   "core-misc.connect.working": "Working on this step",
   "core-misc.connect.feishu.waiting": "Scan the QR code with Feishu and follow the steps to create the bot",

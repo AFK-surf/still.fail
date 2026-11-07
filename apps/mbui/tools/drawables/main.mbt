@@ -1,5 +1,5 @@
 // still.fail's pictures for mbui: this app's vector drawables (apps/mbui/android's res/drawable: still.fail's mark and
-// its illustrations, design/brand; the model makers' marks, Slack's and Feishu's), the station glyphs of
+// its illustrations, design/brand; the model makers' marks, Slack's, Feishu's and Comma's), the station glyphs of
 // design/station-icons, and the apps' launcher icons (apps/mbui/android: launcher_face on launcher_bg, the middle 72 of
 // its 108 as a launcher shows it; still.fail mbui's, still.fail's and youdid.wtf's colours), into
 // src/sf/drawable_data.mbt as mbui's @pixels.Vector (path strings), which src/sf/picture.mbt draws.
@@ -16,7 +16,7 @@ let drawables : Array[String] = [
   "maker_xai", "maker_mistral", "maker_xiaomi", "maker_ant_ling", "maker_openrouter", "maker_vercel", "maker_cloudflare",
   "maker_azure", "maker_groq", "maker_together", "maker_fireworks", "maker_cerebras", "maker_huggingface", "maker_nvidia",
   "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "maker_hermes", "maker_meta", "maker_stepfun",
-  "maker_tencent", "maker_meituan", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
+  "maker_tencent", "maker_meituan", "slack", "feishu", "comma", "stillfail_mark", "stillfail_mark_dark",
   "illus_sign_in", "illus_sign_in_dark", "illus_new_chat", "illus_new_chat_dark", "illus_no_station", "illus_no_station_dark",
   "illus_no_profile", "illus_no_profile_dark",
   // the programs a station logs in to (its 登录's rows: web/public/tools)

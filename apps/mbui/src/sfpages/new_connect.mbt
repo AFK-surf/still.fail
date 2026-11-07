@@ -16,6 +16,9 @@ priv struct NcFlow {
   resume : String
   app_id : @ui.Field
   app_secret : @ui.Field
+  /// the line Comma's still.fail plugin shows, as typed
+  comma_line : @ui.Field
+  mut comma_line_sent : String
   mut app_id_sent : String
   mut app_secret_sent : String
   mut look : SaDraft?
@@ -56,6 +59,8 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     resume,
     app_id: @ui.Field::new(),
     app_secret: @ui.Field::new(),
+    comma_line: @ui.Field::new(),
+    comma_line_sent: "",
     app_id_sent: "",
     app_secret_sent: "",
     look: None,
@@ -300,28 +305,31 @@ fn nc_body(
     match step {
       "platform" => {
         let offered = strings(v, "platforms").contains("feishu")
+        let comma = strings(v, "platforms").contains("comma")
         let platform = opt_text(v, "platform").unwrap_or("slack")
+        let platforms = [
+          ("slack", "Slack", @sf.t("web-pages.connect.feishu.slackNote")),
+          (
+            "feishu",
+            @sf.t("web-pages.connect.feishu.name"),
+            @sf.t(if offered { "web-pages.connect.feishu.feishuNote" } else { "web-pages.connect.feishu.update" }),
+          ),
+        ]
+        // (offered only by a station with the Comma connect)
+        if comma {
+          platforms.push(("comma", "Comma", @sf.t("web-pages.connect.comma.note")))
+        }
         let picked = @sf.choices(
           c,
           "nc-platform/" + f.form,
           platform,
-          [
-            ("slack", "Slack", @sf.t("web-pages.connect.feishu.slackNote")),
-            (
-              "feishu",
-              @sf.t("web-pages.connect.feishu.name"),
-              @sf.t(if offered { "web-pages.connect.feishu.feishuNote" } else { "web-pages.connect.feishu.update" }),
-            ),
-          ],
+          platforms,
           label=@sf.t("web-pages.connect.feishu.platform"),
           disabled=if offered { [] } else { ["feishu"] },
           icon=fn(p) {
             c.box(style=nc_platform_mark, fn() {
-              if p == "feishu" {
-                @sf.feishu_mark(c, nc_platform_size) |> ignore
-              } else {
-                @sf.slack_mark(c, nc_platform_size) |> ignore
-              }
+              // (Comma's mark is one colour: in the page's ink)
+              @sf.drawable(c, @sf.origin_mark_name(p), nc_platform_size, tint?=if p == "comma" { Some(@sf.theme().p.text) } else { None }) |> ignore
             })
             |> ignore
           },
@@ -330,7 +338,8 @@ fn nc_body(
           nc_edit(core, f, obj([("platform", str(picked))]))
         }
       }
-      "feishuBind" | "bind" => {
+      "commaLine" | "done" if text(v, "platform") == "comma" => nc_comma_line(c, core, f, field(v, "comma"), error)
+      "feishuBind" | "commaBind" | "bind" => {
         nc_models(c, src, core, f, v)
         @sf.field(c, @sf.t("web-pages.connect.mode"), fn() {
           let (m, r, by_thread) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"), flag(v, "threads"))
@@ -684,6 +693,28 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
 }
 
 ///|
+/// The Comma path's last step: where the line comes from (Comma's still.fail plugin), the line pasted, why adding it
+/// failed.
+fn nc_comma_line(c : @ui.Ctx, core : Core, f : NcFlow, cm : Json?, error : String) -> Unit {
+  // (the field echoes what is typed; the core has it a moment later)
+  if f.comma_line_sent == "" && f.comma_line.text() == "" && text(cm, "line") != "" {
+    f.comma_line.set(text(cm, "line"))
+    f.comma_line_sent = text(cm, "line")
+  }
+  let said = match opt_text(cm, "error") {
+    Some(e) => e
+    None => error
+  }
+  @sf.field(c, @sf.t("web-pages.connect.comma.line"), hint=@sf.t("web-pages.connect.comma.lineHint"), error=said, fn() {
+    let typed = @sf.input(c, "nc-comma-line/" + f.form, placeholder="comma https://… …", field=f.comma_line).text
+    if typed != f.comma_line_sent {
+      f.comma_line_sent = typed
+      c.tell("nc-comma-line/" + f.form, fn() { nc_edit(core, f, obj([("comma", obj([("line", str(typed))]))])) })
+    }
+  })
+}
+
+///|
 /// The dialog's buttons for its step `step` (CoreNewConnectDialog's footer; useFeishuStep's): 取消 where the wizard's
 /// back closes it (back a step is the step's head's, the dialog's steps following the wizard's), and the way on, each
 /// as the core says the step stands.
@@ -719,7 +750,20 @@ fn nc_foot(
     "platform" => {
       cancel()
       let feishu = opt_text(v, "platform") == Some("feishu") && strings(v, "platforms").contains("feishu")
-      next(@sf.t("web-pages.connect.next"), false, false, fn() { nc_go(core, f, if feishu { "feishuBind" } else { "team" }, close) })
+      let comma = opt_text(v, "platform") == Some("comma") && strings(v, "platforms").contains("comma")
+      next(@sf.t("web-pages.connect.next"), false, false, fn() {
+        nc_go(core, f, if feishu { "feishuBind" } else if comma { "commaBind" } else { "team" }, close)
+      })
+    }
+    "commaBind" => {
+      cancel()
+      next(@sf.t("web-pages.connect.next"), !flag(v, "canCreate"), false, fn() { nc_go(core, f, "commaLine", close) })
+    }
+    "commaLine" | "done" if text(v, "platform") == "comma" => {
+      cancel()
+      next(@sf.t("web-pages.connect.addConnect"), !flag(field(v, "comma"), "ready"), busy, fn() {
+        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
+      })
     }
     "feishuBind" => {
       cancel()

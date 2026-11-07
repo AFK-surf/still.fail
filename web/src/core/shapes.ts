@@ -1280,6 +1280,8 @@ export interface Overview {
 	slackUsers: string[];
 	slackTeams: SlackTeam[];
 	slackApps?: MadeSlackApp[];
+	/** The station has the Comma connect: Comma is offered as a platform. Absent from one without it. */
+	comma?: boolean;
 	/**
 	 * The Feishu bots the viewer is making by scanning. Absent from a station without the Feishu
 	 * connect, which is then not offered.

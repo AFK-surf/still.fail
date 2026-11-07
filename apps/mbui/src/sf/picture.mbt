@@ -137,6 +137,17 @@ pub fn slack_mark(c : @ui.Ctx, size : Double) -> Int {
 }
 
 ///|
+/// The mark of where a chat came from, by the core's originKind: Feishu's, Comma's for a Comma
+/// connect's, else Slack's.
+pub fn origin_mark_name(kind : String) -> String {
+  match kind {
+    "feishu" => "feishu"
+    "comma" => "comma"
+    _ => "slack"
+  }
+}
+
+///|
 /// Feishu's mark (a Feishu connect, SlackMark's "feishu").
 pub fn feishu_mark(c : @ui.Ctx, size : Double) -> Int {
   drawable(c, "feishu", size)

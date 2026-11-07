@@ -556,6 +556,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "feishu.errors.*",
     "feishu.registration.error",
     "feishu.error",
+    "comma.error",
   ],
   "connection": [
     "items.*.text",
