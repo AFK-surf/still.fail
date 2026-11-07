@@ -19,6 +19,7 @@ import type { To } from "../api/events.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
+import { foreground } from "../store/backfill.ts";
 import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import { CARD_OCCUPIED, cardPlace, recordPostedCard } from "../sessions/card-place.ts";
@@ -37,6 +38,10 @@ import { hasInvalidVaultMembers, vaultMembersComplete } from "./member-index.ts"
 import { reboxIndexComplete, REBOX_LEGACY, REBOX_READY } from "./rebox-index.ts";
 
 export const CARRIED_SAVE_PENDING = "SELECT body FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'";
+const EXPIRED_GRANT_BATCH = 32;
+type SavedGrant = { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
+type RestoreRow = { ws: string; id: string; body: string };
+type ExpiredGrant = { row: RestoreRow; saved: SavedGrant; now: number };
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_requests (
@@ -355,19 +360,63 @@ export class Secrets {
   /// The plain library's grants written down before a restart, held again: those not run out, whose chat goes on and
   /// whose item is still given as granted, its value read again from the store.
   #restore(ended: (session: string) => boolean) {
-    const rows = this.#d.db.prepare("SELECT ws, id, body FROM vault_grants").all() as { ws: string; id: string; body: string }[];
+    const rows = this.#d.db.prepare("SELECT ws, id, body FROM vault_grants").all() as RestoreRow[];
+    const expired: ExpiredGrant[] = [];
+    const restore = ({ row, saved, now }: ExpiredGrant, useNow = true) => {
+      if (!this.#restoreRow(row, ended, saved, useNow ? now : undefined))
+        this.#restorePending.set(JSON.stringify([row.ws, row.id]), { ws: row.ws, id: row.id });
+    };
+    const flush = () => {
+      if (expired.length === 0) return;
+      const batch = expired.splice(0);
+      if (batch.length === 1) { restore(batch[0]!); return; }
+      // The old process may have renewed a row since the list was read. Delete only the exact bodies we saw, and
+      // recover any that changed using the same retry path as an individual grant.
+      this.#restoreRemove ??= this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ? AND body = ?");
+      const pending: ExpiredGrant[] = [];
+      const priority = this.#d.backfill?.priority;
+      foreground(priority === undefined ? null : new Int32Array(priority), () => {
+        this.#d.db.exec("SAVEPOINT vault_restore_expired");
+        try {
+          for (const entry of batch) {
+            const { row } = entry;
+            if (Number(this.#restoreRemove!.run(row.ws, row.id, row.body).changes) === 0) pending.push(entry);
+          }
+          this.#d.db.exec("RELEASE vault_restore_expired");
+        } catch (error) {
+          try { this.#d.db.exec("ROLLBACK TO vault_restore_expired; RELEASE vault_restore_expired"); } catch {}
+          throw error;
+        }
+      });
+      for (const entry of pending) restore(entry, false);
+    };
     for (const original of rows) {
-      if (!this.#restoreRow(original, ended)) this.#restorePending.set(JSON.stringify([original.ws, original.id]), { ws: original.ws, id: original.id });
+      let saved: SavedGrant, now: number, due: boolean;
+      try {
+        now = Math.floor(this.#d.now() / 1000);
+        saved = JSON.parse(original.body) as SavedGrant;
+        due = (saved.until ?? saved.grant.exp) <= now;
+      } catch (error) { flush(); throw error; }
+      const entry = { row: original, saved, now };
+      if (due) {
+        expired.push(entry);
+        if (expired.length === EXPIRED_GRANT_BATCH) flush();
+      } else {
+        const waiting = expired.length !== 0;
+        flush();
+        restore(entry, !waiting);
+      }
     }
+    flush();
     this.#resumeRestore(ended);
   }
 
-  #restoreRow(original: { ws: string; id: string; body: string }, ended: (session: string) => boolean): boolean {
+  #restoreRow(original: RestoreRow, ended: (session: string) => boolean, first?: SavedGrant, firstNow?: number): boolean {
     let row: typeof original | undefined = original;
     // A previous station can renew or use a grant while this station is starting. Do not delete its newer version.
     for (let attempt = 0; row !== undefined && attempt < 3; attempt++) {
-      const now = Math.floor(this.#d.now() / 1000);
-      const { request, grant, uses, until } = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
+      const now = attempt === 0 && firstNow !== undefined ? firstNow : Math.floor(this.#d.now() / 1000);
+      const { request, grant, uses, until } = attempt === 0 && first !== undefined ? first : JSON.parse(row.body) as SavedGrant;
       let checked: { body: string | null; owner: string; limit: { lasts: Scope; at: number } | null | undefined } | undefined;
       if ((until ?? grant.exp) > now && !ended(request.session) && this.#d.lock(row.ws) === null) {
         const snapshot = this.#d.plain.itemSnapshot(row.ws, request.item);
