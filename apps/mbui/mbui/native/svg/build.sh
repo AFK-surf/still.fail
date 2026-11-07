@@ -7,6 +7,7 @@ export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$root/target}
 case "$kind" in
   wasm)
     rustup target add wasm32-unknown-unknown
+    export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=+simd128"
     cargo build --manifest-path "$root/Cargo.toml" --locked --release --lib --target wasm32-unknown-unknown
     artifact=$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/mbui_svg.wasm
     ;;
