@@ -31,7 +31,7 @@ priv struct Run {
   /// how deep in flushes, and what is to be done once the outermost is over (after_flush): not this library's
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
-  afters : Array[() -> Unit]
+  afters : Array[(() -> Unit)?]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
 }
@@ -477,7 +477,10 @@ fn flush() -> Unit {
     // main thread 3.2 s, 0.1.7302, 2026-11-05)
     let mut a = 0
     while a < run.afters.length() {
-      let f = run.afters[a]
+      let f = run.afters[a].unwrap()
+      // Clearing an array keeps its unused slots. Drop the callback as it runs
+      // so a completed change does not keep what its callbacks captured.
+      run.afters[a] = None
       a += 1
       f()
     }
@@ -492,7 +495,7 @@ fn flush() -> Unit {
 /// one change left things and never half of it (where a window's tree stands as the next change comes).
 pub fn after_flush(f : () -> Unit) -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.draining {
-    run.afters.push(f)
+    run.afters.push(Some(f))
   } else {
     f()
   }
