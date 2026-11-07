@@ -78,6 +78,8 @@ pub fn chat_mark(@ui.Ctx, String) -> Int32
 
 pub fn chat_mark_node(@view.View, () -> String) -> Unit
 
+pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?]
+
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 
 pub let chat_narrow_w : Double
@@ -100,7 +102,7 @@ pub let coming_after_ms : Double
 
 pub let coming_in_ms : Double
 
-pub fn completion_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn completion_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit) -> Unit
 
 pub fn composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, ComposerSpec, (@sfbase.Writing) -> Unit, place? : ComposerPlace) -> Unit
 
@@ -118,7 +120,7 @@ pub fn composer_open_room(Double, corner? : Double) -> Double
 
 pub fn composer_place(Double) -> ComposerPlace
 
-pub fn composer_room(@ui.Ctx, String, settled? : Bool) -> Double
+pub fn composer_room(@ui.Ctx, String, settled? : Bool, held? : Bool) -> Double
 
 pub fn composer_side() -> Double
 
@@ -278,6 +280,8 @@ pub fn invited_you(@json.Json) -> String
 
 pub fn join_dialog(@settings.Core, String, String, String) -> Unit
 
+pub fn json_sign(@json.Json?) -> String
+
 pub let kind_mark : Double
 
 pub fn kind_mark_of(String) -> Double
@@ -306,6 +310,8 @@ pub let list_filters : Array[String]
 
 pub fn list_key(@sfbase.ChatRef) -> String
 
+pub fn lists_top() -> Unit
+
 pub let lists_top_in : Double
 
 pub fn local_menu_open() -> Bool
@@ -322,7 +328,7 @@ pub fn local_stopped_words(@json.Json?) -> String
 
 pub fn lock_wait_page(@ui.Ctx, @settings.Core, @settings.Here) -> Unit
 
-pub fn login_card(@ui.Ctx, @settings.Core, String, String, marked? : Bool) -> Unit
+pub fn login_card(@ui.Ctx, @settings.Core, String, String, marked? : Bool, place? : String) -> Unit
 
 pub fn login_cards_reset() -> Unit
 
@@ -370,11 +376,11 @@ pub fn no_workspace(@ui.Ctx, @sfbase.Source, @json.Json?, () -> Unit) -> Unit
 
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> @json.Json?, () -> Unit) -> @view.View
 
-pub fn notify_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn notify_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn offered_image() -> String
 
-pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], from~ : @sf.Beside, along? : @ui.Along) -> Unit
+pub fn open_chat_menu(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], from~ : @sf.Beside, along? : @view.Along) -> Unit
 
 pub fn open_context_actions(@sfbase.Source, String, String, @json.Json?, @sf.Beside) -> Unit
 
@@ -394,7 +400,7 @@ pub fn open_triple(String, String) -> Unit
 
 pub fn open_triple_accounts(String, String) -> Unit
 
-pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @view.Side) -> Unit
+pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @view.Side, page? : @json.Json?) -> Unit
 
 pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
@@ -438,7 +444,7 @@ pub fn pick_files(@sfbase.Writing) -> Unit
 
 pub fn picking(MessageHere, @ui.Ctx, @sfbase.Source, String, Double, String, String, String, () -> Unit, fill? : Bool, key? : String) -> Unit
 
-pub fn picture_out(@ui.Ctx, Bytes?, copy_said? : Bool) -> Bool
+pub fn picture_out(@ui.Ctx, Bytes?, copy_said? : Bool, copy? : Bool) -> Bool
 
 pub fn picture_share(@sfbase.Attachment, Double, min_side? : Double) -> (Double, Double)
 
@@ -524,6 +530,8 @@ pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
 
+pub fn rows_rest() -> Double
+
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 
 pub fn sample_stations() -> Array[@json.Json]
@@ -544,17 +552,25 @@ pub fn screens_perf(Double) -> String
 
 pub fn search_away(@ui.Ctx) -> Double
 
+pub fn search_away_node(@view.View) -> () -> Double
+
 pub fn search_bar_away() -> Bool
 
 pub fn search_leaving() -> Bool
 
 pub let search_list_rise : Double
 
+pub fn search_on_lists() -> Bool
+
 pub fn search_opened() -> Bool
 
 pub fn search_over(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Double) -> Unit
 
+pub fn search_page_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, () -> Double, @sf.ListAt) -> Unit
+
 pub fn search_start(@ui.Ctx) -> Unit
+
+pub fn search_start_now() -> Unit
 
 pub fn search_summon(@ui.Ctx, Array[Offered], Bool) -> Unit
 
@@ -771,6 +787,7 @@ pub(all) struct ListsFrame {
   others : Array[() -> Unit]
   shown : Int32
   at : @sf.ListAt
+  kept : Bool
 }
 
 pub(all) struct ListsNodeFrame {
@@ -783,6 +800,7 @@ pub(all) struct ListsNodeFrame {
   others : Array[(@view.View) -> Unit]
   shown : () -> Int32
   at : @sf.ListAt
+  watched : () -> Bool
 }
 
 type MapPlace
