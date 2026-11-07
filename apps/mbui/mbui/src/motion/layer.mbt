@@ -345,8 +345,6 @@ priv struct ListMo {
   reborn : Map[Int, Int]
   /// what moves its rows lifted over others (read where a row reads how long ago it was lifted: `lifted`)
   lift_mover : @ui.Mover
-  /// rows let go without a copy left behind
-  unghost : Map[Int, Bool]
   mut seen : Int
 }
 
@@ -966,7 +964,6 @@ pub fn list_keys(
         lifted: {},
         reborn: {},
         lift_mover: @ui.Mover::new(),
-        unghost: {},
         seen: frame,
       }
       mo.lists[id] = l
@@ -1010,7 +1007,6 @@ pub fn list_keys(
   lm.names = keys
   // nothing to move from: only where they are is kept
   if nb == 0 || away || c.still() {
-    lm.unghost.clear()
     return id
   }
   lm.changed_frame = frame
@@ -1079,9 +1075,6 @@ pub fn list_keys(
       continue
     }
     gone = true
-    if lm.unghost.contains(k) {
-      continue
-    }
     match mo.recs.get(k) {
       Some(r) if r.seen >= frame - 2 && r.list == id && !r.drawing.is_empty() =>
         match r.exit {
@@ -1101,12 +1094,6 @@ pub fn list_keys(
   }
   if gone {
     lm.close_until = now + 50.0
-  }
-  // (one let go without a copy stays so until it leaves: ListMotion.kt swiped.retainAll)
-  let left : Array[Int] = []
-  lm.unghost.each(fn(k, _) { if !fresh.contains(k) && !ks.contains(k) { left.push(k) } })
-  for k in left {
-    lm.unghost.remove(k)
   }
   let stale : Array[Int] = []
   lm.arrived.each(fn(k, at) { if now - at >= 500.0 { stale.push(k) } })
