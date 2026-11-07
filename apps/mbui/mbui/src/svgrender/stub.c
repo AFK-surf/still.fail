@@ -4,6 +4,12 @@
 #include <string.h>
 #include <limits.h>
 
+#ifdef _MSC_VER
+// System imports required by the Rust static library.
+#pragma comment(lib, "ntdll.lib")
+#pragma comment(lib, "userenv.lib")
+#endif
+
 extern void mbsvg_fonts_add(void *, const uint8_t *, size_t);
 extern uint8_t *mbsvg_rasterize_app(void *, const uint8_t *, size_t, uint32_t);
 extern void mbsvg_buffer_free(uint8_t *, size_t);
