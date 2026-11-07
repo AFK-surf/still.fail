@@ -1772,8 +1772,8 @@ export class Store {
   /// and redelivers) is the same message: its n comes back with `fresh` false and nothing changes.
   insertMessage(m: NewMessage): [number, boolean] {
     return this.#with((changes) => {
-      const existing = this.#messageAt(m.thread, m.ts);
-      if (existing !== null) return [existing.n, false];
+      const existing = this.messageNumberAt(m.thread, m.ts);
+      if (existing !== null) return [existing, false];
       const card = m.card ?? undefined;
       const options = m.options ?? undefined;
       const entry = this.#append(
@@ -2094,6 +2094,11 @@ export class Store {
   /// A message of the thread by its platform id, as merged.
   messageAt(thread: number, ts: string): MessageRow | null {
     return this.#messageAt(thread, ts);
+  }
+
+  /// A message's number without reading its text or edits (for duplicate detection).
+  messageNumberAt(thread: number, ts: string): number | null {
+    return this.#one("SELECT n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts)?.n ?? null;
   }
 
   /// The card the message at `ts` in a thread was posted with, if any (a Slack login card's field answered: whose login).
