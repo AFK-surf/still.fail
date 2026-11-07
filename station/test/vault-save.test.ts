@@ -103,7 +103,7 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
     extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
   const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
-  return { db, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
+  return { db, hub, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
 }
 
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
@@ -216,6 +216,46 @@ test("a still-needed secret save can be asked again without reading the secret a
   }
 });
 
+test("a secret reask rechecks its decision after old card preparation", async () => {
+  const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    let ready = false;
+    (h.hub.store as any).pendingCardHeaderIfReady = () => ready ? h.hub.store.pendingCardHeader() : undefined;
+    (h.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = h.secrets.reask("s1", request);
+    void reask.catch(() => {});
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]);
+    assert.equal(waiting, true, "the reask waits for old card preparation");
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
+    release.resolve();
+    await assert.rejects(reask, /no longer pending/);
+    assert.equal(h.cards.length, 1);
+  } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a secret reask does not record a card decided during final old-card preparation", async () => {
+  const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    let reads = 0, ready = false;
+    (h.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? h.hub.store.pendingCardHeader() : undefined;
+    (h.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = h.secrets.reask("s1", request);
+    void reask.catch(() => {});
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]);
+    assert.equal(waiting, true, "the final card check waits for preparation");
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
+    release.resolve();
+    await assert.rejects(reask, /no longer pending/);
+    assert.equal(h.cards.length, 1, "a card for the decided request was not recorded");
+  } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
 test("a still-needed secret use can be asked again as the same request", async () => {
   const h = harness(() => null);
   try {
@@ -259,7 +299,8 @@ test("a decision arriving while a secret card is reissued is not reset", async (
       assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
     });
     await assert.rejects(h.secrets.reask("s1", request), /no longer pending/);
-    assert.deepEqual(h.withdrawn, ["1", "2"], "both the old card and the raced new card were closed");
+    assert.deepEqual(h.withdrawn, ["1"], "the old card was closed");
+    assert.equal(h.cards.length, 1, "no new card was recorded after the decision");
     assert.equal(h.secrets.held("s1")[0]!.request.id, request, "the decision survived");
   } finally {
     rmSync(h.dir, { recursive: true, force: true });

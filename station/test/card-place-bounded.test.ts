@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { cardPlace } from "../src/sessions/card-place.ts";
+import { cardPlace, postCard } from "../src/sessions/card-place.ts";
+import { cardPostsStep } from "../src/store/card-post-index.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 
 test("an operation finds its original card without reading the session's other conversations", () => {
@@ -83,3 +88,117 @@ test("finding an operation's pending card does not merge its message", () => {
     } finally { Object.defineProperty(store, "db", { configurable: true, value: db }); }
   } finally { store.close(); }
 });
+
+test("a card place defers an old thread until its card posts are prepared", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "CHAT", "old-card-place", null, null).id;
+    store.joinThread(thread, "s", "local");
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','s','choose',?,1)")
+      .run(thread, JSON.stringify({ type: "text" }));
+    db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
+    db.prepare("DELETE FROM card_posts WHERE thread=?").run(thread);
+    Object.defineProperty(store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/SELECT n FROM entries WHERE thread = \? AND kind = 'message' AND (card|options) IS NOT NULL/i.test(sql))
+          throw new Error("the station scanned an unprepared card index");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    assert.equal(cardPlace(store, "s", thread, "1.1"), undefined);
+    while (!cardPostsStep(db, thread).done) { /* bounded worker batches */ }
+    assert.equal(cardPlace(store, "s", thread, "1.1")?.state, "same");
+  } finally { Object.defineProperty(store, "db", { configurable: true, value: db }); store.close(); }
+});
+
+test("a reasked card does not replace a card another connection wrote during confirmation", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-place-race-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path), writer = new DatabaseSync(path);
+  try {
+    const thread = store.openThread("ember", "CHAT", "card-race", null, null).id;
+    store.joinThread(thread, "s", "local");
+    const where = store.sessionThreadById("s", thread)!;
+    const header = store.pendingCardHeaderIfReady.bind(store);
+    let changed = false;
+    store.pendingCardHeaderIfReady = (id) => {
+      const result = header(id);
+      if (!changed) {
+        changed = true;
+        writer.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','other','agent','other','ask',?,1)")
+          .run(thread, JSON.stringify({ type: "text" }));
+      }
+      return result;
+    };
+    const hub = { store, chat: () => ({ post: async () => "reasked" }), shared: () => {} };
+    await assert.rejects(postCard(hub, "s", where, "ask again", { type: "text" }, (why) => new Error(why)), /Another card is pending/);
+    assert.equal(changed, true);
+    assert.deepEqual(dbRows(store, thread), ["other"]);
+  } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a reasked card waits off the station thread for an external writer", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-place-busy-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path), writer = new DatabaseSync(path);
+  let transaction = false;
+  try {
+    const thread = store.openThread("ember", "CHAT", "card-busy", null, null).id;
+    store.joinThread(thread, "s", "local");
+    const where = store.sessionThreadById("s", thread)!;
+    writer.exec("BEGIN IMMEDIATE"); transaction = true;
+    const posted = Promise.withResolvers<void>();
+    const hub = { store, chat: () => ({ post: async () => { posted.resolve(); return "reasked"; } }), shared: () => {} };
+    let settled = false;
+    const reask = postCard(hub, "s", where, "ask again", { type: "text" }, (why) => new Error(why));
+    void reask.then(() => { settled = true; }, () => { settled = true; });
+    await posted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false, "the writer did not block the station or end the reask");
+    writer.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','other','agent','other','ask',?,1)")
+      .run(thread, JSON.stringify({ type: "text" }));
+    writer.exec("COMMIT"); transaction = false;
+    await assert.rejects(reask, /Another card is pending/);
+    assert.deepEqual(dbRows(store, thread), ["other"]);
+  } finally { if (transaction) writer.exec("ROLLBACK"); writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a reasked card continues after an unrelated external write", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "card-place-busy-unrelated-"));
+  const path = join(dir, "stillfail.db"), store = Store.open(path), writer = new DatabaseSync(path);
+  let transaction = false;
+  try {
+    const thread = store.openThread("ember", "CHAT", "card-busy-unrelated", null, null).id;
+    store.joinThread(thread, "s", "local");
+    const where = store.sessionThreadById("s", thread)!;
+    writer.exec("BEGIN IMMEDIATE"); transaction = true;
+    const posted = Promise.withResolvers<void>();
+    const hub = { store, chat: () => ({ post: async () => { posted.resolve(); return "reasked"; } }), shared: () => {} };
+    const reask = postCard(hub, "s", where, "ask again", { type: "text" }, (why) => new Error(why));
+    await posted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+    writer.prepare("UPDATE threads SET title='unrelated' WHERE id=?").run(thread);
+    writer.exec("COMMIT"); transaction = false;
+    assert.equal(await reask, "reasked");
+    assert.deepEqual(dbRows(store, thread), ["reasked"]);
+  } finally { if (transaction) writer.exec("ROLLBACK"); writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an error after a reasked card was recorded does not retry the write", async () => {
+  const store = Store.open(":memory:");
+  try {
+    const thread = store.openThread("ember", "CHAT", "card-after-write", null, null).id;
+    store.joinThread(thread, "s", "local");
+    const where = store.sessionThreadById("s", thread)!;
+    let announced = 0;
+    const busy = Object.assign(new Error("synthetic post-commit busy"), { errcode: 5 });
+    const hub = { store, chat: () => ({ post: async () => "reasked" }), shared: () => { announced++; throw busy; } };
+    await assert.rejects(postCard(hub, "s", where, "ask again", { type: "text" }, (why) => new Error(why)), /synthetic post-commit busy/);
+    assert.equal(announced, 1);
+    assert.deepEqual(dbRows(store, thread), ["reasked"]);
+  } finally { store.close(); }
+});
+
+function dbRows(store: Store, thread: number): string[] {
+  return (store.db.prepare("SELECT ts FROM entries WHERE thread=? AND kind='message' ORDER BY n").all(thread) as { ts: string }[]).map((r) => r.ts);
+}

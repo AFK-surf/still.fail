@@ -20,7 +20,7 @@ import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
-import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
+import { CARD_OCCUPIED, cardPlace, recordPostedCard } from "../sessions/card-place.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
 import { stateOf } from "../browser/signins.ts";
@@ -808,17 +808,18 @@ export class Secrets {
           vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: hosted(r.mode) ? (r.hosts ?? l.hosts) : [], ...(r.runOn ? { station: r.runOn.name } : {}), ...(r.timeout ? { timeout: r.timeout } : {}) },
         }
       : null;
-    return this.#postCard(session, thread, text, card, requireEmpty);
+    return this.#postCard(session, thread, text, card, requireEmpty, r);
   }
 
   /// A request's post in the session's chat, with its card where the chat shows cards; the card's ts, if it has one.
-  async #postCard(session: string, thread: SessionThread, text: string, card: Record<string, unknown> | null, requireEmpty = false): Promise<string | null> {
+  async #postCard(session: string, thread: SessionThread, text: string, card: Record<string, unknown> | null, requireEmpty = false, request?: Request): Promise<string | null> {
     const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
-    if (requireEmpty && this.#d.hub.store.pendingCardHeader(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
-    const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
-    this.#d.hub.shared(thread.thread.id, n, session, text);
-    return card !== null ? posted : null;
+    const needed = request ? () => {
+      const current = this.#kept(request.ws, request.id)?.request;
+      return current?.status === "pending" && this.#requestLive(current, Math.floor(this.#d.now() / 1000));
+    } : undefined;
+    return recordPostedCard(this.#d.hub, session, thread, text, card, posted, requireEmpty ? (why) => new Refused(why) : null, needed);
   }
 
   /// Reissue the card for the very same pending request, without recapturing or revealing a secret. A message can end
@@ -834,6 +835,11 @@ export class Secrets {
       throw new Refused(`Request ${id} is no longer pending (expired).`);
     }
     const place = cardPlace(this.#d.hub.store, session, kept.thread, kept.cardTs);
+    if (place === undefined) {
+      if (!this.#d.hub.prepareCardPosts || kept.thread == null) throw new Refused("card lookup is not ready");
+      await this.#d.hub.prepareCardPosts([kept.thread]);
+      return this.reask(session, id);
+    }
     if (place === null) throw new Refused("This request has no card in the chat to ask again.");
     if (place.state === "same") return `The card for request ${id} is already pending in the chat.`;
     if (place.state === "other") throw new Refused(CARD_OCCUPIED);
@@ -1051,7 +1057,7 @@ export class Secrets {
           },
         }
       : null;
-    return this.#postCard(session, thread, text, card, requireEmpty);
+    return this.#postCard(session, thread, text, card, requireEmpty, r);
   }
 
   /// What an agent is told of a request to keep a secret, waiting (secret_save's answer) or decided (a notice).
