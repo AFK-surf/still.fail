@@ -447,28 +447,15 @@ fn push_circle_clip(cx : Double, cy : Double, r : Double) -> Unit {
 ///|
 /// Node `n`'s clip pushed: its rect, its corners rounded as it draws them (radius_at), within the clip it is in.
 fn push_round_clip(n : Node) -> Unit {
-  // (a box whose border is drawn over what it holds (paint's border_over) cuts it at the border's inside, as CSS's
-  // overflow cuts at the padding box: what it holds never shows under its line, which is the box's edge (a list's row
-  // under a card's see-through line read as the line through it), its corners concentric with the box's there)
-  let bw = if n.border_w > 0.0 && n.first >= 0 && (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll) {
-    dmin(n.border_w, dmin(n.fw, n.fh) / 2.0)
-  } else {
-    0.0
-  }
-  push_inset_clip(n.x, n.y, n.fw, n.fh, fn(j) { n.radius_at(j) }, bw)
+  push_box_clip(n.x, n.y, n.fw, n.fh, fn(j) { n.radius_at(j) })
 }
 
 ///|
 /// A clip pushed for what a box `w` by `h` at (x, y) holds, its corners `radius_at` each (top left, then round it),
-/// cut `bw` in from its edges where its line is drawn over what it holds (the line's inside, as CSS's overflow cuts at
-/// the padding box), its corners concentric with the box's there; within the clip it is in. An old view's box's
-/// (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
-fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double, bw : Double) -> Unit {
-  let bw = dmax(0.0, dmin(bw, dmin(w, h) / 2.0))
-  let x = x + bw
-  let y = y + bw
-  let w = w - 2.0 * bw
-  let h = h - 2.0 * bw
+/// within the clip it is in: at the box's own edge, where its border is, which takes no room (what is laid out to its
+/// edge is all of it there, under its border, drawn over it: paint's border_over), as a layer's border over what it
+/// masks. An old view's box's (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
+fn push_box_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double) -> Unit {
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -482,7 +469,7 @@ fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(concentric(radius_at(j), bw), room), 0.0)
+    let r = dmax(dmin(radius_at(j), room), 0.0)
     if r > 0.0 && cx == ox && cy == oy && r >= pr {
       (r, smoothness(r, room))
     } else {

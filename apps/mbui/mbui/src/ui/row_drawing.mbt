@@ -378,7 +378,7 @@ fn Ctx::row_replay(self : Ctx, d : RowDrawing, i : Int, dx : Double, dy : Double
     a[b] += dx
     a[b + 1] += dy
     // (cut by a clip of its own: moved with it, and cut by the list's where that cuts it, its corners square where
-    // cut, as push_inset_clip makes them; by the list's: in it as it is now; turned about a point: that point too;
+    // cut, as push_box_clip makes them; by the list's: in it as it is now; turned about a point: that point too;
     // faded towards a cut: where)
     if how == 1 {
       for c in 0..<4 {

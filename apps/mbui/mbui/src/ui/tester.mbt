@@ -1419,6 +1419,27 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
 }
 
 ///|
+/// Each list's visible rows' boxes (x, y, width, height), top to bottom, list by list as they were built.
+pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Double, Double)]] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for i in 0..<c.count {
+    if c.nodes[i].kind == kind_list {
+      let rows = []
+      let mut r = c.nodes[i].first
+      while r >= 0 {
+        let n = c.nodes[r]
+        rows.push((n.x, n.y, n.fw, n.fh))
+        r = n.next
+      }
+      out.push(rows)
+    }
+  }
+  out
+}
+
+///|
 /// The lines of the first text node whose text contains `s`, as laid out.
 pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
   let c = g()
