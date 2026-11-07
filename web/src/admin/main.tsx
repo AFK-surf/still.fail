@@ -8,5 +8,5 @@ import { isSignIn, show } from "../login/page.tsx";
 
 const root = document.getElementById("app")!;
 const path = location.pathname.replace(/\/+$/, "");
-if (isSignIn(path)) show(root, path);
+if (isSignIn(path)) show(root, path, true);
 else void import("./app.tsx").then((m) => m.show(root));

@@ -10,8 +10,9 @@ addWords({ zh: zhLogin as Words, en: enLogin as Words });
 /** Whether `path` is one of the sign-in pages. */
 export const isSignIn = (path: string) => path === "/login" || path === "/auth/callback";
 
-export function show(root: HTMLElement, path: string): void {
+/** `admin`: on the admin's console's host. */
+export function show(root: HTMLElement, path: string, admin = false): void {
   // (in place of the splash index.html paints first)
   root.replaceChildren();
-  render(<I18nRoot>{path === "/auth/callback" ? <Callback /> : <SignIn />}</I18nRoot>, root);
+  render(<I18nRoot>{path === "/auth/callback" ? <Callback /> : <SignIn admin={admin} />}</I18nRoot>, root);
 }

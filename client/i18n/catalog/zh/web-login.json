@@ -12,5 +12,7 @@
   "web-login.stateMismatch": "登录状态不匹配，请重新登录",
   "web-login.unreachable": "连不上 {name}：{error}",
   "web-login.device": "{brand} 网页版 · {browser}{more}",
-  "web-login.browser": "浏览器"
+  "web-login.browser": "浏览器",
+  "web-login.adminTitle": "{name} 管理后台",
+  "web-login.adminLead": "仅 {name} 的管理员可访问此页面。使用管理员账号登录。"
 }

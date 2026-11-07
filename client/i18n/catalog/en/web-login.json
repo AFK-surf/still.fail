@@ -12,5 +12,7 @@
   "web-login.stateMismatch": "Sign-in state mismatch. Sign in again",
   "web-login.unreachable": "Couldn't reach {name}: {error}",
   "web-login.device": "{brand} Web · {browser}{more}",
-  "web-login.browser": "Browser"
+  "web-login.browser": "Browser",
+  "web-login.adminTitle": "{name} admin",
+  "web-login.adminLead": "Only {name} admins can use this. Sign in with an admin account."
 }

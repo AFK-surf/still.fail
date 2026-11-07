@@ -30,14 +30,17 @@ function Button({ primary = false, onClick, children }: { primary?: boolean; onC
   return <button type="button" className={`${css.button}${primary ? ` ${css.primary}` : ""}`} onClick={onClick}>{children}</button>;
 }
 
-/** /login: on to still.fail cloud's sign-in at once; should that fail, a way to try again. */
-export function SignIn() {
+/** /login: on to still.fail cloud's sign-in at once; should that fail, a way to try again. `admin`: the admin's
+ * console's, said as its own. */
+export function SignIn({ admin = false }: { admin?: boolean }) {
+  const title = t(admin ? "web-login.adminTitle" : "web-login.title", { name: NAME });
+  const lead = admin ? t("web-login.adminLead", { name: NAME }) : t("web-login.lead");
   const [error, setError] = useState<string | null>(null);
   const to = returnTo(location.search);
   useEffect(() => { start(to).catch((e: unknown) => setError(String(e))); }, []);
-  if (error === null) return <Page title={t("web-login.title", { name: NAME })} lead={t("web-login.lead")} />;
+  if (error === null) return <Page title={title} lead={lead} />;
   return (
-    <Page title={t("web-login.title", { name: NAME })} lead={t("web-login.unreachable", { name: NAME, error })}>
+    <Page title={title} lead={t("web-login.unreachable", { name: NAME, error })}>
       <Button primary onClick={() => { setError(null); start(to).catch((e: unknown) => setError(String(e))); }}>{t("web-login.start")}</Button>
     </Page>
   );
