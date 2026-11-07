@@ -206,6 +206,10 @@ export interface Host {
     open(): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
   };
 
+  /// A file a station's agent sends to this phone (adb.ts `#fetch`), in a folder its adb shell reads: `bytes` written at
+  /// `offset` (0 starts it anew), answered with its path and its size now. Empty bytes at offset -1 only ask them.
+  stage?(name: string, offset: number, bytes: Uint8Array): Effect.Effect<{ path: string; size: number }, HostError>;
+
   /// An HTTP listener on this machine's loopback `host` (127.0.0.1 or ::1, nothing else) at `port`, open while the scope
   /// is: what comes to it, a request at a time (a login's browser coming back). Fails when the port
   /// is taken there. Only a native host has one (a web page cannot listen).

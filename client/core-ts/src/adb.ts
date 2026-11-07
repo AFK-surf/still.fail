@@ -28,6 +28,8 @@ function grantChat(g: J): string {
 }
 
 const RETRY_MS = 1_000;
+/// How much of a file the station sends is asked at once (as a chat's file's download asks: views/downloads.ts).
+const FETCH_PART = 4 * 1024 * 1024;
 /// The grants taken back here (id → when they would have ended): a station that goes on saying one lends nothing.
 export const REVOKED_KEY = "adb-revoked";
 
@@ -55,6 +57,9 @@ export type AdbEnv = {
   /// Whether this device has an adb to lend: a phone's own adbd, which only an Android device runs (as it said it is:
   /// `client.device`), reached over TCP; a Mac's or a PC's core reaches TCP too, and has none.
   lends: () => boolean;
+  /// A part of a file sent in a chat of `station` (its session `key`, `name` in its uploads), as a chat's file is
+  /// downloaded (station/requests.ts `filePart`): what `#fetch` brings a file the station sends this phone with.
+  part?: (station: StationAddr, key: string, name: string, offset: number, length: number) => Effect.Effect<{ total: number; bytes: Uint8Array }, CoreError>;
   /// The person's own lock (personal-lock.ts): whose a workspace's grants are, who this device speaks for, and how it
   /// joins (views/pair.ts).
   personal: PersonalLock;
@@ -382,9 +387,11 @@ class Lend {
       const carry = { bytes: new Uint8Array() };
       const line = yield* Effect.orElseSucceed(readLine(stream, carry), () => null);
       if (line === null) return;
-      const kind = (parseJson(utf8(line)) as J)?.tunnel;
+      const asked = parseJson(utf8(line)) as J;
+      const kind = asked?.tunnel;
       const offer = this.#offer;
       if (offer === null) return yield* refuse("已停止共享");
+      if (asked?.fetch !== undefined) return yield* this.#fetch(stream, offer.station, asked.fetch);
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
       if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
       // This device's own adb session where its host has one (the shell's adb.rs): the station's adb carried on the one
@@ -434,6 +441,46 @@ class Lend {
           }),
         ),
       );
+    });
+  }
+
+  /// A file the station sends this phone (its agent's `phone_send`): `{fetch: {key, name, size}}`, fetched a part at a
+  /// time as a chat's file is downloaded and written where adb's shell reads it, going on from what an earlier fetch of
+  /// it left. Answered `{at}` after each part, then `{path}`, or `{error, at}`.
+  #fetch(stream: IrohStream, station: string, fetch: J): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const say = (said: J) => Effect.ignore(stream.write(utf8(`${JSON.stringify(said)}\n`)), { log: "Unhandled", message: "fetch said" });
+      const end = Effect.ignore(stream.finish(), { log: "Unhandled", message: "fetch finished" });
+      const stage = this.#env.host.stage?.bind(this.#env.host);
+      const part = this.#env.part;
+      const { key, name, size } = fetch ?? {};
+      if (stage === undefined || part === undefined) return yield* Effect.andThen(say({ error: "unsupported" }), end);
+      if (typeof key !== "string" || typeof name !== "string" || !/^[^/\\]+$/.test(name) || name === "." || name === ".." || !Number.isSafeInteger(size) || size < 0)
+        return yield* Effect.andThen(say({ error: "invalid fetch" }), end);
+      const addr = StationAddr.parse(station);
+      const failed = (at: number) => (e: { message: string }) => Effect.andThen(say({ error: e.message, at }), end);
+      const had = yield* Effect.result(stage(name, -1, new Uint8Array()));
+      if (had._tag === "Failure") return yield* failed(0)(had.failure);
+      // (one longer than the file is another's: begun anew)
+      let at = had.success.size <= size ? had.success.size : 0;
+      let path = had.success.path;
+      if (at === 0) {
+        const begun = yield* Effect.result(stage(name, 0, new Uint8Array()));
+        if (begun._tag === "Failure") return yield* failed(0)(begun.failure);
+      }
+      while (at < size) {
+        const got = yield* Effect.result(part(addr, key, name, at, FETCH_PART));
+        if (got._tag === "Failure") return yield* failed(at)(got.failure);
+        const { total, bytes } = got.success;
+        if (total !== size || bytes.length === 0) return yield* failed(at)({ message: `the station has ${total} bytes of it, not ${size}` });
+        const wrote = yield* Effect.result(stage(name, at, bytes));
+        if (wrote._tag === "Failure") return yield* failed(at)(wrote.failure);
+        at += bytes.length;
+        path = wrote.success.path;
+        yield* say({ at });
+      }
+      yield* say({ path });
+      yield* end;
     });
   }
 

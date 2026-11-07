@@ -46,6 +46,18 @@ export const PHONE_USE = {
   },
 };
 
+export const PHONE_SEND = {
+  name: "phone_send",
+  description:
+    "Put a file of this machine on the phone granted to this chat (phone_use), much faster and surer than adb push over the phone's link: the phone fetches it the way it downloads a chat's file. Answers its path on the phone, in the app's own folder, which this chat's adb shell reads; pm cannot read there, so install an APK from a copy: adb … shell 'cp <path> /data/local/tmp/a.apk && pm install -r /data/local/tmp/a.apk'. Cut short (the link went), call it again: it goes on from what the phone has. Waits until the file is there.",
+  inputSchema: {
+    "type": "object",
+    "properties": { "path": { "type": "string", "description": "The file: an absolute path, or one in your workspace." } },
+    "required": ["path"],
+    "additionalProperties": false
+  },
+};
+
 /// How a granted phone is reached now: its owner's phones lent here (`phones`), each in the grant's adb server (`port`).
 /// `gone`: when the phone was last offered no longer and why, if it was since the station started.
 /// `display`: the chat's own screen on the phone (displays.ts), or why it could not be made; none while the phone is not
@@ -59,6 +71,7 @@ export function reached(serials: { serial: string; adb: string; device: string }
   return [
     "Granted. Use this chat's adb server, with -P on every adb command (the station's own adb, 5037, does not have the phone; another server is turned away; run from under this session or its own directory, others are refused):",
     ...lines,
+    "To put a file on the phone, use phone_send, not adb push (much slower over the phone's link, begun again from nothing when it breaks).",
     'adb "connected" is ready; "unpaired": the phone needs pairing, and its card in your chat shows its person how (a card under it, in the still.fail app on the phone): leave it to the card, do not send them to the phone\'s settings, and you are told in this session when it connects. Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
     ...(display ? ["", displayed(display)] : []),
   ].join("\n");
