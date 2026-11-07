@@ -1347,7 +1347,7 @@ fn Ctx::emit_rich_glyphs(
       _ => (key, 1.0)
     }
     if rec_glyph_early(key, sc / zoom, ox + lay.xs[c], top, ox + lay.xs[c] + lay.adv[c], top + lay.line_h[l]) {
-      paint_culled.val += 1
+      rec_skip(top, top + lay.line_h[l])
       continue
     }
     let g = glyph(key, sc / zoom)

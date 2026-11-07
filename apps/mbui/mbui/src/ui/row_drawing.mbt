@@ -29,6 +29,9 @@ priv struct RowDrawing {
   mut held_off : Bool
   /// the clip's rect it was painted in (what it said is put in the list's as it is said again)
   band : Array[Double]
+  /// how far it was painted, its rect: the band, short of a line of words past the list's clip whose glyphs were not
+  /// asked for (rec_reach); drawn again only while the list's clip is inside it
+  reach : Array[Double]
   /// how many nodes it is
   mut n : Int
   /// each instance's node (from the row's first; -1, the row's paint around its nodes) and line of words (top,
@@ -86,6 +89,7 @@ fn row_drawing_new() -> RowDrawing {
     whole: false,
     held_off: false,
     band: [],
+    reach: [],
     n: 0,
     node_of: [],
     line_top: [],
@@ -258,10 +262,11 @@ fn row_inside_band(d : RowDrawing, n : Node, dx : Double, dy : Double) -> Bool {
 /// Whether the list's clip at `k` lies inside how far the row painted whole (`d`) was painted, moved with it by `dx`,
 /// `dy`: all of it that can show there was painted.
 fn row_reach(d : RowDrawing, dx : Double, dy : Double, k : Int) -> Bool {
-  clip_stack[k] >= d.band[0] + dx &&
-  clip_stack[k + 1] >= d.band[1] + dy &&
-  clip_stack[k + 2] <= d.band[2] + dx &&
-  clip_stack[k + 3] <= d.band[3] + dy
+  d.reach.length() == 4 &&
+  clip_stack[k] >= d.reach[0] + dx &&
+  clip_stack[k + 1] >= d.reach[1] + dy &&
+  clip_stack[k + 2] <= d.reach[2] + dx &&
+  clip_stack[k + 3] <= d.reach[3] + dy
 }
 
 ///|
@@ -582,6 +587,7 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
   if plain {
     d.band.append(row_whole_rect(k))
     rec_real.val = (d.clip[0], d.clip[1], d.clip[2], d.clip[3])
+    rec_reach.val = (d.band[1], d.band[3])
     for q in 0..<4 {
       clip_stack[k + q] = d.band[q]
     }
@@ -624,6 +630,12 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
   let whole = plain ||
     (n.x >= d.clip[0] && n.y >= d.clip[1] && n.x + n.fw <= d.clip[2] && n.y + n.fh <= d.clip[3])
   let band = d.band
+  d.reach.clear()
+  d.reach.append(band)
+  if plain {
+    d.reach[1] = rec_reach.val.0
+    d.reach[3] = rec_reach.val.1
+  }
   d.valid = whole && !d.watch.is_stale() && paint_culled.val == culled && clock_reads.val == clocked &&
     paint_base.wake == wake &&
     self.row_drawing_cuts(start, if plain { row_whole_clip(d.clip, band) } else { d.clip }, d.klass, whole=plain)
