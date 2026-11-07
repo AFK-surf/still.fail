@@ -1,4 +1,4 @@
-// still.fail's styles (mbui's docs/style.md): the few roles words have across the app, and the boxes every page
+// still.fail's styles (mbui's ui/style.mbt): the few roles words have across the app, and the boxes every page
 // lays out with, made of tokens alone (tokens.mbt has the numbers). A page says these, not sizes and colours; a role
 // it lacks is added here, for every page, not named after one.
 

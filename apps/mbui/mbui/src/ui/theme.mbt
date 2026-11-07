@@ -1,7 +1,7 @@
 // What the views built under it look like unless they say (SwiftUI's environment, Compose's CompositionLocal, egui's
 // Style): the theme's colours, corners and sizes, and which way words and rows run. The app sets it once (it stays
 // from frame to frame) or for a part of what it builds (Ctx::with_theme, Ctx::with_direction); the widgets read their
-// defaults from it, and what a call says itself still wins. docs/components.md says how the components use it.
+// defaults from it, and what a call says itself still wins. mbui's kit/styles.mbt says how the components use it.
 
 ///|
 /// The theme: colours RRGGBBAA, corners and sizes in logical pixels. Made from one of its kinds (Theme::light, …) and

@@ -1,4 +1,4 @@
-// The components' gallery (docs/components.md): a page of components (MBUI_SCREEN=<page>, `foundation` by default),
+// The components' gallery (mbui's kit/styles.mbt): a page of components (MBUI_SCREEN=<page>, `foundation` by default),
 // every one in its states, the light theme beside the dark one. Live where it can be (pressed, focused by Tab), and
 // each state also drawn by its look as it is (pointed at, held, focused, disabled), for screenshots
 // (scripts/shots.sh kit).

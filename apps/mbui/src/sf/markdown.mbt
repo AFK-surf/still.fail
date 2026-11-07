@@ -1188,7 +1188,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   // the copy key in the block's top right corner: a capsule, as far from both edges as makes it concentric with the
   // block (a block of the ladder's: row_corner), on a row of its own over the code with either input (the web's over
   // the code's first line to a mouse: a long first line ran under its words). Whole: quiet at 55% until pointed at, its
-  // words were 2.2 to 1 (docs/ui-panels.md 对比度)
+  // words were 2.2 to 1 (mbui ui/contrast.mbt)
   let block_radius = row_corner
   let key_inset = @ui.capsule_in(block_radius, code_key_h)
   let over = native_input() is Mouse
@@ -1524,7 +1524,7 @@ fn Md::table_frame(
           @motion.measure(c, row_box, head_at)
         }
         // a rule under every row but the last, across the table from the first column's words to the last's, as
-        // faint as is seen on what it lies on (docs/ui-panels.md 对比度): the rows' words part them, the rule only marks
+        // faint as is seen on what it lies on (mbui ui/contrast.mbt): the rows' words part them, the rule only marks
         // where
         if r < rows.length() - 1 {
           c.box(style=@ui.style(w=Fixed(total), h=Fixed(scale), bg=Data(rule)), fn() {  }) |> ignore

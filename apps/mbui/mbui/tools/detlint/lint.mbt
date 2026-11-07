@@ -336,7 +336,7 @@ fn lint_mbt(
       add("layout-read-back", c.at, f.line_text(c.at))
     }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
-    // laid out at changed (the app's docs/motion.md)
+    // laid out at changed (the app's sf/motion.mbt)
     match follow_target(f, c, returns) {
       Some(n) if !in_t => {
         let pos = c.args.filter(fn(a) { a.0 is None })
@@ -360,14 +360,14 @@ fn lint_mbt(
       !moving_listed(f, c.at) {
       add("motion-read", c.at, f.line_text(c.at))
     }
-    // a spring of the app's own: each is one of @motion's (the app's docs/motion.md, Curves)
+    // a spring of the app's own: each is one of @motion's (the app's sf/motion.mbt, Curves)
     if (c.name == "spring" || c.name == "motion_spring") &&
       app &&
       !in_t &&
       ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "method") {
       add("motion-spring", c.at, f.line_text(c.at))
     }
-    // a move of a length of its own: a thing moved takes as long as its way is far (the app's docs/motion.md, Curves)
+    // a move of a length of its own: a thing moved takes as long as its way is far (the app's sf/motion.mbt, Curves)
     if c.name == "tween" &&
       !in_t &&
       ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "bare") &&
@@ -650,7 +650,7 @@ fn loose_look(name : String) -> Array[String]? {
 let style_makers : Array[String] = ["style", "patch", "text_style", "text_patch"]
 
 ///|
-/// style-literal, box-loose, style-exact (docs/style.md): tests are not counted
+/// style-literal, box-loose, style-exact (mbui's ui/style.mbt): tests are not counted
 fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
   if matches(f.rel, cfg.style_outside) {
     return
@@ -1563,7 +1563,7 @@ fn css_of_args(
 
 ///|
 /// style-text: a `style(…)` in a top-level `let` (a named style, a `.then(…)` of one) whose properties are all
-/// tokens and numbers is to be its text, `@ui.css("…")` (docs/style.md): moonc makes each such call ~5-10 KB of C in
+/// tokens and numbers is to be its text, `@ui.css("…")` (mbui's ui/style.mbt): moonc makes each such call ~5-10 KB of C in
 /// `moonbit_init`, run as the app starts, built again on every build (2026-10-24). One naming a variable, worked
 /// out, or in a function stays `style(…)`. Bare `style(` is counted where the `let` says `Style` (mbui's own
 /// package).

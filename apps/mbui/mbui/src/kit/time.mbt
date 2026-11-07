@@ -1,4 +1,4 @@
-// Time for the components (docs/components.md, "Time and motion"): everything in them that waits or moves goes
+// Time for the components (mbui's kit/styles.mbt, "Time and motion"): everything in them that waits or moves goes
 // through these three, on the Ctx's clock (a Tester moves it; screenshots and reduced motion put motion at its end at
 // once), so that nothing counts frames of its own and one scheduler can stand behind all of it later. `after` is a
 // delay (a tooltip's, a toast's time); `presence` is Motion's AnimatePresence (what is shown comes in, and once it is

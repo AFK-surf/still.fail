@@ -34,7 +34,7 @@ pub(all) struct Trans {
   spec : Spec
   /// a panel's (what is put over others, its own ground under its words): faded in whole under its words before they
   /// come in over it, they going before it as it goes (Look's `words`), so that never are its words and what it is put
-  /// over both seen in one place (docs/motion.md rule 4)
+  /// over both seen in one place (sf/motion.mbt rule 4)
   ground_first : Bool
 } derive(Show, Eq)
 
@@ -341,7 +341,7 @@ priv struct ListMo {
   lifted : Map[Int, Double]
   /// rows gone ahead of others this change: not moved across them, but gone from where they were (a copy shrinking
   /// there as the rest close over it) and come in where they are now (grown in as the rest make room), each its words
-  /// over none of theirs (docs/motion.md rule 4; the user, 2026-10-29: 「它先缩下去，然后在目标位置挤出来」)
+  /// over none of theirs (sf/motion.mbt rule 4; the user, 2026-10-29: 「它先缩下去，然后在目标位置挤出来」)
   reborn : Map[Int, Int]
   /// what moves its rows lifted over others (read where a row reads how long ago it was lifted: `lifted`)
   lift_mover : @ui.Mover
@@ -552,7 +552,7 @@ fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
 /// changes, it is drawn where it was and goes by `spec` to where it is now, carrying on from wherever it had got to. A
 /// row of a list told its rows (list_keys) that names no cause of its own moves for their change. Moved by nothing it
 /// moves for (a window resized, a keyboard, a pane made narrower), it is put in its new place at once, a move of its
-/// own going on as it was: no difference found between frames moves anything (docs/motion.md of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
+/// own going on as it was: no difference found between frames moves anything (sf/motion.mbt of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
 /// `drive` (0 → 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by
 /// where it shows in the list's view. `cut`: grown for its cause, what it holds is cut to as tall as it shows; false
 /// where what is new in it grows with its room of itself (`grown_shown`): drawn whole, never cut through. `whole`: not
@@ -1382,7 +1382,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 ///|
 /// What moves this frame for each cause (its `by`), on a Move: how far the furthest of it goes, and each of its motions
 /// (where to, by what), set out again as long as that one, so what moves together for one cause (a composer's ground,
-/// its words, its ＋ and its send) is on one clock (docs/motion.md: as long as its way is far).
+/// its words, its ＋ and its send) is on one clock (sf/motion.mbt: as long as its way is far).
 // kept across runs: cleared as each frame's layout begins, taken as it ends (after_layout)
 let together : Map[String, (Double, Array[(Anim, Double, Spec)])] = {}
 
@@ -1461,7 +1461,7 @@ fn rows_drawn(c : @ui.Ctx, list : Int) -> Array[(Double, Double)] {
 let room_soft : Double = @ui.cut_soft_most
 
 ///|
-/// What comes into a list's place shows only in the room what was there has left (docs/motion.md rule 4, words over
+/// What comes into a list's place shows only in the room what was there has left (sf/motion.mbt rule 4, words over
 /// words): a row in its place (one new to the list, or one a row closes over) is not drawn where a row of the same
 /// list on its way to its place still is, as that one goes there (an agent's line gliding down from where a message
 /// came in, the rows closing up over one gone). The row on its way is drawn whole, over its old place; the one in its
@@ -2135,7 +2135,7 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
     }
     // (its two Anims say their ends as they are read: frames until they are there)
     // from as it was (1) to its far end (0); not where a row of its list is drawn now: what goes gives way to what is
-    // there or comes over it, never its words under theirs (docs/motion.md rule 4)
+    // there or comes over it, never its words under theirs (sf/motion.mbt rule 4)
     c.draw_drawing(gh.drawing, li, gh.trans.at(1.0 - pf, 1.0 - pm), apart=rows_drawn(c, id))
   }
   let mut j = done.length() - 1

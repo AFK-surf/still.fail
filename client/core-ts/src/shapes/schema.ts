@@ -2196,7 +2196,7 @@ export const SHAPES: Record<string, Shape> = {
     ["ui", opt("String"), { doc: "The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face." }],
     ["text", opt("String"), { doc: "What people and agents wrote (messages, the composer); none: as `ui`." }],
     ["code", opt("String"), { doc: "Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page)." }],
-  ], { default: true, doc: "The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md)." }),
+  ], { default: true, doc: "The faces chosen on this device, by place (client/core-ts/src/fonts.ts, sf/faces.mbt)." }),
   FontsView: struct([
     ["ui", "FontFace"],
     ["text", "FontFace"],

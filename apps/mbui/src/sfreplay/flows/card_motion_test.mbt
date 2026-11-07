@@ -18,7 +18,7 @@ test "70-card-motion" {
     f.see("=灰色 083209")
     f.tap_now("=橙色 083209") |> ignore
     f.answered("decision.answer", 1)
-    // answered on screen (decision.answer): its options close as the answer comes in, one move (docs/list-motion.md)
+    // answered on screen (decision.answer): its options close as the answer comes in, one move (mbui's view/list_motion.mbt)
     f.gone("=灰色 083209")
     f.tap("发消息")
     f.type_text("再选一个 083209 card:先做哪一页 083209|首页 083209|设置页 083209")
@@ -36,7 +36,7 @@ test "70-card-motion" {
     f.see("=忽略")
     f.tap_now("=忽略") |> ignore
     f.answered("decision.dismiss", 1)
-    // let go on screen (decision.dismiss): 忽略 and the card's options close (docs/list-motion.md)
+    // let go on screen (decision.dismiss): 忽略 and the card's options close (mbui's view/list_motion.mbt)
     f.run_for(@sfapp.archive_ms)
     f.gone("=忽略")
     f.gone("=设置页 083209")

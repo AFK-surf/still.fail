@@ -28,7 +28,7 @@ pub fn level_color(level : String) -> Int64 {
 /// The chip (FillChip): its ground the neutral one, filled from the left as far as `fill` (0–100), grey while the
 /// level is ok, faintly the level's colour once it is not (the accent's ink for `progress`: chip_fill_share); its figure
 /// and its `mark` before it in the text's colour, whatever the level: the fill says the level, and over it the level's
-/// ink, or a grey a step quieter, read too faint (amber 3.3 to 1, the mark 3.9 to 1 in the dark; docs/ui-panels.md
+/// ink, or a grey a step quieter, read too faint (amber 3.3 to 1, the mark 3.9 to 1 in the dark; sf/align.mbt
 /// 对比度). Its words are the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
 /// `compact`: less horizontal padding around a small chip's figure when its mark stands separately above it.
 /// `said`: what it is, over it while it is pointed at (QuotaBars', MeterChips' tips: what is left of what and when it
@@ -62,7 +62,7 @@ pub fn fill_chip(
   let id = if key == "" || said == "" { 0 } else { c.id("fill-chip/" + key) }
   // (its fill a plain rectangle its layer cuts along the chip's corners, its end square where it stops; the chip
   // itself cuts nothing: a box that cuts what it holds gives way to its row, which would cut its figure to an ellipsis
-  // beside anything wider: @ui's docs/style.md, Short of room)
+  // beside anything wider: mbui's ui/squeeze.mbt)
   let b = c.box(style=if small { chip_box_small } else { chip_box }, drop~, keep~, id~, taps=false, points=true, fn() {
     if fill > 0 {
       c.layer(fn() {

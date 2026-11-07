@@ -31,7 +31,7 @@ pub(all) struct Look {
   /// the opacity of all it holds over its own (`alpha`), past its own ground, edge and shadow: its words, its drawing,
   /// every box in it and what they draw, as one (words_alpha). A panel coming in whole under what it holds before that
   /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
-  /// over that's (docs/motion.md rule 4); then all it holds at once, never its words after its icons and pictures
+  /// over that's (sf/motion.mbt rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
 } derive(Show, Eq, Debug)
 

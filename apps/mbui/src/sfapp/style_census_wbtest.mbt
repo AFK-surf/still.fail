@@ -1,6 +1,6 @@
 // How many values of each kind the app's screens use (mbui's Tester::census over the fixtures' screens, narrow and
 // wide, light and dark): sizes of words with their lines, weights, paddings and gaps, corners, colours. The styles'
-// migration (mbui's docs/style.md) brings each down; scripts/style_census.sh prints them, and the values. What the old
+// migration (mbui's ui/style.mbt) brings each down; scripts/style_census.sh prints them, and the values. What the old
 // views draw and the window's tree's nodes are counted both (Tester::census: the tree's as each is set, Tree::styled).
 
 ///|

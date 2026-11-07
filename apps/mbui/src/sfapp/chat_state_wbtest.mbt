@@ -47,7 +47,7 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
   let (_, need_y) = t.find(need).unwrap()
   let (_, last_y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   assert_true(need_y > last_y)
-  // the core no longer says it: it fades as its room closes (docs/list-motion.md), what is over it coming down with
+  // the core no longer says it: it fades as its room closes (mbui's view/list_motion.mbt), what is over it coming down with
   // it, a step of the way each frame, never at once
   said.set(false)
   t.draw()

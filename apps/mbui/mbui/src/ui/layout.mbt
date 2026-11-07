@@ -216,7 +216,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
 
 ///|
 /// Whether a node is words on one line (Ctx::text's or Ctx::rich's, `wrap` false): never laid wider than a column they
-/// are in, as wide as they are in a row unless they say otherwise (docs/style.md, Short of room).
+/// are in, as wide as they are in a row unless they say otherwise (mbui's ui/squeeze.mbt).
 fn Node::one_line_words(self : Node) -> Bool {
   (self.kind == kind_text || self.kind == kind_rich) && !self.wrap
 }
@@ -982,7 +982,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   fit_least = dmax(fit_least, least)
   n.fit_least = fit_least
-  // what it comes to as a last resort where its row has not the room for every least (docs/style.md, Short of room):
+  // what it comes to as a last resort where its row has not the room for every least (mbui's ui/squeeze.mbt):
   // words on one line in a row that say not how they give, none of them; what holds such words, as it holds them,
   // but for what is pressed (a button, a chip: a control is never cut); else its least
   let mut soft_least = if k == kind_box &&

@@ -1,5 +1,5 @@
 // Contrast, measured: what a frame draws to be seen stands off what it is drawn on far enough to be seen (still.fail's
-// docs/ui-panels.md「对比度」). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up
+// mbui ui/contrast.mbt). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up
 // in bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
 // with nothing in it, its ground or (where that does not show) its edge alone saying what it is: a gauge's cell, a
 // bar's track, a line (Ctx::lines too), a sheet's grip, each bar and shape of a page's bones (bones.mbt): at least

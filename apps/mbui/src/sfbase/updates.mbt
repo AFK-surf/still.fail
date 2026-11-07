@@ -19,6 +19,9 @@
 // is given by default: src/stillfail gives the cloud's for MBUI_UPDATE_FEED=<feed> (the local cloud's in e2e). A
 // source of a release elsewhere answers the same AppRelease (versionCode, versionName, file: a path under the source's
 // releases or a whole https URL, sha256, size, news).
+//
+// A person wants the latest version; checking and fetching are not their business (the user, 2026-10-31: 「从第一性
+// 原理出发」).
 
 ///|
 /// As at the start (the app's reset).

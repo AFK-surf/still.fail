@@ -186,7 +186,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
             |> ignore
           } else {
             // coming in with the words, when they fly here from the composer: seen once they are in over it, not as
-            // they pass up over its place (docs/motion.md rule 4)
+            // they pass up over its place (sf/motion.mbt rule 4)
             let at = c.box(fn() { message_time(c, "m:" + m.ts, m.time) })
             match flight_here(here) {
               Some(f) if f.text != "" => {
@@ -419,7 +419,7 @@ fn message_name(
     }
   }
   c.box(style=msg_name_room, id~, fn() {
-    // (the accent's words already: pointed at, underlined, docs/ui-panels.md 悬停)
+    // (the accent's words already: pointed at, underlined, mbui ui/hand_moves.mbt)
     c.rich([@ui.span(name, underline=goes && c.hovered(id))], style=msg_name) |> ignore
   })
   |> ignore

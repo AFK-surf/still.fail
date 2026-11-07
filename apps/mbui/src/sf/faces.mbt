@@ -1,4 +1,4 @@
-// The faces still.fail's words are set in, beside the system's (docs/fonts.md): code in JetBrains Mono, as Android's
+// The faces still.fail's words are set in, beside the system's (sf/faces.mbt): code in JetBrains Mono, as Android's
 // Theme.kt JetBrainsMono, the app carrying its file's bytes (font_assets.mbt, scripts/fontassets.py), given to the
 // hosts as the app starts. The faces a person chooses (外观 › 字体) come later, given the same way.
 

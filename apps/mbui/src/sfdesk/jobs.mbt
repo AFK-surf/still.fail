@@ -596,7 +596,7 @@ let job_row_static_inset : @ui.Style = @ui.css("row w=Full py=S1_5 px=S2_5 gap=S
 
 ///|
 /// Its dot and words; over, its name stepped back to the muted grey (data-off), not faded (at 55% its words were 2.3 to
-/// 1: docs/ui-panels.md 对比度).
+/// 1: mbui ui/contrast.mbt).
 // kept across runs: a value (no field of it changes)
 let job_row_on : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=AStart)
 
@@ -679,7 +679,7 @@ let job_last_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wr
 
 ///|
 /// Its actions (jobActions): 2 apart, 6 under what is over them, 8 out at their start; each 26 high, 8 in, its mark and
-/// words 5 apart, the pointer's ground on hover (over the row's, lit with it: docs/ui-panels.md 悬停).
+/// words 5 apart, the pointer's ground on hover (over the row's, lit with it: mbui ui/hand_moves.mbt).
 // kept across runs: a value (no field of it changes)
 let job_actions : @ui.Style = @ui.css("row pt=S1_5 gap=S0_5").then(@sf.outset_start(8.0))
 

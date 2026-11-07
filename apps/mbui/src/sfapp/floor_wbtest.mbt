@@ -1,6 +1,6 @@
 // The room an agent's line leaves at the chat's end (chat.mbt floor_of, Chat.kt floor): the list never gets shorter
 // under the reader at once: nothing over the line drops as it goes; the rows over it make way from where they stood (on
-// the rows' spring, docs/motion.md kind 3), and what comes in meanwhile takes the room back.
+// the rows' spring, sf/motion.mbt kind 3), and what comes in meanwhile takes the room back.
 
 ///|
 fn floor_now() -> Double {

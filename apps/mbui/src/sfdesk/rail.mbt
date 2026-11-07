@@ -482,7 +482,7 @@ let rail_under : Ref[Int64] = Ref(0L)
 
 ///|
 /// A mark hung on the top right corner of one of the rail's grounds (a place's, a workspace's square: drawn in it,
-/// after what is on it): on the corner, not in it (docs/ui-panels.md, the user, 2026-10-17: @sf.on_corner), its middle
+/// after what is on it): on the corner, not in it (sf/align.mbt, the user, 2026-10-17: @sf.on_corner), its middle
 /// on the ground's curve where it turns 45° (its corner this frame: rail_round), on a disc of what the rail stands on
 /// 2 round it (rail_under), which the ground, lit, shows cut out of it. `shown` of the way in (a list's as the sidebar
 /// folds: Rail.css.ts listMark, from clear at 40%, moved with it).

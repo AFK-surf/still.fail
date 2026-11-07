@@ -25,6 +25,9 @@
 // sidebar, in its place. Back goes from the side panel to the page, takes what was opened over the page off one at a
 // time (sliding as a phone's page does), then from the page to the sidebar, from the sidebar of another place to the
 // chats'; each following the system's back gesture as it goes (the page's stack, Ctx::nav_flat's; the tape, tape_back).
+//
+// A panel changes only by pressing or dragging it (the user, 2026-10-24: 「当需要操作某个视窗的时候，应该先点击，然
+// 后视窗会过来」), and nothing folds the sidebar by itself (「老莫名其妙收起」).
 
 ///|
 /// What the frame keeps of its own (the rest is the stack's and the core's): the sidebar's width and how it was left,

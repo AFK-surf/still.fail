@@ -2,7 +2,7 @@
 // useComposerMove): the composer goes from its place on the one to its place on the other (340 ms, the ease out: its
 // own reshape, composer.mbt), a new chat left leaves by its own way (its scene fading where it is, its choices
 // fading where they are: fresh.mbt, as a new chat become its chat does), and what comes in is there at once. No page
-// crossfades whole (docs/motion.md: what is swapped does not move; the web's root view transition is not taken).
+// crossfades whole (sf/motion.mbt: what is swapped does not move; the web's root view transition is not taken).
 // Between two chats nothing moves; a new chat become its chat has its own (newchat.mbt new_chat_after).
 
 ///|

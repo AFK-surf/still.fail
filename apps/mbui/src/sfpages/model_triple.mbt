@@ -6,6 +6,9 @@
 // effort and the speed, every name whole; at its foot who runs it (the accounts in a panel of their own, from it).
 // Its rows are the screen's (Theme::rows pick). Each pick is made what it runs on as it is picked (`pick.save`), a
 // model closing the panel; a model another station has is drafted (`pick.set`) and borrowed first, asked in a dialog.
+//
+// Laid out by use, not by our controls (the user, 2026-10-30: 「不要被我们现在的控件束缚住了」): what is used more
+// stands nearer the button (2026-11-01: 「那它就不应该跑到离按钮很远的最顶上去啊」).
 
 ///|
 /// What the control keeps of its own (the pick is the core's): the one whose panel is open (its station and pick, ""

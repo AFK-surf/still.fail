@@ -174,7 +174,7 @@ test "an option answered on screen: its options close at once, how it went in th
   // (none of them answers again, closing as they are)
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  // on screen as out of sight: its room closed with what came of it, one move (docs/list-motion.md)
+  // on screen as out of sight: its room closed with what came of it, one move (mbui's view/list_motion.mbt)
   t.run_for(turn_most_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("你 选择了「一起换」") is Some(_))

@@ -167,7 +167,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
 
 ///|
 test "what waits to go has its ✕ hung on its corner, its centre on the curve, a picture's and a file's card alike, on a phone and a computer alike, clear of the next; tapped, it takes it out" {
-  // (Android, then macOS: one design on every screen, docs/ui-panels.md)
+  // (Android, then macOS: one design on every screen, sf/align.mbt)
   for platform in [2, 0] {
     let calls : Array[Made] = []
     let made : Ref[Source?] = Ref(None)

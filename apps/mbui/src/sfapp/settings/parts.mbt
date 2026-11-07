@@ -74,7 +74,7 @@ fn wide_head_in() -> Double {
 /// A page of the settings: what it shows, a block at a time (each laid out only when it comes into view), scrolling
 /// under what stays at its top. `key` keeps its place while it is on the stack. `keys`: each block's own (a station's
 /// id, a person's), as many as the blocks: what came or went comes and goes where it is, as a chat's rows do
-/// (ListRows, docs/list-motion.md); `moves` also closes a block that changes order and opens it at its new place. A
+/// (ListRows, mbui's view/list_motion.mbt); `moves` also closes a block that changes order and opens it at its new place. A
 /// page whose blocks are all others now (what waited, then what came) shows them as they are. `continuity` identifies
 /// the blocks that mean this is the same list: a spacer or a waiting view is not an existing item in it, and an
 /// unanswered view has none. Only those blocks are remembered for the next time.
@@ -896,7 +896,7 @@ let card_ui_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(@sf.button_h
 
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
-/// (`on_card`, LocalOnCard). On every width, as the library's group is (docs/ui-panels.md 页面卡片: a group of rows on
+/// (`on_card`, LocalOnCard). On every width, as the library's group is (sf/page.mbt: a group of rows on
 /// a list card wide too; `boxed`, said where a page asked for the card in the wide frame before it was always one).
 fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
   ignore(boxed)

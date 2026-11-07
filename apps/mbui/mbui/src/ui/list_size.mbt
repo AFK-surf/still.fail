@@ -1,4 +1,4 @@
-// A list's rows' heights as they change (still.fail's docs/list-motion.md, 2026-10-30 the user: 「那些会变长或缩短的消息
+// A list's rows' heights as they change (2026-10-30 the user: 「那些会变长或缩短的消息
 // 列表内容的动效协同起来的效果，需要系统性设计一下」「为啥每个改动都要自己处理一遍」). The page gives its list its rows
 // each build, each by its key and its version (ListRows): from one build to the next the list itself works out what
 // came (a key new to it: its room opening from nothing), what went (a key gone: kept in the list as it last was while
@@ -83,7 +83,7 @@ fn RowSizing::at(self : RowSizing, t : Double, to : Double, k : Double) -> (Doub
 }
 
 ///|
-/// How long a row's height takes to go to its new one: a near Move's (docs/motion.md Curves). Not yet as long as its
+/// How long a row's height takes to go to its new one: a near Move's (sf/motion.mbt Curves). Not yet as long as its
 /// way is far, as every other move is: a row's height is worked out by its key as the list is laid out (ListRows),
 /// its way's length to come with that.
 pub let row_size_ms : Double = 300.0

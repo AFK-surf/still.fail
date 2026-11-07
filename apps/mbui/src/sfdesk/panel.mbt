@@ -212,7 +212,7 @@ let side_tab_shape : @ui.Style = @ui.style(
 )
 
 ///|
-/// One behind: the pointer's ground on it (and its × a step more, pointed at: docs/ui-panels.md 悬停).
+/// One behind: the pointer's ground on it (and its × a step more, pointed at: mbui ui/hand_moves.mbt).
 // kept across runs: a value (no field of it changes)
 pub let side_tab : @ui.Style = side_tab_shape.then(@ui.css("hovered{bg=Hover}"))
 
@@ -691,7 +691,7 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
     side_change(src, r, "close", Some(tab))
   }
   let (label, closing) = side_tab_names(src, r, v, tab)
-  // lit, a tab's muted words and marks come up to the words' colour, as its ground comes (docs/ui-panels.md 悬停)
+  // lit, a tab's muted words and marks come up to the words' colour, as its ground comes (mbui ui/hand_moves.mbt)
   let lit = !front && c.lit(id)
   let b = c.box(style=if front { side_tab_in_front } else { side_tab }, id~, fn() {
     side_tab_mark_of(c, src, r, v, tab, front || lit)

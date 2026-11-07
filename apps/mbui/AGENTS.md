@@ -39,14 +39,14 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## The component library
 
-- The parts pages are made of are the library's, `src/sf` (docs/library.md): the counterpart of the web's `web/ui`,
+- The parts pages are made of are the library's, `src/sf` (sf/styles.mbt): the counterpart of the web's `web/ui`,
   one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
 
 - A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
   as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
-  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui/docs/style.md). Why (2026-10-24): moonc made
+  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui's ui/style.mbt). Why (2026-10-24): moonc made
   each `@ui.style(…)` constant ~5-10 KB of C in the program's start, ~1400 of them ~11.8 MB of one function compiled
   again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
   way and prints the text to write.
@@ -90,7 +90,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## Motion
 
-- `docs/motion.md` says what moves and how; read it before adding or changing a motion. In short (the user,
+- `sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
   2026-10-25):
   - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
     scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.

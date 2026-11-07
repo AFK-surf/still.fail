@@ -1,6 +1,6 @@
 // What the hand changes, measured as the corner rule is (corners.mbt): the hand on a thing (a mouse's pointer resting
 // on it, a finger pressing it) changes how it looks, its ground and its ink, and never how big words are, nor how tall
-// anything it lights is or how far down it stands (still.fail's docs/ui-panels.md 悬停: 「形状就是它能按的范围，字的位置
+// anything it lights is or how far down it stands (mbui ui/hand_moves.mbt: 「形状就是它能按的范围，字的位置
 // 不动」). A page writing its hot words as a style of their own can say more than their ink in it: a popover's foot,
 // 全部 1 个 · 在侧栏查看, Meta at rest and Ui under the pointer, grew under it (the user, 2026-10-26: 「这玩意儿 hover
 // 会变大」); a row's 忽略, shown only under the pointer, a point taller than the row's line, made the row taller
@@ -8,6 +8,10 @@
 // shown (Ctx::lit_every, lit_all), at the same moment as the frame before it with none (Tester::hand_moves), and finds
 // what is otherwise (Ctx::hand_faults). Across, a row may make room for what shows in it under the hand, as the web's
 // rows do. What goes by an animation the hand starts (motion's while_hover) is where it starts in both.
+//
+// A hover answers one thing: what moves if pressed now (the user, 2026-10-25: 「hover 效果需要系统性设计一下」). So
+// one light, ink laid over what is there, which reads as a step forward on any ground where a solid colour would
+// not.
 
 ///|
 /// How far a place measured may differ and be the same: the layout's rounding.

@@ -9,7 +9,7 @@ import { card } from "./pages.css.ts";
 /**
  * In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, its
  * words where the card's other words end (its padding taken back by its margin); hovered, the hover ink behind them as
- * everywhere (docs/ui-panels.md 悬停).
+ * everywhere (mbui ui/hand_moves.mbt).
  */
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
   borderColor: "transparent", background: "transparent", paddingBlock: "0", ...bleedX(12),

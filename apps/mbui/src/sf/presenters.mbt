@@ -6,6 +6,9 @@
 // panel) or a dialog in the middle of the window (a confirm, a question). One host draws them all over
 // the shell (`presented`), after the pages, each frame: it keeps what is open, one over another, the topmost taking
 // back, Escape and a press outside, and the focus going into it as it opens.
+//
+// A step further in changes page in the panel rather than stacking (the user, 2026-11-02: 「现有的多重弹窗太垃圾了」
+// ); stacking is for what is asked and returned from.
 
 ///|
 /// What opened a presenter: the box pressed (its id, `c.id(key)`), a rectangle of the window (x, y, w, h: a point
@@ -2164,7 +2167,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let (_, wh) = c.window_size()
   // what it holds, as tall as this frame lays it out (read back: laid out another height, the frame is built again),
   // so the sheet is as tall as that in the frame it shows, and with it as it changes: placed by its size, not chased
-  // to the size the frame before measured (docs/motion.md)
+  // to the size the frame before measured (sf/motion.mbt)
   let fit = c.id("sf-present/fit/\{p.serial}")
   let natural = match c.laid_size(fit) {
     Some((_, h)) => Some(h)

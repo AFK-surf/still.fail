@@ -1,4 +1,4 @@
-// The curves of timed motion, one for each thing a motion can be (motion.ts; the app's apps/mbui/docs/motion.md,
+// The curves of timed motion, one for each thing a motion can be (motion.ts; the app's sf/motion.mbt,
 // Curves; mbui's @ui.Ease): kept apart from the motion library so styles can say them too (--ease-move, --ease-leave).
 
 /** The page's --ease-leave: what goes (faded out, shrinking, off the screen). */

@@ -280,7 +280,7 @@ test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () 
   assert.deepEqual(messages[0].decision, { resolved: true, text: "已替换为新问题" });
   assert.deepEqual(messages[2].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
   // Its station still saying it waits (its row not told the answer yet): what is on its way settles it all the same,
-  // the card closing with the answer coming in, not a moment after it (docs/list-motion.md).
+  // the card closing with the answer coming in, not a moment after it (mbui's view/list_motion.mbt).
   messages = [askedMsg(2)];
   messages = d.inMessages(messages, [2, false], [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
   assert.equal(messages[0].decision.resolved, true);

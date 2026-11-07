@@ -259,7 +259,7 @@ priv struct PageBones {
 let page_bones : Ref[PageBones?] = Ref(None)
 
 ///|
-/// A page while what it shows is read the first time (docs/ui-panels.md 等待): the page `view` draws, given made-up
+/// A page while what it shows is read the first time (sf/waiting.mbt): the page `view` draws, given made-up
 /// data (what it will show, made of made-up words, through a core that answers nothing), drawn with its frame as it
 /// is (its back; `title` the frame's, as the page's own is not known yet) and all it shows in its bones (its head, what
 /// it is for, what it does, its blocks), breathing; what it waits on (`text`, `note`) said to a screen reader; over it
@@ -490,7 +490,7 @@ pub fn page_rows_reset() -> Unit {
 /// List `key`'s `blocks` (the first `chrome` of them its page's own: back, title, head, what it is for), by the keys
 /// the page gave its blocks (page_keyed, as many as those after `chrome`): a block new to it opens its room where it
 /// is, one gone closes where it was, one showing another thing goes to its new height, as a chat's rows do (ListRows,
-/// docs/list-motion.md; 2026-11-03 the user: 「只给那几页加身份」); its rows' heights so (the list's `sized`). As
+/// mbui's ui/list_size.mbt; 2026-11-03 the user: 「只给那几页加身份」); its rows' heights so (the list's `sized`). As
 /// given, by their places, where the page gave no keys.
 fn keyed_blocks(
   c : @ui.Ctx,
@@ -864,7 +864,7 @@ pub fn heading(c : @ui.Ctx, title : String, note? : String = "", actions? : () -
 }
 
 ///|
-/// Rows together, on a list card on every page (docs/ui-panels.md 页面卡片, 列表卡: what a group of settings is, the same
+/// Rows together, on a list card on every page (sf/page.mbt, 列表卡: what a group of settings is, the same
 /// on a narrow page and a wide one; the user, 2026-10-26, 「设置感觉很乱」: a wide page's rows on the page and its cards
 /// mixed for no reason): narrow, ListCard (12 from the page's sides, 10 under it, its rows 8 in); wide, at the column's
 /// edges, its rows' grounds 10 in from its edges and 2 apart, their words 20 in, as a content card's (`card`: words on a
@@ -937,7 +937,7 @@ pub fn among_groups(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A group's rows while they are read the first time (docs/ui-panels.md 等待: a list's first read, a section's as
+/// A group's rows while they are read the first time (sf/waiting.mbt: a list's first read, a section's as
 /// well): its card with `rows` in it (its own rows, drawn by what draws them, of made-up words) in their bones,
 /// breathing, `text` what it waits on said to a screen reader. Its card as it will be, its rows where they will be:
 /// not a wait's line at the card's edge (2026-10-26, 账号's devices: 「这个 loading 很怪」).
@@ -1299,7 +1299,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// the line has not the room for both; `control` at its
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
 /// words on the line of what rows say at their ends, its ground under the hand reaching out past them to the card's
-/// edge (row_end; docs/ui-panels.md 页面卡片: 文字按钮). `title_cut` and `value_cut` say when either is a summary that
+/// edge (row_end; sf/page.mbt: 文字按钮). `title_cut` and `value_cut` say when either is a summary that
 /// may be shortened on its line, rather than words expected to fit whole. True on the frame it is pressed.
 pub fn link_row(
   c : @ui.Ctx,
@@ -1666,7 +1666,7 @@ let value_dotted : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 /// A row with lines under its first (a note, what is wrong: words of no length known), each on a line of its own as
 /// wide as the row's words: what the row has at its end (what it says, a button, a switch, a chevron) stands on its
 /// first line, beside its title, and what it has before its words (`row_lead`) by that line too
-/// (docs/ui-panels.md 放不下的时候). Its parts from its top.
+/// (mbui ui/squeeze.mbt). Its parts from its top.
 // kept across runs: a value (no field of it changes)
 let row_top : @ui.Style = @ui.css("align=AStart")
 
@@ -1712,7 +1712,7 @@ let figure_words_under : @ui.Style = @ui.css("w=Full gap=S2_5 align=AStart")
 ///|
 /// A name (a chat's, a file's, a station's), or a glimpse of what is in it (a chat's last words), taking what its line
 /// leaves the rest of what is on it (a time, a mark), cut short there (`w=Cut`: the one kind of words cut for what is
-/// beside them, docs/ui-panels.md 放不下的时候). Its words' node.
+/// beside them, mbui ui/squeeze.mbt). Its words' node.
 pub fn name_words(c : @ui.Ctx, name : String, style : @ui.TextStyle, color? : Int64) -> Int {
   let mut i = 0
   // (keeping four of its size before what may leave its row does: Ctx::box drop)
@@ -1732,7 +1732,7 @@ let name_cut : @ui.TextStyle = @ui.text_style(wrap=false, w=Cut)
 /// A row's words with what it has at its end, as the library's rows lay them (link_row, switch_row): `head`, its first
 /// line (its title and what stands at its end: a value, a button, a chevron), across the whole room, 12 apart; then
 /// `under`, the lines under it (a note, a time, what is wrong: words of no length known), each a line of its own as
-/// wide as the room (docs/ui-panels.md 放不下的时候), `spaced` 2 apart (a wide list's). In place of a row holding
+/// wide as the room (mbui ui/squeeze.mbt), `spaced` 2 apart (a wide list's). In place of a row holding
 /// a column of words and, beside all of it, what is at its end.
 pub fn row_lines(c : @ui.Ctx, head : () -> Unit, under : () -> Unit, spaced? : Bool = false) -> Unit {
   c.box(style=if spaced { desk_list_text } else { pg_row_words }, fn() {
@@ -1746,7 +1746,7 @@ pub fn row_lines(c : @ui.Ctx, head : () -> Unit, under : () -> Unit, spaced? : B
 /// What a row with lines under its first has at the end of that line when it is words (what it says, a button of words
 /// alone: `Ghost`), on that line and as high as it (narrow: the body's; wide: a list's title, the UI's 20), 12 apart:
 /// a button of words alone is as tall as a button, its words on the line and its ground under the hand reaching past
-/// it into the row's room (docs/ui-panels.md 页面卡片: 文字按钮), rather than the line as tall as the button and the
+/// it into the row's room (sf/page.mbt: 文字按钮), rather than the line as tall as the button and the
 /// lines under it lower than a row's without one (a 退出 or a 移除 on a device's or a person's first line put its
 /// times or its email 8 lower than its neighbours', 2026-10-26). A button drawn with a ground of its own is not one:
 /// its line is as tall as it.
@@ -1942,7 +1942,7 @@ let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its
-/// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); the switch
+/// end across their middle (a round control stays out of the row's corners: mbui ui/squeeze.mbt); the switch
 /// alone takes the press, at every width (its reach a finger's least however small it is drawn), its words none. `busy`: what it set is on its
 /// way (not turned again meanwhile). `lead`: what goes before its title on its line (a workspace's mark:
 /// workspace_badge). Answers whether it is on now.

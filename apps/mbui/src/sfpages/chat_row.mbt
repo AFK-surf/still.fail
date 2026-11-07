@@ -7,6 +7,8 @@
 // place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat is swiped left
 // to archive it. The menu is the presenters' (@sf.menu): 固定,
 // 重命名, 保留, 复制会话链接, 转到频道, 归档, 分享给其他 workspace, 分享图片, each where the chat has it.
+//
+// One mark for one meaning everywhere (the user, 2026-10-28: 「agent 各种颜色和形状的点很混乱」).
 
 ///|
 /// What the rows keep: the row whose title is being written in place (a mouse's 重命名, its key; "" none) and its field,
@@ -582,7 +584,7 @@ let mark_slot : @ui.Style = @ui.css("w=S2_5 align=ACenter")
 /// The title of a chat settled (all its work done or dropped) or of an offline station's, stepped back: in the muted
 /// grey (navSession[data-settled], [data-offline]); a settled one says so by the archive box leading its second line
 /// (@sfbase.row_lead), its words going no lighter. Not faded: half its ink was 2.7 to 1 on the sidebar, too faint to read
-/// for a row that still opens (docs/ui-panels.md 对比度).
+/// for a row that still opens (mbui ui/contrast.mbt).
 // kept across runs: a value (no field of it changes)
 let title_dim : @ui.TextStyle = @ui.text_style(color=Muted)
 

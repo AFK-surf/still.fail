@@ -8,6 +8,9 @@
 // Shown as the table is pointed at (2026-10-30 用户：「表格右边的按钮改成 hover 表格那一行才显示」), its menu open or
 // it saying it copied, always to a finger: what a pointer over a thing shows (@sf.pointed_or_finger); its room kept
 // either way, so nothing moves as it comes and goes.
+//
+// Hung to the table's right, over nothing (the user, 2026-10-26: 「不要压在表格上」); a row over it and a button
+// inside its corner were tried and refused.
 
 ///|
 /// The key's size (icon_button's), and how far it is from the table and from what follows it (a press's room round it).

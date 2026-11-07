@@ -1,4 +1,4 @@
-// What the styles' migration (mbui's docs/style.md) must leave as it was, byte for byte: the draw lists of the lock's
+// What the styles' migration (mbui's ui/style.mbt) must leave as it was, byte for byte: the draw lists of the lock's
 // waiting page in each of its states, and of screens with kit's components, narrow and wide, light and dark. Each is
 // kept as its length and its FNV-1a hash; one that changes is a change to what is drawn.
 

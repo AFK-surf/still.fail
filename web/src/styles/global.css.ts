@@ -53,7 +53,7 @@ globalStyle(":root", {
     "--subtle": "#565b62",
     // What is drawn to be seen with nothing in it, at its faintest (a line, a gauge's empty cell, a placeholder's block):
     // the ink at an opacity, so it stands as far off whatever it lies on (the page, a card, a menu), at least 1.25 to 1
-    // (docs/ui-panels.md 对比度); an opaque grey was that on the page alone (a station's empty cells on its card, 1.03 to
+    // (mbui ui/contrast.mbt); an opaque grey was that on the page alone (a station's empty cells on its card, 1.03 to
     // 1 in the dark, 2026-10-26). The same on the canvas as the grey it was.
     "--line": "rgb(50 45 36 / .141)",
     "--line-strong": "oklch(82% .008 255)",
@@ -314,7 +314,7 @@ globalStyle("[data-passage-marks] > span", {
   position: "absolute",
   background: `color-mix(in srgb, ${vars.accent} 26%, transparent)`, animation: `${passageFlashKeyframes} 2400ms both`,
 });
-// own corner: a passage's ends, round where it starts and ends, square where it runs on to the next line (docs/ui-panels.md)
+// own corner: a passage's ends, round where it starts and ends, square where it runs on to the next line (sf/align.mbt)
 globalStyle("[data-passage-marks] > span[data-start]", { borderTopLeftRadius: `calc(6px * ${vars.cornerScale})`, borderBottomLeftRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape }); // own corner: a passage's start
 globalStyle("[data-passage-marks] > span[data-end]", { borderTopRightRadius: `calc(6px * ${vars.cornerScale})`, borderBottomRightRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape }); // own corner: a passage's end
 globalStyle(`${STILL} [data-passage-marks] > span`, stillFlash(passageFlashHeldKeyframes, "2400ms"));

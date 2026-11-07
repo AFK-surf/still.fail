@@ -1,4 +1,4 @@
-// Waiting, drawn one way everywhere (docs/ui-panels.md「等待」; Android ui/Waiting.kt the same). Three kinds:
+// Waiting, drawn one way everywhere (sf/waiting.mbt; Android ui/Waiting.kt the same). Three kinds:
 // - a page or list read for the first time: `Waiting`, what will come drawn as it will be, by its own parts, of made-up
 //   words, in its bones (`Bones`: its words bars, its pictures and icons shapes, its outline its own), breathing, no
 //   words (the page's frame, its bar, title and composer, drawn as ever around it); what could not be read said over

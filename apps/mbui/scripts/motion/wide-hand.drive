@@ -1,4 +1,4 @@
-# A control answering the hand on a computer (docs/motion.md, kind 7): MBUI_WIN=1280x800 over the made-up chat. ⌘,
+# A control answering the hand on a computer (sf/motion.mbt, kind 7): MBUI_WIN=1280x800 over the made-up chat. ⌘,
 # then 密钥, a secret's page: the pointer on 编辑 and away, its ground in and out over --dur.
 timeout 30000
 until 发消息

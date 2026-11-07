@@ -1,5 +1,5 @@
 // What values the last frame's nodes take, by kind (Tester::census): how many sizes of words, paddings, corners and
-// colours a screen uses, which an app keeps few (its styles' tokens: docs/style.md), the window's tree's nodes with the
+// colours a screen uses, which an app keeps few (its styles' tokens: mbui's ui/style.mbt), the window's tree's nodes with the
 // old frame's (Tree::styled). Read only.
 
 ///|

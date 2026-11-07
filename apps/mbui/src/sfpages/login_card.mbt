@@ -169,7 +169,7 @@ fn login_step(
   if more.is_empty() {
     step(foot(if solid { lc_step_solid } else { lc_step }))
   } else {
-    // the other ways of doing the step, seldom used, in a ⋯ at the row's end (docs/ui-panels.md: what is used least
+    // the other ways of doing the step, seldom used, in a ⋯ at the row's end (sf/align.mbt: what is used least
     // goes into the row's ⋯)
     c.box(style=foot(lc_step_row), fn() {
       step(if solid { lc_step_solid_in_row } else { lc_step_in_row })
@@ -576,7 +576,7 @@ let lc_code : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=
 
 ///|
 /// A step's button (cardStep): the card's width, 32 high, 8 under what is above it, 12 in, its corner the card's less
-/// its padding; the ink at 5% (the pointer's over it, docs/ui-panels.md 悬停), solid (the primary's, a step towards
+/// its padding; the ink at 5% (the pointer's over it, mbui ui/hand_moves.mbt), solid (the primary's, a step towards
 /// the page under the pointer) while it is the next thing to do; its words 13 medium, a spinner or ↗ 6 beside them.
 // kept across runs: a value (no field of it changes)
 let lc_step : @ui.Style = @ui.css(

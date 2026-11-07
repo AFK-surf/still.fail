@@ -177,7 +177,7 @@ pub(all) struct Items {
 }
 
 // ---------------------------------------------------------------------------
-// Measures (docs/ui-panels.md; styles/align.ts, pages.css.ts)
+// Measures (sf/align.mbt; styles/align.ts, pages.css.ts)
 
 // (a small panel's padding, its words' room and its pills: align.mbt panel_pad, text_in, panel_pill)
 
@@ -221,7 +221,7 @@ pub let lit_apart : Double = 2.0
 ///|
 /// How far in from the sides of what holds it a row that lights up under the hand stands, where it runs across it
 /// (Theme::lit_reach, the spacing rules' 7): a small panel's padding, so a menu's rows, a list card's and a card of
-/// options' alike (docs/ui-panels.md 列表卡; the user, 2026-10-26: a card of options' grounds 10 in, 「6px 就差不多了」).
+/// options' alike (sf/page.mbt; the user, 2026-10-26: a card of options' grounds 10 in, 「6px 就差不多了」).
 pub let lit_reach : Double = panel_pad
 
 ///|
@@ -950,7 +950,7 @@ pub let large_from : Double = 840.0
 
 ///|
 /// How opaque a tone's ink is as its ground (a pill's, a mention's, an error's card: green_bg, red_bg…), in the light
-/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, docs/ui-panels.md 对比度),
+/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, mbui ui/contrast.mbt),
 /// and its ink on it still read (4.5 to 1). Grounds fitted to the page alone, opaque, were 1.0 to 1.1 to 1 off a card
 /// in the dark (a pull request's 开启, 2026-10-27): its words seen, not its pill.
 let tone_light : Double = 0.18
@@ -1666,7 +1666,7 @@ let ground_over : Ref[Int] = Ref(0)
 
 ///|
 /// A link's ink: the accent's ink (its darker one on paper, its lighter one in the dark), which reads in words; the
-/// accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度).
+/// accent itself in the dark was 4.3 to 1 on a raised ground (mbui ui/contrast.mbt).
 pub fn link_ink() -> Int64 {
   theme().p.accent_text
 }
@@ -1780,7 +1780,7 @@ pub fn mix_seen(a : Int64, share : Double, b : Int64) -> Int64 {
 }
 
 // ---------------------------------------------------------------------------
-// mbui's tokens (its docs/style.md): what still.fail's styles (styles.mbt) say by name. The numbers are here and
+// mbui's tokens (its mbui's ui/style.mbt): what still.fail's styles (styles.mbt) say by name. The numbers are here and
 // nowhere else; a value off mbui's scale is one of the few `Exact`s below.
 
 ///|
@@ -1966,7 +1966,7 @@ let ui_theme_made : Ref[(Palette, Type, @ui.Theme)?] = Ref(None)
 fn ui_theme_of(t : Theme) -> @ui.Theme {
   let base = if t.dark { @ui.Theme::narrow_dark() } else { @ui.Theme::narrow_light() }
   // a link's ink: the accent's ink (the darker one on paper, the lighter in the dark), which reads in words; the
-  // accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度)
+  // accent itself in the dark was 4.3 to 1 on a raised ground (mbui ui/contrast.mbt)
   {
     ..base,
     text: text_roles(t.t),
@@ -2071,7 +2071,7 @@ pub let share_w_most : Double = 360.0
 pub let share_ink : Int64 = 0xF4F4F5FFL
 
 ///|
-/// (thinned to 62%: 7.0 to 1 on the night, 6.5 on a card: docs/ui-panels.md 对比度)
+/// (thinned to 62%: 7.0 to 1 on the night, 6.5 on a card: mbui ui/contrast.mbt)
 pub let share_dim : Int64 = 0xF4F4F59EL
 
 ///|

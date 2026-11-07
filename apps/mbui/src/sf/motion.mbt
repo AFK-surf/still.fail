@@ -1,10 +1,14 @@
-// The app's presets (docs/motion.md, Presets: each kind's few, every motion one of them), the web's at the same place:
+// The app's presets (sf/motion.mbt, Presets: each kind's few, every motion one of them), the web's at the same place:
 // its ease-out, what comes into and goes from a list, the spring what makes way moves by, a shape, the list's glide,
 // the most a motion waits for what is here already, a control answering the hand, what is woken, the breath, copied.
 // Those the framework makes are mbui's, named there and in the table (kit's pop_in, dialog_in, switch_ms,
 // progress_ms, media's; @motion's springs; ui's pages pushed); motion as data is mbui's (@motion, Ctx::move_state:
 // the web's moveState). What moves (a shape, the composer to another page, a state moved) is a Move as long as its
 // way is far (@ui.move_ms, @motion.move), never a length of its own.
+//
+// Every motion is set off by its cause, never found by comparing frames (the user, 2026-10-25: 「我感觉现在有不少动
+// 效 bug 是因为用了类似 css 的"过渡"效果，而没有准确地去控制什么时候应该去哪，而是直接检测差值」): a difference
+// cannot know why it happened, so a resize, a dragged sidebar or a keyboard would move what only typing should.
 
 ///|
 /// The page's --ease-out (EASE_OUT: cubic-bezier(0.2, 0.7, 0.2, 1)).

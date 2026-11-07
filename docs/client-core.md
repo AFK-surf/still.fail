@@ -783,7 +783,7 @@ shapes every topic's value passes through on its way out): `node
 client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts`, and `--check` keeps them from drifting. A field whose words someone outside the app wrote (a name, a
 title, a notice, a command, an error, or a line the core makes with them in it) is marked `said`: the same script lists
 where each topic holds them for the mbui app (`apps/mbui/src/sffixture/said_paths.mbt`), whose squeeze sweep makes
-them their longest and holds every screen to fit them (docs/ui-panels.md, 放不下的时候).
+them their longest and holds every screen to fit them (sf/align.mbt, 放不下的时候).
 
 `connectFlow {station, form}` owns the complete connection wizard. It starts at the
 platform where the station has the Feishu connect (its overview lists

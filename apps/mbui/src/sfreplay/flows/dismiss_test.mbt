@@ -21,7 +21,7 @@ test "23-dismiss" {
     f.answered("decision.dismiss", 1)
     f.gone("=忽略")
     f.see("=先合 B 083209")
-    // (its options closing as it was let go: to their end, docs/list-motion.md)
+    // (its options closing as it was let go: to their end, mbui's view/list_motion.mbt)
     // Dismissal closes first; the options and outcome can then move as the view update arrives.
     for _ in 0..<4 {
       let closing = @sfapp.under_rest()

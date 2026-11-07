@@ -46,8 +46,8 @@ changes, laid out or painted again alone, a move or a fade only painted (a trans
 6. **The hand is asked of the tree.** What the pointer is over, what a press went down on, what has the focus, what is
    read out: hit tests and walks of the retained tree, the nodes' own handlers and semantics on them, not lists said
    by each frame's build (said.mbt). A node's lit, pressed, focused and selected states are signals of the node, read by
-   its style's paint properties (hovering changes no size: docs/style.md), so a press lights a node by painting it.
-7. **Time is a signal, read where it is used.** A motion is `animated(target, spec)` (docs/motion.md), a signal of its
+   its style's paint properties (hovering changes no size: mbui's ui/style.mbt), so a press lights a node by painting it.
+7. **Time is a signal, read where it is used.** A motion is `animated(target, spec)` (sf/motion.mbt), a signal of its
    own: read by a paint property (a place, a look: `moved_by`, `look_by`) it paints again each frame it goes and
    nothing else; read by a layout property (a height going), it lays out its node again each frame it goes. A moment
    (a "3 minutes ago", an exit's end) wakes then. Nothing that is not shown reads it; nothing is told to start.
@@ -78,11 +78,11 @@ changes, laid out or painted again alone, a move or a fade only painted (a trans
 - **Fields** (editor.mbt) are nodes holding their own state as now; what is typed writes it; the caret blinks by a
   moment.
 - **Native views** (native.mbt) are made and let go with their node; where they are is worked out as it is painted.
-- **Leaving** is the structure's: `show` and `each` keep a node gone as long as its exit says (docs/motion.md:
+- **Leaving** is the structure's: `show` and `each` keep a node gone as long as its exit says (sf/motion.mbt:
   `animated(present)`), still painted, no longer hit nor read out; its exit's end is the moment it is let go. A row's
   neighbours moving as it comes or goes are moved by that coming or going, told by the `each` that knows it (Compose's
   animateItem), never by comparing where they were laid out.
-- **Layers** (docs/strata.md) are the paint order of the retained tree, a node's stratum a property.
+- **Layers** (src/ui/strata.mbt) are the paint order of the retained tree, a node's stratum a property.
 - **What is read out** (a11y.mbt, semantics.mbt) is the tree's, each node's semantics bindings of its own; what
   changed of it is told to the host as it changes.
 
@@ -95,7 +95,7 @@ How the others put motion on a tree made once, and what of it is ours (2026-10-3
   set) apart from its presentation value (what shows now, worked out from the animations on it each frame), and what
   acts reads the model. Compose reads an animated value in a `graphicsLayer { }` lambda, as it is drawn, so a motion
   composes nothing again. Ours: a property bound to `animated(target, spec)` (rule 7 above); its target is state, its
-  value now is worked out only where it is read; logic reads the target alone (docs/motion.md rule 3).
+  value now is worked out only where it is read; logic reads the target alone (sf/motion.mbt rule 3).
 - **The phase that reads it is the phase that is done again.** Compose's three phases (composition, layout, drawing): a
   state read in one does that one again and those after. Ours: a place, a scale, an opacity, a cut, a look are paint's
   (painted again each frame it goes, nothing laid out); a size is layout's (its node laid out again, up to a relayout
@@ -103,7 +103,7 @@ How the others put motion on a tree made once, and what of it is ours (2026-10-3
 - **A motion is set off by its cause, never by a value changing.** QML has both: `Behavior on x` (any change of `x`
   eases, whatever changed it) and States with Transitions (what eases is said with the change of state that causes it).
   Slint's `animate x`, Flutter's implicit widgets and Compose's `animate*AsState` are the first kind. Ours is the
-  second alone (docs/motion.md rules 1 and 2): a binding moves where its cause says so (`by`), a window made wider
+  second alone (sf/motion.mbt rules 1 and 2): a binding moves where its cause says so (`by`), a window made wider
   changes a width at once. The only place "its value changed, so it eases" holds is a control's own state (kind 7).
 - **Coming and going is the structure's.** Vue's `<Transition>` (Vapor's own `VaporTransition`), Solid's
   transition-group, Compose's `AnimatedVisibility`, Svelte's `transition:`: what decides that a node shows keeps it,
@@ -117,7 +117,7 @@ How the others put motion on a tree made once, and what of it is ours (2026-10-3
   cause (an `each` that moved a row, a stack that pushed a page, a sidebar folded) says so; nothing compares frames.
   What flies between two places (kind 4) flies in an overlay, the pair matched by its key.
 
-The nine kinds (docs/motion.md) in it:
+The nine kinds (sf/motion.mbt) in it:
 
 | Kind | Made once as | Read in |
 |---|---|---|
@@ -177,7 +177,7 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    be the whole app; the API takes one a page, so the old goes from the outside in, never an app beside the tree.
 
 8. **One logical timeline.** Everything that happens at a moment of its own (an input, a message, a leaving ending, a
-   step of what goes by steps: docs/motion.md, the logical clock) is on one timeline the host only wakes and gives the
+   step of what goes by steps: sf/motion.mbt, the logical clock) is on one timeline the host only wakes and gives the
    time to, done in the order of its moments (those together in the order told), each as of its moment; frames and
    events advance it to their moment (Tree::advance) and only observe and draw it.
 9. **The same events, the same picture.** From the same state, the same events with their moments and the same
