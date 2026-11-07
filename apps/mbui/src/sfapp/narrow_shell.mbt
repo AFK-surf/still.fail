@@ -215,6 +215,8 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a newer build of the app asked for once (updates.mbt)
   // (asked once, with the app's version: nothing a build changes)
   update_first(src)
+  // and again while it stays open (one never shown again asks no more otherwise)
+  update_again(c, src)
   // what another app shared in (share.mbt)
   share_in_frame(c)
   // files being kept on the device, said once kept (keep.mbt)

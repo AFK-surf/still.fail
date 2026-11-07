@@ -956,6 +956,8 @@ pub let unseen_at : Double
 
 pub let update : @sfbase.Update
 
+pub fn update_again(@ui.Ctx, @sfbase.Source) -> Unit
+
 pub fn update_asks() -> Bool
 
 pub fn update_check(@sfbase.Source, Bool, done? : (String) -> Unit) -> Unit

@@ -222,3 +222,17 @@ test "the update key while the build goes in: its arrow going up as a station's 
   assert_true(t.find("重启更新") is None)
   assert_true(t.query(Button, label="重启更新").unwrap().disabled, msg="takes no press while it goes in")
 }
+
+///|
+test "left open, a newer build asked for again each hour: a window never shown again does not stay on its build" {
+  let asked = []
+  let t = updates_tester(Json::null(), asked)
+  t.frame()
+  assert_eq(asked, ["1 false"])
+  t.run_for(@sfbase.update_again_ms / 2.0)
+  assert_eq(asked, ["1 false"])
+  t.run_for(@sfbase.update_again_ms / 2.0 + 1000.0)
+  assert_eq(asked, ["1 false", "1 false"])
+  t.run_for(@sfbase.update_again_ms)
+  assert_eq(asked, ["1 false", "1 false", "1 false"])
+}
