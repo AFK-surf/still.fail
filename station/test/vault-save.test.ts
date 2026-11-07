@@ -330,6 +330,38 @@ test("a decision arriving while a secret card is reissued is not reset", async (
   }
 });
 
+test("a decision after the last reask read is not overwritten by the new card", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    const insert = h.hub.store.insertMessage;
+    let posted = false, reads = 0;
+    h.hub.store.insertMessage = (message) => { const result = insert(message); posted = true; return result; };
+    const prepare = h.db.prepare.bind(h.db);
+    (h.db as any).prepare = (sql: string) => {
+      const stmt = prepare(sql);
+      if (sql !== "SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ?") return stmt;
+      return new Proxy(stmt, { get(target, property) {
+        if (property === "get") return (...args: any[]) => {
+          const row = target.get(...args);
+          if (posted && ++reads === 2 && row !== undefined) {
+            const body = { ...JSON.parse(String(row.body)), status: "denied" };
+            prepare("UPDATE vault_requests SET status='denied',body=? WHERE ws=? AND id=?").run(JSON.stringify(body), WS, request);
+          }
+          return row;
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      } });
+    };
+    await assert.rejects(h.secrets.reask("s1", request), /changed|no longer pending/);
+    assert.equal(prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, request)?.status, "denied");
+    assert.deepEqual(h.withdrawn, ["2"]);
+  } finally { rmSync(h.dir, { recursive: true, force: true }); }
+});
+
 test("a new question arriving while a secret card is reissued is not replaced", async () => {
   const h = harness(() => null);
   try {

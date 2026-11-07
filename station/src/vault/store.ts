@@ -47,7 +47,13 @@ export class VaultStore {
   }
 
   vault(ws: string, id: string): Vault | null {
-    return parse<Vault>(this.#db.prepare("SELECT body FROM vaults WHERE ws = ? AND id = ?").all(ws, id))[0] ?? null;
+    return this.vaultSnapshot(ws, id)?.value ?? null;
+  }
+
+  /// Exact bodies let a later decision check the vault and item it validated have not changed.
+  vaultSnapshot(ws: string, id: string): { value: Vault; body: string } | null {
+    const row = this.#db.prepare("SELECT body FROM vaults WHERE ws = ? AND id = ?").get(ws, id) as { body: string } | undefined;
+    return row ? { value: JSON.parse(row.body) as Vault, body: row.body } : null;
   }
 
   /// A vault's new version, in place of the one before (checked to follow it). Deleted, its items go with it: sealed
@@ -63,7 +69,12 @@ export class VaultStore {
   }
 
   item(ws: string, vault: string, id: string): Item | null {
-    return parse<Item>(this.#db.prepare("SELECT body FROM vault_items WHERE ws = ? AND vault = ? AND id = ?").all(ws, vault, id))[0] ?? null;
+    return this.itemSnapshot(ws, vault, id)?.value ?? null;
+  }
+
+  itemSnapshot(ws: string, vault: string, id: string): { value: Item; body: string } | null {
+    const row = this.#db.prepare("SELECT body FROM vault_items WHERE ws = ? AND vault = ? AND id = ?").get(ws, vault, id) as { body: string } | undefined;
+    return row ? { value: JSON.parse(row.body) as Item, body: row.body } : null;
   }
 
   putItem(i: Item): void {
