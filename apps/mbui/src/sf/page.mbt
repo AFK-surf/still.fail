@@ -291,6 +291,9 @@ fn under_pane_bar(c : @ui.Ctx, bar : PageBar, barred : () -> Unit, alone : () ->
 /// Under a bar of the frame's that holds its title, back and what it does (`pane_bar`): what is left of its head there
 /// (a head of its own, as the arrangement has a head's room, 8 or 16 under the bar; what it is for, the line under the
 /// title the bar holds, right under the bar), then what it holds as under a page's head, laid out as `l` lays them.
+/// Narrow, the head and the lead stand in the page's room as its cards do (pg_room_now: 16 in a panel), as they do
+/// under a large title (narrow_page); 2026-11-07 they were the frame's chrome there, against the panel's edge while
+/// the cards and the parts' choice stood 16 in (a station's page on an iPhone Duo).
 fn barred_page(
   c : @ui.Ctx,
   key : String,
@@ -316,10 +319,12 @@ fn barred_page(
   let chrome = blocks.length()
   match l {
     Narrow => {
+      // (its head and what it is for in the page's room as its cards are, the page's own there: nothing of the
+      // frame's stands from the page's edges under the bar, which holds back and the title)
       for b in content {
         blocks.push(b)
       }
-      narrow_list(c, key, blocks, foot, chrome~)
+      narrow_list(c, key, blocks, foot, chrome=0, own=chrome)
     }
     Wide => {
       // (what it holds as under a head: its first 16 under it, the head's own 12 over that)

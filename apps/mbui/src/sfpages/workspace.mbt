@@ -224,9 +224,8 @@ fn workspace_row(
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  // on a list card (Parts.kt PickRow, LocalOnCard): its words card_pad from the card's edge, the card's list_pad in
-  // already; on a sheet, 12 in and 8 more
-  // (in a panel: its card's, or a row of the panel's own `panel_card_in` from its sides, its words on the panel's line)
+  // (in a panel: on its card (the one in use), or a row of the panel's own `panel_card_in` from its sides; either way
+  // its mark and words on the panel's words' line, every row's on one)
   c.box(style=if on_card { ws_row_on_card } else { ws_row_in.then(@sf.panel_card_out()) }, fn() {
     c.box(style=if on_card { ws_row_card } else { ws_row }, id~, fn() {
       match lead {
@@ -238,8 +237,9 @@ fn workspace_row(
           |> ignore
         None => ()
       }
+      // (an icon in the same square a mark stands in: the rows' words on one line, a workspace's or an action's)
       if icon != "" {
-        @sf.icon(c, icon, size=ws_row_icon, color=t.p.text) |> ignore
+        c.box(style=ws_row_lead, fn() { @sf.icon(c, icon, size=ws_row_icon, color=t.p.text) |> ignore }) |> ignore
       }
       c.box(style=@sf.full_width, fn() {
         c.text(label, style=ws_row_label) |> ignore
@@ -275,13 +275,15 @@ let ws_row_on_card : @ui.Style = @ui.css("w=Full")
 let ws_row : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.room_of(@sf.panel_words - @sf.panel_card_in)))
 
 ///|
-/// On a card: the card's list_pad in already, a row's room more (list_words_room: its words 16 from the card's edge).
+/// On the card (the one in use, among the rows of the others): its mark and words where the other rows' are, on the
+/// panel's words' line; the card `panel_card_in` from the panel's sides and `corner_inset` in already, as far as the
+/// rows' grounds reach, the rest of the way here (2026-11-07: a row's room more put its mark 16 past the others').
 // kept across runs: a value (no field of it changes)
-let ws_row_card : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.room_of(@sf.text_in)))
+let ws_row_card : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.room_of(@sf.panel_words - @sf.panel_card_in - @sf.corner_inset)))
 
 ///|
-/// A workspace's mark or its letter in a square 24 across: the mark 22, the letter 15 semibold, muted; an icon 20, the
-/// check 14.
+/// A workspace's mark or its letter in a square 24 across: the mark 22, the letter 15 semibold, muted; an icon 20 in
+/// the same square (an action's: 登录其他账号, 新建 workspace), the check 14.
 // kept across runs: a value (no field of it changes)
 let ws_row_lead : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
 
