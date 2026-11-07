@@ -319,7 +319,9 @@ static void nav_put(UIViewController *slot) {
   [the_view requestFrame];
 }
 
-// The action's icon: the app's icon in white on a disc of its accent, kept as drawn (the system's tab tints it not).
+// The action's icon: the app's icon in white on a disc of its accent, kept as drawn (the system's tab tints it not:
+// iOS 27's prominent tab has no API for its glass's colour, and its tint leaves a template glyph black; the user,
+// 2026-11-07: 染成橙色底的、主题色底的).
 static UIImage *nav_disc(NSString *icon, UIColor *ground, CGFloat size) {
   UIImage *glyph = nav_icon(icon, size * 0.55);
   UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size)];
@@ -786,10 +788,16 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       [made addObject:tab];
     }
     // (the action a tab of its own the system sets apart at the bar's end, as Xiaohongshu's 发布 is, on the system's
-    // glass, with an accent glyph: never chosen, shouldSelectTab says it)
+    // glass, with an accent glyph (iOS 27: white on a disc of the accent, nav_disc, its glass taking no colour of the
+    // app's): never chosen, shouldSelectTab says it)
     self.action = act[@"id"];
     if (act && ![seen containsObject:act[@"id"]]) {
-      UITab *x = [self tabFor:act[@"id"] title:act[@"title"] image:[nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal]];
+      UIImage *image = [nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal];
+      // (iOS 27's prominent tab, 48 across: on a disc of the accent, a point of its glass round it)
+#ifdef __IPHONE_27_0
+      if (@available(iOS 27.0, *)) image = nav_disc(act[@"icon"], accent, 46);
+#endif
+      UITab *x = [self tabFor:act[@"id"] title:act[@"title"] image:image];
       x.preferredPlacement = UITabPlacementPinned;
       [made addObject:x];
     }
