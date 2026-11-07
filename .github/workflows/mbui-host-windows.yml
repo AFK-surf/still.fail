@@ -66,7 +66,28 @@ jobs:
           grep -q 'handle line https://a.example/p?token=hunter3' out/logs/stderr.txt
           grep -q 'after the stall' out/logs/stderr.txt
 
+  image-library:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - name: Build the image archive independently of host compilation
+        run: |
+          export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(command -v cl)")/link.exe")
+          cargo build --manifest-path native/svg/Cargo.toml --locked --release --lib --target x86_64-pc-windows-msvc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-windows-image-library
+          path: apps/mbui/mbui/native/svg/target/x86_64-pc-windows-msvc/release/mbui_svg.lib
+          if-no-files-found: error
+
   contracts:
+    needs: image-library
     runs-on: windows-latest
     timeout-minutes: 5
     defaults:
@@ -79,6 +100,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/download-artifact@v4
+        with:
+          name: host-windows-image-library
+          path: apps/mbui/mbui/out/svg-prebuilt
+      - name: Use this run's image archive
+        run: echo "MBUI_IMAGE_ARCHIVE=$PWD/out/svg-prebuilt/mbui_svg.lib" >> "$GITHUB_ENV"
       - name: kitdemo
         run: scripts/host_contract.sh windows build
       - name: "The host's contract: a run's tape = a Tester's frames"
