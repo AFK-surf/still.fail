@@ -71,17 +71,22 @@ let cloud = null;
 let station = null;
 let browser = null;
 let shown = null;
-const stop = () => {
+const stop = async () => {
+  // The launcher waits for its Node to finish; deleting the workspace before then races its writes.
   try {
-    execFileSync("pkill", ["-f", `${WORK}/`], { stdio: "ignore" });
+    station?.kill("SIGTERM");
   } catch {}
   try {
     if (cloud) process.kill(-cloud.pid, "SIGTERM");
   } catch {}
+  await until(() => [station, cloud].every((child) => !child || child.pid === undefined || child.exitCode !== null || child.signalCode !== null), "station and cloud stopped", 150);
+  try {
+    execFileSync("pkill", ["-f", `${WORK}/`], { stdio: "ignore" });
+  } catch {}
 };
 
 async function main() {
-  stop();
+  await stop();
   rmSync(WORK, { recursive: true, force: true });
   mkdirSync(SHOTS, { recursive: true });
 
@@ -200,7 +205,14 @@ async function main() {
   await page.screenshot({ path: join(SHOTS, "phone-context-back.png") });
   const kept = page.frames().find((f) => f.parentFrame()?.url().includes("/_stillfail/frame"));
   const pressed = await kept.locator("#go").boundingBox();
+  // The first press already left this text in the page. Require a new POST and a new response after restoration.
+  await kept.locator("#post").evaluate((e) => { e.textContent = "waiting for the next response"; });
+  const posted = page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === "POST" && request.postData() === "pressed" && request.frame() === kept && response.ok();
+  }, { timeout: 60_000 });
   await page.mouse.click(pressed.x + pressed.width / 2, pressed.y + pressed.height / 2);
+  if (await (await posted).text() !== "posted pressed") throw new Error("the POST after context restoration returned the wrong body");
   await until(async () => (await kept.locator("#post").innerText()) === "posted pressed", "a press after the context came back");
   console.log("PASS phone: the app drawn again after its GL context was lost, its page still pressed");
   // A finger on a phone's page scrolls it; beside it, in the app's bar, it is the app's and the page stays.
@@ -246,7 +258,7 @@ try {
   } catch {}
 } finally {
   await browser?.close();
-  stop();
+  await stop();
   rmSync(WORK, { recursive: true, force: true });
 }
 process.exit(ok ? 0 : 1);
