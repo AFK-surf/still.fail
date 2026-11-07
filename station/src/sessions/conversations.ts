@@ -479,12 +479,16 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const name = (await chat?.userName?.(m.author)) ?? null;
     if (name !== null) names.set(m.author, name);
   }
-  const pending = hub.store.pendingCard(thread.id)?.[0].n;
   const cards = new Map<number, { card: Json; pending: boolean }>();
   for (const e of hub.store.messagePageEntries(thread.id, messages.map((m) => m.n))) {
     if (e.kind !== "message") continue;
     const card = e.card ?? (e.options != null ? { type: "options", options: e.options } : null);
-    if (card !== null) cards.set(e.n, { card, pending: e.n === pending });
+    if (card !== null) cards.set(e.n, { card, pending: false });
+  }
+  if (cards.size > 0) {
+    const pending = hub.historyPendingCard ? await hub.historyPendingCard(thread.id) : hub.store.pendingCard(thread.id)?.[0].n;
+    const current = pending == null ? undefined : cards.get(pending);
+    if (current) current.pending = true;
   }
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names, cards);
 }
