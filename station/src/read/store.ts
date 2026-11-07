@@ -351,17 +351,6 @@ export function threadsOfSessions(s: Store, keys: string[]): number[] {
   return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
 }
 
-/// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
-export function threadsActiveSince(s: Store, threads: number[], since: number): number[] {
-  if (threads.length === 0 || since <= 0) return threads;
-  return all(
-    s,
-    `SELECT t.id FROM threads t LEFT JOIN thread_state st ON st.thread = t.id LEFT JOIN entries e ON e.thread = t.id AND e.n = st.said_n
-     WHERE t.id IN (${threads.map(() => "?").join(", ")}) AND (t.created_at >= ? OR e.at >= ?)`,
-    ...threads, since, since,
-  ).map((r) => r.id as number);
-}
-
 /// The chat a session is in: the thread it first joined, or null.
 export function threadOfSession(s: Store, key: string): number | null {
   return one(s, "SELECT thread FROM thread_sessions WHERE session = ? ORDER BY joined_at, rowid LIMIT 1", key)?.thread ?? null;
@@ -568,20 +557,6 @@ export function lastSaidText(s: Store, thread: number): string | null {
       WHERE m.thread=?1 AND m.n=CAST(?2 AS INTEGER) AND m.kind='message'`, thread, n, edit);
     return r ? r.t : null;
   } finally { s.db.exec("RELEASE last_said_text_read"); }
-}
-
-/// When the latest message was written, without loading its text or edits.
-export function lastSaidAt(s: Store, thread: number): number | null {
-  return one(s, "SELECT e.at FROM thread_state t JOIN entries e ON e.thread = t.thread AND e.n = t.said_n AND e.kind = 'message' WHERE t.thread = ?", thread)?.at ?? null;
-}
-
-/// Messages after the read position that are not the viewer's own (nor of a Slack user they are).
-function unreadCount(s: Store, viewer: string, thread: number, read: number): number {
-  const t = getThread(s, thread);
-  const slack = t ? t.surface !== STILLFAIL_SURFACE : true;
-  const selves = [viewer];
-  if (slack) selves.push(...slackIdentities(s, viewer));
-  return unreadOf(s, thread, read, selves);
 }
 
 /// Messages after `read` that are not of `selves`, nor letters (isLetter).

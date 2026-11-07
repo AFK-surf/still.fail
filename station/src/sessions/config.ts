@@ -188,8 +188,6 @@ export const allowedIn = (profile: Profile, ws: string | null, home: string | nu
 /// The profiles a connect's sessions can run on: every profile of its runtime allowed in its workspace.
 export const profilesFor = (config: HubConfig, connect: Connect, home: string | null = null): Profile[] =>
   config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
-
-export const runtimeName = (r: Runtime) => r;
 export const runtimeNamed = (name: string): Runtime | null => runtimeKind(name) ?? null;
 /// How people call a runtime.
 export const runtimeTitle = (r: Runtime) => runtimeLabel(r);

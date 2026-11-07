@@ -116,11 +116,6 @@ export function given(thread: ThreadRow): string | null {
   return titles.givenTitle(thread);
 }
 
-/// What a thread is called (title_of over a summary).
-export function chatTitle(t: ThreadSummary, channelName: string | null): string {
-  return titleOf(t.thread, t.firstText, channelName);
-}
-
 /// What a thread is called, by the one rule the core names it by too (client/core-ts/src/titles.ts).
 export function titleOf(thread: ThreadRow, firstText: string | null, channelName: string | null): string {
   return titles.chatTitle(thread, firstText, channelName, { untitled: untitled(), directMessage: tr("station.chat.directMessage") });

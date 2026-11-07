@@ -328,35 +328,6 @@ export function usageDetailReady(db: DatabaseSync, viewer: InWorkspace | null, g
     && db.prepare(PENDING_DETAIL_SESSION.replace(/\busage_detail(?=_|\b)/g, table)).get(viewer.workspace) === undefined;
 }
 
-/// A move changes at most one bounded batch of lookup entries, leaving unrelated workspaces readable.
-export function backfillUsageDetailMove(db: DatabaseSync, limit = 32, requested?: string): { done: boolean; processed: number } {
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const state = (requested === undefined
-      ? db.prepare("SELECT session, after_level, after_bucket FROM usage_detail_dirty ORDER BY session LIMIT 1").get()
-      : db.prepare("SELECT session, after_level, after_bucket FROM usage_detail_dirty WHERE session = ?").get(requested)) as
-      { session: string; after_level: number | null; after_bucket: number | null } | undefined;
-    if (!state) { db.exec("COMMIT"); return { done: true, processed: 0 }; }
-    const rows = (state.after_level === null
-      ? db.prepare("SELECT level, bucket FROM usage_detail_lookup WHERE session = ? ORDER BY level, bucket LIMIT ?").all(state.session, limit)
-      : db.prepare("SELECT level, bucket FROM usage_detail_lookup WHERE session = ? AND (level, bucket) > (?, ?) ORDER BY level, bucket LIMIT ?")
-        .all(state.session, state.after_level, state.after_bucket, limit)) as { level: number; bucket: number }[];
-    const target = (db.prepare(`SELECT ${scope("ws")} AS scope FROM sessions WHERE key = ?`).get(state.session) as { scope: string } | undefined)?.scope ?? "H";
-    const move = db.prepare("UPDATE usage_detail_lookup SET scope = ? WHERE session = ? AND level = ? AND bucket = ? AND scope <> ?");
-    for (const row of rows) move.run(target, state.session, row.level, row.bucket, target);
-    db.prepare("UPDATE usage_detail_scope SET ws = (SELECT ws FROM sessions WHERE key = ?) WHERE session = ?").run(state.session, state.session);
-    if (rows.length < limit) {
-      db.prepare("DELETE FROM usage_detail_dirty_scope WHERE session = ?").run(state.session);
-      db.prepare("DELETE FROM usage_detail_dirty WHERE session = ?").run(state.session);
-    } else {
-      const last = rows.at(-1)!;
-      db.prepare("UPDATE usage_detail_dirty SET after_level = ?, after_bucket = ? WHERE session = ?").run(last.level, last.bucket, state.session);
-    }
-    db.exec("COMMIT");
-    return { done: db.prepare("SELECT 1 FROM usage_detail_dirty LIMIT 1").get() === undefined, processed: rows.length };
-  } catch (error) { db.exec("ROLLBACK"); throw error; }
-}
-
 /// Add at most `limit` old calls. Each call updates four levels, so the default keeps a transaction small.
 /// Writes made during the fill are marked and are not counted twice.
 export function backfillUsageDetail(db: DatabaseSync, session: string, limit = 8): { done: boolean; processed: number } {

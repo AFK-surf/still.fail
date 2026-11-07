@@ -137,9 +137,6 @@ function toMessage(r: any): MessageRow {
   } as MessageRow;
 }
 
-/// Every thread's id.
-export const threadIds = (s: Store): number[] => all(s, "SELECT id FROM threads").map((r) => r.id as number);
-
 // ── transcripts ──
 
 type Profiles = { id: string; home: string; runtime: string; model?: string; access?: any; name?: string }[];
@@ -397,8 +394,6 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
   }
   return finish({ hits: found.slice(options.offset, options.offset + options.limit), more: found.length > options.offset + options.limit, left: 0 });
 }
-
-export const sessionKeys = (s: Store): string[] => all(s, "SELECT key FROM sessions").map((r) => r.key as string);
 
 // ── jobs ──
 

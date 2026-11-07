@@ -30,7 +30,6 @@ export const grokHome = (home: string) => join(home, "grok");
 /// Where in its home Grok Build keeps its sessions; in a session's directory, its transcript, and what the station
 /// writes beside it of each turn's usage (Grok Build keeps none: the prompt's answer says it).
 export const SESSIONS = "sessions";
-export const TRANSCRIPT = "chat_history.jsonl";
 export const USAGE = "stillfail-usage.jsonl";
 
 /// Reasoning effort in the station's terms (pool.ts) as Grok Build takes it (low, medium, high, xhigh; max where the

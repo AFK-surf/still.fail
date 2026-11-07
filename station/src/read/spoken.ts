@@ -4,6 +4,5 @@ import { type Lang, tr as translate } from "../ops/i18n.ts";
 
 let lang: Lang = "zh";
 export const setLang = (l: Lang | undefined) => (lang = l ?? "zh");
-export const spoken = () => lang;
 /// `t!(spoken(); key, args…)`.
 export const tr = (key: string, args: Record<string, string> = {}) => translate(lang, key, args);

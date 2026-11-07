@@ -99,8 +99,6 @@ export type Room = {
   rebuild: [string, number][];
 };
 
-export const rebuildBytes = (room: Room) => room.rebuild.reduce((sum, [, b]) => sum + b, 0);
-
 /// Counts files once each however many links they have.
 class Seen {
   private seen = new Set<string>();
