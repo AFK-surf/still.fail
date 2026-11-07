@@ -423,8 +423,10 @@ fn Ride::new(
   legs.push((t, x, v, to))
   // set out long before what it rides on comes to rest (a change caught up at its own moment, long after: the iPhone's
   // clock is the time since it started, so days of 16 ms legs, gigabytes and a hang): long since at rest where it was
-  // sent then, it rides only the last of that way
-  let late = still - ride_most_ms
+  // sent then, it rides only the last of that way, on the steps it would have taken from `t0` (so it is sent elsewhere
+  // at the step it would have been)
+  let late = t0 +
+    ((still - ride_most_ms - t0) / ride_step_ms).floor() * ride_step_ms
   if late > t {
     t = late
     to = anchor(t)

@@ -422,3 +422,39 @@ test "bar: a ride set out days before what it rides on rests (a change caught up
   assert_true((r.at(r.end).0 - 100.0).abs() < 0.000001)
   assert_true((r.at(still - 400.0).0 - 40.0).abs() < 0.01, msg="\{r.at(still - 400.0)}")
 }
+
+///|
+test "bar: a ride set out long before what it rides on rests, off its steps from the late moment, is sent elsewhere at the step it would have been" {
+  bar_reset()
+  let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0)
+  t.draw()
+  let swap : Swap = { i: 0, n: 0, from: 1.0, key: None, sets: [[]], cur: 0, alpha: 1.0, drop: 0.0, lit: {}, ends: 0.0 }
+  let from : RideFrom = { swap, j: 0, w: 346.0, row_top: 0.0, o_to: 0.0, o_end: 0.0, k_to: 0.0, k_end: 0.0, up_to: 0.0, up_end: 0.0 }
+  // (still - 10 s is 1 ms past one of its 16 ms steps from 0; where it is sent changes 8 ms before still, between two)
+  let still = 20001.0
+  let anchor = fn(t : Double) { if t < still - 8.0 { 40.0 } else { 100.0 } }
+  let k = 300.0
+  let c = ball_damping(k)
+  let r = Ride::new(0.0, 0.0, 0.0, k, c, ball_rest_within, anchor, still, from)
+  // the whole way, step by step from 0
+  let ratio = c / (2.0 * k.sqrt())
+  let legs = [(0.0, 0.0, 0.0, anchor(0.0))]
+  let mut s = 0.0
+  let mut x = 0.0
+  let mut v = 0.0
+  let mut to = anchor(0.0)
+  while s < still {
+    let (d, vel) = @motion.spring_at(ratio, k, x - to, v, ride_step_ms / 1000.0)
+    x = to + d
+    v = vel
+    s = s + ride_step_ms
+    to = anchor(dmin(s, still))
+    legs.push((s, x, v, to))
+  }
+  let whole : Ride = { legs, k, ratio, to, end: r.end, from, stopped: false }
+  for at in [still - 9.0, still - 1.0, still + 9.0, still + 40.0, still + 200.0] {
+    let (a, _) = r.at(at)
+    let (b, _) = whole.at(at)
+    assert_true((a - b).abs() < 0.000001, msg="at \{at}: \{a}, the whole way \{b}")
+  }
+}
