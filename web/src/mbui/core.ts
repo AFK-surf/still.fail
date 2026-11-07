@@ -161,6 +161,13 @@ const fetchCarried = (name: string, url = `/mbui/assets/${name}?b=${BUILT_AT}`) 
   fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
     .then((b) => { if (b) assets[name] = new Uint8Array(b); });
 const starting = fetchCarried("inter.woff2", interLatin);
+const svgUrl = `/mbui/svg.mjs?b=${BUILT_AT}`;
+const svgStarting = Promise.all([
+  import(/* @vite-ignore */ svgUrl),
+  WebAssembly.compileStreaming(fetch(`/mbui/svg.wasm?b=${BUILT_AT}`)),
+]).then(async ([{ loadSvg }, module]) => {
+  (globalThis as { mbuiSvg?: unknown }).mbuiSvg = await loadSvg(module);
+});
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
@@ -171,7 +178,7 @@ takeShare((channel, json) => host()?.post(channel, json), (open) => {
   const h = host() as { openUrl?(url: string): boolean } | undefined;
   if (h) h.openUrl = open;
 });
-await starting;
+await Promise.all([starting, svgStarting]);
 await handOver;
 await load(`/mbui/app.js?b=${BUILT_AT}`);
 for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])

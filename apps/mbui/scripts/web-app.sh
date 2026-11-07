@@ -10,6 +10,7 @@ APP=stillfail bash "$D/web.sh" build >/dev/null
 . "$D/env.sh"
 out=$SF_SRC/web/public/mbui
 mkdir -p "$out"
+cp "$MBUI_APP_MOD/out/web/svg.wasm" "$MBUI_APP_MOD/out/web/svg.mjs" "$out/"
 # minified (MoonBit's names are long: 25 MB to 9.5, brotli 4.3 MB to 2.1) by esbuild, the version pinned here: the
 # web's own where its packages have it, else fetched (CI's mbui-web, whose install has none: deployed unminified once)
 ESBUILD=0.28.2

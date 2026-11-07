@@ -324,35 +324,12 @@ fn local_cloud(url : String) -> Bool {
 }
 
 ///|
-// kept across runs: the faces' database, made again when the faces given change (one come)
-let svg_fonts : Ref[(Int, @font.FontDb, String)] = Ref((-1, @font.FontDb::new(), ""))
+// kept across runs: the renderer owns the current app fonts and replaces them when they change.
+let svg_renderer : @svgrender.Renderer = @svgrender.Renderer::new()
 
 ///|
-/// An SVG picture drawn at `px` on its longer side, its text set in the app's faces (@sfbase.vector_faces): the app's
-/// own words' face for every generic family but monospace, the code face for that.
 fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
-  let faces = @sfbase.vector_faces(data)
-  if svg_fonts.val.0 != faces.length() {
-    let db = @font.FontDb::new()
-    for f in faces {
-      db.load_font_data(f)
-    }
-    let family = fn(i) {
-      match db.faces().get(i) {
-        Some(f) if f.families.length() > 0 => f.families[0].0
-        _ => ""
-      }
-    }
-    let own = family(0)
-    db.set_serif_family(own)
-    db.set_sans_serif_family(own)
-    db.set_cursive_family(own)
-    db.set_fantasy_family(own)
-    db.set_monospace_family(family(1))
-    svg_fonts.val = (faces.length(), db, own)
-  }
-  let (_, fonts, own) = svg_fonts.val
-  @svg.rasterize(data, px, opt={ ..@svg.Options::default(), fonts, font_family: own })
+  svg_renderer.rasterize(data, px, fonts=@sfbase.vector_faces(data))
 }
 
 ///|

@@ -43,6 +43,10 @@ if ! moon build --target wasm --release --no-strip src/$APP > "$log" 2>&1; then
 fi
 echo "wasm-app: the app in $((SECONDS - t0)) s"
 program=$A/$(pkg_build $APP wasm release)/$APP.wasm
+if [ "$APP" = stillfail ] || [ "$APP" = sfmedia ]; then
+  bash "$MBUI_DIR/native/svg/link.sh" "$program" "$O/$APP-linked.wasm"
+  program=$O/$APP-linked.wasm
+fi
 # wasmtime's command line (its release for this machine, fetched once by its checksum), which compiles a program ahead
 # for a device's shell: WT_CLI; WT_SAME, what makes its compilation the C API's default engine's (the command line's own
 # collector is another: a program compiled without it the shell refuses)

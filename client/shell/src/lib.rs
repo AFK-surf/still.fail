@@ -26,6 +26,10 @@ use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
 mod adb;
 
+// One native Rust library; the same SVG boundary is built alone for Wasm.
+#[path = "../../../apps/mbui/mbui/native/svg/src/lib.rs"]
+mod svg;
+
 const MDNS_SERVICE: &str = "stillfail";
 
 /// The nodes a DHT starts from: n0-mainline's defaults, with ours (cloud/dht-node, on the relays' machines) in place of relay.pkarr.org.

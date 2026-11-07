@@ -69,15 +69,35 @@ jobs:
         run: |
           set -o pipefail
           moon test --target native -p mbui/dmath -p mbui/zip -p mbui/pixels -p mbui/codec -p mbui/damage 2>&1 | tail -3
-      - name: "Vector graphics as tiny-skia draws them, against its own pictures (mbui/skia, mbui/skiatest); SVG, fonts and OpenType shaping (mbui/svg, mbui/font, mbui/shape: resvg's suite runs where it is checked out beside them, src/svgtest)"
-        run: |
-          set -o pipefail
-          moon test --target native -p mbui/skia -p mbui/skiatest -p mbui/svg -p mbui/font -p mbui/shape -p mbui/svgtest 2>&1 | tail -3
       - name: "The tools (tools/): detlint's rules on made-up files; the C step (tools/mbc): the splitter on made-up C, then programs built with it, a MoonBit one whole and split (scripts/mbc_test.sh)"
         run: |
           set -o pipefail
           (cd tools && moon test --target native 2>&1 | tail -3)
           bash scripts/mbc_test.sh
+
+  svg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/mbui/mbui/native/svg/target
+          key: svg-linux-${{ hashFiles('apps/mbui/mbui/native/svg/Cargo.lock', 'apps/mbui/mbui/native/svg/Cargo.toml') }}
+      - name: Fetch pinned SVG test dependencies
+        run: bash native/svg/test.sh prepare
+      - name: Allow the test's network namespace
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Upstream SVG suite, resource contract, Moon ownership and device art
+        shell: bash scripts/offline.sh {0}
+        run: bash native/svg/test.sh
 
   native:
     defaults:

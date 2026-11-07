@@ -1,4 +1,4 @@
-// The text of SVG pictures (mbui/svg draws them, the app's main gives @ui its drawing): set in the faces the app
+// The text of SVG pictures (mbui/svgrender draws them, the app's main gives @ui its drawing): set in the faces the app
 // carries (Inter, its code face) and Chinese and Japanese in 思源黑体 (Noto Sans SC), a face still.fail keeps, had from
 // the core as a place's face is (faces.mbt) the first time a picture has such text, the pictures drawn again once it is
 // here.

@@ -80,7 +80,7 @@ pub fn device(c : @ui.Ctx, model : Device, screen : String, width : Double) -> I
   let scale = width / g.width
   let (art, svg) = model.art()
   if !@ui.has_image(art) {
-    @ui.add_vector_image(art, @utf8.encode(svg), fn(data, px) { @svg.rasterize(data, px) })
+    @ui.add_vector_image(art, @utf8.encode(svg), fn(data, px) { @svgrender.rasterize(data, px) })
   }
   c.box(w=Px(width), h=Px(g.height * scale), name="media-device", fn() {
     c.box(

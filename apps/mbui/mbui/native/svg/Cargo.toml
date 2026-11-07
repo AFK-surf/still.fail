@@ -1,0 +1,17 @@
+[package]
+name = "mbui-svg"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib", "staticlib"]
+
+[dependencies]
+resvg = { git = "https://github.com/linebender/resvg", rev = "847abd69841493b011d07f9202f9f1fa616a82c6", default-features = false, features = ["text", "raster-images", "svgz"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = "symbols"

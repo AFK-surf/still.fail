@@ -1,6 +1,6 @@
 import {
   "mbui/ui",
-  "mbui/svg",
+  "mbui/svgrender",
   "moonbitlang/core/encoding/utf8",
 }
 

@@ -5,7 +5,7 @@ test "the device art leaves the screen open and keeps the hardware" {
     let screen = model.screen()
     assert_eq((screen.width * screen.scale, screen.height * screen.scale), (g.screen_width, g.screen_height))
     let (_, svg) = model.art()
-    guard @svg.rasterize(@utf8.encode(svg), 512) is Some((w, h, rgba)) else {
+    guard @svgrender.rasterize(@utf8.encode(svg), 512) is Some((w, h, rgba)) else {
       fail("device art could not be drawn")
     }
     let k = if g.width > g.height { w.to_double() / g.width } else { h.to_double() / g.height }

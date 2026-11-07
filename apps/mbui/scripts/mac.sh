@@ -10,6 +10,9 @@ D="$(cd "$(dirname "$0")" && pwd)"
 export APP=${APP:-stillfail}
 [ "${1:-}" = login ] && export APP=coredemo
 if [ "${MBUI_CORE:-0}" != 0 ]; then export APP=coredemo; fi
+if [ "$APP" = sfmedia ]; then
+  bash "$MBUI_DIR/native/svg/build.sh" native "$A/out/svg/libmbui_svg.a" || exit 1
+fi
 if [ $APP = coredemo ] || [ $APP = stillfail ]; then
   if [ "${1:-build}" = build ]; then
     # (each part's time said, mac-app.sh shows it: a release's Mac job was 185-238 s, the app's part 114-166 s of it,

@@ -167,7 +167,7 @@ pub fn add_vector_image(
 ///|
 // kept across runs: set once as the app starts (its main), what draws vector pictures for every run after
 /// What draws a vector picture (SVG) handed over as bytes: its bytes and the pixels wanted on its longer side to its
-/// width, height and straight RGBA; None where it is not one. The app's main gives it (mbui/svg's rasterize), so a
+/// width, height and straight RGBA; None where it is not one. The app's main gives it (mbui/svgrender's rasterize), so a
 /// program that shows none links no vector drawing.
 let vector_pictures : Array[(Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = []
 

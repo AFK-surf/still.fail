@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/svgrender"
+
+// Values
+pub fn rasterize(Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?
+
+// Errors
+
+// Types and methods
+type Db
+
+pub struct Renderer {
+  mut database : Db?
+  mut fonts : Array[Bytes]
+}
+pub fn Renderer::close(Self) -> Unit
+pub fn Renderer::new() -> Self
+pub fn Renderer::rasterize(Self, Bytes, Int32, fonts? : Array[Bytes]) -> (Int32, Int32, FixedArray[Byte])?
+
+// Type aliases
+
+// Traits
