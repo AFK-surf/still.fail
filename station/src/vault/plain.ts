@@ -94,6 +94,8 @@ export function plainOk(prev: PlainItem | null, next: PlainItem, owner: string):
 
 export class PlainStore {
   readonly #db: DatabaseSync;
+  #itemRead: ReturnType<DatabaseSync["prepare"]> | undefined;
+  #lastsRead: ReturnType<DatabaseSync["prepare"]> | undefined;
 
   constructor(db: DatabaseSync) {
     this.#db = db;
@@ -111,13 +113,15 @@ export class PlainStore {
 
   /// Keep the exact stored body with the value so a later write can check that its decision is still current.
   itemSnapshot(ws: string, id: string): { value: PlainItem; body: string } | null {
-    const row = this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND id = ?").get(ws, id) as { body: string } | undefined;
+    this.#itemRead ??= this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND id = ?");
+    const row = this.#itemRead.get(ws, id) as { body: string } | undefined;
     return row ? { value: JSON.parse(row.body) as PlainItem, body: row.body } : null;
   }
 
   /// The longest grant `owner`'s items are given for where an item says none, and when they said so (none: any).
   lasts(ws: string, owner: string): { lasts: Scope; at: number } | null {
-    const row = this.#db.prepare("SELECT lasts, at FROM vault_plain_lasts WHERE ws = ? AND owner = ?").get(ws, owner) as { lasts: Scope; at: number } | undefined;
+    this.#lastsRead ??= this.#db.prepare("SELECT lasts, at FROM vault_plain_lasts WHERE ws = ? AND owner = ?");
+    const row = this.#lastsRead.get(ws, owner) as { lasts: Scope; at: number } | undefined;
     return row ? { lasts: row.lasts, at: row.at } : null;
   }
 
