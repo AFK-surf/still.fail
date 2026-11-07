@@ -69,7 +69,8 @@ import { archiveLastRead, installArchiveLast } from "./archive-last.ts";
 import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
-import { legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
+import { legacyEditLatest, legacyEditsUseOldIndex, legacyMergedNeedsRepair, legacyMergedReadReady } from "./legacy-edits-build.ts";
+import { boundedEditKey, LAST_MESSAGE_WITH_EDIT } from "./legacy-edits-read.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -1784,10 +1785,35 @@ export class Store {
   /// A platform edit: an edit entry with the message's new words. The thread, or null for a message the station never
   /// recorded or one whose words did not change.
   editMessage(surface: string, channel: string, threadTs: string, ts: string, text: string): number | null {
+    return this.#editMessage(surface, channel, threadTs, ts, text, false) ?? null;
+  }
+
+  /// The same edit, or undefined when its old edit lookup must first be prepared off the station thread.
+  editMessageIfReady(surface: string, channel: string, threadTs: string, ts: string, text: string): number | null | undefined {
+    return this.#editMessage(surface, channel, threadTs, ts, text, true);
+  }
+
+  #editMessage(surface: string, channel: string, threadTs: string, ts: string, text: string, bounded: boolean): number | null | undefined {
     return this.#with((changes) => {
       const thread = this.threadAt(surface, channel, threadTs);
       if (thread === null) return null;
-      const message = this.#messageAt(thread.id, ts);
+      let message: MessageRow | null;
+      if (bounded) {
+        // Check readiness in the same snapshot as the merged read: another connection may replace an index or add
+        // changed keys. A missing message can be ignored without preparing old edits.
+        this.db.exec("SAVEPOINT platform_edit_read");
+        try {
+          if (!legacyMergedReadReady(this.db)) {
+            const found = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread.id, ts);
+            if (!found) return null;
+            if (legacyMergedNeedsRepair(this.db)) return undefined;
+            const edit = boundedEditKey(this.db, thread.id, found.n);
+            if (edit === undefined) return undefined;
+            const row = this.#one(LAST_MESSAGE_WITH_EDIT, thread.id, found.n, edit);
+            message = row ? toMessage(row) : null;
+          } else message = this.#messageAt(thread.id, ts);
+        } finally { this.db.exec("RELEASE platform_edit_read"); }
+      } else message = this.#messageAt(thread.id, ts);
       if (message === null || message.text === text) return null;
       this.#append(
         {

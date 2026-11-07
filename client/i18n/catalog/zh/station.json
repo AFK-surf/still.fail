@@ -371,6 +371,7 @@
   "station.session.noProfile": "没有可运行 {runtime} 的 Profile",
   "station.session.noProfileHere": "此 workspace 的对话没有可运行 {runtime} 的 Profile：请 station 所属 workspace 的管理员为某个 Profile 勾选此 workspace",
   "station.session.noProfileForModel": "没有可运行 {model} 的 {runtime} Profile：请先在某个 Profile 中启用",
+  "station.slack.answerUnconfirmed": "回答未能确认，请检查后重试",
   "station.slack.chooseFirst": "请先选一个选项",
   "station.slack.confirm": "确定",
   "station.slack.fileNotFetched": "[无法获取文件 {name}：{error}]",

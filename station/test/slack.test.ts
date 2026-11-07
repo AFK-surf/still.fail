@@ -462,6 +462,37 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
+  test("a card answer that cannot be accepted tells the person and can be tried again", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const heard: ChatEvent[] = [];
+    let attempts = 0;
+    try {
+      const handle = async (event: ChatEvent) => {
+        if (++attempts === 1) throw new Error("old edit preparation failed");
+        heard.push(event);
+      };
+      const asked = await surface.post({ channel: "C1", threadTs: "1.1" }, "选一个", [], { type: "options", options: [{ label: "合并" }] });
+      const press = (ts: string) => ({
+          type: "block_actions", user: { id: "U1" }, channel: { id: "C1" },
+          message: { ts: asked, thread_ts: "1.1", text: "选一个" },
+          actions: [{ action_id: "sf_answer", value: '{"l":["合并"]}', action_ts: ts }],
+          state: { values: { b1: { sf_pick: { selected_option: { value: "0" } } } } },
+      });
+      await assert.rejects((surface as any).answer(press("9.5"), handle), /old edit preparation failed/);
+      assert.equal(fake.calls("chat.postEphemeral")[0]?.params.text, "回答未能确认，请检查后重试");
+      assert.equal(fake.calls("chat.update").length, 0);
+      await (surface as any).answer(press("9.6"), handle);
+      assert.equal(fake.calls("chat.update").length, 1);
+      assert.equal(heard.length, 1);
+      assert.equal((heard[0] as any).message.text, "合并");
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
   test("/sf opens a form whose model field completes as typed; sent, its words start a thread on the model picked", async () => {
     const fake = await FakeSlack.start();
     bot(fake);

@@ -201,6 +201,8 @@ export class Hub {
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   /// The message files needed to identify an old widget's source.
   prepareWidgetSources: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null = null;
+  /// Prepare an old store's merged-message lookup before accepting a platform edit.
+  prepareLegacyEdits: ((signal?: AbortSignal) => Promise<void>) | null = null;
   /// The sessions whose old copy destinations are needed before posting a copy.
   prepareCcSessions: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   /// The sessions whose old conversation order is needed to name them.
@@ -226,9 +228,9 @@ export class Hub {
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
   readonly openings = new Map<number, { session: string; ts: string }>();
-  /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its
-  /// session.
-  readonly gates = new Map<string, { tail: Promise<void>; waiting: number }>();
+  /// One incoming message or edit at a time per thread: Slack also sends a mention twice (app_mention and message).
+  readonly gates = new Map<string, { tail: Promise<{ error: unknown } | null>; waiting: number }>();
+  private readonly incoming = new AbortController();
   /// The station's background jobs (made after the hub, which tells their agents).
   jobs: Jobs | null = null;
   /// Each workspace's presets, in its agent home (presets.ts).
@@ -411,7 +413,9 @@ export class Hub {
       this.release("drain");
       throw error;
     }
-    // Settled: snapshotted at once, before anything else is taken in.
+    // Settled: leave incoming events waiting for old preparation unacknowledged for the next station.
+    this.incoming.abort();
+    // Snapshotted at once, before anything else is taken in.
     const sessions: Snapshot[] = [];
     for (const actor of this.actors.values()) {
       if (actor.processState() !== "cold" || actor.holdsState()) sessions.push(actor.snapshot());
@@ -552,7 +556,20 @@ export class Hub {
       }
       return;
     }
-    this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
+    const prepare = this.prepareLegacyEdits;
+    if (prepare === null) {
+      this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
+      return;
+    }
+    const surface = this.surface(connectId), at = `${surface}\0${event.channel}\0${event.threadTs}`;
+    return this.inThread(at, async () => {
+      for (;;) {
+        this.incoming.signal.throwIfAborted();
+        const changed = this.store.editMessageIfReady(surface, event.channel, event.threadTs, event.ts, event.text);
+        if (changed !== undefined) return;
+        await prepare(this.incoming.signal);
+      }
+    }, true);
   }
 
   /// A login card's field answered on a platform (Slack): the code goes to the login that card is of, and only if the
@@ -572,13 +589,23 @@ export class Hub {
   /// deliberately ignored).
   async accept(connectId: string, message: InboundMessage) {
     const at = `${this.surface(connectId)}\0${message.channel}\0${message.threadTs}`;
+    return this.inThread(at, () => this.acceptInTurn(connectId, message));
+  }
+
+  private async inThread<T>(at: string, run: () => Promise<T>, blockFollowingOnError = false): Promise<T> {
     let gate = this.gates.get(at);
-    if (!gate) this.gates.set(at, (gate = { tail: Promise.resolve(), waiting: 0 }));
+    if (!gate) this.gates.set(at, (gate = { tail: Promise.resolve(null), waiting: 0 }));
     gate.waiting++;
-    const turn = gate.tail.then(() => this.acceptInTurn(connectId, message));
+    const previous = gate.tail;
+    const turn = previous.then((blocked) => {
+      if (blocked) throw blocked.error;
+      return run();
+    });
+    // An unrecorded edit must be redelivered before the events already waiting behind it. Ordinary message failures
+    // keep the previous behavior; once this queue has drained, a new delivery may try again.
     gate.tail = turn.then(
-      () => {},
-      () => {},
+      () => null,
+      async (error) => (await previous) ?? (blockFollowingOnError ? { error } : null),
     );
     try {
       return await turn;
@@ -1064,6 +1091,7 @@ export class Hub {
   }
 
   async shutdown() {
+    this.incoming.abort();
     this.stopTimers();
     this.unlistenRunning();
     this.live.close();
