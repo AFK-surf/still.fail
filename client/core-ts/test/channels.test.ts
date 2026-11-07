@@ -423,11 +423,12 @@ test("a_stream_that_was_away_has_it_asked_what_came_after_what_is_held_whatever_
   await w.work();
   assert.deepEqual(w.asked.slice(2), ["d?after=6", "d?from=1&to=4"]);
   assert.deepEqual(w.numbers(d), run(1, 9));
-  // One none of which is held is not asked: it is brought when it is to be.
+  // A shown channel none of which arrived (its first read may have failed) starts with its latest page again.
   w.there.set("e", 4);
   w.channels.catchUp(log("e"), Priority.shown);
   await w.work();
-  assert.equal(w.asked.length, 4);
+  assert.deepEqual(w.asked.slice(4), ["e?latest"]);
+  assert.deepEqual(w.numbers(log("e")), run(1, 4));
 });
 
 test("a_stretch_and_the_page_before_are_read_for_one_who_waits_and_fail_as_the_read_does", async () => {

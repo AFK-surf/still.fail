@@ -374,7 +374,12 @@ export class StationsSync {
   #catchUpShown(address: string): void {
     for (const topic of this.#core.store.liveTopics()) {
       if (topic.station !== address) continue;
-      if (topic.topic === "thread" && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+      if (topic.topic === "thread" && typeof topic.thread === "number") {
+        this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+        // An opening around an unread or saved position may still be missing even if a later page is held. Recompute it
+        // so its failed range read is asked again, independently of whether the catch-up read brings anything new.
+        this.#core.store.invalidate(topic);
+      }
       else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }
