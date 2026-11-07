@@ -23,61 +23,79 @@ fn mbw_cb_mb_host_run_5_in(a0 : Int, a1 : Int, a2 : Int, a3 : Int) -> Unit {
 fn mbw_mb_host_run(title : Int, frame : FuncRef[(Double, Double, Double, Double) -> Unit], pointer : FuncRef[(Int, Double, Double, Int) -> Unit], wheel : FuncRef[(Double, Double, Double, Double, Int) -> Unit], key : FuncRef[(Int, Int) -> Unit], text : FuncRef[(Int, Int, Int, Int) -> Unit]) = "mbhost" "mb_host_run"
 
 ///|
-fn ffi_run(title : String, frame : FuncRef[(Double, Double, Double, Double) -> Unit], pointer : FuncRef[(Int, Double, Double, Int) -> Unit], wheel : FuncRef[(Double, Double, Double, Double, Int) -> Unit], key : FuncRef[(Int, Int) -> Unit], text : FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit {
+fn run(title : String, frame : FuncRef[(Double, Double, Double, Double) -> Unit], pointer : FuncRef[(Int, Double, Double, Int) -> Unit], wheel : FuncRef[(Double, Double, Double, Double, Int) -> Unit], key : FuncRef[(Int, Int) -> Unit], text : FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit {
   mbw_cb_mb_host_run_5.val = Some(text)
   mbw_mb_host_run(@wasmrt.string_addr(title), frame, pointer, wheel, key, fn(a0, a1, a2, a3) { mbw_cb_mb_host_run_5_in(a0, a1, a2, a3) })
 }
 
 fn ffi_now() -> Double = "mbhost" "mb_host_now"
 
-fn ffi_event_time() -> Double = "mbhost" "mb_host_event_time"
+/// When the input event being delivered happened, on now()'s clock (ms):
+/// a touch's own time, which comes before it is handled (a frame's touches
+/// are handled together); negative when the host doesn't say.
+fn event_time() -> Double = "mbhost" "mb_host_event_time"
 
-fn ffi_event_finger() -> Int = "mbhost" "mb_host_event_finger"
+/// What the pointer's event being delivered came from: 1 a finger, 0 a mouse or a pen, -1 not said (@hostapi.event_finger).
+fn event_finger() -> Int = "mbhost" "mb_host_event_finger"
 
-fn ffi_frame_late() -> Double = "mbhost" "mb_host_frame_late"
+/// How late the frame before reached the screen (@hostapi.frame_late).
+fn frame_late() -> Double = "mbhost" "mb_host_frame_late"
 
-fn ffi_platform() -> Int = "mbhost" "mb_host_platform"
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
+fn platform() -> Int = "mbhost" "mb_host_platform"
 
-fn ffi_request_frame() = "mbhost" "mb_host_request_frame"
+fn request_frame() = "mbhost" "mb_host_request_frame"
 
-fn ffi_wake_after(ms : Double) = "mbhost" "mb_host_wake_after"
+fn wake_after(ms : Double) = "mbhost" "mb_host_wake_after"
 
+/// Ascent, descent and line height of the system font (or its code face,
+/// `style` & style_mono; slanted with style_italic) at this size and weight,
+/// then the ascent and descent of the font a Han ideograph falls back to, then
+/// 1 where the host sets lines of words on whole device pixels (Android), 0
+/// where not (six numbers in `out`).
 fn mbw_mb_host_font_metrics(size : Double, weight : Int, style : Int, out : Int) = "mbhost" "mb_host_font_metrics"
 
 ///|
-fn ffi_font_metrics(size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Unit {
+fn font_metrics(size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Unit {
   mbw_mb_host_font_metrics(size, weight, style, @wasmrt.doubles_addr(out))
 }
 
+/// `text` shaped in that font into grapheme clusters: four numbers each
+/// (start, length, advance, glyph key; -1 for none) in `out`; returns how
+/// many.
 fn mbw_mb_host_shape(text : Int, size : Double, weight : Int, style : Int, out : Int) -> Int = "mbhost" "mb_host_shape"
 
 ///|
-fn ffi_shape(text : String, size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Int {
+fn shape(text : String, size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Int {
   mbw_mb_host_shape(@wasmrt.string_addr(text), size, weight, style, @wasmrt.doubles_addr(out))
 }
 
+/// The glyph key of `text` drawn whole as one piece (the way the platform draws it in a line: a word whose letters
+/// join), for `glyph`.
 fn mbw_mb_host_text_key(text : Int, size : Double, weight : Int, style : Int) -> Int = "mbhost" "mb_host_text_key"
 
 ///|
-fn ffi_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
+fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
   mbw_mb_host_text_key(@wasmrt.string_addr(text), size, weight, style)
 }
 
 fn mbw_mb_host_glyph(key : Int, out : Int) = "mbhost" "mb_host_glyph"
 
 ///|
-fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit {
+fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   mbw_mb_host_glyph(key, @wasmrt.doubles_addr(out))
 }
 
-fn ffi_glyph_put(key : Int, x : Int, y : Int) = "mbhost" "mb_host_glyph_put"
+fn glyph_put(key : Int, x : Int, y : Int) = "mbhost" "mb_host_glyph_put"
 
 fn ffi_atlas_size(colour : Int) -> Int = "mbhost" "mb_host_atlas_size"
 
+/// The glyphs of the first `n` of `keys` drawn ahead, off the frames' thread (Android's MBText.ahead, Apple's
+/// apple_text.m); Windows draws a glyph as it is first asked for.
 fn mbw_mb_host_glyphs_ahead(keys : Int, n : Int) = "mbhost" "mb_host_glyphs_ahead"
 
 ///|
-fn ffi_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
   mbw_mb_host_glyphs_ahead(@wasmrt.ints_addr(keys), n)
 }
 
@@ -88,7 +106,8 @@ fn ffi_face_add(face : Int, path : String, weight : Int) -> Int {
   mbw_mb_host_face_add(face, @wasmrt.string_addr(path), weight)
 }
 
-fn ffi_face_clear(face : Int) = "mbhost" "mb_host_face_clear"
+/// Face `face` given up: what was in it is in the system's face again.
+fn face_clear(face : Int) = "mbhost" "mb_host_face_clear"
 
 fn mbw_mb_host_face_add_bytes(face : Int, data : Int, weight : Int) -> Int = "mbhost" "mb_host_face_add_bytes"
 
@@ -109,16 +128,16 @@ fn ffi_face_add_family(face : Int, family : String) -> Int {
 fn mbw_mb_host_local_font_families() -> Int = "mbhost" "mb_host_local_font_families"
 
 ///|
-fn ffi_local_font_families() -> String {
+fn local_font_families() -> String {
   @wasmrt.take_string(mbw_mb_host_local_font_families())
 }
 
-fn ffi_atlas_generation() -> Int = "mbhost" "mb_host_atlas_generation"
+fn atlas_generation() -> Int = "mbhost" "mb_host_atlas_generation"
 
 fn mbw_mb_host_present(buf : Int, count : Int, r : Double, g : Double, b : Double) = "mbhost" "mb_host_present"
 
 ///|
-fn ffi_present(buf : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
+fn present(buf : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
   mbw_mb_host_present(@wasmrt.doubles_addr(buf), count, r, g, b)
 }
 
@@ -138,15 +157,16 @@ fn ffi_set_ime(active : Int, x : Double, y : Double, w : Double, h : Double, tex
 fn mbw_mb_host_clipboard_set(s : Int) = "mbhost" "mb_host_clipboard_set"
 
 ///|
-fn ffi_clipboard_set(s : String) -> Unit {
+fn clipboard_set(s : String) -> Unit {
   mbw_mb_host_clipboard_set(@wasmrt.string_addr(s))
 }
 
 ///|
+/// A picture put on the system's clipboard (@hostapi.clipboard_set_image).
 fn mbw_mb_host_clipboard_image(data : Int) = "mbhost" "mb_host_clipboard_image"
 
 ///|
-fn ffi_clipboard_image(data : Bytes) -> Unit {
+fn clipboard_set_image(data : Bytes) -> Unit {
   mbw_mb_host_clipboard_image(@wasmrt.bytes_addr(data))
 }
 
@@ -159,26 +179,29 @@ fn ffi_clipboard_secret(s : String, clear_ms : Double) -> Unit {
 }
 
 ///|
-fn ffi_clipboard_secret_off() = "mbhost" "mb_host_clipboard_secret_off"
+/// The last secret copied taken off unless something else was copied since (see hostapi's clipboard_secret_off).
+fn clipboard_secret_off() = "mbhost" "mb_host_clipboard_secret_off"
 
 fn mbw_mb_host_log(s : Int) = "mbhost" "mb_host_log"
 
 ///|
-fn ffi_log(s : String) -> Unit {
+fn log(s : String) -> Unit {
   mbw_mb_host_log(@wasmrt.string_addr(s))
 }
 
-fn ffi_bench_mode() -> Int = "mbhost" "mb_host_bench_mode"
+fn bench_mode() -> Int = "mbhost" "mb_host_bench_mode"
 
 ///|
 fn ffi_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Int = "mbhost" "mb_host_set_outside"
 
 ///|
 #borrow(what)
+/// As the frame just built left it: how many of the app's asks the host has not answered yet (effect.mb's outside)
+/// and what they are ("" when none). A run to a declared moment keeps its clock still while any is awaited.
 fn mbw_mb_host_frame_awaiting(awaiting : Int, what : Int) = "mbhost" "mb_host_frame_awaiting"
 
 ///|
-fn ffi_frame_awaiting(awaiting : Int, what : String) -> Unit {
+fn frame_awaiting(awaiting : Int, what : String) -> Unit {
   mbw_mb_host_frame_awaiting(awaiting, @wasmrt.string_addr(what))
 }
 
@@ -188,54 +211,66 @@ fn ffi_reduce_motion() -> Int = "mbhost" "mb_host_reduce_motion"
 ///|
 fn ffi_own_clock() -> Int = "mbhost" "mb_host_own_clock"
 
-fn ffi_exit(code : Int) = "mbhost" "mb_host_exit"
+fn exit(code : Int) = "mbhost" "mb_host_exit"
 
-fn ffi_mem_bytes() -> Double = "mbhost" "mb_host_mem_bytes"
+fn mem_bytes() -> Double = "mbhost" "mb_host_mem_bytes"
 
 fn ffi_reduce_transparency() -> Int = "mbhost" "mb_host_reduce_transparency"
 
-fn ffi_gpu_ms() -> Double = "mbhost" "mb_host_gpu_ms"
+/// The GPU's time for the last frame it finished, in ms (-1: not known on
+/// this host).
+fn gpu_ms() -> Double = "mbhost" "mb_host_gpu_ms"
 
-fn ffi_cpu_ms() -> Double = "mbhost" "mb_host_cpu_ms"
+/// The CPU's time the process has had, every thread's, in ms (-1: not known on this host).
+fn cpu_ms() -> Double = "mbhost" "mb_host_cpu_ms"
 
-fn ffi_perf_state() -> Int = "mbhost" "mb_host_perf_state"
+/// The performance record (@hostapi.perf_state): iOS keeps one (ios_app.m), the other hosts none (-1).
+fn perf_state() -> Int = "mbhost" "mb_host_perf_state"
 
 fn ffi_set_perf(on : Int) = "mbhost" "mb_host_set_perf"
 
 fn mbw_mb_host_perf_line(line : Int) = "mbhost" "mb_host_perf_line"
 
 ///|
-fn ffi_perf_line(line : String) -> Unit {
+fn perf_line(line : String) -> Unit {
   mbw_mb_host_perf_line(@wasmrt.string_addr(line))
 }
 
 fn mbw_mb_host_perf_where() -> Int = "mbhost" "mb_host_perf_where"
 
 ///|
-fn ffi_perf_where() -> String {
+fn perf_where() -> String {
   @wasmrt.take_string(mbw_mb_host_perf_where())
 }
 
 ///|
 fn ffi_perf_open(go : Int) -> Int = "mbhost" "mb_host_perf_open"
 
-fn ffi_perf_size() -> Double = "mbhost" "mb_host_perf_size"
+fn perf_size() -> Double = "mbhost" "mb_host_perf_size"
 
 fn mbw_mb_host_perf_read() -> Int = "mbhost" "mb_host_perf_read"
 
 ///|
-fn ffi_perf_read() -> Bytes {
+fn perf_read() -> Bytes {
   @wasmrt.take_bytes(mbw_mb_host_perf_read())
 }
 
-fn ffi_set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) = "mbhost" "mb_host_set_back"
+/// Where the system's back goes (Android's back gesture, predictive or not,
+/// and its back button; a mouse's back button): `back(kind, x, progress,
+/// edge)`, kind 0 a back gesture started at x (logical pixels), 1 it moved
+/// (to x, `progress` 0-1 as the system has it), 2 let go to go back (or a
+/// back with no gesture), 3 called off; edge 0 the left, 1 the right.
+/// Called before `run`.
+fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) = "mbhost" "mb_host_set_back"
 
 fn ffi_back_enabled(on : Int) = "mbhost" "mb_host_back_enabled"
 
+/// An environment variable ("" when unset; in a browser, the page's query
+/// parameter of that name).
 fn mbw_mb_host_env(name : Int) -> Int = "mbhost" "mb_host_env"
 
 ///|
-fn ffi_env(name : String) -> String {
+fn env(name : String) -> String {
   @wasmrt.take_string(mbw_mb_host_env(@wasmrt.string_addr(name)))
 }
 
@@ -246,18 +281,22 @@ fn ffi_drive(kind : Int, text : String) -> Int {
   mbw_mb_host_drive(kind, @wasmrt.string_addr(text))
 }
 
-fn ffi_set_app_state(f : FuncRef[(Int) -> Unit]) = "mbhost" "mb_host_set_app_state"
+/// Who to tell when the app comes to the front or leaves it: `f` gets 1 while its window is shown, | 2 while it is
+/// also in front (the key window of the active app; Android: the activity resumed with the window's focus). Told on
+/// each change, on the app's thread (Android: before the GL thread pauses). Hosts that never tell leave the app as
+/// shown and in front.
+fn set_app_state(f : FuncRef[(Int) -> Unit]) = "mbhost" "mb_host_set_app_state"
 
 fn ffi_system_dark() -> Int = "mbhost" "mb_host_system_dark"
 
 ///|
-fn ffi_font_scale() -> Double = "mbhost" "mb_host_font_scale"
+fn font_scale() -> Double = "mbhost" "mb_host_font_scale"
 
 ///|
-fn ffi_native_pointing() -> Int = "mbhost" "mb_host_native_pointing"
+fn native_pointing() -> Int = "mbhost" "mb_host_native_pointing"
 
 ///|
-fn ffi_keyboard() -> Int = "mbhost" "mb_host_keyboard"
+fn keyboard() -> Int = "mbhost" "mb_host_keyboard"
 
 ///|
 fn ffi_a11y_on() -> Int = "mbhost" "mb_host_a11y_on"
@@ -266,7 +305,7 @@ fn ffi_a11y_on() -> Int = "mbhost" "mb_host_a11y_on"
 fn mbw_mb_host_a11y_tree(s : Int) = "mbhost" "mb_host_a11y_tree"
 
 ///|
-fn ffi_a11y_tree(s : String) -> Unit {
+fn a11y_tree(s : String) -> Unit {
   mbw_mb_host_a11y_tree(@wasmrt.string_addr(s))
 }
 
@@ -288,18 +327,22 @@ fn ffi_share(text : String, name : String, mime : String, data : Bytes) -> Int {
 }
 
 ///|
+/// What another app shared into this one since last asked (Android's ACTION_SEND of text or files, ACTION_SEND_MULTIPLE
+/// of files; MBUI_SHARE_FILES, paths split by |, on macOS for scripted runs), as JSON text `{"text","title","files"}`,
+/// `files` each `{"name","type","size"}` (absent when none); "" when nothing was.
 fn mbw_mb_host_shared_in() -> Int = "mbhost" "mb_host_shared_in"
 
 ///|
-fn ffi_shared_in() -> String {
+fn shared_in() -> String {
   @wasmrt.take_string(mbw_mb_host_shared_in())
 }
 
 ///|
+/// The i-th of the files shared in (`shared_in`'s `files`), taken once: empty after, or where there is none.
 fn mbw_mb_host_shared_in_file(i : Int) -> Int = "mbhost" "mb_host_shared_in_file"
 
 ///|
-fn ffi_shared_in_file(i : Int) -> Bytes {
+fn shared_in_file(i : Int) -> Bytes {
   @wasmrt.take_bytes(mbw_mb_host_shared_in_file(i))
 }
 
@@ -339,7 +382,8 @@ fn ffi_hold_words(channel : String, title : String, body : String) -> Unit {
 }
 
 ///|
-fn ffi_app_version() -> Int = "mbhost" "mb_host_app_version"
+/// This build's version code, as the system has it (Android's); 0 where the app does not update itself.
+fn app_version() -> Int = "mbhost" "mb_host_app_version"
 
 ///|
 fn mbw_mb_host_update_fetch(url : Int, sha256 : Int, size : Double, name : Int, now : Int) = "mbhost" "mb_host_update_fetch"
@@ -350,26 +394,32 @@ fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String,
 }
 
 ///|
+/// The build made ready put in this app's place now (@hostapi.update_apply).
 fn mbw_mb_host_update_apply(said : Int) = "mbhost" "mb_host_update_apply"
 
 ///|
-fn ffi_update_apply(said : String) -> Unit {
+fn update_apply(said : String) -> Unit {
   mbw_mb_host_update_apply(@wasmrt.string_addr(said))
 }
 
 ///|
+/// How an update goes, as JSON text (@hostapi.update_state).
 fn mbw_mb_host_update_state() -> Int = "mbhost" "mb_host_update_state"
 
 ///|
-fn ffi_update_state() -> String {
+fn update_state() -> String {
   @wasmrt.take_string(mbw_mb_host_update_state())
 }
 
 ///|
+/// A package (an APK a chat has) handed to the system's installer, which asks the person to confirm (Android:
+/// still.fail's Install.kt installApk). What comes of it, when it is not installed, comes on @hostapi.system_channel
+/// (system.mbt `install`: the leave to install apps asked for, or why it failed: "unsupported" where there is no
+/// installer).
 fn mbw_mb_host_install_package(name : Int, data : Int) = "mbhost" "mb_host_install_package"
 
 ///|
-fn ffi_install_package(name : String, data : Bytes) -> Unit {
+fn install_package(name : String, data : Bytes) -> Unit {
   mbw_mb_host_install_package(@wasmrt.string_addr(name), @wasmrt.bytes_addr(data))
 }
 
@@ -380,10 +430,10 @@ fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inse
 fn ffi_window_inset() -> Int = "mbhost" "mb_host_window_inset"
 
 ///|
-fn ffi_window_hold() = "mbhost" "mb_host_window_hold"
+fn window_hold() = "mbhost" "mb_host_window_hold"
 
 ///|
-fn ffi_window_show() = "mbhost" "mb_host_window_show"
+fn window_show() = "mbhost" "mb_host_window_show"
 
 ///|
 fn ffi_full_screen() -> Int = "mbhost" "mb_host_full_screen"
@@ -392,25 +442,32 @@ fn ffi_full_screen() -> Int = "mbhost" "mb_host_full_screen"
 fn ffi_set_full_screen(on : Int) = "mbhost" "mb_host_set_full_screen"
 
 ///|
-fn ffi_window_corner() -> Double = "mbhost" "mb_host_window_corner"
+/// How round the system draws the window's corners now (@hostapi.window_corner).
+fn window_corner() -> Double = "mbhost" "mb_host_window_corner"
 
 ///|
-fn ffi_window_corner_at(k : Int) -> Double = "mbhost" "mb_host_window_corner_at"
+/// How round the system draws the window's corner `k` (@hostapi.window_corner_at).
+fn window_corner_at(k : Int) -> Double = "mbhost" "mb_host_window_corner_at"
 
 ///|
-fn ffi_window_drag() = "mbhost" "mb_host_window_drag"
+/// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
+/// here, as its title bar's would be.
+fn window_drag() = "mbhost" "mb_host_window_drag"
 
 ///|
-fn ffi_window_act(what : Int) = "mbhost" "mb_host_window_act"
+/// What the window's own buttons do, the app's to draw (@hostapi.window_act).
+fn window_act(what : Int) = "mbhost" "mb_host_window_act"
 
 ///|
 fn ffi_window_zoomed() -> Int = "mbhost" "mb_host_window_zoomed"
 
 ///|
-fn ffi_window_snap(x : Double, y : Double, w : Double, h : Double) = "mbhost" "mb_host_window_snap"
+/// Where the app draws the window's maximize button, the host's there (@hostapi.window_snap).
+fn window_snap(x : Double, y : Double, w : Double, h : Double) = "mbhost" "mb_host_window_snap"
 
 ///|
-fn ffi_window_snap_state() -> Int = "mbhost" "mb_host_window_snap_state"
+/// How the pointer stands on it (@hostapi.window_snap_state).
+fn window_snap_state() -> Int = "mbhost" "mb_host_window_snap_state"
 
 ///|
 fn ffi_window_opens() -> Int = "mbhost" "mb_host_window_opens"
@@ -432,16 +489,18 @@ fn ffi_window_front(what : String) -> Int {
 }
 
 ///|
-fn ffi_set_cursor(kind : Int) = "mbhost" "mb_host_set_cursor"
+/// The pointer's shape from now on: 0 the arrow, 1 a hand, 2 the text's I-beam, 3 resizing sideways, 4 up and down,
+/// 5 an open hand. Nothing where there is no pointer.
+fn set_cursor(kind : Int) = "mbhost" "mb_host_set_cursor"
 
 ///|
-fn ffi_set_badge(n : Int) = "mbhost" "mb_host_set_badge"
+fn set_badge(n : Int) = "mbhost" "mb_host_set_badge"
 
 ///|
 fn mbw_mb_host_menu_setup(json : Int) = "mbhost" "mb_host_menu_setup"
 
 ///|
-fn ffi_menu_setup(json : String) -> Unit {
+fn menu_setup(json : String) -> Unit {
   mbw_mb_host_menu_setup(@wasmrt.string_addr(json))
 }
 
@@ -458,16 +517,6 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 /// (a window's wheel is the app's alone: no page under it zooms by one it kept nothing of)
 fn wheel_kept(_kept : Bool) -> Unit {
   ()
-}
-
-///|
-fn window_hold() -> Unit {
-  ffi_window_hold()
-}
-
-///|
-fn window_show() -> Unit {
-  ffi_window_show()
 }
 
 ///|
@@ -490,46 +539,9 @@ fn set_full_screen(on : Bool) -> Unit {
 }
 
 ///|
-/// How round the system draws the window's corners now (@hostapi.window_corner).
-fn window_corner() -> Double {
-  ffi_window_corner()
-}
-
-///|
-/// How round the system draws the window's corner `k` (@hostapi.window_corner_at).
-fn window_corner_at(k : Int) -> Double {
-  ffi_window_corner_at(k)
-}
-
-///|
-/// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
-/// here, as its title bar's would be.
-fn window_drag() -> Unit {
-  ffi_window_drag()
-}
-
-///|
-/// What the window's own buttons do, the app's to draw (@hostapi.window_act).
-fn window_act(what : Int) -> Unit {
-  ffi_window_act(what)
-}
-
-///|
 /// Whether the window is maximized now (@hostapi.window_zoomed).
 fn window_zoomed() -> Bool {
   ffi_window_zoomed() != 0
-}
-
-///|
-/// Where the app draws the window's maximize button, the host's there (@hostapi.window_snap).
-fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
-  ffi_window_snap(x, y, w, h)
-}
-
-///|
-/// How the pointer stands on it (@hostapi.window_snap_state).
-fn window_snap_state() -> Int {
-  ffi_window_snap_state()
 }
 
 ///|
@@ -551,27 +563,10 @@ fn window_front(what : String) -> Bool {
 }
 
 ///|
-/// The pointer's shape from now on: 0 the arrow, 1 a hand, 2 the text's I-beam, 3 resizing sideways, 4 up and down,
-/// 5 an open hand. Nothing where there is no pointer.
-fn set_cursor(kind : Int) -> Unit {
-  ffi_set_cursor(kind)
-}
-
-///|
-fn set_badge(n : Int) -> Unit {
-  ffi_set_badge(n)
-}
-
-///|
-fn menu_setup(json : String) -> Unit {
-  ffi_menu_setup(json)
-}
-
-///|
 fn mbw_mb_host_local_station() -> Int = "mbhost" "mb_host_local_station"
 
 ///|
-fn ffi_local_station() -> String {
+fn local_station() -> String {
   @wasmrt.take_string(mbw_mb_host_local_station())
 }
 
@@ -579,39 +574,12 @@ fn ffi_local_station() -> String {
 fn mbw_mb_host_local_station_act(a : Int) = "mbhost" "mb_host_local_station_act"
 
 ///|
-fn ffi_local_station_act(a : String) -> Unit {
+fn local_station_act(a : String) -> Unit {
   mbw_mb_host_local_station_act(@wasmrt.string_addr(a))
 }
 
 ///|
-fn local_station() -> String {
-  ffi_local_station()
-}
-
-///|
-fn local_station_act(a : String) -> Unit {
-  ffi_local_station_act(a)
-}
-
-///|
-fn ffi_mods_held() -> Int = "mbhost" "mb_host_mods_held"
-
-///|
-fn mods_held() -> Int {
-  ffi_mods_held()
-}
-
-///|
-fn run(
-  title : String,
-  frame : FuncRef[(Double, Double, Double, Double) -> Unit],
-  pointer : FuncRef[(Int, Double, Double, Int) -> Unit],
-  wheel : FuncRef[(Double, Double, Double, Double, Int) -> Unit],
-  key : FuncRef[(Int, Int) -> Unit],
-  text : FuncRef[(Int, String, Int, Int) -> Unit],
-) -> Unit {
-  ffi_run(title, frame, pointer, wheel, key, text)
-}
+fn mods_held() -> Int = "mbhost" "mb_host_mods_held"
 
 ///|
 fn now() -> Double {
@@ -619,116 +587,17 @@ fn now() -> Double {
 }
 
 ///|
-fn ffi_wall_ms() -> Double = "mbhost" "mb_host_wall_ms"
-
-///|
 /// The time of day, in ms since 1970 (UTC), as the machine's clock has it: for what is shown of it only (@ui.wall_ms).
 /// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
-fn wall_ms() -> Double {
-  ffi_wall_ms()
-}
-
-///|
-fn ffi_utc_offset_min(at_ms : Double) -> Int = "mbhost" "mb_host_utc_offset_min"
+fn wall_ms() -> Double = "mbhost" "mb_host_wall_ms"
 
 ///|
 /// How far local time is ahead of UTC at `at_ms`, in minutes (@hostapi.utc_offset_min).
-fn utc_offset_min(at_ms : Double) -> Int {
-  ffi_utc_offset_min(at_ms)
-}
-
-///|
-/// When the input event being delivered happened, on now()'s clock (ms):
-/// a touch's own time, which comes before it is handled (a frame's touches
-/// are handled together); negative when the host doesn't say.
-fn event_time() -> Double {
-  ffi_event_time()
-}
-
-///|
-/// What the pointer's event being delivered came from: 1 a finger, 0 a mouse or a pen, -1 not said (@hostapi.event_finger).
-fn event_finger() -> Int {
-  ffi_event_finger()
-}
-
-///|
-/// How late the frame before reached the screen (@hostapi.frame_late).
-fn frame_late() -> Double {
-  ffi_frame_late()
-}
-
-///|
-/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
-fn platform() -> Int {
-  ffi_platform()
-}
-
-///|
-fn request_frame() -> Unit {
-  ffi_request_frame()
-}
-
-///|
-fn wake_after(ms : Double) -> Unit {
-  ffi_wake_after(ms)
-}
-
-///|
-/// Ascent, descent and line height of the system font (or its code face,
-/// `style` & style_mono; slanted with style_italic) at this size and weight,
-/// then the ascent and descent of the font a Han ideograph falls back to, then
-/// 1 where the host sets lines of words on whole device pixels (Android), 0
-/// where not (six numbers in `out`).
-fn font_metrics(
-  size : Double,
-  weight : Int,
-  style : Int,
-  out : FixedArray[Double],
-) -> Unit {
-  ffi_font_metrics(size, weight, style, out)
-}
-
-///|
-/// `text` shaped in that font into grapheme clusters: four numbers each
-/// (start, length, advance, glyph key; -1 for none) in `out`; returns how
-/// many.
-fn shape(
-  text : String,
-  size : Double,
-  weight : Int,
-  style : Int,
-  out : FixedArray[Double],
-) -> Int {
-  ffi_shape(text, size, weight, style, out)
-}
-
-///|
-/// The glyph key of `text` drawn whole as one piece (the way the platform draws it in a line: a word whose letters
-/// join), for `glyph`.
-fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
-  ffi_text_key(text, size, weight, style)
-}
-
-///|
-fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
-  ffi_glyph(key, out)
-}
-
-///|
-fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
-  ffi_glyph_put(key, x, y)
-}
+fn utc_offset_min(at_ms : Double) -> Int = "mbhost" "mb_host_utc_offset_min"
 
 ///|
 fn atlas_size(colour : Bool) -> Int {
   ffi_atlas_size(if colour { 1 } else { 0 })
-}
-
-///|
-/// The glyphs of the first `n` of `keys` drawn ahead, off the frames' thread (Android's MBText.ahead, Apple's
-/// apple_text.m); Windows draws a glyph as it is first asked for.
-fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
-  ffi_glyphs_ahead(keys, n)
 }
 
 ///|
@@ -747,35 +616,8 @@ fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
 }
 
 ///|
-/// Face `face` given up: what was in it is in the system's face again.
-fn face_clear(face : Int) -> Unit {
-  ffi_face_clear(face)
-}
-
-///|
 fn face_add_family(face : Int, family : String) -> Bool {
   ffi_face_add_family(face, family) != 0
-}
-
-///|
-fn local_font_families() -> String {
-  ffi_local_font_families()
-}
-
-///|
-fn atlas_generation() -> Int {
-  ffi_atlas_generation()
-}
-
-///|
-fn present(
-  buf : FixedArray[Double],
-  count : Int,
-  r : Double,
-  g : Double,
-  b : Double,
-) -> Unit {
-  ffi_present(buf, count, r, g, b)
 }
 
 ///|
@@ -793,17 +635,6 @@ fn set_ime(
 }
 
 ///|
-fn clipboard_set(s : String) -> Unit {
-  ffi_clipboard_set(s)
-}
-
-///|
-/// A picture put on the system's clipboard (@hostapi.clipboard_set_image).
-fn clipboard_set_image(data : Bytes) -> Unit {
-  ffi_clipboard_image(data)
-}
-
-///|
 /// A secret put on the system's clipboard: marked sensitive where the system masks such (Android 13 on), kept out of
 /// the clipboard's history and the cloud's where it keeps them (Windows), kept to this device (iOS, which takes it off
 /// itself `clear_ms` later). Elsewhere as clipboard_set. The app takes it off `clear_ms` later on its own clock
@@ -813,34 +644,11 @@ fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
 }
 
 ///|
-/// The last secret copied taken off unless something else was copied since (see hostapi's clipboard_secret_off).
-fn clipboard_secret_off() -> Unit {
-  ffi_clipboard_secret_off()
-}
-
-///|
-fn log(s : String) -> Unit {
-  ffi_log(s)
-}
-
-///|
-fn bench_mode() -> Int {
-  ffi_bench_mode()
-}
-
-///|
 /// Who is told as what the host does for the app is done (`f(kind, id, state)`: kind 1 an image or a PDF's page
 /// decoded, 2 a native view ready — a page loaded and its picture taken, a video's first frame —; state 1 done, -1
 /// failed), on the main thread, between frames. False where the host sends no such events.
 fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
   ffi_set_outside(f) != 0
-}
-
-///|
-/// As the frame just built left it: how many of the app's asks the host has not answered yet (effect.mb's outside)
-/// and what they are ("" when none). A run to a declared moment keeps its clock still while any is awaited.
-fn frame_awaiting(awaiting : Int, what : String) -> Unit {
-  ffi_frame_awaiting(awaiting, what)
 }
 
 ///|
@@ -876,27 +684,6 @@ let reduce_read : Ref[Double] = { val: -1.0 }
 let reduce_said : Ref[Bool] = { val: false }
 
 ///|
-fn exit(code : Int) -> Unit {
-  ffi_exit(code)
-}
-
-///|
-fn mem_bytes() -> Double {
-  ffi_mem_bytes()
-}
-
-///|
-/// Where the system's back goes (Android's back gesture, predictive or not,
-/// and its back button; a mouse's back button): `back(kind, x, progress,
-/// edge)`, kind 0 a back gesture started at x (logical pixels), 1 it moved
-/// (to x, `progress` 0-1 as the system has it), 2 let go to go back (or a
-/// back with no gesture), 3 called off; edge 0 the left, 1 the right.
-/// Called before `run`.
-fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
-  ffi_set_back(back)
-}
-
-///|
 /// Whether the app takes back now (a page to go back to): when not, the
 /// system does what it does (Android leaves the app).
 fn back_enabled(on : Bool) -> Unit {
@@ -912,68 +699,13 @@ fn reduce_transparency() -> Bool {
 }
 
 ///|
-/// The GPU's time for the last frame it finished, in ms (-1: not known on
-/// this host).
-fn gpu_ms() -> Double {
-  ffi_gpu_ms()
-}
-
-///|
-/// The CPU's time the process has had, every thread's, in ms (-1: not known on this host).
-fn cpu_ms() -> Double {
-  ffi_cpu_ms()
-}
-
-///|
-/// The performance record (@hostapi.perf_state): iOS keeps one (ios_app.m), the other hosts none (-1).
-fn perf_state() -> Int {
-  ffi_perf_state()
-}
-
-///|
 fn set_perf(on : Bool) -> Unit {
   ffi_set_perf(if on { 1 } else { 0 })
 }
 
 ///|
-fn perf_line(line : String) -> Unit {
-  ffi_perf_line(line)
-}
-
-///|
-fn perf_where() -> String {
-  ffi_perf_where()
-}
-
-///|
 fn perf_open(go : Bool) -> Bool {
   ffi_perf_open(if go { 1 } else { 0 }) != 0
-}
-
-///|
-fn perf_size() -> Double {
-  ffi_perf_size()
-}
-
-///|
-fn perf_read() -> Bytes {
-  ffi_perf_read()
-}
-
-///|
-/// An environment variable ("" when unset; in a browser, the page's query
-/// parameter of that name).
-fn env(name : String) -> String {
-  ffi_env(name)
-}
-
-///|
-/// Who to tell when the app comes to the front or leaves it: `f` gets 1 while its window is shown, | 2 while it is
-/// also in front (the key window of the active app; Android: the activity resumed with the window's focus). Told on
-/// each change, on the app's thread (Android: before the GL thread pauses). Hosts that never tell leave the app as
-/// shown and in front.
-fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
-  ffi_set_app_state(f)
 }
 
 ///|
@@ -985,28 +717,8 @@ fn system_dark() -> Bool {
 }
 
 ///|
-fn font_scale() -> Double {
-  ffi_font_scale()
-}
-
-///|
-fn native_pointing() -> Int {
-  ffi_native_pointing()
-}
-
-///|
-fn keyboard() -> Int {
-  ffi_keyboard()
-}
-
-///|
 fn a11y_on() -> Bool {
   ffi_a11y_on() != 0
-}
-
-///|
-fn a11y_tree(s : String) -> Unit {
-  ffi_a11y_tree(s)
 }
 
 ///|
@@ -1041,50 +753,9 @@ fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
 }
 
 ///|
-/// What another app shared into this one since last asked (Android's ACTION_SEND of text or files, ACTION_SEND_MULTIPLE
-/// of files; MBUI_SHARE_FILES, paths split by |, on macOS for scripted runs), as JSON text `{"text","title","files"}`,
-/// `files` each `{"name","type","size"}` (absent when none); "" when nothing was.
-fn shared_in() -> String {
-  ffi_shared_in()
-}
-
-///|
-/// The i-th of the files shared in (`shared_in`'s `files`), taken once: empty after, or where there is none.
-fn shared_in_file(i : Int) -> Bytes {
-  ffi_shared_in_file(i)
-}
-
-///|
-/// This build's version code, as the system has it (Android's); 0 where the app does not update itself.
-fn app_version() -> Int {
-  ffi_app_version()
-}
-
-///|
 /// A newer build downloaded and made ready (@hostapi.update_fetch).
 fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
   ffi_update_fetch(url, sha256, size, name, if now { 1 } else { 0 })
-}
-
-///|
-/// The build made ready put in this app's place now (@hostapi.update_apply).
-fn update_apply(said : String) -> Unit {
-  ffi_update_apply(said)
-}
-
-///|
-/// How an update goes, as JSON text (@hostapi.update_state).
-fn update_state() -> String {
-  ffi_update_state()
-}
-
-///|
-/// A package (an APK a chat has) handed to the system's installer, which asks the person to confirm (Android:
-/// still.fail's Install.kt installApk). What comes of it, when it is not installed, comes on @hostapi.system_channel
-/// (system.mbt `install`: the leave to install apps asked for, or why it failed: "unsupported" where there is no
-/// installer).
-fn install_package(name : String, data : Bytes) -> Unit {
-  ffi_install_package(name, data)
 }
 
 ///|
@@ -1104,59 +775,39 @@ fn drive(kind : Int, text : String) -> Bool {
 // kept as textures the renderer draws (instances of kind 4 name theirs in
 // slot 20). A decode that finishes requests a frame.
 
+/// Starts decoding the image at `src` (a file path or an http(s) URL);
+/// returns its id.
 fn mbw_mb_host_image_load(src : Int, max_px : Int) -> Int = "mbhost" "mb_host_image_load"
 
 ///|
-fn ffi_image_load(src : String, max_px : Int) -> Int {
+fn image_load(src : String, max_px : Int) -> Int {
   mbw_mb_host_image_load(@wasmrt.string_addr(src), max_px)
 }
 
+/// Starts decoding an encoded image (JPEG, PNG, HEIC, WebP…) in memory.
 fn mbw_mb_host_image_load_bytes(data : Int, max_px : Int) -> Int = "mbhost" "mb_host_image_load_bytes"
 
 ///|
-fn ffi_image_load_bytes(data : Bytes, max_px : Int) -> Int {
+fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
   mbw_mb_host_image_load_bytes(@wasmrt.bytes_addr(data), max_px)
 }
 
+/// 0 while decoding, 1 when ready, -1 if it failed. Ready, `out` gets the
+/// decoded width and height and the original's, in pixels.
 fn mbw_mb_host_image_info(id : Int, out : Int) -> Int = "mbhost" "mb_host_image_info"
 
 ///|
-fn ffi_image_info(id : Int, out : FixedArray[Double]) -> Int {
+fn image_info(id : Int, out : FixedArray[Double]) -> Int {
   mbw_mb_host_image_info(id, @wasmrt.doubles_addr(out))
 }
 
-fn ffi_image_free(id : Int) = "mbhost" "mb_host_image_free"
+fn image_free(id : Int) = "mbhost" "mb_host_image_free"
 
 fn mbw_mb_host_image_pixels(id : Int, out : Int) -> Int = "mbhost" "mb_host_image_pixels"
 
 ///|
 fn ffi_image_pixels(id : Int, out : FixedArray[Byte]) -> Int {
   mbw_mb_host_image_pixels(id, @wasmrt.byte_array_addr(out))
-}
-
-///|
-/// Starts decoding the image at `src` (a file path or an http(s) URL);
-/// returns its id.
-fn image_load(src : String, max_px : Int) -> Int {
-  ffi_image_load(src, max_px)
-}
-
-///|
-/// Starts decoding an encoded image (JPEG, PNG, HEIC, WebP…) in memory.
-fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
-  ffi_image_load_bytes(data, max_px)
-}
-
-///|
-/// 0 while decoding, 1 when ready, -1 if it failed. Ready, `out` gets the
-/// decoded width and height and the original's, in pixels.
-fn image_info(id : Int, out : FixedArray[Double]) -> Int {
-  ffi_image_info(id, out)
-}
-
-///|
-fn image_free(id : Int) -> Unit {
-  ffi_image_free(id)
 }
 
 ///|
@@ -1520,10 +1171,15 @@ fn nt_text(what : Int) -> String {
 // host's own, from 1; 0 where the host has none of that kind.
 
 ///|
+/// A native view of `kind`: 1 a video (and audio) player, its bytes read through the app (`view_read_next`), `arg`
+/// its MIME type ("video/mp4"); 2 a web page of `arg`'s HTML, its scripts on, nothing of the device's files or the
+/// app's reachable, its links not followed; 3 a site served by the app: a web view at `arg` (a path) of a host of its
+/// own, each of whose requests the app answers (`view_site_next`). Hidden until placed. 0 when this host has no such
+/// view.
 fn mbw_mb_host_view_open(kind : Int, arg : Int) -> Int = "mbhost" "mb_host_view_open"
 
 ///|
-fn ffi_view_open(kind : Int, arg : String) -> Int {
+fn view_open(kind : Int, arg : String) -> Int {
   mbw_mb_host_view_open(kind, @wasmrt.string_addr(arg))
 }
 
@@ -1531,24 +1187,37 @@ fn ffi_view_open(kind : Int, arg : String) -> Int {
 fn ffi_view_place(id : Int, x : Double, y : Double, w : Double, h : Double, cx0 : Double, cy0 : Double, cx1 : Double, cy1 : Double, r0 : Double, r1 : Double, r2 : Double, r3 : Double, shown : Int) = "mbhost" "mb_host_view_place"
 
 ///|
-fn ffi_view_close(id : Int) = "mbhost" "mb_host_view_close"
+/// The view gone (its player stopped, its page closed).
+fn view_close(id : Int) = "mbhost" "mb_host_view_close"
 
 ///|
-fn ffi_view_control(id : Int, op : Int, value : Double) = "mbhost" "mb_host_view_control"
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed, 11
+/// to about `value` ms at once (the nearest key frame: nothing before it decoded); a site: 5 back, 6 forward, 7
+/// reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's own size shown smaller).
+fn view_control(id : Int, op : Int, value : Double) = "mbhost" "mb_host_view_control"
 
 ///|
+/// How the view stands: -1 failed, -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
+/// damaged, 0 opening, 1 ready.
+/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
+/// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
+/// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek
+/// within what it has, nor one while paused), how far on it has what it needs to play (ms; 0 not said), played to its
+/// end (1).
 fn mbw_mb_host_view_info(id : Int, out : Int) -> Int = "mbhost" "mb_host_view_info"
 
 ///|
-fn ffi_view_info(id : Int, out : FixedArray[Double]) -> Int {
+fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   mbw_mb_host_view_info(id, @wasmrt.doubles_addr(out))
 }
 
 ///|
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
+/// the id of one it let go of (@hostapi.view_read_next).
 fn mbw_mb_host_view_read_next(id : Int, out : Int) -> Int = "mbhost" "mb_host_view_read_next"
 
 ///|
-fn ffi_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
+fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   mbw_mb_host_view_read_next(id, @wasmrt.doubles_addr(out))
 }
 
@@ -1561,62 +1230,6 @@ fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more 
 }
 
 ///|
-fn mbw_mb_host_view_site_next(id : Int) -> Int = "mbhost" "mb_host_view_site_next"
-
-///|
-fn ffi_view_site_next(id : Int) -> String {
-  @wasmrt.take_string(mbw_mb_host_view_site_next(id))
-}
-
-///|
-fn mbw_mb_host_view_site_body(id : Int, req : Int) -> Int = "mbhost" "mb_host_view_site_body"
-
-///|
-fn ffi_view_site_body(id : Int, req : Int) -> Bytes {
-  @wasmrt.take_bytes(mbw_mb_host_view_site_body(id, req))
-}
-
-///|
-fn mbw_mb_host_view_site_head(id : Int, req : Int, status : Int, headers : Int) = "mbhost" "mb_host_view_site_head"
-
-///|
-fn ffi_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  mbw_mb_host_view_site_head(id, req, status, @wasmrt.string_addr(headers))
-}
-
-///|
-fn mbw_mb_host_view_site_chunk(id : Int, req : Int, data : Int) = "mbhost" "mb_host_view_site_chunk"
-
-///|
-fn ffi_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  mbw_mb_host_view_site_chunk(id, req, @wasmrt.bytes_addr(data))
-}
-
-///|
-fn mbw_mb_host_view_site_end(id : Int, req : Int, error : Int) = "mbhost" "mb_host_view_site_end"
-
-///|
-fn ffi_view_site_end(id : Int, req : Int, error : String) -> Unit {
-  mbw_mb_host_view_site_end(id, req, @wasmrt.string_addr(error))
-}
-
-///|
-fn mbw_mb_host_view_site_state(id : Int) -> Int = "mbhost" "mb_host_view_site_state"
-
-///|
-fn ffi_view_site_state(id : Int) -> String {
-  @wasmrt.take_string(mbw_mb_host_view_site_state(id))
-}
-
-///|
-fn mbw_mb_host_view_site_load(id : Int, path : Int) = "mbhost" "mb_host_view_site_load"
-
-///|
-fn ffi_view_site_load(id : Int, path : String) -> Unit {
-  mbw_mb_host_view_site_load(id, @wasmrt.string_addr(path))
-}
-
-///|
 /// What a site (a view of kind 3) has to say, oldest first: a JSON text, "" when nothing waits. `{"req":n,"method",
 /// "path","headers":[[k,v]…],"page":true|false}` a request of its own host the app answers (`view_site_head`, then
 /// `view_site_chunk`s, then `view_site_end`); `{"gone":n}` a request the page let go of (nothing more of it is taken);
@@ -1624,52 +1237,65 @@ fn ffi_view_site_load(id : Int, path : String) -> Unit {
 /// (view_tell 3; it waits on); `{"slow":n}` an answer more of which waits than `backlog` (the host takes no more of
 /// it, and fails its body once what waits is read: the app ends it). Of a page's or a site's, `{"said":text}`: what
 /// its page's scripts said to the app (`mbuiHost.post(text)`), in the order said.
+fn mbw_mb_host_view_site_next(id : Int) -> Int = "mbhost" "mb_host_view_site_next"
+
+///|
 fn view_site_next(id : Int) -> String {
-  ffi_view_site_next(id)
+  @wasmrt.take_string(mbw_mb_host_view_site_next(id))
 }
 
 ///|
 /// A request's body (empty when it has none, or the host's web view does not hand it over: Android's).
+fn mbw_mb_host_view_site_body(id : Int, req : Int) -> Int = "mbhost" "mb_host_view_site_body"
+
+///|
 fn view_site_body(id : Int, req : Int) -> Bytes {
-  ffi_view_site_body(id, req)
+  @wasmrt.take_bytes(mbw_mb_host_view_site_body(id, req))
 }
 
 ///|
 /// A request's answer begins: its status and headers (`[[k,v]…]` as JSON text).
+fn mbw_mb_host_view_site_head(id : Int, req : Int, status : Int, headers : Int) = "mbhost" "mb_host_view_site_head"
+
+///|
 fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  ffi_view_site_head(id, req, status, headers)
+  mbw_mb_host_view_site_head(id, req, status, @wasmrt.string_addr(headers))
 }
 
 ///|
 /// The next piece of a request's answer's body.
+fn mbw_mb_host_view_site_chunk(id : Int, req : Int, data : Int) = "mbhost" "mb_host_view_site_chunk"
+
+///|
 fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  ffi_view_site_chunk(id, req, data)
+  mbw_mb_host_view_site_chunk(id, req, @wasmrt.bytes_addr(data))
 }
 
 ///|
 /// A request's answer ends ("" whole; else why it broke off). A request with no head yet fails with it.
+fn mbw_mb_host_view_site_end(id : Int, req : Int, error : Int) = "mbhost" "mb_host_view_site_end"
+
+///|
 fn view_site_end(id : Int, req : Int, error : String) -> Unit {
-  ffi_view_site_end(id, req, error)
+  mbw_mb_host_view_site_end(id, req, @wasmrt.string_addr(error))
 }
 
 ///|
 /// Where the site's page is: `{"path","back","forward","loading","title"}` as JSON text.
+fn mbw_mb_host_view_site_state(id : Int) -> Int = "mbhost" "mb_host_view_site_state"
+
+///|
 fn view_site_state(id : Int) -> String {
-  ffi_view_site_state(id)
+  @wasmrt.take_string(mbw_mb_host_view_site_state(id))
 }
 
 ///|
 /// The site's page at `path` of its own host.
+fn mbw_mb_host_view_site_load(id : Int, path : Int) = "mbhost" "mb_host_view_site_load"
+
+///|
 fn view_site_load(id : Int, path : String) -> Unit {
-  ffi_view_site_load(id, path)
-}
-
-///|
-fn mbw_mb_host_view_tell(id : Int, what : Int, text : Int) = "mbhost" "mb_host_view_tell"
-
-///|
-fn ffi_view_tell(id : Int, what : Int, text : String) -> Unit {
-  mbw_mb_host_view_tell(id, what, @wasmrt.string_addr(text))
+  mbw_mb_host_view_site_load(id, @wasmrt.string_addr(path))
 }
 
 ///|
@@ -1679,18 +1305,11 @@ fn ffi_view_tell(id : Int, what : Int, text : String) -> Unit {
 /// slop in points (ui's NativeView::touch). 3 a site's settings, as JSON: `head_wait_ms` (how long a request waits for
 /// its head before the host says `{"late":n}`, still waiting), `backlog` (how many bytes of an answer may wait for the
 /// page to read them before the host says `{"slow":n}` and takes no more of it).
-fn view_tell(id : Int, what : Int, text : String) -> Unit {
-  ffi_view_tell(id, what, text)
-}
+fn mbw_mb_host_view_tell(id : Int, what : Int, text : Int) = "mbhost" "mb_host_view_tell"
 
 ///|
-/// A native view of `kind`: 1 a video (and audio) player, its bytes read through the app (`view_read_next`), `arg`
-/// its MIME type ("video/mp4"); 2 a web page of `arg`'s HTML, its scripts on, nothing of the device's files or the
-/// app's reachable, its links not followed; 3 a site served by the app: a web view at `arg` (a path) of a host of its
-/// own, each of whose requests the app answers (`view_site_next`). Hidden until placed. 0 when this host has no such
-/// view.
-fn view_open(kind : Int, arg : String) -> Int {
-  ffi_view_open(kind, arg)
+fn view_tell(id : Int, what : Int, text : String) -> Unit {
+  mbw_mb_host_view_tell(id, what, @wasmrt.string_addr(text))
 }
 
 ///|
@@ -1718,39 +1337,6 @@ fn view_place(
 }
 
 ///|
-/// The view gone (its player stopped, its page closed).
-fn view_close(id : Int) -> Unit {
-  ffi_view_close(id)
-}
-
-///|
-/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed, 11
-/// to about `value` ms at once (the nearest key frame: nothing before it decoded); a site: 5 back, 6 forward, 7
-/// reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's own size shown smaller).
-fn view_control(id : Int, op : Int, value : Double) -> Unit {
-  ffi_view_control(id, op, value)
-}
-
-///|
-/// How the view stands: -1 failed, -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
-/// damaged, 0 opening, 1 ready.
-/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
-/// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
-/// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek
-/// within what it has, nor one while paused), how far on it has what it needs to play (ms; 0 not said), played to its
-/// end (1).
-fn view_info(id : Int, out : FixedArray[Double]) -> Int {
-  ffi_view_info(id, out)
-}
-
-///|
-/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
-/// the id of one it let go of (@hostapi.view_read_next).
-fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
-  ffi_view_read_next(id, out)
-}
-
-///|
 /// Read `req`'s next bytes, as they come, `more` while more of it comes (@hostapi.view_read_answer).
 fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
   ffi_view_read_answer(id, req, data, total, if more { 1 } else { 0 })
@@ -1759,59 +1345,34 @@ fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bo
 // PDFs drawn by the system (Android's PdfRenderer, Core Graphics' CGPDF, Windows.Data.Pdf), page by page into images.
 
 ///|
+/// A PDF opened from its bytes: its id, or 0 where the host draws none.
 fn mbw_mb_host_pdf_open(data : Int) -> Int = "mbhost" "mb_host_pdf_open"
 
 ///|
-fn ffi_pdf_open(data : Bytes) -> Int {
+fn pdf_open(data : Bytes) -> Int {
   mbw_mb_host_pdf_open(@wasmrt.bytes_addr(data))
 }
 
 ///|
-fn ffi_pdf_pages(doc : Int) -> Int = "mbhost" "mb_host_pdf_pages"
-
-///|
-fn mbw_mb_host_pdf_page_size(doc : Int, page : Int, out : Int) = "mbhost" "mb_host_pdf_page_size"
-
-///|
-fn ffi_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
-  mbw_mb_host_pdf_page_size(doc, page, @wasmrt.doubles_addr(out))
-}
-
-///|
-fn ffi_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int = "mbhost" "mb_host_pdf_page_load"
-
-///|
-fn ffi_pdf_close(doc : Int) = "mbhost" "mb_host_pdf_close"
-
-///|
-/// A PDF opened from its bytes: its id, or 0 where the host draws none.
-fn pdf_open(data : Bytes) -> Int {
-  ffi_pdf_open(data)
-}
-
-///|
 /// How many pages it has; -1 when it could not be opened.
-fn pdf_pages(doc : Int) -> Int {
-  ffi_pdf_pages(doc)
-}
+fn pdf_pages(doc : Int) -> Int = "mbhost" "mb_host_pdf_pages"
 
 ///|
 /// A page's size in points (`out` [0] width, [1] height).
+fn mbw_mb_host_pdf_page_size(doc : Int, page : Int, out : Int) = "mbhost" "mb_host_pdf_page_size"
+
+///|
 fn pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
-  ffi_pdf_page_size(doc, page, out)
+  mbw_mb_host_pdf_page_size(doc, page, @wasmrt.doubles_addr(out))
 }
 
 ///|
 /// A page drawn (on white, off the app's thread) at most `max_px` on its longer side: an image's id, as image_load's
 /// (image_info, image_free).
-fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
-  ffi_pdf_page_load(doc, page, max_px)
-}
+fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int = "mbhost" "mb_host_pdf_page_load"
 
 ///|
-fn pdf_close(doc : Int) -> Unit {
-  ffi_pdf_close(doc)
-}
+fn pdf_close(doc : Int) = "mbhost" "mb_host_pdf_close"
 
 ///|
 fn mbw_mb_host_view_text(id : Int, what : Int) -> Int = "mbhost" "mb_host_view_text"
@@ -1825,10 +1386,11 @@ fn ffi_view_text(id : Int, what : Int) -> String {
 fn ffi_view_text_known(id : Int, what : Int) -> Int = "mbhost" "mb_host_view_text_known"
 
 ///|
+/// A video view's frame grabbed (PNG), taken once.
 fn mbw_mb_host_view_still(id : Int) -> Int = "mbhost" "mb_host_view_still"
 
 ///|
-fn ffi_view_still(id : Int) -> Bytes {
+fn view_still(id : Int) -> Bytes {
   @wasmrt.take_bytes(mbw_mb_host_view_still(id))
 }
 
@@ -1842,12 +1404,6 @@ fn view_text(id : Int, what : Int) -> String? {
   } else {
     Some(ffi_view_text(id, what))
   }
-}
-
-///|
-/// A video view's frame grabbed (PNG), taken once.
-fn view_still(id : Int) -> Bytes {
-  ffi_view_still(id)
 }
 
 ///|
@@ -1914,7 +1470,9 @@ fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
 }
 
 ///|
-fn ffi_post_take() -> Int = "mbhost" "mb_host_post_take"
+/// What was posted from outside the frames since the last take (`mb_post`, any thread: post.h), taken now as a frame
+/// begins: how many. They are handed on one at a time (`post_next`), in the order posted.
+fn post_take() -> Int = "mbhost" "mb_host_post_take"
 
 ///|
 fn mbw_mb_host_post_next() -> Int = "mbhost" "mb_host_post_next"
@@ -1938,13 +1496,6 @@ fn mbw_mb_host_post_bytes() -> Int = "mbhost" "mb_host_post_bytes"
 ///|
 fn ffi_post_bytes() -> Bytes {
   @wasmrt.take_bytes(mbw_mb_host_post_bytes())
-}
-
-///|
-/// What was posted from outside the frames since the last take (`mb_post`, any thread: post.h), taken now as a frame
-/// begins: how many. They are handed on one at a time (`post_next`), in the order posted.
-fn post_take() -> Int {
-  ffi_post_take()
 }
 
 ///|

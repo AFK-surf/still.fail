@@ -1,7 +1,7 @@
 // Browser host: web/host.js defines globalThis.__mbhost (canvas, WebGL2,
 // canvas-2D text, a hidden textarea for input methods).
 
-extern "js" fn js_run(
+extern "js" fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],
   pointer : FuncRef[(Int, Double, Double, Int) -> Unit],
@@ -11,20 +11,23 @@ extern "js" fn js_run(
 ) -> Unit =
   #|(t, f, p, w, k, x) => globalThis.__mbhost.run(t, f, p, w, k, x)
 
-extern "js" fn js_now() -> Double =
+extern "js" fn now() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.now) ? globalThis.__mbhost.now() : performance.now()
 
-extern "js" fn js_event_time() -> Double =
+/// When the input event being delivered happened, on now()'s clock (ms);
+/// negative when the host doesn't say.
+extern "js" fn event_time() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.eventTime) ? globalThis.__mbhost.eventTime() : -1
 
 // Without a host (the tests, run in node) a frame asked for is nobody's to draw.
-extern "js" fn js_request_frame() -> Unit =
+extern "js" fn request_frame() -> Unit =
   #|() => globalThis.__mbhost && globalThis.__mbhost.requestFrame()
 
-extern "js" fn js_wake_after(ms : Double) -> Unit =
+extern "js" fn wake_after(ms : Double) -> Unit =
   #|(ms) => globalThis.__mbhost && globalThis.__mbhost.wakeAfter(ms)
 
-extern "js" fn js_font_metrics(
+/// As host_native's: ascent, descent, line height, the Han font's ascent and descent, whole-pixel lines.
+extern "js" fn font_metrics(
   size : Double,
   weight : Int,
   style : Int,
@@ -32,7 +35,7 @@ extern "js" fn js_font_metrics(
 ) -> Unit =
   #|(s, w, st, o) => globalThis.__mbhost.fontMetrics(s, w, st, o)
 
-extern "js" fn js_shape(
+extern "js" fn shape(
   text : String,
   size : Double,
   weight : Int,
@@ -41,31 +44,35 @@ extern "js" fn js_shape(
 ) -> Int =
   #|(t, s, w, st, o) => globalThis.__mbhost.shape(t, s, w, st, o)
 
-extern "js" fn js_text_key(text : String, size : Double, weight : Int, style : Int) -> Int =
+extern "js" fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int =
   #|(t, s, w, st) => globalThis.__mbhost.textKey(t, s, w, st)
 
-extern "js" fn js_glyph(key : Int, out : FixedArray[Double]) -> Unit =
+extern "js" fn glyph(key : Int, out : FixedArray[Double]) -> Unit =
   #|(k, o) => globalThis.__mbhost.glyph(k, o)
 
-extern "js" fn js_glyph_put(key : Int, x : Int, y : Int) -> Unit =
+extern "js" fn glyph_put(key : Int, x : Int, y : Int) -> Unit =
   #|(k, x, y) => globalThis.__mbhost.glyphPut(k, x, y)
 
-extern "js" fn js_atlas_size(colour : Bool) -> Int =
+extern "js" fn atlas_size(colour : Bool) -> Int =
   #|(c) => globalThis.__mbhost.atlasSize(c)
 
-extern "js" fn js_atlas_generation() -> Int =
+extern "js" fn atlas_generation() -> Int =
   #|() => globalThis.__mbhost.atlasGeneration()
 
-extern "js" fn js_face_add(face : Int, path : String, weight : Int) -> Bool =
+/// A font file (at `path`: a URL the page can fetch) made part of face `face` (style.mbt), for `weight` (0: variable,
+/// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
+extern "js" fn face_add(face : Int, path : String, weight : Int) -> Bool =
   #|(f, p, w) => globalThis.__mbhost.faceAdd ? globalThis.__mbhost.faceAdd(f, p, w) : false
 
-extern "js" fn js_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool =
+/// As face_add, the font's file being `data`.
+extern "js" fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool =
   #|(f, d, w) => globalThis.__mbhost.faceAddBytes ? globalThis.__mbhost.faceAddBytes(f, d, w) : false
 
-extern "js" fn js_face_clear(face : Int) -> Unit =
+/// Face `face` given up.
+extern "js" fn face_clear(face : Int) -> Unit =
   #|(f) => { if (globalThis.__mbhost.faceClear) globalThis.__mbhost.faceClear(f) }
 
-extern "js" fn js_present(
+extern "js" fn present(
   buf : FixedArray[Double],
   count : Int,
   r : Double,
@@ -84,7 +91,7 @@ extern "js" fn ffi_edit_can(can : Int) -> Unit =
   #|(c) => {}
 
 ///|
-extern "js" fn js_set_ime(
+extern "js" fn set_ime(
   active : Bool,
   x : Double,
   y : Double,
@@ -99,42 +106,53 @@ extern "js" fn js_set_ime(
 extern "js" fn js_clipboard_set(s : String) -> Unit =
   #|(s) => globalThis.__mbhost.clipboardSet(s)
 
-extern "js" fn js_log(s : String) -> Unit =
+extern "js" fn log(s : String) -> Unit =
   #|(s) => globalThis.__mbhost ? globalThis.__mbhost.log(s) : console.log(s)
 
-extern "js" fn js_bench_mode() -> Int =
+extern "js" fn bench_mode() -> Int =
   #|() => globalThis.__mbhost.benchMode()
 
-extern "js" fn js_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool =
+/// Who is told as what the host does for the app is done (`f(kind, id, state)`, as host_native.mbt's). False where
+/// the host sends no such events.
+extern "js" fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool =
   #|(f) => globalThis.__mbhost.setOutside ? (globalThis.__mbhost.setOutside(f), true) : false
 
-extern "js" fn js_frame_awaiting(awaiting : Int, what : String) -> Unit =
+/// As the frame just built left it: how many of the app's asks the host has not answered yet and what they are (""
+/// when none). A run to a declared moment keeps its clock still while any is awaited.
+extern "js" fn frame_awaiting(awaiting : Int, what : String) -> Unit =
   #|(n, w) => globalThis.__mbhost.frameAwaiting && globalThis.__mbhost.frameAwaiting(n, w)
 
-extern "js" fn js_exit(code : Int) -> Unit =
+extern "js" fn exit(code : Int) -> Unit =
   #|(c) => globalThis.__mbhost.exit(c)
 
-extern "js" fn js_mem_bytes() -> Double =
+extern "js" fn mem_bytes() -> Double =
   #|() => globalThis.__mbhost.memBytes()
 
-extern "js" fn js_set_back(
+/// Where the system's back goes (host_native.mbt `set_back`); in a browser:
+/// Alt+Left and a mouse's back button.
+extern "js" fn set_back(
   back : FuncRef[(Int, Double, Double, Int) -> Unit],
 ) -> Unit =
   #|(b) => globalThis.__mbhost && globalThis.__mbhost.setBack && globalThis.__mbhost.setBack(b)
 
-extern "js" fn js_back_enabled(on : Bool) -> Unit =
+extern "js" fn back_enabled(on : Bool) -> Unit =
   #|(on) => globalThis.__mbhost && globalThis.__mbhost.backEnabled && globalThis.__mbhost.backEnabled(on)
 
-extern "js" fn js_reduce_transparency() -> Bool =
+/// Whether the system asks for less transparency (glass drawn solid): the
+/// browser's prefers-reduced-transparency.
+extern "js" fn reduce_transparency() -> Bool =
   #|() => !!(globalThis.__mbhost && globalThis.__mbhost.reduceTransparency && globalThis.__mbhost.reduceTransparency())
 
-extern "js" fn js_gpu_ms() -> Double =
+/// The GPU's time for the last frame drawn, in ms (-1: not known here).
+extern "js" fn gpu_ms() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.gpuMs) ? globalThis.__mbhost.gpuMs() : -1
 
-extern "js" fn js_system_dark() -> Bool =
+/// Whether the system is set to dark (see host_native.mbt): the browser's prefers-color-scheme.
+extern "js" fn system_dark() -> Bool =
   #|() => typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches
 
-extern "js" fn js_env(name : String) -> String =
+/// The page's query parameter `name` ("" when there is none).
+extern "js" fn env(name : String) -> String =
   #|(n) => (typeof location !== "undefined" && new URLSearchParams(location.search).get(n)) || ""
 
 ///|
@@ -152,49 +170,15 @@ extern "js" fn wheel_kept(kept : Bool) -> Unit =
   #|(k) => { if (globalThis.__mbhost) globalThis.__mbhost.wheelKept = k }
 
 ///|
-fn run(
-  title : String,
-  frame : FuncRef[(Double, Double, Double, Double) -> Unit],
-  pointer : FuncRef[(Int, Double, Double, Int) -> Unit],
-  wheel : FuncRef[(Double, Double, Double, Double, Int) -> Unit],
-  key : FuncRef[(Int, Int) -> Unit],
-  text : FuncRef[(Int, String, Int, Int) -> Unit],
-) -> Unit {
-  js_run(title, frame, pointer, wheel, key, text)
-}
-
-///|
-fn now() -> Double {
-  js_now()
-}
-
-///|
-extern "js" fn js_wall_ms() -> Double =
+/// The time of day, in ms since 1970 (UTC), as the machine's clock has it: for what is shown of it only (@ui.wall_ms).
+/// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
+extern "js" fn wall_ms() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.wallMs) ? globalThis.__mbhost.wallMs() : Date.now()
 
 ///|
-/// The time of day, in ms since 1970 (UTC), as the machine's clock has it: for what is shown of it only (@ui.wall_ms).
-/// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
-fn wall_ms() -> Double {
-  js_wall_ms()
-}
-
-///|
-extern "js" fn js_utc_offset_min(at_ms : Double) -> Int =
-  #|(ms) => (globalThis.__mbhost && globalThis.__mbhost.utcOffsetMin) ? globalThis.__mbhost.utcOffsetMin(ms) : -new Date(ms).getTimezoneOffset()
-
-///|
 /// How far local time is ahead of UTC at `at_ms`, in minutes (@hostapi.utc_offset_min).
-fn utc_offset_min(at_ms : Double) -> Int {
-  js_utc_offset_min(at_ms)
-}
-
-///|
-/// When the input event being delivered happened, on now()'s clock (ms);
-/// negative when the host doesn't say.
-fn event_time() -> Double {
-  js_event_time()
-}
+extern "js" fn utc_offset_min(at_ms : Double) -> Int =
+  #|(ms) => (globalThis.__mbhost && globalThis.__mbhost.utcOffsetMin) ? globalThis.__mbhost.utcOffsetMin(ms) : -new Date(ms).getTimezoneOffset()
 
 ///|
 /// What the pointer's event came from (@hostapi.event_finger): a page's host does not say.
@@ -215,81 +199,10 @@ fn platform() -> Int {
 }
 
 ///|
-fn request_frame() -> Unit {
-  js_request_frame()
-}
-
-///|
-fn wake_after(ms : Double) -> Unit {
-  js_wake_after(ms)
-}
-
-///|
-/// As host_native's: ascent, descent, line height, the Han font's ascent and descent, whole-pixel lines.
-fn font_metrics(
-  size : Double,
-  weight : Int,
-  style : Int,
-  out : FixedArray[Double],
-) -> Unit {
-  js_font_metrics(size, weight, style, out)
-}
-
-///|
-fn shape(
-  text : String,
-  size : Double,
-  weight : Int,
-  style : Int,
-  out : FixedArray[Double],
-) -> Int {
-  js_shape(text, size, weight, style, out)
-}
-
-///|
-fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
-  js_text_key(text, size, weight, style)
-}
-
-///|
-fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
-  js_glyph(key, out)
-}
-
-///|
-fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
-  js_glyph_put(key, x, y)
-}
-
-///|
-fn atlas_size(colour : Bool) -> Int {
-  js_atlas_size(colour)
-}
-
-///|
 /// (the page draws a glyph as it is first asked for: nothing ahead)
 fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
   ignore(keys)
   ignore(n)
-}
-
-///|
-/// A font file (at `path`: a URL the page can fetch) made part of face `face` (style.mbt), for `weight` (0: variable,
-/// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
-fn face_add(face : Int, path : String, weight : Int) -> Bool {
-  js_face_add(face, path, weight)
-}
-
-///|
-/// As face_add, the font's file being `data`.
-fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
-  js_face_add_bytes(face, data, weight)
-}
-
-///|
-/// Face `face` given up.
-fn face_clear(face : Int) -> Unit {
-  js_face_clear(face)
 }
 
 ///|
@@ -303,36 +216,6 @@ fn face_add_family(face : Int, family : String) -> Bool {
 ///|
 fn local_font_families() -> String {
   ""
-}
-
-///|
-fn atlas_generation() -> Int {
-  js_atlas_generation()
-}
-
-///|
-fn present(
-  buf : FixedArray[Double],
-  count : Int,
-  r : Double,
-  g : Double,
-  b : Double,
-) -> Unit {
-  js_present(buf, count, r, g, b)
-}
-
-///|
-fn set_ime(
-  active : Bool,
-  x : Double,
-  y : Double,
-  w : Double,
-  h : Double,
-  text : String,
-  sel_start : Int,
-  sel_end : Int,
-) -> Unit {
-  js_set_ime(active, x, y, w, h, text, sel_start, sel_end)
 }
 
 ///|
@@ -360,39 +243,10 @@ fn clipboard_secret_off() -> Unit {
 }
 
 ///|
-fn log(s : String) -> Unit {
-  js_log(s)
-}
-
-///|
-fn bench_mode() -> Int {
-  js_bench_mode()
-}
-
-///|
-/// Who is told as what the host does for the app is done (`f(kind, id, state)`, as host_native.mbt's). False where
-/// the host sends no such events.
-fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
-  js_set_outside(f)
-}
-
-///|
-/// As the frame just built left it: how many of the app's asks the host has not answered yet and what they are (""
-/// when none). A run to a declared moment keeps its clock still while any is awaited.
-fn frame_awaiting(awaiting : Int, what : String) -> Unit {
-  js_frame_awaiting(awaiting, what)
-}
-
-///|
-extern "js" fn js_own_clock() -> Bool =
-  #|() => !!(globalThis.__mbhost.ownClock && globalThis.__mbhost.ownClock())
-
-///|
 /// Whether the run is on a clock of its own (its frames', 1/60 s a frame from 0, still while the app awaits the host:
 /// web/host.js shot_at), not the machine's.
-fn own_clock() -> Bool {
-  js_own_clock()
-}
+extern "js" fn own_clock() -> Bool =
+  #|() => !!(globalThis.__mbhost.ownClock && globalThis.__mbhost.ownClock())
 
 ///|
 /// The system under the browser, whose keys the person types with (@hostapi.keys_platform): Apple's (macOS, and iOS's
@@ -404,41 +258,6 @@ extern "js" fn keys_platform() -> Int =
 /// Whether the system asks for less motion: the browser's prefers-reduced-motion.
 extern "js" fn reduce_motion() -> Bool =
   #|() => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches
-
-///|
-fn exit(code : Int) -> Unit {
-  js_exit(code)
-}
-
-///|
-fn mem_bytes() -> Double {
-  js_mem_bytes()
-}
-
-///|
-/// Where the system's back goes (host_native.mbt `set_back`); in a browser:
-/// Alt+Left and a mouse's back button.
-fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
-  js_set_back(back)
-}
-
-///|
-fn back_enabled(on : Bool) -> Unit {
-  js_back_enabled(on)
-}
-
-///|
-/// Whether the system asks for less transparency (glass drawn solid): the
-/// browser's prefers-reduced-transparency.
-fn reduce_transparency() -> Bool {
-  js_reduce_transparency()
-}
-
-///|
-/// The GPU's time for the last frame drawn, in ms (-1: not known here).
-fn gpu_ms() -> Double {
-  js_gpu_ms()
-}
 
 ///|
 /// A browser says not how much of a CPU its page has had (@hostapi.cpu_ms).
@@ -484,23 +303,11 @@ fn perf_read() -> Bytes {
 }
 
 ///|
-/// The page's query parameter `name` ("" when there is none).
-fn env(name : String) -> String {
-  js_env(name)
-}
-
-///|
 /// Who to tell when the app comes to the front or leaves it (host_native.mbt): the page shown (its tab in front, its
 /// window not minimized: visibilityState) and in front (it has the focus), as each changes (web/host.js H.setAppState).
 /// Without it a tab behind another took itself as looked at: what it showed read, a screen in it kept open.
 extern "js" fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit =
   #|(f) => { const H = globalThis.__mbhost; if (H && H.setAppState) H.setAppState(f); }
-
-///|
-/// Whether the system is set to dark (see host_native.mbt): the browser's prefers-color-scheme.
-fn system_dark() -> Bool {
-  js_system_dark()
-}
 
 ///|
 fn font_scale() -> Double {
@@ -561,12 +368,7 @@ fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
 
 ///|
 /// What the page was given to share (its /share, web/src/mbui/share.ts `__mbshare`), taken once: "" for none.
-fn shared_in() -> String {
-  js_shared_in()
-}
-
-///|
-extern "js" fn js_shared_in() -> String =
+extern "js" fn shared_in() -> String =
   #|() => { const s = globalThis.__mbshare; return (s && s.take && s.take()) || "" }
 
 ///|
@@ -625,44 +427,24 @@ extern "js" fn js_drive(kind : Int) -> Bool =
   #|(k) => globalThis.__mbhost.drive(k)
 
 ///|
-extern "js" fn js_image_load(src : String, max_px : Int) -> Int =
+extern "js" fn image_load(src : String, max_px : Int) -> Int =
   #|(s, m) => globalThis.__mbhost.imageLoad(s, m)
 
 ///|
-extern "js" fn js_image_load_bytes(data : Bytes, max_px : Int) -> Int =
+extern "js" fn image_load_bytes(data : Bytes, max_px : Int) -> Int =
   #|(d, m) => globalThis.__mbhost.imageLoadBytes(d, m)
 
 ///|
-extern "js" fn js_image_info(id : Int, out : FixedArray[Double]) -> Int =
+extern "js" fn image_info(id : Int, out : FixedArray[Double]) -> Int =
   #|(i, o) => globalThis.__mbhost.imageInfo(i, o)
 
 ///|
-extern "js" fn js_image_free(id : Int) -> Unit =
+extern "js" fn image_free(id : Int) -> Unit =
   #|(i) => globalThis.__mbhost.imageFree(i)
 
 ///|
 extern "js" fn js_image_pixels(id : Int, out : FixedArray[Byte]) -> Int =
   #|(i, o) => globalThis.__mbhost.imagePixels(i, o)
-
-///|
-fn image_load(src : String, max_px : Int) -> Int {
-  js_image_load(src, max_px)
-}
-
-///|
-fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
-  js_image_load_bytes(data, max_px)
-}
-
-///|
-fn image_info(id : Int, out : FixedArray[Double]) -> Int {
-  js_image_info(id, out)
-}
-
-///|
-fn image_free(id : Int) -> Unit {
-  js_image_free(id)
-}
 
 ///|
 /// A ready image's pixels (as host_native.mbt's).
@@ -967,11 +749,11 @@ extern "js" fn nt_text(what : Int) -> String =
 // holes; PDFs: none drawn here.
 
 ///|
-extern "js" fn js_view_open(kind : Int, arg : String) -> Int =
+extern "js" fn view_open(kind : Int, arg : String) -> Int =
   #|(k, a) => { const H = globalThis.__mbhost; return H && H.viewOpen ? H.viewOpen(k, a) : 0 }
 
 ///|
-extern "js" fn js_view_place(
+extern "js" fn view_place(
   id : Int,
   x : Double,
   y : Double,
@@ -990,149 +772,59 @@ extern "js" fn js_view_place(
   #|(i, x, y, w, h, a, b, c, d, r0, r1, r2, r3, s) => { const H = globalThis.__mbhost; if (H && H.viewPlace) H.viewPlace(i, x, y, w, h, a, b, c, d, s, r0, r1, r2, r3) }
 
 ///|
-extern "js" fn js_view_close(id : Int) -> Unit =
+extern "js" fn view_close(id : Int) -> Unit =
   #|(i) => { const H = globalThis.__mbhost; if (H && H.viewClose) H.viewClose(i) }
 
 ///|
-extern "js" fn js_view_control(id : Int, op : Int, value : Double) -> Unit =
+extern "js" fn view_control(id : Int, op : Int, value : Double) -> Unit =
   #|(i, o, v) => { const H = globalThis.__mbhost; if (H && H.viewControl) H.viewControl(i, o, v) }
 
 ///|
-extern "js" fn js_view_info(id : Int, out : FixedArray[Double]) -> Int =
+extern "js" fn view_info(id : Int, out : FixedArray[Double]) -> Int =
   #|(i, o) => { const H = globalThis.__mbhost; return H && H.viewInfo ? H.viewInfo(i, o) : -1 }
 
 ///|
-extern "js" fn js_view_read_next(id : Int, out : FixedArray[Double]) -> Int =
+extern "js" fn view_read_next(id : Int, out : FixedArray[Double]) -> Int =
   #|(i, o) => { const H = globalThis.__mbhost; return H && H.viewReadNext ? H.viewReadNext(i, o) : 0 }
 
 ///|
-extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit =
+extern "js" fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit =
   #|(i, r, d, t, m) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t, m) }
-
-///|
-fn view_open(kind : Int, arg : String) -> Int {
-  js_view_open(kind, arg)
-}
-
-///|
-fn view_place(
-  id : Int,
-  x : Double,
-  y : Double,
-  w : Double,
-  h : Double,
-  cx0 : Double,
-  cy0 : Double,
-  cx1 : Double,
-  cy1 : Double,
-  r0 : Double,
-  r1 : Double,
-  r2 : Double,
-  r3 : Double,
-  shown : Bool,
-) -> Unit {
-  js_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown)
-}
-
-///|
-fn view_close(id : Int) -> Unit {
-  js_view_close(id)
-}
-
-///|
-fn view_control(id : Int, op : Int, value : Double) -> Unit {
-  js_view_control(id, op, value)
-}
-
-///|
-fn view_info(id : Int, out : FixedArray[Double]) -> Int {
-  js_view_info(id, out)
-}
-
-///|
-fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
-  js_view_read_next(id, out)
-}
-
-///|
-fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
-  js_view_read_answer(id, req, data, total, more)
-}
 
 ///|
 /// What a view has to say (see host_native.mbt): a site's requests where the page has a frame for them (web/host.js),
 /// what a page's frame posts its host (`{"said":…}`).
-fn view_site_next(id : Int) -> String {
-  js_view_site_next(id)
-}
-
-///|
-extern "js" fn js_view_site_next(id : Int) -> String =
+extern "js" fn view_site_next(id : Int) -> String =
   #|(i) => { const H = globalThis.__mbhost; return (H && H.viewSiteNext ? H.viewSiteNext(i) : '') || '' }
 
 ///|
 /// What the app tells a view beyond its controls (see host_native.mbt).
-fn view_tell(id : Int, what : Int, text : String) -> Unit {
-  js_view_tell(id, what, text)
-}
-
-///|
-extern "js" fn js_view_tell(id : Int, what : Int, text : String) -> Unit =
+extern "js" fn view_tell(id : Int, what : Int, text : String) -> Unit =
   #|(i, w, t) => { const H = globalThis.__mbhost; if (H && H.viewTell) H.viewTell(i, w, t) }
 
 ///|
-extern "js" fn js_view_site_body(id : Int, req : Int) -> Bytes =
+extern "js" fn view_site_body(id : Int, req : Int) -> Bytes =
   #|(i, r) => globalThis.__mbhost.viewSiteBody(i, r)
 
 ///|
-fn view_site_body(id : Int, req : Int) -> Bytes {
-  js_view_site_body(id, req)
-}
-
-///|
-extern "js" fn js_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit =
+extern "js" fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit =
   #|(i, r, s, h) => globalThis.__mbhost.viewSiteHead(i, r, s, h)
 
 ///|
-fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  js_view_site_head(id, req, status, headers)
-}
-
-///|
-extern "js" fn js_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit =
+extern "js" fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit =
   #|(i, r, d) => globalThis.__mbhost.viewSiteChunk(i, r, d)
 
 ///|
-fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  js_view_site_chunk(id, req, data)
-}
-
-///|
-extern "js" fn js_view_site_end(id : Int, req : Int, error : String) -> Unit =
+extern "js" fn view_site_end(id : Int, req : Int, error : String) -> Unit =
   #|(i, r, e) => globalThis.__mbhost.viewSiteEnd(i, r, e)
 
 ///|
-fn view_site_end(id : Int, req : Int, error : String) -> Unit {
-  js_view_site_end(id, req, error)
-}
-
-///|
-extern "js" fn js_view_site_state(id : Int) -> String =
+extern "js" fn view_site_state(id : Int) -> String =
   #|(i) => globalThis.__mbhost.viewSiteState(i)
 
 ///|
-fn view_site_state(id : Int) -> String {
-  js_view_site_state(id)
-}
-
-///|
-extern "js" fn js_view_site_load(id : Int, path : String) -> Unit =
+extern "js" fn view_site_load(id : Int, path : String) -> Unit =
   #|(i, p) => globalThis.__mbhost.viewSiteLoad(i, p)
-
-///|
-fn view_site_load(id : Int, path : String) -> Unit {
-  js_view_site_load(id, path)
-}
 
 ///|
 fn pdf_open(data : Bytes) -> Int {
@@ -1194,7 +886,8 @@ fn save_file(name : String, data : Bytes) -> Bool {
 }
 
 ///|
-extern "js" fn js_set_cursor(kind : Int) -> Unit =
+/// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
+extern "js" fn set_cursor(kind : Int) -> Unit =
   #|(k) => globalThis.__mbhost && globalThis.__mbhost.setCursor && globalThis.__mbhost.setCursor(k)
 
 ///|
@@ -1290,12 +983,6 @@ fn window_front(what : String) -> Bool {
 }
 
 ///|
-/// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
-fn set_cursor(kind : Int) -> Unit {
-  js_set_cursor(kind)
-}
-
-///|
 /// (no icon of the app's in a browser to put a number on)
 fn set_badge(n : Int) -> Unit {
   ignore(n)
@@ -1376,7 +1063,9 @@ fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
 }
 
 ///|
-extern "js" fn js_post_take() -> Int =
+/// What was posted from outside the frames since the last take (`__mbhost.post(channel, json, bytes)`: web/host.js),
+/// taken now as a frame begins: how many. They are handed on one at a time (`post_next`), in the order posted.
+extern "js" fn post_take() -> Int =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.postTake) ? globalThis.__mbhost.postTake() : 0
 
 ///|
@@ -1390,13 +1079,6 @@ extern "js" fn js_post_json() -> String =
 ///|
 extern "js" fn js_post_bytes() -> Bytes =
   #|() => globalThis.__mbhost.postBytes()
-
-///|
-/// What was posted from outside the frames since the last take (`__mbhost.post(channel, json, bytes)`: web/host.js),
-/// taken now as a frame begins: how many. They are handed on one at a time (`post_next`), in the order posted.
-fn post_take() -> Int {
-  js_post_take()
-}
 
 ///|
 /// The next message taken (`post_take`): its channel, its JSON and the bytes beside it (empty: none). None when all
