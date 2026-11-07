@@ -2970,7 +2970,6 @@ pub(all) struct RowAgent {
 pub struct RowsMade {
   all : Array[Entry]
   v : ChatView
-  following : Bool
   rise_ms : Double
   known : Int32
   list : Array[Entry]
