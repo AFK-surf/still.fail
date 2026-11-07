@@ -17,7 +17,8 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
       }
       made.topic(name, params).get().snapshot()
     },
-    leave: fn(name, _) {
+    leave: fn(name, _, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
       left.push(name)
       read.push("left")
     },
@@ -160,7 +161,9 @@ test "a file is read on every entry, including while its card is still open" {
       }
       made.topic(name, params).get().snapshot()
     },
-    leave: fn(name, _) { if name == "filePeek" { active.val = false } },
+    leave: fn(name, _, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if name == "filePeek" { active.val = false } },
     release: fn(name, _) { if name == "filePeek" { active.val = false } },
     refresh: fn(name, _) { if name == "filePeek" && active.val { reads.val += 1 } },
   }
@@ -224,7 +227,9 @@ fn file_card_refresh_case(intermediate : Bool) -> Unit raise {
       { value: sub.value, error: sub.error, version: sub.version }
     },
     waits: fn(name, params) { client.follow_topic(name, params~).waiting },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
     refresh: fn(name, params) { client.refresh_topic(name, params~) },
   }

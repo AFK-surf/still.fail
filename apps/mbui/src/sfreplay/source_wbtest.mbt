@@ -15,7 +15,7 @@ test "a replay's direct accounts subscription survives a source signal leaving" 
   assert_eq(r.deliver(at_most=1), 1)
   assert_true(@sfbase.flag(accounts.value, "signedIn"))
   stop()
-  (src.leave)("accounts", {})
+  (src.leave)("accounts", {}, @sfbase.TopicLeave::Legacy)
   assert_eq(r.deliver(at_most=1), 1)
   assert_false(@sfbase.flag(accounts.value, "signedIn"))
   assert_eq(r.diverged().length(), 0)

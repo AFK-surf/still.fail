@@ -281,7 +281,7 @@ fn follow_notices(src : Source, workspace : String) -> Unit {
 ///|
 fn leave_notices(src : Source) -> Unit {
   if notice_state.following != "" {
-    (src.leave)("notify", notify_params(notice_state.following))
+    (src.leave)("notify", notify_params(notice_state.following), TopicLeave::Legacy)
     notice_state.following = ""
   }
 }

@@ -413,7 +413,9 @@ test "a core reset ends pending draft calls and adopts the restarted core's vers
     waits: fn(name, params) { client.follow_topic(name, params~).waiting },
     generation: fn(name, params) { client.topic_generation(name, params~) },
     call: fn(name, params, done) { client.call(name, params~, on_done=done) |> ignore },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
   }
   let held : Ref[@sfbase.Writing?] = Ref(None)
@@ -450,7 +452,9 @@ test "a closed draft does not reopen a real client subscription" {
       let sub = client.follow_topic(name, params~)
       { value: sub.value, error: sub.error, version: sub.version }
     },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
   }
   let params = { "key": Json::string("station:chat") }
@@ -484,7 +488,9 @@ test "a draft reopened after its last reader left follows a fresh core subscript
     },
     waits: fn(name, params) { client.follow_topic(name, params~).waiting },
     generation: fn(name, params) { client.topic_generation(name, params~) },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
   }
   let params = { "key": Json::string("new:ws1") }
@@ -552,7 +558,9 @@ test "reopening a draft preserves an acknowledged local edit until the core catc
     waits: fn(name, params) { client.follow_topic(name, params~).waiting },
     generation: fn(name, params) { client.topic_generation(name, params~) },
     call: fn(name, params, done) { client.call(name, params~, on_done=done) |> ignore },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
   }
   let params = { "key": Json::string("new:ws1") }
@@ -610,7 +618,9 @@ fn reopened_text_same_revision(ack_before_reopen : Bool) -> Unit raise {
     },
     generation: fn(name, params) { client.topic_generation(name, params~) },
     call: fn(name, params, done) { client.call(name, params~, on_done=done) |> ignore },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
   }
   let params = { "key": Json::string("new:ws1") }
@@ -679,7 +689,9 @@ test "a restarted core can replace a watched draft with a lower version" {
     },
     generation: fn(name, params) { client.topic_generation(name, params~) },
     call: fn(name, params, done) { client.call(name, params~, on_done=done) |> ignore },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
   }
   let held : Ref[@sfbase.Writing?] = Ref(None)
@@ -721,7 +733,9 @@ test "a new draft does not adopt a retained value from before a core restart" {
       { value: sub.value, error: sub.error, version: sub.version }
     },
     generation: fn(name, topic_params) { client.topic_generation(name, params=topic_params) },
-    leave: fn(name, topic_params) { client.leave_topic(name, params=topic_params) },
+    leave: fn(name, topic_params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params=topic_params) },
     release: fn(name, topic_params) { client.release_topic(name, params=topic_params) },
   }
   let w = @sfbase.writing(src, "new:ws1")

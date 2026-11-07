@@ -41,7 +41,7 @@ pub fn chat_row_node(
   let press_lit : @signals.Signal[Bool] = @signals.signal(false)
   let press_due : Ref[() -> Unit] = Ref(fn() {  })
   // (what a finger pressing it read ahead, let go as it is let go without opening it: a hold)
-  let primed = Ref(false)
+  let primed : Ref[@sfbase.TopicLease?] = Ref(None)
   let opened = Ref(false)
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
   // about and nothing in it is unread, its chat goes there as it opens: ChatMark.tsx jumpFromLine)
@@ -51,6 +51,9 @@ pub fn chat_row_node(
     let i = @signals.untracked(item)
     opened.val = true
     let r = row_ref(i)
+    let early = primed.val
+    primed.val = None
+    let reader = match early { Some(reader) => @sfbase.prepare_chat_handoff(reader); None => None }
     let on_line = match (down_at.val, state_at.val) {
       (Some((x, y)), Some(l)) if l.alive() => {
         let (lx, ly, lw, lh) = l.placed_window_now()
@@ -63,6 +66,7 @@ pub fn chat_row_node(
       _ => ()
     }
     open_page(Chat(r))
+    match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
   }
   parent.box(fn(slot) {
     @sf.style_node(slot, fn() { if more { @sf.list_more(at) } else { row_last } })
@@ -74,6 +78,12 @@ pub fn chat_row_node(
       slot
     }
     let row = holder.box(fn(_) {  })
+    row.owns(fn() {
+      match primed.val {
+        Some(reader) => { primed.val = None; reader.cancel() }
+        None => ()
+      }
+    }) |> ignore
     // held by a finger, it lifts off the list toward the finger (iOS's context menu): a little as its time shows, all
     // the way once its menu opens, back down as the menu goes (@sf.lift_of's), a card of the raised ground over the
     // menu's scrim, drawn in from the screen's sides (row_lifted, @sf.lift_over's)
@@ -438,8 +448,8 @@ pub fn chat_row_node(
         press_due.val = row.at_moment(row.cause_at() + @ui.tap_indication_ms, fn() {
           press_lit.set(true)
           if finger && !src.read_only {
-            primed.val = true
-            (src.topic_read)("chat", chat_params(@signals.untracked(r))) |> ignore
+            match primed.val { Some(reader) => { primed.val = None; reader.cancel() }; None => () }
+            primed.val = Some(src.lease_topic("chat", chat_params(@signals.untracked(r))))
           }
         })
       },
@@ -447,10 +457,12 @@ pub fn chat_row_node(
         held.set(false)
         (press_due.val)()
         press_lit.set(false)
-        if primed.val && !opened.val {
-          unprime(src, @signals.untracked(r))
+        if !opened.val {
+          let reader = primed.val
+          primed.val = None
+          unprime(src, @signals.untracked(r), reader)
         }
-        primed.val = false
+        primed.val = None
       },
     )
     // (Tab passes the rows, as the old list's: they are gone through by ⌥↑ ⌥↓, chat.prev and chat.next)

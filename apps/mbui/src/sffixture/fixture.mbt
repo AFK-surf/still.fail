@@ -1288,6 +1288,10 @@ pub fn fixture(mode : String) -> Source {
   }
   {
     topic_read: fn(name, params) { fixture_topic(f, name, params) },
+    topic_key: @sfbase.exact_topic_key,
+    topic_scope: None,
+    topic_alive: fn() { true },
+    topic_lease_own: None,
     call: fn(name, params, done) {
       // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
       let done = fn(r) {
@@ -1597,7 +1601,9 @@ pub fn fixture(mode : String) -> Source {
     draft_picture: fn(_, _) { "!" },
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
-    leave: fn(_, _) {  },
+    leave: fn(_, _, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      },
     release: fn(_, _) {  },
     refresh: fn(_, _) {  },
     read_only: false,

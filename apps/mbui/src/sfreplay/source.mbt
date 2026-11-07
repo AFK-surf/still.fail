@@ -113,6 +113,10 @@ pub fn source() -> @sfapp.Source {
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
+    topic_key: fn(name, params) { @sfbase.wire_topic_key(name, replay_topic_params(name, params)) },
+    topic_scope: None,
+    topic_alive: fn() { true },
+    topic_lease_own: None,
     waits: fn(name, params) { @core.follow_topic(name, params=replay_topic_params(name, params)).waiting },
     generation: fn(name, params) { @core.client.topic_generation(name, params=replay_topic_params(name, params)) },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
@@ -204,7 +208,9 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.leave_topic(name, params=replay_topic_params(name, params)) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      @core.leave_topic(name, params=replay_topic_params(name, params)) },
     release: fn(name, params) { @core.release_topic(name, params=replay_topic_params(name, params)) },
     refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,

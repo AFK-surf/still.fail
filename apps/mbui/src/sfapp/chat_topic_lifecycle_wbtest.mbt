@@ -52,7 +52,9 @@ test "a chat view still watched after the page leaves follows the topic's next c
         base.topic(name, params).get().snapshot()
       }
     },
-    leave: fn(_, _) {  },
+    leave: fn(_, _, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
   let watcher = @signals.watch(fn() { marked.val += 1 })

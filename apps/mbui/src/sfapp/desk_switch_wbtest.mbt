@@ -21,7 +21,9 @@ test "desk: a chat switched to shows once its view has come, the chat before it 
       asked[key(name, params)] = true
       base.topic(name, params).get().snapshot()
     },
-    leave: fn(name, params) { asked.remove(key(name, params)) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      asked.remove(key(name, params)) },
     release: fn(name, params) { asked.remove(key(name, params)) },
   }
   let chat = fn(session : String) -> ChatRef { { station: "ws1/st1", session, title: "", station_name: "Willow" } }

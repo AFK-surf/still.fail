@@ -18,12 +18,12 @@ test "leaving an unobserved chat does not subscribe again, and reopening reads i
       }
       base.topic(name, params).get().snapshot()
     },
-    leave: fn(name, params) {
+    leave: fn(name, params, __reason) {
       if name == "chat" && text(Some(Json::object(params)), "session") == "s-c1" {
         left.val = true
         changed.set(changed.get() + 1)
       }
-      (base.leave)(name, params)
+      (base.leave)(name, params, __reason)
     },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }

@@ -5,7 +5,9 @@ test "what a page read is let go of as it ends, once, and nothing it never read"
   let made = made_source()
   let src : Source = {
     ..made,
-    leave: fn(name, params) { left.push(name + " " + params.get("job").or(Json::string("")).as_string().unwrap()) },
+    leave: fn(name, params, __reason) {
+      if __reason is TopicLeave::Owned(__stop) { __stop(); return }
+      left.push(name + " " + params.get("job").or(Json::string("")).as_string().unwrap()) },
     release: fn(name, params) { left.push(name + " " + params.get("job").or(Json::string("")).as_string().unwrap()) },
   }
   let log = fn(job : String) -> Map[String, Json] {

@@ -196,8 +196,9 @@ test "a real client's prefs change the language of the existing settings page" {
     waits: fn(name, params) {
       if name == "prefs" { client.follow_topic(name, params~).waiting } else { (base.waits)(name, params) }
     },
-    leave: fn(name, params) {
-      if name == "prefs" { client.leave_topic(name, params~) } else { (base.leave)(name, params) }
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if name == "prefs" { client.leave_topic(name, params~) } else { (base.leave)(name, params, @sfbase.TopicLeave::Legacy) }
     },
     release: fn(name, params) {
       if name == "prefs" { client.release_topic(name, params~) } else { (base.release)(name, params) }

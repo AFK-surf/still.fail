@@ -158,6 +158,10 @@ fn refused(name : String) -> Json {
 ///|
 let core_source : @sfapp.Source = {
   topic_read: core_topic,
+  topic_key: fn(name, params) { @sfbase.wire_topic_key(name, @sfbase.core_topic_params(name, params)) },
+  topic_scope: None,
+  topic_alive: fn() { true },
+  topic_lease_own: None,
   waits: fn(name, params) { @core.follow_topic(name, params=@sfbase.core_topic_params(name, params)).waiting },
   generation: fn(name, params) { @core.client.topic_generation(name, params=@sfbase.core_topic_params(name, params)) },
   call: fn(name, params, done) {
@@ -291,7 +295,9 @@ let core_source : @sfapp.Source = {
   draft_picture,
   images: chat_images,
   now: fn() { @ui.wall_ms() },
-  leave: fn(name, params) { @core.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      @core.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
   release: fn(name, params) { @core.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
   refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,

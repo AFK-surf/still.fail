@@ -1,6 +1,740 @@
 // A real core client's messages reach the app's signal without a frame or a page copying its fields.
 
 ///|
+test "two view-owned sources share a topic until the last view goes" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let first : Ref[Source?] = Ref(None)
+  let second : Ref[Source?] = Ref(None)
+  let first_tree = @view.Tree::new(fn(root) { first.val = Some(src.owned_by(root)) })
+  let second_tree = @view.Tree::new(fn(root) { second.val = Some(src.owned_by(root)) })
+  first_tree.frame(300.0, 300.0) |> ignore
+  second_tree.frame(300.0, 300.0) |> ignore
+  let a = first.val.unwrap()
+  let b = second.val.unwrap()
+  a.topic("doing", {}).get() |> ignore
+  let sub = client.peek_topic("doing").unwrap()
+  b.topic("doing", {}).get() |> ignore
+  assert_true(physical_equal(sub, client.peek_topic("doing").unwrap()))
+  assert_eq(sent.length(), 1, msg="the views share one wire subscription")
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": { "text": "first" } })
+  assert_eq(@sfbase.text(b.topic("doing", {}).get().value, "text"), "first")
+  first_tree.dispose()
+  assert_true(physical_equal(sub, client.peek_topic("doing").unwrap()), msg="the second view still owns it")
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "delta": [{ "path": ["text"], "set": "next" }] })
+  assert_eq(@sfbase.text(b.topic("doing", {}).get().value, "text"), "next")
+  second_tree.dispose()
+  assert_true(client.peek_topic("doing") is None, msg="the last view let it go")
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+}
+
+///|
+test "one view leaving a topic does not release another view's reader" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let first : Ref[Source?] = Ref(None)
+  let second : Ref[Source?] = Ref(None)
+  let first_tree = @view.Tree::new(fn(root) { first.val = Some(src.owned_by(root)) })
+  let second_tree = @view.Tree::new(fn(root) { second.val = Some(src.owned_by(root)) })
+  first_tree.frame(300.0, 300.0) |> ignore
+  second_tree.frame(300.0, 300.0) |> ignore
+  let a = first.val.unwrap()
+  let b = second.val.unwrap()
+  let p : Map[String, Json] = { "station": "one", "path": "two" }
+  let reordered : Map[String, Json] = { "path": "two", "station": "one" }
+  a.topic("doing", p).get() |> ignore
+  b.topic("doing", p).get() |> ignore
+  let sub = client.peek_topic("doing", params=p).unwrap()
+  assert_eq(sent.length(), 1)
+  assert_true(sent[0].contains("\"subscribe\":"))
+  // The existing Client distinguishes different outgoing JSON field order. A view must not conflate their holds.
+  a.topic("doing", reordered).get() |> ignore
+  let other = client.peek_topic("doing", params=reordered).unwrap()
+  assert_true(!physical_equal(sub, other))
+  assert_eq(sent.length(), 2)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 2)
+  (a.leave)("doing", reordered, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("doing", params=reordered) is None)
+  assert_true(physical_equal(sub, client.peek_topic("doing", params=p).unwrap()))
+  (a.leave)("doing", p, @sfbase.TopicLeave::Legacy)
+  assert_true(physical_equal(sub, client.peek_topic("doing", params=p).unwrap()))
+  (b.leave)("doing", p, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("doing", params=p) is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 2)
+  first_tree.dispose()
+  second_tree.dispose()
+}
+
+///|
+test "an independent graph reader outlives a view-owned source" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let graph = @signals.watch(fn() {  })
+  graph.read(fn() { src.topic("doing", {}).get() }) |> ignore
+  owner.val.unwrap().topic("doing", {}).get() |> ignore
+  let sub = client.peek_topic("doing").unwrap()
+  tree.dispose()
+  assert_true(physical_equal(sub, client.peek_topic("doing").unwrap()))
+  graph.stop()
+  assert_true(client.peek_topic("doing") is None)
+}
+
+///|
+test "an untracked view reader outlives an independent base graph" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let graph = @signals.watch(fn() {  })
+  graph.read(fn() { src.topic("doing", {}).get() }) |> ignore
+  let sub = client.peek_topic("doing").unwrap()
+  owner.val.unwrap().topic("doing", {}).get() |> ignore
+  graph.stop()
+  assert_true(physical_equal(sub, client.peek_topic("doing").unwrap()), msg="the view's untracked read is independently held")
+  tree.dispose()
+  assert_true(client.peek_topic("doing") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+}
+
+///|
+test "a view leaving does not release an independent legacy reader" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  (src.topic_read)("doing", {}) |> ignore
+  assert_true(client.peek_topic("doing") is Some(_), msg="the legacy reader subscribed")
+  let sub = client.peek_topic("doing").unwrap()
+  owner.val.unwrap().topic("doing", {}).get() |> ignore
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  (owner.val.unwrap().leave)("doing", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("doing") is Some(_), msg="the view's leave keeps the independent legacy reader")
+  assert_true(physical_equal(sub, client.peek_topic("doing").unwrap()), msg="the separate legacy reader remains")
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 0)
+  (src.leave)("doing", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("doing") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  tree.dispose()
+}
+
+///|
+test "a live view-owned reader resubscribes when the client resets" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  owner.val.unwrap().topic("doing", {}).get() |> ignore
+  let old = client.peek_topic("doing").unwrap()
+  client.receive_json({ "id": Json::number(old.id.to_double()), "value": { "text": "before" } })
+  sent.clear()
+  client.reset()
+  assert_eq(sent.length(), 1, msg="the live view asks the new client for the topic")
+  assert_true(sent[0].contains("\"subscribe\":"))
+  let current = client.peek_topic("doing").unwrap()
+  assert_true(!physical_equal(old, current))
+  client.unsubscribe(old)
+  assert_true(physical_equal(current, client.peek_topic("doing").unwrap()))
+  client.receive_json({ "id": Json::number(current.id.to_double()), "value": { "text": "after" } })
+  assert_eq(@sfbase.text(owner.val.unwrap().topic("doing", {}).get().value, "text"), "after")
+  tree.dispose()
+  assert_true(client.peek_topic("doing") is None)
+}
+
+///|
+test "a view-owned untracked frame read leaves no extra manual hold" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  @sfbase.held_build(1)
+  owner.val.unwrap().topic("doing", {}).get() |> ignore
+  @sfbase.held_end()
+  assert_true(client.peek_topic("doing") is Some(_))
+  tree.dispose()
+  assert_true(client.peek_topic("doing") is None, msg="the view was the last owner")
+}
+
+///|
+test "view owners can leave a topic through its equivalent overridden name" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let first : Ref[Source?] = Ref(None)
+  let second : Ref[Source?] = Ref(None)
+  let a_tree = @view.Tree::new(fn(root) { first.val = Some(src.owned_by(root)) })
+  let b_tree = @view.Tree::new(fn(root) { second.val = Some(src.owned_by(root)) })
+  a_tree.frame(300.0, 300.0) |> ignore
+  b_tree.frame(300.0, 300.0) |> ignore
+  let a = first.val.unwrap()
+  let b = second.val.unwrap()
+  let overridden : Map[String, Json] = { "topic": "actual", "station": "one" }
+  let direct : Map[String, Json] = { "station": "one" }
+  a.topic("unused", overridden).get() |> ignore
+  let sub = client.peek_topic("actual", params=direct).unwrap()
+  b.topic("actual", direct).get() |> ignore
+  assert_eq(sent.length(), 1)
+  (a.leave)("actual", direct, @sfbase.TopicLeave::Legacy)
+  assert_true(physical_equal(sub, client.peek_topic("actual", params=direct).unwrap()))
+  (b.leave)("unused", overridden, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("actual", params=direct) is None, msg="both equivalent owners left")
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  a_tree.dispose()
+  b_tree.dispose()
+}
+
+///|
+test "view owners share normalized chat parameters and release independently" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let base = signal_client_source(client)
+  let normalize = fn(name : String, params : Map[String, Json]) { @sfbase.core_topic_params(name, params) }
+  let src : Source = {
+    ..base,
+    topic_key: fn(name, params) { @sfbase.wire_topic_key(name, normalize(name, params)) },
+    topic_read: fn(name, params) { (base.topic_read)(name, normalize(name, params)) },
+    waits: fn(name, params) { (base.waits)(name, normalize(name, params)) },
+    leave: fn(name, params, __reason) {
+      (base.leave)(name, normalize(name, params), __reason) },
+    release: fn(name, params) { (base.release)(name, normalize(name, params)) },
+  }
+  let first : Ref[Source?] = Ref(None)
+  let second : Ref[Source?] = Ref(None)
+  let a_tree = @view.Tree::new(fn(root) { first.val = Some(src.owned_by(root)) })
+  let b_tree = @view.Tree::new(fn(root) { second.val = Some(src.owned_by(root)) })
+  a_tree.frame(300.0, 300.0) |> ignore
+  b_tree.frame(300.0, 300.0) |> ignore
+  let a = first.val.unwrap()
+  let b = second.val.unwrap()
+  let plain : Map[String, Json] = { "session": "one" }
+  let compact : Map[String, Json] = { "session": "one", "compact": false }
+  a.topic("chat", plain).get() |> ignore
+  a.topic("chat", compact).get() |> ignore
+  b.topic("chat", compact).get() |> ignore
+  let expected = normalize("chat", plain)
+  let sub = client.peek_topic("chat", params=expected).unwrap()
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  (a.leave)("chat", compact, @sfbase.TopicLeave::Legacy)
+  assert_true(physical_equal(sub, client.peek_topic("chat", params=expected).unwrap()))
+  (b.leave)("chat", plain, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("chat", params=expected) is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  a_tree.dispose()
+  b_tree.dispose()
+}
+
+///|
+test "a view changing parameters explicitly leaves the earlier topic" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let earlier : Map[String, Json] = { "query": "first" }
+  let later : Map[String, Json] = { "query": "second" }
+  owned.topic("search", earlier).get() |> ignore
+  owned.topic("search", later).get() |> ignore
+  (owned.leave)("search", earlier, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("search", params=earlier) is None)
+  assert_true(client.peek_topic("search", params=later) is Some(_))
+  tree.dispose()
+  assert_true(client.peek_topic("search", params=later) is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 2)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 2)
+}
+
+///|
+test "a view's raw prefetch ends on cancel and coexists with another owner" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let first : Ref[Source?] = Ref(None)
+  let second : Ref[Source?] = Ref(None)
+  let a_tree = @view.Tree::new(fn(root) { first.val = Some(src.owned_by(root)) })
+  let b_tree = @view.Tree::new(fn(root) { second.val = Some(src.owned_by(root)) })
+  a_tree.frame(300.0, 300.0) |> ignore
+  b_tree.frame(300.0, 300.0) |> ignore
+  let a = first.val.unwrap()
+  let b = second.val.unwrap()
+  let params : Map[String, Json] = { "session": "one" }
+  a.prefetch("chat", params) |> ignore
+  assert_true(client.peek_topic("chat", params~) is Some(_))
+  (a.leave)("chat", params, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("chat", params~) is None, msg="cancel releases the sole prefetch")
+  a.prefetch("chat", params) |> ignore
+  let sub = client.peek_topic("chat", params~).unwrap()
+  b.topic("chat", params).get() |> ignore
+  (a.leave)("chat", params, @sfbase.TopicLeave::Legacy)
+  assert_true(physical_equal(sub, client.peek_topic("chat", params~).unwrap()), msg="the other view still reads")
+  b_tree.dispose()
+  assert_true(client.peek_topic("chat", params~) is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 2)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 2)
+  a_tree.dispose()
+}
+
+///|
+test "a prefetch made inside a graph outlives that graph until cancelled" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let pressed = @signals.signal(false)
+  let stop = @signals.effect(fn() {
+    if pressed.get() { owned.prefetch("chat", {}) |> ignore }
+  })
+  pressed.set(true)
+  let sub = client.peek_topic("chat").unwrap()
+  stop()
+  assert_true(client.peek_topic("chat") is Some(_), msg="the graph ended but the direct prefetch remains")
+  assert_true(physical_equal(sub, client.peek_topic("chat").unwrap()), msg="the explicit prefetch remains held after the graph exits")
+  (owned.leave)("chat", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("chat") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  tree.dispose()
+}
+
+///|
+test "a base source prefetch made in a graph remains until explicitly left" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let stop = @signals.effect(fn() { src.prefetch("chat", {}) |> ignore })
+  let sub = client.peek_topic("chat").unwrap()
+  stop()
+  assert_true(client.peek_topic("chat") is Some(_), msg="the legacy prefetch is independent of the graph")
+  assert_true(physical_equal(sub, client.peek_topic("chat").unwrap()))
+  (src.leave)("chat", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("chat") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+}
+
+///|
+test "a direct graph read and an independent base prefetch release differently" {
+  for prefetch in [false, true] {
+    new_run()
+    let sent : Array[String] = []
+    let client = @core.Client::new(fn(s) { sent.push(s) })
+    let src = signal_client_source(client)
+    let stop = @signals.effect(fn() {
+      if prefetch { src.prefetch("chat", {}) |> ignore } else { (src.topic_read)("chat", {}) |> ignore }
+    })
+    let sub = client.peek_topic("chat").unwrap()
+    stop()
+    (src.release)("chat", {})
+    if prefetch {
+      assert_true(client.peek_topic("chat") is Some(_), msg="the explicit prefetch is a separate owner")
+      assert_true(physical_equal(sub, client.peek_topic("chat").unwrap()))
+      assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 0)
+    } else {
+      assert_true(client.peek_topic("chat") is None, msg="the raw graph dependency was released")
+      assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+    }
+    (src.leave)("chat", {}, @sfbase.TopicLeave::Legacy)
+    assert_true(client.peek_topic("chat") is None)
+    assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+    assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  }
+}
+
+///|
+test "a source callback can prefetch a different topic for its view" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let base = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "outer" { owner.val.unwrap().prefetch("prefetch", {}) |> ignore }
+      (base.topic_read)(name, params)
+    },
+  }
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let stop = @signals.effect(fn() { owned.topic("outer", {}).get() |> ignore })
+  assert_true(client.peek_topic("outer") is Some(_))
+  assert_true(client.peek_topic("prefetch") is Some(_))
+  let prefetched = client.peek_topic("prefetch").unwrap()
+  stop()
+  assert_true(client.peek_topic("outer") is None, msg="the graph's topic ended")
+  assert_true(client.peek_topic("prefetch") is Some(_), msg="the source callback's direct prefetch belongs to the view")
+  assert_true(physical_equal(prefetched, client.peek_topic("prefetch").unwrap()))
+  (owned.leave)("prefetch", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("prefetch") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 2)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 2)
+  tree.dispose()
+}
+
+///|
+test "a wrapper can prefetch before forwarding a view graph read" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let wrapped : Source = {
+    ..owned,
+    topic_read: fn(name, params) {
+      if name == "outer" { owned.prefetch("prefetch", {}) |> ignore }
+      (owned.topic_read)(name, params)
+    },
+  }
+  let stop = @signals.effect(fn() { wrapped.topic("outer", {}).get() |> ignore })
+  assert_true(client.peek_topic("outer") is Some(_))
+  assert_true(client.peek_topic("prefetch") is Some(_))
+  let prefetched = client.peek_topic("prefetch").unwrap()
+  stop()
+  assert_true(client.peek_topic("outer") is None, msg="the forwarded graph topic ended")
+  assert_true(client.peek_topic("prefetch") is Some(_), msg="the wrapper's direct prefetch remains with its view")
+  assert_true(physical_equal(prefetched, client.peek_topic("prefetch").unwrap()))
+  (owned.leave)("prefetch", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(client.peek_topic("prefetch") is None)
+  tree.dispose()
+}
+
+///|
+test "a wrapper's low-level reads follow the graph without a prefetch" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let wrapped : Source = {
+    ..owned,
+    topic_read: fn(name, params) {
+      if name == "outer" { (owned.topic_read)("other", {}) |> ignore }
+      (owned.topic_read)(name, params)
+    },
+  }
+  let stop = @signals.effect(fn() { wrapped.topic("outer", {}).get() |> ignore })
+  assert_true(client.peek_topic("outer") is Some(_))
+  assert_true(client.peek_topic("other") is Some(_))
+  stop()
+  assert_true(client.peek_topic("outer") is None)
+  assert_true(client.peek_topic("other") is None, msg="a low-level read in this graph was not an independent prefetch")
+  tree.dispose()
+}
+
+///|
+test "a wrapper can forward a view graph to another topic name" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let wrapped : Source = {
+    ..owned,
+    topic_read: fn(name, params) { (owned.topic_read)(if name == "alias" { "actual" } else { name }, params) },
+    waits: fn(name, params) { (owned.waits)(if name == "alias" { "actual" } else { name }, params) },
+  }
+  let stop = @signals.effect(fn() { wrapped.topic("alias", {}).get() |> ignore })
+  assert_true(client.peek_topic("actual") is Some(_))
+  stop()
+  assert_true(client.peek_topic("actual") is None, msg="forwarding a graph read did not create a view prefetch")
+  tree.dispose()
+}
+
+///|
+test "one wire subscription preserves each source-side projection" {
+  for reverse in [false, true] {
+    new_run()
+    let sent : Array[String] = []
+    let client = @core.Client::new(fn(s) { sent.push(s) })
+    let base = signal_client_source(client)
+    let src : Source = {
+      ..base,
+      topic_read: fn(name, params) {
+        let topic = (base.topic_read)(name, params)
+        { ..topic, value: Some(Json::string(name)) }
+      },
+    }
+    let owner : Ref[Source?] = Ref(None)
+    let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+    tree.frame(300.0, 300.0) |> ignore
+    let owned = owner.val.unwrap()
+    let aliased : Map[String, Json] = { "topic": "actual" }
+    if reverse {
+      assert_eq(owned.topic("actual", {}).get().value, Some(Json::string("actual")))
+      assert_eq(owned.topic("alias", aliased).get().value, Some(Json::string("alias")))
+    } else {
+      assert_eq(owned.topic("alias", aliased).get().value, Some(Json::string("alias")))
+      assert_eq(owned.topic("actual", {}).get().value, Some(Json::string("actual")))
+    }
+    assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+    (owned.leave)("actual", {}, @sfbase.TopicLeave::Legacy)
+    assert_true(client.peek_topic("actual") is None)
+    assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+    tree.dispose()
+  }
+}
+
+///|
+test "a made source keeps its own topic identity" {
+  new_run()
+  let src = @sfbase.made_source(topic=fn(name, _) { Some(Json::string(name)) })
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  assert_eq(owned.topic("alias", { "topic": "actual" }).get().value, Some(Json::string("alias")))
+  assert_eq(owned.topic("actual", {}).get().value, Some(Json::string("actual")))
+  (owned.leave)("actual", {}, @sfbase.TopicLeave::Legacy)
+  assert_eq(owned.topic("alias", { "topic": "actual" }).get().value, Some(Json::string("alias")))
+  tree.dispose()
+}
+
+///|
+fn disposed_owned_source_case(read_kind : Int, independent_base : Bool) -> Unit raise {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let graph = @signals.watch(fn() {  })
+  if independent_base {
+    graph.read(fn() { src.topic("doing", {}).get() }) |> ignore
+    assert_true(client.peek_topic("doing") is Some(_), msg="the base graph subscribed")
+  }
+  let base_sub = client.peek_topic("doing")
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let stale = owner.val.unwrap()
+  tree.dispose()
+  match read_kind {
+    0 => (stale.topic_read)("doing", {}) |> ignore
+    1 => stale.topic("doing", {}).get() |> ignore
+    _ => stale.prefetch("doing", {}) |> ignore
+  }
+  (stale.leave)("doing", {}, @sfbase.TopicLeave::Legacy)
+  if independent_base {
+    assert_true(physical_equal(base_sub.unwrap(), client.peek_topic("doing").unwrap()), msg="the independent base reader keeps its original subscription")
+  } else {
+    assert_true(client.peek_topic("doing") is None, msg="the stale source did not subscribe")
+  }
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), if independent_base { 1 } else { 0 })
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 0)
+  graph.stop()
+  assert_true(client.peek_topic("doing") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), if independent_base { 1 } else { 0 })
+}
+
+///|
+test "a late raw read from a disposed view does not subscribe" {
+  disposed_owned_source_case(0, false)
+}
+
+///|
+test "a late signal read from a disposed view does not subscribe" {
+  disposed_owned_source_case(1, false)
+}
+
+///|
+test "a late raw read and leave do not disturb a base graph" {
+  disposed_owned_source_case(0, true)
+}
+
+///|
+test "a late signal read and leave do not disturb a base graph" {
+  disposed_owned_source_case(1, true)
+}
+
+///|
+test "a late prefetch from a disposed view does not subscribe" {
+  disposed_owned_source_case(2, false)
+}
+
+///|
+test "a late prefetch and leave do not disturb a base graph" {
+  disposed_owned_source_case(2, true)
+}
+
+///|
+test "a graph using a view's source stops following when the view is disposed" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let stale = owner.val.unwrap()
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() { seen.push(@sfbase.text(stale.topic("doing", {}).get().value, "text")) })
+  let sub = client.peek_topic("doing").unwrap()
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": { "text": "while alive" } })
+  tree.dispose()
+  assert_true(client.peek_topic("doing") is None, msg="the disposed view cannot keep an external graph subscribed")
+  assert_eq(seen.last(), Some(""), msg="the external graph was told the view is gone")
+  stop()
+}
+
+///|
+test "a view source graph drops changed parameters while the view remains" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let query = @signals.signal("first")
+  let stop = @signals.effect(fn() { owned.topic("search", { "query": Json::string(query.get()) }).get() |> ignore })
+  let first : Map[String, Json] = { "query": "first" }
+  let second : Map[String, Json] = { "query": "second" }
+  assert_true(client.peek_topic("search", params=first) is Some(_))
+  query.set("second")
+  assert_true(client.peek_topic("search", params=first) is None, msg="the only graph reader no longer reads the old parameters")
+  assert_true(client.peek_topic("search", params=second) is Some(_))
+  stop()
+  assert_true(client.peek_topic("search", params=second) is None, msg="stopping the last graph reader releases its topic")
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 2)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 2)
+  tree.dispose()
+}
+
+///|
+test "a view source graph follows updates without another view hold" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let topic = owned.topic("doing", {})
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() { seen.push(@sfbase.text(topic.get().value, "text")) })
+  let sub = client.peek_topic("doing").unwrap()
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": { "text": "one" } })
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "delta": [{ "path": ["text"], "set": "two" }] })
+  assert_eq(seen, ["", "one", "two"])
+  (owned.leave)("doing", {}, @sfbase.TopicLeave::Legacy)
+  assert_true(physical_equal(sub, client.peek_topic("doing").unwrap()), msg="an active graph still reads after a view leave")
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 0)
+  stop()
+  assert_true(client.peek_topic("doing") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  tree.dispose()
+}
+
+///|
+test "a wrapper around a view source preserves its projection" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let owned = owner.val.unwrap()
+  let wrapped : Source = {
+    ..owned,
+    topic_read: fn(name, params) {
+      let topic = (owned.topic_read)(name, params)
+      { ..topic, value: Some(Json::string(name)) }
+    },
+  }
+  let seen : Array[Json?] = []
+  let stop = @signals.effect(fn() { seen.push(wrapped.topic("doing", {}).get().value) })
+  assert_eq(seen, [Some(Json::string("doing"))])
+  assert_true(client.peek_topic("doing") is Some(_))
+  stop()
+  assert_true(client.peek_topic("doing") is None, msg="the tracked wrapper did not add a view hold")
+  assert_eq(wrapped.topic("doing", {}).get().value, Some(Json::string("doing")))
+  assert_true(client.peek_topic("doing") is Some(_), msg="the untracked wrapper read belongs to the view")
+  tree.dispose()
+  assert_true(client.peek_topic("doing") is None)
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 2)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 2)
+}
+
+///|
+test "a nested view source does not give its parent an extra reader" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let parent : Ref[Source?] = Ref(None)
+  let parent_tree = @view.Tree::new(fn(root) { parent.val = Some(src.owned_by(root)) })
+  parent_tree.frame(300.0, 300.0) |> ignore
+  let child : Ref[Source?] = Ref(None)
+  let child_tree = @view.Tree::new(fn(root) { child.val = Some(parent.val.unwrap().owned_by(root)) })
+  child_tree.frame(300.0, 300.0) |> ignore
+  child.val.unwrap().topic("doing", {}).get() |> ignore
+  assert_true(client.peek_topic("doing") is Some(_))
+  child_tree.dispose()
+  assert_true(client.peek_topic("doing") is None, msg="the child was the only actual reader")
+  assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), 1)
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  parent_tree.dispose()
+}
+
+///|
+test "a nested view source becomes inert when its parent ends" {
+  new_run()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let parent : Ref[Source?] = Ref(None)
+  let parent_tree = @view.Tree::new(fn(root) { parent.val = Some(src.owned_by(root)) })
+  parent_tree.frame(300.0, 300.0) |> ignore
+  let child : Ref[Source?] = Ref(None)
+  let child_tree = @view.Tree::new(fn(root) { child.val = Some(parent.val.unwrap().owned_by(root)) })
+  child_tree.frame(300.0, 300.0) |> ignore
+  let nested = child.val.unwrap()
+  nested.topic("doing", {}).get() |> ignore
+  assert_true(client.peek_topic("doing") is Some(_))
+  parent_tree.dispose()
+  assert_true(client.peek_topic("doing") is None, msg="the nested source cannot outlive its parent")
+  nested.topic("doing", {}).get() |> ignore
+  assert_true(client.peek_topic("doing") is None, msg="a late nested read cannot resubscribe")
+  child_tree.dispose()
+}
+
+///|
 test "a frame hands a topic between readers without resubscribing and releases it when none remain" {
   new_run()
   let sent : Array[String] = []
@@ -71,8 +805,9 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
     waits: fn(name, p) {
       if name == "chat" { client.follow_topic(name, params=@sfbase.core_topic_params(name, p)).waiting } else { (base.waits)(name, p) }
     },
-    leave: fn(name, p) {
-      if name == "chat" { client.leave_topic(name, params=@sfbase.core_topic_params(name, p)) } else { (base.leave)(name, p) }
+    leave: fn(name, p, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if name == "chat" { client.leave_topic(name, params=@sfbase.core_topic_params(name, p)) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) }
     },
     release: fn(name, p) {
       if name == "chat" { client.release_topic(name, params=@sfbase.core_topic_params(name, p)) } else { (base.release)(name, p) }
@@ -176,8 +911,9 @@ test "home releases transfers while a chat covers it and reads current transfers
     waits: fn(name, p) {
       if name == "driveTransfers" { client.follow_topic(name, params=p).waiting } else { (base.waits)(name, p) }
     },
-    leave: fn(name, p) {
-      if name == "driveTransfers" { client.leave_topic(name, params=p) } else { (base.leave)(name, p) }
+    leave: fn(name, p, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if name == "driveTransfers" { client.leave_topic(name, params=p) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) }
     },
     release: fn(name, p) {
       if name == "driveTransfers" { client.release_topic(name, params=p) } else { (base.release)(name, p) }
@@ -234,8 +970,9 @@ test "reopening a chat reads the current station and follows later updates" {
     waits: fn(name, p) {
       if name == "stations" { client.follow_topic(name, params=p).waiting } else { (base.waits)(name, p) }
     },
-    leave: fn(name, p) {
-      if name == "stations" { client.leave_topic(name, params=p) } else { (base.leave)(name, p) }
+    leave: fn(name, p, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if name == "stations" { client.leave_topic(name, params=p) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) }
     },
     release: fn(name, p) {
       if name == "stations" { client.release_topic(name, params=p) } else { (base.release)(name, p) }
@@ -277,12 +1014,15 @@ fn signal_client_source(client : @core.Client) -> Source {
   let base = @sfbase.made_source()
   {
     ..base,
+    topic_key: @sfbase.wire_topic_key,
     topic_read: fn(name, params) {
       let sub = client.follow_topic(name, params~)
       { value: sub.value, error: sub.error, version: sub.version }
     },
     waits: fn(name, params) { client.follow_topic(name, params~).waiting },
-    leave: fn(name, params) { client.leave_topic(name, params~) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params~) },
     release: fn(name, params) { client.release_topic(name, params~) },
     refresh: fn(name, params) { client.refresh_topic(name, params~) },
   }
@@ -368,7 +1108,7 @@ test "a direct subscriber can leave while an untracked legacy reader still holds
   assert_eq(@sfbase.text(src.topic("accounts", {}).get().value, "name"), "after")
   @sfbase.held_build(2)
   @sfbase.held_end()
-  (src.leave)("accounts", {})
+  (src.leave)("accounts", {}, @sfbase.TopicLeave::Legacy)
   assert_eq(sent.length(), 2)
   assert_true(sent[1].contains("\"id\":1") && sent[1].contains("\"unsubscribe\":true"))
 }
@@ -393,7 +1133,7 @@ test "the existing topic entry is a signal shared across immediate frames and re
   @sfbase.held_end()
   @sfbase.held_build(12)
   @sfbase.held_end()
-  (src.leave)("chat", {})
+  (src.leave)("chat", {}, @sfbase.TopicLeave::Legacy)
   assert_eq(sent.length(), 2)
   assert_true(sent[1].contains("\"unsubscribe\":true"))
 }
@@ -609,7 +1349,9 @@ test "equivalent chat params, source wrappers and old readers release one shared
         { value: sub.value, error: sub.error, version: sub.version }
       },
       waits: fn(name, params) { client.follow_topic(name, params=@sfbase.core_topic_params(name, params)).waiting },
-      leave: fn(name, params) { client.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
+      leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      client.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
       release: fn(name, params) { client.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
     }
     let wrapped : Source = { ..src }
@@ -788,9 +1530,10 @@ fn chat_signal_page_case(pop : Bool, intermediate : Bool) -> Unit raise {
     waits: fn(name, p) {
       if which(name, p) { client.follow_topic(name, params=@sfbase.core_topic_params(name, p)).waiting } else { (base.waits)(name, p) }
     },
-    leave: fn(name, p) {
+    leave: fn(name, p, __reason) {
       if name == "chat" && which(name, p) { chat_lefts.val += 1 }
-      if which(name, p) { client.leave_topic(name, params=@sfbase.core_topic_params(name, p)) } else { (base.leave)(name, p) }
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if which(name, p) { client.leave_topic(name, params=@sfbase.core_topic_params(name, p)) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) }
     },
     release: fn(name, p) {
       if which(name, p) { client.release_topic(name, params=@sfbase.core_topic_params(name, p)) } else { (base.release)(name, p) }
@@ -827,18 +1570,25 @@ fn chat_signal_page_case(pop : Bool, intermediate : Bool) -> Unit raise {
   let refs = @sfbase.writings.get(draft_key(chat)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(@sfbase.text(@sfbase.field(refs.get(0), "ref"), "mode"), "file")
+  assert_eq(sent.length(), before_events, msg="the file-drop frames kept the page subscription; sent=\{sent}")
   let link = @sfbase.link_target({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "child-session", "service": "j-web" })
   assert_true(@sfbase.open_target(src, link, false, None))
   assert_true(app.nav.top() == Service("ws1/st1", "j-web"), msg="an agent's link stays over its chat")
-  assert_eq(sent.length(), before_events, msg="event reads share the topics from the page")
+  assert_eq(sent.length(), before_events, msg="event reads share the topics from the page; before=\{before_events}, sent=\{sent}")
   assert_true(app.nav.pages().iter().any(fn(p) { p is Chat(_) }))
   if pop {
     let start = t.time()
     home()
     assert_false(app.nav.pages().iter().any(fn(p) { p is Chat(_) }))
+    assert_false(app.nav.moving(), msg="the wide navigation does not slide out")
+    assert_true(client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(s) && physical_equal(s, chat_sub), msg="the last rendered chat still has its subscription before the next frame")
     t.frame()
-    assert_true(client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(_), msg="the leaving page still has a reader")
-    if intermediate { t.frame_at(start + 100.0) }
+    assert_true(t.shown_of("做完了：") is None, msg="the chat message is no longer visible")
+    assert_true(client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is None, msg="the page's last reader is released after its frame ends")
+    if intermediate {
+      t.frame_at(start + 100.0)
+      assert_true(client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is None)
+    }
     // The same declared time with and without the intermediate frame must have the same owners.
     t.frame_at(start + 1000.0)
   } else {
@@ -860,8 +1610,12 @@ test "a chat page's topic is shared with events and released when its pane is re
 }
 
 ///|
-test "a popped chat's last reader leaves at the same time with or without an intermediate frame" {
+test "a popped chat's last reader leaves without an intermediate frame" {
   chat_signal_page_case(true, false)
+}
+
+///|
+test "a popped chat's last reader leaves with an intermediate frame" {
   chat_signal_page_case(true, true)
 }
 
@@ -875,7 +1629,7 @@ test "a directly held accounts subscription survives source readers leaving and 
   let stop = @signals.effect(fn() { live.get() |> ignore })
   client.receive_json({ "id": 1, "value": { "signedIn": true } })
   stop()
-  (src.leave)("accounts", {})
+  (src.leave)("accounts", {}, @sfbase.TopicLeave::Legacy)
   assert_eq(sent.length(), 1, msg="leaving the Source must not close a directly held Sub")
   client.receive_json({ "id": 1, "delta": [{ "path": ["signedIn"], "set": false }] })
   assert_false(@sfbase.flag(direct.value, "signedIn"))
@@ -886,7 +1640,7 @@ test "a directly held accounts subscription survives source readers leaving and 
   let stop_again = @signals.effect(fn() { again.get() |> ignore })
   client.receive_json({ "id": 1, "value": { "signedIn": true } })
   stop_again()
-  (src.leave)("accounts", {})
+  (src.leave)("accounts", {}, @sfbase.TopicLeave::Legacy)
   assert_true(@sfbase.flag(after.value, "signedIn"))
   assert_eq(sent.length(), 2, msg="the direct subscription after reset stays open")
   client.unsubscribe(after)
@@ -913,7 +1667,9 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
       { value: sub.value, error: sub.error, version: sub.version }
     },
     waits: fn(name, p) { if ours(name, p) { client.follow_topic(name, params=p).waiting } else { (base.waits)(name, p) } },
-    leave: fn(name, p) { if ours(name, p) { client.leave_topic(name, params=p) } else { (base.leave)(name, p) } },
+    leave: fn(name, p, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if ours(name, p) { client.leave_topic(name, params=p) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) } },
     release: fn(name, p) { if ours(name, p) { client.release_topic(name, params=p) } else { (base.release)(name, p) } },
   }
   open_drive_fixture("drive")
@@ -988,7 +1744,9 @@ test "a chat after closing the switcher reads station changes made in the gap" {
       { value: sub.value, error: sub.error, version: sub.version }
     },
     waits: fn(name, p) { if name == "stations" { client.follow_topic(name, params=p).waiting } else { (base.waits)(name, p) } },
-    leave: fn(name, p) { if name == "stations" { client.leave_topic(name, params=p) } else { (base.leave)(name, p) } },
+    leave: fn(name, p, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if name == "stations" { client.leave_topic(name, params=p) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) } },
     release: fn(name, p) { if name == "stations" { client.release_topic(name, params=p) } else { (base.release)(name, p) } },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)

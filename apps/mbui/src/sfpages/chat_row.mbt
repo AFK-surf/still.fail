@@ -40,6 +40,11 @@ let rows : Rows = {
 
 ///|
 fn chat_rows_reset() -> Unit {
+  match row_primed.val {
+    Some(reader) => { row_primed.val = None; reader.cancel() }
+    None => ()
+  }
+  row_held.val = (0, false)
   row_left.val = ("", false)
   row_left_said.set("")
   row_renaming.set("")
@@ -86,18 +91,21 @@ fn row_failed(src : Source, item : ChatItem) -> String? {
 let row_calls : Array[String] = ["chat.pin", "chat.rename", "chat.archive"]
 
 ///|
-/// A row let go without opening its chat (a scroll, a hold): what it read ahead let go too, unless its page is open.
-fn unprime(src : Source, r : ChatRef) -> Unit {
+/// A row let go without opening its chat (a scroll, a hold): release only the read made by this press.
+fn unprime(src : Source, r : ChatRef, reader : @sfbase.TopicLease?) -> Unit {
   if !src.read_only && !readings.contains(r.station + "\u{1}" + r.session) {
-    @sfbase.chat_inputs_left(r)
-    (src.leave)("chat", chat_params(r))
+    @sfbase.chat_inputs_left_from(src, r)
   }
+  match reader { Some(reader) => reader.cancel(); None => () }
 }
 
 ///|
 /// The row pressed last, and whether the press has been a long one (its menu's: not a tap).
 // kept across runs: put back by chat_rows_reset (rows)
 let row_held : Ref[(Int, Bool)] = Ref((0, false))
+
+///|
+let row_primed : Ref[@sfbase.TopicLease?] = Ref(None)
 
 ///|
 /// A chat's row in a list: `lead` whose pictures lead, `on` its chat the
@@ -143,9 +151,10 @@ pub fn chat_row(
   let down = parts.iter().any(fn(p) { c.held_down(p) })
   // Start reading when the finger goes down: the visible press can be delayed in a scrolling list.
   if finger && down && row_held.val.0 != id {
+    match row_primed.val { Some(reader) => { row_primed.val = None; reader.cancel() }; None => () }
     row_held.val = (id, false)
     if !src.read_only {
-      (src.topic_read)("chat", chat_params(r)) |> ignore
+      row_primed.val = Some(src.lease_topic("chat", chat_params(r)))
     }
   }
   // (what it asks again waits on the station)
@@ -155,6 +164,11 @@ pub fn chat_row(
   match asked {
     Some((x, y)) if menu => {
       row_held.val = (id, true)
+      if finger {
+        let reader = row_primed.val
+        row_primed.val = None
+        unprime(src, r, reader)
+      }
       row_menu(c, src, item, id, x, y)
     }
     _ => ()
@@ -167,15 +181,23 @@ pub fn chat_row(
   c.on_press(id, fn() {
     // (being renamed: a press is the field's)
     if renaming {
+      let reader = row_primed.val
+      row_primed.val = None
+      unprime(src, r, reader)
       return
     }
     let long = row_held.val.0 == id && row_held.val.1
     row_held.val = (0, false)
     if long {
       if finger {
-        unprime(src, r)
+        let reader = row_primed.val
+        row_primed.val = None
+        unprime(src, r, reader)
       }
     } else {
+      let primed = row_primed.val
+      row_primed.val = None
+      let reader = match primed { Some(reader) => @sfbase.prepare_chat_handoff(reader); None => None }
       match opened {
         Some(f) => f(r)
         None => {
@@ -189,12 +211,15 @@ pub fn chat_row(
           open_page(Chat(r))
         }
       }
+      match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
     }
   })
   if !down && row_held.val.0 == id && !menu_on && !c.clicked(id) {
     row_held.val = (0, false)
     if finger {
-      unprime(src, r)
+      let reader = row_primed.val
+      row_primed.val = None
+      unprime(src, r, reader)
     }
   }
   // pointed at by a mouse (its menu open beside it too); a finger's, held or its menu open

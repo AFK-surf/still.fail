@@ -996,7 +996,7 @@ pub fn near_left(src : Source, station : String) -> Unit {
   near_asked.each(fn(k, p) {
     if p.get("station") == Some(Json::string(station)) {
       gone.push(k)
-      (src.leave)("imageNear", p)
+      (src.leave)("imageNear", p, TopicLeave::Legacy)
     }
   })
   for k in gone {

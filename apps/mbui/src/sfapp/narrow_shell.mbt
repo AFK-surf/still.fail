@@ -83,6 +83,22 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
         None => ()
       }
     },
+    page_for=fn(entry, serial) {
+      let retained = @sfbase.page_entry_source(src, entry, serial)
+      let page_read = @sfbase.page_chat_reader(retained, entry, serial)
+      fn(visible) {
+        let shown = src.owned_by(visible)
+        fn(c, page) {
+          @sfbase.page_entry_read(serial, retained, page)
+          page_read(page)
+          let page_src = if page is Chat(_) { retained } else { shown }
+          match workspace_in_view(page_src).0 {
+            Some(w) => narrow_page_held(c, page_src, w, page)
+            None => ()
+          }
+        }
+      }
+    },
     bg=fn() { @sf.theme().p.bg },
     // a page opened slides in once the core has given what it shows
     ready=fn(page) {
@@ -705,4 +721,3 @@ fn next_place_actions_gen() -> Int {
   place_actions_made.val += 1
   place_actions_made.val
 }
-

@@ -15,6 +15,25 @@
 const HAS_CHILD_EFFECT : Int = 64
 
 ///|
+// A computed lost its last reader while its getter was running. Its reads must remain linked until that getter ends.
+const UNWATCH_AFTER_UPDATE : Int = 128
+
+///|
+// Explicit dispose applies even if another node still reads the computed.
+const DISPOSE_AFTER_UPDATE : Int = 256
+
+///|
+// Additional reads made for a computed by Computed::reading, in call order.
+let computed_extra_reads : Array[ReactiveNode?] = []
+
+///|
+fn computed_extra_reading(node : ReactiveNode) -> Bool {
+  computed_extra_reads.iter().any(fn(entry) {
+    match entry { Some(reading) => physical_equal(reading, node); None => false }
+  })
+}
+
+///|
 /// What the graph is doing: the cycle of reads (a link's version), how deep in effects' runs and in batches, the
 /// effects notified and waiting to run, and the node reading (activeSub).
 priv struct Run {
@@ -164,7 +183,9 @@ fn notify(first : ReactiveNode) -> Unit {
 fn unwatched(node : ReactiveNode) -> Unit {
   match node.kind {
     ComputedNode =>
-      if node.deps is Some(_) {
+      if (node.flags & RECURSED_CHECK) != 0 || computed_extra_reading(node) {
+        node.flags = node.flags | UNWATCH_AFTER_UPDATE
+      } else if node.deps is Some(_) {
         node.flags = MUTABLE | DIRTY
         dispose_all_deps_in_reverse(node)
       }
@@ -176,6 +197,19 @@ fn unwatched(node : ReactiveNode) -> Unit {
       }
     EffectNode => effect_oper(node)
     ScopeNode | TriggerNode | WatchNode => effect_scope_oper(node)
+  }
+}
+
+///|
+fn finish_computed_read(node : ReactiveNode) -> Unit {
+  if (node.flags & (UNWATCH_AFTER_UPDATE | DISPOSE_AFTER_UPDATE)) == 0 { return }
+  if (node.flags & RECURSED_CHECK) != 0 || computed_extra_reading(node) { return }
+  let unwatched_during_read = (node.flags & UNWATCH_AFTER_UPDATE) != 0
+  let disposed_during_read = (node.flags & DISPOSE_AFTER_UPDATE) != 0
+  node.flags = node.flags & (UNWATCH_AFTER_UPDATE | DISPOSE_AFTER_UPDATE).lnot()
+  if disposed_during_read || (unwatched_during_read && node.subs is None) {
+    node.flags = MUTABLE | DIRTY
+    dispose_all_deps_in_reverse(node)
   }
 }
 
@@ -391,7 +425,8 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
     }
   }
   c.deps_tail = None
-  c.flags = MUTABLE | RECURSED_CHECK
+  let deferred = c.flags & (UNWATCH_AFTER_UPDATE | DISPOSE_AFTER_UPDATE)
+  c.flags = MUTABLE | RECURSED_CHECK | deferred
   let prev_sub = set_active_sub(Some(c))
   run.cycle += 1
   let old_value = state.value
@@ -400,6 +435,7 @@ fn[T] update_computed(c : ReactiveNode, state : ComputedState[T]) -> Bool {
   run.active_sub = prev_sub
   c.flags = c.flags & RECURSED_CHECK.lnot()
   purge_deps(c)
+  finish_computed_read(c)
   match old_value {
     Some(old) => !same_as(state.same, old, value)
     None => true
@@ -576,6 +612,7 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
     state.value = Some((state.getter)(None))
     run.active_sub = prev_sub
     node.flags = node.flags & RECURSED_CHECK.lnot()
+    finish_computed_read(node)
   }
   track(node)
   let value = state.value.unwrap()
@@ -744,7 +781,12 @@ pub fn[T] Computed::peek(self : Computed[T]) -> T? {
 /// The computed let go of what it read (as unwatched does with a computed nothing reads any more): what it read no
 /// longer holds it, and it is worked out anew if it is read again.
 pub fn[T] Computed::dispose(self : Computed[T]) -> Unit {
-  unwatched(self.0)
+  let node = self.0
+  if (node.flags & RECURSED_CHECK) != 0 || computed_extra_reading(node) {
+    node.flags = node.flags | DISPOSE_AFTER_UPDATE
+  } else {
+    unwatched(node)
+  }
 }
 
 ///|
@@ -796,9 +838,14 @@ pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {
 /// is built for it after it ran (a list's rows, laid out after the part they are in was built). Let go as the
 /// computed's run reads anew, as what it read is.
 pub fn[T, U] Computed::reading(self : Computed[T], f : () -> U) -> U {
+  let depth = computed_extra_reads.length()
+  computed_extra_reads.push(Some(self.0))
   let prev_sub = set_active_sub(Some(self.0))
   let v = f()
   run.active_sub = prev_sub
+  computed_extra_reads[depth] = None
+  computed_extra_reads.pop() |> ignore
+  finish_computed_read(self.0)
   v
 }
 
