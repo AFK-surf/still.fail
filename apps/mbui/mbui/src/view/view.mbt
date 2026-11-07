@@ -602,6 +602,9 @@ pub struct Tree {
   order_holder : Array[Int]
   /// where in the order what each holds ends (the next not in it): a node left out passed over whole
   order_end : Array[Int]
+  /// by each node's index, where it is in the order as that was last worked out (-1: not in it): what holds what
+  /// read there (Tree::holds_drawn_in)
+  order_of : Array[Int]
   /// by each node's index, the node of the root's it is in as the order was last worked out (Tree::top_of's; -2: not
   /// known then): read while the order is not due again
   tops : Array[Int]
@@ -845,6 +848,7 @@ pub fn Tree::new(
     order: [],
     order_holder: [],
     order_end: [],
+    order_of: [],
     tops: [],
     walks: [],
     walking: 0,
@@ -1476,6 +1480,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.order.clear()
   self.order_holder.clear()
   self.order_end.clear()
+  self.order_of.clear()
   self.tops.clear()
   // (a walk going on keeps what it walks with till it ends; none kept for the next, its room given back with it)
   self.walks = []
@@ -6079,9 +6084,11 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.order.clear()
     self.order_holder.clear()
     self.order_end.clear()
+    self.order_of.clear()
     self.tops.clear()
     for _ in 0..<self.nodes.length() {
       self.tops.push(-2)
+      self.order_of.push(-1)
     }
     self.ordered(0, -1, -1)
     self.work.orders = self.work.orders + 1
@@ -6595,6 +6602,7 @@ fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
   self.order_holder.push(holder)
   self.order_end.push(-1)
   let me = self.order.length() - 1
+  self.order_of[at] = me
   // (the node of the root's it is in: itself where the root holds it, through its slots alone; Tree::top_of)
   let top = if at == 0 { -1 } else if top < 0 { at } else { top }
   self.tops[at] = top
@@ -6955,6 +6963,25 @@ pub fn Tree::holds(self : Tree, outer : NodeId, inner : NodeId) -> Bool {
     q = self.nodes[q].parent
   }
   false
+}
+
+///|
+/// Whether node `inner` is `outer` or held by it, as Tree::holds says, read off the order as it was last worked out
+/// (where each is in it, and where what it holds ends there) for two drawn in it, not gone up to through what holds
+/// `inner`: for what is asked of each drawn as the scene is gone through (ui's view_paint, each drawn asked of all
+/// still open round it).
+pub fn Tree::holds_in_order(self : Tree, outer : NodeId, inner : NodeId) -> Bool {
+  guard !self.order_due &&
+    self.alive_id(outer) &&
+    self.alive_id(inner) &&
+    outer.at < self.order_of.length() &&
+    inner.at < self.order_of.length() else {
+    return self.holds(outer, inner)
+  }
+  let o = self.order_of[outer.at]
+  let i = self.order_of[inner.at]
+  guard o >= 0 && i >= 0 else { return self.holds(outer, inner) }
+  i >= o && i < self.order_end[o]
 }
 
 ///|

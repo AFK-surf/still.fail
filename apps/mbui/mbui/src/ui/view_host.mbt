@@ -76,7 +76,7 @@ let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Do
 /// grown, shrunk or drawn off (Tree::each_drawn_laid less Tree::laid_origin: what places it beside another, its offset):
 /// where its words are set on the pixels, as the tree's own are (glyphs_carried_of).
 // kept across runs: put back as a run begins (view_forget)
-let old_placed_off : Map[@view.NodeId, (Double, Double)] = {}
+let old_placed_off : ByNode[(Double, Double)] = ByNode::new()
 
 ///|
 /// Whether the one old view is the whole window, wholly opaque: the old frame is its build, as with no tree.
@@ -87,6 +87,20 @@ let old_whole : Ref[Bool] = Ref(true)
 /// Each old view's box among the old frame's nodes, as the last build made it: painted in the tree's order.
 // kept across runs: put back as a run begins (view_forget)
 let old_boxes : Map[@view.NodeId, Int] = Map([])
+
+///|
+/// The same by each node's index (ByNode): looked up for each old node painted, no hash of its id; kept as old_boxes is.
+// kept across runs: put back as a run begins (view_forget)
+let old_box_of : ByNode[Int] = ByNode::new()
+
+///|
+/// No old view's box kept (old_boxes, old_box_of), the room by index kept.
+fn old_boxes_clear() -> Unit {
+  for id, _ in old_boxes {
+    old_box_of.remove(id)
+  }
+  old_boxes.clear()
+}
 
 ///|
 /// Where a press held went down: a node's, the old view's, or nothing's.
@@ -418,6 +432,7 @@ fn view_forget() -> Unit {
   old_bars.clear()
   nav_views.clear()
   old_boxes.clear()
+  old_box_of.clear()
   old_box_owners.clear()
   old_whole.val = true
   old_around.val = false
@@ -672,8 +687,11 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 /// Where each old view of `tree` is placed now (as it was last laid out), and whether the one is the whole window.
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
+  // (each placed before let go of by its index, the room kept: what was set is what was placed)
+  for p in old_placed {
+    old_placed_off.remove(p.0)
+  }
   old_placed.clear()
-  old_placed_off.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
   tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
@@ -743,7 +761,7 @@ fn old_frame(c : Ctx) -> Unit {
       Some(o) => {
         // (the old frame's own node holding it: laid out as this old view's, under its owner; no box of its own)
         old_box_owners.clear()
-        old_boxes.clear()
+        old_boxes_clear()
         old_box_owners[c.cur] = (o.owner, o.id)
         owned_by(o.owner, fn() { o.watch.read(fn() { (o.build)(c) }) })
       }
@@ -752,7 +770,7 @@ fn old_frame(c : Ctx) -> Unit {
     return
   }
   old_box_owners.clear()
-  old_boxes.clear()
+  old_boxes_clear()
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
@@ -837,6 +855,7 @@ fn old_frame(c : Ctx) -> Unit {
           }
         })
         old_boxes[o.id] = i
+        old_box_of[o.id] = i
         old_box_owners[i] = (o.owner, o.id)
       }
       None => ()
@@ -916,7 +935,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (what was open and holds not `next` (none: the end) closed, the innermost first: a clip popped, an edge drawn)
   let open = fn(id : @view.NodeId, next : @view.NodeId?) {
     match next {
-      Some(n) => tree.holds(id, n)
+      Some(n) => tree.holds_in_order(id, n)
       None => false
     }
   }
@@ -929,7 +948,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
       // (the inner of the two first: a node's own clip before its edge, as an old view pops its clip before its border)
       let clip_first = clip_out &&
-        (!ring_out || tree.holds(rings[rings.length() - 1].0, clipping[clipping.length() - 1]))
+        (!ring_out || tree.holds_in_order(rings[rings.length() - 1].0, clipping[clipping.length() - 1]))
       if clip_first {
         clipping.pop() |> ignore
         pop_clip()
@@ -957,7 +976,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   let raise_close = fn(next : @view.NodeId?) {
     match raising.val {
       Some((id, k0)) if (match next {
-          Some(n) => !tree.holds(id, n)
+          Some(n) => !tree.holds_in_order(id, n)
           None => true
         }) => {
         if self.ninst > k0 {
@@ -986,10 +1005,10 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
     close_to(Some(c.id))
     raise_close(Some(c.id))
-    while fading.length() > 0 && !tree.holds(fading[fading.length() - 1].0, c.id) {
+    while fading.length() > 0 && !tree.holds_in_order(fading[fading.length() - 1].0, c.id) {
       fading.pop() |> ignore
     }
-    while stretching.length() > 0 && !tree.holds(stretching[stretching.length() - 1].0, c.id) {
+    while stretching.length() > 0 && !tree.holds_in_order(stretching[stretching.length() - 1].0, c.id) {
       stretching.pop() |> ignore
     }
     // (the root, the window, is drawn by nothing of its own)
@@ -1096,7 +1115,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         // them)
         self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
       } else {
-        match old_boxes.get(c.id) {
+        match old_box_of.get(c.id) {
           // (in a node that clips: cut by it, as what else it holds is; else by the window)
           Some(i) =>
             if clipping.length() > 0 {
@@ -1219,7 +1238,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
     // as big, as an old view's field is painted; not in its block, kept as it was made)
-    match tree_fields.get(c.id) {
+    match (if tree_fields.is_empty() { None } else { tree_fields.get(c.id) }) {
       Some(tf) if c.bones == 0L => self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
       _ => ()
     }
@@ -2630,7 +2649,7 @@ fn island_scale(id : @view.NodeId) -> Double {
 fn Ctx::glyphs_carried_of(self : Ctx, i : Int) -> (Double, Double) {
   match self.nodes[i].island {
     Some(id) =>
-      match old_boxes.get(id) {
+      match old_box_of.get(id) {
         Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => {
           let (sx, sy) = old_placed_off.get(id).unwrap_or((0.0, 0.0))
           (self.nodes[b].moved_x - sx, self.nodes[b].moved_y - sy)
