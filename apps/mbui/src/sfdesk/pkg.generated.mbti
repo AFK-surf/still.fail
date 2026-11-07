@@ -30,6 +30,8 @@ pub let bar_update_in : Double
 
 pub let bar_update_inset : Double
 
+pub fn attention_any(@sfbase.Source, @sfbase.Workspace) -> Bool
+
 pub fn bell_lit(@sfbase.Source, @sfbase.Workspace) -> Bool
 
 pub fn bring_page() -> Unit
@@ -187,6 +189,8 @@ pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 pub fn on_cards() -> Bool
 
 pub fn open_attention() -> Unit
+
+pub fn open_attention_panel(@sfbase.Source, @sfbase.Workspace, @sf.Anchor) -> Unit
 
 pub fn open_entry(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, @sfbase.DvEntry, Array[@sfbase.DvEntry], (@sfbase.DriveAt) -> Unit) -> Unit
 

@@ -1,7 +1,8 @@
 // What wants the viewer and they have not looked at yet, beside the rail's bell or under 待处理 (still.fail
 // web/src/Attention.tsx, Attention.css.ts): the stations' trouble and the services left up long (with the bell), then
 // each workspace's chats that came to want the viewer and were not read since (the core's `workspaceMarks` items),
-// each leading to its chat: a card until read (then its row still says it), a failure until the chat runs again;
+// each leading to its chat: a card until read (then its row still says it), a failure until the chat runs again,
+// an unread chat the app's number counts until read (全部已读 reads them at once, leaving cards and failures);
 // one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it fails again). A
 // station's trouble is the same: listed until the panel has shown it, then the Station's place
 // says it, until the trouble changes (kept on this device).
@@ -86,7 +87,10 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       along=Start,
       offset=if railed { attention_off_rail } else { attention_off_side },
       look=@sf.beside_look(Px(attention_w), inner=att_list),
-      fn() { attention_rows(c, src, w, railed, close) },
+      fn() {
+        attention_rows(c, src, w, railed, close)
+        attention_foot(c, src, w, close)
+      },
     )
     |> ignore
   })
@@ -173,8 +177,54 @@ fn attention_key(i : Json) -> String {
     return text(v, "failure")
   }
   let session = text(v, "session")
-  text(v, "station") + "/" + (if session != "" { session } else { number(v, "thread").to_int64().to_string() })
+  let chat = text(v, "station") + "/" + (if session != "" { session } else { number(v, "thread").to_int64().to_string() })
+  // (read here: what is said in it after is listed anew)
+  if text(v, "kind") == "done" {
+    chat + "@" + number(v, "seq").to_int64().to_string()
+  } else {
+    chat
+  }
 }
+
+///|
+/// Whether 待处理 lists any chat (what a bell with no services or stations of its own, the phone's, lights by).
+pub fn attention_any(src : Source, w : Workspace) -> Bool {
+  attention_groups(src, w, true).length() > 0
+}
+
+///|
+/// The unread 待处理 lists, read up to their last message: gone at once, back if that could not be done.
+fn attention_read_all(src : Source, list : Array[Json]) -> Unit {
+  for i in list {
+    let v = Some(i)
+    let key = attention_key(i)
+    attention.gone.push(key)
+    act(
+      src,
+      @sf.t("web-main.attention.readAll"),
+      "",
+      "chat.read",
+      { "station": Json::string(text(v, "station")), "thread": Json::number(number(v, "thread")), "seq": field(v, "seq").unwrap() },
+      failed=fn() { attention.gone.retain(fn(k) { k != key }) },
+    )
+  }
+}
+
+///|
+/// 待处理 as a panel of its own, where there is no bell to open it beside (a phone's Home).
+pub fn open_attention_panel(src : Source, w : Workspace, from : @sf.Anchor) -> Unit {
+  @sf.panel(
+    @sf.t("web-main.attention.entry"),
+    fn(c, close) { c.box(style=att_sheet, fn() { attention_rows(c, src, w, false, close) }) |> ignore },
+    from~,
+    foot=fn(c, close) { c.box(style=att_sheet, fn() { attention_foot(c, src, w, close) }) |> ignore },
+  )
+}
+
+///|
+/// In a box of its own, what it holds stays within the sheet's sides, under its title.
+// kept across runs: a value (no field of it changes)
+let att_sheet : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Each workspace's chats in 待处理 (the core's marks' items), the one in view's first, those let go here left out
@@ -307,8 +357,20 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
       }
     })
   }
-  // 通知设置: small words, quiet (link)
+}
+
+///|
+/// 待处理's foot: 全部已读 while it lists unread, 通知设置, small words, quiet (link).
+fn attention_foot(c : @ui.Ctx, src : Source, w : Workspace, close : () -> Unit) -> Unit {
+  let unread = attention_groups(src, w, true)
+    .iter()
+    .flat_map(fn(g) { g.2.iter() })
+    .filter(fn(i) { text(Some(i), "kind") == "done" && number(Some(i), "thread") > 0.0 && field(Some(i), "seq") is Some(Number(_, ..)) })
+    .collect()
   c.box(style=att_foot, fn() {
+    if unread.length() > 0 && attention_link(c, "attention/read-all", @sf.t("web-main.attention.readAll")) {
+      attention_read_all(src, unread)
+    }
     if attention_link(c, "attention/settings", @sf.t("web-main.attention.settings")) {
       close()
       open_settings_at(@settings.Route::Notifications)
@@ -318,7 +380,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
 }
 
 ///|
-/// A row of 待处理's panel: its dot (amber waiting on the viewer, red gone wrong), its title
+/// A row of 待处理's panel: its dot (amber waiting on the viewer, red gone wrong, blue unread), its title
 /// (500) and its line; 忽略 at its end while pointed at, when it can be let go (`note` its tip). Pressed, `go`.
 fn attention_item(
   c : @ui.Ctx,
@@ -339,9 +401,13 @@ fn attention_item(
   let alert = kind == "alert"
   let b = c.box(style=if hover { att_item_on } else { att_item }, id~, fn() {
     // (its kind in words: role="img")
-    let ink = if alert { @sf.theme().p.red } else { @sf.theme().p.warn_ink }
-    let dot = c.box(style=att_dot.then(@ui.style(bg=Data(ink))), fn() {  })
-    c.semantics(dot, Image, label=@sf.t(if alert { "web-main.attention.alertOne" } else { "web-main.attention.waitOne" }))
+    let (ground, said) : (@ui.Color, String) = match kind {
+      "alert" => (Data(@sf.theme().p.red), "web-main.attention.alertOne")
+      "done" => (@sf.mark_blue, "web-main.chatMark.done")
+      _ => (Data(@sf.theme().p.warn_ink), "web-main.attention.waitOne")
+    }
+    let dot = c.box(style=att_dot.then(@ui.style(bg=ground)), fn() {  })
+    c.semantics(dot, Image, label=@sf.t(said))
     c.box(style=att_text, fn() {
       c.text(title, style=att_title) |> ignore
       if line != "" {

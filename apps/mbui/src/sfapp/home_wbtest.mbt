@@ -1107,3 +1107,25 @@ fn held_drag(t : @ui.Tester, x : Double, y0 : Double, y1 : Double) -> Unit {
   t.touch(2, x, y1)
   t.draw()
 }
+
+///|
+test "a phone's Home: the bell opens 待处理, 全部已读 reads the unread and leaves the rest" {
+  let t = tester("home-attention")
+  t.frame()
+  let (x, y, w, h) = named_at(t, "待处理").unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  t.frame()
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_true(t.find("夜里的备份") is Some(_))
+  assert_true(t.find("周报草稿") is Some(_))
+  assert_true(t.find("全部已读") is Some(_))
+  let (x, y, w, h) = t.rect_of("全部已读").unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  t.frame()
+  assert_true(t.find("周报草稿") is None)
+  assert_true(t.find("全部已读") is None)
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_true(t.find("夜里的备份") is Some(_))
+}
