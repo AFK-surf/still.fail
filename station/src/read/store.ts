@@ -936,12 +936,15 @@ export function keptChats(s: Store, viewer: string | null, threads: number[] | n
 /// The thread's card still pending, if any: its latest post with a card, as long as no person has written in the
 /// thread since (nor was it closed). The post as merged, and its card.
 export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null {
-  if (!cardPostsReady(s.db, thread)) {
-    if (threadsWithCards(s, [thread]).length === 0) return null;
-    throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify([thread]));
-  }
-  const asked = one(s, CARD_POST_LATEST, thread);
-  return asked === undefined ? null : cardAt(s, thread, asked.n);
+  s.db.exec("SAVEPOINT pending_card_read");
+  try {
+    if (!cardPostsReady(s.db, thread)) {
+      if (threadsWithCards(s, [thread]).length === 0) return null;
+      throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify([thread]));
+    }
+    const asked = one(s, CARD_POST_LATEST, thread);
+    return asked === undefined ? null : cardAt(s, thread, asked.n);
+  } finally { s.db.exec("RELEASE pending_card_read"); }
 }
 
 /// The pending post's number for chat history. Its merged text is not needed to mark a card as pending.
@@ -999,15 +1002,22 @@ export function threadsWithCards(s: Store, threads: number[]): number[] {
 /// The card a thread waits on as kept (`n`, pendingCards), as `pendingCard` gives it; null where it no longer waits
 /// (closed, or a person wrote since).
 export function cardAt(s: Store, thread: number, n: number): [MessageRow, Json] | null {
-  const asked = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
-  if (!asked) return null;
-  const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
-  const closed = one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
-  if (answered || closed) return null;
-  const card = cardOf(asked.card, asked.options);
-  if (card === undefined) return null;
-  const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-  return m ? [toMessage(m), card] : null;
+  s.db.exec("SAVEPOINT card_at_read");
+  try {
+    const asked = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
+    if (!asked) return null;
+    const answered = one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
+    const closed = one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
+    if (answered || closed) return null;
+    const card = cardOf(asked.card, asked.options);
+    if (card === undefined) return null;
+    if (!legacyMergedReadReady(s.db)) {
+      const message = mergedWithBoundedEdit(s, thread, String(n));
+      return message ? [message, card] : null;
+    }
+    const m = one(s, "SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
+    return m ? [toMessage(m), card] : null;
+  } finally { s.db.exec("RELEASE card_at_read"); }
 }
 
 /// An agent's latest message in a chat during a turn (`?2` to `?3`, ms), by the index of agents' messages by time (store/

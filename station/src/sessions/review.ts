@@ -104,7 +104,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
       }
       const older = messages.length - kept.length;
       kept.reverse();
-      const pending = hub.store.pendingCard(id);
+      const pending = hub.reviewPendingCard ? await hub.reviewPendingCard(id) : hub.store.pendingCard(id);
       conversations.push({ thread: id, messages: kept, olderMessagesLeftOut: older > 0 || omitted, pendingCard: pending ? { ts: pending[0].ts, text: pending[0].text } : null });
       versions.push([id, version]);
     }
