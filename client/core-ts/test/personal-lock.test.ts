@@ -101,6 +101,10 @@ test("a grant holds only for what was signed, by a key on the lock, in its time,
     assert.equal(holds(grantOf(signed), STATION, SUB, 2_000_000_001), null, "past its time");
     const s = signed as { body: { exp: number } };
     assert.equal(holds(grantOf({ ...s, body: { ...s.body, exp: 2_100_000_000 } })), null, "its end moved");
+    const t = signed as { sig: { key: string; sig: string } };
+    const flipped = (t.sig.sig[0] === "0" ? "1" : "0") + t.sig.sig.slice(1);
+    assert.equal(holds(grantOf({ ...t, sig: { ...t.sig, sig: flipped } })), null, "its signature changed, the right one checked before");
+    assert.equal(holds(grantOf(signed)), 2_000_000_000, "and the right one still holds");
   } finally {
     a.runner.shutdown();
     b.runner.shutdown();

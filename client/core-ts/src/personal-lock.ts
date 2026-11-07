@@ -30,12 +30,24 @@ const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
 const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16)) : new Uint8Array());
 const asKey = (id: string) => (id.startsWith("ed25519:") ? unhex(id.slice(8)) : new Uint8Array());
 
+/// What each signature checked came to, by key, signature and what it signs: the same chain and grants are asked of
+/// at every grant a station tells of and each view of the lock, and one check in Hermes takes milliseconds.
+const verified = new Map<string, boolean>();
+const VERIFIED_MAX = 4096;
+
 const verifies = (id: string, sig: string, bytes: Uint8Array) => {
+  const k = `${id}|${sig}|${hex(bytes)}`;
+  const was = verified.get(k);
+  if (was !== undefined) return was;
+  let ok: boolean;
   try {
-    return ed25519.verify(unhex(sig), bytes, asKey(id));
+    ok = ed25519.verify(unhex(sig), bytes, asKey(id));
   } catch {
-    return false;
+    ok = false;
   }
+  if (verified.size >= VERIFIED_MAX) verified.clear();
+  verified.set(k, ok);
+  return ok;
 };
 
 export type Device = { key: string; id: string; label: string };
@@ -52,9 +64,15 @@ const crypto = {
 /// not hold.
 export function checkChain(entries: readonly Entry[], sub: string): Chain | null {
   if (entries.length === 0) return { devices: new Map(), hash: null };
+  // (a chain kept is replaced whole, never changed in place: what it said once it says until then)
+  const was = folded.get(entries);
+  if (was !== undefined && was.sub === sub) return was.chain;
   const out = rules.person_fold_js(entries, sub, crypto) as J;
-  return "error" in out ? null : { devices: new Map((out.devices as Device[]).map((d) => [d.key, d])), hash: out.head };
+  const chain = "error" in out ? null : { devices: new Map((out.devices as Device[]).map((d) => [d.key, d])), hash: out.head };
+  folded.set(entries, { sub, chain });
+  return chain;
 }
+const folded = new WeakMap<readonly Entry[], { sub: string; chain: Chain | null }>();
 
 /// What a person's device signs for a chat's grant of their phone.
 export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "chat"; exp: number };
