@@ -17,7 +17,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { devicesFor, memberWithEmail, membersWithEmail, type LockState } from "../cloud/lock.ts";
 import type { To } from "../api/events.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
-import { wall } from "../ops/fibers.ts";
+import { Fibers, wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
@@ -229,6 +229,15 @@ export class Secrets {
   readonly #heldLostScopes = new Map<string, Set<string>>();
   readonly #preparingPending = new Map<string, Promise<void>>();
   #previousExited = false;
+  /// Grants whose startup cleanup raced repeatedly with another writer, retried after handover.
+  readonly #restorePending = new Map<string, { ws: string; id: string }>();
+  #restoreWaiting = false;
+  #restoreClosed = false;
+  #restoreFibers: Fibers | null = null;
+  #restoreRemove: ReturnType<DatabaseSync["prepare"]> | undefined;
+  #restoreRemoveItem: ReturnType<DatabaseSync["prepare"]> | undefined;
+  #restoreRead: ReturnType<DatabaseSync["prepare"]> | undefined;
+  #restoreConfirm: ReturnType<DatabaseSync["prepare"]> | undefined;
   /// Carried saves to reconcile after the old process can no longer write their requests.
   readonly #carriedSaves = new Set<string>();
   #carriedSavesWaiting = false;
@@ -247,6 +256,27 @@ export class Secrets {
       const row = d.hub.store.getSession(session);
       return row === null || row.archivedAt != null;
     };
+    // Other connections can use, renew, or remove the same plain grant. A use or renewal must never recreate an
+    // already removed record, and concurrent uses of a reusable grant must not overwrite each other's counts.
+    const updateRepeated = (h: Held, until?: number): { uses: number; until?: number } | false | null => {
+      if (h.request.vault !== PLAIN) return null;
+      const { secret: _, ...grant } = h.grant;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const row = d.db.prepare("SELECT body FROM vault_grants WHERE ws = ? AND id = ?").get(h.request.ws, h.request.id) as { body: string } | undefined;
+        if (row === undefined) return false;
+        const stored = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
+        if (!Number.isSafeInteger(stored.uses) || stored.uses < 0 || (stored.until ?? stored.grant.exp) <= Math.floor(d.now() / 1000)
+          || JSON.stringify(stored.request) !== JSON.stringify(h.request) || JSON.stringify(stored.grant) !== JSON.stringify(grant)) return false;
+        const nextUntil = until === undefined ? stored.until : Math.max(stored.until ?? stored.grant.exp, until);
+        const uses = stored.uses + (until === undefined ? 1 : 0);
+        const body = JSON.stringify({ ...stored, uses, ...(nextUntil === undefined ? {} : { until: nextUntil }) });
+        if (Number(d.db.prepare("UPDATE vault_grants SET body = ? WHERE ws = ? AND id = ? AND body = ?")
+          .run(body, h.request.ws, h.request.id, row.body).changes) !== 0) {
+          return { uses, ...(nextUntil === undefined ? {} : { until: nextUntil }) };
+        }
+      }
+      return false;
+    };
     this.keeper = new Keeper(() => Math.floor(d.now() / 1000), {
       ended,
       kept: {
@@ -256,6 +286,17 @@ export class Secrets {
           const { secret: _, ...grant } = h.grant;
           d.db.prepare("INSERT INTO vault_grants (ws, id, session, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET body = excluded.body")
             .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses, ...(h.until === undefined ? {} : { until: h.until }) }));
+        },
+        current: (h) => {
+          if (h.request.vault !== PLAIN) return null;
+          const row = d.db.prepare("SELECT body FROM vault_grants WHERE ws = ? AND id = ?").get(h.request.ws, h.request.id) as { body: string } | undefined;
+          if (row === undefined) return false;
+          const stored = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
+          const { secret: _, ...grant } = h.grant;
+          if (!Number.isSafeInteger(stored.uses) || stored.uses < 0
+            || (stored.until !== undefined && !Number.isSafeInteger(stored.until))
+            || JSON.stringify(stored.request) !== JSON.stringify(h.request) || JSON.stringify(stored.grant) !== JSON.stringify(grant)) return false;
+          return { uses: stored.uses, ...(stored.until === undefined ? {} : { until: stored.until }) };
         },
         // Claim a persisted one-use grant with one conditional write: the previous station may still be running.
         spendOnce: (h) => {
@@ -269,6 +310,31 @@ export class Secrets {
           const body = JSON.stringify({ ...stored, uses: 1 });
           return d.db.prepare("UPDATE vault_grants SET body = ? WHERE ws = ? AND id = ? AND body = ?")
             .run(body, h.request.ws, h.request.id, row.body).changes !== 0;
+        },
+        spendAgain: (h) => {
+          const result = updateRepeated(h);
+          if (result === false || result === null) return result;
+          h.uses = result.uses - 1;
+          if (result.until === undefined) delete h.until;
+          else h.until = result.until;
+          return true;
+        },
+        renew: (h, until) => {
+          const result = updateRepeated(h, until);
+          if (result === false || result === null) return result;
+          h.uses = result.uses;
+          return result.until!;
+        },
+        expire: (h, now) => {
+          if (h.request.vault !== PLAIN) return null;
+          const row = d.db.prepare("SELECT body FROM vault_grants WHERE ws = ? AND id = ?").get(h.request.ws, h.request.id) as { body: string } | undefined;
+          if (row === undefined) return false;
+          const stored = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; until?: number };
+          const { secret: _, ...grant } = h.grant;
+          if (JSON.stringify(stored.request) !== JSON.stringify(h.request) || JSON.stringify(stored.grant) !== JSON.stringify(grant)
+            || (stored.until ?? stored.grant.exp) > now) return false;
+          return Number(d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ? AND body = ?")
+            .run(h.request.ws, h.request.id, row.body).changes) !== 0;
         },
         forget: (h) => {
           if (h.request.vault === PLAIN) d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(h.request.ws, h.request.id);
@@ -289,19 +355,109 @@ export class Secrets {
   /// The plain library's grants written down before a restart, held again: those not run out, whose chat goes on and
   /// whose item is still given as granted, its value read again from the store.
   #restore(ended: (session: string) => boolean) {
-    const now = Math.floor(this.#d.now() / 1000);
     const rows = this.#d.db.prepare("SELECT ws, id, body FROM vault_grants").all() as { ws: string; id: string; body: string }[];
-    for (const row of rows) {
-      const { request, grant, uses, until } = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
-      const item = this.#d.plain.item(row.ws, request.item);
-      const l = item?.listing;
-      const secret = item ? { kind: item.kind, name: item.name, fields: item.fields } : null;
-      const still = (until ?? grant.exp) > now && !ended(request.session) && this.#d.lock(row.ws) === null && l !== undefined && !item!.deleted && l.modes.includes(grant.mode)
-        && allows(l.lasts ?? this.#d.plain.lasts(row.ws, item!.owner)?.lasts, grant.scope)
-        && grant.hosts.every((h) => l.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, l.hosts))) && secret !== null && valueOf(secret) !== null;
-      if (still) this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses, ...(until === undefined ? {} : { until }) });
-      else this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(row.ws, row.id);
+    for (const original of rows) {
+      if (!this.#restoreRow(original, ended)) this.#restorePending.set(JSON.stringify([original.ws, original.id]), { ws: original.ws, id: original.id });
     }
+    this.#resumeRestore(ended);
+  }
+
+  #restoreRow(original: { ws: string; id: string; body: string }, ended: (session: string) => boolean): boolean {
+    let row: typeof original | undefined = original;
+    // A previous station can renew or use a grant while this station is starting. Do not delete its newer version.
+    for (let attempt = 0; row !== undefined && attempt < 3; attempt++) {
+      const now = Math.floor(this.#d.now() / 1000);
+      const { request, grant, uses, until } = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
+      let checked: { body: string | null; owner: string; limit: { lasts: Scope; at: number } | null | undefined } | undefined;
+      if ((until ?? grant.exp) > now && !ended(request.session) && this.#d.lock(row.ws) === null) {
+        const snapshot = this.#d.plain.itemSnapshot(row.ws, request.item);
+        const item = snapshot?.value ?? null;
+        const l = item?.listing;
+        const secret = item ? { kind: item.kind, name: item.name, fields: item.fields } : null;
+        const limit = item && l?.lasts === undefined ? this.#d.plain.lasts(row.ws, item.owner) : undefined;
+        checked = { body: snapshot?.body ?? null, owner: item?.owner ?? "", limit };
+        const still = l !== undefined && !item!.deleted && l.modes.includes(grant.mode)
+          && allows(l.lasts ?? limit?.lasts, grant.scope)
+          && grant.hosts.every((h) => l.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, l.hosts))) && secret !== null && valueOf(secret) !== null;
+        if (still) {
+          // The initial list and the item's read may have raced with a deletion, renewal, or item change.
+          // Check all three rows in one SQLite snapshot before accepting the saved grant.
+          this.#restoreConfirm ??= this.#d.db.prepare(`SELECT g.body, p.body AS item_body, l.lasts, l.at
+            FROM vault_grants g LEFT JOIN vault_plain p ON p.ws = g.ws AND p.id = ?
+            LEFT JOIN vault_plain_lasts l ON l.ws = g.ws AND l.owner = ?
+            WHERE g.ws = ? AND g.id = ?`);
+          const current = this.#restoreConfirm.get(request.item, checked.owner, row.ws, row.id) as
+            { body: string; item_body: string | null; lasts: Scope | null; at: number | null } | undefined;
+          if (current === undefined) return true;
+          if (current.body !== row.body || current.item_body !== checked.body
+            || (limit !== undefined && (current.lasts !== (limit?.lasts ?? null) || current.at !== (limit?.at ?? null)))
+            || (until ?? grant.exp) <= Math.floor(this.#d.now() / 1000) || ended(request.session) || this.#d.lock(row.ws) !== null) {
+            row = { ...row, body: current.body };
+            continue;
+          }
+          this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses, ...(until === undefined ? {} : { until }) });
+          return true;
+        }
+      }
+      let removed: number | bigint;
+      if (checked === undefined) {
+        this.#restoreRemove ??= this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ? AND body = ?");
+        removed = this.#restoreRemove.run(row.ws, row.id, row.body).changes;
+      } else {
+        this.#restoreRemoveItem ??= this.#d.db.prepare(`DELETE FROM vault_grants WHERE ws = ? AND id = ? AND body = ?
+          AND (SELECT body FROM vault_plain WHERE ws = ? AND id = ?) IS ?
+          AND (? = 0 OR ((SELECT lasts FROM vault_plain_lasts WHERE ws = ? AND owner = ?) IS ?
+            AND (SELECT at FROM vault_plain_lasts WHERE ws = ? AND owner = ?) IS ?))`);
+        removed = this.#restoreRemoveItem.run(row.ws, row.id, row.body, row.ws, request.item, checked.body,
+          checked.limit === undefined ? 0 : 1, row.ws, checked.owner, checked.limit?.lasts ?? null, row.ws, checked.owner, checked.limit?.at ?? null).changes;
+      }
+      if (Number(removed) !== 0) return true;
+      this.#restoreRead ??= this.#d.db.prepare("SELECT ws, id, body FROM vault_grants WHERE ws = ? AND id = ?");
+      row = this.#restoreRead.get(row.ws, row.id) as typeof original | undefined;
+    }
+    return row === undefined;
+  }
+
+  #resumeRestore(ended: (session: string) => boolean) {
+    if (this.#restoreClosed || this.#restoreWaiting || this.#restorePending.size === 0) return;
+    this.#restoreWaiting = true;
+    void (this.#d.backfill?.previousGone ?? Promise.resolve()).then(() => {
+      this.#restoreWaiting = false;
+      if (!this.#restoreClosed) this.#retryRestore(ended);
+    }, (error) => {
+      this.#restoreWaiting = false;
+      log.warn("vault", "the previous station did not finish for grant recovery", { error: (error as Error).message });
+    });
+  }
+
+  #retryRestore(ended: (session: string) => boolean) {
+    if (this.#restoreClosed) return;
+    const first = this.#restorePending.entries().next().value;
+    if (first === undefined) return;
+    const [key, target] = first;
+    this.#restorePending.delete(key);
+    let delayed = false;
+    try {
+      if (!this.keeper.hasGrant(target.id)) {
+        this.#restoreRead ??= this.#d.db.prepare("SELECT ws, id, body FROM vault_grants WHERE ws = ? AND id = ?");
+        const row = this.#restoreRead.get(target.ws, target.id) as { ws: string; id: string; body: string } | undefined;
+        if (row !== undefined && !this.#restoreRow(row, ended)) delayed = true;
+      }
+    } catch (error) {
+      delayed = true;
+      log.warn("vault", "a grant could not be recovered after handover", { error: (error as Error).message });
+    }
+    if (delayed) this.#restorePending.set(key, target);
+    if (this.#restorePending.size > 0) {
+      this.#restoreFibers ??= new Fibers("vault grant recovery");
+      this.#restoreFibers.after(delayed ? 250 : 0, () => this.#retryRestore(ended));
+    }
+  }
+
+  async close(): Promise<void> {
+    this.#restoreClosed = true;
+    this.#restorePending.clear();
+    await Promise.all([this.#uses.close(), this.#restoreFibers?.close()]);
   }
 
   #scopeSave(id: string, ws: string, owner: string) {
