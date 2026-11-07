@@ -87,7 +87,7 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 /// An update in a bar as a node (update_key's, the settings' sidebar's band): `side` across, round, the pointer's ground
 /// on it while it can be pressed; its mark `mark` across: offered (`offered()`), a download mark; ready, the update's
 /// arrow up in a ring; being put in place
-/// (`busy()`), that arrow going up (updating_node); while it comes (`coming()`: Some of a known part or of None for an
+/// (`busy()`), that arrow going up (updating_mark_node); while it comes (`coming()`: Some of a known part or of None for an
 /// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
 /// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
 /// says one (in `tips`); pressed while not busy, `press`.
@@ -139,7 +139,7 @@ pub fn update_key_node(
           ready.over(Is(true)).alpha(By(fn() { 1.0 - progress.shown(ready) })) |> ignore
           ready.pick(busy, fn(r, b) {
             if b {
-              updating_node(r, mark, fn() { theme().p.text })
+              updating_mark_node(r, mark, fn() { theme().p.text })
             } else {
               r.pick(offered, fn(o, on) {
                 icon_node(o, if on { "download" } else { "update" }, mark, By(fn() { theme().p.text })) |> ignore
@@ -205,67 +205,6 @@ fn coming_node(parent : @view.View, coming : () -> Double?, size : Double, color
     b.box(fn(i) {
       i.over(Is(true)) |> ignore
       icon_node(i, "download-ring", size, By(color)) |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// An update being put in place as a node (updating_mark's): in a ring an arrow up standing a while, then off up through
-/// its top as the next comes up from its bottom, eased in and out, once every updating_rise_ms, seen in a round window
-/// inside the ring; `size` across, in `color()`, moved by the clock as each frame is drawn.
-fn updating_node(parent : @view.View, size : Double, color : () -> Int64) -> Unit {
-  let pi = 3.141592653589793
-  let k = size / 24.0
-  let stroke = 1.75 * k
-  let mid = size / 2.0
-  let window = 13.0 * k
-  let wmid = window / 2.0
-  let length = 8.0 * k
-  let pitch = window + length
-  let arrow = fn(top : Double, ink : Int64) -> Array[@ui.Line] {
-    [
-      @ui.line([(wmid, top), (wmid, top + length)], width=stroke, color=ink),
-      @ui.line([(wmid - 3.0 * k, top + 3.0 * k), (wmid, top), (wmid + 3.0 * k, top + 3.0 * k)], width=stroke, color=ink),
-    ]
-  }
-  let top = wmid - length / 2.0
-  parent.box(fn(b) {
-    b
-    .width(Is(Some(size)))
-    .height(Is(Some(size)))
-    .lines(By(fn() { [@ui.line(@ui.arc(mid, mid, 8.5 * k, from=0.0, sweep=2.0 * pi), width=stroke, color=color())] }))
-    |> ignore
-    b.box(fn(w) {
-      w
-      .over(Is(true))
-      .width(Is(Some(window)))
-      .height(Is(Some(window)))
-      .offset(Is((mid - wmid, mid - wmid)))
-      .radius(Is(window / 2.0))
-      .clips(Is(true))
-      |> ignore
-      w.box(fn(a) {
-        a
-        .width(Is(Some(window)))
-        .height(Is(Some(window + pitch)))
-        .lines(By(fn() {
-          let ink = color()
-          let lines = arrow(top, ink)
-          lines.push_iter(arrow(top + pitch, ink).iter())
-          lines
-        }))
-        .offset(By(fn() {
-          let f = a.cycle(updating_rise_ms)
-          let g = if f <= updating_stand { 0.0 } else { (f - updating_stand) / (1.0 - updating_stand) }
-          let h = 2.0 - 2.0 * g
-          let eased = if g < 0.5 { 4.0 * g * g * g } else { 1.0 - h * h * h / 2.0 }
-          (0.0, -eased * pitch)
-        }))
-        |> ignore
-      })
-      |> ignore
     })
     |> ignore
   })
