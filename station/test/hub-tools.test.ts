@@ -1237,6 +1237,92 @@ test("an agent can open more than eight unfinished chats without duplicating a k
   await r.close();
 });
 
+test("opening a chat again checks its author through the reader", async () => {
+  const r = new Rig({ link: true });
+  const original = r.store.messagesBefore.bind(r.store);
+  try {
+    const a = say("<@UBOT> open it");
+    await r.accept(a);
+    await settle();
+    const parent = sessionKey("cl", "C1", a.threadTs);
+    await r.call(parent, "chat_create", { key: "once", text: "first" });
+    const child = r.store.openedBy(parent)[0]!.child;
+    const thread = r.store.homeChat(child)!;
+    const reads: unknown[] = [];
+    r.hub.openedChatSaid = async (...args) => { reads.push(args); return true; };
+    r.store.messagesBefore = () => { throw new Error("station message lookup used"); };
+    assert.match(await r.call(parent, "chat_create", { key: "once", text: "first" }), /already opened/);
+    assert.deepEqual(reads, [[thread.id, parent, true]]);
+    r.store.messagesBefore = original;
+    assert.equal(r.said(thread.id).length, 1);
+  } finally { r.store.messagesBefore = original; await r.close(); }
+});
+
+test("concurrent opens with the same key send the first message once while the reader waits", async () => {
+  const r = new Rig({ link: true });
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    const a = say("<@UBOT> open it");
+    await r.accept(a);
+    await settle();
+    const parent = sessionKey("cl", "C1", a.threadTs);
+    let reads = 0;
+    r.hub.openedChatSaid = async (thread, author, agentOnly) => {
+      const found = r.store.messagesBefore(thread, null, 200).some((m) => m.author === author && (!agentOnly || m.authorKind === "agent"));
+      if (++reads === 1) { entered.resolve(); await release.promise; }
+      return found;
+    };
+    const first = r.call(parent, "chat_create", { key: "once", text: "first" });
+    void first.catch(() => {});
+    await entered.promise;
+    const second = r.call(parent, "chat_create", { key: "once", text: "first" });
+    void second.catch(() => {});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    release.resolve();
+    await Promise.all([first, second]);
+    const opened = r.store.openedBy(parent);
+    assert.equal(opened.length, 1);
+    assert.equal(r.said(r.store.homeChat(opened[0]!.child)!.id).length, 1);
+  } finally { release.resolve(); await r.close(); }
+});
+
+test("a failed first-message check leaves the same chat key available for retry", async () => {
+  const r = new Rig({ link: true });
+  try {
+    const a = say("<@UBOT> open it");
+    await r.accept(a);
+    await settle();
+    const parent = sessionKey("cl", "C1", a.threadTs);
+    let reads = 0;
+    r.hub.openedChatSaid = async () => {
+      if (++reads === 1) throw new Error("reader stopped");
+      return false;
+    };
+    await assert.rejects(r.call(parent, "chat_create", { key: "once", text: "first" }), /reader stopped/);
+    assert.match(await r.call(parent, "chat_create", { key: "once", text: "first" }), /already opened/);
+    const opened = r.store.openedBy(parent);
+    assert.equal(opened.length, 1);
+    assert.equal(r.said(r.store.homeChat(opened[0]!.child)!.id).length, 1);
+  } finally { await r.close(); }
+});
+
+test("a peer retry checks its author through the reader", async () => {
+  const r = new Rig({ link: true });
+  const original = r.store.messagesBefore.bind(r.store);
+  try {
+    const request = { session: "parent", key: "once", runtime: "claude" };
+    const made = await createForPeer(r.hub, "near", request);
+    const thread = r.store.homeChat(made.session)!;
+    const reads: unknown[] = [];
+    r.hub.openedChatSaid = async (...args) => { reads.push(args); return true; };
+    r.store.messagesBefore = () => { throw new Error("station message lookup used"); };
+    const again = await createForPeer(r.hub, "near", request);
+    assert.equal(again.session, made.session);
+    assert.equal(again.said, true);
+    assert.deepEqual(reads, [[thread.id, "near/parent", false]]);
+  } finally { r.store.messagesBefore = original; await r.close(); }
+});
+
 test("an agent opens a chat on another station: made there once per key, its first message and files sent once, its turns told back", async () => {
   // "near" opens a chat on "far" (named orchard); each answers the other as the transport would.
   const near = new Rig({ link: true });

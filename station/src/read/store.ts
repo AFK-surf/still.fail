@@ -739,6 +739,19 @@ function boundedMessagePageKeys(s: Store, thread: number, before: number | bigin
   return keys.slice(0, limit);
 }
 
+// While the old ordinary-message lookup is being built or reconciled, a short source tail can still prove the page.
+function unpreparedMessagePageKeys(s: Store, thread: number, before: number | bigint, limit: number,
+  old: { preparing: boolean; needsDrain: boolean }): string[] {
+  const pending = () => { throw old.preparing ? new LegacySaidUnavailable() : new SaidUnavailable([thread]); };
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > Number.MAX_SAFE_INTEGER - 64) return pending();
+  if (limit === 0) return [];
+  const cap = limit + 64;
+  const tail = all(s, LEGACY_SAID_PAGE_TAIL, thread, before, cap);
+  const keys = tail.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
+  if (keys.length < limit && tail.length === cap) return pending();
+  return keys;
+}
+
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
 export function messagesBefore(s: Store, thread: number, n: number | bigint | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
@@ -746,13 +759,7 @@ export function messagesBefore(s: Store, thread: number, n: number | bigint | nu
   try {
     const old = s.legacySaid ? legacySaidPageState(s.db, thread) : null;
     if (old && (old.preparing || old.needsDrain)) {
-      const pending = () => { throw old.preparing ? new LegacySaidUnavailable() : new SaidUnavailable([thread]); };
-      if (!Number.isSafeInteger(limit) || limit < 0 || limit > Number.MAX_SAFE_INTEGER - 64) return pending();
-      if (limit === 0) return [];
-      const cap = limit + 64;
-      const tail = all(s, LEGACY_SAID_PAGE_TAIL, thread, before, cap);
-      const keys = tail.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
-      if (keys.length < limit && tail.length === cap) return pending();
+      const keys = unpreparedMessagePageKeys(s, thread, before, limit, old);
       if (keys.length === 0) return [];
       if (legacyMergedReadReady(s.db))
         return all(s, MESSAGES_FROM_KEYS, thread, JSON.stringify(keys)).map(toMessage).reverse();
@@ -783,6 +790,23 @@ export function messagesBefore(s: Store, thread: number, n: number | bigint | nu
       return message === null ? [] : [message];
     }).reverse();
   } finally { s.db.exec("RELEASE messages_before_read"); }
+}
+
+// Whether an opener appears among the latest 200 messages. Author and author_kind are properties of the original
+// entry, so this needs neither the merged view nor the history of its edits.
+export function openedChatSaid(s: Store, thread: number, author: string, agentOnly: boolean): boolean {
+  s.db.exec("SAVEPOINT opened_chat_said_read");
+  try {
+    const old = s.legacySaid ? legacySaidPageState(s.db, thread) : null;
+    const keys = old && (old.preparing || old.needsDrain)
+      ? unpreparedMessagePageKeys(s, thread, I64_MAX, 200, old)
+      : boundedMessagePageKeys(s, thread, I64_MAX, 200);
+    if (keys.length === 0) return false;
+    return one(s, `SELECT 1 FROM json_each(?2) j CROSS JOIN entries e
+      ON e.thread=?1 AND e.n=CAST(j.value AS INTEGER)
+      WHERE e.author=?3 AND (?4=0 OR e.author_kind='agent') LIMIT 1`,
+      thread, JSON.stringify(keys), author, agentOnly ? 1 : 0) !== undefined;
+  } finally { s.db.exec("RELEASE opened_chat_said_read"); }
 }
 
 // The boundary identifies a message, so resolving it does not need the merged view's edit lookup.

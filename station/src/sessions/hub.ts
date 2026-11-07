@@ -166,6 +166,8 @@ export class Hub {
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// Check whether a chat's opener wrote among its latest messages without reading their edits.
+  openedChatSaid: ((thread: number, author: string, agentOnly: boolean) => Promise<boolean>) | null = null;
   /// Read a chat_history page and its optional before-message boundary off the station thread.
   historyMessages: ((thread: number, before: string | null, limit: number) => Promise<MessageRow[] | null>) | null = null;
   /// Read a chat history's pending card post off the station thread.
