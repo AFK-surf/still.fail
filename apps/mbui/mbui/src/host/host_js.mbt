@@ -614,12 +614,15 @@ extern "js" fn js_post(channel : String, json : String) -> Unit =
   #|(c, j) => { const H = globalThis.__mbhost; if (H && H.post) H.post(c, j) }
 
 ///|
-/// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
+/// A scripted run's input given to the host (see host_native.mbt): the browser has only the GL context's (10, 11).
 fn drive(kind : Int, text : String) -> Bool {
-  ignore(kind)
   ignore(text)
-  false
+  js_drive(kind)
 }
+
+///|
+extern "js" fn js_drive(kind : Int) -> Bool =
+  #|(k) => globalThis.__mbhost.drive(k)
 
 ///|
 extern "js" fn js_image_load(src : String, max_px : Int) -> Int =
