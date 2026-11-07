@@ -108,6 +108,8 @@ case "${1:-build}" in
     if [ "$PKG" != stillfail ] && [ "$PKG" != coredemo ]; then
       ROOT=$PWD
       . "$ROOT/native/svg/host-lib.sh"
+      # Git Bash also supplies link.exe; Rust must use the MSVC linker beside cl.
+      export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(command -v cl)")/link.exe")
       image_host_library "$(rustc -vV | sed -n 's/^host: //p')" "$PWD/out/svg/mbui_svg.lib"
       export MBC_LINK_ARCHIVE=$(cygpath -w "$MBC_LINK_ARCHIVE")
     fi
