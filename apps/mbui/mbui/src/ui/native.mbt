@@ -116,7 +116,7 @@ fn touch_name(t : Touch) -> String {
 
 ///|
 /// How long a site's request waits for the head of its answer before the app's words for that (`site`'s `no_answer`)
-/// answer it instead (PreviewWeb.kt HEAD_WAIT_S): the host says when (`{"late":N}`), what the app sees is that event.
+/// answer it instead: the host says when (`{"late":N}`), what the app sees is that event.
 pub let site_head_wait_ms : Double = 60000.0
 
 ///|
@@ -305,7 +305,7 @@ pub fn NativeView::page(html : String, said? : (String) -> Unit) -> NativeView {
 }
 
 ///|
-/// A site served by the app (still.fail's preview of a service: Preview.kt, PreviewWeb.kt): a web view of a host of
+/// A site served by the app: a web view of a host of
 /// its own at `start` (a path), each request its page makes of that host handed to `serve` to answer, as a browser
 /// would have it from a server (its scripts on, its cookies kept by the app as it answers); a link elsewhere is not
 /// followed but told to `leave`. Android's WebView and Windows' WebView2 (their requests intercepted), Apple's

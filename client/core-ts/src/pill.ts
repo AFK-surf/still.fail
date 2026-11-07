@@ -1,4 +1,4 @@
-// What a chat says of its connection (pill.rs; the `connection` topic): its link to its station while down or coming
+// What a chat says of its connection (the `connection` topic): its link to its station while down or coming
 // back, else what its workspace's `status` says. When it shows is decided here: trouble at once; coming back only
 // once it has lasted BUSY_MS; "已连上" for BACK_MS once all is well again, after a busy or a trouble was shown. These
 // timers only time what is on screen (rule 2: a display may sample while shown); nothing is asked of the network.

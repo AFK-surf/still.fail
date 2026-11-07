@@ -1,7 +1,7 @@
 // What a person does on the device, as a station's screen takes it (still.fail apps/android app/remote/Input.kt;
 // `screen.input`): points in 0..1 of the frame, buttons as the DOM's bit mask, keys by the DOM's
 // KeyboardEvent names, typed text as it is committed. And the frame's own zoom and the trackpad's pointer, on this
-// device only (ScreenViewer.kt ViewZoom: mbui's @kit.Zoom; PadPointer).
+// device only (PadPointer).
 
 ///|
 /// The DOM's mouse buttons (MouseEvent.buttons).

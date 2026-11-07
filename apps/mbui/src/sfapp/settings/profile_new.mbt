@@ -1,4 +1,4 @@
-// A new profile on a station (Profiles.kt NewProfileScreen), as the core's add flow has it (`profileFlow`): the
+// A new profile on a station, as the core's add flow has it (`profileFlow`): the
 // providers by group, then how to connect the one picked: a plan signed in (`login.new`, its steps relayed here, the
 // profile made by the station once it is signed in), or a key checked first (`profile.flow.submit`: the profile made
 // only if it works). And an account on several stations (ProfileAccountScreen).
@@ -168,7 +168,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     if d is Some(_) && step != "pick" {
       c.on_back(leave)
     }
-    // (Profiles.kt NewProfileScreen: NavBar, under the status bar, its title in the middle)
+    // (under the status bar, its title in the middle)
     nav_bar(
       c,
       core,

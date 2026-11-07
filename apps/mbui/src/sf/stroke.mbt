@@ -12,7 +12,7 @@ pub let stroke_ms : Double = 520.0
 pub let stroke_gap_ms : Double = 180.0
 
 ///|
-/// How long `n` strokes take to be drawn in, one after another (Search.kt StrokedLine's animation).
+/// How long `n` strokes take to be drawn in, one after another.
 pub fn strokes_ms(n : Int) -> Double {
   stroke_ms + stroke_gap_ms * n.to_double()
 }
@@ -36,11 +36,11 @@ pub(all) struct StrokeShape {
 }
 
 ///|
-/// A found line's (Search.kt StrokedLine): 3 under the baseline.
+/// A found line's: 3 under the baseline.
 pub let line_stroke : StrokeShape = { up: -2.0, down: 1.5, end: -1.5, width: 2.0 }
 
 ///|
-/// A message's (TextMark.kt): 4 under the baseline.
+/// A message's: 4 under the baseline.
 pub let message_stroke : StrokeShape = { up: -3.0, down: 2.0, end: -2.0, width: 2.5 }
 
 ///|

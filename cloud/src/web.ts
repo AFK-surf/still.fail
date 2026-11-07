@@ -113,7 +113,7 @@ async function page(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (requ
  * What every answer of the app's host says besides its file: it may not be framed (a click in the app reaches a
  * station), it sends no referrer (an address here names a chat or a station), and it is what it says it is. The CSP
  * names no script source: the page's first scripts are inline (index.html), and the agent-written HTML a chat draws in
- * frames of its own runs inline scripts from public CDNs (web/src/Viz.tsx) — a script-src that lets those in lets an
+ * frames of its own runs inline scripts from public CDNs — a script-src that lets those in lets an
  * injected one in just as well. What it does say holds however a script comes to be there: no plugins, no <base>, and
  * forms only to this host or Google's sign-in.
  */

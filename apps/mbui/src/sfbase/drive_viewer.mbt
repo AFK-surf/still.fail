@@ -1,4 +1,4 @@
-// A file of a station's drive as a viewer opens it (@sf.ViewerFile; the web's web/src/drive/viewerFile.ts): read
+// A file of a station's drive as a viewer opens it (@sf.ViewerFile): read
 // through the core a part at a time (`drive.read`, 4 MB a part, bytes beside the answer), kept on the device as its
 // folder lists it (drive_keep: read whole as `file`, played as `played`); where it was left on this device the core's
 // (the drivePlace topic, `drive.place`); saved as the drive's 下载 saves it. A text of it read in the library's reader,

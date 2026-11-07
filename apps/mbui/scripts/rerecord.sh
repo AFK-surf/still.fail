@@ -1,5 +1,5 @@
 #!/bin/bash
-# Records a flow's trace again from its test (src/sfreplay/flows/NAME_test.mbt), one command, nothing kept by hand:
+# Records a flow's trace again from its test, one command, nothing kept by hand:
 # the test's steps, as its first order takes them, written as a scripted run (src/sfreplay/emit.mbt: FLOW_EMIT), run
 # in the app against a local still.fail of its own (scripts/e2e-local.sh up, e2e/run.sh with MBUI_CORE_TRACE=1), its
 # conversation made the test's trace again (scripts/trace make) and what changed of its asks said (scripts/trace diff),

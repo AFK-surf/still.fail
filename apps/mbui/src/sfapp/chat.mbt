@@ -1,4 +1,4 @@
-// A chat, read (still.fail apps/android chat/screens/Chat.kt ChatScreen, Messages; ui/Follow.kt): its bar over its messages
+// A chat, read (Messages): its bar over its messages
 // (back, the title, its people and its agents' marks with the station they run on, "…"), the messages as the core's
 // `chat` view gives them, newest at the bottom, the list following its newest while it is at its end and "jump to
 // the newest" over the composer's room otherwise; the page before loaded as the reader nears the top, what is in view
@@ -18,7 +18,7 @@
 let chat_bar_h : Double = bar_h
 
 ///|
-/// The title's line in the bar (Chat.kt BarFrame: a Text with no line height of its own, 16 on the theme's 1.4em).
+/// The title's line in the bar (16 on the theme's 1.4em).
 let chat_title_line : Double = 16.0 * 1.4
 
 ///|
@@ -34,7 +34,7 @@ let joined_gap : Double = 4.0
 
 ///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
-/// row: 14 under the bar (Chat.kt).
+/// row: 14 under the bar.
 fn bar_foot() -> Double {
   status_top() + chat_bar_h
 }
@@ -45,13 +45,13 @@ fn list_top() -> Double {
 }
 
 ///|
-/// What the list keeps under its last row over the composer's room: 10 (Chat.kt).
+/// What the list keeps under its last row over the composer's room: 10.
 fn list_foot() -> Double {
   10.0
 }
 
 ///|
-/// How far under the list's top the unread line opens: a few lines of what came before it in view (Chat.kt 85).
+/// How far under the list's top the unread line opens: a few lines of what came before it in view.
 fn unread_lead() -> Double {
   85.0
 }
@@ -94,7 +94,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         }
         // a chat just made from a new chat (its scene leaving, its first words on their way) is the core's own:
         // nothing to read from a station, nothing breathing for the frames until the core's view of it comes
-        // (Chat.kt made)
+        // 
         if failed is Some(_) || !@sfbase.new_chat_made(c, r) {
           waiting_messages(c, failed)
         }
@@ -214,7 +214,7 @@ let ask_lift_ms : Double = 200.0
 let bar_drop_people : Int = 1
 
 ///|
-/// The bar's frame (Chat.kt BarFrame), the same while the chat is read and once it is: back, the title, what follows
+/// The bar's frame, the same while the chat is read and once it is: back, the title, what follows
 /// it, what is at its end, and "…".
 fn bar_frame(
   c : @ui.Ctx,
@@ -276,7 +276,7 @@ fn bar_frame(
 }
 
 ///|
-/// The chat's bar (Chat.kt ChatBar): its title from the left, then its people, then its agents' marks (the first's
+/// The chat's bar: its title from the left, then its people, then its agents' marks (the first's
 /// tile carrying the station it runs on); its services and jobs, its archive while nothing is left in it, and "…".
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
@@ -314,7 +314,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           c.box(drop=bar_drop_people, fn() { people_stack(c, src, people, 16.0) }) |> ignore
         }
         for i, a in v.agents {
-          // each opens its card (AgentSheet.kt)
+          // each opens its card
           let id = c.id("bar-agent/" + a.key)
           if c.clicked(id) {
             open_agent(src, r, a.key)
@@ -394,7 +394,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
 }
 
 ///|
-/// A station named in a small outlined tag (PageParts.kt StationTag): how it is reached as a dot, its mark, its name.
+/// A station named in a small outlined tag: how it is reached as a dot, its mark, its name.
 /// The dot leading it stands in its round end as far in as makes it concentric with it (20 high: its half less the
 /// dot's), its words 8 in otherwise.
 fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
@@ -441,8 +441,8 @@ let station_tag_end : Double = 8.0
 let via_dot_side : Double = 7.0
 
 ///|
-/// The station's tag in a chat's bar while no agent is in it (PageParts.kt ChatStationChip): a tap opens its card
-/// (Stations.kt openStationPeek).
+/// The station's tag in a chat's bar while no agent is in it: a tap opens its card
+/// .
 fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
   let id = c.id("bar-station")
   if c.clicked(id) {
@@ -452,7 +452,7 @@ fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
 }
 
 ///|
-/// How a station is reached (StationLink.css.ts dot, cornerDot): the online green direct, amber through the relay, red
+/// How a station is reached (cornerDot): the online green direct, amber through the relay, red
 /// offline, grey while it is being reached; ringed in the page's ground on a tile's corner.
 fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
   let t = @sf.theme()
@@ -485,14 +485,14 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 }
 
 ///|
-/// At work, as a row says it (Spokes.kt): yellow spokes 10 across stepping round in 12, no disc round them (it showed as
+/// At work, as a row says it: yellow spokes 10 across stepping round in 12, no disc round them (it showed as
 /// a dark rim).
 fn at_work_mark(c : @ui.Ctx) -> Unit {
   @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
 }
 
 ///|
-/// An agent's mark (Parts.kt ModelMark, small, as a list's): its maker's mark on a soft tile, its state on the corner.
+/// An agent's mark (small, as a list's): its maker's mark on a soft tile, its state on the corner.
 fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
   let t = @sf.theme()
   let (ground, line) = mark_ground()
@@ -516,7 +516,7 @@ fn model_mark(c : @ui.Ctx, a : Agent, size : Double) -> Unit {
 }
 
 ///|
-/// The chat's first agent with the station it runs on, one tile (PageParts.kt AgentStationMark): the maker's
+/// The chat's first agent with the station it runs on, one tile: the maker's
 /// square, then the station's mark or name; the agent's state on the maker's corner, how the station is reached on the
 /// tile's. Until the station is known, the agent's mark alone.
 fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
@@ -573,7 +573,7 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
 }
 
 ///|
-/// An agent's mark in the bar: 22 square on the card's ground with a line round it (PageParts.kt), its maker .6 of it,
+/// An agent's mark in the bar: 22 square on the card's ground with a line round it, its maker .6 of it,
 /// a station's mark 13.
 fn mark_side() -> Double {
   22.0
@@ -647,7 +647,7 @@ fn people_stack(
 }
 
 ///|
-/// A person, round (Parts.kt Avatar): their picture once it is here, their initial on their colour until then.
+/// A person, round: their picture once it is here, their initial on their colour until then.
 fn avatar(
   c : @ui.Ctx,
   src : Source,

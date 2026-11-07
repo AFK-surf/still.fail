@@ -1,4 +1,4 @@
-// The archive (settings/Archive.kt ArchiveScreen, the core's `archive` topic): chats archived by hand or by their
+// The archive (the core's `archive` topic): chats archived by hand or by their
 // station once they idled, of every station online in one list, newest first by the day they were archived. Each can
 // be opened to read (its composer restores it), put back in the list (`chat.archive` with archived false), and one
 // whose agents are done deleted for good (`session.delete`). Only those with the words looked for, and the newest so
@@ -53,7 +53,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     None => ()
   }
   let view = archive_state.last
-  // under the app's top bar at the bar's top, from under it, scrolling under it (Archive.kt: contentPadding top)
+  // under the app's top bar at the bar's top, from under it, scrolling under it
   let top = top_room()
   let entries : Array[ArchiveEntry] = if top > 0.0 { [Room(top), Search] } else { [Search] }
   let days = items(view, "days")
@@ -287,7 +287,7 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
 let round_action_side : Double = 34.0
 
 ///|
-/// A round action of a row (Archive.kt Action): its icon, 16 in a 34 circle. True on the frame after a tap.
+/// A round action of a row: its icon, 16 in a 34 circle. True on the frame after a tap.
 fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -304,7 +304,7 @@ fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") 
       @motion.ripple(c, id, 17.0)
     },
   )
-  // what it says to a screen reader (Archive.kt Action: its contentDescription)
+  // what it says to a screen reader
   c.semantics(b, Button, id~, label~)
   hit(c, id)
 }

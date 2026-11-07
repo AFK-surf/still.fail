@@ -36,7 +36,7 @@ pub fn page_bar(c : @ui.Ctx, body : () -> Unit, corners? : (Double, Double)? = N
 let page_bar_box : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 align=ACenter")
 
 ///|
-/// A key of the bar (PreviewBar's iconBtn, Preview.kt BarIcon): round, its icon in the ink, faint when it cannot be
+/// A key of the bar (PreviewBar's iconBtn): round, its icon in the ink, faint when it cannot be
 /// pressed, the hover grey under the hand; its name told a screen reader and shown on hover. Whether it was pressed.
 pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled? : Bool = true) -> Bool {
   let t = theme()

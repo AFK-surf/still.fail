@@ -1,4 +1,4 @@
-// What a person set going on this device and the core has not finished (the `doing` topic; doing.rs): every call that
+// What a person set going on this device and the core has not finished (the `doing` topic): every call that
 // changes something, from the moment it is asked until its answer. One that failed stays a few seconds more, with why.
 import { t } from "./i18n.ts";
 

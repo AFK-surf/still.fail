@@ -55,7 +55,7 @@ function sessionHome(options: OpenOptions, configured: string): string {
   } finally { closeSync(fd); }
 }
 
-/// Hermes' ACP title is `<tool_name>: <argument preview>` (acp_adapter/tools.py). The live and transcript readers
+/// Hermes' ACP title is `<tool_name>: <argument preview>`. The live and transcript readers
 /// need the tool's name, notably to recognise chat_post; its arguments remain in rawInput, not in the name.
 function hermesUpdate(update: Json): Json {
   if (update?.sessionUpdate !== "tool_call" || typeof update.title !== "string") return update;

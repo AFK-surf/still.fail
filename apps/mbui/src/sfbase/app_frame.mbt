@@ -14,7 +14,7 @@ pub fn language_said(src : Source) -> Unit {
 }
 
 ///|
-/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@hostapi.system_dark)
+/// Light or dark, as this device is set (the prefs' `appearance`), or as the system is (@hostapi.system_dark)
 /// when it follows it; the host told when it changes (its bars follow, or are as dark as the frame's page says:
 /// `page_dark`).
 pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
@@ -189,7 +189,7 @@ fn system_said(json : String) -> Unit {
       Menu("update.check") => update_from_menu(src)
       // one of the pages' actions from the menu bar: as its keys pressed (keymap.mbt action_pressed)
       Menu(action) => @settings.ask_action(action)
-      // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
+      // a package handed to the system's installer could not be installed
       InstallAllow(..) => toast_later(@sf.t("android-chat.file.allowInstall", args=[("app", "still.fail")]))
       InstallFailed(error~, ..) => toast_later(@sf.t("android-chat.file.installFailed", args=[("error", error)]))
       Network =>

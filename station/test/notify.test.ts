@@ -1,4 +1,4 @@
-// What the chats' people hear about (admin/notify.rs): a turn told by how it ended, a person's message to the others,
+// What the chats' people hear about: a turn told by how it ended, a person's message to the others,
 // the station's ⚠️ to everyone; gathered and handed on once.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";

@@ -13,7 +13,7 @@ pub let fill_chip_h : Double = 22.0
 pub let fill_chip_small_h : Double = 16.0
 
 ///|
-/// How full, as a colour: the core's level (components.css.ts quotaChip's data-level).
+/// How full, as a colour: the core's level.
 pub fn level_color(level : String) -> Int64 {
   let t = theme()
   match level {

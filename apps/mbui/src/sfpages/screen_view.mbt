@@ -9,7 +9,7 @@
 // the frame as it was last shown; over (ended, gone…), said in the screen's place, gone dark. While it is in sight the
 // device stays awake; out of sight the view is let go of, and opened again from the frame it showed.
 //
-// That is touch's. With keyboard and mouse (web/src/screen/ScreenViewer.tsx's, not a phone's) there is nothing to make
+// That is touch's. With keyboard and mouse (not a phone's) there is nothing to make
 // up for a phone's hand: the viewer's bar across the window's top (the way back, the screen's name and the core's line,
 // how the view goes, 控制中心, 只看/控制), the picture under it; the mouse is the screen's pointer where it is (its moves,
 // its buttons, its wheel: screen_mouse), the keyboard types into it once it is pressed, ⌘V pastes this device's
@@ -162,7 +162,7 @@ fn phase_over(p : String) -> Bool {
 }
 
 ///|
-/// How long the rail's line stays said once asked for (ScreenViewer.kt Rail: 3000).
+/// How long the rail's line stays said once asked for.
 let rail_say_ms : Double = 3000.0
 
 ///|
@@ -229,7 +229,7 @@ pub fn screen_page(
       // (into the device's performance record while it is kept: what warms a phone is mostly a screen looked at)
       @hostapi.perf_line("app: screen " + (if shown { "shown " } else { "hidden " }) + key)
     }
-    // while it is looked at, a phone turns as it is held (ScreenViewer.kt: the activity's orientation unspecified),
+    // while it is looked at, a phone turns as it is held,
     // the rotation lock honoured: with it on, the system offers its turn button
     if u.turnable != shown {
       u.turnable = shown
@@ -537,7 +537,7 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 
 ///|
 /// The device's clipboard, pasted into the screen where its focus is: its picture as PNG where the screen carries
-/// pictures, else its text (ScreenViewer.kt paste; ScreenClips.kt pasteKind). Asked of the system as the button is
+/// pictures, else its text. Asked of the system as the button is
 /// tapped (paste_asked), taken here once it answers.
 fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   guard u.reading is Some(r) else { return }
@@ -672,7 +672,7 @@ fn control_chosen(c : @ui.Ctx, s : ScreenSess, on : Bool) -> Unit {
 
 ///|
 /// What the keyboard sends (the key catcher's: committed words, named keys and shortcuts as taps), as the screen takes
-/// it (Input.kt KeyCatcher), with the modifiers held on the keys row: words typed with one held go as keys with it, a
+/// it, with the modifiers held on the keys row: words typed with one held go as keys with it, a
 /// key goes down with them and up with what it went down with.
 fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.KeyIn]) -> Unit {
   if keys.is_empty() {

@@ -1,5 +1,5 @@
-// svgtypes' paints (paint.rs), paint order (paint_order.rs), transform origins (transform_origin.rs,
-// directional_position.rs) and enable-background (enable_background.rs).
+// svgtypes' paints, paint order, transform origins (transform_origin.rs,
+// directional_position.rs) and enable-background.
 
 ///|
 priv enum PaintFallback {

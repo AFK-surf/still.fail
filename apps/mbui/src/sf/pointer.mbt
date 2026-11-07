@@ -19,7 +19,7 @@ pub let pointer_tip : Double = 1.0
 pub let pointer_size : Double = 20.0
 
 ///|
-/// The edge's colour (ScreenViewer.kt Pointer: 0xFF1B1C1F), and the dark of the dark shapes.
+/// The edge's colour, and the dark of the dark shapes.
 let pointer_edge : Int64 = 0x1B1C1FFFL
 
 ///|

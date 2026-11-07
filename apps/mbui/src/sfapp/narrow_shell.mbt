@@ -84,7 +84,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
       }
     },
     bg=fn() { @sf.theme().p.bg },
-    // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
+    // a page opened slides in once the core has given what it shows
     ready=fn(page) {
       match workspace_in_view(src).0 {
         Some(w) => page_ready(src, w, page)
@@ -301,7 +301,7 @@ fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
 /// file open over them is the window's tree's: sfbase viewer_tree.mbt).
 fn narrow_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in the
-  // workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+  // workspace's safe mode (its Home is the wait: lock_gate)
   bottom_bar(c, src, w, place_of(app.nav.top()), narrow_bar_shown(src, w))
   // the chat being made public (sfpages' publish.mbt)
   @sfpages.publish_layer(c, src)
@@ -311,7 +311,7 @@ fn narrow_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// Whether the bottom bar shows: on a place's top page with nothing over it; not while this device waits to be
-/// confirmed in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar).
+/// confirmed in the workspace's safe mode (its Home is the wait: lock_gate).
 fn narrow_bar_shown(src : Source, w : Workspace) -> Bool {
   let root = app.nav.top()
   let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
@@ -330,7 +330,7 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
   })
   // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
-  // (App.kt LockPrompts): put up when no other sheet is
+  // : put up when no other sheet is
   @settings.lock_prompts(settings_core(src, w), !sheet_open())
   // a device of the person's waiting on this one for a vault's key (settings/vault_prompts.mbt), the same way
   @settings.vault_prompts(settings_core(src, w), !sheet_open())

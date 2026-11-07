@@ -1,4 +1,4 @@
-// An agent at work in a chat (Chat.kt Activity): its ring of eight arcs steps round, a step every 100 ms (Spokes.kt;
+// An agent at work in a chat: its ring of eight arcs steps round, a step every 100 ms (Spokes.kt;
 // the steps themselves: src/sf/spokes_test.mbt).
 
 ///|
@@ -158,7 +158,7 @@ test "the viewer's own message taller than the list is followed to the end: its 
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a message of the viewer's taller than the list (sent from here, or from another of their devices), its agent at
-  // work on it: an agent's message so long is read from its top (Follow.kt), the viewer's own followed to the end
+  // work on it: an agent's message so long is read from its top, the viewer's own followed to the end
   let lines = Array::makei(40, fn(i) { "第 \{i + 1} 行" })
   lines.push("最后一行")
   fix_later(1.0, fn() {

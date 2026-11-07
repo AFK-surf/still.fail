@@ -1,4 +1,4 @@
-// An agent's activity staying a moment once its turn is over (chat.mbt chat_tick, Chat.kt lingering): on the time that
+// An agent's activity staying a moment once its turn is over (chat.mbt chat_tick): on the time that
 // goes by, whatever page shows; while its messages still come out of its avatar it stays, its moment from the last.
 
 ///|
@@ -37,7 +37,7 @@ test "its turn over while another page covers its chat: its moment goes by meanw
   t.run_for(fix_turn_end_ms + 1000.0)
   t.back()
   t.draw()
-  // the chat shown again: its activity's moment went by under the page (Chat.kt: on the time that goes by)
+  // the chat shown again: its activity's moment went by under the page
   assert_eq(lingering(), 0)
   t.run_for(@ui.move_most_ms)
   assert_eq(lingering(), 0)

@@ -20,7 +20,7 @@ test "本机 Station, at each width and with either hand: as the system says it 
     }
     // (its facts going on in lines where the room ends: none cut, none past the card)
     assert_eq(t.squeeze_faults(), [], msg=at)
-    // stopped from its card's menu (LocalStation.tsx: its ⋯, the card's)
+    // stopped from its card's menu (the card's)
     t.click(Button, label="更多操作")
     t.frame()
     // (its menu in, a sheet's or a menu's)

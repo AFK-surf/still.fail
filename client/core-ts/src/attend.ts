@@ -1,4 +1,4 @@
-// Where the viewer's attention is, and what follows from it (attend.rs; the `notify` topic, `client.focus`): a
+// Where the viewer's attention is, and what follows from it (the `notify` topic, `client.focus`): a
 // chat's unread line, what is read, what comes in with a motion while a chat shows, which notices a page shows now,
 // and the workspace the viewer is in. Whether notifications are on, whether the system was asked, and which
 // workspaces are heard of, are kept on the device.

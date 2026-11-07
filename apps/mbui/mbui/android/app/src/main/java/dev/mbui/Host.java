@@ -132,7 +132,7 @@ final class Host {
     }
 
     /**
-     * Turned sideways for a film (@hostapi.set_sideways, still.fail's Player.kt): landscape asked for (a phone with rotation
+     * Turned sideways for a film (@hostapi.set_sideways): landscape asked for (a phone with rotation
      * locked turns too) and the system bars away, a swipe bringing them for a while; off, upright and the bars back.
      */
     static void setSideways(boolean on) {
@@ -358,7 +358,7 @@ final class Host {
     static String secretCopied;
 
     /**
-     * A secret on the clipboard (@hostapi.clipboard_set_secret, still.fail's Vault.kt copy): marked sensitive (the
+     * A secret on the clipboard (@hostapi.clipboard_set_secret): marked sensitive (the
      * system's preview of it masked, Android 13 on: ClipDescription.EXTRA_IS_SENSITIVE, by its value, which older
      * systems pass over). The app takes it off `clearMs` later (clipboardSecretOff).
      */

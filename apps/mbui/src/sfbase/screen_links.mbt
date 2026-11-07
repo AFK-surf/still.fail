@@ -11,15 +11,15 @@
 // does (open_links.mbt open_link).
 
 ///|
-/// A preview's pace (ScreenLinks.kt PEEK_MS): a picture at most this often.
+/// A preview's pace: a picture at most this often.
 pub let peek_ms : Double = 500.0
 
 ///|
-/// The picture a preview asks for, in pixels at most (ScreenLinks.kt PEEK_SIZE): the card's width, twice over.
+/// The picture a preview asks for, in pixels at most: the card's width, twice over.
 pub let peek_size : Double = 640.0
 
 ///|
-/// A preview refused or ended (ScreenLink.tsx PEEK_AGAIN_MS) is asked for again after this, while its card shows.
+/// A preview refused or ended is asked for again after this, while its card shows.
 pub let peek_again_ms : Double = 5000.0
 
 ///|
@@ -52,7 +52,7 @@ pub let monitor_mark : LinkMark = { name: "monitor" }
 pub let globe_mark : LinkMark = { name: "web" }
 
 
-// ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
+// ── the cards' looks ──
 
 ///|
 /// A card: a row 236 wide, a capsule as a file's card (a row high, 52), on the chat's bubble ground: its mark, 24,
@@ -144,7 +144,7 @@ pub(all) struct ScreenCard {
 }
 
 ///|
-/// The card of the screen `href` names, once the core has said (ScreenLinks.kt screenCardOf).
+/// The card of the screen `href` names, once the core has said.
 pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
   guard to.card == "screen" else { return None }
   let (station, screen) = (to.station, to.screen)
@@ -162,7 +162,7 @@ pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
 }
 
 ///|
-/// The card of the 共享调试 `href` names, once the core has said (AdbLinks.kt adbCardOf: the `adbCard` topic).
+/// The card of the 共享调试 `href` names, once the core has said.
 pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
   guard to.card == "adb" else { return None }
   let station = to.station
@@ -173,8 +173,8 @@ pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
 }
 
 ///|
-/// The links to screens in an agent's words as a chat draws them (ScreenLinks.kt ScreenLinks): their cards, and a bare
-/// one's title (屏幕 until it is known); a station's 共享调试 as its own (AdbLinks.kt). `message` names the message
+/// The links to screens in an agent's words as a chat draws them: their cards, and a bare
+/// one's title (屏幕 until it is known); a station's 共享调试 as its own. `message` names the message
 /// (a screen's preview is its card's own).
 pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
   {
@@ -252,7 +252,7 @@ pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.Link
 }
 
 ///|
-/// A bare link to a station's 共享调试: what it reads as within a sentence (AdbLinks.kt adbTitle).
+/// A bare link to a station's 共享调试: what it reads as within a sentence.
 pub fn adb_title(src : Source, to : @sf.LinkTo) -> String {
   match adb_card_of(src, to) {
     Some(_) as v => text(v, "title")
@@ -290,7 +290,7 @@ pub fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, 
 }
 
 ///|
-/// A screen as a card (ScreenLinks.kt ScreenLinkCard): its kind's mark, its title (the link's own words, when it has
+/// A screen as a card: its kind's mark, its title (the link's own words, when it has
 /// them) over what its station says of it; one its station no longer has, its title quieter. Its size is kept while
 /// the core has not said, its lines empty. One its station previews (a tab of its browser) is the screen live across
 /// the card's top, the words under it. A tap opens it, as the link does. `key`: the card's own (its message's and its
@@ -444,7 +444,7 @@ pub(all) enum PeekRun {
 } derive(Eq)
 
 ///|
-/// A card's preview (ScreenLinks.kt Peek).
+/// A card's preview.
 pub(all) struct Peek {
   station : String
   screen : String
@@ -524,7 +524,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
 }
 
 ///|
-/// The screen live in its card (ScreenLinks.kt Peek): only looking (not among those on it, its tab not brought
+/// The screen live in its card: only looking (not among those on it, its tab not brought
 /// forward), its mark until a picture comes (a tab behind another casts none). A browser's preview keeps its shape as
 /// its viewport adapts to a viewer; another screen's shape follows its picture, its listed size until one comes, within bounds. The newest picture
 /// decoded fills the preview, cropped from the top; a newer one is drawn over it once it is decoded.

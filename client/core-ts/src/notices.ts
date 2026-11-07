@@ -1,4 +1,4 @@
-// What a person hears about while a client runs (notices.rs; the `notices` topic): a chat of
+// What a person hears about while a client runs (the `notices` topic): a chat of
 // theirs whose agent is blocked on them, went wrong, or finished with something new to read, or where someone else
 // said something, or where a card newly waits for them. Noticed from the chat rows the core holds (what the sync keeps
 // current), by how each row changed in a write (db/account.ts says each row before and after): looked at as they change

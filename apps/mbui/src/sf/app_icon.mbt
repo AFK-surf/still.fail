@@ -3,7 +3,7 @@
 // pictures the cloud's /avatars) or a model maker's mark, each on a colour of its own, drawn on its colour as the app's
 // icon: 1024 pixels, a buddy as large as fits (92%), a maker's mark 560 across (white where it is drawn in one
 // colour), a picture of the person's own its middle square; a JPEG as a data URL, what Slack takes (mbui/pixels makes
-// it, the same bytes on every host). The phone's look (sfapp/settings app_look.mbt) and the desktop's (sfdesk
+// it, the same bytes on every host). The phone's look and the desktop's (sfdesk
 // slack_app.mbt) both draw from these.
 
 ///|
@@ -18,7 +18,7 @@ pub(all) struct AppAvatar {
 }
 
 ///|
-/// The model makers' marks, each on its own colour (SlackApp.kt MAKER_AVATARS).
+/// The model makers' marks, each on its own colour.
 // kept across runs: a table of constants, never written
 pub let app_makers : Array[AppAvatar] = [
   { id: "anthropic", label: "Anthropic", bg: "#D97757", mark: "maker_anthropic", mono: true },
@@ -173,7 +173,7 @@ pub fn app_own_icon(w : Int, h : Int, px : FixedArray[Byte]) -> @pixels.Canvas {
 }
 
 ///|
-/// The ground where neither colour is one (SlackApp.kt parseColor's fallback).
+/// The ground where neither colour is one.
 pub let icon_fallback : Int64 = 0x7A2E0EFFL
 
 ///|

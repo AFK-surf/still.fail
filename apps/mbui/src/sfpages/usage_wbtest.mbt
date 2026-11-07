@@ -1,4 +1,4 @@
-// 用量's days (usage.mbt usage_chart, the web's Usage.tsx DaysChart): each day's bar in the middle of its day over its
+// 用量's days (usage.mbt usage_chart): each day's bar in the middle of its day over its
 // date, standing on the days' foot as high as its share of the scale's top; all in full until a day is picked, then
 // the others faded, the day pressed again let go. And the page: what someone opening it wants to know, most first.
 

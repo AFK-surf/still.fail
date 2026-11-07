@@ -1,4 +1,4 @@
-// Distributed tracing (trace.rs): one trace per user action, spans for what it asks of stations and
+// Distributed tracing: one trace per user action, spans for what it asks of stations and
 // still.fail cloud, exported as OTLP JSON to still.fail cloud's `/v1/telemetry/traces`. JavaScript has no way to carry
 // a context across awaits on every host (the Rust core sets it around each poll), so here the context is current
 // around synchronous calls (`enter`) and is handed on explicitly to what runs later (`ctx` parameters).

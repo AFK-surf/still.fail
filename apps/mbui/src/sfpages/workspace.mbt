@@ -184,7 +184,7 @@ let ws_list_compact : @ui.Style = @ui.css("w=Full pb=S3")
 let ws_current : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
 
 ///|
-/// A list card (Workspaces.kt RowsCard): its rows list_pad in, the list card's corner, on the chips' grey.
+/// A list card: its rows list_pad in, the list card's corner, on the chips' grey.
 // kept across runs: a value (no field of it changes)
 let ws_card : @ui.Style = @ui.style(w=Full, p=@sf.room_of(@sf.corner_inset), radius=@sf.card_radius, clip=true)
 
@@ -208,7 +208,7 @@ let ws_label_box : @ui.Style = @ui.css("pt=S1_5 pb=S0_5")
 let ws_label_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=Font)
 
 ///|
-/// A row (Controls.kt PickRow, Workspaces.kt WorkspaceRow): what, a line under it, a check on the chosen one; before
+/// A row: what, a line under it, a check on the chosen one; before
 /// it a workspace's mark (or its letter) or an icon; after it what a workspace has waiting (`mark`: its marks). True
 /// on the frame after it was pressed.
 fn workspace_row(
@@ -231,7 +231,7 @@ fn workspace_row(
       match lead {
         Some(w) =>
           c.box(style=ws_row_lead, fn() {
-            // (a GIF moving only for the workspace in use: Workspaces.kt, still for the others)
+            // (still for the others)
             workspace_mark(c, w, ws_row_mark, t.p.text, ws_row_letter, still=!checked)
           })
           |> ignore
@@ -310,7 +310,7 @@ let ws_row_label : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false)
 let ws_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut, leading=@sf.pick_sub_line)
 
 ///|
-/// What a workspace has waiting, after its name (SettingParts.kt MarkCounts): the chats its person takes part in that
+/// What a workspace has waiting, after its name: the chats its person takes part in that
 /// went wrong, and those where it is their turn (waiting on them or unread), each its mark (chat_mark.mbt: red, blue)
 /// and how many, 8 apart.
 fn mark_counts(c : @ui.Ctx, mark : Json) -> Unit {
@@ -642,7 +642,7 @@ pub fn workspace_menu_open() -> Bool {
 }
 
 ///|
-/// The workspaces at the rail's foot (Rail.tsx RailWorkspaces, Rail.css.ts workspaces, workspaceItem), on the rail's
+/// The workspaces at the rail's foot (workspaceItem), on the rail's
 /// squares (`parts`): each on a square, 6 apart; a letter on a square of its own, a mark (an icon, an emoji) on nothing, the places' ground under
 /// the pointer; the one in view a short bar at its left; another with what waits in it (the core's marks' tone) its
 /// mark at its corner. Over them the ＋ (making one, another account, invitations), always seen (the web's only as the
@@ -673,7 +673,7 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
         // (always seen: what stands over it, what comes to this device, would else stand alone over a gap)
         let ink = if hot { t.p.text } else { t.p.muted }
         @sf.icon(c, "plus", size=rail_plus_size, color=ink) |> ignore
-        // an invitation waiting: the accent's dot (workspace.css.ts inviteDot)
+        // an invitation waiting: the accent's dot
         if waiting {
           (parts.corner)("invite")
         }
@@ -723,7 +723,7 @@ let rail_plus_size : Double = 16.0
 let rail_ws_mark : Double = 18.0
 
 ///|
-/// A workspace's letter (Rail.css.ts workspaceItem: textUi, 600), muted unless it is the one in view or pointed at:
+/// A workspace's letter (600), muted unless it is the one in view or pointed at:
 /// its ink alone, the letter as big in each.
 // kept across runs: a value (no field of it changes)
 let rail_letter : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Muted, wrap=false)
@@ -813,5 +813,5 @@ fn workspace_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
 let rail_ws_menu_off : Double = 10.0
 
 ///|
-/// The ＋'s menu (workspace.tsx accountMenu): 260 at least.
+/// The ＋'s menu: 260 at least.
 let rail_ws_menu_w : Double = 260.0

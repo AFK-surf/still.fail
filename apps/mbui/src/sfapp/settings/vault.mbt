@@ -3,7 +3,7 @@
 // profile runs on. Its page is src/sfpages vault.mbt's, one in every frame.
 
 ///|
-/// The kinds of item, in the editor's order (Vault.kt KINDS).
+/// The kinds of item, in the editor's order.
 // kept across runs: a table, never written
 pub let vault_kinds : Array[String] = ["token", "ssh_key", "login", "file"]
 
@@ -68,7 +68,7 @@ fn index_of(out : Array[(String, String, Array[Json])], g : String) -> Int? {
 }
 
 ///|
-/// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived (Vault.kt SCOPES).
+/// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived.
 // kept across runs: a table, never written
 pub let vault_scopes : Array[String] = ["once", "hour", "chat"]
 
@@ -81,12 +81,12 @@ fn lasts_name(lasts : String) -> String {
 
 ///|
 /// An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own
-/// (Vault.kt LASTS).
+/// .
 // kept across runs: a table, never written
 pub let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
 
 ///|
-/// An item's longest grant as its editor names it (Vault.kt lastsChoice).
+/// An item's longest grant as its editor names it.
 pub fn lasts_choice(lasts : String) -> String {
   if lasts == "default" {
     tr("android-settings.vault.lasts.default")

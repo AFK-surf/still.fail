@@ -1,5 +1,5 @@
 // This machine's station on Windows (@hostapi.local_station, local_station_act), as mac_app.m has it on the Mac and
-// still.fail's desktop app managed it on Windows (apps/desktop/src/installed.ts, station.ts): its data
+// still.fail's desktop app managed it on Windows (station.ts): its data
 // (%USERPROFILE%\.stillfail), whether it runs (run\station.json's pid alive) and by what (the scheduled task the
 // installer made, "still.fail station": cloud/src/install-windows.ts; or a process started by hand), its release, whether
 // the installer put one there (<data>\app: the desktop app's carried station had none), the workspace its data is in

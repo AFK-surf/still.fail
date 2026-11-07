@@ -35,7 +35,7 @@ pub fn around(inset : Double, inner : Double) -> Double {
 
 ///|
 /// How far a round mark `size` across reaches past both edges of the box it hangs on, its centre on that box's corner
-/// of `corner` where the curve turns 45° (@ui.smooth_middle; Composer.kt PictureRemoveOut): a picture's remove button
+/// of `corner` where the curve turns 45° (@ui.smooth_middle): a picture's remove button
 /// over its top right corner. `room`: half that box's shorter side, where its corner may be too round to be wholly
 /// smooth (@ui.corner_middle: a circle's, a capsule's end).
 pub fn on_corner(corner : Double, size : Double, room? : Double) -> Double {

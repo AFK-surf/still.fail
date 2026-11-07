@@ -227,7 +227,7 @@ fn open_named(src : Source, station : String, agent : String, path : String) -> 
 }
 
 ///|
-/// What a file is by its name (FilePreview.tsx kindOf, as the chat tells them apart): image, video, or anything else.
+/// What a file is by its name (as the chat tells them apart): image, video, or anything else.
 pub fn file_kind(name : String) -> String {
   match @sfbase.preview_kind(name).0 {
     Some(@sfbase.KImage) => "image"
@@ -237,7 +237,7 @@ pub fn file_kind(name : String) -> String {
 }
 
 ///|
-/// The box an image takes in the chat, known before it loads (imageBox.ts): its own proportions (sent with it, or its
+/// The box an image takes in the chat, known before it loads: its own proportions (sent with it, or its
 /// ThumbHash's) within 360×300, a tiny one drawn to 40 on its longer side; a strip thinner than `least` letterboxed in
 /// a box that thick; 240×160 for one sent before sizes were kept. An image at the height limit is cropped to at least
 /// `min_side` across, one at the width limit to at least `min_side` high. (width, height, letterboxed)
@@ -296,7 +296,7 @@ fn tall_image_cropped(a : Attachment) -> Bool {
 
 ///|
 /// The share of its box's width and height a picture takes in it (image_box's, `least` thick): all of it, or a
-/// letterboxed one's, its own proportions fitted inside, centred (imageBox.ts letterbox).
+/// letterboxed one's, its own proportions fitted inside, centred.
 pub fn picture_share(a : Attachment, least : Double, min_side? : Double = 0.0) -> (Double, Double) {
   let (bw, bh, letterbox) = image_box(a, least, min_side~)
   match own_size(a) {
@@ -913,7 +913,7 @@ let image_px_most : Double = 8192.0
 
 ///|
 /// The least an image's box is across (16) and a video's (96: room round its capsule); the box of one sent before
-/// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side (imageBox.ts).
+/// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side.
 pub let image_least : Double = 16.0
 
 ///|

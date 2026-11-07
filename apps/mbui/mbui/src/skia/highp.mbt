@@ -1,4 +1,4 @@
-// tiny-skia's high precision pipeline (src/pipeline/highp.rs): 8 pixels at a time in floats, lane by lane as the
+// tiny-skia's high precision pipeline: 8 pixels at a time in floats, lane by lane as the
 // SIMD types compute them (src/wide: SSE's min, max and conversions; reciprocals exact).
 
 ///|

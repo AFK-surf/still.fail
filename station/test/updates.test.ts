@@ -1,4 +1,4 @@
-// The station's and its runtimes' versions and updating them (the Rust station's updates.rs's tests), with fake release
+// The station's and its runtimes' versions and updating them, with fake release
 // servers, fake installers and fake npm/vp/curl commands in temporary directories: nothing real is installed or read.
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";

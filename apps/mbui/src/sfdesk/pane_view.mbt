@@ -529,7 +529,7 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       first.val = false
       match (was, from_tape) {
         (Some(w), _) if w != cause && w.native == cause.native && !wide.edge_held.get() => {
-          // shown a while from now: how far the page moves aside, worked out once as it starts (Rail.tsx markPeek)
+          // shown a while from now: how far the page moves aside, worked out once as it starts
           let look = if cause.peeking && !w.peeking {
             fold_goes.shift = fold_peek_shift(fold_along(at, look))
             match @sfbase.workspace_in_view(src).0 {
@@ -857,7 +857,7 @@ fn pane_edge_stands(src : Source, n : @view.View) -> Bool {
 }
 
 ///|
-/// The sidebar's edge (the web's SidebarEdge, Rail.css.ts edge), the tree's, in node `n` over what `holder` holds: a
+/// The sidebar's edge (the web's SidebarEdge), the tree's, in node `n` over what `holder` holds: a
 /// strip 12 wide down all of the window, its line in its middle where the block's move has the edge as it is drawn
 /// (fold_along's `edge`), the library's look 3 in (its bar shown with the pointer on the strip, its line not while the
 /// sidebar is folded). Open or shown a while, dragged, the sidebar's width (side_min to side_max), each event at its

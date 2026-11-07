@@ -10,7 +10,7 @@
 // Slack user's name offers 这是我 or 不是我 (`slack.identity`); a place is a way there.
 
 ///|
-/// A page's compact bar (Parts.kt NavBar): back, with where it goes back to, in the accent; the title in the middle;
+/// A page's compact bar: back, with where it goes back to, in the accent; the title in the middle;
 /// what is at its end.
 fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
   if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top()) {
@@ -34,7 +34,7 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
 }
 
 ///|
-/// The page (History.kt HistoryScreen): its bar (copying its link at its end), the agent at its head with what can be
+/// The page: its bar (copying its link at its end), the agent at its head with what can be
 /// done to it and the tabs, then its steps or its details; its steps opened at `entry` (a transcript entry), else at
 /// its newest.
 fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
@@ -125,7 +125,7 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
 }
 
 ///|
-/// What can be done to it now (History.kt Actions): stop a turn, let an idle process go; each a 28 disc, a spinner
+/// What can be done to it now: stop a turn, let an idle process go; each a 28 disc, a spinner
 /// while it is asked.
 fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
   let t = @sf.theme()
@@ -175,7 +175,7 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
 }
 
 ///|
-/// The head's short line (History.kt Summary): only what is worth a look now: a quota running out (its chip, what it
+/// The head's short line: only what is worth a look now: a quota running out (its chip, what it
 /// says and more in its tip), the disk filling up (amber), an account that cannot run (red).
 fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
   let t = @sf.theme()
@@ -212,7 +212,7 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
 }
 
 ///|
-/// How a history's steps were put in place as it opened (History.kt Steps: `follow.placed`), by its list's key: at
+/// How a history's steps were put in place as it opened, by its list's key: at
 /// its newest, followed (true), or at an entry, not followed (false). Not there: not put in place yet.
 let history_placed : Map[String, Bool] = {}
 
@@ -222,7 +222,7 @@ let history_placed : Map[String, Bool] = {}
 let history_short : Map[String, Bool] = {}
 
 ///|
-/// Its details (History.kt Details): where it stands and its figures as its card has them, how it runs in a line,
+/// Its details: where it stands and its figures as its card has them, how it runs in a line,
 /// what it runs on and has done, what it used, the station.
 fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Json?) -> Unit {
   let t = @sf.theme()
@@ -316,7 +316,7 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
 }
 
 ///|
-/// How it runs, in one line (History.kt RunRow): the model (never cut short), how hard it thinks, the account; a
+/// How it runs, in one line: the model (never cut short), how hard it thinks, the account; a
 /// hairline round it. True on the frame after a tap (the model picker opened).
 fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
   let t = @sf.theme()
@@ -381,7 +381,7 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
 }
 
 ///|
-/// An entry opened in full (History.kt's reader, Sheet.kt ReaderHost): back to 执行历史, the line it was under, then
+/// An entry opened in full: back to 执行历史, the line it was under, then
 /// all its words as Markdown, 20 from the sides, 12 between.
 fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit {
   ignore(src)
@@ -405,7 +405,7 @@ fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit 
   |> ignore
 }
 
-// ── a call, drawn by what it is (ui/ToolStep.kt) ────────────────────────
+// ── a call, drawn by what it is ────────────────────────
 
 ///|
 /// The boxes of a step drawn so far, numbered for where each is scrolled to (within the step's scope).

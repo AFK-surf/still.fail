@@ -183,7 +183,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let p = field(e, "profile")
         let route = profile_route(e)
         let usable = flag(e, "usable")
-        // how it is where that is not simply fine, as the core says it, in its tone (ProfilesNav.tsx ProfileRow): what
+        // how it is where that is not simply fine, as the core says it, in its tone: what
         // needs a look in colour
         let trouble = text(field(e, "state"), "text")
         let tone = text(field(e, "state"), "tone")
@@ -306,7 +306,7 @@ let place_side : @ui.Style = @ui.css("w=Full h=Full")
 let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 
 ///|
-/// What is wrong, in its tone (ProfilesNav.css.ts trouble): amber, red, or muted (neutral).
+/// What is wrong, in its tone: amber, red, or muted (neutral).
 fn trouble_ink(tone : String) -> @ui.TextStyle {
   match tone {
     "red" => place_trouble_red
@@ -328,7 +328,7 @@ let place_trouble_amber : @ui.TextStyle = @ui.text_style(color=WarnInk)
 let place_trouble_neutral : @ui.TextStyle = @ui.text_style(color=Muted)
 
 ///|
-/// The words that give way first (SidebarList.css.ts fill).
+/// The words that give way first.
 // kept across runs: a value (no field of it changes)
 let place_fill : @ui.TextStyle = @ui.text_style(w=Cut)
 

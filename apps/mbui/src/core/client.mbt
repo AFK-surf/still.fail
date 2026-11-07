@@ -79,7 +79,7 @@ pub struct Client {
   /// when it could not be read): Client::time_topics
   priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
   /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
-  /// (StillFailCore.kt `focus`), which would else take the app for out of view
+  /// , which would else take the app for out of view
   priv mut focus : Json?
   /// While the device's performance record is kept (@hostapi.perf_recording): each call's name by its id until it is
   /// answered, so what the core says of it is put to its name (Client::perf_name)
@@ -121,7 +121,7 @@ pub fn Client::new(
 }
 
 ///|
-/// What the app times of its topics (still.fail's Android app's bar_switch, BarTiming.kt `topics`): `f(id, topic,
+/// What the app times of its topics (still.fail's Android app's bar_switch): `f(id, topic,
 /// None, false)` as a subscription is made and asked of the core, `f(id, topic, value, true)` as its first message is
 /// taken (its value; None: an error). Nothing here reads a clock: the times are the caller's.
 pub fn Client::time_topics(self : Client, f : ((Int, String, Json?, Bool) -> Unit)?) -> Unit {
@@ -536,7 +536,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       for id in subs {
         self.end_sub_wait(id)
       }
-      // (as StillFailCore.kt fails them: `core_restarted`, in the app's words; the reason is the core's own, on_failed)
+      // (in the app's words; the reason is the core's own, on_failed)
       let err = Json::object({
         "code": Json::string("core_restarted"),
         "message": Json::string(restarted_text.val),

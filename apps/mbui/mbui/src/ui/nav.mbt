@@ -1,5 +1,5 @@
 // A stack of pages, as still.fail's Android app moves between them
-// (app/App.kt Pages): a page pushed comes in whole from the right as the one
+// : a page pushed comes in whole from the right as the one
 // under it goes out whole to the left, side by side, 300 ms on the standard
 // curve (.4, 0, .2, 1), nothing fading; back, the other way. A page the
 // stack says comes from the left (`from_left`) comes in from there, the one under it going out to

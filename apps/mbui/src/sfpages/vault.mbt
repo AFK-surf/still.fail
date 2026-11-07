@@ -9,7 +9,7 @@
 // approval lasts, picked through the presenters; the devices holding its key); deleting the vault in red at its foot,
 // asked first; the stations that refused it. 全部密钥 is what it keeps, a section a kind (the profiles' accounts as the
 // profiles list them, then each vault's secrets), each a row to its page, and 添加 at its head. Made of the library's
-// page parts (@sf.section, group, link_row, page_card), laid out by the page's width (page_look.mbt). Adding, a
+// page parts (@sf.section, group, link_row, page_card), laid out by the page's width. Adding, a
 // secret's editor and the recovery words typed are the presenters' (vault_dialogs.mbt).
 
 ///|
@@ -403,7 +403,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
     })
   }
   if reading {
-    // (a vault's secrets still read: rows' shapes under what is shown, Vault.tsx's Waiting, 3 dense)
+    // (a vault's secrets still read: rows' shapes under what is shown, 3 dense)
     out.push(fn() { @sf.group_waiting(c, fn() { vault_items_sample(c, core) }, text=@sf.t("common.reading")) })
   } else if rows.length() + accounts.length() == 0 && find != "" {
     out.push(fn() { @sf.page_note(c, @sf.t("web-pages.vault.noMatch", args=[("q", vault_find.text().trim(chars=" ").to_owned())])) })
@@ -414,7 +414,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
 }
 
 ///|
-/// A request waiting on the viewer (Vault.tsx Request): its card, as in its chat (vault_ask), and a way to that chat.
+/// A request waiting on the viewer: its card, as in its chat (vault_ask), and a way to that chat.
 fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
   let rv = Some(r)
   let id = text(rv, "id")
@@ -633,7 +633,7 @@ fn vault_named(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Unit {
         None =>
           match topic.error {
             Some(e) => @sf.page_note(c, error_text(e), bad=true)
-            // (read the first time: rows' shapes where its card's rows will be, Vault.tsx's Waiting, 4)
+            // (read the first time: rows' shapes where its card's rows will be, 4)
             None =>
               @sf.group_waiting(c, fn() { named_rows(c, vault_sample_items().map(Json::object)) }, text=@sf.t("common.reading"))
           }

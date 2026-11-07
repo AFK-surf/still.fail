@@ -1320,7 +1320,7 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 
 // ── the made-up chat's cards, answered here ─────────────────────────────
 //
-// The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
+// The fixture takes a card's answer as the core does: answered at once (the option picked, 你 选择了
 // 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
 // card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards);
 // chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it; chat-vault-typed,
@@ -2010,7 +2010,7 @@ pub fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
 }
 
 ///|
-/// The chat with its station's update said in its bar and opened (MBUI_FIXTURE=chat-update: station_update.mbt).
+/// The chat with its station's update said in its bar and opened.
 /// chat-cache-cold: its agent at rest, its prompt cache over, as the core says it (ChatView::cacheCold).
 pub fn with_cache_cold(v : Json) -> Json {
   match v {

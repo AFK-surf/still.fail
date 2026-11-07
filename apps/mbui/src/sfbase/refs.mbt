@@ -617,7 +617,7 @@ pub fn paste_threshold(c : @ui.Ctx, src : Source) -> Int {
 
 ///|
 /// Words pasted at once past the bound (what the field gave up) going with draft `w` as a file of their own
-/// (pastedText.ts makePastedFile: `pasted-text-<its id>.txt`), what the core says of them (`paste.info`) with it.
+/// , what the core says of them (`paste.info`) with it.
 pub fn writing_paste(src : Source, w : Writing, station : String, words : String) -> Unit {
   (src.call)("paste.info", { "text": Json::string(words) }, fn(r) {
     guard r is Ok(v) else { return }

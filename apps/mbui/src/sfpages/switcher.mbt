@@ -8,7 +8,7 @@
 // finds (its sizes the theme's: @sf.Found); where the screen has keys, ↑ / ↓ choose and Enter opens, a press anywhere.
 
 ///|
-/// What can be done here, as the frame offers it (Switcher.tsx Offered): a key's action it answers now, or one of its
+/// What can be done here, as the frame offers it: a key's action it answers now, or one of its
 /// own; for one the core does not name (a settings page), its `label`, `group`, other `words`, and whether it is only
 /// found by typing; for one whose name the core words with something, the version an update goes to and the station
 /// updated ("" none); its icon, its keys (a key's action's, as kept on this device), what it does.
@@ -26,7 +26,7 @@ pub(all) struct Offered {
 }
 
 ///|
-/// A command as the list shows it (Switcher.tsx Listed): its part, its part's heading, its name, as the core says.
+/// A command as the list shows it: its part, its part's heading, its name, as the core says.
 priv struct Listed {
   id : String
   group : String
@@ -35,7 +35,7 @@ priv struct Listed {
 }
 
 ///|
-/// A line of the list (Switcher.tsx Found, SearchPage's rows, and the headings and words between).
+/// A line of the list (SearchPage's rows, and the headings and words between).
 priv enum FindLine {
   Head(String)
   /// over one kind alone: back to every kind (全部结果)

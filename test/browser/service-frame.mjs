@@ -6,7 +6,7 @@
 // Pictures of each go to SHOTS.
 //
 //   pnpm run build:cloud && (cd station && pnpm run build) && SHOTS=<dir> node test/browser/service-frame.mjs
-//   (the iroh dev relay on :3340; PORT, default 8973, and PORT+1..+5 free; PLAYWRIGHT_MODULE as stories.mjs takes it;
+//  (the iroh dev relay on :3340; PORT, default 8973, and PORT+1..+5 free; PLAYWRIGHT_MODULE as stories.mjs takes it;
 //   build:cloud with STILLFAIL_PREVIEW_ORIGIN=http://127.0.0.1:<PORT+3>, whose app apps/mbui/scripts/web-app.sh made)
 //
 // Real processes and a browser: a side script, not one of the deterministic tests.

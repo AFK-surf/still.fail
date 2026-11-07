@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * PDFs drawn by the system's PdfRenderer (src/host/host_native.mbt `pdf_*`), as still.fail's Android app draws them
- * (FilePreview.kt PdfViewer): the bytes put in a file of the app's cache (the renderer reads a file), the pages' sizes
+ * : the bytes put in a file of the app's cache (the renderer reads a file), the pages' sizes
  * read as it opens, each page drawn on white off the GL thread, one at a time (the renderer opens one page at a time),
  * and uploaded as an image of the host's table (Images.upload).
  */

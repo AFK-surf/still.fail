@@ -1,4 +1,4 @@
-// Visualizations (still.fail apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt, Prose.kt; web/src/Viz.tsx): an HTML
+// Visualizations: an HTML
 // file an agent placed in its message's text (`[title](figure.html)` on a line of its own), drawn there in a page's
 // view (src/ui/native.mbt NativeView::page) instead of shown as a card, with ways under it to open it over the whole
 // screen or as a page of its own (PreviewFile, service.mbt). (A ```mermaid block is the app's own picture:
@@ -14,7 +14,7 @@
 // ── the page itself ────────────────────────────────────────────────────
 
 ///|
-/// A page drawn (Viz.kt VizFrame): its view, the height it said, whether it is shown yet (once it has drawn itself:
+/// A page drawn: its view, the height it said, whether it is shown yet (once it has drawn itself:
 /// what is under it shows meanwhile), the theme it was told.
 pub(all) struct VizFrame {
   view : @ui.NativeView
@@ -180,7 +180,7 @@ pub fn viz_frame(
           None => ()
         }
       })
-      // in a list, an upright drag on the page moves the list (Viz.kt passVerticalDrags); a page of its own keeps them
+      // in a list, an upright drag on the page moves the list; a page of its own keeps them
       if !fill {
         view.touch(@ui.Touch::VerticalOut)
       }
@@ -416,7 +416,7 @@ pub let viz_fill : @ui.Style = @ui.css("w=Full h=Full")
 pub let viz_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// A whole page in a message: its corners the card's (Smooth 20), on the paper (Viz.kt: #F6F2EA, dark #26272B).
+/// A whole page in a message: its corners the card's (Smooth 20), on the paper (dark #26272B).
 // kept across runs: a value (no field of it changes)
 pub let viz_page_frame : @ui.Style = @ui.style(w=Full, radius=@sf.viz_card_radius, clip=true, bg=@sf.viz_paper, dark=@ui.patch(bg=@sf.viz_paper_dark))
 
@@ -479,8 +479,8 @@ fn viz_shown_again(key : String) -> Unit {
 }
 
 ///|
-/// One of the ways under a page (VizFiles.kt): a 22 box (corners Smooth 6), a 14 icon in the frame's subtle grey; named
-/// `label`, said over it while it is pointed at (Viz.tsx's Tip).
+/// One of the ways under a page: a 22 box (corners Smooth 6), a 14 icon in the frame's subtle grey; named
+/// `label`, said over it while it is pointed at.
 pub fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String, subtle : Int64) -> Unit {
   let b = c.box(style=viz_way, id~, fn() {
     @sf.icon(c, icon, size=14.0, color=subtle) |> ignore
@@ -491,7 +491,7 @@ pub fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String, subtle : I
   @sf.tip(c, "viz-way/" + id.to_string(), id, label)
 }
 
-// ── in a message (VizFiles.kt VizFile) ─────────────────────────────────
+// ── in a message ─────────────────────────────────
 
 ///|
 /// Where a visualization's words to send go: the chat's composer, whichever frame's (its draft: the words after what
@@ -606,7 +606,7 @@ pub let viz_way : @ui.Style = @ui.style(
   justify=JCenter,
 )
 
-// ── over the whole screen (Viz.kt VizFull, VizFiles.kt VizOpen) ────────
+// ── over the whole screen ────────
 
 ///|
 /// A visualization open over the whole screen: its name, its file (to fetch, or fetched), the chat whose composer its

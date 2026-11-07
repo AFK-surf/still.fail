@@ -1,4 +1,4 @@
-// What is written as the core keeps it (sfbase's compose.mbt, the web's draft.ts): over the fixture core's composers
+// What is written as the core keeps it (sfbase's compose.mbt): over the fixture core's composers
 // (compose_fixture.mbt).
 
 ///|

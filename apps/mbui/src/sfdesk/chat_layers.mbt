@@ -39,7 +39,7 @@ fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : In
 }
 
 ///|
-/// A row of the 文件 tab carried over box `pane` (DropHint, ChatPage.css.ts dropHint): the pane frosted over under the
+/// A row of the 文件 tab carried over box `pane` (DropHint): the pane frosted over under the
 /// composer, the row's mark twice a card's and 松开以添加到消息 in its middle; let go there, into draft `draft` on
 /// `station` (useChatDrop: named by its path, or as a file where the chat says so).
 pub fn chat_drop(c : @ui.Ctx, src : Source, station : String, draft : String, pane : Int) -> Unit {

@@ -1,4 +1,4 @@
-// ⌘K (the web's Switcher.tsx ChatSwitcher and Finder, Switcher.css.ts): a panel high on the window over a scrim, the
+// ⌘K: a panel high on the window over a scrim, the
 // search on top (搜索全部内容和操作), under it what a few words find in the workspace (the core's `search`, 
 // its chats, the messages that have them, what every station finds besides, each kind under its heading, a few of each;
 // 查看更多 that kind alone, 全部结果 or Esc back to all) and what can be done here by its name (the core's
@@ -63,7 +63,7 @@ pub fn switcher_open_with(words : String) -> Unit {
 }
 
 ///|
-/// How ⌘K's panel comes (Switcher.css.ts switcher: popKeyframes from its top, 140 ms on the ease-out).
+/// How ⌘K's panel comes (140 ms on the ease-out).
 // kept across runs: a value (no field of it changes)
 let switcher_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, oy=0.0, spec=@motion.tween(@kit.pop_ms, ease=Out), ground_first=true)
 
@@ -75,7 +75,7 @@ let gone_at_once : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.Snap(0.0
 ///|
 /// ⌘K over the page (ChatSwitcher): over a scrim, 14% down the window, 560 wide at most (32 short of the window), 480
 /// high at most (72% of the window); its search, then sfpages' list of what is found and what can be done (finder_list),
-/// the latest chats with nothing typed. Drawn each frame; nothing while closed. It comes in as the web's (Switcher.css.ts):
+/// the latest chats with nothing typed. Drawn each frame; nothing while closed. It comes in as the web's:
 /// its scrim faded in over 120 ms, the panel grown out of 97% from its top and faded in over 140 ms; it goes at once.
 pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // (asked closed too: opened again, it comes in again)
@@ -169,7 +169,7 @@ fn dmin(a : Double, b : Double) -> Double {
 }
 
 ///|
-/// The panel (Switcher.css.ts switcher): 14% down the window, 560 wide at most and 32 short of the window, 480 high at
+/// The panel: 14% down the window, 560 wide at most and 32 short of the window, 480 high at
 /// most and 72% of the window; 12 in (EDGE), its corner a row's (18) and that (30: concentric with its rows where
 /// its list is scrolled to its end, not a pill's 19 the rows are not round by), a small panel's
 /// ground and line, a deep shadow (0 24px 64px); what its search takes of it (76).
@@ -208,7 +208,7 @@ let switcher_side : Double = 16.0
 let switcher_panel_rest : Double = 76.0
 
 ///|
-/// The search (Switcher.css.ts search): 48 high, 12 in, the words a title's (16), the placeholder subtle.
+/// The search: 48 high, 12 in, the words a title's (16), the placeholder subtle.
 // kept across runs: a value (no field of it changes)
 let switcher_search_box : @ui.Style = @ui.css("row w=Full h=S12 px=S3 align=ACenter")
 
@@ -227,7 +227,7 @@ fn action_offered(id : String, icon : String, version? : String = "", station? :
 }
 
 ///|
-/// What ⌘K offers of what the frame can do now (Switcher.tsx offered: the keys' actions it answers, and its own): the
+/// What ⌘K offers of what the frame can do now (and its own): the
 /// open chat's (find, its services, into the archive, its agents' history, its agents stopped, a file into its draft,
 /// relayed, its station updated: as its keys and its bar's offer them now), the app's newer build or looking for one, the app's (a new
 /// chat, the sidebar, settings, the shortcuts), settings' pages (only found by typing). The core names the keys'

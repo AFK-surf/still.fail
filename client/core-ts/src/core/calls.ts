@@ -1,4 +1,4 @@
-// Named calls and their input validation (core/calls.rs); execution stays in the core (execute.ts).
+// Named calls and their input validation; execution stays in the core (execute.ts).
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
@@ -218,7 +218,7 @@ export function callStation(call: Call): string | null {
   }
 }
 
-/// Whether a call is one a person does and waits on (doing.rs `counts`).
+/// Whether a call is one a person does and waits on.
 export function counts(call: Call, name: string): boolean {
   switch (call.kind) {
     case "decisionForm":

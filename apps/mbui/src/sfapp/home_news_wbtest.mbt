@@ -1,4 +1,4 @@
-// What the last update brought at Home's top (home_news.mbt; PageParts.kt ChangelogNews), over the fixture's Home with
+// What the last update brought at Home's top, over the fixture's Home with
 // the changelog's `news` said.
 
 ///|

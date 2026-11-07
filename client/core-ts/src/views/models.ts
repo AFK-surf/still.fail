@@ -1,4 +1,4 @@
-// What a station can run, put together from its overview (views.rs, its second half): the runtimes a chat can start
+// What a station can run, put together from its overview (its second half): the runtimes a chat can start
 // on and their models, what a session can be moved to and who runs it, what is worth a look about a session, an
 // account's allowance in a few words.
 import * as format from "../format.ts";

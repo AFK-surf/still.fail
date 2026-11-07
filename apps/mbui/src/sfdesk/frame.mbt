@@ -38,7 +38,7 @@ pub(all) struct Wide {
   side_w : @signals.Signal[Double]
   folded : @signals.Signal[Bool]
   edge_held : @signals.Signal[Bool]
-  /// folded, whether it is shown a while over the page (Rail.tsx peekSidebar)
+  /// folded, whether it is shown a while over the page
   peeking : @signals.Signal[Bool]
   /// folded for the page's room whatever was chosen (page_beside_least), this frame; shown a while from the next as a
   /// place is pressed into; the page shown as the last build began (a row chosen while shown: another page, folded)
@@ -300,7 +300,7 @@ fn side_on_fold() -> Double? {
 }
 
 ///|
-/// The rail's width; the sidebar's own, its least and most (Rail.tsx SIDEBAR: 240, from 180 to 480; the stations' 280).
+/// The rail's width; the sidebar's own, its least and most (from 180 to 480; the stations' 280).
 pub let rail_w : Double = 56.0
 
 ///|
@@ -372,7 +372,7 @@ let closed_peek_shadow : (Double, Double, Double) = (24.0, 8.0, 1.0)
 let side_into_rail : Double = 8.0
 
 ///|
-/// How far the page clears the folded sidebar shown a while, and stays from the window's edge (Rail.tsx PEEK_GAP).
+/// How far the page clears the folded sidebar shown a while, and stays from the window's edge.
 pub let peek_gap : Double = 16.0
 
 ///|
@@ -1006,7 +1006,7 @@ pub fn landing(w : Workspace) -> Bool {
 
 ///|
 /// The chats' place with nothing open: the chat the core says was open last in this workspace, else a new chat
-/// (workspace.tsx WorkspaceHome; once per workspace, so closing the chat goes back to the list on a phone).
+/// (once per workspace, so closing the chat goes back to the list on a phone).
 fn land(src : Source, w : Workspace) -> Unit {
   if app.nav.depth() != 1 || app.nav.top() != Home {
     return
@@ -1042,7 +1042,7 @@ fn main_page(
   match page {
     Chat(r) => chat_page(c, src, w, r)
     // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
-    // open beside it at the entry asked (ChatPage.tsx's `history`), the page the chat's
+    // open beside it at the entry asked, the page the chat's
     History(r, key, entry) => {
       c.tell("history-page/" + key, fn() { history_beside(src, r, key, entry) })
       chat_page(c, src, w, r)
@@ -1073,7 +1073,7 @@ fn main_page(
 }
 
 ///|
-/// Which sidebar the block holds (Rail.tsx SidebarGroup), each its own width and folded or not: the files', the
+/// Which sidebar the block holds, each its own width and folded or not: the files', the
 /// profiles' and the stations' when in the rail, the chats' for the chats' places and the others in the rail, else the
 /// settings'; in a place with none of its own, the one it had (side_place: it closes as wide as it was).
 fn side_group(src : Source, ws : String) -> String {
@@ -1102,7 +1102,7 @@ fn side_default(group : String) -> Double {
 ///|
 /// The sidebar shown follows the place and the workspace as it was left on this device (prefs `sidebars`): its width
 /// the person's, the same in every workspace, by `\n<group>` (no workspace before the line); folded or not each
-/// workspace's own, by `<workspace>\n<group>` (`closed`; Rail.tsx widthFor, folded). A width kept before by a
+/// workspace's own, by `<workspace>\n<group>` (`closed`; folded). A width kept before by a
 /// workspace (`<width>` or `<width>,closed` there) is read where none is kept across them. What changes of it is
 /// kept, once a drag of its edge is over. (The user, 2026-10-27: a sidebar's width is the person's, not the
 /// workspace's.)
@@ -1218,7 +1218,7 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
     }
     return
   }
-  // on it, or on its edge at its right (Rail.tsx PEEK_ON: the dock, the edge, what pops up from it)
+  // on it, or on its edge at its right (the edge, what pops up from it)
   let over = (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
     (wide.peeking.get() && px >= bar_r - 2.0 && px < bar_r + 10.0)
   if over && !wide.peeking.get() && px < bar_x + rail_closed_w {
@@ -1250,7 +1250,7 @@ fn side_crowded() -> Unit {
 }
 
 ///|
-/// How long the pointer is off the sidebar shown a while before it folds again (Rail.tsx PEEK_LEAVE).
+/// How long the pointer is off the sidebar shown a while before it folds again.
 pub let peek_leave_ms : Double = 400.0
 
 ///|

@@ -4,7 +4,7 @@
 // chat.place). Each frame draws the rows its own way.
 
 ///|
-/// An entry of the list (Chat.kt Entry), with the room above the first (the bar's) and below the last (the
+/// An entry of the list, with the room above the first (the bar's) and below the last (the
 /// composer's).
 pub(all) enum Entry {
   Top
@@ -71,7 +71,7 @@ pub(all) struct Reading {
   mut seen_whole : Double
   /// where the reader is: the message at the top of what shows (-1 none), and whether at the chat's end
   mut top_seq : Double
-  /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between (wide_find.mbt)
+  /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between
   mut bottom_seq : Double
   /// the frame those were last worked out in (read_place: once its builds were over, its page shown), whether where
   /// the chat stands (its State row) was in view then, and whether the list was still then (not gliding, nothing in
@@ -97,7 +97,7 @@ pub(all) struct Reading {
   mut bench_rows : Int
   bench_ms : Array[Double]
   bench_present : Array[Double]
-  /// the rows drawn so far, by key (what is new to the list rises in: Chat.kt known, arrived); whether it has been
+  /// the rows drawn so far, by key (arrived); whether it has been
   /// drawn; the rows new to it since, until they show
   known : Map[String, Bool]
   mut drawn : Bool
@@ -110,7 +110,7 @@ pub(all) struct Reading {
   mut played : Int
   mut ticked : Int
   fresh : Map[String, Bool]
-  /// the frame a row new to it last came into it (`fresh`): what comes at its end then is glided after (Follow.kt)
+  /// the frame a row new to it last came into it (`fresh`): what comes at its end then is glided after
   mut came_frame : Int
   /// the rows that came new to it while it shows, by key: the how-manieth (`came_n`), and the agent whose avatar it
   /// came out of ("" none). Words sent from here are not among them: they fly in (flight.mbt)
@@ -123,24 +123,24 @@ pub(all) struct Reading {
   /// the rows over it go up for it: sfpages chat_list), and the frame it came in ("" and -10: none yet)
   mut over : String
   mut over_frame : Int
-  /// rows asked a turn to come in (turns.mbt: Chat.kt admitted)
+  /// rows asked a turn to come in
   admitted : Map[String, Bool]
   /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
-  /// end (ListInfo's `glide_rest`), not for the reader's hand (listQueue.ts listStill: following, and there)
+  /// end (ListInfo's `glide_rest`), not for the reader's hand (and there)
   mut list_read : @ui.ListReader?
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
   mut following_row : Bool
   mut follow_key : String
-  /// the outbox entries messages were sent from here as, by seq (their rows go on being those: Chat.kt sentAs)
+  /// the outbox entries messages were sent from here as, by seq
   sent : Map[Double, String]
   /// the key each row of the core's that what was sent from here became goes on by: the key it had as it was sent
   /// ("o:local:n"), its one identity from the press on (its outbox entry's and its message's keys to it)
   sent_as : Map[String, String]
   /// Told when a local row is taken over, so a viewer opened before that can follow its new core identity.
   sent_as_told : @signals.Signal[Int]
-  /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
+  /// agents whose turn ended, still shown a moment (then fading 220): Lingering
   linger : Map[String, Lingering]
   /// how many have lingered (Lingering.id)
   mut lingered : Int
@@ -150,7 +150,7 @@ pub(all) struct Reading {
   mut acts_seen : Int
   /// told as one comes to linger or goes (what reads `linger` built again for it: it is said before any page is built)
   linger_said : @signals.Signal[Int]
-  /// the room agents' lines left as they went from the list (Chat.kt floor): the list never gets shorter under the
+  /// the room agents' lines left as they went from the list: the list never gets shorter under the
   /// reader. What comes in next takes it back (`floor_takers`: each row by key, as tall as the build last read it;
   /// `floor_laid`: as the frame before laid it out). Each agent's line's room (its row, the gap over it with it) as last
   /// read, by key; the frame the floor was last counted in
@@ -166,7 +166,7 @@ pub(all) struct Reading {
   running : Map[String, Agent]
   /// each agent's last turn as last ticked (Agent.last_turn)
   last_turns : Map[String, String]
-  /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
+  /// a message gone to (a notification's) and how lit it is (flash_of)
   mut flash : String
   flash_lit : @motion.Anim
   /// flashes started (each one's own hold, with motion reduced)
@@ -175,9 +175,9 @@ pub(all) struct Reading {
   /// its words; yet to be put in the list's middle when it lies low (`flash_centre`)
   mut flash_passage : String
   mut flash_centre : Bool
-  /// a message the search opened the chat at (ChatMotion.kt foundAt, "" none) and its words marked in it (`found`),
+  /// a message the search opened the chat at ("" none) and its words marked in it (`found`),
   /// for as long as the chat shows; how far their strokes are drawn in (ms of drawFound's); its first word yet to be
-  /// put in the list's middle when it lies low (Chat.kt rememberJump's FOUND)
+  /// put in the list's middle when it lies low
   mut found_at : String
   mut found_words : Array[String]
   found_drawn : @motion.Anim
@@ -301,7 +301,7 @@ pub fn reading_of(key : String) -> Reading {
 }
 
 ///|
-/// Where a chat was left this run (AppState.places, Chat.kt leave): the message at the top of what showed (its seq) and
+/// Where a chat was left this run (AppState.places): the message at the top of what showed (its seq) and
 /// how far its top was below the list's (points); and, left at its end, the newest message then (else -1). It opens
 /// there again before where the core says (`at`): the chat's view can outlive its page (opened again before the core
 /// lets it go, a minute after: store.ts EVICT_AFTER_MS) and still say where it was opened the first time.
@@ -320,7 +320,7 @@ pub let kept_places : Map[String, KeptPlace] = {}
 let state_key : String = "state"
 
 ///|
-/// The list's entries (Chat.kt Messages → all): the page before's spinner, the messages with the unread line over the
+/// The list's entries: the page before's spinner, the messages with the unread line over the
 /// first unread and what went to Slack after each, the page after's spinner, the outbox, where it stands (said only at
 /// its end: none while an agent works), its agents at work.
 pub fn entries_of(v : ChatView) -> Array[Entry] {
@@ -638,14 +638,14 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     }
   }
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
-  // wait out of the list (emit.mbt, ChatMotion.kt). (Once under way, it goes on while the end is near: the answer
+  // wait out of the list (emit.mbt). (Once under way, it goes on while the end is near: the answer
   // coming in grows the list under the reader, who is a moment short of its end until the list follows; only
   // scrolled away, as the way to the newest shows, it ends.)
   // (played on while its page shows: under another page it waits where it is, as before)
   let em = emits_of(rk)
   if shown && !played {
     rd.played = frame
-    // what changes the list's height, one at a time (turns.mbt): each whose turn has come starts
+    // what changes the list's height, one at a time: each whose turn has come starts
     let turns = turns_of(rk)
     turns.step(c, match rd.list_read {
       Some(lr) =>
@@ -750,7 +750,7 @@ fn linger_told(rd : Reading) -> Unit {
 }
 
 ///|
-/// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
+/// The list with the activities of agents whose turn just ended, kept a moment (then fading 220).
 pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   rd.linger_said.get() |> ignore
   if rd.linger.is_empty() {
@@ -835,7 +835,7 @@ pub fn act_rooms(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) 
 }
 
 ///|
-/// How tall the floor agents' lines left is in this build (Chat.kt floor, web's): what they left, less the rows that
+/// How tall the floor agents' lines left is in this build (web's): what they left, less the rows that
 /// came in since, each as tall as last laid out (read back: laid out otherwise, the frame is built again). As a frame
 /// begins, from what the frame before laid out: once they fill it, it is gone; one gone from the list (an outbox entry
 /// become its message, by another key), its height is taken for good.
@@ -1085,7 +1085,7 @@ pub fn Reading::sees(self : Reading, frame : Int, seq : Double?) -> Bool {
 /// The rows in the list and their keys, as they move (a message sent from here keeps its outbox row's: Chat.kt
 /// sentAs), and which are new: what comes while the list follows its end and the chat shows, not caught up on (Chat.kt
 /// arrived, caught). What comes then (a message simply coming in, an agent's line, an outbox entry) comes in its turn
-/// among what changes the list's height (turns.mbt, Chat.kt newcomers), kept out of the list till then. What was sent
+/// among what changes the list's height, kept out of the list till then. What was sent
 /// from here never waits: in the list the frame it is sent, before the core has it (LocalSent).
 pub fn row_keys(
   c : @ui.Ctx,
@@ -1304,7 +1304,7 @@ pub fn row_keys(
           }
           None => ()
         }
-        // what comes in takes back the room an agent's line left (Chat.kt floor)
+        // what comes in takes back the room an agent's line left
         if rd.floor > 0.0 {
           rd.floor_takers[keys[i]] = 0.0
         }
@@ -1433,7 +1433,7 @@ fn shown_rows(
 
 ///|
 /// The newest row (a message, an outbox entry; not an agent's line, which folds away) come while the list follows its
-/// end: followed from its top, its top follow_margin under the bar (Chat.kt newestKey, Follow.kt anchor), not past its
+/// end: followed from its top, its top follow_margin under the bar, not past its
 /// end; the row kept by its key as rows come and go round it. The viewer's own (an outbox entry, a message of theirs)
 /// is not read from its start: they wrote it, and the list follows on to its end, its pictures and the agent's line
 /// under it (the web's Chat.tsx: what comes with its agent's activity after it goes on to the end).
@@ -1494,14 +1494,14 @@ fn own_row(e : Entry) -> Bool {
 }
 
 ///|
-/// How far under the list's room at its top a row followed from its top stops (Chat.kt followMargin).
+/// How far under the list's room at its top a row followed from its top stops.
 pub let follow_margin : Double = 12.0
 
 ///|
 pub let flash_held : Ref[Bool] = Ref(false)
 
 ///|
-/// A message gone to flashes (ChatMotion.kt flash): the accent's ground in over `flash_in_ms` on Ease.Out, held to
+/// A message gone to flashes: the accent's ground in over `flash_in_ms` on Ease.Out, held to
 /// `flash_held_ms`, gone by `flash_ms` on the standard curve.
 pub let flash_in_ms : Double = 160.0
 
@@ -1569,7 +1569,7 @@ pub fn at_end_asked() -> Bool {
 }
 
 ///|
-/// Tells the core the chat shows, its end seen or not (Chat.kt: `client.focus` with `chat`), and the last message seen
+/// Tells the core the chat shows, its end seen or not, and the last message seen
 /// whole (`seen`), as either changes; it marks what is read and where the unread line goes. Never with
 /// Source.readonly.
 pub fn tell_focus(
@@ -1632,10 +1632,10 @@ pub fn focus_chat(r : ChatRef, v : ChatView, end : Bool?) -> Json {
 }
 
 ///|
-/// Where the chat is, told the core (`chat.place`, Chat.kt leave): the message at the top and how far its top is below
+/// Where the chat is, told the core (`chat.place`): the message at the top and how far its top is below
 /// the list's (in the screen's pixels, as Android's app tells it), none at its end; told again only where that moved.
 pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit {
-  // kept here too, for opening it again this run (Chat.kt leave: app.places)
+  // kept here too, for opening it again this run
   if rd.top_seq >= 0.0 {
     kept_places[r.station + "\u{1}" + r.session] = {
       top: rd.top_seq,
@@ -1695,7 +1695,7 @@ pub fn list_frame(
 ) -> ListFrame {
   let rd = reading_of(r.station + "\u{1}" + r.session)
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
-  // wait out of the list (emit.mbt, ChatMotion.kt)
+  // wait out of the list (emit.mbt)
   // (taken and played on, before the page is built, by linger_tick)
   let ek = r.station + "\u{1}" + r.session
   let em = emits_of(ek)
@@ -1841,7 +1841,7 @@ pub fn list_after(
     let mut put_now = false
     if rd.placed && !rd.put && !at_end_asked() {
       rd.put = true
-      // where it was left here this run (Chat.kt kept): unless at its end with nothing new since, then at its end
+      // where it was left here this run: unless at its end with nothing new since, then at its end
       let newest = match v.messages.last() {
         Some(m) => m.seq
         None => -1.0
@@ -1921,7 +1921,7 @@ pub fn list_after(
               }
               if m.seq == target {
                 at = i
-                // opened from a search: its words marked in it, nothing flashing (Chat.kt markWords, FOUND)
+                // opened from a search: its words marked in it, nothing flashing (FOUND)
                 match go_to_words.get(gk) {
                   Some(words) => {
                     go_to_words.remove(gk)

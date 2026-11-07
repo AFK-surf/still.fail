@@ -1,4 +1,4 @@
-// The wide frame (wide.mbt) over the fixture, at a desktop's size; its calls kept as composer_wbtest.mbt keeps them.
+// The wide frame over the fixture, at a desktop's size; its calls kept as composer_wbtest.mbt keeps them.
 
 ///|
 /// The app over the fixture in a window `w` wide, its calls kept in `calls` (the fixture answers the rest).
@@ -2130,7 +2130,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
   let lines = word("读了 src/ui/list.mbt")
-  // (where it stands alone: no clock while it neither waits nor works, as AgentCard.tsx)
+  // (where it stands alone: no clock while it neither waits nor works)
   let status = word("做完了").filter(fn(w) {
     label.length() == 1 && lines.length() == 1 && w.2 > label[0].2 && w.2 < lines[0].2
   })

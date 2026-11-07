@@ -1,4 +1,4 @@
-// Slack as a chat surface (chat/slack.rs), on a socket kept up as every connect's is (connects/surface.ts): Socket Mode
+// Slack as a chat surface, on a socket kept up as every connect's is (connects/surface.ts): Socket Mode
 // for what Slack tells the station (a card's buttons too), the Web API for what the station and its agents say and ask.
 // One SlackSurface per connected connect.
 import { readFile } from "node:fs/promises";

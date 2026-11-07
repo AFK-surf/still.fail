@@ -1,4 +1,4 @@
-// An agent's execution history as the clients show it (history.rs): what actually ran, put together here so every
+// An agent's execution history as the clients show it: what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
 import { args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";

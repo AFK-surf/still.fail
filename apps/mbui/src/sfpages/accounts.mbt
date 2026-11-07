@@ -1,4 +1,4 @@
-// A profile's page on the desktop (still.fail web/src/pages/Accounts.tsx AccountView and its sections; Accounts.css.ts): who
+// A profile's page on the desktop: who
 // the account is and whether it works now (its provider's mark, its name renamed here, the runtimes it serves, what it
 // is, its last check, checking again; its ⋯ to delete it, or stop the machine's own), signing it in where that comes
 // first, what is left of its allowance, what it spent, the stations it is on, sharing it, the workspaces it serves,
@@ -1622,7 +1622,7 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String) -> Unit {
   |> ignore
 }
 
-// ── styles (pages.css.ts identity, Accounts.css.ts) ─────────────────────
+// ── styles (pages.css.ts identity) ─────────────────────
 
 ///|
 /// Words on its cards, and the quieter ones (the ui's 13 on 24; muted).
@@ -1818,5 +1818,5 @@ fn profile_sample() -> Json {
 }
 
 ///|
-/// A workspace's mark before its switch's title (Accounts.tsx WorkspaceNamed: 16).
+/// A workspace's mark before its switch's title.
 let profile_ws_mark : Double = 16.0

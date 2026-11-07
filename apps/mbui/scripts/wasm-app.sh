@@ -13,7 +13,7 @@
 #       reads the app where it is here; run's argument the script, as ios.sh's
 #     PLATFORM=windows: (Git Bash, MSVC) the shell a program of its own, out/wasm-app/windows/stillfail.exe, with the
 #       DLLs and core.hbc beside it
-#     check: the Wasm side of the native calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
+#  check: the Wasm side of the native calls as their declarations make it
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"

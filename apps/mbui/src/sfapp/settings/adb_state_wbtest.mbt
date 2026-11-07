@@ -1,4 +1,4 @@
-// 共享调试's line while it is lent (station_parts.mbt adb_state, AdbShare.kt state).
+// 共享调试's line while it is lent (station_parts.mbt adb_state).
 
 ///|
 test "共享调试 lent: the minutes left of it, said again as they change" {

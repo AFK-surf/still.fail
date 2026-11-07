@@ -1,4 +1,4 @@
-// Managing a connect's Slack app from still.fail (chat/slack_apps.rs): its name, description, colour, icon and
+// Managing a connect's Slack app from still.fail: its name, description, colour, icon and
 // permissions live in the app's manifest, which Slack lets a workspace member change with an app configuration token.
 // The token lasts 12 hours; its refresh token (single use) yields the next pair, so the station keeps both and rotates
 // as needed. Permission changes still need a person to approve them in Slack; the station hands them the link. Also the

@@ -1,8 +1,8 @@
 // The rest of settings' pages (the Android app's settings module): what the automatic decisions' pages keep (their
 // drafts: the pages are src/sfpages automatic_decisions.mbt's, one each in every frame), this device's bottom bars
-// (BarSettings.kt), what this device keeps (KeptFiles.kt), the changelog (Changelog.kt), the prices the usage is
-// counted at (Usage.kt UsagePricesScreen); and, used from the chats' pages, how an agent runs (History.kt
-// RunSettingsScreen, run_page) and the machine's own sessions to go on with (NewChat.kt MachineSessions).
+// , what this device keeps, the changelog, the prices the usage is
+// counted at; and, used from the chats' pages, how an agent runs (History.kt
+// RunSettingsScreen, run_page) and the machine's own sessions to go on with.
 
 // ---------------------------------------------------------------------------
 // 自动决策
@@ -35,7 +35,7 @@ fn decisions_left(core : Core, route : Route) -> Unit {
 pub let bar_size : Int = 4
 
 ///|
-/// Every place, in the picker's order (Places.kt PLACES).
+/// Every place, in the picker's order.
 // kept across runs: a table of constants, never written
 pub let all_places : Array[String] = ["chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault"]
 
@@ -51,7 +51,7 @@ pub fn bars_value(core : Core) -> String {
 }
 
 ///|
-/// The bars kept whole (BarSettings.kt save): an empty one dropped, the one in view still the same bar after it.
+/// The bars kept whole: an empty one dropped, the one in view still the same bar after it.
 pub fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
   let mut cur = current
   let kept : Array[Array[String]] = []
@@ -191,7 +191,7 @@ fn size_words(n : Double) -> String {
 }
 
 ///|
-/// How long ago `at` was, in the app's words (KeptFiles.kt since): just now, minutes, hours, days.
+/// How long ago `at` was, in the app's words: just now, minutes, hours, days.
 fn since_words(now : Double, at : Double) -> String {
   let minutes = ((now - at) / 60000.0).floor().to_int()
   if minutes < 1 {
@@ -634,7 +634,7 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
 }
 
 ///|
-/// A kept file's bin (KeptFiles.kt: 36 across, its icon in its middle, its ripple a circle): no ground or corner of its
+/// A kept file's bin (its icon in its middle, its ripple a circle): no ground or corner of its
 /// own, pressed or not, so none stands round in its card's corner where no circle is concentric with it.
 // kept across runs: a value (no field of it changes)
 let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 align=ACenter justify=JCenter")

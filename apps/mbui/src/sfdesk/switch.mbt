@@ -52,7 +52,7 @@ fn page_switch_to(top : Page) -> Unit {
       became_starts(wide=true)
     }
   }
-  // a new chat come to: nothing made for it yet (NewChat.tsx useEnsureChat: once a page)
+  // a new chat come to: nothing made for it yet
   if top == NewChat && page_switch.was != Some(NewChat) {
     fresh_reset()
   }

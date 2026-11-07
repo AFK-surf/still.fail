@@ -375,7 +375,7 @@ test "profiles, connects, the vault: their lists" {
   assert_true(t.find("Claude 订阅") is Some(_))
   assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier in its row")
   assert_true(t.find("Pro 200") is Some(_), msg="the Codex subscription's tier in its row")
-  // its allowance a line of its own under its words, at the row's start (Profiles.kt)
+  // its allowance a line of its own under its words, at the row's start
   let (nx, ny) = t.find("Claude 主账号").unwrap()
   let (qx, qy) = t.find("62%").unwrap()
   assert_true(qy > ny + 20.0)
@@ -460,7 +460,7 @@ test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the wo
   let t = settings_tester("bars")
   bars_picked.set(None)
   assert_true(t.find("第 1 栏") is Some(_))
-  // under the title, what the bars are of (BarSettings.kt LargeTitle's small words)
+  // under the title, what the bars are of
   assert_true(t.find("此设备") is Some(_))
   // Station's "−", at its icon's top right over the first bar's last slot, said as what it takes off
   let (x, y, w, h) = t.query(Button, label="从此栏移除Station").unwrap().rect
@@ -479,7 +479,7 @@ test "下方栏: a place held and slid sideways goes where it is let go, by the 
   let t = settings_tester("bars")
   bars_picked.set(None)
   let (x, y, w, h) = t.query(@ui.Role::Group, label="对话").unwrap().rect
-  // a tap: nothing (BarSettings.kt: a place has no tap, only its drag)
+  // a tap: nothing (only its drag)
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(bars_picked.get() is None)
   // held and slid a slot and a third to the right: after 文件
@@ -629,7 +629,7 @@ fn unseen_lines(t : @ui.Tester) -> Array[Double] {
 }
 
 ///|
-/// The chip whose words are `words` and its ground's fill as drawn (Parts.kt FillChip): the fill's width (0: none) and
+/// The chip whose words are `words` and its ground's fill as drawn: the fill's width (0: none) and
 /// the chip's, the fill from the chip's left, as tall as it.
 fn chip_fill(t : @ui.Tester, words : String) -> (Double, Double) {
   let (x, y) = t.find(words).unwrap()
@@ -844,7 +844,7 @@ test "本机缓存 with many chats: the ones keeping most first, all when asked,
 test "本机缓存: a chat's files opened, each let go by its bin; those of no chat known apart" {
   let t = settings_tester("kept")
   t.draw()
-  // the chat: its messages and its 2 files (KeptFiles.kt chat.both), what is kept of it all
+  // the chat: its messages and its 2 files, what is kept of it all
   assert_true(t.find("消息 2.3 MB · 2 个文件 15.2 MB") is Some(_))
   assert_true(t.find("17.5 MB") is Some(_))
   // a chat of its messages alone: its size once, at its end
@@ -875,7 +875,7 @@ test "本机缓存: a chat's files opened, each let go by its bin; those of no c
 
 ///|
 test "a secret's longest grant: on its page its own or its vault's, in its editor 跟随默认 or one of its own" {
-  // its page: none of its own, its vault's (Vault.kt: 跟随默认 · …)
+  // its page: none of its own, its vault's
   let t = settings_tester("vault-item:v1#it1")
   t.draw()
   assert_true(t.find("最长授权") is Some(_))

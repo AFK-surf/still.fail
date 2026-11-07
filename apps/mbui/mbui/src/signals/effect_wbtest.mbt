@@ -1,4 +1,4 @@
-// alien-signals' own tests (tests/effect.spec.ts, effectScope.spec.ts, trigger.spec.ts), ported as they are.
+// alien-signals' own tests, ported as they are.
 
 // ── effect.spec.ts ──────────────────────────────────────────────────────────────────────────────────────────
 

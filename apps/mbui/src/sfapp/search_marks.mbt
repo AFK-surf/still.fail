@@ -10,7 +10,7 @@
 let found_marking : Ref[(String, Array[String], Double)] = Ref(("", [], 0.0))
 
 ///|
-/// How long the strokes are drawn in for (ChatMotion.kt drawFound: STROKE_MS + STROKE_GAP_MS × 12).
+/// How long the strokes are drawn in for.
 let found_draw_ms : Double = @sf.strokes_ms(12)
 
 ///|
@@ -22,7 +22,7 @@ fn found_start(rd : Reading) -> Unit {
 }
 
 ///|
-/// In the chat drawn now, while ⌘F's bar is open in it (wide_find.mbt): what it found, marked in every message drawn.
+/// In the chat drawn now, while ⌘F's bar is open in it: what it found, marked in every message drawn.
 let find_marking : Ref[Array[String]] = Ref([])
 
 ///|
@@ -38,7 +38,7 @@ fn found_words_of(ts : String) -> Array[String] {
 
 ///|
 /// Once the message gone to is laid out: its first word low in it (past 80% of the page) is what comes to the
-/// middle (Chat.kt rememberJump: `mid.y > pane.size.height * 0.8f`), once.
+/// middle, once.
 fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
   if !rd.found_centre || rd.found_at == "" {
     return
@@ -73,8 +73,8 @@ fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
 ///|
 /// The strokes under the words a search opened the chat at in message `ts`'s words (box `key`, as laid out), drawn
 /// in a layer of the box at `(bx, by)` in the window, behind its words: each of its paragraphs' own, one a line of a
-/// word that wraps, 4 under the baseline, 2 past the word's ends, 2.5 wide (TextMark.kt). `faint`: ⌘F's in a message
-/// other than the one the reader is at, drawn whole and lighter (ChatFind.css.ts: .45).
+/// word that wraps, 4 under the baseline, 2 past the word's ends, 2.5 wide. `faint`: ⌘F's in a message
+/// other than the one the reader is at, drawn whole and lighter.
 fn found_strokes(
   c : @ui.Ctx,
   key : String,

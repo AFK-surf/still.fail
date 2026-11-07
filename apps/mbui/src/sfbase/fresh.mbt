@@ -192,7 +192,7 @@ pub fn new_chat_leaving_of(c : @ui.Ctx, r : ChatRef) -> Bool {
 
 ///|
 /// Whether chat `r` was just made from a new chat, its scene still leaving or its first words still carried: the
-/// core's own, its first view not read yet, nothing breathing over it (Chat.kt made).
+/// core's own, its first view not read yet, nothing breathing over it.
 pub fn new_chat_made(c : @ui.Ctx, r : ChatRef) -> Bool {
   match fresh.became.get() {
     Some(b) if b == r => !new_leave(c).over() || flight_carried(r.station + ":" + r.session)

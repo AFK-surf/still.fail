@@ -24,7 +24,7 @@ import { claudePlan, codexClaims } from "./machine.ts";
 
 type Json = any;
 
-/// Whether a profile works, and what models it offers (profiles.rs ProfileCheck, the same JSON).
+/// Whether a profile works, and what models it offers (the same JSON).
 export type ProfileCheck = {
   decision?: Capability;
   /// The subscription tier as reported by its login; absent when the runtime does not say.
@@ -47,7 +47,7 @@ export type ProfileCheck = {
 export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
-/// How much of a profile's allowance is used, where the provider says (profiles.rs ProfileQuota).
+/// How much of a profile's allowance is used, where the provider says.
 export type ProfileQuota = {
   /// ok: windows filled; unsupported: nothing to show for this kind; unavailable: could not ask; blocked: the provider
   /// refuses the account.
@@ -120,7 +120,7 @@ export const keyed = (kind: AccessKind) => kind === "opencode-go" || kind === "a
 export const needsKey = (kind: AccessKind, provider: string | undefined): boolean =>
   keyed(kind) && !(kind === "api-provider" && provider !== undefined && find(provider)?.keyOptional === true);
 
-/// The runtimes an access kind runs without its provider (profiles.rs runtimes_of): a provider's follow from where it
+/// The runtimes an access kind runs without its provider: a provider's follow from where it
 /// speaks (`runtimesFor`).
 export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runtime[] {
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];

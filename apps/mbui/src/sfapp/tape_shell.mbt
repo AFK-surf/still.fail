@@ -90,7 +90,7 @@ fn taped_under(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// Over the tape's panels (an island, taking presses where it draws them alone): a station's screen over the whole
 /// window, as Android's ScreenActivity is over the app; a drive's text read, a film played over it too, as the web's
-/// pages of a file opened (Drive.css.ts opened: fixed over everything); what opens over the panels (sfdesk's
+/// pages of a file opened; what opens over the panels (sfdesk's
 /// overlays.mbt); the player sideways turned upright and words picked let go by back first; a visualization over the
 /// whole screen; what is over the frame in every tier (signed_in_over).
 fn taped_over(c : @ui.Ctx, src : Source) -> Unit {

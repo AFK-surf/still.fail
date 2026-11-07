@@ -149,7 +149,7 @@ fn ScreenSess::still_going(self : ScreenSess, d : ScreenDropItem) -> Bool {
 }
 
 ///|
-/// One part of a file up from `have` (Calls.kt driveUpload: small first, doubling while parts go through): the
+/// One part of a file up from `have` (doubling while parts go through): the
 /// station answers with what it has (`have`), the last part in with the entry it now has; a name taken refuses the
 /// first part (409 `exists`), and the file goes up again under the next free name.
 fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, planned : Int) -> Unit {

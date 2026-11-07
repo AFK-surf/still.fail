@@ -1157,7 +1157,7 @@ int32_t mb_host_mods_held(void) {
          ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
 }
 
-// This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation, installed.ts): its data
+// This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation): its data
 // (~/.stillfail), whether it runs (run/station.json's pid alive) and by what (a launchd service the installer made, or a
 // process started by hand), its release, whether the installer put one there, the workspace its data is in; what is
 // being done to it and what went wrong last. "" where there is neither data nor a service. Its acts (@hostapi.local_station_act) run off the main thread:

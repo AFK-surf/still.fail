@@ -6,7 +6,7 @@ import { pageBar as onePageBar } from "./styles/sidebar.css.ts";
 import { bar as filesBar } from "./pages/Files.css.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
 
-// A page's bar, and the files page's over its tabs (Files.tsx), which is in the same place.
+// A page's bar, and the files page's over its tabs, which is in the same place.
 const pageBar = `:is(${onePageBar}, ${filesBar})`;
 export const illus = style({
   display: "block", maxWidth: "100%", height: "auto",

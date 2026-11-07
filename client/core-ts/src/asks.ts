@@ -1,4 +1,4 @@
-// What a UI asks the core to find out (asks.rs): where one of still.fail's links opens in the app, whether a newer
+// What a UI asks the core to find out: where one of still.fail's links opens in the app, whether a newer
 // app is out, a picture (fetched once and kept on the device), the buddies a Slack app can wear, a dev cloud's sign-in.
 import { Deferred, Effect, Semaphore } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };

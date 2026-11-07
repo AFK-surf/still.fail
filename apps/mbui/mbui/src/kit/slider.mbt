@@ -129,7 +129,7 @@ pub fn slider(
 let thumb_room : Double = 22.0
 
 ///|
-/// A slider's look by its sizes (still.fail's, Reader.css.ts slider): a hairline track `track_h` high on `track` (16%
+/// A slider's look by its sizes (still.fail's): a hairline track `track_h` high on `track` (16%
 /// of `ink`, the words' colour), the part up to the thumb in `fill` (the accent); a round thumb `thumb_d` across in the
 /// fill with a ring of `ring` (the page's ground) round it, 4 more while held; 28 high.
 pub fn slider_look_of(

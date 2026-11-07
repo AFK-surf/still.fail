@@ -1,4 +1,4 @@
-// Signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box the frame gives it (inside the
+// Signed out (the web's cloud/gate.tsx SignInPage), in the box the frame gives it (inside the
 // system's bars): the illustration, what still.fail is for, 登录或注册, that several can be signed in, and under the
 // button where signing in stands: out in the browser, or why it failed.
 

@@ -42,7 +42,7 @@ fn home_moving(t : @ui.Tester) -> Array[String] {
 
 ///|
 test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
-  // (Home.kt: the list composed anew as it is come back to, its ListMotion new: nothing moves the first time)
+  // (its ListMotion new: nothing moves the first time)
   new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })

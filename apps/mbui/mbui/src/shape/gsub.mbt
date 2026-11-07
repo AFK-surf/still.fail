@@ -1,4 +1,4 @@
-// GSUB's subtables (harfrust's ot/lookup/gsub.rs): single, multiple, alternate and ligature substitution, the
+// GSUB's subtables: single, multiple, alternate and ligature substitution, the
 // contexts (context.mbt) and reverse chaining.
 
 ///|

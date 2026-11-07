@@ -1,4 +1,4 @@
-// This station's errors, reported to still.fail's PostHog project (telemetry.rs). Off unless the
+// This station's errors, reported to still.fail's PostHog project. Off unless the
 // station's operator turns it on in config.json (`"telemetry": { "errors": true }`). Only errors leave: error log
 // lines, each with its error's message, the station's id and the build. Paths under home directories lose the home,
 // and quoted text in error messages (a JSON parser's, for one, quotes its input) is cut.

@@ -47,7 +47,7 @@ pub let media_glass_share : Double = 0.72
 
 ///|
 /// The speed's ground (vvRate): the words at 10%; the timeline's track (vvTrack) the words at 20%, what has come at
-/// 22% over it (Player.css.ts buffered).
+/// 22% over it.
 pub let media_rate_share : Double = 0.1
 
 ///|
@@ -262,7 +262,7 @@ let media_head_room : @ui.Style = @ui.css("w=S0 h=S3")
 let media_head_disc : @ui.Style = @ui.css("w=S3 h=S3 radius=Full shadow=Sm")
 
 ///|
-/// A smaller head (the volume's, Player.css.ts volumeHead: 10 across).
+/// A smaller head (the volume's).
 let media_small_head_r : Double = 5.0
 
 ///|

@@ -1,4 +1,4 @@
-// config.json as a live, editable document (settings.rs): the file stays the source of truth. Edits are checked,
+// config.json as a live, editable document: the file stays the source of truth. Edits are checked,
 // written atomically (mode 600: it holds secrets) and told to whoever listens; fields this station does not know are
 // kept as they are. Edited by something else (the installer, `stillfail channel`, a person): read again when the file
 // changed (by its size and time) on the next read, and told then. A file that is not there is `{}` (the defaults).

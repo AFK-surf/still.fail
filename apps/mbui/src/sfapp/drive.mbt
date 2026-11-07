@@ -26,7 +26,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       // under the top bar (and the status bar); at the foot 30 over the navigation bar, and the bottom bar's room at a
-      // place's top (Files.kt foot)
+      // place's top
       let foot = nav_foot() + 30.0 + (if place && has_bar() { bar_room } else { 0.0 })
       @sfdesk.files_places(c, src, w.id, top=if place { status_top() + bar_h + 8.0 } else { 4.0 }, foot~, go=fn(at) {
         open_page(Drive(at))
@@ -55,7 +55,7 @@ pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// 文件's top bar as a place's (PlacePage.kt TopGlassBar): its name, settings at the right edge.
+/// 文件's top bar as a place's: its name, settings at the right edge.
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {

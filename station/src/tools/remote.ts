@@ -1,4 +1,4 @@
-// The agents' tools for other stations of the workspace (the Rust station's remote.rs `Remote::tools`): station_list,
+// The agents' tools for other stations of the workspace: station_list,
 // station_task, station_file (once the Rust's, word for word; station_task has since taken `dir` and `back`); what they
 // do is Remote.tool.
 import type { Remote } from "../jobs/remote.ts";

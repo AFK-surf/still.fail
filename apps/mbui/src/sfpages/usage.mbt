@@ -49,7 +49,7 @@ fn usage_reset() -> Unit {
 }
 
 ///|
-/// The days the page shows (Usage.tsx DAYS).
+/// The days the page shows.
 // kept across runs: a table, never written
 let usage_days_choices : Array[Int] = [7, 30]
 

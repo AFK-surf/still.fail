@@ -567,7 +567,7 @@ pub fn columns_view(
 }
 
 ///|
-/// Between two columns (Drive.css.ts columns' gap), where an edge is.
+/// Between two columns, where an edge is.
 pub let column_gap : Double = 6.0
 
 ///|
@@ -744,7 +744,7 @@ let tree_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 let tree_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
 
 ///|
-/// The columns side by side (Drive.css.ts columns), as tall as the list.
+/// The columns side by side, as tall as the list.
 // kept across runs: a value (no field of it changes)
 let columns_strip : @ui.Style = @ui.css("row w=Full h=Full")
 

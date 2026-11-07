@@ -1,4 +1,4 @@
-// Writes asked with an idempotency key happen once (once.rs): asked again, or twice at once, the first answer.
+// Writes asked with an idempotency key happen once: asked again, or twice at once, the first answer.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";

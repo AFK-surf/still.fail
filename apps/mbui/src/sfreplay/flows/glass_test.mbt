@@ -56,7 +56,7 @@ test "29-glass" {
       // its answer come (in the words sent and in the agent's message)
       f.see_n(2, glass_reply(i))
     }
-    // (what came with them in the list in its turn: turns.mbt, one at a time)
+    // (one at a time)
     let turns = f.t.rest_of("a chat's list turns")
     if turns > f.t.time() && turns < @double.infinity {
       f.run_to(turns)

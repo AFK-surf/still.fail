@@ -2,7 +2,7 @@
 // msgImageReveal.
 
 ///|
-/// How long a message's image takes to come in on the desktop (Chat.css.ts msgImageReveal: 1100 ms).
+/// How long a message's image takes to come in on the desktop.
 let reveal_ms : Double = 1100.0
 
 ///|

@@ -4,7 +4,7 @@
 
 ///|
 /// A page of the settings, by its route: call for the page the app's stack shows. `root`: a place of the bottom
-/// bar's at the stack's root (PlacePage.kt), under the app's own top bar, so without its compact one. `top`: where
+/// bar's at the stack's root, under the app's own top bar, so without its compact one. `top`: where
 /// that bar is over the page rather than above it, how far down what it shows starts (it scrolls under the bar).
 pub fn page(
   c : @ui.Ctx,
@@ -160,7 +160,7 @@ pub fn dark(prefs : Json?, system_dark : Bool) -> Bool {
 }
 
 ///|
-/// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
+/// still.fail's terms or privacy policy on the web (the app speaks Chinese: no /en).
 pub fn legal_url(page : String) -> String {
   "https://still.fail/" + page
 }
@@ -170,7 +170,7 @@ pub fn legal_url(page : String) -> String {
 pub let notify_switched : @signals.Signal[Bool?] = @signals.signal(None)
 
 ///|
-/// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
+/// Notifications turned on or off on this device (AppState.useNotify): turned on, the system
 /// asked to allow them too; the core keeps it (`notify.set`), taking this device's pushes off the accounts when off,
 /// and the push registration follows what it answers (Push.sync). Not done: said in a toast, the switch back.
 pub fn use_notify(core : Core, on : Bool) -> Unit {

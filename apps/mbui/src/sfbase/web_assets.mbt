@@ -5,7 +5,7 @@
 // kept across runs: a file's words, never written
 pub let viz_css : String =
   #|/*
-  #| * The stylesheet of an inline visualization (Viz.tsx, the app's viz_file.mbt): an HTML file placed in a message, drawn
+  #| * The stylesheet of an inline visualization (the app's viz_file.mbt): an HTML file placed in a message, drawn
   #| * in a sandboxed frame. As Codex's visualize plugin does it: one token contract under the names agents know
   #| * (--background, --foreground, --muted-foreground, --viz-series-1…) and utility classes under Bootstrap's names (.card,
   #| * .btn, .table, .nav-pills…), the only design system a figure is written with. Their values are still.fail's: the page
@@ -126,7 +126,7 @@ pub let viz_css : String =
   #|
   #|*, *::before, *::after { box-sizing: border-box; }
   #|html, body { margin: 0; padding: 0; }
-  #|/* The frame is as tall as the content (Viz.tsx), so it never scrolls: a fractional scale on Windows can leave the
+  #|/* The frame is as tall as the content, so it never scrolls: a fractional scale on Windows can leave the
   #|   content a pixel over, enough for a scrollbar the width of the frame (2026-10-14). */
   #|html { overflow: hidden; }
   #|[hidden] { display: none !important; }
@@ -362,7 +362,7 @@ pub let viz_css : String =
 /// web/src/viz/bridge.js, as it is.
 // kept across runs: a file's words, never written
 pub let viz_bridge : String =
-  #|// Runs first inside an inline visualization's frame (Viz.tsx). The frame is sandboxed without its page's origin, so
+  #|// Runs first inside an inline visualization's frame. The frame is sandboxed without its page's origin, so
   #|// the two only talk by messages: the frame says how tall its content is, the page says when its theme changes (the
   #|// --e-* tokens viz.css maps), and the frame draws the tooltip of any element with data-tooltip.
   #|//
@@ -372,7 +372,7 @@ pub let viz_bridge : String =
   #|(() => {
   #|  const root = document.documentElement;
   #|  // The page is the parent in a message; opened beside the chat it is the top, over the preview's own frame
-  #|  // (Preview.tsx), which takes no notice.
+  #| //, which takes no notice.
   #|  const pages = parent === top ? [parent] : [parent, top];
   #|  const post = (message) => { for (const page of pages) page.postMessage({ vizMessage: true, ...message }, "*"); };
   #|
@@ -450,7 +450,7 @@ pub let viz_bridge : String =
   #|    sendHeight();
   #|    new ResizeObserver(sendHeight).observe(document.body);
   #|  });
-  #|  // Shown only once it is drawn in its own faces (Viz.tsx hides it till then): no empty or unstyled frame flashing first.
+  #| // Shown only once it is drawn in its own faces: no empty or unstyled frame flashing first.
   #|  addEventListener("load", () => {
   #|    sendHeight();
   #|    document.fonts.ready.then(() => { sendHeight(); post({ type: "ready" }); });
@@ -462,7 +462,7 @@ pub let viz_bridge : String =
 /// web/src/viz/components.js, as it is.
 // kept across runs: a file's words, never written
 pub let viz_components : String =
-  #|// What inline visualizations get beside the stylesheet (Viz.tsx, the app's viz_file.mbt), as Codex's visualize plugin
+  #|// What inline visualizations get beside the stylesheet (the app's viz_file.mbt), as Codex's visualize plugin
   #|// gives its own: tabs (.nav[role="tablist"]) switched by themselves, Lucide icons (data-lucide), and still.fail's
   #|// charts, <viz-chart> and <viz-spark>, drawn from the data an agent gives them in the theme's colours (var(--…), so they
   #|// follow it without being drawn again). How agents use them: station/src/skills/stillfail-viz.md.
@@ -805,13 +805,13 @@ pub let viz_components : String =
 /// apps/mbui/assets/preview/page.js, as it is.
 // kept across runs: a file's words, never written
 pub let page_js : String =
-  #|// First in each of a web service's pages in the app's preview (screens/Preview.kt puts it there, after <head>): what a
+  #|// First in each of a web service's pages in the app's preview (after <head>): what a
   #|// preview's frame and its service worker do on the web (cloud/src/preview.ts, web/src/annotate/frame.ts), for a
   #|// WebView that is the page itself. Three parts: the page's WebSockets through the app (socketScript() of
   #|// cloud/src/previewSocket.ts, as written out with the link below: regenerate it from there when that changes), its
   #|// requests' bodies, and marking the page.
   #|(() => {
-  #|  // The words a person may read here in the app's language, which the app says first (PreviewWeb.kt pageScript).
+  #| // The words a person may read here in the app's language, which the app says first.
   #|  const en = self.__stillfailLang === "en";
   #|  const link = (() => {
   #|  // The page's own WebSockets go through the app (the preview's JavascriptInterface, StillFailPreviewNative, on to
@@ -989,7 +989,7 @@ pub let page_js : String =
   #|// request then carries in a header, x-stillfail-body, which the app takes off again. The top page's fetch() goes to
   #|// the app whole instead, and its answer comes as it is sent (below).
   #|(() => {
-  #|  // The words a person may read here in the app's language, which the app says first (PreviewWeb.kt pageScript).
+  #| // The words a person may read here in the app's language, which the app says first.
   #|  const en = self.__stillfailLang === "en";
   #|  const native = window.StillFailPreviewNative;
   #|  if (!native || window.__stillfailBodies) return;
@@ -1001,7 +1001,7 @@ pub let page_js : String =
   #|    native.stash(id, base64(bytes), type || "");
   #|    return id;
   #|  };
-  #|  // The top page's fetch() of its own host goes through the app instead (PreviewWeb.kt fetchSaid), over a message port
+  #| // The top page's fetch() of its own host goes through the app instead, over a message port
   #|  // the app gives it: a WebView hands the page what the app answers only 2 KB at a time, and this way each piece of a
   #|  // body comes as the service sends it (a log, a streamed answer). Bytes go on it as they are where the app says it can
   #|  // (fetchBytes: an ArrayBuffer, the length of the fetch's id, the id, then the bytes), else as base64 in JSON. Without
@@ -1032,7 +1032,7 @@ pub let page_js : String =
   #|          }
   #|          let said;
   #|          try { said = JSON.parse(data); } catch { return; }
-  #|          if (said && said.t === "socket") return void window.__stillfailSocketEvent?.(said.id, said.kind, said.a, said.b, said.c);
+  #| if (said && said.t === "socket") return void window.__stillfailSocketEvent?.(said.id, said.kind, said.a, said.b);
   #|          waiting.get(said && said.id)?.(said);
   #|        };
   #|        resolve(got);
@@ -1094,7 +1094,7 @@ pub let page_js : String =
   #|        } else if (said.t === "chunk") {
   #|          if (!stream) return;
   #|          stream.enqueue(said.bytes || bytesOf(said.b));
-  #|          // Read too slowly (as in PreviewWeb.kt's Chunks): given up rather than kept here without end.
+  #| // Read too slowly: given up rather than kept here without end.
   #|          if (stream.desiredSize < -(32 << 20)) { stream.error(new TypeError(en ? "The page read too slowly and was stopped" : "网页读得太慢，已停止")); stop(); }
   #|        } else if (said.t === "end") {
   #|          finish();
@@ -1307,7 +1307,7 @@ pub let page_js : String =
   #|// (StillFailPreviewNative.marked, `picked`) and where the marks are as the page scrolls or moves (`at`, in the
   #|// page's viewport, with its width so the app knows its scale). The app draws the marks, and takes the pictures.
   #|(() => {
-  #|  // The words a person may read here in the app's language, which the app says first (PreviewWeb.kt pageScript).
+  #| // The words a person may read here in the app's language, which the app says first.
   #|  const en = self.__stillfailLang === "en";
   #|  const native = window.StillFailPreviewNative;
   #|  if (!native || window !== window.top || window.__stillfailMarks) return;

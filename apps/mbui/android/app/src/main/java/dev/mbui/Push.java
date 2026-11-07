@@ -16,7 +16,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Pushes, as still.fail's Android app has them (its Push.kt): Firebase Cloud Messaging, set up by hand from the app's
+ * Pushes, as still.fail's Android app has them: Firebase Cloud Messaging, set up by hand from the app's
  * resources (res/values/push.xml: apps/android/firebase.properties' values) rather than google-services.json, for the
  * Firebase app of the package the app is built as (fail.still.android's and fail.still.android.beta's; none registered
  * for the others, whose pushes stay off and only local notices are shown). The device's token goes to mbui's host (dev.mbui.Notices.token),
@@ -138,7 +138,7 @@ final class Push {
     }
 
     /**
-     * FCM's side (Push.kt PushService), on its own thread, with the core: the app's where it runs, else one started for
+     * FCM's side, on its own thread, with the core: the app's where it runs, else one started for
      * it (StillFailCore.start there; CoreHost.startAlone), stopped once done unless the app has taken it meanwhile. A
      * new token is registered; a push is shown unless the core says not ({@code notice.pushed}: notifications off, a
      * page in view, its workspace or its kind off; the title as the core says it, a workspace's name before one of a

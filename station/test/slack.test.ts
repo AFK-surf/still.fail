@@ -1,4 +1,4 @@
-// Slack as a chat surface (chat/slack.rs, chat/names.rs, chat/status.rs tests, ported), against a stand-in for Slack
+// Slack as a chat surface (ported), against a stand-in for Slack
 // (test/slack-fake.ts): events taken from Socket Mode, the socket given up when it goes quiet, posting, history, the
 // Web API as the bot, token checks, names kept on disk, and the status line in a thread.
 import assert from "node:assert/strict";

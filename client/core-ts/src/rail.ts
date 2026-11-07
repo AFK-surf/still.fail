@@ -1,4 +1,4 @@
-// The wide screen's rail as clients draw it (prefs `railView`; web/src/Rail.tsx, the mbui app's wide.mbt): which places,
+// The wide screen's rail as clients draw it (prefs `railView`): which places,
 // in what order, as each workspace keeps them, what is left out by kind, their words. Self-contained (only i18n.ts):
 // the web's demo builds its prefs with it, typechecked as the web is.
 import { current, tr, type Lang } from "./i18n.ts";

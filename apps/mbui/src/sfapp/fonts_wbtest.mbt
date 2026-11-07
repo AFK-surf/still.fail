@@ -1,4 +1,4 @@
-// 外观 › 字体 (settings/fonts.mbt; Fonts.kt) and the faces the app is then set in (faces.mbt), over the settings'
+// 外观 › 字体 (settings/fonts.mbt) and the faces the app is then set in (faces.mbt), over the settings'
 // fixture and its made-up faces (fonts_fixture.mbt).
 
 ///|

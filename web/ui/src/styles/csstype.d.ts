@@ -1,4 +1,4 @@
-// Properties the browsers still.fail runs in have and csstype (what *.css.ts styles are checked against) does not yet.
+// Properties the browsers still.fail runs in have and csstype does not yet.
 import "csstype";
 
 declare module "csstype" {

@@ -1,4 +1,4 @@
-// Sharing a chat as a picture with keyboard and mouse (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's
+// Sharing a chat as a picture with keyboard and mouse (sfpages publish.mbt): from the chat's
 // info, over the whole window, the picture as it would be; 复制图片 puts it on the clipboard, one PNG of it all.
 
 ///|

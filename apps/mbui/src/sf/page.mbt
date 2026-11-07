@@ -48,7 +48,7 @@ let head_ends : Ref[Int] = Ref(0)
 /// `trailing`), 10 apart: as wide as it is beside the title, which keeps its words whole; where the line has not the
 /// room, what is here gives way first (a choice in it fitted to the room left: `segmented`), the title cut only where
 /// it is longer than the line leaves it then. A choice here is as wide as its options, not filling the line
-/// (web/src/mobile/Usage.tsx: its days' Seg, not `fill`).
+/// (not `fill`).
 pub fn head_end(c : @ui.Ctx, actions : () -> Unit) -> Unit {
   head_ends.val = head_ends.val + 1
   c.box(style=pg_head_end, actions) |> ignore
@@ -134,7 +134,7 @@ pub let pane_bar : Ref[((@ui.Ctx, PageBar, () -> Unit) -> Unit)?] = Ref(None)
 
 ///|
 /// What a place's top page under the frame's own bar does (its `named`), given to that bar as the page is drawn: the
-/// bar holds it at its end and takes it from here (PlacePage.kt: TopGlassBar's `actions`, 用量's days, 连接's filter).
+/// bar holds it at its end and takes it from here (用量's days, 连接's filter).
 // kept across runs: said by the page as it is drawn, taken by the bar over it
 pub let named_actions : Ref[(() -> Unit)?] = Ref(None)
 
@@ -1015,7 +1015,7 @@ let rows_head_wide_first : @ui.Style = rows_head_wide.then(@ui.css("pt=S3"))
 
 ///|
 /// How far a card stands under the small title over it, whichever part says it (a section's title, a heading, a
-/// list's head): wide, the web's sectionHead's 10 (parts.css.ts); narrow, SectionHeader's 6 (Parts.kt).
+/// list's head): wide, the web's sectionHead's 10 (parts.css.ts); narrow, SectionHeader's 6.
 pub let title_card_wide : Double = 10.0
 
 ///|

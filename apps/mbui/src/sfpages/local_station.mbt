@@ -1,6 +1,6 @@
-// 本机 Station (web/src/pages/LocalStation.tsx; apps/desktop/src/main.ts localStation), one page in every frame: this
+// 本机 Station (apps/desktop/src/main.ts localStation), one page in every frame: this
 // machine's station whoever runs it (the service the installer made, a process started by hand), as the system says
-// it (@ui.local_station), shown as a workspace's stations are (cloud/StationCards.css.ts card): its dot, its name and
+// it (@ui.local_station), shown as a workspace's stations are: its dot, its name and
 // how it is, 启动 where it is stopped, its menu (停止 or 启动, 重启, 更新到最新版, 打开日志, its data shown); under
 // them who runs it, its version, its workspace, its data, in lines as the room has them; the installer's progress and
 // what went wrong in it. None here: 添加这台 Mac where the app adds one. (The phone's copy, its rows a list each, is

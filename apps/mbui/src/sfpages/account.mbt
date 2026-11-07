@@ -1,4 +1,4 @@
-// 账号, one page in every frame (web/src/cloud/settings.tsx AccountSettings; the narrow app's mobile/Me.tsx), the same
+// 账号, one page in every frame, the same
 // on every width (the user, 2026-10-26: 「设置感觉很乱」; it was four sections and two cards wide, one card narrow): the
 // accounts on this device on one card, the one in view first with who it is (its picture, name, email and how it
 // signs in) and signing out of it, the others each signed out of by itself, another added, each one's picture changed
@@ -80,7 +80,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
     )
   }
   let blocks : Array[() -> Unit] = []
-  // the accounts on this device on one card (Me.tsx): the one in view with who it is, then the others, each signed out
+  // the accounts on this device on one card: the one in view with who it is, then the others, each signed out
   // of by itself, another added
   blocks.push(fn() {
     @sf.group(c, fn() {
@@ -127,7 +127,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       acc_devices(c, core, here)
     })
   })
-  // deleting the account in view, at the foot, in red (Me.tsx)
+  // deleting the account in view, at the foot, in red
   blocks.push(fn() {
     @sf.group(c, fn() {
       if @sf.link_row(c, "delete-account", @sf.t("android-settings.me.delete"), danger=true, chevron=false) {
@@ -207,7 +207,7 @@ let own_face_mark : Double = 14.0
 ///|
 /// Where the account is signed in (the `loginSessions` topic): each device's name (this one marked 当前), when it signed
 /// in and until when; 退出 on the others (`loginSession.revoke`). Narrow, on a card. Read the first time, rows' shapes
-/// where their card's rows will be (settings.tsx: Waiting, 3).
+/// where their card's rows will be (3).
 fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = (core.topic)("loginSessions", { "account": str(here.sub) })
   let list = match topic.value {

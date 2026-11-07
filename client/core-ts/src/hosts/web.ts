@@ -282,7 +282,7 @@ export class WebHost implements Host {
             socket.close();
           }),
       );
-      // `ping` every SOCKET_PING_MS while it is open (host.rs).
+      // `ping` every SOCKET_PING_MS while it is open.
       yield* Effect.forkScoped(
         Effect.forever(Effect.sleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.sync(() => socket.readyState === WebSocket.OPEN && socket.send(SOCKET_PING))))),
       );

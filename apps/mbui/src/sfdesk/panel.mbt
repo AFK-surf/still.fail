@@ -47,7 +47,7 @@ pub fn side_now(src : Source, r : ChatRef) -> (Array[String], String) {
 }
 
 ///|
-/// Chat `r`'s tabs changed by the core, which keeps them on this device (ChatPage.tsx change): `tab` opened in front (an
+/// Chat `r`'s tabs changed by the core, which keeps them on this device: `tab` opened in front (an
 /// agent's history after the histories open, any other last), closed (the last left in front, if it was), brought to
 /// the front; all of them closed (`clear`). The panel is told first whether any will be open, to slide as they come.
 pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) -> Unit {
@@ -58,7 +58,7 @@ pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) ->
     _ => false
   }
   side_changing(chat_key(r), tabs, front, any)
-  // a web service's or a visualization's tab closed lets its page go (ChatPage.tsx endPreview)
+  // a web service's or a visualization's tab closed lets its page go
   match (action, tab) {
     ("close", Some(t)) => tab_let_go(r, t)
     ("clear", _) => for t in tabs { tab_let_go(r, t) }
@@ -89,14 +89,14 @@ pub fn side_toggle(src : Source, r : ChatRef, tab : String) -> Unit {
 }
 
 ///|
-/// How narrow and how wide the panel is dragged (ChatSide.tsx PANEL_MIN, PANEL_MAX).
+/// How narrow and how wide the panel is dragged (PANEL_MAX).
 let panel_min : Double = 320.0
 
 ///|
 let panel_max : Double = 960.0
 
 ///|
-/// How wide the panel is (ChatSide.tsx panelWidth: the width dragged, else 38% of the page and at least 360), the
+/// How wide the panel is (else 38% of the page and at least 360), the
 /// chat keeping 360 at least.
 pub fn side_width(pane : Double) -> Double {
   let wanted = match panel_own.width.get() {
@@ -321,13 +321,13 @@ fn side_left(key : String) -> Unit {
 ///|
 /// Page `key` (`page`) and its side panel (`panel`, `whole` wide at rest) side by side, the panel `open` or not. Opened by
 /// a change asked here, the panel's column widens from nothing over 280 ms and the page narrows with it, frame by frame;
-/// closed, the other way over 240 ms (ChatSide.tsx useSidePanel). The panel keeps its whole width all along and shows
+/// closed, the other way over 240 ms. The panel keeps its whole width all along and shows
 /// through its column as it grows, so it comes in from the right edge without what it holds laid out again; turned back
 /// on its way, it goes on from where it is. Open or closed otherwise (a page opened with its tabs as they were left),
 /// it is so at once.
 pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page : () -> Unit, panel : () -> Unit) -> Unit {
   // where the page has not the room for the chat and the panel at their least side by side, the panel comes in over
-  // the page from its right edge (ChatPage.css.ts sidePanel on a narrow page: 460 at most, a shadow at its side), the
+  // the page from its right edge (a shadow at its side), the
   // page as wide as it was, the panel's edge not dragged
   let over = c.width < side_both_least
   side_over.val = over

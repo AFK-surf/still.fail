@@ -1,4 +1,4 @@
-// What the core says of an allowance and of a machine, as fill chips (components.tsx QuotaChip, MeterChip): one part
+// What the core says of an allowance and of a machine, as fill chips (MeterChip): one part
 // each, for every page that shows one (a profile's row and page, a station's row and peek, a chat's agents, the model
 // control), drawn by fill_chip.
 
@@ -13,7 +13,7 @@ pub fn has_quota(q : Json?) -> Bool {
 }
 
 ///|
-/// An allowance's windows (components.tsx QuotaBars compact, QuotaChip each, ProfilesNav.tsx Windows): a chip per
+/// An allowance's windows (QuotaChip each): a chip per
 /// window, what is left in it, filled as far as that, its mark before it where `marked` (the web's default; a chat's
 /// agents only with more than one), or `worded`, its name and what is left in words, as a machine's chips say theirs
 /// (每周剩 78%, as 内存剩 12.3 G: a profile's row, where a touch has no tip to say what W is); `small`, a lower line;
@@ -198,7 +198,7 @@ fn quota_worded(w : Json?, form : Int) -> (String, String) {
 }
 
 ///|
-/// One window of an allowance (components.tsx QuotaChip), or the one an agent is short of: what is left in it, filled
+/// One window of an allowance, or the one an agent is short of: what is left in it, filled
 /// as far as that, its mark before it where `marked`; `compact` gives a small, unmarked figure less padding when the
 /// mark is above it; over it while pointed at, `said` (what is left and when it fills again: quota_said), the chip
 /// `key`'s.
@@ -226,7 +226,7 @@ pub fn quota_chip(
 }
 
 ///|
-/// What is left of an allowance's window, in words (components.tsx quotaLeft: with its name where it has one), and
+/// What is left of an allowance's window, in words, and
 /// when it fills again on a line of its own (QuotaBars' tip).
 pub fn quota_said(w : Json?) -> String {
   let said = quota_left(w)
@@ -249,7 +249,7 @@ fn quota_left(w : Json?) -> String {
 }
 
 ///|
-/// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
+/// A machine's CPU, memory or disk: its mark and what is left, filled as far as is used;
 /// `brief`, the figure alone with its unit's first letter, small (a station's row); `figure`, the same words at the
 /// chip's own size (meter_line's shorter way); `drop`, the turn it is left out of a line short of room in (Ctx::box's),
 /// `keep` never squeezed there.
@@ -289,7 +289,7 @@ pub fn meter_chip(
 }
 
 ///|
-/// A machine's CPU, memory and disk (components.tsx MeterChips), each a meter_chip, in one line that never goes on to
+/// A machine's CPU, memory and disk, each a meter_chip, in one line that never goes on to
 /// another, so what holds it is as high however narrow (a station's row in a narrow sidebar). Where it is short of
 /// room, only what is still plenty is left out (level ok, grey: the last of them first); one running low (amber, red)
 /// always stays, being what the line is there to show (MeterChips `alerts`: those running low).

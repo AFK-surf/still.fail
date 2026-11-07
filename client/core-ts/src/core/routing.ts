@@ -1,4 +1,4 @@
-// Topic routing and the values the core computes as they go out (core/routing.rs). Subscriptions only read what is
+// Topic routing and the values the core computes as they go out. Subscriptions only read what is
 // held (rule 6): nothing here asks the network for anything; a topic with nothing held yet shows nothing (or why it
 // cannot have anything), and fills in as the sync brings it.
 import type { Inner } from "../core.ts";

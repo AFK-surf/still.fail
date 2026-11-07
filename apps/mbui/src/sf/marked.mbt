@@ -1,9 +1,9 @@
-// What a search found, as its rows show it (the web's Marked.tsx and Switcher.tsx's ItemRow; the phone's Search.kt):
+// What a search found, as its rows show it:
 // the words found in a line marked (bold, a hand-drawn stroke under each), what is said of a row beside each other, and
 // what each kind found is drawn with. The phone's search and the desktop's ⌘K both draw with them.
 
 ///|
-/// A found line (Search.kt StrokedLine over `marked`): `text` on one line cut at its end, in `style`, the words found
+/// A found line: `text` on one line cut at its end, in `style`, the words found
 /// (`marks`) in `ink` and bold, a hand-drawn stroke in the accent under each, drawn in from the left one after another
 /// as the line comes (again when it changes).
 pub fn found_line(
@@ -95,7 +95,7 @@ pub fn join_meta(parts : Array[String]) -> String {
 }
 
 ///|
-/// What a kind is drawn with (web Switcher.tsx's KIND_ICON).
+/// What a kind is drawn with.
 pub fn kind_icon(kind : String) -> String {
   match kind {
     "file" => "file"

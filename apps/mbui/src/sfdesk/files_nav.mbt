@@ -1,4 +1,4 @@
-// The files' sidebar (still.fail web/src/pages/FilesNav.tsx, FilesNav.css.ts), as Finder's: the person's own folders kept at
+// The files' sidebar, as Finder's: the person's own folders kept at
 // hand (个人收藏, of any station: favorites.mbt, including old pins), then every station of the workspace with a drive,
 // opened to its places. A row opens its folder in the side in front; something dragged onto one goes into it, and a
 // folder dragged onto 个人收藏 is kept there (drag.mbt).
@@ -101,7 +101,7 @@ fn places_rows_of(ws : String) -> @ui.ListRows[PlaceItem] {
 }
 
 ///|
-/// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, Files.tsx, is the same list), in the box it
+/// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, is the same list), in the box it
 /// is given, scrolling: the person's folders kept at hand, then every station with a drive. Its rows a sidebar list's on this screen (the
 /// theme's: touch's a finger's list's, a size up, the box's width). `top`, `foot`: room kept at its ends for
 /// what is over it;
@@ -473,7 +473,7 @@ fn disk_bar(c : @ui.Ctx, s : DvStation) -> Unit {
   }
   let used = 1.0 - s.disk_free / s.disk_total
   let part = (if used >= disk_full { disk_warn } else { disk_used }).then(@ui.style(w=Fixed(disk_w * used)))
-  // (what is left of it in words, over it while it is pointed at: FilesNav.tsx DiskBar's tip)
+  // (what is left of it in words)
   let id = c.id("files-disk/" + s.station)
   let bar = c.box(style=disk_track, id~, taps=false, points=true, fn() { c.box(style=part, fn() {  }) |> ignore })
   let gb = s.disk_free / 1.0e9

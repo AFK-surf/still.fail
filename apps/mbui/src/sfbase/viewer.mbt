@@ -1,13 +1,13 @@
 // A file of a chat opened over the whole screen (still.fail apps/android chat/screens/FilePreview.kt, VideoViewer.kt,
 // FileKinds.kt kindOf, ChatFiles.kt FileData; web/src/FilePreview.tsx): images to zoom (a double tap, the bar's − and
-// +, the wheel) and pan (mbui's @kit.Zoom, Zoom.kt's); videos played by the system's player (a native view over the
+// +, the wheel) and pan (mbui's @kit.Zoom); videos played by the system's player (a native view over the
 // canvas, src/ui/native.mbt), its bytes read through the core a part at a time (`station.file.part`); PDFs drawn by the
 // system page by page; HTML in a page of its own (a native web view: its scripts on, nothing of the app's reachable);
 // Markdown rendered; CSV as a table; code and text as they are. Anything else says it cannot be shown and offers the
 // download. One bar floats at the top with its name and tools and fades when left alone; a tap brings it back. Back (or
 // ×) closes it.
 //
-// An image or a video flies from the chat's thumbnail and back into it (FilePreview.kt ViewerFlight); a video closed
+// An image or a video flies from the chat's thumbnail and back into it; a video closed
 // so keeps the frame it was left at, which its thumbnail shows and where it goes on from when opened again
 // (FileViewers.frames). Its bytes stream (the Android app reads it whole first): a finger along its timeline puts its
 // player in a mode of seeks one after another (NativeView::scrub), and the host keeps what it read.
@@ -35,7 +35,7 @@ pub fn pv_fill(key : String, args : Array[(String, String)]) -> String {
   s
 }
 
-// ── what a file is (FileKinds.kt kindOf) ───────────────────────────────
+// ── what a file is ───────────────────────────────
 
 ///|
 pub(all) enum PKind {
@@ -134,7 +134,7 @@ pub let code_languages : Array[String] = [
 // ── the viewer's state ─────────────────────────────────────────────────
 
 ///|
-/// Over this a file is not read into memory to be shown (ChatFiles.kt BIG_FILE); above SHOW_LIMIT only its start
+/// Over this a file is not read into memory to be shown; above SHOW_LIMIT only its start
 /// shows as text; a table shows TABLE_ROWS rows at most.
 pub let big_file : Double = 16.0 * 1024.0 * 1024.0
 
@@ -272,7 +272,7 @@ pub(all) struct Viewer {
   mut left_at : Double
   /// told as leaving_grab changes (Viewer::grab_set): what is done at its going's end follows it
   grab_told : @signals.Signal[Int]
-  /// a desktop's song: played in the player a drive's is (play_desk.mbt), not the phone's strip
+  /// a desktop's song: played in the player a drive's is, not the phone's strip
   mut media : @kit.Media?
   /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
   mut copied : Int
@@ -298,7 +298,7 @@ pub(all) struct Viewer {
 let viewers_opened : Ref[Int] = Ref(0)
 
 ///|
-/// A thumbnail of the chat's the viewer flies from and back into (FilePreview.kt Thumb): where it is laid out (in the
+/// A thumbnail of the chat's the viewer flies from and back into: where it is laid out (in the
 /// window, its whole box: not cut to what clips it), its corners, how its picture sits in it and which picture that is.
 pub(all) struct Thumb {
   x : Double
@@ -306,7 +306,7 @@ pub(all) struct Thumb {
   w : Double
   h : Double
   corners : @motion.MeasuredCorners
-  /// its picture letterboxed in it (ChatFiles.kt imageBox's fit): fitted inside its box, not cropped to it
+  /// its picture letterboxed in it: fitted inside its box, not cropped to it
   letterbox : Bool
   /// a cropped picture starts at its top, rather than its middle
   top_crop : Bool
@@ -345,7 +345,7 @@ pub(all) struct ThumbLook {
 pub let pv_thumbs : Map[String, ThumbLook] = Map([])
 
 ///|
-/// A video closed back into its thumbnail keeps the frame it was left at (FilePreview.kt FileViewers.frames): the
+/// A video closed back into its thumbnail keeps the frame it was left at: the
 /// thumbnail shows it from then on, and opened again the video goes on from there. By the thumbnail's id (Viewer::id):
 /// the frame's image, where it was (ms).
 pub let pv_frames : Map[String, (String, Double)] = Map([])
@@ -360,7 +360,7 @@ pub let kept_frame_side : Double = 640.0
 
 ///|
 /// A chat's video the station made no poster of (one from before posters, or with neither QuickLook nor ffmpeg), small
-/// enough to read for it (ChatFiles.kt ChatVideo: BIG_FILE), or one waiting in a draft that the host has no picture
+/// enough to read for it, or one waiting in a draft that the host has no picture
 /// of: its first frame drawn here. A player of it made out of sight (never placed), its frame at 0 grabbed, then let
 /// go; what it read of a chat's kept with the chat by the core, as the viewer's reads are. By the thumbnail's id: the
 /// player while it grabs, and the frame's image ("" while it comes, "!" none to be had).
@@ -471,7 +471,7 @@ fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeVi
 pub let pv_hidden : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
-/// A thumbnail of the chat built this frame as node `node`, showing `picture` (FilePreview.kt viewerThumb): where it is
+/// A thumbnail of the chat built this frame as node `node`, showing `picture`: where it is
 /// laid out kept as it moves (@motion.measure), under the viewer too, for the viewer to fly from and back into; in
 /// chat list `list` (note_list), if it is in one. `over`: what it draws over its picture, at an opacity (Thumb's);
 /// `said`: what decides how that looks (what draws it in flight is told as it changes: thumbs_said).
@@ -640,7 +640,7 @@ fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?) -> (Double, Double
 }
 
 ///|
-/// The viewer fading in and out where there is no thumbnail to grow from (FilePreview.css.ts fp: 140 ms).
+/// The viewer fading in and out where there is no thumbnail to grow from.
 pub let pv_fade_ms : Double = 140.0
 
 ///|
@@ -666,7 +666,7 @@ pub let double_tap_ms : Double = 300.0
 
 
 ///|
-/// What an image opened in the viewer steps through (FilePreview.kt Gallery): the images of the chat it is opened from,
+/// What an image opened in the viewer steps through: the images of the chat it is opened from,
 /// of which the core tells those beside the one shown (`imageNear`: by the chat's thread, else its session), not the
 /// chat's every image; or a folder's of a drive.
 pub(all) enum Stepping {
@@ -954,7 +954,7 @@ pub fn keep_read(id : String, b : Bytes) -> Unit {
 }
 
 ///|
-/// The images stepped through slide this far apart (FilePreview.kt SLIDE_GAP), on SLIDE (critically damped, 400).
+/// The images stepped through slide this far apart, on SLIDE (critically damped, 400).
 pub let slide_gap : Double = 24.0
 
 ///|
@@ -1085,7 +1085,7 @@ pub fn Viewer::told_of(self : Viewer) -> Bool {
 
 ///|
 pub fn Viewer::dark(self : Viewer) -> Bool {
-  // on the page's own canvas whatever it shows (FilePreview.css.ts fp); a film and a song in their player, dark as
+  // on the page's own canvas whatever it shows; a film and a song in their player, dark as
   // the player is
   self.shown_kind() == Some(KVideo) || self.shown_kind() == Some(KAudio)
 }
@@ -1313,7 +1313,7 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
         }
       })
     // what else, an image too (grown from its thumbnail meanwhile): how much has come as it comes, said in its bar
-    // as the web's (FilePreview.tsx FileComing; ChatFiles.kt fetch: `progress`, the core's `{loaded, total}`)
+    // as the web's (the core's `{loaded, total}`)
     None => {
       let p = file_params(self)
       p["progress"] = Json::boolean(true)
@@ -1527,7 +1527,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
     v.started = true
     // it comes up in the keyboard's place: what was being typed into lets go of it first
     c.blur()
-    // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
+    // an image grows from its thumbnail when the chat shows it and its size is known here
     match v.flight_target(c, src) {
       Some(to) =>
         match thumb_of(c, v.thumb_id()) {
@@ -1552,7 +1552,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
         }
       None => ()
     }
-    // as web's: fading in (FilePreview.css.ts fp: 140 ms ease-out), when there is no thumbnail to grow from
+    // as web's: fading in, when there is no thumbnail to grow from
     if !v.flies {
       v.fade.go(1.0, @motion.tween(pv_fade_ms, ease=Out), at~)
     } else {
@@ -1739,7 +1739,7 @@ pub fn Viewer::draft_key(self : Viewer) -> String {
 
 ///|
 /// The marked image asked for: drawn by the host at the picture's own size (marks.mbt), then downloaded or put in the
-/// chat's draft with a quote per numbered mark (ImageMarks.kt finish).
+/// chat's draft with a quote per numbered mark.
 pub fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
   let bytes = match self.bytes.get() {
     Some(b) => b
@@ -1824,7 +1824,7 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     }
   } else {
     match (kind, v.bytes.get()) {
-      // a text and Markdown read in the reader, as a drive's are (FilePreview.tsx hands them to the same Reader)
+      // a text and Markdown read in the reader, as a drive's are
       (_, Some(b)) if vf_reads(v) => vf_read(v, c, src, b)
       (Some(KPdf), Some(b)) => v.pdf_stage(c, b, stage)
       (Some(k), Some(b)) => v.text_stage(c, k, b, stage)
@@ -1842,7 +1842,7 @@ pub fn tap_stage(c : @ui.Ctx, v : Viewer, stage : Int) -> Unit {
 }
 
 ///|
-/// A note in the middle of the stage (FilePreview.kt Note): 24 round it, what it holds 14 apart.
+/// A note in the middle of the stage: 24 round it, what it holds 14 apart.
 pub fn Viewer::note(self : Viewer, c : @ui.Ctx, body : () -> Unit) -> Unit {
   ignore(self)
   c.box(w=Fill(1.0), h=Fill(1.0), pad=24.0, gap=14.0, align=ACenter, justify=JCenter, fn() { body() })
@@ -1850,7 +1850,7 @@ pub fn Viewer::note(self : Viewer, c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A wait (ui/Waiting.kt WaitPill): a spinner and its words on the chip's ground, round.
+/// A wait: a spinner and its words on the chip's ground, round.
 pub fn reading_pill(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=reading_pill_box, fn() {
     @sf.spinner(c, size=reading_spinner) |> ignore
@@ -1874,11 +1874,11 @@ pub let reading_spinner : Double = 12.0
 pub let file_progress_corner : Double = 14.0
 
 ///|
-/// Android's C.surface2, dark (Theme.kt), what a file's progress is on
+/// Android's C.surface2, dark, what a file's progress is on
 pub let surface2_dark : Int64 = 0x2C2D31FFL
 
 ///|
-/// 安装: an APK handed to the system's installer, which asks the person to confirm (FilePreview.kt install), once
+/// 安装: an APK handed to the system's installer, which asks the person to confirm, once
 /// its bytes are here (fetched first when it was only told of). What the system says of it comes later (app.mbt
 /// system_said): the leave to install apps asked for (its page opened), 允许 still.fail 安装应用后，再次点击安装; a
 /// failure, 无法安装：….
@@ -2061,7 +2061,7 @@ fn flight_box(
   if tw <= 0.0 || th <= 0.0 {
     return None
   }
-  // where the picture lies in the thumbnail's box: covering it, or fitted inside it (FilePreview.kt fitted)
+  // where the picture lies in the thumbnail's box: covering it, or fitted inside it
   let k = if from.letterbox { dmin(from.w / tw, from.h / th) } else { dmax(from.w / tw, from.h / th) }
   let (pw0, ph0) = (tw * k, th * k)
   let (px0, py0) = (from.x + (from.w - pw0) / 2.0, from.y + (if from.top_crop { 0.0 } else { (from.h - ph0) / 2.0 }))
@@ -2111,7 +2111,7 @@ fn Viewer::picture_menu_at(self : Viewer, c : @ui.Ctx, x : Double, y : Double, b
 }
 
 ///|
-/// The images beside this one (FilePreview.kt before, after): a chat's as the core tells them (`imageNear`, each with
+/// The images beside this one (after): a chat's as the core tells them (`imageNear`, each with
 /// the session that keeps it), a folder's by its order; their viewers kept (and read ahead) while they are beside it.
 pub fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
   self.near_by(src, fn(id, f) {
@@ -2320,7 +2320,7 @@ pub fn Viewer::natural_size(self : Viewer, src : Source) -> (Double, Double) {
 }
 
 ///|
-/// To the one before (`dir` -1) or after (1) (FilePreview.kt go): it takes this one's place, coming in from that side
+/// To the one before (`dir` -1) or after (1): it takes this one's place, coming in from that side
 /// as this one goes out to the other (the strip on SLIDE from where the finger left it, at its speed); with none
 /// there, back.
 pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Double) -> Unit {
@@ -2373,7 +2373,7 @@ pub fn Viewer::wheel(self : Viewer, c : @ui.Ctx, stage : Int, z : @kit.Zoom) -> 
 /// The wheel turned (`wx`, `wy`, with `mods` held) at (`px`, `py`) on the stage at `at` (its moment: how big the picture
 /// shows then, whether zoomed then, and what it is told from there, by its glide or fling as they have it then, never
 /// by what a frame last copied): a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round
-/// the pointer (FilePreview.tsx useZoom onWheel: a pinch's small steps finer than a wheel's notches); a phone's zooms.
+/// the pointer; a phone's zooms.
 pub fn Viewer::wheeled(
   self : Viewer,
   z : @kit.Zoom,
@@ -2458,7 +2458,7 @@ pub fn Viewer::drag_zoomed(
 // ── a video ────────────────────────────────────────────────────────────
 
 ///|
-/// The chat's still of a video, as the chat shows it (ChatFiles.kt ChatVideo): the frame it was left at when it was
+/// The chat's still of a video, as the chat shows it: the frame it was left at when it was
 /// closed into its thumbnail, else what its thumbnail shows, else the station's poster (its first frame); an image's
 /// key, "" while it comes or where there is none (a drive's file).
 pub fn Viewer::still(self : Viewer, src : Source) -> String {
@@ -2642,7 +2642,7 @@ pub let dark_glass_blur : Double = 24.0 * 0.57735 + 0.5
 pub let page_glass_blur : Double = 20.0 * 0.57735 + 0.5
 
 ///|
-/// The frosted glass over a picture (FilePreview.kt darkGlass): 0x121214 at 62% over its blur; with transparency
+/// The frosted glass over a picture: 0x121214 at 62% over its blur; with transparency
 /// reduced, that tint over black.
 pub fn dark_glass() -> @ui.Glass {
   let tint = @sf.alpha(0x121214FFL, 0.62)
@@ -2650,14 +2650,14 @@ pub fn dark_glass() -> @ui.Glass {
 }
 
 ///|
-/// The same over a document (FilePreview.kt pageGlass): the surface at 72% (dark, surface2's) over its blur, over the
+/// The same over a document: the surface at 72% (dark, surface2's) over its blur, over the
 /// viewer's canvas.
 pub fn page_glass() -> @ui.Glass {
   @sf.viewer_page_glass()
 }
 
 ///|
-/// A button on the viewer's bars (ImageMarks.kt PictureButton): 32 square, its corner 12, an 18 icon; quieter when
+/// A button on the viewer's bars: 32 square, its corner 12, an 18 icon; quieter when
 /// it cannot be pressed; `held` (the tool in use) on white at 16%, its icon near white. True on the frame after it was
 /// tapped.
 pub fn picture_button(
@@ -2689,7 +2689,7 @@ pub fn picture_button(
       }
     },
   )
-  // named `said` (PictureButton's contentDescription), pressed while `held`; said on hover too (ImageMarks.tsx's Tips)
+  // named `said` (PictureButton's contentDescription), pressed while `held`; said on hover too
   c.semantics(b, Button, id~, label=said, disabled=!enabled, pressed=held)
   if live {
     @sf.tip(c, key + "/tip", id, said)
@@ -2700,7 +2700,7 @@ pub fn picture_button(
 // ── a PDF ──────────────────────────────────────────────────────────────
 
 ///|
-/// Pages drawn by the system, each as it scrolls near, as wide as the screen allows (FilePreview.kt PdfViewer): 12
+/// Pages drawn by the system, each as it scrolls near, as wide as the screen allows: 12
 /// round them and between them, a page not drawn yet its shape on the bubble's grey.
 pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit {
   let v = self
@@ -2729,7 +2729,7 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
     return
   }
   tap_stage(c, v, stage)
-  // as the web's (FilePreview.css.ts fpPdf): 76 down, as wide as 1000 less 56 allows, 20 apart; under 640, 60 down,
+  // as the web's: 76 down, as wide as 1000 less 56 allows, 20 apart; under 640, 60 down,
   // 12 round them and between them
   let small = c.width <= @sf.viewer_small_w
   let w = if small { c.width - 2.0 * pdf_small_in } else { desk_pdf_width(c.width) }
@@ -2793,7 +2793,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
         p
       }
     }
-    // under the bar: 60 under the status bar, a desktop's 76 (FilePreview.css.ts fpPageFrame)
+    // under the bar: 60 under the status bar, a desktop's 76
     let top = if c.width <= @sf.viewer_small_w { viewer_top(c) + page_small_top } else { viewer_top(c) + desk_page_top }
     c.box(w=Fill(1.0), h=Fill(1.0), pt=top, fn() {
       if page.here() && !v.closing {
@@ -2942,7 +2942,7 @@ pub fn Viewer::lines_stage(
         |> ignore
       }
       if code {
-        // scrolled across, its rows as one (FilePreview.kt: the code in a horizontalScroll, 32 in from its sides)
+        // scrolled across, its rows as one (32 in from its sides)
         c.sideways("preview/code/" + v.file.path, across=true, padx=32.0, words) |> ignore
       } else {
         c.box(w=Fill(1.0), pl=side, pr=side, words) |> ignore
@@ -2961,7 +2961,7 @@ pub fn Viewer::lines_stage(
 }
 
 ///|
-/// Past this a file shows as plain text, unhighlighted (FilePreview.kt HIGHLIGHT_LIMIT: 256 KB).
+/// Past this a file shows as plain text, unhighlighted.
 pub let highlight_limit : Int = 256 * 1024
 
 ///|
@@ -2983,7 +2983,7 @@ pub fn runs_by_line(runs : Array[@ui.Run]) -> Array[Array[@ui.Run]] {
 }
 
 ///|
-/// A file shown only in part (FilePreview.kt Cut): the warning's words on its tint.
+/// A file shown only in part: the warning's words on its tint.
 pub fn cut_line(c : @ui.Ctx, words : String) -> Unit {
   let warn = 0xD9962BFFL
   c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=8.0, pb=8.0, bg=@sf.alpha(warn, 0.14), fn() {
@@ -2993,7 +2993,7 @@ pub fn cut_line(c : @ui.Ctx, words : String) -> Unit {
 }
 
 ///|
-/// A table (FilePreview.kt CsvTable): a row number, then its columns, each as wide as what it holds (by its
+/// A table: a row number, then its columns, each as wide as what it holds (by its
 /// characters here: 48 to 420), the head on the canvas with a hairline under it.
 pub fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool) -> Unit {
   let t = @sf.theme()
@@ -3021,7 +3021,7 @@ pub fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool
     dmax(48.0, dmin(420.0, most + 32.0))
   })
   let number = "\{body_n}".length().to_double() * 8.4 + 36.0
-  // a desktop's in the page's 13 (FilePreview.css.ts fpTable), 68 down to its head; a phone's in 15
+  // a desktop's in the page's 13, 68 down to its head; a phone's in 15
   let size = desk_cell_size
   let top = viewer_top(c) + desk_table_top
   let cell = fn(s : String, w : Double, weight : Int, color : Int64) {

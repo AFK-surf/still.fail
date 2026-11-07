@@ -53,7 +53,7 @@ fn inf() -> Double {
   1.0 / 0.0
 }
 
-// ── spring (motion-dom generators/__tests__/spring.test.ts) ─────────────
+// ── spring ─────────────
 
 ///|
 /// A spring by one of the option sets the tests use, from `from` to `to`.
@@ -565,7 +565,7 @@ test "spring NaN guards: an invalid stiffness still resolves to a spring that co
   assert_true(@motion.calc_generator_duration(g) < @motion.max_generator_duration)
 }
 
-// ── inertia (motion-dom generators/__tests__/inertia.test.ts) ───────────
+// ── inertia ───────────
 
 ///|
 test "inertia: runs animations with default values" {
@@ -722,7 +722,7 @@ test "inertia: higher power, further distance" {
   assert_true(long_target.val > short_target.val)
 }
 
-// ── keyframes (motion-dom generators/__tests__/keyframes.test.ts) ───────
+// ── keyframes ───────
 
 ///|
 test "keyframes: defaultEasing returns an easing for each piece" {

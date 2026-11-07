@@ -1,4 +1,4 @@
-// What this device keeps of how its person likes it (the `prefs` topic; prefs.rs): one record in the data center
+// What this device keeps of how its person likes it (the `prefs` topic): one record in the data center
 // (table `prefs`, key `device`), written by `prefs.set`; with it, what the device is (`client.device`) and what follows.
 import * as brand from "./brand.ts";
 import * as fonts from "./fonts.ts";
@@ -97,7 +97,7 @@ export function archiveHintOf(prefs: unknown): ArchiveHint {
   return v === "off" || v === "reviewed" ? v : "done";
 }
 
-/// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
+/// The places a phone's bottom bar can hold, in no order.
 export const BAR_PLACES = ["chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault"];
 /// At most this many places in one bar.
 export const BAR_SIZE = 4;

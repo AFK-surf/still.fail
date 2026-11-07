@@ -1,4 +1,4 @@
-// A session's transcripts read as they grow (transcript.rs TranscriptTail): by the live view as its sessions work
+// A session's transcripts read as they grow: by the live view as its sessions work
 // (sessions/live.ts), and by the readers for the pages of a history (read/transcripts.ts). Each read goes on from where
 // the last left off.
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
@@ -30,7 +30,7 @@ export type TailState = { path: string; runtime?: RuntimeKind; offset: number; p
 export type TranscriptRef = string | { path: string; runtime: RuntimeKind };
 const transcriptRef = (runtime: RuntimeKind, ref: TranscriptRef) => typeof ref === "string" ? { path: ref, runtime } : ref;
 
-/// Reads a transcript as it grows (transcript.rs TranscriptTail): each read gives the timeline entries of the lines
+/// Reads a transcript as it grows: each read gives the timeline entries of the lines
 /// written since the last one. Everything read is kept (as `shape` makes it), so watchers joining later are served from
 /// memory. What is new is read a PIECE at a time: a long transcript read from its start is never one buffer and one
 /// string. What its calls used it does not count: the usage counter does (usage/counter.ts), the one count of it.

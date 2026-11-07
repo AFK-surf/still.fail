@@ -1,4 +1,4 @@
-// A new device showing this one's code (Security.kt LockPrompts, pairSheet; the core's `lockPrompts`, views/pair.ts):
+// A new device showing this one's code (pairSheet; the core's `lockPrompts`, views/pair.ts):
 // put up over whichever page is open, in any workspace of the person's, once (the library's panel: what is put up
 // after it stands over it), until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away (拒绝),
 // it is denied (`lockPrompt.deny`) and its code is worth nothing; closed by hand (a tap beside it, back), it is no
@@ -37,7 +37,7 @@ pub fn lock_prompts(core : Core, free : Bool) -> Unit {
 }
 
 ///|
-/// The sheet of a new device asking (Security.kt pairSheet): whose it is and what, where it asks to be let in, the code
+/// The sheet of a new device asking: whose it is and what, where it asks to be let in, the code
 /// large, that it is shown only here, 拒绝. Gone by itself once that device is done or turned away elsewhere.
 fn pair_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
@@ -107,12 +107,12 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
 }
 
 ///|
-/// What the panel holds, 12 apart (Security.kt:372).
+/// What the panel holds, 12 apart.
 // kept across runs: a value (no field of it changes)
 let pair_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
-/// Whose device it is and what (14 in the muted: Security.kt:373).
+/// Whose device it is and what.
 // kept across runs: a value (no field of it changes)
 let pair_body : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
@@ -143,7 +143,7 @@ let pair_place_mark : Double = 20.0
 let pair_until : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
-/// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).
+/// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot.
 // kept across runs: a value (no field of it changes)
 let pair_deny_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
 

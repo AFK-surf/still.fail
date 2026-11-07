@@ -2,7 +2,7 @@
 // fetch the whole video (up to 1 GB) to show what it is. Made on first asking, by what the machine has: QuickLook on a
 // Mac (`qlmanage`, then `sips` to make it a JPEG), else ffmpeg where it is installed; kept in <data>/thumbs beside the
 // images' thumbnails, by the video's path. None where neither can make it: the chat then shows the video without one.
-// The drive's videos have theirs made the same way for the modules (modules/media.ts), made again once the video is
+// The drive's videos have theirs made the same way for the modules, made again once the video is
 // newer (`since`).
 import { execFile } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";

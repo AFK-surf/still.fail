@@ -19,7 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * Wireless debugging's ports on this phone, as it announces them (DNS-SD; still.fail's AdbPorts, AdbShare.kt): adb's
+ * Wireless debugging's ports on this phone, as it announces them (DNS-SD; still.fail's AdbPorts): adb's
  * (`_adb-tls-connect._tcp`) while it is on and, while the pairing dialog is open, the pairing one
  * (`_adb-tls-pairing._tcp`). Only this phone's own: others' on the same Wi-Fi are announced too. `changed` is told on
  * the main thread each time they change.

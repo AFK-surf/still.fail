@@ -56,7 +56,7 @@ pub(all) struct Palette {
   on_primary : Int64
   /// a card's ground on the page
   card : Int64
-  /// what sits a step apart on a card: a command's box (Theme.kt surface2, root.css.ts --m-surface2)
+  /// what sits a step apart on a card: a command's box
   card2 : Int64
   /// the narrow screen's quiet button
   chip : Int64
@@ -89,7 +89,7 @@ pub(all) struct Type {
   /// (msgPlain, PersonWords): set alike in all three, so that sending it only moves it (SendText.kt: "the field,
   /// flying words and own messages share their typography and line breaks"; the breaks: the viewer's bubble as wide as
   /// the composer sets them, sfpages message.mbt mine_most); the body's size on its line, a phone's on a message's
-  /// line as the agent's Markdown beside it (Chat.kt: 15 on 24.75). Not the web's 16 for what is typed on a phone,
+  /// line as the agent's Markdown beside it. Not the web's 16 for what is typed on a phone,
   /// which is there so that iOS's browser does not zoom into it. In numbers, where a field takes them:
   /// Ctx::style_size.
   words : @ui.TextStyle
@@ -861,23 +861,23 @@ pub let button_h : Double = menu_row_min
 pub let list_pad : Double = lit_reach
 
 ///|
-/// A settings row's icon, before its name (SettingParts.kt ROW_ICON).
+/// A settings row's icon, before its name.
 pub let row_icon : Double = 22.0
 
 ///|
-/// A finger's list row in from its box's left (SidebarList.css.ts phone: a chat row's 22).
+/// A finger's list row in from its box's left.
 pub let phone_row_in : @ui.Space = room(22.0)
 
 ///|
-/// An empty list's illustration and words in from its sides (Home.kt Empty: 30).
+/// An empty list's illustration and words in from its sides.
 pub let empty_in : @ui.Space = room(30.0)
 
 ///|
-/// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
+/// The account's picture and the workspace's mark, each on its card atop settings: 46.
 pub let identity_mark : Double = 46.0
 
 ///|
-/// The workspace's mark's square (SettingsHome.kt WorkspaceTile): the account's picture's size beside it, in its row's
+/// The workspace's mark's square: the account's picture's size beside it, in its row's
 /// corners the ladder's inset in (a row's 18, 10 in), so concentric with them: the small block's 10, all four alike;
 /// what it holds in its middle.
 pub let workspace_tile : @ui.Style = @ui.style(
@@ -895,11 +895,11 @@ pub let workspace_tile_mark : Double = 26.0
 
 ///|
 /// A workspace's first letter in its square, where it has no mark: 22 on a line of 22 (Xl3, L7: SettingsHome.kt's
-/// lineHeight, near the account's initial beside it, half its picture), semibold, muted (Rail.css.ts workspaceItem).
+/// lineHeight, near the account's initial beside it, half its picture), semibold, muted.
 pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Heading, leading=L7, weight=Semibold, color=Muted, wrap=false)
 
 ///|
-/// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):
+/// A chip whose ground fills from the left (an allowance's, a machine's load):
 /// round by the ladder's small corner (a small one's 16 a capsule); in a card's or a row's corner concentric with it
 /// (mbui works it out).
 pub let fill_chip_corner : Double = small_corner
@@ -949,16 +949,6 @@ pub let large_from : Double = 840.0
 // ---------------------------------------------------------------------------
 
 ///|
-/// How opaque a tone's ink is as its ground (a pill's, a mention's, an error's card: green_bg, red_bg…), in the light
-/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, mbui ui/contrast.mbt),
-/// and its ink on it still read (4.5 to 1). Grounds fitted to the page alone, opaque, were 1.0 to 1.1 to 1 off a card
-/// in the dark (a pull request's 开启, 2026-10-27): its words seen, not its pill.
-let tone_light : Double = 0.18
-
-///|
-let tone_dark : Double = 0.16
-
-///|
 /// A ground in a tone the palette has none for (a merged pull request's purple): its ink at the theme's opacity, as
 /// green_bg is green_ink's.
 pub fn tone_ground(ink : Int64) -> Int64 {
@@ -966,92 +956,7 @@ pub fn tone_ground(ink : Int64) -> Int64 {
 }
 
 ///|
-/// The web's own tones (a white page, grey cards on it): what the message's Markdown keeps of them (markdown.mbt `web`),
-/// and what the palette's names not its own mean (light_palette).
-let web_light : Palette = {
-  bg: 0xFFFFFFFFL,
-  canvas: 0xFFFFFFFFL,
-  raised: 0xE4E4E8FFL,
-  sidebar: 0xF6F5F1FFL,
-  list: 0xFBFAF9FFL,
-  text: 0x24272BFFL,
-  muted: 0x565B62FFL,
-  subtle: 0x565B62FFL,
-  line: 0x322D2424L,
-  line_strong: 0xC1C4C9FFL,
-  hover: 0x26211711L,
-  selected: 0xEBE7E1FFL,
-  paper: 0xF6F2EAFFL,
-  accent: 0xDC5929FFL,
-  accent_text: 0x982E01FFL,
-  accent_bg: alpha(0x982E01FFL, tone_light),
-  green: 0x006A3FFFL,
-  green_ink: 0x026039FFL,
-  warn_ink: 0x6E4802FFL,
-  red: 0x9A2830FFL,
-  red_bg: alpha(0x9A2830FFL, tone_light),
-  green_bg: alpha(0x026039FFL, tone_light),
-  blue_bg: alpha(0x0047AEFFL, tone_light),
-  amber_bg: alpha(0x6E4802FFL, tone_light),
-  online: 0x45B164FFL,
-  neutral_bg: 0x24272B13L,
-  overlay: 0x13161B33L,
-  shadow: 0x13161B1AL,
-  primary: 0x24272BFFL,
-  primary_hover: 0x41464CFFL,
-  on_primary: 0xFFFFFFFFL,
-  // the text at 4% over the canvas (pages.css.ts cardGround)
-  card: 0xF6F6F7FFL,
-  card2: 0xFBFAF7FFL,
-  chip: 0xEFECE6FFL,
-  blue: 0x0047AEFFL,
-  code_ink: 0x7C3FA0FFL,
-  code_ground: 0xF5F5F5FFL,
-}
-
-///|
-let web_dark : Palette = {
-  bg: 0x1F2023FFL,
-  canvas: 0x1F2023FFL,
-  raised: 0x2A2C31FFL,
-  sidebar: 0x19191BFFL,
-  list: 0x1C1D20FFL,
-  text: 0xE9E9EAFFL,
-  muted: 0xA8AAAEFFL,
-  subtle: 0xA8AAAEFFL,
-  line: 0xE9E9EA19L,
-  line_strong: 0x3D3F44FFL,
-  hover: 0xFFFFFF0DL,
-  selected: 0x323338FFL,
-  paper: 0x26272BFFL,
-  accent: 0xE97342FFL,
-  accent_text: 0xFF9E71FFL,
-  accent_bg: alpha(0xFF9E71FFL, tone_dark),
-  green: 0x68C894FFL,
-  green_ink: 0x6ACA96FFL,
-  warn_ink: 0xE6B55DFFL,
-  red: 0xFF9A97FFL,
-  red_bg: alpha(0xFF9A97FFL, tone_dark),
-  green_bg: alpha(0x6ACA96FFL, tone_dark),
-  blue_bg: alpha(0x8EB8FEFFL, tone_dark),
-  amber_bg: alpha(0xE6B55DFFL, tone_dark),
-  online: 0x45B164FFL,
-  neutral_bg: 0xE9E9EA0EL,
-  overlay: 0x00000080L,
-  shadow: 0x00000073L,
-  primary: 0xECEDEDFFL,
-  primary_hover: 0xD3D4D6FFL,
-  on_primary: 0x1F2023FFL,
-  card: 0x28292CFFL,
-  card2: 0x2C2D31FFL,
-  chip: 0x313237FFL,
-  blue: 0x8EB8FEFFL,
-  code_ink: 0xC9A2E6FFL,
-  code_ground: 0x26272AFFL,
-}
-
-///|
-/// still.fail's palette on every screen (the phone's, root.css.ts m): warm paper, white cards on it, its own greys;
+/// still.fail's palette on every screen (the phone's): warm paper, white cards on it, its own greys;
 /// what the web's names mean there.
 let light_palette : Palette = {
   ..web_light,
@@ -1059,7 +964,7 @@ let light_palette : Palette = {
   canvas: 0xFFFFFFFFL,
   raised: 0xFFFFFFFFL,
   text: 0x24272BFFL,
-  // the greys and the red Android's (Theme.kt Light), what the app on a phone matches, not the narrow web's
+  // the greys and the red Android's, what the app on a phone matches, not the narrow web's
   muted: 0x535559FFL,
   subtle: 0x535559FFL,
   line: 0x322D2424L,
@@ -1074,7 +979,7 @@ let light_palette : Palette = {
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0x322D2413L,
   card: 0xFFFFFFFFL,
-  // Android's C.chip (Theme.kt), what the app on a phone matches, not the narrow web's EFECE6
+  // Android's C.chip, what the app on a phone matches, not the narrow web's EFECE6
   chip: 0xE8E4DCFFL,
   hover: 0x24272B0FL,
   // the sidebar beside the page (a tablet's Medium and Large): a step under the page's ground as the web's is under
@@ -1092,7 +997,7 @@ let dark_palette : Palette = {
   raised: 0x2A2C31FFL,
   text: 0xECECEDFFL,
   muted: 0xB8BBC1FFL,
-  // Android's (Theme.kt Dark)
+  // Android's
   subtle: 0xB8BBC1FFL,
   line: 0xECECED1FL,
   accent: 0xE8734FFFL,
@@ -1787,8 +1692,8 @@ pub fn mix_seen(a : Int64, share : Double, b : Int64) -> Int64 {
 /// still.fail's sizes of words on mbui's scale (Tailwind's names, still.fail's values), the eight the Android app
 /// has, each with the line it has where a `Text` there says no `lineHeight` (ui/Theme.kt WebType: 1.4em, the web
 /// phone's root.css.ts), and mbui's two under Xs (Xs3 10, Xs2 11) on the same rule: Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
-/// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
-/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559); past them Tailwind's own, on lines as tall as
+/// title, Parts.kt:527), Xl2 17 (back), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
+/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title); past them Tailwind's own, on lines as tall as
 /// they are, for a number standing alone in a picture (the card shared of the agents at work: Xl6 60).
 pub let text_scale : @ui.TextScale = {
   // (the roles: each screen's own, Type's, set by ui_theme: text_roles)
@@ -1834,8 +1739,8 @@ fn text_roles(t : Type) -> @ui.TextScale {
 ///|
 /// The lines Android says (`lineHeight`), in place of the size's own (Leading): L4 16 (a row's small line in a list:
 /// OpenJobs.kt:98, AgentSheet.kt:217, DriveScreen.kt:409, Attach.kt:197), L5 18 (a note, a meta line: Security.kt:110,
-/// 485), L6 20 (a file's or a link's card's name: Composer.kt:781, 803; ChatFiles.kt:567; DriveScreen.kt:408), L7 22
-/// (a lead, a paragraph: Security.kt:105, 106, 286; Composer.kt:562, 708).
+/// 485), L6 20 (803), L7 22
+/// (a lead, 106, 286; 708).
 pub let leading_scale : @ui.LeadingScale = {
   ..@ui.LeadingScale::tailwind(),
   l4: 16.0,
@@ -1859,12 +1764,12 @@ pub let radii : @ui.RadiusScale = {
 }
 
 ///|
-/// A large title's letters drawn closer (Parts.kt:559, 562 LargeTitle: letterSpacing -0.6sp): off Tailwind's scale
+/// A large title's letters drawn closer (562 LargeTitle: letterSpacing -0.6sp): off Tailwind's scale
 /// (Tight is -0.8 at 32).
 pub let large_title_tracking : @ui.Tracking = Exact(-0.6)
 
 ///|
-/// A message's line (24.75: Chat.kt:1363, 1367, 1374), the one place Android says it.
+/// A message's line (1367, 1374), the one place Android says it.
 pub let message_line : @ui.Leading = Exact(24.75)
 
 ///|
@@ -1890,7 +1795,7 @@ pub let group_row_end_radius : @ui.Radius = rounded(@ui.concentric(group_corner,
 pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()
 
 ///|
-/// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 24 wide at most (BAR), how far a line of the
+/// The usage page's days: the plot 150 high (PLOT), a bar 24 wide at most (BAR), how far a line of the
 /// scale's words stand over it (their line, Xs3's 14, and 2), and a part's corner (4; 2 with many days: Base, Sm).
 pub let usage_plot : Double = 150.0
 
@@ -1917,7 +1822,7 @@ pub let usage_part_r : Double = 4.0
 pub let usage_part_r_many : Double = 2.0
 
 ///|
-/// A small dot's side, how a thing stands (7: PageParts.kt:465 PresenceDot, Security.kt:101 Dot).
+/// A small dot's side, how a thing stands.
 pub let dot_size : @ui.Len = Fixed(7.0)
 
 ///|
@@ -1934,7 +1839,7 @@ pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 pub let phone_max : @ui.Len = Fixed(420.0)
 
 ///|
-/// A bar's round button (Parts.kt NavButton): 34 across.
+/// A bar's round button: 34 across.
 pub let nav_button_side : @ui.Len = Fixed(34.0)
 
 ///|
@@ -1993,7 +1898,7 @@ fn ui_theme_of(t : Theme) -> @ui.Theme {
     danger: t.p.red,
     danger_bg: t.p.red_bg,
     warn_ink: t.p.warn_ink,
-    // the greys Android's (Theme.kt C.muted, C.subtle: the palette's), not mbui's own paper theme's lighter dark ones:
+    // the greys Android's (C.subtle: the palette's), not mbui's own paper theme's lighter dark ones:
     // what a style's Muted and Subtle say
     muted: t.p.muted,
     subtle: t.p.subtle,
@@ -2018,14 +1923,14 @@ fn ui_theme_of(t : Theme) -> @ui.Theme {
 
 ///|
 /// The composer's files' row: the gap between what waits in it (Composer.kt: 6 and a remove button's reach past a
-/// picture), and the room kept at its end for the last button's reach (Composer.kt `beyond + PictureRemoveOut`).
+/// picture), and the room kept at its end for the last button's reach.
 pub let files_gap : @ui.Space = Exact(11.0)
 
 ///|
 pub let files_row_end : @ui.Space = Exact(7.0)
 
 ///|
-/// A page's bar (Parts.kt NavBar): the title kept 84 clear of the bar's sides; the gap in the line under the title (5).
+/// A page's bar: the title kept 84 clear of the bar's sides; the gap in the line under the title (5).
 pub let nav_title_clear : @ui.Space = Exact(84.0)
 
 ///|
@@ -2045,7 +1950,7 @@ pub let tag_max : @ui.Len = Fixed(104.0)
 pub let ref_row_min_h : @ui.Len = Fixed(44.0)
 
 ///|
-/// The sign-in page's (SignIn.kt): its title 28, bold, on the font's own line (28.sp), off the scale between Xl3's
+/// The sign-in page's: its title 28, bold, on the font's own line (28.sp), off the scale between Xl3's
 /// 22 and Xl4's 32; its sides 30 (padding(horizontal = 30.dp)), between S7's 28 and S8's 32.
 pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 
@@ -2231,11 +2136,11 @@ pub let stage_plain : Int64 = 0xF4F4F51FL
 pub let stage_plain_lit : Int64 = 0xF4F4F533L
 
 ///|
-/// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.
+/// A picking row's line under its words, between L4's 16 and L5's 18.
 pub let pick_sub_line : @ui.Leading = Exact(17.0)
 
 ///|
-/// The search (Search.kt): its field on the ink at 6% (as high as what stands over a sidebar's list: ChatList band_h,
+/// The search: its field on the ink at 6% (as high as what stands over a sidebar's list: ChatList band_h,
 /// 38 with touch as FIELD); a row found 66 high (HitRow, ItemRow; 50 an item with no line of words), its first line 22;
 /// what a row found says starts 22 in.
 pub let search_ground : @ui.Color = A(Fg, Exact(0.06))
@@ -2266,9 +2171,9 @@ pub let line_left : @ui.Size = Fill(1.0)
 pub let card_across : @ui.Size = Fill(1.0)
 
 ///|
-/// A visualization in a message (Android ui/Viz.kt, chat/VizFiles.kt): its place while it comes (120 high), the ways
+/// A visualization in a message: its place while it comes (120 high), the ways
 /// under it (22 boxes); a whole page's corners (Smooth 20, the web's card) on its paper (#F6F2EA, dark #26272B); the
-/// full screen's name 18 in (Viz.kt VizFull).
+/// full screen's name 18 in.
 pub let viz_wait_h : @ui.Len = Fixed(120.0)
 
 ///|
@@ -2287,7 +2192,7 @@ pub let viz_paper_dark : @ui.Color = Exact(0x26272BFFL)
 pub let viz_full_in : @ui.Space = S4_5
 
 ///|
-/// Marking a service's page (Preview.kt MarkMode, MarksOver, Note): its bar 30 high (a capsule), 添加到对话 (24 high)
+/// Marking a service's page (MarksOver, Note): its bar 30 high (a capsule), 添加到对话 (24 high)
 /// and the dot's ring (13) in its ends where they are concentric with them (capsule_end_room: 3 in at its end, 8.5 at
 /// its start), 添加到对话's icon and words 5 apart; the edit key's ground the accent's 14%, the ring's 22%, an open
 /// mark's 8%; what floats over the page frosted thick (the surface at 94%; dark, surface2's); a pin's number 11; what is
@@ -2337,26 +2242,26 @@ pub let mark_pin_size : @ui.TextSize = Exact(11.0, 15.4)
 pub let mark_said_h : @ui.Len = Fixed(26.0)
 
 ///|
-/// How much of a file has come (FilePreview.kt FileProgress): 220 wide.
+/// How much of a file has come: 220 wide.
 pub let file_progress_w : @ui.Len = Fixed(220.0)
 
 ///|
-/// A size typed (Preview.kt CustomSize): its fields 72 wide, 10 round.
+/// A size typed: its fields 72 wide, 10 round.
 pub let custom_field_w : @ui.Len = Fixed(72.0)
 
 ///|
 pub let custom_field_r : @ui.Radius = Exact(10.0)
 
 ///|
-/// The same field with keyboard and mouse (ViewportSize.css.ts field: 52 wide).
+/// The same field with keyboard and mouse.
 pub let custom_field_dense_w : @ui.Len = Fixed(52.0)
 
 // ---------------------------------------------------------------------------
-// A station's screen, seen and driven (Android app/remote/ScreenViewer.kt): its sizes off the steps, as Android says
+// A station's screen, seen and driven: its sizes off the steps, as Android says
 // them.
 
 ///|
-/// A sidebar's row, every sidebar's (Sidebar.css.ts navRow, navSession; SidebarList.css.ts item): the ladder's row
+/// A sidebar's row, every sidebar's (Sidebar.css.ts navRow, navSession): the ladder's row
 /// (row_corner), as a list card's rows and a menu's are. The web's nav corner (12, as a field's and an option's) is a
 /// row's; on the ladder a row is 18, so a one-line row (32) is round at its ends as a menu's row is, and a chat's (54)
 /// as a list card's.
@@ -2368,12 +2273,12 @@ pub let side_row_radius : @ui.Radius = row_radius
 pub let side_row_h : @ui.Len = Fixed(54.0)
 
 ///|
-/// A person's picture after the first at a sidebar row's end (RowPicture.css.ts: 16 across, 3 over the one before):
+/// A person's picture after the first at a sidebar row's end (3 over the one before):
 /// the room it takes.
 pub let side_face_step : @ui.Len = Fixed(13.0)
 
 ///|
-/// The same at a finger's row's end (mobile/Home.tsx RowAside size 18): 15 the room after the first, the starter's ring
+/// The same at a finger's row's end: 15 the room after the first, the starter's ring
 /// 22 across (2 past the face's ground).
 pub let touch_face_step : @ui.Len = Fixed(15.0)
 
@@ -2381,7 +2286,7 @@ pub let touch_face_step : @ui.Len = Fixed(15.0)
 pub let touch_face_ring : @ui.Len = Fixed(22.0)
 
 ///|
-/// The dot before a chat that wants the viewer in 待处理's panel (Attention.css.ts dot): 7 across.
+/// The dot before a chat that wants the viewer in 待处理's panel: 7 across.
 pub let attention_dot : @ui.Len = Fixed(7.0)
 
 ///|
@@ -2405,11 +2310,11 @@ pub let rail_say_max : @ui.Len = Fixed(280.0)
 pub let ended_max : @ui.Len = Fixed(320.0)
 
 ///|
-/// A button's height on the phone (Controls.kt BUTTON_HEIGHT 38).
+/// A button's height on the phone.
 pub let button_38 : @ui.Len = Fixed(38.0)
 
 ///|
-/// A link's card in a message (ScreenLinks.kt, AdbLinks.kt): 236 wide; a screen's with its preview over its words 280.
+/// A link's card in a message: 236 wide; a screen's with its preview over its words 280.
 pub let link_card_w : @ui.Len = Fixed(236.0)
 
 ///|
@@ -2445,19 +2350,19 @@ pub let peek_frame_px : Double = peek_card_px - 2.0 * peek_card_in_px
 pub let link_mark_w : @ui.Len = Fixed(30.0)
 
 ///|
-/// A quiet ground under what is grouped on a sheet (Publish.kt: the ink at 4%).
+/// A quiet ground under what is grouped on a sheet.
 pub let faint_ground : @ui.Color = A(Fg, Exact(0.04))
 
 ///|
-/// How wide a face's status at its row's end may be (Fonts.kt:142).
+/// How wide a face's status at its row's end may be.
 pub let face_status_most : @ui.Len = Fixed(140.0)
 
 ///|
-/// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
+/// A Slack app's icon as it is in its look, off the scale.
 pub let app_icon_side : @ui.Len = Fixed(72.0)
 
 ///|
-/// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
+/// A choice's line on a card: 11 over and under (as files_gap), rounded 10 (as custom_field_r),
 /// its check in a room 18 wide at its end.
 pub let pick_line_y : @ui.Space = files_gap
 
@@ -2468,11 +2373,11 @@ pub let pick_line_r : @ui.Radius = custom_field_r
 pub let check_room_w : @ui.Len = Fixed(18.0)
 
 ///|
-/// A person's initial on their colour (Parts.kt Avatar: Color.White), on every theme.
+/// A person's initial on their colour, on every theme.
 pub let face_ink : Int64 = 0xFFFFFFFFL
 
 ///|
-/// A sheet's grabber (Sheet.kt SheetGrab): 38 × 5, round at its ends (its 3 capped at half its height, as every
+/// A sheet's grabber: 38 × 5, round at its ends (its 3 capped at half its height, as every
 /// renderer draws it; its colour the palette's line, said where it is drawn).
 // kept across runs: a value (no field of it changes)
 pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=Full")
@@ -2482,7 +2387,7 @@ pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=F
 pub let tip_max : @ui.Len = Fixed(300.0)
 
 ///|
-/// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least where there is the room
+/// A login card's on a desktop's width: 360 at least where there is the room
 /// (min(100%, 360px)), and its corner its padding and its × pill's half (8 + 12: the web's card's 20, as a
 /// visualization's).
 pub let login_card_least : @ui.Len = Within(360.0)
@@ -2492,7 +2397,7 @@ pub let login_card_least : @ui.Len = Within(360.0)
 pub let login_card_most : @ui.Len = Fixed(560.0)
 
 ///|
-/// An agent's request about a vault item as its card in a chat (the web's VaultAsk.css.ts card): as wide as what it
+/// An agent's request about a vault item as its card in a chat: as wide as what it
 /// says, 320 at least where there is the room (min(100%, 320px)), 560 at most and never wider than the room (min(100%,
 /// 560px): a Cut box's max in a column).
 // kept across runs: a value (no field of it changes)
@@ -2514,11 +2419,11 @@ pub let file_sheet_w : @ui.Len = Fixed(30.0)
 pub let file_sheet_h : @ui.Len = Fixed(36.0)
 
 ///|
-/// A file card's own button (Chat.css.ts fileCardRemove: 22 round).
+/// A file card's own button.
 pub let file_card_button : @ui.Len = Fixed(22.0)
 
 ///|
-/// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
+/// A name over a message at its widest.
 pub let name_max : @ui.Len = Fixed(240.0)
 
 ///|
@@ -2526,7 +2431,7 @@ pub let name_max : @ui.Len = Fixed(240.0)
 pub let small_button : @ui.Len = Fixed(22.0)
 
 ///|
-/// The pill offering to quote what is picked (the web's Chat.css.ts quotePop: 26 high).
+/// The pill offering to quote what is picked.
 pub let quote_pop_h : @ui.Len = Fixed(26.0)
 
 ///|
@@ -2779,8 +2684,8 @@ pub fn tape_bar_over_room() -> @ui.Space {
 let hairline_h : Double = 1.0
 
 ///|
-/// A card over what the pointer rests on (the web's Hover.css.ts card: 320 wide; a tile's 220 at least, 420 at most),
-/// and an agent's in it (AgentCard.css.ts: 288).
+/// A card over what the pointer rests on (a tile's 220 at least, 420 at most),
+/// and an agent's in it.
 pub let hover_card_w : @ui.Len = Fixed(320.0)
 
 ///|
@@ -3043,7 +2948,7 @@ pub let edge_tip_ms : Double = 300.0
 pub let edge_tip_gap : Double = 14.0
 
 // ---------------------------------------------------------------------------
-// The desktop's sidebar and rail (sfdesk: still.fail web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
+// The desktop's sidebar and rail (styles/shell.css.ts)
 
 ///|
 /// An agent's and a chat's marks' colours, bright in both themes, one meaning each wherever they are (ChatMark.css.ts:
@@ -3134,7 +3039,7 @@ pub fn panel_corner_foot() -> @ui.Style {
 
 ///|
 /// A place's ground in the rail (a place's, a workspace's): 30 round, so where it stands in a panel's corner it is
-/// concentric with it (Rail.css.ts item, workspaceItem: 9 round, the web's).
+/// concentric with it (workspaceItem: 9 round, the web's).
 pub let rail_ground_side : Double = 30.0
 
 ///|
@@ -3160,7 +3065,7 @@ pub let panel_radius : @ui.Radius = rounded(r_menu)
 pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
 
 ///|
-/// The `@` menu over the composer (ChatRef.css.ts refMenu: a small panel, padded panel_pad) and its rows' corner
+/// The `@` menu over the composer (padded panel_pad) and its rows' corner
 /// (refItem: concentric with it); its rows as high as a menu's (pick_high).
 pub let ref_menu_corner : @ui.Radius = rounded(r_menu)
 
@@ -3188,7 +3093,7 @@ pub fn closed_bar_of(ground_in : Double) -> @ui.CornerOf {
 
 
 ///|
-/// The sidebar's edge's look 3 in its strip (Rail.css.ts edge: its line 6 in, its bar 4 in, the library's 7 wide).
+/// The sidebar's edge's look 3 in its strip (its bar 4 in, the library's 7 wide).
 pub let edge_in : @ui.Space = room(3.0)
 
 ///|
@@ -3222,7 +3127,7 @@ pub fn agent_mark_corner(side : Double) -> @ui.Radius {
 }
 
 ///|
-/// A chat's jobs (the web's Jobs.css.ts): a job's action 26 high, the popover's foot's rows 38.
+/// A chat's jobs: a job's action 26 high, the popover's foot's rows 38.
 pub let job_action_h : @ui.Len = Fixed(26.0)
 
 ///|
@@ -3230,14 +3135,14 @@ pub let jobs_row_h : @ui.Len = Fixed(38.0)
 
 
 ///|
-/// A tab of a chat's side panel (the web's ChatPage.css.ts sideTab: 30 high).
+/// A tab of a chat's side panel.
 pub let side_tab_h : @ui.Len = Fixed(side_tab_side)
 
 ///|
 pub let side_tab_side : Double = 30.0
 
 ///|
-/// A device's code read aloud, large (Security.css.ts bigCode): the web's display size, 28, its line 1.3 of it, off
+/// A device's code read aloud, large: the web's display size, 28, its line 1.3 of it, off
 /// the scale; its letters 6 apart.
 pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
 
@@ -3245,7 +3150,7 @@ pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
 pub let code_big_tracking : @ui.Tracking = Exact(6.0)
 
 ///|
-/// A chat's bar (the web's ChatPage.css.ts): its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
+/// A chat's bar: its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
 /// most, in by .19 of its 20 tile and 1.
 pub let chat_station_most : @ui.Len = Fixed(160.0)
 
@@ -3268,7 +3173,7 @@ pub fn tile_whole() -> Bool {
 pub let agent_station_in : @ui.Space = room(20.0 * 0.19 + 1.0)
 
 ///|
-/// A person in a chat's stack of people (the web's later.css.ts peopleStack): 16 ringed 1.5.
+/// A person in a chat's stack of people: 16 ringed 1.5.
 pub let person_ringed : @ui.Len = Fixed(19.0)
 
 ///|
@@ -3288,7 +3193,7 @@ pub fn usage_series(i : Int) -> Int64 {
 }
 
 ///|
-/// An agent's history's steps (the web's History.css.ts, ToolStep.css.ts): the turn's rail 9.5 in, how much of a wait
+/// An agent's history's steps: the turn's rail 9.5 in, how much of a wait
 /// has gone a bar 3 high; a diff's line 22 in, its mark 9.
 pub let history_rail_in : @ui.Space = room(9.5)
 
@@ -3315,7 +3220,7 @@ pub let message_avatar_out : @ui.Space = room(-message_avatar_reach)
 pub let message_avatar_down : @ui.Space = room(3.0)
 
 ///|
-/// A message's head in past its picture where the picture is over its start (Chat.css.ts inlineHeads: 25).
+/// A message's head in past its picture where the picture is over its start.
 pub let message_head_in : @ui.Space = room(25.0)
 
 ///|
@@ -3324,11 +3229,11 @@ pub let message_head_in : @ui.Space = room(25.0)
 pub let notice_w : @ui.Len = Fixed(760.0)
 
 ///|
-/// A service's address in its bar beside the chat (Preview.css.ts previewAddress: 30 high).
+/// A service's address in its bar beside the chat.
 pub let preview_address_h : @ui.Len = Fixed(30.0)
 
 ///|
-/// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
+/// A message's video (msgVideoPlay, msgVideoName): black under its still, black at 65% under its
 /// play mark and its name, which are white.
 pub let video_ground : @ui.Color = Data(0x000000FFL)
 
@@ -3350,7 +3255,7 @@ pub fn ui_theme_now() -> @ui.Theme {
 
 ///|
 /// A top bar's title (a place's name over its page, the phone's Home's workspace): 24 on 30, bold, one line, 0.4 of a
-/// point tighter at the system's size of words, made larger with it (PlacePage.kt TopBarTitle's letterSpacing, in sp).
+/// point tighter at the system's size of words, made larger with it (in sp).
 /// One spec: the old view's top_bar_title and top_bar_title_node both read it.
 pub let top_bar_title_look : @view.WordsLook = {
   size: 24.0,

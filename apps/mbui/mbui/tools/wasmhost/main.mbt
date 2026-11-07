@@ -1,11 +1,11 @@
 // The native host's calls (`extern "C"` declarations) made Wasm's, for a program of an app run in classic Wasm by a
 // native shell that links the host as it is (the user, 2026-11-03: no C compiled for an app in development):
 //
-//     wasmhost gen THUNKS.c FILE.mbt…     beside each FILE (x_native.mbt), its Wasm side (x_wasm.mbt): each call the
+//  wasmhost gen THUNKS.c FILE.mbt… beside each FILE, its Wasm side: each call the
 //                                         same function, an import of the shell's ("mbhost", its C name); and
-//                                         THUNKS.c, the shell's side: each import read off the Wasm program's memory
+//  THUNKS.c, the shell's side: each import read off the Wasm program's memory
 //                                         and made the C call the native program makes
-//     wasmhost check THUNKS.c FILE.mbt…   the Wasm sides as they are made, nothing written: what differs said, exit 1
+//  wasmhost check THUNKS.c FILE.mbt… the Wasm sides as they are made, nothing written: what differs said, exit 1
 //
 // Classic Wasm's imports take numbers and function references alone. What is not a number crosses as where it lies in
 // the program's memory (mbui/wasmrt's *_addr): there it is laid out as the native program has it, [rc][length] and

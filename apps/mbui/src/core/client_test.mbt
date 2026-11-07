@@ -243,7 +243,7 @@ test "a fatal fails the calls in flight; restarted asks every subscription again
   c.receive("{\"fatal\":\"boom\"}") |> ignore
   assert_eq(c.fatal, Some("boom"))
   assert_eq(errs.length(), 1)
-  // (in the app's words, as StillFailCore.kt fails them; the core's own reason kept in `fatal`)
+  // (in the app's words, the core's own reason kept in `fatal`)
   assert_eq(errs[0].stringify(), "{\"code\":\"core_restarted\",\"message\":\"" + restarted_text.val + "\"}")
   sent.clear()
   c.restarted()

@@ -46,7 +46,7 @@ pub(all) struct Sheet {
 pub let sheet_scrim_ms : Double = 300.0
 
 ///|
-/// The scrim's fade: sheet_scrim_ms on CSS's ease (Sheet.kt's scrim tween).
+/// The scrim's fade: sheet_scrim_ms on CSS's ease.
 fn scrim_fade() -> @motion.Spec {
   @motion.tween(sheet_scrim_ms, ease=Out)
 }
@@ -333,7 +333,7 @@ fn nearest(shares : Array[Double], f : Double) -> Double {
 }
 
 ///|
-/// A sheet's grabber (still.fail's Sheet.kt SheetGrab): 38 by 5 in the theme's line colour, 12 above it and 8 under.
+/// A sheet's grabber: 38 by 5 in the theme's line colour, 12 above it and 8 under.
 pub fn sheet_grabber(c : @ui.Ctx) -> Unit {
   let t = c.theme()
   c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {

@@ -1,4 +1,4 @@
-// Files of an archived workspace through the admin API (admin/files.rs `session_file` and `attachments`): read out of
+// Files of an archived workspace through the admin API: read out of
 // its archive under the room's lock, a file sent again taken back out of it.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

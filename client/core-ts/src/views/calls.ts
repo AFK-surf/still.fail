@@ -1,4 +1,4 @@
-// The calls that change a chat (core/execute.rs, the views' part): sending, making a chat, answering a card, renaming,
+// The calls that change a chat (the views' part): sending, making a chat, answering a card, renaming,
 // pinning, archiving. Each takes effect here at once (local.ts: the outbox, a chat asked for, a change laid over its
 // row) and answers once its station has it; nothing a person does waits on the network to show (rule 4). What was on
 // its way when the core stopped goes on as it starts again, under the same idempotency key.

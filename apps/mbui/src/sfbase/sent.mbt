@@ -174,7 +174,7 @@ pub fn sent_local_gone(rk : String, key : String) -> Unit {
 
 
 ///|
-/// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
+/// The pictures of images sent from here, as they were picked: by station and the name
 /// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
 /// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
 /// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).

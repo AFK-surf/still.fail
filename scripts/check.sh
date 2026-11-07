@@ -241,6 +241,14 @@ if part ts; then
     step "clients' types" after core node client/core-ts/scripts/shapes.ts --check
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
+  # still.fail's colours are web/ui/src/palette.ts's (the app's palette made from it); the web's curves are the app's.
+  if touches '^web/ui/src/(palette|curves-data)\.ts$|^scripts/(palette|curves)\.ts$|^apps/mbui/src/sf/(palette_data|tokens)\.mbt$|^apps/mbui/mbui/src/ui/motion\.mbt$'; then
+    step "palette and curves" sh -c 'node scripts/palette.ts --check && node scripts/curves.ts --check'
+  fi
+  # The app's UI fault categories are the core's (client/core-ts/src/ui-faults.ts).
+  if touches '^client/core-ts/(src/ui-faults\.ts|scripts/ui-faults\.ts)$|^apps/mbui/src/stillfail/ui_faults\.mbt$'; then
+    step "UI fault categories" node client/core-ts/scripts/ui-faults.ts --check
+  fi
 
   if touches '^design/(station-)?icons/|^apps/mbui/(tools/icons/|scripts/icons$)|^web/ui/src/icons\.tsx$'; then
     step icons bash apps/mbui/scripts/icons . --check
@@ -256,7 +264,7 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  # the Wasm side of the native host's calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
+  # the Wasm side of the native host's calls as their declarations make it
   if touches '^apps/mbui/(mbui/src/host|src/(core|stillfail|pinyin|sfreplay))/.*native\.mbt$|^apps/mbui/mbui/tools/wasmhost/'; then
     step "wasm host calls" bash apps/mbui/scripts/wasm-app.sh check
   fi
@@ -302,7 +310,7 @@ if part ts; then
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
       | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
     step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
-    # One light for the pointer in what a change adds (docs/ui-panels.md 悬停): a hover lays the ink, `vars.hover` (lit.ts
+    # One light for the pointer in what a change adds: a hover lays the ink, `vars.hover` (lit.ts
     # `litOver` over a ground of its own), or takes a solid ground a step towards the page (`vars.primaryHover`, a colour
     # 85% mixed with the canvas); never a colour, a tint or a filter of its own. One that must says why with "own hover:".
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E ':hover[^{]*\{[^}]*(background(Color)?|filter): *' \
@@ -311,7 +319,7 @@ if part ts; then
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'
-    # A small panel stands on controls.css.ts popover (docs/ui-panels.md): surface() only for it and the three that are not
+    # A small panel stands on controls.css.ts popover: surface() only for it and the three that are not
     # popovers (a notice, ⌘K, the composer's list of chats).
     step "small panels on one ground" sh -c '! git grep -n "\.\.\.surface(" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/ui/src/styles/controls.css.ts" ":!web/src/SystemBubbles.css.ts" ":!web/src/Switcher.css.ts" ":!web/src/ChatRef.css.ts"'
   fi

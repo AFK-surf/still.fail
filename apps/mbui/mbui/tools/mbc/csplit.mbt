@@ -2,10 +2,10 @@
 // (mbc.mbt), as the same program: its stable split (moonc's made-up names made stable, a package's functions
 // a unit, each unit with only the declarations it uses):
 //
-//   decls.h    the prelude and every declaration (types, prototypes, #defines), in moonc's order
-//   externs.h  an `extern` declaration of each global
-//   data.c     decls.h and the globals' definitions (it alone sees each global's definition)
-//   init.c     moonbit_init, calling its packages' pieces (init.<package>.c; small ones together, init.s<k>.c)
+//  decls.h the prelude and every declaration (types, prototypes, #defines), in moonc's order
+//  externs.h an `extern` declaration of each global
+//  data.c decls.h and the globals' definitions (it alone sees each global's definition)
+//  init.c moonbit_init, calling its packages' pieces (init.<package>.c; small ones together, init.s<k>.c)
 //   <pkg>.c    a package's functions (a big package's in pieces by source file, <pkg>_<k>.c; small packages
 //              together, s<k>.c), with the prelude and only the declarations and externs they use (a struct they
 //              only pass by pointer declared, not defined), in an order of their own
@@ -451,7 +451,7 @@ fn package_of(name : BytesView) -> Bytes {
 
 ///|
 /// The prelude with each definition of its own that is not static (the software clz/ctz/popcnt, sqrt… a compiler
-/// without the builtins gets: MSVC) made `#ifdef CSPLIT_DEFS` (data.c, which defines it) `#else` a declaration:
+/// without the builtins gets: MSVC) made `#ifdef CSPLIT_DEFS` (which defines it) `#else` a declaration:
 /// defined once, declared in every unit. Its #ifdef __cplusplus blocks stay as they are.
 fn prelude_definitions(prelude : Bytes) -> (Bytes, Int) {
   let ls = line_starts(prelude)

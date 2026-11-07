@@ -1,4 +1,4 @@
-// Fixed bug reports told to the sessions that reported them (feedback.rs's tests).
+// Fixed bug reports told to the sessions that reported them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedNotice, tellFixed } from "../src/tools/feedback.ts";

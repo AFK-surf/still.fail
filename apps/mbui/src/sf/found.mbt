@@ -1,8 +1,8 @@
-// A search's words in what it found (still.fail apps/android shared/ui/TextMark.kt findWords, markWeight): where each is in
+// A search's words in what it found (markWeight): where each is in
 // a text, case aside, and the runs of a paragraph with them bold.
 
 ///|
-/// Where each of `words` (case aside) is in `text`, in order (TextMark.kt findWords): (from, to), UTF-16. None when
+/// Where each of `words` (case aside) is in `text`, in order: (from, to), UTF-16. None when
 /// the text's lower case is not as long as it (a letter whose lower case is longer: no offsets to trust).
 pub fn find_words(text : String, words : Array[String]) -> Array[(Int, Int)] {
   let lower = text.to_lower()
@@ -89,7 +89,7 @@ fn is_space(u : Int) -> Bool {
 }
 
 ///|
-/// `runs` with `words` (a search's) semibold wherever they are in their text (TextMark.kt markWeight): each run cut
+/// `runs` with `words` (a search's) semibold wherever they are in their text: each run cut
 /// where a word starts or ends in it. As they were with none.
 pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.Run] {
   if words.is_empty() {

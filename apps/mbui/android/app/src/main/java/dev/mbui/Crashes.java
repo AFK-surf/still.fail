@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The app's crashes, to still.fail's PostHog project as {@code $exception} events, as still.fail's Android app sends
- * them (apps/android/app/src/main/kotlin/fail/still/android/Crashes.kt). A crash in Java is
+ * them. A crash in Java is
  * written down as it happens (its exception, which the system does not keep); at the next start, once an account is
  * signed in (src/stillfail/reports.mbt), the system's record of how the app's processes ended (ApplicationExitInfo) is
  * read from where the last start left off, and each crash, native abort (Hermes, the core's JNI, the MoonBit app's C)

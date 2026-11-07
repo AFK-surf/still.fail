@@ -1,4 +1,4 @@
-// Workspaces: the units the core keeps apart (workspace.rs). What the core has of one workspace is its own: the account
+// Workspaces: the units the core keeps apart. What the core has of one workspace is its own: the account
 // that reaches it, its stations (station.ts), what is waited on for them (status.ts), what its person hears of it
 // (notices.ts) and what the core keeps in sync of it (sync.ts). What is the device's stays shared; what is an account's
 // is kept by account.

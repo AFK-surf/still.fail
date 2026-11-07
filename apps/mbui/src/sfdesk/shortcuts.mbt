@@ -1,8 +1,8 @@
-// ⌘/ (still.fail web/src/Shortcuts.tsx ShortcutsDialog, Shortcuts.css.ts): every shortcut, by where it works, the way to
+// ⌘/: every shortcut, by where it works, the way to
 // change them (快捷键, sfpages shortcuts.mbt) at its foot.
 
 ///|
-/// ⌘/ (Shortcuts.tsx ShortcutsDialog): every shortcut, by where it works (the core's keymap, then those of one place,
+/// ⌘/: every shortcut, by where it works (the core's keymap, then those of one place,
 /// not changed here), quiet words beside each; the way to change them at its foot (the desktop app's).
 pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
@@ -79,7 +79,7 @@ fn key_lines(prefs : Json?) -> Array[(String, Array[(String, String)])] {
 }
 
 ///|
-/// (Shortcuts.css.ts sheet: the groups 18 apart; group: its lines 2 apart, its title 4 over them)
+/// (group: its lines 2 apart, its title 4 over them)
 // kept across runs: a value (no field of it changes)
 let keys_sheet : @ui.Style = @ui.css("w=Full gap=S4_5")
 

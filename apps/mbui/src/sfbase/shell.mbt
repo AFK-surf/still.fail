@@ -26,7 +26,7 @@ pub(all) struct Shell {
   /// what was chosen in a list (a row of a place's list, a pick) shown where the layout has the page: on the tape the
   /// page beside the sidebar in use, brought over from the side panel (show_chosen)
   show : () -> Unit
-  /// the rail changed where it is (自定义侧边条, Rail.tsx editing), where the layout has a rail beside the pages; none
+  /// the rail changed where it is (自定义侧边条), where the layout has a rail beside the pages; none
   /// where it has none
   edit_rail : () -> Unit
 }

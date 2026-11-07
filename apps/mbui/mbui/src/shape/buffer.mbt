@@ -1,4 +1,4 @@
-// harfrust's buffer (buffer.rs): glyph infos and positions, the output side substitutions write into, cluster
+// harfrust's buffer: glyph infos and positions, the output side substitutions write into, cluster
 // merging. Glyph flags (unsafe-to-break and the like) are not kept: they only mark the result for line breaking,
 // in mask bits no feature uses.
 
@@ -63,7 +63,7 @@ fn GlyphPosition::set_attach_type(self : GlyphPosition, n : Int) -> Unit {
   self.attach = (self.attach & 0xFF00FFFF) | ((n & 0xFF) << 16)
 }
 
-// per-stage variables (ot/layout.rs, normalize.rs, ot/shaper/mod.rs)
+// per-stage variables (ot/shaper/mod.rs)
 
 ///|
 fn GlyphInfo::glyph_props(self : GlyphInfo) -> Int {

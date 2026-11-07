@@ -1,4 +1,4 @@
-// An agent's line coming in, each turn of its agent's (Chat.kt Activity): its room opens under its words, carrying
+// An agent's line coming in, each turn of its agent's: its room opens under its words, carrying
 // what is above it up, its second turn as its first. Its key is its agent's, the same each turn: gone from the chat,
 // it is new to the list again.
 

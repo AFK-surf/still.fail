@@ -15,25 +15,6 @@ let reported : Ref[Bool] = Ref(false)
 let timed : Map[Int, Bool] = {}
 
 ///|
-/// Faults can contain editor keys derived from people’s file paths. Report only fixed categories, never their text.
-/// Keep these categories in sync with the core's `clientError` allowlist.
-fn ui_fault_category(said : String) -> String {
-  if said.has_prefix("Ctx::editor: one Field given to two editors in one build (") {
-    "editor field reused"
-  } else if said.has_prefix("Ctx::editor: a Field given to ") {
-    "editor field already in tree"
-  } else if said == "field: one Field given to two fields of the tree's: a Field is one editor's" {
-    "tree field reused"
-  } else if said.has_prefix("scene: a frame put together round layers drawn again where they were not kept: ") {
-    "scene layer conflict"
-  } else if said == "presented beside a node of the tree, drawn by the old frame: a kind of panel panel_node does not take yet" {
-    "panel cannot be presented"
-  } else {
-    "UI fault"
-  }
-}
-
-///|
 /// The host's reports set going, before the app's first frame.
 fn reports_start() -> Unit {
   // what a call in flight as the core failed says (StillFailCore.restartedText)

@@ -259,7 +259,7 @@ pub fn composer(
   // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
   // nothing sent)
   let ready = (w.ready || (w.text.get().trim() != "" && !w.starting)) && !spec.locked
-  // sent once what it refers to can be read in this workspace (OutsideShare.tsx, sfbase's outside.mbt): at once when
+  // sent once what it refers to can be read in this workspace (sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
   let submit = fn() {
@@ -302,7 +302,7 @@ pub fn composer(
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
-  // laid out for another page than the frame before (a new chat's roomy in the page, a chat's at its foot: dock.tsx)
+  // laid out for another page than the frame before (a new chat's roomy in the page)
   let moved = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
@@ -334,7 +334,7 @@ pub fn composer(
     shape,
   )
   // gone to a page with no choices in its row from one with them (a new chat become its chat, or left for one): they
-  // leave as the new chat's other parts by the composer do (madeChat.ts: fading where they are, @sfbase.new_fade),
+  // leave as the new chat's other parts by the composer do (@sfbase.new_fade),
   // carried with the row as it goes, drawn only; till the end that fade declared
   if moved {
     composing.toolbar_leaving = if spec.toolbar is None { composing.toolbar_before } else { None }
@@ -344,7 +344,7 @@ pub fn composer(
     composing.toolbar_leaving = None
   }
   composing.toolbar = spec.toolbar
-  // its parts (what goes with it from where it showed as it changes shape: morph.ts's PARTS), as this build has them
+  // its parts, as this build has them
   let mut plus = -1
   let mut words = -1
   let mut send_i = -1
@@ -430,7 +430,7 @@ pub fn composer(
   // what it says under it): laid out as it ends at once, its ground going from the shape it had to this one, its parts
   // from where they showed to their places; laid out for the other page (a new chat's in the page, a chat's at its
   // foot: dock.tsx), the same from where it was there, one composer changing, and what it holds there that it did not
-  // here (a new chat's choices) carried on its ground (morph.ts morph), what it held there and does not here leaving
+  // here (a new chat's choices) carried on its ground, what it held there and does not here leaving
   // on it; words sent from it, as they let go of it (held till then: composer_hold). Moved by nothing of these (the
   // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
   // where it is laid out at once (sf/motion.mbt)
@@ -602,7 +602,7 @@ pub fn drops_as_files(src : Source, key : String) -> Bool {
 }
 
 ///|
-/// A station's file or folder carried in (Drive.tsx droppedFrom): which station has it and where, and where it is in
+/// A station's file or folder carried in: which station has it and where, and where it is in
 /// that station's drive.
 pub fn dropped_of(d : Dragged) -> Json {
   {
@@ -619,7 +619,7 @@ pub fn dropped_of(d : Dragged) -> Json {
 }
 
 ///|
-/// The text field (useComposerText's textarea, Chat.css.ts composerText): 14 on 1.5, growing with the text up to 480 or
+/// The text field (useComposerText's textarea): 14 on 1.5, growing with the text up to 480 or
 /// 40% of the window, then scrolling; with a mouse and nothing focused it says which key brings the cursor back
 /// (useSpaceHint); typed, told to the core (and the agent's runtime warmed, once a minute); Enter sends, ⇧Enter starts a
 /// line; with nothing typed ↑ / ↓ go to the chat above or below.
@@ -725,7 +725,7 @@ fn composer_text(
 ///|
 /// How far its field's hint (its placeholder) shows: only on a composer at rest without the cursor, so it never moves
 /// with the composer's shape. Gone at once as the field takes the cursor (`hidden`: or keeps the box a moment after),
-/// and while words sent leave the emptied field, still over it (madeChat.ts data-made-hint, flight.mbt); back over 200 ms
+/// and while words sent leave the emptied field, still over it (flight.mbt); back over 200 ms
 /// once they are out of it, or, the composer changing `shape` (its box let go to a capsule, a file put in it, `moved`
 /// to another page), once it is there (by `going`, the shape's motion).
 fn composer_hint(
@@ -1024,7 +1024,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
       let removed = @sf.with_corner_remove(c, key, remove_label(v, name), @sf.composer_inner(), w=dmin(@sf.file_card_w, c.width), fn() {
         let said = waiting_card(c, key, v, restore=restorable(w, v))
         match waiting_as(v) {
-          // a link: tapped, it opens (Composer.kt LinkCard)
+          // a link: tapped, it opens
           Link =>
             if said.opened {
               let url = text(field(v, "link"), "url")
@@ -1137,7 +1137,7 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         open=true,
         composer=true,
       )
-    // a link shared in (share-in.ts): its title and its site, drawn as a file is (Composer.kt LinkCard); sent as
+    // a link shared in (share-in.ts): its title and its site, drawn as a file is; sent as
     // words, nothing going up
     Link => {
       let l = field(v, "link")
@@ -1327,7 +1327,7 @@ fn composer_picture(
 }
 
 ///|
-/// How long it stays a box after it loses the cursor (LET_GO_MS); how long its change of shape takes (morph.ts).
+/// How long it stays a box after it loses the cursor (LET_GO_MS); how long its change of shape takes.
 pub let let_go_ms : Double = 300.0
 
 ///|
@@ -1681,7 +1681,7 @@ fn remember_sent_pictures(src : Source, w : Writing, station : String) -> Unit {
 ///|
 /// The files of a draft that are up, and its images and videos still going up (drawn where they land from their
 /// pictures here: sent_local), flying as it is sent to what each is in its message (file_key: one put up from here, or
-/// still going up, its upload; any other its path), each from its tile (ChatHost.kt sending): from where its card or
+/// still going up, its upload; any other its path), each from its tile: from where its card or
 /// its picture is (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
 fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
@@ -1930,7 +1930,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
 }
 
 ///|
-/// What is written sent into chat `r` (`v` its view: its thread, what is in it now; sendDraft, draft.ts send): in the
+/// What is written sent into chat `r` (`v` its view: its thread, what is in it now; sendDraft): in the
 /// list and flying there in the frame it is sent, before the core has it (sent_local: the rule), the composer empty at
 /// once; then what the core took (`composer.take`: the words with the links and the paths after them, the files up,
 /// the quotes, those still going up as it took them, which it waits for) goes (`chat.send`). Not taken in at all (the
@@ -1956,7 +1956,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   // the composer grew on under them, held where they were)
   let room = composer_room(c, w.key)
   let box = @motion.measured(c, "composer/content").unwrap_or(0.0) + @motion.reshaped_over(c, "composer/box")
-  // its quotes fly too, each from its card, and its files that are up, each from its tile (ChatHost.kt sending)
+  // its quotes fly too, each from its card, and its files that are up, each from its tile
   let flying = flying_quotes(c, src, w, r.station) + flying_files(c, src, w)
   @sfbase.flight_start(
     c,
@@ -2017,7 +2017,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
 ///|
 /// What was sent from draft `draft`'s composer holds it as tall as it was, its box (`box`) and its room (`room`), for
 /// `ms`: the words are in it till then, and it comes down as they let go of it, not from under them as they set out
-/// (ChatHost.kt hold; dock.tsx: the list's foot kept where it was till the message's row is in). Then its box is laid
+/// . Then its box is laid
 /// out as it is, its ground going down to that (composer's reshape, for this), and its room down on the same curve.
 fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Unit {
   let c = @ui.current()
@@ -2121,7 +2121,7 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held?
 ///|
 /// A chat's composer at its pane's foot (dock.tsx's chat place; cloud.css.ts composerWrap: 12 over it, 16 under it;
 /// dock.css.ts: 12 clear of the pane's sides, the column and its curve wide at most, in the middle): the chat's draft
-/// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), no file taken in while its station is down.
+/// , what it sends going into the chat (send_in_chat), no file taken in while its station is down.
 /// Its place measured (composer_room). `apart`: the page a panel of its own (the
 /// frame's tape), the composer as far from its foot as from its sides.
 pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v : ChatView?, apart? : Bool = false) -> Unit {
@@ -2665,7 +2665,7 @@ fn capsule_room(pane : Double) -> Double {
 ///|
 /// The room a chat's composer takes opened with one line at the foot of a pane `pane` wide (its box, composer_open_box;
 /// 12 over it and its foot's room under it, composer_foot_in): what a list that keeps its words in place as the
-/// composer closes keeps clear at least (ChatHost.kt roomForList).
+/// composer closes keeps clear at least.
 pub fn composer_open_room(pane : Double, corner? : Double = @sf.composer_corner()) -> Double {
   composer_open_box(corner~) + 12.0 + composer_foot_in(pane)
 }
@@ -2674,7 +2674,7 @@ pub fn composer_open_room(pane : Double, corner? : Double = @sf.composer_corner(
 /// How far a chat's composer stands from the foot of a pane `pane` wide (over the system's navigation bar, which is the
 /// page's): where it reaches across it, as far as from its sides (composer_side), the four sides of what it stands in
 /// alike (a phone's screen, a panel of its own: there in its corners, InnerOr); in a pane wider than it (a wide column,
-/// the composer 804 at most in its middle) the web's 16 (dock.css.ts).
+/// the composer 804 at most in its middle) the web's 16.
 pub fn composer_foot_in(pane : Double) -> Double {
   let d = composer_side()
   if composer_width(pane) >= pane - 2.0 * d - 0.5 {

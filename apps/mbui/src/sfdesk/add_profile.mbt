@@ -1,4 +1,4 @@
-// A new profile on the desktop, on a page of its own (still.fail web/src/pages/AddProfile.tsx, AddProfile.css.ts): the
+// A new profile on the desktop, on a page of its own: the
 // providers in their groups, then how to connect the one picked (its plan or a key) and the form. What is picked and
 // typed, and what each step says, is the core's (`profileFlow`, `profile.flow.*`); this draws it. Which online
 // station it is added on is chosen at its head; the machine's own logins not used yet are offered first.
@@ -548,7 +548,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
   |> ignore
 }
 
-// ── styles (AddProfile.css.ts) ─────────────────────────────────────────
+// ── styles ─────────────────────────────────────────
 
 ///|
 let ap_tile_glyph : Double = 16.0

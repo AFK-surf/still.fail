@@ -1,6 +1,6 @@
 // The chats' lists' sizes on the screen in force (sizes, row heights and density are the
 // theme's, by the native input): keyboard and mouse's the web's sidebar (Sidebar.css.ts navSession…, RowPicture.css.ts,
-// ChatMark.css.ts), touch's the phone's home (mobile/Home.css.ts mChatRow…, Home.kt). The rows, their second
+// ChatMark.css.ts), touch's the phone's home. The rows, their second
 // line, what stands at its end, the days' headings, the list's waiting and how its rows and panes move. One set of
 // pages draws them (sfpages' sidebar.mbt, chat_row.mbt, chat_mark.mbt, row_picture.mbt), taking them from here.
 
@@ -81,7 +81,7 @@ pub(all) struct ChatList {
   waiting_rows : Int
   waiting_noted : Int
   /// whether the screen has keys to find and choose with: ⌘K, ↑ ↓ and Enter in what is found, the one chosen shown so (a
-  /// computer's); else the search is at the list's top, scrolled to (touch's: Home.kt top)
+  /// computer's); else the search is at the list's top, scrolled to
   keys : Bool
   /// what search finds, a line each (Found)
   found : Found
@@ -108,7 +108,7 @@ pub let mouse_chat_list : ChatList = {
     gap=S2,
     align=AStart,
   ),
-  // (SidebarList.css.ts item: 7 over and under, as a chat's row)
+  // (as a chat's row)
   item: @ui.style(row=true, w=Full, min_h=S8, py=row_in, gap=S2, align=AStart),
   text: @ui.css("w=Full gap=S0_5"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
@@ -167,7 +167,7 @@ pub let mouse_chat_list : ChatList = {
 pub let touch_chat_list : ChatList = {
   row_h: touch_list_row_h,
   row: @ui.style(row=true, w=Full, h=Fixed(touch_list_row_h), gap=S1_5, align=ACenter),
-  // (SidebarList.css.ts phone: 10 over and under, its mark's column 8 from its words)
+  // (its mark's column 8 from its words)
   item: @ui.css("row w=Full py=S2_5 gap=S2 align=AStart"),
   text: @ui.css("w=Full justify=JCenter"),
   head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
@@ -182,7 +182,7 @@ pub let touch_chat_list : ChatList = {
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L6, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L6, wrap=false, w=Full),
-  // (bold, as the phone's: Home.kt StateLine)
+  // (bold)
   state_lead: @ui.text_style(weight=Bold, w=Hug),
   state_slot: @ui.css("w=S2_5 h=S5 justify=JCenter"),
   agent_mark: 14.0,
@@ -322,7 +322,7 @@ let whole_heading_in : @ui.Style = @ui.css("px=S5")
 
 ///|
 /// How far in a found line is and its corner, where its list stands: in a side column or a panel (⌘K's, the tape's
-/// sidebar's search) 12 in, rounded as a menu's row (Switcher.css.ts: 12 in); across the whole screen the phone's
+/// sidebar's search) 12 in, rounded as a menu's row; across the whole screen the phone's
 /// (mFound: 22 at the left, 16 at the right), square.
 pub fn found_row_in(at : ListAt) -> @ui.Style {
   match at {
@@ -368,7 +368,7 @@ pub fn found_head_in(at : ListAt) -> @ui.Style {
 }
 
 ///|
-/// Touch's chat row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
+/// Touch's chat row's height and its title's line (mChatLine1).
 pub let touch_list_row_h : Double = 66.0
 
 ///|
@@ -400,8 +400,8 @@ let mouse_meta_h : Double = 18.0
 /// each, its mark (an icon, an agent's maker, a station's mark), its first line (what it is, or the words found in it)
 /// with who, where and when at its end, and where it is under it (its chat, its line with the words) where it says one;
 /// the kinds under their headings; 全部结果 and 查看更多 in the link's ink; quiet words, the stations still answering.
-/// Its sizes the screen's: keyboard and mouse's the web's ⌘K (Switcher.css.ts: rows 38, two lines 54, 13 and 12), a touch
-/// device's the phone's search (mobile/Home.css.ts mFound…: rows 50, two lines 66, 15 and 14).
+/// Its sizes the screen's: keyboard and mouse's the web's ⌘K (two lines 54, 13 and 12), a touch
+/// device's the phone's search (two lines 66, 15 and 14).
 pub(all) struct Found {
   /// a line's height as the list first takes it: one line, two, a heading, quiet words
   row_h : Double

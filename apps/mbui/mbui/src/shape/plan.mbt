@@ -1,4 +1,4 @@
-// The shape plan (harfrust's planner.rs, plan.rs, ot/map.rs, tag.rs): which OpenType script and language system
+// The shape plan: which OpenType script and language system
 // a run uses, the features the default shaper asks for, each feature's mask bits, and the lookups to apply in
 // order, stage by stage.
 

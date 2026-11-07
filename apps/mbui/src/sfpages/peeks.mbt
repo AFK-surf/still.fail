@@ -182,7 +182,7 @@ fn destination(href : String) -> String {
 }
 
 ///|
-/// A page's tile (Hover.css.ts tile): its icon in a 36 square on the hover's ground (GitHub's mark for a GitHub page,
+/// A page's tile: its icon in a 36 square on the hover's ground (GitHub's mark for a GitHub page,
 /// the globe for any other), 10 from its title (two lines at most, 500) over where it goes (its site's name before it,
 /// muted, one line); the page's picture over it, 16:9, where it has one.
 fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?, copy : () -> Unit) -> Unit {
@@ -321,13 +321,13 @@ fn change_card(c : @ui.Ctx, v : Json?, pr : Bool, copy : () -> Unit) -> Unit {
 }
 
 ///|
-/// A fact in a pill on the hover's ground (Hover.css.ts chip).
+/// A fact in a pill on the hover's ground.
 fn fact_chip(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=peek_chip, fn() { c.text(words, style=peek_meta_words) |> ignore }) |> ignore
 }
 
 ///|
-/// A state in a tinted pill (Hover.css.ts state): its glyph (GitHub's, 12) and its name, 500, in the state's colours:
+/// A state in a tinted pill: its glyph (GitHub's, 12) and its name, 500, in the state's colours:
 /// open and passed green, merged and completed purple, closed and failed red, pending amber, a draft or not planned
 /// grey.
 fn state_pill(c : @ui.Ctx, state : String, glyph : String?, words : String) -> Unit {
@@ -343,7 +343,7 @@ fn state_pill(c : @ui.Ctx, state : String, glyph : String?, words : String) -> U
 }
 
 ///|
-/// A state's ink and ground (Hover.css.ts state's data-state).
+/// A state's ink and ground.
 fn state_colours(state : String) -> (Int64, Int64) {
   let p = @sf.theme().p
   match state {
@@ -359,7 +359,7 @@ fn state_colours(state : String) -> (Int64, Int64) {
 }
 
 ///|
-/// GitHub's purple for what was merged or completed (Hover.css.ts), each theme's a step deeper or lighter than GitHub's
+/// GitHub's purple for what was merged or completed, each theme's a step deeper or lighter than GitHub's
 /// (#8250df, #a371f7) to read on its ground, the purple at the theme's tone opacity (@sf.tone_ground).
 let merged_light : Int64 = 0x6830BFFFL
 
@@ -727,7 +727,7 @@ fn mono(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
 // kept across runs: a moment's words, gone as the moment is
 let copied_paths : Set[String] = Set::new()
 
-// ── a chat's (ChatRef.tsx RefPreview) ───────────────────────────────────
+// ── a chat's ───────────────────────────────────
 
 ///|
 /// What the core reads a chat's link as (`link.parse`): asked; the chat's station, its key (its id, or its agent's
@@ -949,7 +949,7 @@ fn chat_card_sample(c : @ui.Ctx) -> Unit {
   })
 }
 
-// ── its look (Hover.css.ts) ──────────────────────────────────────────────
+// ── its look ──────────────────────────────────────────────
 
 ///|
 /// A tile: its thumb and its words, 10 apart, at their tops: the thumb in the card's corner as far from its top as
@@ -960,7 +960,7 @@ let peek_tile : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
 ///|
 /// Its thumb: 36 square on the hover's ground, what it shows in its middle (20); in the card's corner as far in as makes
 /// the small block's corner concentric with the card's there (24 less 10: 14), out past the card's words to there
-/// (Hover.css.ts's 9).
+/// .
 // kept across runs: a value (no field of it changes)
 let peek_thumb : @ui.Style = @ui.css("w=S9 h=S9 bg=Hover align=ACenter justify=JCenter clip=true").then(
   @ui.style(radius=@sf.small_radius, ml=@sf.room_of(peek_thumb_out), mt=@sf.room_of(peek_thumb_out)),
@@ -990,7 +990,7 @@ let peek_tile_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, col
 let peek_tile_url : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// A page's picture over its tile: as wide as the card, 16:9 (Hover.css.ts tileWithPicture: 296 wide); 10 over the
+/// A page's picture over its tile: as wide as the card, 16:9; 10 over the
 /// tile.
 // kept across runs: a value (no field of it changes)
 let peek_with_picture : @ui.Style = @ui.style(w=Fixed(peek_picture_w), gap=S2_5)
@@ -1002,7 +1002,7 @@ let peek_picture_w : Double = 296.0
 let peek_picture_h : Double = peek_picture_w * 9.0 / 16.0
 
 ///|
-/// Its corner: in the card's top corners 16 in, concentric with its 23 there (Hover.css.ts's 8), as the tile's thumb.
+/// Its corner: in the card's top corners 16 in, concentric with its 23 there, as the tile's thumb.
 let peek_picture_r : Double = @sf.small_corner
 
 ///|
@@ -1045,7 +1045,7 @@ let peek_meta_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 let peek_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// Its facts: in a line that goes on to another, 8 apart across and between its lines (Hover.css.ts facts' gap); its
+/// Its facts: in a line that goes on to another, 8 apart across and between its lines; its
 /// first (who opened it, or a fact's pill) in the card's bottom left corner, concentric with it as its state is in its
 /// top left.
 // kept across runs: a value (no field of it changes)

@@ -1,4 +1,4 @@
-// A link held in a message (still.fail apps/android ui/Links.kt linkHold, in Sheet.kt MenuHost's look): its own menu, open it
+// A link held in a message: its own menu, open it
 // or copy it, rather than the message's (picking its words) and rather than the link opening as the finger lifts; a tap
 // stays the link's. The menu is 180 wide, under the line held (over it when there is no room below), centred on the
 // finger; it comes as the app's menus do (MenuSpring, from its corner by the line) over the menu's scrim. Other words
@@ -80,7 +80,7 @@ fn menu_under(
 /// The menu over the page, while open and as it goes: mbui's dropdown menu (the arrows and Enter as a menu's; a tap
 /// beside it, Esc or back close it) at the line held, in MenuHost's look.
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
-  // opened by a link held: felt as it opens (Links.kt)
+  // opened by a link held: felt as it opens
   if link_menu.open && link_menu.at == c.press().frame {
     feel_hold(c, "link")
   }

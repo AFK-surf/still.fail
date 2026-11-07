@@ -1,4 +1,4 @@
-// What the pages ask of the hub, the jobs and the files (admin/mod.rs `route`, admin/files.rs): new chats and sessions,
+// What the pages ask of the hub, the jobs and the files (admin/mod.rs `route`): new chats and sessions,
 // uploads, messages, adding a session to a chat, archiving, deleting, stopping, evicting, warming, a session's settings,
 // clearing a chat's ended jobs, stopping a job. What is only written to the store is routes/marks.ts's; the reads are
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).

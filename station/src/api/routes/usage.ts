@@ -40,7 +40,7 @@ function cursorInteger(r: Request, name: string): bigint | null {
 
 /// A path segment (admin/mod.rs segment_decode): `+` stays itself there.
 
-/// The Rust's `/footprint` for clients from before footprint statistics were retired (admin/footprint.rs `retired`).
+/// The Rust's `/footprint` for clients from before footprint statistics were retired.
 const RETIRED = JSON.stringify({
   checkedAt: null, tookMs: null, scanning: false, manage: false,
   disk: { totalBytes: 0, freeBytes: 0 },

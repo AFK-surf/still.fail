@@ -1,4 +1,4 @@
-// What each workspace has waiting for its person, for where workspaces are switched (views/marks.rs): of the chats
+// What each workspace has waiting for its person, for where workspaces are switched: of the chats
 // they take part in, those that want them and those with something unread; the chat last open in it. Only how many
 // and how urgent goes past a workspace.
 import { decodeComponent } from "../accounts.ts";

@@ -74,7 +74,7 @@ fn relay_focused(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// The dialog's search, its places, then the note (Relay.css.ts body: one column, 12 apart).
+/// The dialog's search, its places, then the note (12 apart).
 fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : Json?) -> Unit {
   c.box(style=relay_column, fn() {
     // the bots to go on through, when there are several (scopes)
@@ -221,7 +221,7 @@ fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : S
 }
 
 ///|
-/// The people the note can mention (Relay.tsx's popover, the composer's `@` menu's look: ref_menu) while it is
+/// The people the note can mention (the composer's `@` menu's look: ref_menu) while it is
 /// focused and offers some, under it and as wide: its head (可以 @ 的人 and the words typed), then each person, the
 /// one chosen on the hover's ground. ↑ / ↓ choose (round), Enter or Tab (taken as each comes, before the field:
 /// Ctx::on_key) or a press puts the one chosen in; Escape (or a press away) closes it for this `@`.
@@ -486,7 +486,7 @@ let relay_mark_size : Double = 16.0
 let relay_kind_size : Double = 10.0
 
 ///|
-/// A person's picture (Relay.css.ts person: 16, a menu row's mark).
+/// A person's picture (a menu row's mark).
 let relay_person_size : Double = 16.0
 
 ///|

@@ -1,4 +1,4 @@
-// What a program run in classic Wasm by mbui's native shell (src/host/wasm_shell.m) gives the native host of its
+// What a program run in classic Wasm by mbui's native shell gives the native host of its
 // values, and takes of the host's (tools/wasmhost writes the calls that use it): where a string, bytes or an array lies
 // in the program's memory (laid out as the native program has it: [rc][length], then what it holds), and a string or
 // bytes the host answered, copied into one made here. Empty on the other targets.

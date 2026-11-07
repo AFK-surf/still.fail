@@ -1,4 +1,4 @@
-// A chat's 文件 tab (still.fail web/src/pages/DriveTab.tsx, DriveTab.css.ts; mobile/StationFiles.tsx): the files of the
+// A chat's 文件 tab: the files of the
 // workspace's stations beside a chat, to put into what is being written. That is what it is for, on every screen: a
 // few files picked (a press picks a file, goes into a folder; the folder shown picked as a whole from the top of its
 // list), then 添加 n at its foot puts them into the message; what a file is, seen by its row's menu (打开) or the
@@ -90,7 +90,7 @@ fn ftab_pick(d : Dragged) -> Unit {
 }
 
 ///|
-/// What is picked, at the tab's foot (StationFiles.tsx's 添加; 添加 n once something is): pressed, it goes into chat
+/// What is picked, at the tab's foot (添加 n once something is): pressed, it goes into chat
 /// `key`'s message (files_into: the composer takes it, by its path or as a file as the chat says), the picks let go.
 fn ftab_add(c : @ui.Ctx, key : String) -> Unit {
   let n = ftab.picked.length()
@@ -245,7 +245,7 @@ fn ftab_places(c : @ui.Ctx, stations : Array[DvStation]) -> Unit {
 }
 
 ///|
-/// The way to `abs` (useDrive.ts trailOf): from the home (主目录) when it is under it, else from the top of the disk.
+/// The way to `abs`: from the home (主目录) when it is under it, else from the top of the disk.
 fn ftab_trail(abs : String, home : String) -> Array[(String, String)] {
   let trim = fn(p : String) { if p.length() > 1 && p.has_suffix("/") { p.view(end_offset=p.length() - 1).to_string() } else { p } }
   let at = trim(abs)
@@ -572,7 +572,7 @@ let ftab_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 let ftab_problem : @ui.Style = @ui.css("w=Full p=S3 gap=S2_5 align=AStart")
 
 ///|
-/// Where `name` goes in the folder `folder`, as an absolute path (useDrive.ts childOf).
+/// Where `name` goes in the folder `folder`, as an absolute path.
 fn ftab_child(folder : String, name : String) -> String {
   if folder.has_suffix("/") {
     folder + name

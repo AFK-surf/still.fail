@@ -163,7 +163,7 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
       (shell.val.open_invite)(t.token)
     }
-    // a reference to another chat (web/src/chatRefs.ts), opened over this one
+    // a reference to another chat, opened over this one
     "chat" => {
       if t.chat == "" {
         return false
@@ -349,7 +349,7 @@ pub fn open_item(
 }
 
 ///|
-/// One of a station's screens in the viewer (AppState.openScreen; remote/ScreenActivity.kt): `title`, the row's,
+/// One of a station's screens in the viewer (AppState.openScreen): `title`, the row's,
 /// until the core says one (screen_view.mbt).
 pub fn open_screen(station : String, screen : String, title : String?) -> Unit {
   open_page(Screen({ station, screen, title: title.unwrap_or(""), until_gone: false }))
@@ -375,7 +375,7 @@ pub fn open_slack(app : String, web : String) -> Bool {
 }
 
 ///|
-/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one of still.fail's opens here as the core
+/// A link tapped in a message (AppState.openLink): one of still.fail's opens here as the core
 /// says (open_link_in); any other is handed to the system (its browser, or the app that takes it: mbui's open_url), said
 /// when nothing took it.
 pub fn open_link(href : String) -> Unit {

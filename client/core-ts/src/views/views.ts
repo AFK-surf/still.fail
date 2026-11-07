@@ -1,4 +1,4 @@
-// The views (views.rs): what one screen shows, put together from the account and station topics so the UI does no
+// The views: what one screen shows, put together from the account and station topics so the UI does no
 // joining, filtering or grouping (Views). A view watches the topics it is built from; any change
 // of them only invalidates it, and the store has it computed when its coalesced emission goes out. What a person did
 // here and their station has not confirmed yet (local.ts) is laid over what the stations hold.
@@ -2770,10 +2770,10 @@ function goingUp(o: J): J {
 /// How far apart the viewer's messages sent one after another still go together, one time under the last.
 const FOLLOWED_MS = 5 * 60_000;
 
-/// How long a station up may go without a host reading before it is said to be silent (StationCards.tsx useLong's 15 s).
+/// How long a station up may go without a host reading before it is said to be silent.
 const SILENT_MS = 15_000;
 
-/// How a station is in a few words, as its page's head and its card say it (StationCards.tsx state): down for a security
+/// How a station is in a few words, as its page's head and its card say it: down for a security
 /// mode, its line; away, when it was last online (or never); up, connecting until its overview is read, then its
 /// agents at work (`busy`) or idle.
 export function stationState(online: boolean, saysWhy: boolean, summary: string, lastSeen: number | null, read: boolean, running: number, c: present.Clock): { stateText: string; stateBusy: boolean } {
@@ -2785,7 +2785,7 @@ export function stationState(online: boolean, saysWhy: boolean, summary: string,
   return running > 0 ? { stateText: t("core-views.station.running_agents", { n: running }), stateBusy: true } : { stateText: t("core-views.station.idle"), stateBusy: false };
 }
 
-/// What may be wrong with a station, each in words, worst first (StationCards.tsx problems): silent though up, down for
+/// What may be wrong with a station, each in words, worst first: silent though up, down for
 /// a security mode (why), away (red once it has been online, else amber: never connected). Up and saying what this core
 /// cannot read comes first: it explains the rest.
 export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean, updating = false, unreadable = false): { key: string; level: string; text: string }[] {

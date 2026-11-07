@@ -88,7 +88,7 @@ export class CoreError extends Error {
   }
 }
 
-/// What a host says when what it was asked failed (host.rs `HostError`): in its own words, or (`said`) in the person's,
+/// What a host says when what it was asked failed: in its own words, or (`said`) in the person's,
 /// as the core says it to them.
 export class HostError extends Error {
   readonly said?: true;

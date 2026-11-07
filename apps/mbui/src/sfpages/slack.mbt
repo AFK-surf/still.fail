@@ -1,4 +1,4 @@
-// Connecting a Slack connect on the desktop (still.fail web/src/slack.tsx, slack.css.ts): the steps that make its app in
+// Connecting a Slack connect on the desktop (still.fail web/src/slack.tsx): the steps that make its app in
 // Slack from still.fail's manifest (CreateAppSteps), and its two tokens typed into the core's draft of them
 // (useSlackTokens: `slackTokens {station, form}`, `slack.tokens.edit`, `.verify`, `.drop`), who they belong to said
 // once the core has checked them (TokenFields).
@@ -154,7 +154,7 @@ fn tokens_clear(core : Core, tk : SlackTokens) -> Unit {
 }
 
 ///|
-/// The two tokens' fields (TokenFields; slack.css.ts tokenFields: 12 apart): App-Level Token and, unless the app was
+/// The two tokens' fields (TokenFields): App-Level Token and, unless the app was
 /// installed through Slack (`install`), Bot Token, each a secret's field (`masked`: what is saved, kept while it is left
 /// blank); who they were checked as, in green, while the draft is what is typed; what checking them found wrong, and
 /// why a call failed, in red under them.

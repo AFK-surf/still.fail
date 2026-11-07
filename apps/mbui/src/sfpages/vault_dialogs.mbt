@@ -1,4 +1,4 @@
-// The desktop's 密钥's dialogs (web/src/VaultAdd.tsx AddKinds, cloud/Vault.tsx Editor and Recover), the library's
+// The desktop's 密钥's dialogs, the library's
 // (open_dialog; 添加's a pick): what 添加 offers, an item written (a new one, or one opened, changed or deleted), the recovery words
 // typed in.
 

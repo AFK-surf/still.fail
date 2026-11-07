@@ -16,7 +16,7 @@ pub fn tab_service(tab : String) -> String? {
 }
 
 ///|
-/// A tab's visualization, `file:["<session>","<path>","<name>"]` (chat-tabs.ts, Preview.tsx fileService): its session,
+/// A tab's visualization, `file:["<session>","<path>","<name>"]` (chat-tabs.ts): its session,
 /// its path and its name (None: none, or one that does not read).
 pub fn tab_file(tab : String) -> (String, String, String)? {
   if !tab.has_prefix("file:") {

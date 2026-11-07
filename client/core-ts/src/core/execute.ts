@@ -1,4 +1,4 @@
-// Execution of named client calls (core/execute.rs), as Effects. What changes something takes effect in the core at
+// Execution of named client calls, as Effects. What changes something takes effect in the core at
 // once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed is read
 // again (the account topics show it).
 import { Effect } from "effect";
@@ -18,6 +18,7 @@ import { t } from "../i18n.ts";
 import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
+import { UI_FAULT_CATEGORIES, UI_FAULT_OTHER } from "../ui-faults.ts";
 
 export type Handler = (inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext) => Effect.Effect<unknown, CoreError>;
 
@@ -68,10 +69,9 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({});
       }
       case "clientError": {
-        // UI fault text can contain editor keys made from file paths. Accept only the categories produced by
-        // reports.mbt, including when an older app sends the original text directly to a newer core.
-        const uiFaults = ["UI fault", "editor field reused", "editor field already in tree", "tree field reused", "scene layer conflict", "panel cannot be presented"];
-        const message = call.source === "ui_fault" && !uiFaults.includes(call.message) ? "UI fault" : call.message;
+        // A UI fault's text can hold editor keys made from file paths: only its category leaves (ui-faults.ts), whatever
+        // an app sends, an older one's original text too.
+        const message = call.source === "ui_fault" && !UI_FAULT_CATEGORIES.includes(call.message) ? UI_FAULT_OTHER : call.message;
         const key = `${call.source}\u0000${message}`;
         const now = inner.host.nowMs();
         const was = inner.reported.get(key);

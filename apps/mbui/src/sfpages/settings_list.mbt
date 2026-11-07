@@ -650,7 +650,7 @@ fn settings_lead(c : @ui.Ctx, core : Core, here : @settings.Here, row : Settings
 }
 
 ///|
-/// A sidebar row's mark's side (the rows' icons': SidebarList.css.ts mark, ICON's 16).
+/// A sidebar row's mark's side (ICON's 16).
 let settings_side_mark : Double = 16.0
 
 ///|

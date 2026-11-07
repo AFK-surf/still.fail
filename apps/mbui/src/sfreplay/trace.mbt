@@ -1,5 +1,5 @@
 ///|
-/// A run's trace: e2e/traces/NAME.trace (scripts/trace.py: what the app and its core said in the run, a line each),
+/// A run's trace: e2e/traces/NAME.trace (a line each),
 /// read as the test runs. Read, not compiled in: as constants they were every flow test's program's data (17 MB of a
 /// test's 25 MB data.c, all 78 traces in each), compiled again for each test and on any change.
 pub fn trace(name : String) -> String {

@@ -582,7 +582,7 @@ fn nc_made_steps(c : @ui.Ctx, core : Core, f : NcFlow, made : Json?) -> Unit {
 }
 
 ///|
-/// A Feishu bot being made by scanning (useFeishuStep's scan step: FeishuConnect.css.ts scan): its QR code 196 (or, before
+/// A Feishu bot being made by scanning: its QR code 196 (or, before
 /// it, a ring or Feishu's mark in its place), beside it (narrow: under it) where it stands (a ring while the connect is
 /// added, red where it failed), what went wrong, and while it waits how to scan it and the way to open it on this
 /// device.

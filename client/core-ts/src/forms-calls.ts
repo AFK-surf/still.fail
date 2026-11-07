@@ -1,4 +1,4 @@
-// The forms' topics and calls (core/routing.rs, core/execute.rs for the forms in forms.ts).
+// The forms' topics and calls.
 import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";

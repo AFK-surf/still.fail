@@ -6,14 +6,14 @@
 //   or minimized, @ui.app_awake, as still.fail's desktop app showed its notices with no window open): the notices the
 //   core's `notify {workspace}` says to show now (not while off, not for the chat looked at, none of a workspace turned
 //   off, another workspace's named in its title: client/core-ts attend.ts decides), each shown once it is taken (`notice.claim`). Behind for good (a phone's
-//   app behind another, its frames stopped), the topic is left (the core then holds none back for a page: Notices.kt's
+//  app behind another, its frames stopped), the topic is left (the core then holds none back for a page: Notices.kt's
 //   flow ends with the activity's onStop).
 // - What the system lets the app show, told to the core as the app starts and each time it is shown again
 //   (`notify.permission`); the system asked once, the first time signed in with notifications on (`notify.set
 //   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them).
-// - A chat on top: its notification taken off (App.kt). A notification tapped: its link read by the core
+// - A chat on top: its notification taken off. A notification tapped: its link read by the core
 //   (`link.parse`), its workspace switched to, the chat pushed over Home at the message (chat.mbt `go_to`).
-// - Pushes (Push.kt): this device's registration held as the core's `notify` says (`push.register` with the host's
+// - Pushes: this device's registration held as the core's `notify` says (`push.register` with the host's
 //   token, `push.unregister` while off), a token come later registered then. A push delivered is the app's push
 //   service's (android/…/Push.java, as PushService: it asks the core whether to show it, `notice.pushed`, then brings
 //   what it is about, `notice.bring`), since the app's frames stop while it is behind.
@@ -215,7 +215,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
     }
     None => ()
   }
-  // the notices to show while the app goes on (Notices.kt showNotices)
+  // the notices to show while the app goes on
   if @ui.app_awake() {
     follow_notices(src, w.id)
   } else {

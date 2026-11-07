@@ -1,4 +1,4 @@
-// A new chat in the pane (still.fail web/src/NewChat.tsx): the pages' (sfpages new_chat.mbt) in the wide frame, which adds
+// A new chat in the pane: the pages' (sfpages new_chat.mbt) in the wide frame, which adds
 // what the frame has around it: the workspace's stations' files beside it, as beside a chat (its 文件 in the chat's
 // bar's place, over the page; the side panel sliding in and out; a row of the tab let go over the page going into its
 // message), its parts coming in as the sidebar switches to it from a chat (switch.mbt), and as it becomes its chat,
@@ -120,7 +120,7 @@ fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : Double, fa
 }
 
 ///|
-/// The page as it becomes its chat (NewChat.tsx onSent): the chat opening without its agent's history beside it, the
+/// The page as it becomes its chat: the chat opening without its agent's history beside it, the
 /// files open beside the page open beside the chat.
 fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
   let files = new_files_open(src, w.id)
@@ -131,7 +131,7 @@ fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
 }
 
 ///|
-/// Over the chat a new chat became (madeChat.ts toMadeChat): the page leaving; and a new chat left for a chat by the
+/// Over the chat a new chat became: the page leaving; and a new chat left for a chat by the
 /// sidebar, fading over it (switch.mbt). Drawn over the chat's page, after it.
 pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if @sfbase.new_chat_leaving_of(c, r) {

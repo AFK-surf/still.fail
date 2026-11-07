@@ -76,7 +76,7 @@ pub(all) enum Ease {
   InOut
   /// progress, as it is: handed to another curve (a flight's way), or a cycle's turn
   Linear
-  /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt; the web's madeChat.ts)
+  /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt)
   Flight
 } derive(Eq, Show)
 

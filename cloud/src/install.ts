@@ -59,12 +59,12 @@ export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|lin
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
- * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
+ * latest (the desktop app's electron-updater), and the files it names.
  */
 const APP_FILES: [RegExp, string][] = [
   // The site's film (on it 2026-10-28 to 10-29; a page built then still asks for it), too large for the site's own files.
   [/^site\/film-[a-z]+-[0-9]+\.mp4$/, "video/mp4"],
-  // The station's latest release, for stations to say a newer one is out (the Rust station's updates.rs).
+  // The station's latest release, for stations to say a newer one is out.
   [/^station\.json$/, "application/json"],
   // The test channel's (scripts/release.sh --beta): the station's latest, and the beta apps' (fail.still.desktop.beta,
   // fail.still.android.beta, apps of their own beside the released ones): the desktop one's feed (electron-updater's
@@ -172,7 +172,7 @@ esac
 # The data: $STILLFAIL_DATA, else ~/.stillfail.
 data="\${STILLFAIL_DATA:-$HOME/.$product}"
 cur="$data"
-# Where the update is, for the station to show on its pages (the Rust station's updates.rs): download, handoff, drain,
+# Where the update is, for the station to show on its pages: download, handoff, drain,
 # restart. Only for a station that is there to read it.
 step() { [ -d "$cur/run" ] && printf '%s\n' "$1" > "$cur/run/update.step" 2>/dev/null || true; }
 # A station already in a workspace is only updated: no token, and it stays the same station.
@@ -251,7 +251,7 @@ if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ -z "\${STILLFAIL_INSTALLER_HANDE
   trap - EXIT
   STILLFAIL_ARCHIVE="$keep/stillfail.tar.gz" STILLFAIL_INSTALLER_HANDED=1 exec sh "$keep/install.sh" "$@"
 fi
-# Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
+# Which channel the release came from, for the station.
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
 # The Node it runs on (NODE_VERSION: its version) is not in the release: kept apart in node/v<version> beside the data, once per

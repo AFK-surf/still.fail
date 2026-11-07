@@ -164,7 +164,7 @@ export class NodeHost implements Host {
         }),
         (socket) => Effect.sync(() => socket.close()),
       );
-      // The host's ping (host.rs SOCKET_PING_MS): still.fail cloud answers `pong`. A measurement of the connection, not
+      // The host's ping: still.fail cloud answers `pong`. A measurement of the connection, not
       // a read of anything.
       yield* Effect.forkScoped(Effect.forever(Effect.sleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.sync(() => socket.send(SOCKET_PING))))));
       return { take: Effect.flatMap(Queue.take(frames), (v) => (v instanceof HostError ? Effect.fail(v) : Effect.succeed(v))) };

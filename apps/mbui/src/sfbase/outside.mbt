@@ -1,4 +1,4 @@
-// What a draft refers to, shared before it goes (web OutsideShare.tsx), for every composer: words
+// What a draft refers to, shared before it goes, for every composer: words
 // with a reference to another chat in them (a mark, as the core read them: refs.mbt) are asked of the core before
 // they go: the chats of the viewer's other workspaces they name that are not shared with this workspace yet, and
 // which of them the viewer may share (`chat.outsideRefs`). With none (or a core that cannot say) they go at once; else
@@ -7,7 +7,7 @@
 // said, nothing sent. A second send while the core is asked does nothing.
 
 ///|
-/// A chat of another workspace that what is sent refers to (OutsideShare.tsx Outside): its station and id, its title,
+/// A chat of another workspace that what is sent refers to: its station and id, its title,
 /// its workspace and that's name, whether the viewer may share it (its starter, or an owner or admin there).
 pub(all) struct OutsideRef {
   station : String

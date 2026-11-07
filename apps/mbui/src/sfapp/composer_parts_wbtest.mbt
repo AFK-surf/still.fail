@@ -1,4 +1,4 @@
-// The composer's parts as Android's (Composer.kt, ChatFiles.kt, StationFiles.kt, Keyboard.kt): what waits to go (its
+// The composer's parts as Android's: what waits to go (its
 // files in the order they were put in, a row that scrolls sideways; a picture opening in the viewer, a link opening,
 // a file going up said as it goes), the quotes kept to 176, the archived chat's restore, what the buttons are called,
 // a long press letting the keyboard be. Over the fake core of composer_wbtest.mbt.

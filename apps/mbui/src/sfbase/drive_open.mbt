@@ -1,6 +1,6 @@
 // Where the drive hands a file to be looked at (still.fail apps/android drive/DriveScreen.kt open: pictures, PDFs, code,
 // tables, pages in the chat's viewer, FilePreview.kt): the file preview (viewer.mbt), its bytes read by `drive.read`.
-// Video and audio go to the player (drive.mbt drive_open pushes DrivePlay: play.mbt, Player.kt); a file handed here
+// Video and audio go to the player (drive.mbt drive_open pushes DrivePlay: play.mbt); a file handed here
 // otherwise plays in the preview's player, reading the same way.
 
 ///|

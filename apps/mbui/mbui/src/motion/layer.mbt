@@ -8,7 +8,7 @@
 //   a tween, or a progress the app drives), carrying on from where it had got to. In a list a place is the row's
 //   place in the list's content, not on the screen, so scrolling moves nothing (but what the list put its rows down
 //   by to hold its foot as they changed: a row gone at its end, the rows over it coming down over its place);
-// - a list's rows by key (list_keys, ListMotion.kt): rows new to the list come in (an enter transition), rows gone
+// - a list's rows by key (list_keys): rows new to the list come in (an enter transition), rows gone
 //   leave by a copy of how they were last drawn, shrinking and fading where they were, rows that went ahead of others
 //   pass over them, the rest close over what left, a little late;
 // - enter and exit transitions for what the app shows and hides (presence, Motion's AnimatePresence, Compose's
@@ -627,7 +627,7 @@ pub fn entering(
 }
 
 ///|
-/// Node `i` keyed `key` changes shape for its cause (the web's morph.ts `grow`): in the frame `by` (what it changes for:
+/// Node `i` keyed `key` changes shape for its cause: in the frame `by` (what it changes for:
 /// its words, its files, its being opened) changes, what it holds is laid out as it ends at once, and its own ground
 /// (its colour, glass, shadow, border and corners) goes by `spec` from the shape it showed to the one it is laid out
 /// in, carrying on from wherever it had got to. What in it moves with it says so itself (`layout` with the same `by`);
@@ -923,7 +923,7 @@ fn list_seen(l : ListMo, frame : Int) -> Unit {
 }
 
 ///|
-/// What changes a list shows by its rows' keys (ListMotion.kt update): call while building, each frame, with the keys
+/// What changes a list shows by its rows' keys: call while building, each frame, with the keys
 /// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves, nor
 /// the first time again after a frame it was not built in (Android's list composed anew: its page come back to). As
 /// they change: rows new to it come in (layout's `enter`), rows gone that showed leave by a copy (its `exit`), rows
@@ -1102,7 +1102,7 @@ pub fn list_keys(
   if gone {
     lm.close_until = now + 50.0
   }
-  // (one let go without a copy stays so until it leaves: ListMotion.kt swiped.retainAll)
+  // 
   let left : Array[Int] = []
   lm.unghost.each(fn(k, _) { if !fresh.contains(k) && !ks.contains(k) { left.push(k) } })
   for k in left {
@@ -1138,7 +1138,7 @@ pub fn list_unghost(c : @ui.Ctx, list : Int, key : String, off? : Bool = true) -
 }
 
 ///|
-/// How long a row that went ahead of others takes to pass over them (ListMotion.kt liftedAt).
+/// How long a row that went ahead of others takes to pass over them.
 pub let lift_ms : Double = 480.0
 
 ///|
@@ -1156,7 +1156,7 @@ impl @ui.Moving for Lift with rest_at(self, now, frame) {
 
 ///|
 /// How long ago row `key` of list `list` (its id, as list_keys answers) went ahead of others (ms), while it passes
-/// over them (480 ms: ListMotion.kt liftedAt); -1 otherwise.
+/// over them; -1 otherwise.
 pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
   match mo.lists.get(list) {
     Some(lm) =>

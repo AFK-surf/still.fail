@@ -222,7 +222,7 @@ pub(all) struct FileCardDone {
 }
 
 ///|
-/// A file as a card (FileCard; later.css.ts fileCard): its sheet, its name over its size (or how far it has gone up,
+/// A file as a card (FileCard): its sheet, its name over its size (or how far it has gone up,
 /// `pending`, `sent` of it; or what the core's `download` says while it comes down, its share filling the sheet; or why
 /// it failed, `error`, in red), 236 wide at most, 8 by 10 in and 7 at the sheet's side, rounded as the sheet stands in
 /// (13), on the neutral ground; `path` its tip where it says what the card does not (a path named, a link's address), else its name while cut short. `remove` and `retry` its own ✕ and ↻ at its end (in a
@@ -232,7 +232,7 @@ pub(all) struct FileCardDone {
 /// card): `title` in place of its name (what they begin with), `meta` in place of its size (how many characters), their
 /// own ✕'s `remove_label`, `restore` its ✎ putting them back as words. A message's file the core downloads: its ✕ and ↻
 /// said as calling that off and asking it again (`remove_label`, `retry_label`). `dir`: a folder's (file_tile).
-/// `named`: a file named where it is and not going (a station's file sent as its path: Chat.css.ts fileCard[data-named]),
+/// `named`: a file named where it is and not going,
 /// its card no ground, its edge dashed in the strong line. Going up and how far not known yet (`pending`, no `sent`),
 /// a spinner where its sheet is: what goes on is seen to (an empty sheet that stays so looks stuck). `composer`: waiting
 /// in the composer, on composer_card's ground.

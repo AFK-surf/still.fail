@@ -363,7 +363,7 @@ fn take(msg : Json, bytes : Bytes?) -> Unit {
 
 ///|
 /// Told as the core fails, with its reason, before it is started again (or stopped, a third time in a minute): still.fail's
-/// Android app reports it as CoreFailed (StillFailCore.onFailed, Crashes.kt), as src/stillfail's host does.
+/// Android app reports it as CoreFailed (StillFailCore.onFailed), as src/stillfail's host does.
 pub let on_failed : Ref[((String) -> Unit)?] = { val: None }
 
 ///|

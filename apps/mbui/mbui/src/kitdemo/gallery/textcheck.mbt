@@ -1,4 +1,4 @@
-// The text's contract: a host's kept text (a run's TEXTREC lines, textrec_NAME.mbt) asked of the
+// The text's contract: a host's kept text (a run's TEXTREC lines) asked of the
 // host's text system again and compared, answer by answer. MBUI_TEXTCHECK=NAME on a real host: every metrics, shaping,
 // whole-word key and glyph box asked again, in the order the run asked them first (so the glyph keys the host hands
 // out come in the same order; where a glyph goes in the atlas is not the host's to say: hostapi's atlas.mbt), each

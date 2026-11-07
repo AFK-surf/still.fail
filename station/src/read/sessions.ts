@@ -147,7 +147,7 @@ export function summary(s: Store, key: string): Json {
   return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings, participants: store.participants(s, key), watches: watching(s, [key]), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
-/// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
+/// GET /sessions: the sessions shown in lists, or only the archived ones; those of one connect;
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
@@ -158,7 +158,7 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
   return rows.map((x) => summaryWith(s, x.key, l));
 }
 
-/// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first). `turns`: only that
+/// GET /sessions/:key: the session, its threads, turns and jobs (newest first). `turns`: only that
 /// many of its latest turns (`?turns=`), for a device that knows how many it had and how long they ran from its summary
 /// (`turns`, `workMs`): all of them were read for that, many of one session in 25 s on a station (2026-11-03).
 /// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
@@ -234,13 +234,13 @@ function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
   return visible.map((t) => threadView(s, t, shares));
 }
 
-/// GET /threads?session= (views.rs `threads`): the threads (of one session).
+/// GET /threads?session=: the threads (of one session).
 export function threads(s: Store, viewer: Viewer, session: string | null, lang: Lang): Json[] {
   setLang(lang);
   return threadViews(s, viewer, session);
 }
 
-/// GET /threads/:id (admin/mod.rs, views.rs `thread`): the id an i64, the thread there.
+/// GET /threads/:id (admin/mod.rs): the id an i64, the thread there.
 export function thread(s: Store, viewer: Viewer, id: string, lang: Lang): Json {
   setLang(lang);
   const n = parseI64(id);
@@ -260,11 +260,11 @@ export function parseI64(text: string): number | null {
 // ---- a session's timeline and widgets ----
 
 /// GET /sessions/:key/timeline: transcript entries before those a page was sent: up to `limit` (200, from 1 to 1000)
-/// before entry `before` (0), and the index of the first (live.rs `before`); in brief (transcript.ts `brief`) with
+/// before entry `before` (0), and the index of the first; in brief (transcript.ts `brief`) with
 /// `brief=1`. `after` instead: up to `limit` entries just after entry `after` (what a device that holds up to there has yet
 /// to have). `from` and `to` instead: those entries (both included, at most 1000), whole unless `brief=1`, as one in brief
 /// is read again when it is opened. `end`: how many entries the transcript has. The transcript is found through the
-/// session's profile (hub.rs `locate`); none found: nothing.
+/// session's profile; none found: nothing.
 export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string, afterParam?: string): Json {
   setLang(lang);
   const before = parseUsize(beforeParam) ?? 0;
@@ -300,7 +300,7 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   return { start, entries: between(start, upto), end };
 }
 
-/// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
+/// A session's transcripts: those of the runtime sessions it ran in before first (sessions/afresh.ts),
 /// and none now (its context cleared) still reads those it ran in; found whatever profile it is on now, if any. Null:
 /// none found.
 function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: { path: string; runtime: RuntimeKind }[] } | null {
@@ -347,7 +347,7 @@ export function widgetState(s: Store, key: string, path: string | undefined, lan
   return { state };
 }
 
-// ---- a session's files (admin/files.rs) ----
+// ---- a session's files ----
 
 /// files.rs `mime`: by the file's extension.
 export function mime(path: string): string {

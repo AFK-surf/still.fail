@@ -183,7 +183,7 @@ pub fn fix_detailed_chat(base : Json) -> Json {
       }
       o["agents"] = [fix_agent()]
       o["publish"] = { "may": true }
-      // shared with one of the viewer's other workspaces, read only (ChatInfo.kt ShareRow)
+      // shared with one of the viewer's other workspaces, read only
       o["xshare"] = {
         "session": "s-c1",
         "text": "开源 · 只读",

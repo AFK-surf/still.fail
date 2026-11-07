@@ -88,7 +88,7 @@ pub fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : In
 }
 
 ///|
-/// A place's icon (Places.kt placeIcon; Station's is the stations' glyph of their state once read, bar_glyph).
+/// A place's icon (Station's is the stations' glyph of their state once read, bar_glyph).
 pub fn place_icon(place : String) -> String {
   match place {
     "chats" => "chats"

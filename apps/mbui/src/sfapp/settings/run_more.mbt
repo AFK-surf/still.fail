@@ -1,6 +1,6 @@
-// How a chat's agent runs, changed on a page of its own (History.kt RunSettingsScreen), the machine's own sessions to
-// go on with (NewChat.kt MachineSessionsOffer, openMachineSessions, lookAtMachineSession), and adding people to the
-// workspace (Settings.kt AddSheet) with the workspace's mark.
+// How a chat's agent runs, changed on a page of its own, the machine's own sessions to
+// go on with (openMachineSessions, lookAtMachineSession), and adding people to the
+// workspace with the workspace's mark.
 
 ///|
 /// How an agent runs (RunSettingsScreen): what it is now and what it becomes, the changes marked (and why its account
@@ -76,7 +76,7 @@ fn run_view(
   let draft = field(v, "draft")
   let runtime = text(draft, "runtime")
   if list == "model" {
-    // every model it can move to (SettingParts.kt ModelList)
+    // every model it can move to
     model_list(c, "run-session-models/" + key, items(v, "options"), runtime, text(v, "option"), fn(m) {
       pick([("model", str(m))])
       run_list.remove(of)
@@ -322,7 +322,7 @@ fn run_sample() -> Json {
 }
 
 // ---------------------------------------------------------------------------
-// The machine's own sessions (web/src/MachineSessions.tsx)
+// The machine's own sessions
 
 ///|
 /// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page. What
@@ -334,7 +334,7 @@ let machine_sessions : @sf.LiveMap[String, Array[Json]] = @sf.LiveMap::new()
 let machine_sessions_asked : Map[String, Bool] = Map([])
 
 ///|
-/// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessions.css.ts offer):
+/// The offer, where the station's machine kept sessions of its own Claude Code or Codex:
 /// quiet as the words around it until pointed at, then its ground and its words the text's; its list and a look at one
 /// before going on with it are sheets. Drawn by a new chat's page (sfpages), which says where it hangs.
 pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name : String) -> Unit {
@@ -553,7 +553,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
               close()
               look_at_machine_session(core, station, name, s)
             }
-            // its first words whole while it is pointed at (MachineSessions.tsx's tip: its title cut short is often them)
+            // its first words whole while it is pointed at
             @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"), repeats=text(sv, "title") == "")
           }
         }
@@ -718,7 +718,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
 }
 
 // ---------------------------------------------------------------------------
-// Adding people (Settings.kt AddSheet) and the workspace's mark
+// Adding people and the workspace's mark
 
 ///|
 /// The emails in what was typed or pasted (parseEmails): each once, lowercased.
@@ -987,12 +987,12 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
 }
 
 ///|
-/// The run's chips in lines (History.kt EffortChips), and a chip.
+/// The run's chips in lines, and a chip.
 // kept across runs: a value (no field of it changes)
 let run_chips : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// A chip of a choice (History.kt EffortChips): 16 either side of its words, 9 over and under, round by 18.
+/// A chip of a choice: 16 either side of its words, 9 over and under, round by 18.
 let chip_px : Double = 16.0
 
 ///|
@@ -1002,7 +1002,7 @@ let chip_py : Double = 9.0
 let chip_corner : Double = 18.0
 
 ///|
-/// Who runs the model picked (SettingParts.kt AccountList): what 自动分配 means, then 自动分配 (none picked: the
+/// Who runs the model picked: what 自动分配 means, then 自动分配 (none picked: the
 /// station's pick; `auto_trail` at its end) and each account it may be kept to, its provider's mark before it and its
 /// allowance after it, 18 from the sides. `pick` hears the account picked (None: 自动分配).
 fn account_list(

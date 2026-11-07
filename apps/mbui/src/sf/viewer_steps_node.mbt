@@ -1,4 +1,4 @@
-// The ways to the picture before and after (FilePreview.css.ts fpStep) as nodes of the window's tree
+// The ways to the picture before and after as nodes of the window's tree
 // (the way there 4): each there as what is beside the picture says, in and out as the bars are (or
 // the hand is on it) from the moment that changes, on a motion's way; pressed (its press let go on it), done then.
 

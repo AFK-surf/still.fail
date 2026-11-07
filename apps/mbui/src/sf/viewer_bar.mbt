@@ -1,4 +1,4 @@
-// The bar every file opened shows across the window's top on a desktop (web/ui viewer/ViewerBar.tsx, ViewerBar.css.ts):
+// The bar every file opened shows across the window's top on a desktop:
 // a picture's, a PDF's or code's preview (the app's FilePreview), a text read (reader.mbt), a film played (player.mbt). Always there, along the window's top, 45 high: the way back on the left (where to, by name), the
 // file's name and a line about it in the middle, its tools on the right as icons, download last. Its ground is the
 // file's (the paper under a text) at 82% over a 20 blur, saturated, a line of its own under it at 70%; it drags the
@@ -70,7 +70,7 @@ pub fn viewer_bar(
     let alone = c.theme().corner(Xl)
     let start = if at_corner { viewer_bar_start_in(alone, @ui.corner_roots()) } else { viewer_bar_in }
     c.box(style=viewer_bar_row.then(@ui.style(pl=room(start))), fn() {
-      // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
+      // clear of the window's buttons at its left, the system's (not in full screen)
       if @ui.window_keys_left() {
         c.box(style=viewer_bar_buttons, fn() {  }) |> ignore
       }
@@ -134,7 +134,7 @@ pub fn viewer_bar(
 let tools_across : Ref[Bool] = Ref(false)
 
 ///|
-/// One of a bar's tools (ViewerBar.tsx ViewerTool): an 18 icon in a 32 button, in the file's quieter ink until
+/// One of a bar's tools: an 18 icon in a 32 button, in the file's quieter ink until
 /// pointed at or `on` (its ground then the page's chosen one), named on hover. True on the frame after it was pressed.
 pub fn viewer_tool(
   c : @ui.Ctx,
@@ -249,7 +249,7 @@ pub fn viewer_bar_under() -> Double {
 }
 
 ///|
-/// Its going and coming (ViewerBar.css.ts: transform and opacity, 240 ms ease-out).
+/// Its going and coming (240 ms ease-out).
 pub let viewer_bar_ms : Double = 240.0
 
 ///|
@@ -339,7 +339,7 @@ fn viewer_bar_end() -> @ui.Style {
 let viewer_bar_middle : @ui.Style = @ui.css("align=ACenter clip")
 
 ///|
-/// The way back (ViewerBar.css.ts back): 32 high, 4 before the chevron and 10 after the words, the page's corner.
+/// The way back: 32 high, 4 before the chevron and 10 after the words, the page's corner.
 // kept across runs: a value (no field of it changes)
 let viewer_back_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S0_5 align=ACenter radius=Xl")
 

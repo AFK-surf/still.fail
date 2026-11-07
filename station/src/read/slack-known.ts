@@ -75,7 +75,7 @@ export function knownChannel(s: Store, connect: string | null, channel: string):
   return typeof name === "string" ? name : null;
 }
 
-/// A creator reference `slack:<connect>:<user>` in words (views.rs `creator`): never waits on Slack — what is known
+/// A creator reference `slack:<connect>:<user>` in words: never waits on Slack — what is known
 /// now; null when the reference is not a Slack one.
 export function slackCreator(s: Store, reference: string): Json | null {
   if (!reference.startsWith("slack:")) return null;

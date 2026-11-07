@@ -1,4 +1,4 @@
-// The search over Home (search.mbt; Search.kt) over the made-up chats (search_fixture.mbt).
+// The search over Home (search.mbt) over the made-up chats (search_fixture.mbt).
 
 ///|
 /// Home with the search open, its field come up (the list scrolled to it first: it starts out of view).
@@ -39,7 +39,7 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   t.run_for(@ui.move_most_ms)
   let (active, _, _, _) = t.ime()
   assert_true(active)
-  // the keyboard's action key a search key (Search.kt: ImeAction.Search)
+  // the keyboard's action key a search key
   assert_eq(t.ime_action(), @hostapi.ime_action_search)
   // its field at the top now (8 under the page's top), 取消 beside it
   let (_, to) = t.find("取消").unwrap()

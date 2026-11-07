@@ -1,10 +1,10 @@
-// A card over what the pointer rests on, as the web's (still.fail web/src/Peeks.tsx Hover, Hover.css.ts card, cardTile):
+// A card over what the pointer rests on, as the web's (still.fail web/src/Peeks.tsx Hover, cardTile):
 // opened once the pointer has rested on it 320 ms, closed 120 ms after it has left both it and the card; under it and
 // at its start, 6 away, kept in the window; a small panel (the popover's: 6 in, what it holds 10 in more), 320 wide
 // (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 and clear over 160 ms as it comes,
 // and goes to .97 and clear over 90 ms (Hover.css.ts enter, exit: a card the pointer left, not one put away by a
 // press, so not at once as a menu goes). And an agent's card
-// (AgentCard.tsx, AgentCard.css.ts), the same over its picture beside its messages and over its mark in the chat's bar.
+// , the same over its picture beside its messages and over its mark in the chat's bar.
 
 ///|
 /// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`; to a finger, as it
@@ -144,7 +144,7 @@ let hover_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion
 let hover_out_ms : Double = 90.0
 
 ///|
-/// Its width: 320; a tile's as wide as it holds, 220 at least, 420 at most (Hover.css.ts cardTile).
+/// Its width: 320; a tile's as wide as it holds, 220 at least, 420 at most.
 // kept across runs: a value (no field of it changes)
 let hover_card : @ui.Style = @ui.style(w=@sf.hover_card_w)
 
@@ -153,7 +153,7 @@ let hover_card : @ui.Style = @ui.style(w=@sf.hover_card_w)
 let hover_tile : @ui.Style = @ui.style(min_w=@sf.hover_tile_least, max_w=@sf.hover_tile_most)
 
 ///|
-/// What it holds, 10 in from the panel's padding (controls.css.ts panelCard), 8 apart (Hover.css.ts card).
+/// What it holds, 10 in from the panel's padding (controls.css.ts panelCard), 8 apart.
 // kept across runs: a value (no field of it changes)
 let hover_inner : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
 
@@ -169,7 +169,7 @@ let hover_bare : @ui.Style = @ui.css("w=Full")
 // ── an agent's card ──────────────────────────────────────────────────────
 
 ///|
-/// One of the chat's agents in brief (AgentCard.tsx), `a` as chat `r`'s view has it: what it runs as, one thing (its
+/// One of the chat's agents in brief, `a` as chat `r`'s view has it: what it runs as, one thing (its
 /// mark, its label, the account it runs on with what is left of it); where it stands and for how long, a stop for it
 /// alone at its end while it works; its latest three lines; what it has going in the background and its checklist in a
 /// line (agent_work_line); the figures that say most (UsageTiles); the rest in a quiet line; its jobs and what is
@@ -330,7 +330,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
 }
 
 ///|
-/// For how long it has stood where it does (AgentCard.tsx: Waited, Elapsed): waiting as long as it has (of at most),
+/// For how long it has stood where it does (Elapsed): waiting as long as it has (of at most),
 /// else at work since its turn began; nothing else.
 fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
   let now = (src.now)()
@@ -365,7 +365,7 @@ fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
 }
 
 ///|
-/// An agent's card's latest lines, a line each, oldest first (AgentCard.tsx's list), running on as they change
+/// An agent's card's latest lines, a line each, oldest first, running on as they change
 /// (useLinesMotion): none resized, nor the list; those that stay go from where they were to where they are, carrying
 /// on from wherever they had got to; a new one comes with them from beyond the edge, and one gone leaves with them, as
 /// a copy; with none staying, new and gone fade in place. As they are the first time the card shows them.
@@ -500,7 +500,7 @@ fn hover_reset() -> Unit {
 }
 
 ///|
-/// How long they take to run on, and how (AgentCard.tsx LINES_MS, LINES_EASE).
+/// How long they take to run on, and how (LINES_EASE).
 pub let lines_ms : Double = 240.0
 
 ///|
@@ -529,11 +529,11 @@ fn gone_faint(c : @ui.Ctx, key : String) -> @motion.Anim {
 }
 
 ///|
-/// Its mark's side (AgentCard.tsx AgentMark size).
+/// Its mark's side.
 let agent_card_mark : Double = 28.0
 
 ///|
-/// A tone's colour as a style says it (AgentCard.css.ts status's dot: accent, green, blue, red, amber; else subtle).
+/// A tone's colour as a style says it (green, blue, red, amber; else subtle).
 fn tone_token(tone : String) -> @ui.Color {
   match tone {
     "accent" => Accent
@@ -623,7 +623,7 @@ pub fn open_context_actions(src : Source, station : String, key : String, s : Js
         @sf.menu_item_of(
           @sf.t("web-pages.chat.clear"),
           fn() {
-            // asked as the web asks it (ChatPage.tsx: Confirm)
+            // asked as the web asks it
             @sf.confirm(
               @sf.t("web-pages.chat.clearConfirm"),
               @sf.t("web-pages.chat.clearBody"),
@@ -645,7 +645,7 @@ pub fn open_context_actions(src : Source, station : String, key : String, s : Js
 }
 
 ///|
-/// What can be done to an agent's context from its tile (AgentCard.tsx ContextEntry: its execution history's details):
+/// What can be done to an agent's context from its tile:
 /// its menu opened, something under way, whether it can be compacted.
 pub(all) struct ContextEntry {
   open : () -> Unit
@@ -660,7 +660,7 @@ pub fn context_tile_id(c : @ui.Ctx) -> Int {
 }
 
 ///|
-/// The figures that say most of what an agent used (AgentCard.tsx UsageTiles), each large over its name, side by
+/// The figures that say most of what an agent used, each large over its name, side by
 /// side: what it cost, the cache's hit rate, how full its context is (in its level's colour, how much of how much on
 /// hover). With `entry`, its context's tile opens what can be done to it, its name ending in › (that it can be
 /// compacted said once it is filling up), a spinner while something is under way. None before it has made a call.

@@ -1,4 +1,4 @@
-// The language the app's words are said in, as still.fail's Android app has it (data/I18n.kt): the core's (its prefs'
+// The language the app's words are said in, as still.fail's Android app has it: the core's (its prefs'
 // `lang`: as chosen, else as the device is, which it is told: sfcore's client.device `locale`), and until the core
 // says, the device's (MBUI_LOCALE, its host's: CoreHost.java, apple_engine.m). Chinese for a locale that is (zh…) or
 // none, else English.
@@ -31,7 +31,7 @@ pub fn language() -> String {
 }
 
 ///|
-/// The core's `lang` (its prefs'), None or anything else: the device's from now on (I18n.kt follow).
+/// The core's `lang` (its prefs'), None or anything else: the device's from now on.
 pub fn set_language(said : String?) -> Unit {
   lang_said.set(
     match said {

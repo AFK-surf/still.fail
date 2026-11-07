@@ -1,4 +1,4 @@
-// A text file read as a book (web/ui viewer/Reader.tsx, Reader.css.ts; zdrive's reader in still.fail's look): one
+// A text file read as a book (zdrive's reader in still.fail's look): one
 // column that scrolls, never pages. A plain-text novel hard-wrapped at a fixed width is joined back into its paragraphs,
 // its chapters found and words found in it by the page's core (viewer_host.mbt read_book, search_book); Markdown is
 // never reflowed, and is drawn as a chat's is (markdown.mbt). Where it was left is kept (viewer_file.mbt place,
@@ -17,7 +17,7 @@
 // The phone's page reads with the same column and state (reader_column, Reading), its own bars over it.
 
 ///|
-/// A paper (Reader.css.ts PAPER): its ground, its ink, what is quieter, the raised ground of what floats over it, its
+/// A paper: its ground, its ink, what is quieter, the raised ground of what floats over it, its
 /// line, its accent, whether it is dark.
 pub(all) struct ReaderPaper {
   ground : Int64
@@ -30,7 +30,7 @@ pub(all) struct ReaderPaper {
 }
 
 ///|
-/// The paper shown (Reader.tsx paperOf): night while the app is dark, by day the light paper chosen (white until one
+/// The paper shown: night while the app is dark, by day the light paper chosen (white until one
 /// is).
 pub fn reader_paper(chosen : String) -> ReaderPaper {
   if theme().dark {
@@ -101,7 +101,7 @@ fn paper_by_key(key : String) -> ReaderPaper {
 }
 
 ///|
-/// The bar's colours on the paper (Reader.css.ts reader: --viewer-ground, -ink, -muted, -line); its buttons lit as the
+/// The bar's colours on the paper (-ink, -muted, -line); its buttons lit as the
 /// page's are (the paper is night while the app is dark, a day's paper while it is light: reader_paper).
 pub fn paper_viewer_ink(p : ReaderPaper) -> ViewerInk {
   let page = theme().p
@@ -229,7 +229,7 @@ fn readings_reset() -> Unit {
 }
 
 ///|
-/// The file read, once (Reader.tsx loadBook): its bytes here already, or read whole (at most reader_most, how much
+/// The file read, once: its bytes here already, or read whole (at most reader_most, how much
 /// has come told as it comes); decoded here, then read by the page's core as a reader shows it (read_book).
 pub fn reader_load(r : Reading, file : ViewerFile, markdown : Bool) -> Unit {
   r.file = Some(file)
@@ -374,7 +374,7 @@ pub let reader_search_ms : Double = 250.0
 pub let reader_place_ms : Double = 1000.0
 
 ///|
-/// The column of text (Reader.tsx scroller, column, TextBody / MarkdownBody): the book's blocks in the reader's size,
+/// The column of text (column, TextBody / MarkdownBody): the book's blocks in the reader's size,
 /// lines, margins (`left`, `right`) and face, `top` over them and `foot` under them, the places found marked; where the
 /// top of the screen is followed and kept as it holds still; a jump on its way made; the search made as it is typed.
 /// `headings`: a heading line in 600 and a fifth larger (a desktop's); `cut`: a note under a text cut at reader_most. A
@@ -487,7 +487,7 @@ pub fn reader_column(
       } else if i <= n {
         reader_chunk(c, r, book, i - 1, style, p, size, line, left, right, mark, mark_now, headings)
       } else if i == n + 1 && cut_row == 1 {
-        // a text cut at reader_most says so under it (Reader.css.ts cut)
+        // a text cut at reader_most says so under it
         c.box(style=reader_cut_row, fn() {
           c.box(style=@ui.style(w=Fixed(left)), fn() {  }) |> ignore
           c.box(style=desk_grow, fn() {
@@ -630,7 +630,7 @@ fn reader_words(
     )
   } else {
     let runs = [@ui.plain(render_chunk(raw, book.starts[k], book.heads, style.indent))]
-    // a desktop's headings in 600 and a fifth larger (Reader.css.ts piece p[data-heading])
+    // a desktop's headings in 600 and a fifth larger
     let runs = if headings { reader_headings(runs, raw, book.starts[k], book.heads, style.indent) } else { runs }
     let runs = if mine.length() == 0 {
       runs
@@ -875,7 +875,7 @@ pub fn reader(
 }
 
 ///|
-/// A note in the middle of the paper, 30% of the way down (Reader.css.ts note).
+/// A note in the middle of the paper, 30% of the way down.
 fn desk_note(c : @ui.Ctx, body : () -> Unit) -> Unit {
   c.box(style=reader_fill, fn() {
     c.box(style=@ui.style(h=Fixed(c.height * desk_note_down)), fn() {  }) |> ignore
@@ -886,7 +886,7 @@ fn desk_note(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// The text's room either side on a desktop: one column 34 of its size wide and its margins at most, in the middle of
-/// what the panel leaves (Reader.css.ts column, scroller[data-panel]); the left, and the right with the panel's.
+/// what the panel leaves (scroller[data-panel]); the left, and the right with the panel's.
 fn desk_reader_sides(c : @ui.Ctx, r : Reading, style : ReaderStyle, panel? : Bool = true) -> (Double, Double) {
   let panel = if !panel || r.panel == NoPanel { 0.0 } else { desk_panel_w }
   let margin = style.margin.to_double()
@@ -1032,7 +1032,7 @@ fn desk_toggle_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit {
 }
 
 ///|
-/// What was found and the steps through it (Reader.css.ts findStrip): 「what」 which of how many, the one before and
+/// What was found and the steps through it: 「what」 which of how many, the one before and
 /// after, and the search let go; a capsule of the paper's raised ground, frosted.
 fn desk_found(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
   let step = fn(d : Int) {
@@ -1069,7 +1069,7 @@ fn desk_found(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
 }
 
 ///|
-/// The panel docked at the right, under the bar (Reader.css.ts panel, `desk`): its title (the contents' with how many
+/// The panel docked at the right, under the bar (`desk`): its title (the contents' with how many
 /// chapters and how far read), its close, then what it is.
 fn desk_panel(
   c : @ui.Ctx,
@@ -1128,7 +1128,7 @@ fn desk_panel(
 }
 
 ///|
-/// The chapters (Reader.tsx Contents): finding in the whole text first, then each chapter numbered, the one being read
+/// The chapters: finding in the whole text first, then each chapter numbered, the one being read
 /// in the accent's ink with a check; a tap goes there. None found: said so.
 fn desk_contents(
   c : @ui.Ctx,
@@ -1200,7 +1200,7 @@ fn desk_contents(
 }
 
 ///|
-/// Words to find in the file (Reader.tsx Find): the field, how many were found, each place in a line of its text; one
+/// Words to find in the file: the field, how many were found, each place in a line of its text; one
 /// pressed goes there, ⏎ to the first.
 fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : () -> Unit = fn() {  }) -> Unit {
   c.box(style=desk_find_place, fn() {
@@ -1377,7 +1377,7 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
 }
 
 ///|
-/// One paper, drawn in itself (Reader.css.ts paperSwatch): 文 on its ground, ringed in the accent when it is the one,
+/// One paper, drawn in itself: 文 on its ground, ringed in the accent when it is the one,
 /// its name under it. True on the frame after it was pressed.
 fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double) -> Bool {
   let id = c.id("reader/paper/" + key)
@@ -1401,7 +1401,7 @@ fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double
 }
 
 ///|
-/// A size's key (Reader.css.ts sizeKey): A− or A+, 32 high, 44 wide at least, quiet where it can go no further.
+/// A size's key: A− or A+, 32 high, 44 wide at least, quiet where it can go no further.
 fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : ReaderPaper, said~ : String) -> Bool {
   let id = c.id(key)
   let b = c.box(style=desk_size_key_box, disabled=!on, id=if on { id } else { 0 }, fn() {
@@ -1412,7 +1412,7 @@ fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : Reade
 }
 
 ///|
-/// A setting along a hairline with a knob (Reader.tsx Slider): its name, the line, its value as `shown` says; dragged
+/// A setting along a hairline with a knob: its name, the line, its value as `shown` says; dragged
 /// or tapped, the value follows, and is kept as the pointer lets go: Some(it) on that frame.
 fn desk_slider_row(
   c : @ui.Ctx,
@@ -1495,7 +1495,7 @@ fn narrow_reader_chrome(
     None => 0.0
   }
   let pct = "\{(share * 100.0).round().to_int()}%"
-  // the bars coming (140 ms) or going (240 ms), eased out, a step up or down as they fade (Reader.css.ts fades)
+  // the bars coming (140 ms) or going (240 ms), eased out, a step up or down as they fade
   let k = @motion.animate(c, "reader-bars", if r.chrome { 1.0 } else { 0.0 }, spec=@motion.tween(
       if r.chrome { narrow_bars_in_ms } else { reader_bars_ms },
       ease=Out,
@@ -1682,7 +1682,7 @@ fn narrow_glass(p : ReaderPaper) -> @ui.Glass {
 }
 
 ///|
-/// How far through it is, to drag or tap to a place (Reader.tsx Track): the knob follows the finger, the text goes there
+/// How far through it is, to drag or tap to a place: the knob follows the finger, the text goes there
 /// as it lets go.
 fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : Bool) -> Unit {
   let key = "reader/where"
@@ -1701,7 +1701,7 @@ fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : B
 }
 
 ///|
-/// A tool of the foot (Reader.css.ts tool): its icon over its name, a third of the row, 50 high; its ground the ink at
+/// A tool of the foot: its icon over its name, a third of the row, 50 high; its ground the ink at
 /// 7% while what it opens is open. True on the frame after it was pressed.
 fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on : Bool, p : ReaderPaper, live : Bool, w : Double) -> Bool {
   let id = c.id(key)
@@ -1718,7 +1718,7 @@ fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on
 }
 
 ///|
-/// The panel open (or sinking away) as the page's sheet (Reader.tsx open, narrow): the contents and the search 72% of
+/// The panel open (or sinking away) as the page's sheet (narrow): the contents and the search 72% of
 /// the page and dragged by its grabber, the layout half of it; each on the page's own ground, a pick closing it.
 fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, chapter : Int, share : Double) -> Unit {
   let sheet = match viewer_host().sheet {
@@ -1937,7 +1937,7 @@ let narrow_tool_h : Double = 50.0
 let narrow_tool_words : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
-/// A heading's (Reader.css.ts piece p[data-heading]: 600, 1.2 of the text's size).
+/// A heading's (1.2 of the text's size).
 let reader_heading_weight : Int = 600
 
 ///|
@@ -1984,7 +1984,7 @@ let reader_chunk_row : @ui.Style = @ui.css("row w=Full")
 let reader_words_w : @ui.Size = Fill(1.0)
 
 ///|
-/// A text cut says so under it (Reader.css.ts cut: 2em over it, 12, quiet).
+/// A text cut says so under it (12, quiet).
 // kept across runs: a value (no field of it changes)
 let reader_cut_row : @ui.Style = @ui.css("row w=Full pt=S8")
 
@@ -2008,7 +2008,7 @@ let desk_column_ems : Double = 34.0
 pub let desk_panel_w : Double = 320.0
 
 ///|
-/// A note on the paper (Reader.css.ts note): 30% down, 24 in, 12 between, 12 and quiet; its progress 180 wide.
+/// A note on the paper: 30% down, 24 in, 12 between, 12 and quiet; its progress 180 wide.
 let desk_note_down : Double = 0.3
 
 ///|
@@ -2099,7 +2099,7 @@ let desk_seg_item : Double = 138.0
 let desk_swatch_line : Double = 0.14
 
 ///|
-/// The papers' colours (Reader.css.ts light, PAPER, PAPER_BG).
+/// The papers' colours (PAPER, PAPER_BG).
 let paper_white_ground : Int64 = 0xF5F3EFFFL
 
 ///|

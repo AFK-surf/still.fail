@@ -2,7 +2,7 @@
 // (cloud/test/dev.ts) with two real stations of one workspace over real local iroh: an agent's session on "here" calls
 // peer_forward through its MCP door; a web page served on "there" (absolute asset paths, a WebSocket) and raw TCP go
 // through the forwarded port; the session archived closes it; "there" stopped is said to be offline. Rough latency
-// and throughput are printed. With PLAYWRIGHT_MODULE (playwright-core's index.mjs), Chromium opens the page too.
+// and throughput are printed. With PLAYWRIGHT_MODULE, Chromium opens the page too.
 //
 //   node station/side/peer-forward-e2e.ts   (from a worktree with `pnpm run build` done in station/ and
 //                                            `pnpm run build:cloud` at the top, the iroh dev relay on :3340; PORT,

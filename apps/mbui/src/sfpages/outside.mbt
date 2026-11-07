@@ -133,7 +133,7 @@ let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, color=AccentText, wr
 let outside_whose : @ui.Style = @ui.css("row ml=S1 px=S1_5 py=SPx gap=S1 radius=Full bg=Hover align=ACenter")
 
 ///|
-/// Its workspace's mark, as a chip's station's (ChatRef.css.ts refChipStationIcon: 11).
+/// Its workspace's mark, as a chip's station's.
 let outside_whose_mark : Double = 11.0
 
 ///|

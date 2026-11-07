@@ -336,7 +336,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
 
 ///|
 /// How the view is on its way, or back on its way (over, `ended` says it in the screen's place): in the pill every
-/// wait is said in (Waiting.kt WaitPill), floating over the frame (kept as it was) or the empty stage; said once it
+/// wait is said in, floating over the frame (kept as it was) or the empty stage; said once it
 /// has been waited on a moment (LATER_MS).
 fn screen_waiting(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
   let words = match phase {
@@ -529,7 +529,7 @@ fn screen_row_key(c : @ui.Ctx, key : String, icon : String, label : String) -> B
 }
 
 ///|
-/// A button that is not the main one (Controls.kt Button, primary false: the chip's ground, its words in the ink).
+/// A button that is not the main one (primary false: the chip's ground, its words in the ink).
 fn soft_button(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
   let i = c.box(style=soft_button_box, id~, keep=true, fn() { c.text(label, style=soft_button_words) |> ignore })
@@ -654,7 +654,7 @@ fn gesture_new() -> Gesture {
 }
 
 ///|
-/// The stage's gestures (ScreenViewer.kt gestures). Driving it as a trackpad: one finger moves the pointer, a tap
+/// The stage's gestures. Driving it as a trackpad: one finger moves the pointer, a tap
 /// clicks where it points, tapped again and moved (or held still) it drags, two fingers tapped click the right button,
 /// two moving together scroll. Driving it directly: a tap is a click where it is (down and up, the primary button), a
 /// press held a right click, a drag a drag (down, moves, up), two fingers moving together a wheel. Either way two
@@ -976,7 +976,7 @@ fn mouse_drive_new() -> MouseDrive {
 }
 
 ///|
-/// What a mouse did on the stage since the last frame, as the screen takes it (web/src/screen/input.ts, a mouse): its
+/// What a mouse did on the stage since the last frame, as the screen takes it (a mouse): its
 /// moves over the picture (the frame's last), its primary button down where it is, moved held (past the picture's
 /// edge, at its edge) and up, its secondary button a right click, its wheel (in pixels, not a pinch); with ⇧ ⌃ ⌥ ⌘
 /// held as a button goes down, their keys round it. A press on the stage, a picture's letterbox too, gives it the

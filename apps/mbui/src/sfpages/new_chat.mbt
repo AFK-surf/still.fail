@@ -17,7 +17,7 @@
 // (`chat.send` by its key); the page becomes the chat in place, its first words carried where they were typed till
 // their row is in the chat's list (flight.mbt), what is written meanwhile going on into the chat's draft
 // (`composer.carry`); over the chat its scene and what is under it fade where they are
-// (madeChat.ts toMadeChat, NewChat.kt). The frame says what is over it and under it, and what it does as the page
+// . The frame says what is over it and under it, and what it does as the page
 // becomes the chat (NewChatFrame).
 
 ///|
@@ -102,7 +102,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
 }
 
 ///|
-/// The new chat of view `v` as it is left (madeChat.ts toMadeChat, data-made-leave): as it was but for its composer
+/// The new chat of view `v` as it is left (data-made-leave): as it was but for its composer
 /// (the chat's now, its place kept), its scene `up` of the way faded where it is, what is under the composer `fade` of
 /// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
 /// words sent, what is under the composer 80 ms: @sfbase.new_chat_leaving_of), or over the chat it was left for, in a
@@ -208,7 +208,7 @@ fn new_narrow(
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
         let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
-        // fading where it is (madeChat.ts); back, the chat not made
+        // fading where it is; back, the chat not made
         let gone = if going { up } else { sending_up }
         if gone > 0.0 {
           c.look(scene, @ui.look(alpha=1.0 - gone))
@@ -440,7 +440,7 @@ fn new_station_control(
 
 ///|
 /// A control of the page's (where it runs, the way to models): over the composer a capsule of its glass (mChooser,
-/// NewChat.kt Chooser), in its row as the composer's other controls (Chooser in NewChat.tsx's toolbar); what it holds
+/// NewChat.kt Chooser), in its row as the composer's other controls; what it holds
 /// `body`. True on the frame after it was pressed.
 fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit) -> Bool {
   let id = c.id(key)
@@ -467,7 +467,7 @@ fn take_asked(what : String) -> Bool {
 }
 
 ///|
-/// Where a new chat runs (the mobile pickStation, NewChat.kt pickStation): the workspace's stations up now, each its
+/// Where a new chat runs (the mobile pickStation): the workspace's stations up now, each its
 /// mark beside its name, the one it starts on checked, and what the stations' list says of it (station_facts.mbt: its
 /// agents at work, what is left of its machine, how this device reaches it); picked, the core has it (`newChat.pick`).
 fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
@@ -594,7 +594,7 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
 
 ///|
 /// Part `i` of the page wide as it leaves, fading where it is: `up` (the scene) as its scene does, else as what is under
-/// the composer does (madeChat.ts). While it stays, as it is.
+/// the composer does. While it stays, as it is.
 fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
   match state {
     Going(u, _) if up => c.look(i, @ui.look(alpha=1.0 - u))
@@ -612,7 +612,7 @@ fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
 }
 
 ///|
-/// The composer's choices wide (NewChat.tsx toolbar), in its row: the page's controls (new_controls).
+/// The composer's choices wide, in its row: the page's controls (new_controls).
 fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?) -> Unit {
   new_controls(c, src, w, v, station, false, false)
 }
@@ -700,7 +700,7 @@ fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, s
 }
 
 ///|
-/// The page's head, the same at every width (NewChat.tsx's and the mobile page's say the same): the picture
+/// The page's head, the same at every width: the picture
 /// (Illustration "new-chat") `art_w` wide, what to do, where it starts (while its stations are read, two lines
 /// breathing in its place, still once what they wait on failed); each part given to `part` (how it leaves).
 fn new_head(c : @ui.Ctx, station : Json?, state : NewState, art_w : Double, part : (Int) -> Unit) -> Unit {
@@ -819,7 +819,7 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
 }
 
 ///|
-/// The new chat's first message (draft.ts send with `first`, NewChat.tsx useEnsureChat, onSending, onSent): the page
+/// The new chat's first message (onSending, onSent): the page
 /// becomes the chat the frame it is sent, by the key the core keeps for the next one made (the `newChat` topic's
 /// `next`; the one made for it already while the picks are the same), its first words in its list from then and
 /// flying there as any chat's do, its scene leaving at the same moment: what the core does then (its words taken off
@@ -979,7 +979,7 @@ fn new_send(
       }
     })
   }
-  // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
+  // what is written meanwhile goes on in the chat's draft
   @sfbase.writing_carry(src, d.key, draft)
   new_chat_reset()
   (frame.sent)(r)

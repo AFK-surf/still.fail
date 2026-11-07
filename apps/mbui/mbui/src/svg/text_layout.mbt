@@ -1,4 +1,4 @@
-// usvg's text layout (text/layout.rs, text/mod.rs, text/flatten.rs): fonts resolved with the font database, each
+// usvg's text layout (text/mod.rs): fonts resolved with the font database, each
 // chunk shaped run by run in bidi order, glyphs gathered into clusters, spacing, anchors, baselines, text paths and
 // decorations applied, then every glyph's outline placed as paths of its span's paint.
 

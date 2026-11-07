@@ -39,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 /**
  * An icon-only button; its label shows as a tooltip and names it for screen readers. `busy`: a spinner in its place, not
  * pressed again; `failed`: why what it set going failed a moment ago (useDoingFailed), a red mark in its place and the
- * tip saying so (as DoingMark.tsx does).
+ * tip saying so.
  */
 export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Shortcut; busy?: boolean | undefined; failed?: string | undefined }>(
   function IconButton({ label, icon: Icon, className, shortcut, busy, failed, ...rest }, ref) {
@@ -334,7 +334,7 @@ function keptWidth(variable: string, min: number, max: number, key = variable): 
 }
 
 /**
- * A column's edge, as the sidebar's (Rail.tsx SidebarEdge, Cue's rail handle): a short bar at its middle, shown as the
+ * A column's edge, as the sidebar's (Cue's rail handle): a short bar at its middle, shown as the
  * pointer is over the column and longer on the edge, and a hairline fading toward both ends on hover or while dragged
  * (that edge alone, not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes
  * the width; pressed without moving, `press` (a panel closing); else double-clicked, its own width again.

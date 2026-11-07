@@ -1,10 +1,10 @@
-// The workspace's stations (settings/Stations.kt): a card each with its mark and what it is doing, what of its load
+// The workspace's stations: a card each with its mark and what it is doing, what of its load
 // runs low and its network; one station's page is the machine (its load large, its network, its details), with how
 // many connects and profiles run on it and its memory. Its owners and admins rename it (`workspace.renameStation`),
-// pick its mark or take it out from its "…" (Settings.kt openStationMenu).
+// pick its mark or take it out from its "…".
 
 ///|
-/// Where a station this workspace joined is at home (Stations.kt joinedMark), as grey words before what is said of it.
+/// Where a station this workspace joined is at home, as grey words before what is said of it.
 fn joined_mark(s : Json?) -> String {
   if !flag(s, "joined") {
     return ""
@@ -143,7 +143,7 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
 /// How this device reaches station `s` now, its figures (Stations.kt rememberStationNet: the `stationNet` view, sampled
 /// while shown; none before a connection of its own is open).
 fn station_net(core : Core, s : Json?) -> Json? {
-  // (the view's null: no connection of this device's own open yet, as none; Stations.kt's StationNet?)
+  // (the view's null: no connection of this device's own open yet, as none)
   match (core.topic)("stationNet", { "station": str(text(s, "station")) }).value {
     Some(Object(_)) as v => v
     _ => None
@@ -151,7 +151,7 @@ fn station_net(core : Core, s : Json?) -> Json? {
 }
 
 ///|
-/// Up but not reached just now (Stations.kt Reconnecting): what shows of it is from before.
+/// Up but not reached just now: what shows of it is from before.
 fn reconnecting(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, gap=5.0, align=ACenter, fn() {
@@ -282,7 +282,7 @@ fn clamp(n : Int) -> Int {
 }
 
 ///|
-/// A machine's CPU, memory and disk (components.tsx MeterChips), each a chip (MeterChip) with what it is in its tip;
+/// A machine's CPU, memory and disk, each a chip (MeterChip) with what it is in its tip;
 /// `alerts`: only those running low. 8 apart.
 pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bool = false) -> Unit {
   c.box(style=peek_meters, fn() {
@@ -294,7 +294,7 @@ pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bo
 }
 
 ///|
-/// This device's connection to a station (Stations.kt NetLine): how it goes (and packets lost) over its round trip on
+/// This device's connection to a station: how it goes (and packets lost) over its round trip on
 /// the left; on the right ↑ over ↓, the speed each way and what went that way.
 fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
   let t = @sf.theme()
@@ -384,7 +384,7 @@ fn dial_figure(c : @ui.Ctx, big : String, unit : String, color : Int64) -> Unit 
 }
 
 ///|
-/// A machine's CPU, memory and disk on its page (Parts.kt MeterDials): each what is left large over ten cells (lit as
+/// A machine's CPU, memory and disk on its page: each what is left large over ten cells (lit as
 /// far as is used), what it is and what it is out of; three sharing the width.
 fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
   let t = @sf.theme()
@@ -477,7 +477,7 @@ let figures_line : @ui.Style = @ui.css("w=Full h=S4_5 justify=JCenter")
 let unread_running_w : Double = 120.0
 
 ///|
-/// A part's line where it has nothing to show (offline): 13 on 20, muted (Stations.kt StationDevice's, StationMachine's).
+/// A part's line where it has nothing to show (offline): 13 on 20, muted (StationMachine's).
 // kept across runs: a value (no field of it changes)
 let part_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, w=Full)
 

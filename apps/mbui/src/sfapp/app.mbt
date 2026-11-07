@@ -1,5 +1,5 @@
-// still.fail, as its Android app is (still.fail apps/android app/App.kt): signed out it is the sign-in page; signed in,
-// the chats of one workspace are home (Home.kt), and everything else a page pushed over it (@ui.Nav: sliding in,
+// still.fail, as its Android app is: signed out it is the sign-in page; signed in,
+// the chats of one workspace are home, and everything else a page pushed over it (@ui.Nav: sliding in,
 // swiped back from the left edge; a new chat rising from the bottom), or a sheet from the bottom (sheet.mbt). The
 // places of the bottom bar (bar.mbt) are the pages at the stack's root, switched in place.
 
@@ -849,7 +849,7 @@ fn page_view(
 
 ///|
 /// A place from the bottom bar (AppState.place): its page takes the stack's root, in place (nothing to go back to),
-/// coming in from the side the ball goes to (App.kt placeSwitch); the same place again changes nothing. `sets`, `cur`:
+/// coming in from the side the ball goes to; the same place again changes nothing. `sets`, `cur`:
 /// the bar it is chosen in (none: from no side).
 fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
   let from = match place_of(app.nav.top()) {
@@ -899,7 +899,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
 
 ///|
 /// Whether the workspace's pages are shown: not while this device waits to be confirmed in its safe mode, whose page is
-/// drawn instead (Security.kt LockGate). `bar` (whether invitations wait): on a phone, under Home's top bar, settings
+/// drawn instead. `bar` (whether invitations wait): on a phone, under Home's top bar, settings
 /// and the workspace's name, its switcher (Security.kt SecurityWaitingScreen: with no bottom bar either, a phone had no
 /// way out of the workspace, 2026-10-23); none beside the wide screen's rail, which has them.
 fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
@@ -953,7 +953,7 @@ let place_switch : @motion.Way = @motion.Way::new(1.0)
 ///|
 /// What a write said (sfbase's toasts), where the frame has it: the wide frame's 24 over the window's foot (the web's),
 /// the narrow one's over the foot, clear of the bar and the action standing over it (bar_room above it) and above the
-/// navigation bar the view reaches under (Sheet.kt's navigationBars padding); over the system's tabs across the foot
+/// navigation bar the view reaches under; over the system's tabs across the foot
 /// where they are (an iPhone Duo upright: @sf.native_foot).
 fn toast(c : @ui.Ctx) -> Unit {
   // (where the window is a tree, its own nodes': app_tree's toasts_node)
@@ -991,7 +991,7 @@ pub let toast_ms : Double = @sf.toast_ms
 pub let toast_action_ms : Double = @sf.toast_action_ms
 
 ///|
-/// The app starting, or waiting for what every page needs (Parts.kt Splash): the ground alone, as the system's own
+/// The app starting, or waiting for what every page needs: the ground alone, as the system's own
 /// splash before the app's first frame is (Android's theme, iOS's launch screen), so an opening quicker than a second
 /// is one picture and then the page; once it takes a while (a second), still.fail's mark and what it waits for under
 /// it, from then on; at once when `now` (a failure). (The mark at once, on Android after the launcher's

@@ -1,4 +1,4 @@
-// Applying lookups (harfrust's ot/apply.rs, ot/layout.rs, ot/lookup/mod.rs): which glyphs a lookup skips, matching
+// Applying lookups (ot/lookup/mod.rs): which glyphs a lookup skips, matching
 // input, backtrack and lookahead sequences, recursing into nested lookups, ligating, and walking the buffer.
 
 ///|

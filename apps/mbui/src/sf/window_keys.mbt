@@ -1,6 +1,6 @@
 // The window's own buttons where they are the app's to draw (@ui.window_keys_own: Windows' and Linux's, a window with
 // no title bar of the system's, the app's top row its title bar), as still.fail's desktop app drew them in its page's
-// top row (web WindowControls.tsx, WindowControls.css.ts): after a rule, minimize, maximize or back as it was, close,
+// top row: after a rule, minimize, maximize or back as it was, close,
 // as the bars' keys are (icon_button: 32, round, their icons 16 quiet till pointed at, 2 apart), close red under the
 // hand. Over all the app shows, as a title bar is: on the line of the top row under them, each layout's
 // (window_keys_at). What a top row at the window's top right holds stands before them (window_end_in, window_clear_in,
@@ -18,7 +18,7 @@ pub let window_keys_band : Double = 44.0
 pub let window_keys_in : Double = 12.0
 
 ///|
-/// The rule before the buttons (WindowControls.css.ts separator): 1 by 16, 8 after what is before it, 6 before the
+/// The rule before the buttons: 1 by 16, 8 after what is before it, 6 before the
 /// first, then the buttons' 2 apart.
 let window_rule_before : Double = 8.0
 

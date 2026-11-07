@@ -1,4 +1,4 @@
-// Styles are written in TypeScript beside what they style (Chat.css.ts for Chat.tsx, vanilla-extract): each class is
+// Styles are written in TypeScript beside what they style (vanilla-extract): each class is
 // scoped to its file, so no two can collide, and a rule for an element's state sits with the element's other rules.
 // What several components share is in styles/ (the phone's in mobile/styles/); styles/index.ts loads them all, in
 // the order they cascade.
@@ -15,7 +15,7 @@ const names = [
   "red", "red-bg", "purple", "purple-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",
   "field-focus", "online",
   "r-field", "r-card", "r-dialog", "r-nav", "r-menu", "r-option",
-  // Type sizes, by what the text is (global.css.ts gives them their values; the phone's are its own, mobile/styles/root.css.ts).
+  // Type sizes, by what the text is (global.css.ts gives them their values; the phone's are its own).
   // A style says one of these, never a size of its own (scripts/check.sh).
   "text-caption", "text-meta", "text-ui", "text-body", "text-input", "text-title", "text-heading", "text-display",
   "leading-caption", "leading-meta", "leading-ui", "leading-body", "leading-title", "leading-heading",

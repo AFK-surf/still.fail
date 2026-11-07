@@ -5,10 +5,10 @@
 // warms it, kept on the device alone, @hostapi.perf_state; where the device has no share sheet, the way to its folder,
 // where its logs are too: @hostapi.perf_opens). 更新日志: the core's `changelog`, a tab a part, by day,
 // each change's lines with their kind before them, its version, what is not out yet; opened, what the last update
-// brought is read (`changelog.seen`). Laid out by the page's width (page_look.mbt).
+// brought is read (`changelog.seen`). Laid out by the page's width.
 
 ///|
-/// 关于 (AboutPage; the narrow app's AboutScreen, Android's SettingsHome.kt AboutScreen) made once as nodes (page_node,
+/// 关于 (AboutPage; the narrow app's AboutScreen) made once as nodes (page_node,
 /// laid out by the `width` its frame gives it, narrow where none is given) in node `v`: this build and the way to a newer one (how it
 /// stands as the core's update says it, its bar coming and going with what is under way, the row growing and closing
 /// round it), what changed; whether this device sends usage statistics and error reports (where the build sends any:

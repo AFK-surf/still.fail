@@ -20,7 +20,7 @@
 // With MBUI_READONLY=1 (Source.read_only) nothing leaves: no send, no draft kept, no file put up (said in a toast).
 
 ///|
-/// The field's words: 16 on 21 lines, as the viewer's bubbles (SendText.kt); set as its SendTextStyle sets them,
+/// The field's words: 16 on 21 lines, as the viewer's bubbles; set as its SendTextStyle sets them,
 /// a style of their own with no LineHeightStyle (`trim`).
 let send_size : Double = 16.0
 
@@ -28,7 +28,7 @@ let send_size : Double = 16.0
 let send_line : Double = 21.0
 
 ///|
-/// The capsule's corner and its inset (ui/Glass.kt ComposerCorner, ComposerInset); what sits inside it is rounded
+/// The capsule's corner and its inset (ComposerInset); what sits inside it is rounded
 /// concentric with it.
 let composer_corner : Double = @sf.card_corner
 
@@ -42,7 +42,7 @@ let quote_in : Double = @sf.corner_inset - composer_inset
 ///|
 /// What waits to go with the message, in the capsule's top left corner: a picture's tile (its remove button reaching
 /// `picture_remove_out` beyond its top right corner), each file's card as tall and as round. The row stands as far
-/// from the capsule's left edge as from its top (Glass.kt ComposerFilesIn, 10), its items' corner `Inner`: concentric
+/// from the capsule's left edge as from its top (10), its items' corner `Inner`: concentric
 /// with the capsule's by how it is written (composer_files_row, files_card).
 let picture_tile : Double = 56.0
 
@@ -59,7 +59,7 @@ let pasted_card_w : Double = 260.0
 
 ///|
 /// The files' row (the draft's files and its station files, in one): 2 in from the capsule's room at its sides and
-/// top, 10 from its edges (Composer.kt `beyond`), the reach of the last picture's remove button kept at its end (`end =
+/// top, 10 from its edges, the reach of the last picture's remove button kept at its end (`end =
 /// beyond + PictureRemoveOut`), its items' tops in line; what it has not the room for leaves it for its +N
 /// (draft_files_row).
 // kept across runs: a value (no field of it changes)
@@ -74,7 +74,7 @@ let composer_files_row : @ui.Style = @ui.style(
 
 ///|
 /// What waits in the files' row (a picture's tile, a file's card, a pasted text's): its corner concentric with the
-/// capsule's (Glass.kt InComposerFiles) where the row is the capsule's first (in its corner: `Inner`); under a quote
+/// capsule's where the row is the capsule's first (in its corner: `Inner`); under a quote
 /// or a notice, what Android gives Smooth there (Xl2 in @sf.radii), the row then in no corner.
 fn files_card() -> @ui.Style {
   if files_cornered.val {
@@ -133,7 +133,7 @@ fn capsule_top_of(v : ChatView?, d : Draft) -> Double {
 let plus_ink : Double = 9.0 + 18.0 * ((4.5 - 1.75 / 2.0) / 24.0)
 
 ///|
-/// The composer's measures (Composer.kt, Glass.kt): its capsule's inset and, opened, its content's own padding more (the web's 6
+/// The composer's measures: its capsule's inset and, opened, its content's own padding more (the web's 6
 /// as a capsule, 12 as a box); ＋ and send across and their icons; the words' size and line, the field's padding shut
 /// and opened; the gap between the field and the buttons under it, and between what waits over it; the opened box's
 /// corner (shut, a pill); the field's most lines; the room over and under it on the page, and the least room the list
@@ -178,7 +178,7 @@ fn ct() -> ComposerType {
 }
 
 ///|
-/// How many lines the field grows to before it scrolls: six (Composer.kt).
+/// How many lines the field grows to before it scrolls: six.
 let field_lines : Int = 6
 
 ///|
@@ -201,7 +201,7 @@ priv struct Pending {
   width : Int
   height : Int
   pasted : (String, Json)?
-  /// a picture's bytes as picked (Composer.kt Pending.local): what the viewer shows it from before it is sent; None
+  /// a picture's bytes as picked: what the viewer shows it from before it is sent; None
   /// for any other file, and for one of a kept draft (only the file it went up as is kept)
   local : Bytes?
   done : @signals.Signal[Json?]
@@ -301,7 +301,7 @@ fn draft_of(c : @ui.Ctx, src : Source, r : ChatRef) -> Draft {
 }
 
 ///|
-/// What a composer writes to that is not a chat yet (NewChat.kt NewChatOn): its draft's key (`new:<station>`, as a
+/// What a composer writes to that is not a chat yet: its draft's key (`new:<station>`, as a
 /// new chat's on the device) and what sending does.
 priv struct Fresh {
   key : String
@@ -562,13 +562,13 @@ fn uploading(d : Draft) -> Bool {
 
 ///|
 /// A file going up outside the core (a station's file switched to one, station_files.mbt): sending waits for it here
-/// (Composer.kt goingHere).
+/// .
 fn going_here(d : Draft) -> Bool {
   d.files.iter().any(fn(f) { f.done.get() is None && f.error.get() is None && f.core_id == "" }) || refs_uploading(d.key)
 }
 
 ///|
-/// Something can be sent (Composer.kt ready): words, a file up or going up in the core, or a quote; nothing going up
+/// Something can be sent: words, a file up or going up in the core, or a quote; nothing going up
 /// here, no file that failed (sent again or taken out first, never left out unsaid), nothing locking it.
 fn draft_ready(d : Draft, locked : Bool) -> Bool {
   (
@@ -583,7 +583,7 @@ fn draft_ready(d : Draft, locked : Bool) -> Bool {
 }
 
 ///|
-/// A passage quoted into the draft (MessagePick.kt quote): its comment line takes the focus.
+/// A passage quoted into the draft: its comment line takes the focus.
 fn draft_quote(d : Draft, author : String, words : String, ts : String, role : String) -> Unit {
   let id = next_pending.val
   next_pending.val += 1
@@ -593,7 +593,7 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
 }
 
 ///|
-/// An image of a message quoted (Composer.kt Draft.quoteFile): a quote naming it, its comment line taking the focus;
+/// An image of a message quoted: a quote naming it, its comment line taking the focus;
 /// the file (`a`, as the station has it) goes again with the message, nothing going up, once however often it is
 /// quoted.
 fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : Json) -> Unit {
@@ -631,13 +631,13 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
 }
 
 ///|
-/// A quote's own picture in the composer's quote card: 16 in, 6 under its words (Composer.kt DraftExtras).
+/// A quote's own picture in the composer's quote card: 16 in, 6 under its words.
 // kept across runs: a value (no field of it changes)
 let quote_picture_in : @ui.Style = @ui.css("pl=S4 pt=S1_5")
 
 ///|
 /// The file going with a quote (a mark's screenshot, an image of a message quoted), shown in its card rather than
-/// with the files (Composer.kt Draft.fileOf): the one it names, by the name it went up as.
+/// with the files: the one it names, by the name it went up as.
 fn quote_file_of(d : Draft, q : DraftQuote) -> Pending? {
   if q.file == "" {
     return None
@@ -651,7 +651,7 @@ fn quote_file_of(d : Draft, q : DraftQuote) -> Pending? {
 }
 
 ///|
-/// A quote taken out (Composer.kt Draft.unquote), with the file that went with it unless another quote names it too.
+/// A quote taken out, with the file that went with it unless another quote names it too.
 fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
   let own = quote_file_of(d, q)
   d.quotes.retain(fn(x) { x.id != q.id })
@@ -767,7 +767,7 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
 }
 
 ///|
-/// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
+/// A file picked or pasted, into the draft and up to the station at once: over 1 GB it is
 /// refused where it shows; on a read-only run it goes nowhere. `still`: where the host has it (@hostapi.Picked.src),
 /// the picture of a video picked.
 fn add_file(
@@ -876,7 +876,7 @@ let hashed_max : Int = 32 * 1024 * 1024
 
 ///|
 /// Where a draft's files go up in the core: a composer of their own there (`composer.add`), by a key no chat has, so
-/// nothing of it is kept there; the draft keeps what is written (Composer.kt uploadKey).
+/// nothing of it is kept there; the draft keeps what is written.
 fn upload_key(d : Draft) -> String {
   "mbui:" + d.key
 }
@@ -978,7 +978,7 @@ fn up_uploads(d : Draft) -> Array[Json] {
 }
 
 ///|
-/// One part of a file up from `have` (Calls.kt upload): said as it goes (`progress`: how much of the part has gone,
+/// One part of a file up from `have`: said as it goes (`progress`: how much of the part has gone,
 /// heard while it goes), the station answers with what it has so far, or, the last part in, the file as it keeps it
 /// (an image's size put with it).
 fn upload_part(
@@ -1005,7 +1005,7 @@ fn upload_part(
     "offset": Json::number(have.to_double()),
     "progress": Json::boolean(true),
   }
-  // (how far it has gone, heard while the part goes: Calls.kt partSent)
+  // (how far it has gone)
   let heard = fn(v : Json, _b : Bytes?) {
     match field(Some(v), "sent") {
       Some(Number(n, ..)) if p.done.get() is None && p.error.get() is None => p.sent.set(have + n.to_int())
@@ -1103,14 +1103,14 @@ fn uuid(h : String) -> String {
 
 ///|
 /// What the page keeps of its composer: ＋'s sheet (open), the system's picker under way, a finger down
-/// outside the composer (it lets go of the keyboard once lifted or moved: ui/Keyboard.kt letsGoOfKeyboard).
+/// outside the composer.
 priv struct ComposerUi {
   mut attach : Bool
   mut picking : @ui.Pick?
   mut picking_for : String
   /// a finger went down outside the composer (it lets go of the keyboard once lifted or moved: Ctx::press)
   mut outside : Bool
-  /// why restoring the chat failed (Composer.kt ArchiveNotice: said under it until it is tried again), by its draft
+  /// why restoring the chat failed, by its draft
   restore_error : @sf.LiveMap[String, String]
   /// the draft the page's composer was last built for and the chat it was in (whose room the page's other parts ask:
   /// composer_room_of)
@@ -1168,8 +1168,8 @@ fn composer_natural(c : @ui.Ctx) -> Double? {
 }
 
 ///|
-/// The capsule's height as drawn (Composer.kt Morph): from the height it was to the one its content now takes (a Move
-/// as long as it goes); words just sent held as tall as when they went until a quarter of the way (ChatHost.kt hold), then
+/// The capsule's height as drawn: from the height it was to the one its content now takes (a Move
+/// as long as it goes); words just sent held as tall as when they went until a quarter of the way, then
 /// down to its own on the morph's curve (composer_hold). None before its content is laid out.
 fn composer_morph(c : @ui.Ctx, chat : String, natural : Double?) -> Double? {
   match natural {
@@ -1229,7 +1229,7 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
   let k = ct()
   match (flight_of(d.key), natural, composer_morph(c, d.key, natural)) {
     // while words fly to their row, the list keeps the room the composer will have, so their place is where they
-    // land (ChatHost.kt roomForList)
+    // land
     (Some(_), Some(h), _) => h + top + k.inset + k.over + k.under
     // otherwise the room the capsule is drawn with (the list's rows going with it)
     (None, _, Some(h)) => h + top + k.inset + k.over + k.under
@@ -1278,7 +1278,7 @@ fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[Flyi
 }
 
 ///|
-/// Sends what the draft holds (Composer.kt chatSend): emptied at once, the message in the chat's outbox until the
+/// Sends what the draft holds: emptied at once, the message in the chat's outbox until the
 /// station has it, the list taken to its end; refused before the outbox, the words come back and why is said.
 fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -> Unit {
   if src.read_only {
@@ -1397,7 +1397,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 // ── the composer ────────────────────────────────────────────────────────
 
 ///|
-/// The composer at the chat page's foot (ChatHost.kt HostComposer): its notices, what waits to go, the bar, what went
+/// The composer at the chat page's foot: its notices, what waits to go, the bar, what went
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
 fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
   let t = @sf.theme()
@@ -1415,7 +1415,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     Some(v) => v.archived
     None => false
   }
-  // while the chat is read the first time it takes words, but nothing goes (Chat.kt: its spec sends nothing yet); its
+  // while the chat is read the first time it takes words, but nothing goes; its
   // station down, what is sent waits in the outbox until it is reached, and no file is taken in (Composer.kt
   // draft.offline: files go up to the station first)
   let locked = archived
@@ -1432,7 +1432,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     c.focus_editor(field_key)
     d.focus = 0
   }
-  // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark: taken
+  // marked images of this chat's pictures, up as ＋'s files go, each with a quote per mark: taken
   // in before the capsule is laid out, so this frame draws them (taken once from where they wait: the pictures as they
   // were marked, whichever build takes them)
   match marked_into.get(d.key) {
@@ -1544,7 +1544,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   if !locked {
     c.words_into(cap, field_key)
   }
-  // the capsule changes shape in one motion (Composer.kt Morph, web morph.ts): drawn from the height it was to the one
+  // the capsule changes shape in one motion: drawn from the height it was to the one
   // its content now takes (260 ms, Ease.Out), its ground standing on its bottom edge and its content cut to it, its
   // parts drawn carried from where they were to their places on the same timeline. Only drawn: laid out as tall as its
   // content at once, all of it (＋, the field, send, a quote's line) tapped where it is from the first frame. At rest
@@ -1622,7 +1622,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     let off_capsule = !within(cap) && !within(ref_menu_id(c, d.key))
     cui.outside = off_capsule && !cui.attach
   }
-  // (lifted after a long press: not a tap, the keyboard stays: Keyboard.kt letsGoOfKeyboard)
+  // (lifted after a long press: not a tap)
   if cui.outside && c.editor_focused(field_key) && (press.moved || (press.lifted && !press.long)) {
     cui.outside = false
     c.blur()
@@ -1651,7 +1651,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
 let composer_tools : @ui.Style = @ui.css("row h=S9 gap=S1 align=ACenter")
 
 ///|
-/// What floats over the page in the composer's glass (Glass.kt floating, ComposerCorner): the capsule's ground, the
+/// What floats over the page in the composer's glass (ComposerCorner): the capsule's ground, the
 /// `@` menu's (chat_refs.mbt). `h` tall.
 fn floating_ground(c : @ui.Ctx, h : @ui.Size, corner? : Double = composer_corner) -> Int {
   c.box(
@@ -1676,7 +1676,7 @@ fn workspace_of(station : String) -> String {
 }
 
 ///|
-/// A notice over the bar (Composer.kt: 8 in from the capsule's room at its sides, 2 above and under), its words in a
+/// A notice over the bar (2 above and under), its words in a
 /// line (13, muted; the restore's in the ink, underlined, as a link), why the restore failed in red under them.
 // kept across runs: a value (no field of it changes)
 let notice_box : @ui.Style = @ui.css("px=S2 py=S0_5")
@@ -1707,7 +1707,7 @@ let restore_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=fal
 let notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
-/// What the composer says over its bar (Composer.kt ArchiveNotice, chatComposer's notices): an archived chat's, with its
+/// What the composer says over its bar (chatComposer's notices): an archived chat's, with its
 /// restore (the words underlined; why it failed in red under it, tapped again to try again); its agent's prompt cache
 /// over, saying what going on would read again, with the choice of how it goes on as it is next started, by a message
 /// or a notice: 接着聊 or 换新上下文, the one it takes marked, the other pressed to take it (why it failed in a toast); an
@@ -1812,7 +1812,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
 }
 
 ///|
-/// The bar (Composer.kt ComposerBar): ＋, the field, send. Folded: one row, the field between the buttons; opened
+/// The bar: ＋, the field, send. Folded: one row, the field between the buttons; opened
 /// (focused, or holding something): the field the whole width, the buttons in a row under it.
 fn composer_bar(
   c : @ui.Ctx,
@@ -1877,7 +1877,7 @@ fn composer_bar(
   }
   let k = ct()
   // its ground under a resting pointer (@sf.pointer_rests), its tip (with its keys where there are keys: the tip's own,
-  // held to show with a finger) (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
+  // held to show with a finger) (Chat.tsx ComposerTools)
   if !no_files {
     @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
   }
@@ -1912,7 +1912,7 @@ fn composer_bar(
     // not ready: the ink faint over the capsule's own ground, its arrow that ground (Composer.kt: 18% ink over
     // C.surface, the canvas)
     let ground = t.p.canvas
-    // (its ink a step lighter under a mouse's pointer, in any layout: Chat.css.ts sendBtn, the text at 82%)
+    // (its ink a step lighter under a mouse's pointer, the text at 82%)
     let hot = @sf.pointer_rests() && ready && c.lit(send)
     let b = c.box(
       w=Px(k.button),
@@ -1983,7 +1983,7 @@ fn composer_bar(
         let res = c.editor(
           field_key,
           placeholder~,
-          // in the face chosen for what people write (Composer.kt SendTextFaced)
+          // in the face chosen for what people write
           words=true,
           font_size=k.font,
           line=k.line,
@@ -2072,7 +2072,7 @@ fn composer_bar(
 }
 
 ///|
-/// What waits to go with the words (Composer.kt DraftExtras): the quotes, each a card with a line for a comment (the
+/// What waits to go with the words: the quotes, each a card with a line for a comment (the
 /// one just added takes the focus; its Enter goes back to the words), then the files.
 fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool) -> Unit {
   let t = @sf.theme()
@@ -2096,7 +2096,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
         // (a block of the ladder's: concentric with the capsule's in its corners, mbui working it out)
         c.box(w=Fill(1.0), radius=@sf.row_corner, bg=k.card, fn() {
           c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=34.0, pt=9.0, align=AStart, fn() {
-            // the quote's mark ahead of whose it is (Composer.kt quoteLine's quoteMark)
+            // the quote's mark ahead of whose it is
             c.box(w=Px(15.0), h=Px(19.5), justify=JCenter, fn() {
               @sf.icon(c, "quote", size=11.0, color=k.accent) |> ignore
             })
@@ -2150,7 +2150,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             }
           })
           |> ignore
-          // in the quote's corner as far from both edges (Composer.kt: top 6, end 6)
+          // in the quote's corner as far from both edges (end 6)
           c.layer(align=AEnd, fn() {
             c.box(pt=6.0, pr=6.0, fn() {
               c.box(w=Px(28.0), h=Px(28.0), radius=14.0, align=ACenter, justify=JCenter, id=close, fn() {
@@ -2201,7 +2201,7 @@ fn draft_items(d : Draft) -> Array[DraftItem] {
 }
 
 ///|
-/// The files' row (Composer.kt DraftExtras): as far from the capsule's left edge as from its top, past its own room
+/// The files' row: as far from the capsule's left edge as from its top, past its own room
 /// (composer_files_row, capsule_top); its items' tops in line (Compose's Row: Alignment.Top). Where it has not the
 /// room for them all, the last leave it first, a +N tile at its end standing for them: pressed, a sheet of them all.
 /// Nothing scrolled, nothing wrapped in the row (the user, 2026-10-25).
@@ -2303,7 +2303,7 @@ fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, lo
   if c.clicked(remove) {
     take_out(src, d, f)
   }
-  // failed going up in the core: tapped, it goes again (Composer.kt: the tile's 失败, a card's retry key)
+  // failed going up in the core: tapped, it goes again (a card's retry key)
   let again = c.id("composer/retry/\{f.id}")
   if c.clicked(again) {
     retry_upload(src, d, f)
@@ -2350,7 +2350,7 @@ fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) ->
 ///|
 /// A picture waiting in the composer: a 56 tile, darkened with a spinner while it goes up (失败 when it failed), its
 /// remove button over its corner. Tapped, it opens in the viewer, growing out of its tile, from the bytes picked
-/// (Composer.kt draftPicture: `draft:<id>`, no session's; nothing to mark it into, it is in the draft already); one of
+/// (no session's; nothing to mark it into, it is in the draft already); one of
 /// a draft kept, whose bytes are not, opens nothing.
 fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, remove : Int, again : Int) -> Unit {
   let open = c.id("composer/picture/\{f.id}")
@@ -2382,7 +2382,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     if f.local is Some(_) {
       note_thumb(c, thumb, tile, files_corner(), picture~)
     }
-    // not drawn while the viewer is its picture (one picture on the screen, never two: preview.mbt)
+    // not drawn while the viewer is its picture (one picture on the screen)
     if pv_hidden.get() == thumb {
       c.look(tile, @ui.look(alpha=0.0))
     }
@@ -2443,9 +2443,9 @@ fn files_corner() -> Double {
 }
 
 ///|
-/// The round × of a file's card in the composer, at its trailing end (ChatFiles.kt FileCard); `icon` another key's
+/// The round × of a file's card in the composer, at its trailing end; `icon` another key's
 /// mark of the same look (its retry).
-/// `label`: what it says to a screen reader (a pasted text's: Composer.kt PastedCard's removePaste), none else.
+/// `label`: what it says to a screen reader, none else.
 fn card_close(c : @ui.Ctx, remove : Int, label? : String = "", icon? : String = "close") -> Unit {
   let t = @sf.theme()
   let b = c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=@sf.alpha(t.p.text, 0.06), align=ACenter, justify=JCenter, id=remove, fn() {
@@ -2463,7 +2463,7 @@ fn card_close(c : @ui.Ctx, remove : Int, label? : String = "", icon? : String = 
 fn with_remove(c : @ui.Ctx, remove : Int, w : Double, label : String, body : () -> Unit) -> Unit {
   let t = @sf.theme()
   // (as wide as what it holds and its button's reach: never squeezed by a row too narrow for all of them)
-  // (the button reaches past its right edge over the gap after it, as Composer.kt's: it takes no room of its own there)
+  // (the button reaches past its right edge over the gap after it)
   c.box(w=Px(w), pt=picture_remove_out, fn() {
     body()
     c.layer(align=AEnd, fn() {
@@ -2478,7 +2478,7 @@ fn with_remove(c : @ui.Ctx, remove : Int, w : Double, label : String, body : () 
 }
 
 ///|
-/// Words pasted as a file (Composer.kt PastedCard): their first line, then how it goes (going up, failed, or a text
+/// Words pasted as a file: their first line, then how it goes (going up, failed, or a text
 /// file of so many characters); 展开到输入框 puts them back in the field (not too long for it), 重试上传 after it
 /// failed.
 fn pasted_card(
@@ -2556,7 +2556,7 @@ fn pasted_card(
           c.box(pt=2.0, id=action, fn() {
             c.text(
               tr(if can_retry { "web-main.composer.retryPaste" } else { "web-main.composer.expandPaste" }),
-              // a link's ink (Composer.kt: C.link)
+              // a link's ink
               style=@sf.link,
               size=@sf.theme().t.meta,
               wrap=false,
@@ -2573,12 +2573,12 @@ fn pasted_card(
 }
 
 ///|
-/// Any other file in the composer (ChatFiles.kt FileCard, in the composer's shape): its kind's mark, its name, its
+/// Any other file in the composer (in the composer's shape): its kind's mark, its name, its
 /// size or how it goes.
 fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
   let t = @sf.theme()
   let busy = f.done.get() is None && f.error.get() is None
-  // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt LinkCard)
+  // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens
   let link = field(f.done.get(), "link")
   let open = c.id("composer/link/\{f.id}")
   match link {
@@ -2596,7 +2596,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
     align=ACenter,
     id=if link is Some(_) { open } else { 0 },
     fn() {
-    // a link's the web's mark; any other file's one mark whatever its kind (ChatFiles.kt FileCard: Icons.Read)
+    // a link's the web's mark; any other file's one mark whatever its kind
     if busy {
       @sf.spinner(c) |> ignore
     } else if link is Some(_) {
@@ -2624,7 +2624,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
       |> ignore
     })
     |> ignore
-    // failed going up in the core: its retry key at its end (ChatFiles.kt FileCard onRetry)
+    // failed going up in the core: its retry key at its end
     if f.error.get() is Some(_) && f.retry && again != 0 {
       card_close(c, again, icon="retry", label=tr("web-main.composer.retryUpload"))
     }
@@ -2673,7 +2673,7 @@ fn with_link_words(words : String, d : Draft) -> String {
   lines.join("\n")
 }
 
-// ── ＋'s sheet (Attach.kt) ──────────────────────────────────────────────
+// ── ＋'s sheet ──────────────────────────────────────────────
 
 ///|
 /// ＋'s sheet: the recent photos across the top (the camera first, recent.mbt), then 照片, 文件 and Station 文件

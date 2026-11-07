@@ -1202,7 +1202,7 @@ pub fn words_node(parent : @view.View, words : () -> String, style : () -> @ui.T
 }
 
 ///|
-/// A round key in a bar (nav_button's, Parts.kt NavButton) as a node: `side` across, round, its icon `icon_size` in the
+/// A round key in a bar (nav_button's) as a node: `side` across, round, its icon `icon_size` in the
 /// ink in its middle, no disc behind it (a ground while pressed: its ripple), read out a button named `label`; `press`
 /// done as it is pressed.
 pub fn round_key_node(

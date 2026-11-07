@@ -7,7 +7,7 @@
 ///|
 /// What this slice keeps while the app runs.
 priv struct Decide {
-  /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
+  /// asks let go here, before the core says so, by station, thread and post
   gone : Map[String, Bool]
   /// the letters' sheet: the chat opened in it, by its key ("" the list of them)
   mut letters_open : String
@@ -46,7 +46,7 @@ fn decide_reset() -> Unit {
 }
 
 ///|
-/// The chat into the archive (Chat.kt archiveChat; its bar's 归档, the one under its last 做完了, its sheet's): Home at
+/// The chat into the archive (its bar's 归档, the one under its last 做完了, its sheet's): Home at
 /// once, the chat gone from the list (the core's), said at once by its title, or why not.
 fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
   home()
@@ -75,7 +75,7 @@ fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
 // ── a sheet's head ──────────────────────────────────────────────────────
 
 ///|
-/// A sheet's head (Sheet.kt SheetHead): its title, 17 bold.
+/// A sheet's head: its title, 17 bold.
 fn sheet_head(c : @ui.Ctx, title : String) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {

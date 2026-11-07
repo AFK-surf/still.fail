@@ -51,7 +51,7 @@ export const brand = style({
 /** 云端侧边栏：字标在 workspace 切换器上方（always with `brand`） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });
 
-// Positioned: the rows moving in it are placed by their offsets in it (listMotion.ts). Scroll padding: going to a row
+// Positioned: the rows moving in it are placed by their offsets in it. Scroll padding: going to a row
 // (keyboard, scrollIntoView) stops clear of the bands, and so does the floating scrollbar (scrollbars.ts).
 export const navScroll = style({
   position: "relative", flex: 1, minHeight: 0, overflowY: "auto",
@@ -72,7 +72,7 @@ export const navRow = style({
   selectors: {
     "&:hover": { background: vars.hover },
     '&[aria-current="page"]': { background: vars.selected },
-    // Clicked, its page on the way (Sidebar.tsx setGoing): selected already, and the one it leaves no longer.
+    // Clicked, its page on the way: selected already, and the one it leaves no longer.
     '&[data-going="here"]': { background: vars.selected },
     '&[aria-current="page"][data-going="away"]': { background: "none" },
     // Adjacent sidebar items never touch, so a selected or hovered row stays distinct.

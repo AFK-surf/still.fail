@@ -1,4 +1,4 @@
-// The accounts signed in on this device (accounts.rs). Each keeps its own still.fail cloud session: a short access
+// The accounts signed in on this device. Each keeps its own still.fail cloud session: a short access
 // token and a rotating refresh token. Tokens are refreshed at most once at a time per account (every caller waits on
 // the same refresh).
 //

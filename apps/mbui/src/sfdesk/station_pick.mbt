@@ -324,5 +324,5 @@ let pick_head_first : @ui.Style = @ui.css("w=Full pt=S1 pb=S1")
 let pick_head_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Muted, wrap=false)
 
 ///|
-/// The ＋'s sheet as tall as most of the window (StationFiles.kt: 86%).
+/// The ＋'s sheet as tall as most of the window.
 let station_pick_tall : Double = 0.86

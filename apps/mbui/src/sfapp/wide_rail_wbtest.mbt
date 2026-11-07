@@ -1,4 +1,4 @@
-// The wide frame's rail and its sidebar as the web's (Rail.tsx, brand.tsx, shell.css.ts dock): folded, the rail a bar
+// The wide frame's rail and its sidebar as the web's (brand.tsx, shell.css.ts dock): folded, the rail a bar
 // of its own and the list shown a while as the pointer comes onto it; each sidebar's width and folding kept on the
 // device; the lit place pressed again folds or opens; ⌃1 … ⌃9 the workspaces; a row's menu relays it.
 
@@ -50,7 +50,7 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
 }
 
 ///|
-/// The ground (30, Rail.css.ts item's) of the rail's place at `rect` (its 38 to press): its box as laid out.
+/// The ground (30) of the rail's place at `rect` (its 38 to press): its box as laid out.
 fn rail_ground_at(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> @ui.Laid {
   let (x, y, w, h) = rect
   t
@@ -515,7 +515,7 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  // one gone wrong is not let go from here (Attention.tsx: 忽略 for what waits on the viewer)
+  // one gone wrong is not let go from here
   let (ax, ay) = t.find("磁盘满了").unwrap()
   t.move(ax, ay)
   t.frame()

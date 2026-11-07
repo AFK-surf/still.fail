@@ -1,4 +1,4 @@
-// Marking's tools as nodes of the window's tree (ImageMarks.kt's MarksTools): the tools, the colour and
+// Marking's tools as nodes of the window's tree: the tools, the colour and
 // its palette, the picked one's removal, undo and redo, each done at the moment it is pressed (its press let go on
 // it), as the picture's own drawing is (Viewer::finger_on): the tool a stroke is drawn with the one taken up, whatever
 // frames came between. The note being written too (note_box_node): its pin and what it is, 删除 and 完成 nodes, done as
@@ -316,7 +316,7 @@ fn marks_note_shown() -> (Int, Int, String, Int64)? {
 }
 
 ///|
-/// The note being written in `w` (Notes.kt NoteBox, in the dark), 12 in at its sides and 8 over the
+/// The note being written in `w` (in the dark), 12 in at its sides and 8 over the
 /// navigation bar: a frosted card (26 round, its round buttons' room in from its sides and foot, 10 over, 6 between),
 /// its pin and what it is, muted; then 删除批注 (a bin, 36 round), the field (16 on 21, 添加批注（可选） till something
 /// is written, 8 lines at most: an old view's, the card as tall as it lays out), 完成 (a tick on the ink, 36 round), at
@@ -529,7 +529,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
 }
 
 ///|
-/// The notes said so far in `r` (Notes.kt's tray), 10 over the tools: a card each across the foot (16 in
+/// The notes said so far in `r`, 10 over the tools: a card each across the foot (16 in
 /// at its sides, 8 between), in their numbers' order; where they do not all fit, the last leave the row first, a +N
 /// card at its end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped. Each card,
 /// pressed (its press let go on it), opens its note; +N's, its menu. Which are left out, how many +N says and what its
@@ -909,7 +909,7 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
 
 
 ///|
-/// The words being written over viewer `vw`'s picture while it marks (marking.writing; ImageMarks.kt WritingField), in
+/// The words being written over viewer `vw`'s picture while it marks (marking.writing), in
 /// `h` (over the canvas, all of it): a field of the tree's where they begin on the picture as it is drawn while the zoom
 /// or the lift goes (marks_rect_on), as wide as six of their size at least 120, in their size on the picture and their
 /// colour, its placeholder that colour at 55%; given up (Enter), put down (marks_put_down).

@@ -1,4 +1,4 @@
-// A chat's own find on the desktop (still.fail web/src/ChatFind.tsx, ChatFind.css.ts): ⌘F opens its bar in the chat's
+// A chat's own find on the desktop: ⌘F opens its bar in the chat's
 // bar, in place of its buttons, so it covers nothing of the chat. The core looks in all the chat's messages
 // (`chat.find`: those not in the window shown too, and with `bring` those not on the device), 120 ms after the last
 // key, answering which have the words and how many times; the list goes to the one the reader is at (the window moved
@@ -51,7 +51,7 @@ pub let finding : Finding = {
 }
 
 ///|
-/// The list the find goes along (the page's message list, ChatFind.tsx `virtual`): the messages showing (the first's
+/// The list the find goes along (the page's message list): the messages showing (the first's
 /// and the last's seq; -1 none), the list to a message with the words marked in it, its marks let go.
 pub(all) struct FindList {
   showing : () -> (Double, Double)
@@ -221,7 +221,7 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
 }
 
 ///|
-/// How long after the last key the chat is looked in (ChatFind.tsx TYPING_MS).
+/// How long after the last key the chat is looked in.
 pub let find_typing_ms : Double = 120.0
 
 ///|
@@ -296,7 +296,7 @@ pub fn find_position() -> (Int, Int) {
 pub let find_key : String = "find/field"
 
 ///|
-/// How wide its field is (ChatFind.css.ts field: 320, less where the bar has less: 160 at least), and each of its
+/// How wide its field is (less where the bar has less: 160 at least), and each of its
 /// buttons (button: 26 square).
 let find_field_w : Double = 320.0
 
@@ -311,14 +311,14 @@ let find_button_w : Double = 26.0
 pub let find_field_h : Double = 32.0
 
 ///|
-/// How light the strokes under the words in the messages other than the one the reader is at are (ChatFind.css.ts: .45).
+/// How light the strokes under the words in the messages other than the one the reader is at are.
 pub let find_faint : Double = 0.45
 
 ///|
-/// The bar (ChatFind.css.ts bar): before the field what it did not look in, said while it is so; the field 320 wide, 32
+/// The bar: before the field what it did not look in, said while it is so; the field 320 wide, 32
 /// high, a line round it on the raised ground, a capsule (so in a panel's corner where its shape is concentric); the
 /// words typed in 14, which of how many in 12, the one before, the next, close: 26 round, concentric in its end, the
-/// ground on hover. Opened, it fades in (kit's tip_in, ChatFind.css.ts bar's 120 ms); closed, it goes at once.
+/// ground on hover. Opened, it fades in (kit's tip_in); closed, it goes at once.
 pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : FindList) -> Unit {
   let t = @sf.theme()
   let key = chat_key(r)

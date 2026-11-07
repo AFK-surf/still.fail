@@ -1,4 +1,4 @@
-// 快捷键 (still.fail web/src/Shortcuts.tsx ShortcutsPage, Shortcuts.css.ts), one page made once on every screen: each action
+// 快捷键, one page made once on every screen: each action
 // of the core's keymap (the prefs' `keymap`) gets new keys by pressing them (`keys.set`). ⌘/'s list of them is the
 // shell's (sfdesk shortcuts.mbt keys_dialog).
 
@@ -23,7 +23,7 @@ fn set_keys(core : Core, action : String?, keys : Json) -> Unit {
 }
 
 ///|
-/// 快捷键 (Shortcuts.tsx ShortcutsPage) made once as nodes of the window's tree (page_node, laid out by the `width` its
+/// 快捷键 made once as nodes of the window's tree (page_node, laid out by the `width` its
 /// frame gives it, narrow where none is given): each group of the core's keymap a section, its actions' rows
 /// (keys_rows_node), what the keys do said under the first, and 全部恢复默认 there once any was changed. An action's
 /// keys pressed, the next key press is its new keys: Esc leaves them, ⌫ clears them, keys another action had are moved

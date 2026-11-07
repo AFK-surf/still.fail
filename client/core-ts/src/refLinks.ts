@@ -1,7 +1,7 @@
 // still.fail's links as what is written names them, read alike by every client: a reference to another chat (in the
 // composer a short mark, `@[its title]`; sent, a link, `[its title](its page)`), the link a chat is given away by, and
 // the chat, screen or 共享调试 a link names. Read as a message or a draft is drawn, so the web takes them as they are
-// (web/src/chatRefs.ts), as it takes markdown.ts's words; nothing here reads the device or the station. The core's own
+// , as it takes markdown.ts's words; nothing here reads the device or the station. The core's own
 // keeping of a mark's link until it is sent is refs.ts's.
 
 import { bareLinks } from "./bareLinks.ts";

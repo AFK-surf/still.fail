@@ -1,4 +1,4 @@
-// svgtypes' path data (path.rs: PathParser, SimplifyingPathParser) and kurbo's SVG arcs as cubics (kurbo svg.rs
+// svgtypes' path data (SimplifyingPathParser) and kurbo's SVG arcs as cubics (kurbo svg.rs
 // Arc::from_svg_arc, arc.rs append_iter): a `d` as absolute moves, lines, cubics, quads and closes.
 
 ///|

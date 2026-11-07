@@ -43,7 +43,7 @@ fn station_name(src : Source, station : String) -> String {
 }
 
 ///|
-/// The service `job` of `station`'s page (Preview.kt PreviewScreen).
+/// The service `job` of `station`'s page.
 pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -> Unit {
   let t = @sf.theme()
   let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
@@ -87,7 +87,7 @@ pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -
 }
 
 ///|
-/// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and its station on one line (as
+/// The page's compact bar: 对话 back in the accent, the service's name and its station on one line (as
 /// an in-app browser's bar has its page's: what is over the page as little as it can be; the user, 2026-10-27:
 /// 是不是上面也应该少一点).
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {

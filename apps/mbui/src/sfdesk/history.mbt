@@ -25,7 +25,7 @@ fn history_reset() -> Unit {
 
 ///|
 /// Agent `key`'s history beside its chat `r`, in front (not toggled), brought to transcript entry `entry` if one is
-/// asked (ChatPage.tsx history): the page the chat's, in place of the one that asked.
+/// asked: the page the chat's, in place of the one that asked.
 fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
   match app.nav.top() {
     History(_, _, _) => app.nav.replace(Chat(r))
@@ -47,7 +47,7 @@ fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : 
 }
 
 ///|
-/// The head (History.tsx historyHead) and, unfolded, its details; a line under them.
+/// The head and, unfolded, its details; a line under them.
 fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
   let t = @sf.theme()
   c.box(style=wh_head, fn() {
@@ -408,7 +408,7 @@ let wh_quiet_one : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 let wh_quiet_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Link, wrap=false)
 
 ///|
-/// What needs seeing to, in its tone (ChatPage.css.ts attention: 12; the disk amber, an account red).
+/// What needs seeing to, in its tone (the disk amber, an account red).
 // kept across runs: a value (no field of it changes)
 let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
 

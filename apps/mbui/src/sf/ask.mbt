@@ -8,7 +8,7 @@
 // ？为啥非要冒一行字？」).
 
 ///|
-/// What is asked, over the answer: its lines 2 apart (VaultAsk.css.ts what).
+/// What is asked, over the answer: its lines 2 apart.
 // kept across runs: a value (no field of it changes)
 pub let ask_what : @ui.Style = @ui.css("w=Full gap=S0_5")
 

@@ -1,5 +1,5 @@
-// The choose calls (core/execute.rs `Call::Choose`) and the profiles checked once a run as their station's overview
-// comes in (choose.rs did it as a new chat's page was computed; here the sync does it, whatever is shown: rule 6).
+// The choose calls and the profiles checked once a run as their station's overview
+// comes in (here the sync does it, whatever is shown: rule 6).
 import { Effect } from "effect";
 import { Choose } from "./choose.ts";
 import type { Inner } from "./core.ts";

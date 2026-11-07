@@ -105,7 +105,7 @@ fn button_part(
       _ => (mix(stage_plain_lit, h, stage_plain), 0L, share_ink)
     }
   } else {
-    // the phone's (Parts.kt): the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
+    // the phone's: the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
     // solid ground a step towards the page and a quiet one the hover's step darker (mbui ui/hand_moves.mbt)
     match tone {
       Primary => {
@@ -370,7 +370,7 @@ pub fn icon_button(
 }
 
 ///|
-/// A chip (the reader's bars, Reader.css.ts chip): 30 high, its corner 10 (`inner`: in a rounded surface's corner,
+/// A chip (the reader's bars): 30 high, its corner 10 (`inner`: in a rounded surface's corner,
 /// concentric with it), on a 7% tint of the ink, 12% under the pointer; its words small. One with an icon alone named
 /// `said` (its aria-label), and in its tip.
 pub fn chip(
@@ -975,7 +975,7 @@ pub fn card_text(c : @ui.Ctx, title : String, line? : String = "") -> Unit {
 }
 
 ///|
-/// A setting along a hairline with a knob (Reader.css.ts slider): mbui's slider (@kit.slider) in still.fail's look, the
+/// A setting along a hairline with a knob: mbui's slider (@kit.slider) in still.fail's look, the
 /// line 2 high on 16% of the ink, the part up to the knob in the accent, the knob 22 with a ring of the ground round
 /// it; dragged or tapped along, and with the keyboard. Returns the value, snapped to `step` (0: none).
 pub fn slider(
@@ -1029,7 +1029,7 @@ pub fn sheet_laid(body : () -> Unit) -> Unit {
 pub let sheet_grab_h : Double = 8.0 + 4.0 + 5.0 + 4.0 + 4.0
 
 ///|
-/// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
+/// The grabber at a sheet's top: 38 × 5 in the line's colour, 12 above it and 8 under.
 pub fn sheet_grab(c : @ui.Ctx) -> Unit {
   let grabber = sheet_grabber.then(@ui.style(bg=Data(theme().p.line)))
   c.box(style=sheet_grab_outer, fn() {
@@ -1661,7 +1661,7 @@ pub fn tools_line() -> @ui.Style {
 let tools_line_look : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
+/// A right click's menu (Radix's ContextMenu): opened at the pointer by `menu_open_here`, then
 /// drawn there while it is open. Whether it is open.
 pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {
   if menu_now() != key {
@@ -1895,7 +1895,7 @@ fn control_row(
 }
 
 ///|
-/// One of several to tick (a list a choice of some of: ChatPage.tsx ShareDialog's rows, the phone's PickRow): its box,
+/// One of several to tick (the phone's PickRow): its box,
 /// then what it is (`note` quieter under it), the whole row pressed to tick it or not, its ground lit under the hand. Its
 /// room, its words and its box the theme's rows' (Rows: a finger's with touch, a list row's with keyboard and mouse). What
 /// it is now. `lead`: what goes before its words, after its box (a workspace's mark: workspace_badge).
@@ -2363,7 +2363,7 @@ pub fn dialog(
         let untitled = s.title == "" && step == ""
         if !untitled {
         c.box(style=dialog_head.then(words_at), fn() {
-          // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
+          // a step's count beside the title (8 after it)
           if step != "" {
             c.box(style=dialog_title_line, fn() {
               c.text(s.title, style=dialog_title_one) |> ignore
@@ -2768,7 +2768,7 @@ pub fn textarea(
 }
 
 ///|
-/// A textarea's lines (AutomaticDecisions.css.ts policyText: 1.6 of the words), and what its frame adds over them (7
+/// A textarea's lines, and what its frame adds over them (7
 /// and 1 above and under).
 let textarea_line : Double = 22.4
 
@@ -3797,7 +3797,7 @@ fn edge_state(over : Bool, on : Bool, active : Bool, line : Bool) -> Int {
 let edges_shown : Map[String, Int] = {}
 
 ///|
-/// A column's edge as it looks (parts.css.ts resizeHandle; Rail.css.ts edge the same), 7 wide and as high as what holds
+/// A column's edge as it looks (parts.css.ts resizeHandle), 7 wide and as high as what holds
 /// it: a bar 5 wide at its middle and a hairline through the bar's middle, 8 short of the ends, clear toward them
 /// (clear to 10%, the field's edge grey at 50%, clear from 90%). The bar shows, 24 high, while the pointer is `over` the
 /// column; 48 high while `on` the edge (pointed at, focused, in hand), in the field's edge grey while `active`
@@ -3986,7 +3986,7 @@ pub fn resize_handle(
 }
 
 // ---------------------------------------------------------------------------
-// A card of options (SettingParts.kt DecisionOptions; Decisions.css.ts options, choice)
+// A card of options (choice)
 
 ///|
 /// How far in the card of options' rows stand: a list card's (list_pad, as a menu's rows in its panel), round by the
@@ -4001,7 +4001,7 @@ let option_row_corner : Double = row_corner
 /// An option's measures, the theme's for the screen (decided once): its number's disc a list
 /// item's mark, as far in from the row's top and side as makes it concentric with the row (its corner less the disc's
 /// half); its label in the controls' words, what it leads to in the meta's. Keyboard and mouse's as the web's
-/// (Decisions.css.ts choice: a 20 disc 8 in, 13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
+/// (13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
 /// in, 15 on 22 over 13 on 18).
 priv struct OptionType {
   disc : Double
@@ -4027,7 +4027,7 @@ fn option_type() -> OptionType {
 }
 
 ///|
-/// The card of options in the wide frame: as wide as what it says, 460 at least (Decisions.css.ts options); on a phone
+/// The card of options in the wide frame: as wide as what it says, 460 at least; on a phone
 /// as wide as where it is.
 let options_least_wide : Double = 460.0
 
@@ -4188,7 +4188,7 @@ let option_words : @ui.Style = @ui.css("w=Full")
 let option_waits : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
-/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger list_pad
+/// A card of options: each a row to be pressed (its ground under the finger list_pad
 /// in from the card's edge, as a list card's, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
@@ -4215,11 +4215,11 @@ pub fn options_card(
   let ot = option_type()
   let ground = if history { 0L } else if wide { alpha(t.p.text, 0.05) } else { t.p.chip }
   let padding = if history { 0.0 } else { options_card_pad }
-  // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
+  // (in the wide frame as wide as what it says and 460 at least)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
     let across = @ui.style(w=Full, max_w=Fixed(options_most(options, ot, wide, if waits.contains(true) { waits_why } else { "" })))
     c.box(style=across, radius=options_card_radius, bg=ground, pad=padding, fn() {
-      // (nothing drawn between two: SettingParts.kt DecisionOptions)
+      // 
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
         let waiting = waits.get(i) == Some(true)
@@ -4227,7 +4227,7 @@ pub fn options_card(
         if free && c.clicked(id) {
           picked = Some(i)
         }
-        // under a mouse's pointer its row's ground, in any layout (Decisions.css.ts choice:hover)
+        // under a mouse's pointer its row's ground, in any layout
         let mouse = @ui.pointing() is Mouse
         let hot = mouse && free && c.lit(id)
         // (the one picked, answered: a check in its disc where its number was, on the accent; the rest half there, the
@@ -4338,7 +4338,7 @@ let dialog_step : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Mu
 let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)
 
 ///|
-/// A page that waits on something (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen):
+/// A page that waits on something:
 /// its mark (`mark`, an icon's name), what it waits for (`title`, `lead`), then what can be done meanwhile (`body`); its parts 14 apart,
 /// centred. On a touch screen the phone's (mWaiting: in the middle of its height, 28 in at its sides, the mark 44, the
 /// title bold); with keyboard and mouse the desktop page's (waiting: 110 down, 460 wide at most, 24 in, the mark 40, the title
@@ -4407,7 +4407,7 @@ let wait_title_touch : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold,
 let wait_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Muted, center=true)
 
 ///|
-/// The way into an app, signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box it is
+/// The way into an app, signed out (the web's cloud/gate.tsx SignInPage), in the box it is
 /// given: its picture (`art`, a drawable), what it is (`title`, `note`), its button (`label`; `busy` while it is under
 /// way, not pressed again, a spinner before its words), what to know of it (`foot`), and what there is to say of
 /// signing in under the button (`said`: what it waits on, or why it failed, `bad`, in the red), coming and going with
@@ -4592,7 +4592,7 @@ let sign_in_picture_w : Double = 300.0
 let sign_in_side_w : Double = 30.0
 
 ///|
-/// The title 10 under the picture, 28, bold, on the font's own line (SignIn.kt: 28.sp, Bold).
+/// The title 10 under the picture, 28, bold, on the font's own line (Bold).
 // kept across runs: a value (no field of it changes)
 let sign_in_title_box : @ui.Style = @ui.css("pt=S2_5")
 
@@ -4608,7 +4608,7 @@ let sign_in_title : @ui.TextStyle = @ui.text_style(
 )
 
 ///|
-/// What still.fail is for: the body's size, muted, centred (SignIn.kt: 15.sp, lineHeight 21.sp).
+/// What still.fail is for: the body's size, muted, centred (lineHeight 21.sp).
 // kept across runs: a value (no field of it changes)
 let sign_in_note : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, center=true, w=Full)
 
@@ -5070,7 +5070,7 @@ let icon_stroke : Double = 1.75
 let coming_ring : Double = 17.0
 
 ///|
-/// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).
+/// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide.
 // kept across runs: a value (no field of it changes)
 let update_dot_at : @ui.Style = @ui.style(w=Full, h=Full, pt=room(update_dot_in), pr=room(update_dot_in), align=AEnd)
 

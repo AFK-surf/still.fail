@@ -24,10 +24,10 @@
 //   listen.open {port, host} → {id} (fails when the port is taken there); listen.next {id} → {request, method, path,
 //     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
 //     listen.close {id} — a login's loopback listener, answered by the app (Kotlin:
-//     Loopback.kt, where the app keeps itself running while it listens), not the shell
+//  Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   picked.read {file, start, end} → bytes; picked.hash {file} → {sha256}; picked.release {file} — a file picked in
 //     the app, read a part at a time as it goes up (`composer.add` with `blob: {hostFile, size, type}`) and named by
-//     its content first (a station that has it already copies its own), answered by the app (Kotlin: PickedFiles.kt).
+//  its content first (a station that has it already copies its own), answered by the app.
 //     Or held whole by the app and handed over with the call, its bytes beside it (`blob: {hostBytes: [start,
 //     length], type, sha256}`: mbui's app, whose picked files are read whole), read from those as it goes up
 //   reset {} — the connections kept for requests are taken for gone
@@ -268,7 +268,7 @@ export class BridgeHost implements Host {
     return Effect.gen(function* () {
       const opened = yield* Effect.acquireRelease(bridge.call("ws.open", { url, protocols }), (a) => Effect.ignore(bridge.call("ws.close", { id: (a.json as J).id }), { log: "Unhandled", message: "socket closed" }));
       const id = (opened.json as J).id as number;
-      // The host's ping (host.rs SOCKET_PING_MS).
+      // The host's ping.
       yield* Effect.forkScoped(Effect.forever(laterSleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.ignore(bridge.call("ws.send", { id, text: SOCKET_PING }), { log: "Unhandled", message: "socket pinged" })))));
       return { take: Effect.map(bridge.call("ws.next", { id }), (a) => ((a.json as J)?.end === true ? null : String((a.json as J).text))) };
     });

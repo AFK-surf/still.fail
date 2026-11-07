@@ -54,7 +54,7 @@ export const sessionOps: Record<string, ReadOp> = {
   pendingDeliveries: (s, a) => pendingDeliveries(s, a.key),
   /// The archive review needs the pending post's merged message as well as its card.
   reviewPendingCard: (s, a) => pendingCard(s, a.thread),
-  /// One session as lists and events have it (views.rs `summary`).
+  /// One session as lists and events have it.
   summary: (s, a) => summary(s, a.key),
   sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang, a.viewer ?? null),
   session: (s, a) => session(s, a.key, a.viewer, a.lang, latest(a.turns), a.jobs === "now"),

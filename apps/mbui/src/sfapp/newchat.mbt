@@ -1,10 +1,10 @@
-// A new chat in the Small stack (still.fail web/src/mobile/NewChat.tsx; apps/android NewChat.kt, ChatHost.kt): the pages'
+// A new chat in the Small stack: the pages'
 // (sfpages new_chat.mbt), risen from the bottom over the page under it (380 ms, (.2, .8, .2, 1)) under its bar (取消,
 // 新对话), over the navigation bar. The first message makes the chat and the page becomes it in place
 // (@ui.Nav::become), its composer and focus kept; its scene leaves over the chat (new_chat_leaving).
 
 ///|
-/// A new chat's page, rising over the page on top (Places.kt: 令 in the bar's notch).
+/// A new chat's page, rising over the page on top.
 fn new_chat(c : @ui.Ctx) -> Unit {
   ignore(c)
   fresh_reset()
@@ -14,7 +14,7 @@ fn new_chat(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// What the Small stack gives the page: its bar (Parts.kt NavBar: 取消 back, 新对话 in the middle), the navigation bar's
+/// What the Small stack gives the page: its bar (新对话 in the middle), the navigation bar's
 /// room under it (ChatHost.kt: windowInsetsPadding(keyboard.union(navigationBars))).
 fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
   {

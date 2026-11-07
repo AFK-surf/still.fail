@@ -1,4 +1,4 @@
-// The agents' tools for their conversations (the Rust station's hub.rs `tools`): chat_post, chat_state, chat_history,
+// The agents' tools for their conversations: chat_post, chat_state, chat_history,
 // chat_leave, chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.

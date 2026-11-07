@@ -1,5 +1,5 @@
 // Sharing a chat with the viewer's other workspaces on a phone (sfpages' xshare.mbt, its row xshare.mbt) and archiving a
-// chat that keeps watch from its sheet (ChatInfo.kt: asked first), over the fixture's chat.
+// chat that keeps watch from its sheet, over the fixture's chat.
 
 ///|
 /// The chat's menu over the fixture's chat, its `chat` topic as `over` makes it; calls kept and answered with nothing.

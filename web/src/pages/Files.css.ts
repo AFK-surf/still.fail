@@ -10,7 +10,7 @@ export const bar = style({
   borderBottom: `1px solid ${vars.line}`,
 });
 /** The groove the tabs share, each an equal part of it (as Safari's compact tabs), drawn as the app's own segmented
- * controls are (Drive.css.ts views): capsules in a capsule, 2 apart, the one shown on the page's ground in it. */
+ * controls are: capsules in a capsule, 2 apart, the one shown on the page's ground in it. */
 export const tabs = style({
   flex: "1", minWidth: "0", display: "flex", gap: "2px", padding: "2px", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,

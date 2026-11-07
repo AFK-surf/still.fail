@@ -9,7 +9,7 @@
 //     on past them
 //   8-11 tint rgba (over the frost) · 16-19, 24-27 clip (rect, corners)
 //   frosted: 12-14 the rim's hairline, its lit top-left, its back (white's
-//            alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
+//  alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
 //            edge (its box's notch_*: the circle's middle below the top,
 //            its radius, its fillets'; scene.mbt)
 //   liquid:  12 the rim's light · 13 the bezel's width · 14 unused
@@ -23,7 +23,7 @@
 //      one capture are one merged shape. Frosted glass made `shares_capture`
 //      takes the last capture whatever is drawn between and wherever it is
 //      (over that glass too, at its blur): it frosts what that glass frosts,
-//      not the glass (Bar.kt: the ball and the action frost the pages, not
+//  not the glass (Bar.kt: the ball and the action frost the pages, not
 //      the bar). A renderer copies what is under every instance of a
 //      capture when it reaches the first.
 // Text in liquid glass that is `adaptive` is drawn as kind 7: a glyph whose

@@ -1,4 +1,4 @@
-// The stations at a glance (still.fail's Android app, shared/ui/StationGlyph.kt, as the web's StationGlyph.tsx): a
+// The stations at a glance (still.fail's Android app): a
 // circle cut into one equal arc per station with the bottom slot left open, still.fail's robot in the middle. Online
 // arcs are ink and the rest a faint track; past six stations the arcs join into one bar filled to the share online. A
 // station whose link is on its way follows the online ones, its arc breathing. A station failing drops out of the ring
@@ -35,7 +35,7 @@ priv struct GlyphArc {
 }
 
 ///|
-/// Where every part goes (StationGlyph.kt glyphLayout): the arcs, and the red dots' angles.
+/// Where every part goes: the arcs, and the red dots' angles.
 fn glyph_layout(g : GlyphCounts) -> (Array[GlyphArc], Array[Double]) {
   let pi = 3.141592653589793
   let gap_deg = (1.7 + 1.8) / glyph_r * 180.0 / pi
