@@ -60,7 +60,6 @@ case "${1:-}" in
     mkdir -p "$stage"
     if grep -q 'built for newer macOS version' "$dir/log"; then cat "$dir/log"; exit 1; fi
     cp -p apps/mbui/_build/native/release/build/stillfail/stillfail/stillfail.exe "$stage/stillfail.exe"
-    cp apps/mbui/out/core/core.hbc "$stage/core.hbc"
     ditto apps/mbui/out/core/hermes/Library/Frameworks/macosx/hermes.framework "$stage/hermes.framework"
     git rev-parse HEAD > "$stage/revision"
     tar -cf "$2" -C "$stage" .

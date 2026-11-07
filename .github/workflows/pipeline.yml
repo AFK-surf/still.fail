@@ -790,11 +790,6 @@ jobs:
       - run: |
           bash apps/mbui/scripts/moon-mtimes.sh
           bash .github/mac-release-prebuild.sh ready
-      - uses: ./.github/actions/setup
-      # The native app is already compiling in the background. Bytecode needs pnpm, but not that app: make it now
-      # so bundling takes the content-keyed HBC cache instead of starting another serial compile at the deadline.
-      - name: Build core bytecode beside the native app
-        run: bash apps/mbui/scripts/core.sh hermes apple
       - name: Finish the Mac app build
         run: bash .github/mac-release-prebuild.sh wait
       - name: Hand over the compiled program and runtime

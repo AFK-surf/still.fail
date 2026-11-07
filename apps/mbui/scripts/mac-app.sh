@@ -129,10 +129,11 @@ else
     # CI hands the same commit's compiled program and runtime to this separate bundling job.
     [ "$(cat "$MBUI_MAC_COMPILED/revision")" = "$(git -C "$SF_SRC" rev-parse HEAD)" ] || { echo 'mac-app.sh: compiled app is from another commit' >&2; exit 1; }
     BIN=$MBUI_MAC_COMPILED/stillfail.exe
-    [ -x "$BIN" ] && [ -s "$MBUI_MAC_COMPILED/core.hbc" ] || { echo 'mac-app.sh: incomplete compiled app' >&2; exit 1; }
+    [ -x "$BIN" ] || { echo 'mac-app.sh: incomplete compiled app' >&2; exit 1; }
     HERMES_FRAMEWORK=$MBUI_MAC_COMPILED/hermes.framework
     mkdir -p out/core
-    cp "$MBUI_MAC_COMPILED/core.hbc" out/core/core.hbc
+    # Bytecode belongs to this bundling job, leaving the native compiler its full CPU budget.
+    bash "$A/scripts/core.sh" hermes apple
   else
     APP=stillfail MODE=release bash "$D/mac.sh" build > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
     if grep -q 'built for newer macOS version' "$OUT/build.log"; then
