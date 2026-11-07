@@ -38,6 +38,7 @@ import { hasInvalidVaultMembers, vaultMembersComplete } from "./member-index.ts"
 import { reboxIndexComplete, REBOX_LEGACY, REBOX_READY } from "./rebox-index.ts";
 
 export const CARRIED_SAVE_PENDING = "SELECT body FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'";
+const LISTING_PREFIX = 32;
 const EXPIRED_GRANT_BATCH = 32;
 type SavedGrant = { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
 type RestoreRow = { ws: string; id: string; body: string };
@@ -753,8 +754,16 @@ export class Secrets {
     const { ws, lock } = this.#placeOf(session);
     const email = this.#starter(session);
     if (email === null) return [];
+    return this.#listingsAt(ws, lock, email);
+  }
+
+  #plainListings(items: PlainItem[]): Listed[] {
+    return items.flatMap((i) => (!i.deleted && i.listing ? [{ vault: PLAIN, item: i.id, owner: i.owner, listing: i.listing }] : []));
+  }
+
+  #listingsAt(ws: string, lock: LockState | null, email: string): Listed[] {
     if (lock === null) {
-      return this.#d.plain.items(ws, email).flatMap((i) => (!i.deleted && i.listing ? [{ vault: PLAIN, item: i.id, owner: i.owner, listing: i.listing }] : []));
+      return this.#plainListings(this.#d.plain.items(ws, email));
     }
     const sub = memberWithEmail(lock, email)?.sub;
     if (sub === undefined) return [];
@@ -763,6 +772,25 @@ export class Secrets {
       .filter((v) => v.members.includes(sub))
       .flatMap((vault) => this.#d.vaults.items(lock.ws, vault.id).flatMap((i) =>
         !i.deleted && i.listing !== undefined && i.epoch === vault.epoch ? [{ vault: vault.id, item: i.id, owner: lock.members.get(vault.owner)?.email ?? null, listing: i.listing }] : []));
+  }
+
+  /// A use needs only the first matching listing. Names can equal another item's id, so retain the list's order.
+  #findListing(session: string, wanted: string): Listed | undefined {
+    const { ws, lock } = this.#placeOf(session);
+    const email = this.#starter(session);
+    if (email === null) return undefined;
+    const matches = (l: Listed) => l.item.toLowerCase() === wanted || l.listing.name.toLowerCase() === wanted;
+    if (lock === null) {
+      // Keep both reads in one snapshot: another connection may change an earlier item between the two.
+      this.#d.db.exec("SAVEPOINT vault_find_listing");
+      try {
+        const prefix = this.#d.plain.firstItems(ws, email, LISTING_PREFIX);
+        const found = this.#plainListings(prefix.map((entry) => entry.value)).find(matches);
+        if (found !== undefined || prefix.length < LISTING_PREFIX) return found;
+        return this.#plainListings(this.#d.plain.itemsAfter(ws, email, prefix.at(-1)!.id)).find(matches);
+      } finally { this.#d.db.exec("RELEASE vault_find_listing"); }
+    }
+    return this.#listingsAt(ws, lock, email).find(matches);
   }
 
   /// Whether `viewer` decides request `r`: the plain library's item's owner, a member of the vault.
@@ -950,7 +978,7 @@ export class Secrets {
     const { ws } = this.#placeOf(session);
     const runOn = a.station ? this.#peer(a.station) : null;
     const wanted = a.item.trim().toLowerCase();
-    const found = this.listings(session).find((l) => l.item.toLowerCase() === wanted || l.listing.name.toLowerCase() === wanted);
+    const found = this.#findListing(session, wanted);
     if (found === undefined) throw new Refused(`No secret named ${JSON.stringify(a.item)} may be asked for here: secret_list lists those that may.`);
     const { listing } = found;
     const plain = found.vault === PLAIN;
