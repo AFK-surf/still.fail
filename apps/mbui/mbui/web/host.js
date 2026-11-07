@@ -631,6 +631,8 @@
     float2 hs = r.zw * 0.5;
     return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);
   }
+  // A notch cut into the top edge: a circle about its middle (pad.y below it, pad.z its radius),
+  // met by the edge through fillets (pad.w), the rounded intersection with the outside of the circle.
   float notch_cut(float d, float2 p, float4 r, float4 pad) {
     if (pad.z <= 0.0) return d;
     float b = pad.z - length(p - float2(r.x + r.z * 0.5, r.y + pad.y));
@@ -668,8 +670,6 @@
   uniform highp sampler2D u_segs;
   out vec4 o;
   ${CORNERS}
-  // a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its
-  // radius), met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle
   float sd_group(vec2 p, float k) {
     float d = 1e9;
     for (int i = 0; i < 8; i++) {
