@@ -12,6 +12,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { type Entry, apply as applyLock, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
 import { routes as requestRoutes } from "../src/api/routes/vault-requests.ts";
+import { routes as vaultRoutes } from "../src/api/routes/vault.ts";
 import { type BoxCert, type Deny, type Grant, type Item, type Request, type Sig, type Vault, TAG, encryptWith, grantContext, itemContext, keyContext, newBoxPair, openSeal, saveContext, seal, signedBytes } from "../src/vault/crypto.ts";
 import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
@@ -68,10 +69,11 @@ function written(r: Request, by: Person, fields: Record<string, string>): Item {
   );
 }
 
-function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] | null, starter = "alice@x.com") {
-  const db = new DatabaseSync(":memory:");
-  const vaults = new VaultStore(db);
-  const plain = new PlainStore(db);
+function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] | null, starter = "alice@x.com", dbFile = ":memory:", observe?: (db: DatabaseSync) => DatabaseSync) {
+  const db = new DatabaseSync(dbFile);
+  const connection = observe?.(db) ?? db;
+  const vaults = new VaultStore(connection);
+  const plain = new PlainStore(connection);
   const notified: [string, string][] = [];
   const cards: { text: string; card: any }[] = [];
   const withdrawn: string[] = [];
@@ -102,8 +104,29 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
     extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
-  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
+  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: connection, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
   return { db, hub, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
+}
+
+function requestWriteHook() {
+  let before: (() => void) | undefined;
+  const observe = (db: DatabaseSync) => new Proxy(db, { get(target, property) {
+    if (property === "prepare") return (sql: string) => {
+      const statement = target.prepare(sql);
+      if (!/^(?:INSERT INTO|UPDATE) vault_requests\b/i.test(sql.trim())) return statement;
+      return new Proxy(statement, { get(inner, key) {
+        if (key === "run") return (...args: any[]) => {
+          const go = before; before = undefined; go?.();
+          return (inner.run as (...args: any[]) => unknown).apply(inner, args);
+        };
+        const value = Reflect.get(inner, key, inner);
+        return typeof value === "function" ? value.bind(inner) : value;
+      } });
+    };
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  return { observe, before: (f: () => void) => { before = f; } };
 }
 
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
@@ -497,6 +520,321 @@ test("a device registered while the save card is being posted can approve the se
     assert.deepEqual(opened(request, w.alice), { value: "sample" });
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a stale certificate cannot replace the key a waiting save was sealed to", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    const old = { ...w.alice, box: newBoxPair() }, newer = { ...w.alice, box: newBoxPair() };
+    const cert = (p: Person, at: number) => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at }, TAG.box, p.signer);
+    const staleCert = cert(old, 1100), newCert = cert(newer, 1200);
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    assert.deepEqual(pendingOf(h.secrets, w.state, "alice@x.com")[0]!.sealed, []);
+    let raced = false;
+    const interleaved = new Proxy(h.vaults, { get(target, property) {
+      if (property === "putBoxIf") return (incoming: BoxCert, previous: string | null) => {
+        if (!raced) {
+          raced = true;
+          target.putBox(newCert);
+          h.secrets.boxed(w.state, newCert);
+        }
+        return target.putBoxIf(incoming, previous);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const put = vaultRoutes({ vaults: interleaved, lock: () => w.state, boxed: (lock, value) => h.secrets.boxed(lock, value) })
+      .find((r) => r.method === "PUT" && r.pattern.test("/vault/boxes"))!;
+    const answer = await put.handle({ method: "PUT", path: "/vault/boxes", query: [], headers: {}, body: Buffer.from(JSON.stringify(staleCert)),
+      viewer: { sub: "alice", workspace: WS, email: "alice@x.com", name: "Alice", role: "owner", device: w.alice.base.hex }, lang: "en" }, []);
+    assert.equal(answer.status, 200);
+    assert.equal(raced, true);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [newer.box.pub]);
+    assert.deepEqual(opened(request!, newer), { value: "sample" });
+  } finally { rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a newer certificate written before reboxing keeps its key on a waiting save", async () => {
+  const w = world();
+  const dir = mkdtempSync(join(tmpdir(), "vault-box-concurrent-"));
+  const path = join(dir, "data.sqlite");
+  const h = harness(() => w.state, "alice@x.com", path);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path), otherVaults = new VaultStore(other);
+  try {
+    const old = { ...w.alice, box: newBoxPair() }, newer = { ...w.alice, box: newBoxPair() };
+    const cert = (p: Person, at: number) => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at }, TAG.box, p.signer);
+    const staleCert = cert(old, 1100), newCert = cert(newer, 1200);
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    let raced = false;
+    const interleaved = new Proxy(h.vaults, { get(target, property) {
+      if (property === "putBoxIf") return (incoming: BoxCert, previous: string | null) => {
+        const saved = target.putBoxIf(incoming, previous);
+        if (saved && !raced) {
+          raced = true;
+          otherVaults.putBox(newCert);
+          h.secrets.boxed(w.state, newCert);
+        }
+        return saved;
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const put = vaultRoutes({ vaults: interleaved, lock: () => w.state, boxed: (lock, value) => h.secrets.boxed(lock, value) })
+      .find((r) => r.method === "PUT" && r.pattern.test("/vault/boxes"))!;
+    await put.handle({ method: "PUT", path: "/vault/boxes", query: [], headers: {}, body: Buffer.from(JSON.stringify(staleCert)),
+      viewer: { sub: "alice", workspace: WS, email: "alice@x.com", name: "Alice", role: "owner", device: w.alice.base.hex }, lang: "en" }, []);
+    assert.equal(raced, true);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [newer.box.pub]);
+    assert.deepEqual(opened(request!, newer), { value: "sample" });
+  } finally { await h.secrets.close(); other.close(); h.db.close(); rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a certificate changed between reboxing and its write is checked again", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-rebox-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook();
+  const h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path), otherVaults = new VaultStore(other);
+  try {
+    const old = { ...w.alice, box: newBoxPair() }, newer = { ...w.alice, box: newBoxPair() };
+    const cert = (p: Person, at: number) => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at }, TAG.box, p.signer);
+    const staleCert = cert(old, 1100), newCert = cert(newer, 1200);
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    h.vaults.putBox(staleCert);
+    let raced = false;
+    hook.before(() => { raced = true; otherVaults.putBox(newCert); });
+    h.secrets.boxed(w.state, staleCert);
+    assert.equal(raced, true);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [newer.box.pub]);
+    assert.deepEqual(opened(request!, newer), { value: "sample" });
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reboxing does not restore a request decided by another connection", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-decided-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook();
+  const h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    const cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    let raced = false, notifications = 0;
+    h.secrets.listen(() => { notifications++; });
+    hook.before(() => {
+      raced = true;
+      other.prepare("UPDATE vault_requests SET status='denied', body=json_set(body, '$.status', 'denied') WHERE ws=? AND id=?").run(WS, request!.id);
+    });
+    assert.equal(h.secrets.boxed(w.state, cert), true);
+    const row = other.prepare("SELECT status, body FROM vault_requests WHERE ws=? AND id=?").get(WS, request!.id) as { status: string; body: string };
+    assert.equal(raced, true);
+    assert.equal(row.status, "denied");
+    assert.equal(JSON.parse(row.body).status, "denied");
+    assert.deepEqual(JSON.parse(row.body).sealed, []);
+    assert.equal(notifications, 0);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a busy reboxing retries even if the device does not send its certificate again", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-busy-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook(), h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    const cert = w.cert(w.alice);
+    let attempts = 0, notifications = 0;
+    const told = Promise.withResolvers<void>();
+    h.secrets.listen(() => { notifications++; told.resolve(); });
+    const interfere = () => {
+      attempts++;
+      other.prepare("UPDATE vault_requests SET body=json_set(body, '$.reason', ?) WHERE ws=? AND id=?").run(`changed-${attempts}`, WS, request!.id);
+      if (attempts < 3) hook.before(interfere);
+    };
+    hook.before(interfere);
+    const put = vaultRoutes({ vaults: h.vaults, lock: () => w.state, boxed: (lock, value) => h.secrets.boxed(lock, value) })
+      .find((r) => r.method === "PUT" && r.pattern.test("/vault/boxes"))!;
+    const answer = await put.handle({ method: "PUT", path: "/vault/boxes", query: [], headers: {}, body: Buffer.from(JSON.stringify(cert)),
+      viewer: { sub: "alice", workspace: WS, email: "alice@x.com", name: "Alice", role: "owner", device: w.alice.base.hex }, lang: "en" }, []);
+    assert.equal(answer.status, 503);
+    const [busy] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.equal(attempts, 3);
+    assert.equal(busy!.reason, "changed-3");
+    assert.deepEqual(busy!.sealed, []);
+    assert.equal(notifications, 0);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try { await Promise.race([told.promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("reboxing was not retried")), 5000); })]); }
+    finally { if (timer !== undefined) clearTimeout(timer); }
+    const [finished] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(opened(finished!, w.alice), { value: "sample" });
+    assert.equal(finished!.reason, "changed-3");
+    assert.equal(notifications, 1);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a queued reboxing checks that the device is still admitted", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-revoked-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook();
+  let lock = w.state;
+  const h = harness(() => lock, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com"), cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    let attempts = 0, notifications = 0;
+    h.secrets.listen(() => { notifications++; });
+    const interfere = () => {
+      attempts++;
+      other.prepare("UPDATE vault_requests SET body=json_set(body, '$.reason', ?) WHERE ws=? AND id=?").run(`changed-${attempts}`, WS, request!.id);
+      if (attempts < 3) hook.before(interfere);
+    };
+    hook.before(interfere);
+    assert.equal(h.secrets.boxed(lock, cert), false);
+    lock = { ...lock, devices: new Map([...lock.devices].filter(([id]) => id !== cert.device)) };
+    const retried = Promise.withResolvers<void>(), box = h.vaults.box.bind(h.vaults);
+    h.vaults.box = (ws, device) => { retried.resolve(); return box(ws, device); };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try { await Promise.race([retried.promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("reboxing was not retried")), 5000); })]); }
+    finally { if (timer !== undefined) clearTimeout(timer); }
+    const row = other.prepare("SELECT body FROM vault_requests WHERE ws=? AND id=?").get(WS, request!.id) as { body: string };
+    assert.deepEqual(JSON.parse(row.body).sealed, []);
+    assert.equal(notifications, 0);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("stopping the station cancels a queued reboxing", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-stopped-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook(), h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com"), cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    let attempts = 0, notifications = 0;
+    h.secrets.listen(() => { notifications++; });
+    const interfere = () => {
+      attempts++;
+      other.prepare("UPDATE vault_requests SET body=json_set(body, '$.reason', ?) WHERE ws=? AND id=?").run(`changed-${attempts}`, WS, request!.id);
+      if (attempts < 3) hook.before(interfere);
+    };
+    hook.before(interfere);
+    assert.equal(h.secrets.boxed(w.state, cert), false);
+    await h.secrets.close();
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const row = other.prepare("SELECT body FROM vault_requests WHERE ws=? AND id=?").get(WS, request!.id) as { body: string };
+    assert.deepEqual(JSON.parse(row.body).sealed, []);
+    assert.equal(notifications, 0);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a replacement certificate is checked before a waiting secret is sealed to it", async () => {
+  const w = world(), h = harness(() => w.state);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const original = w.cert(w.alice), forged = { ...w.cert(w.bob), device: w.alice.base.hex };
+    h.vaults.putBox(forged);
+    assert.equal(h.secrets.boxed(w.state, original), false);
+    assert.deepEqual(pendingOf(h.secrets, w.state, "alice@x.com")[0]!.sealed, []);
+  } finally { await h.secrets.close(); h.db.close(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a save made by the new station during handover receives a certificate from the old station", async () => {
+  const w = world(), exit = Promise.withResolvers<void>();
+  const dir = mkdtempSync(join(tmpdir(), "vault-save-handover-"));
+  const path = join(dir, "data.sqlite");
+  const old = harness(() => w.state, "alice@x.com", path);
+  old.db.exec("PRAGMA journal_mode=WAL");
+  const next = harness(() => w.state, "alice@x.com", path);
+  const secrets = next.make({ previousGone: exit.promise });
+  let oldClosed = false;
+  try {
+    await secrets.save("s1", { name: "New save", kind: "token", reason: "test", value: "sample", cwd: next.dir });
+    assert.deepEqual(pendingOf(secrets, w.state, "alice@x.com")[0]!.sealed, []);
+    const cert = w.cert(w.alice);
+    old.vaults.putBox(cert);
+    old.secrets.boxed(w.state, cert);
+    // The old station did not hold the new station's fields and cannot rebox this save.
+    assert.deepEqual(pendingOf(secrets, w.state, "alice@x.com")[0]!.sealed, []);
+    await old.secrets.close();
+    old.db.close();
+    oldClosed = true;
+    exit.resolve();
+    await tick();
+    const [request] = pendingOf(secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [w.alice.box.pub]);
+    assert.deepEqual(opened(request!, w.alice), { value: "sample" });
+  } finally {
+    exit.resolve();
+    await secrets.close();
+    await next.secrets.close();
+    if (!oldClosed) { await old.secrets.close(); old.db.close(); }
+    next.db.close();
+    rmSync(old.dir, { recursive: true, force: true });
+    rmSync(next.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a save still posting when the old station exits includes its last certificate", async () => {
+  const w = world(), exit = Promise.withResolvers<void>(), posting = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const dir = mkdtempSync(join(tmpdir(), "vault-save-posting-")), path = join(dir, "data.sqlite");
+  const old = harness(() => w.state, "alice@x.com", path);
+  old.db.exec("PRAGMA journal_mode=WAL");
+  const next = harness(() => w.state, "alice@x.com", path);
+  const secrets = next.make({ previousGone: exit.promise });
+  let oldClosed = false;
+  try {
+    (next.hub as any).chat = () => ({ post: async () => { posting.resolve(); await release.promise; return "1"; } });
+    const asked = secrets.save("s1", { name: "Posting", kind: "token", reason: "test", value: "sample", cwd: next.dir });
+    await posting.promise;
+    const cert = w.cert(w.alice);
+    old.vaults.putBox(cert);
+    old.secrets.boxed(w.state, cert);
+    await old.secrets.close();
+    old.db.close();
+    oldClosed = true;
+    exit.resolve();
+    await tick();
+    release.resolve();
+    await asked;
+    const [request] = pendingOf(secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [w.alice.box.pub]);
+    assert.deepEqual(opened(request!, w.alice), { value: "sample" });
+  } finally {
+    release.resolve(); exit.resolve();
+    await secrets.close(); await next.secrets.close();
+    if (!oldClosed) { await old.secrets.close(); old.db.close(); }
+    next.db.close();
+    rmSync(old.dir, { recursive: true, force: true });
+    rmSync(next.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

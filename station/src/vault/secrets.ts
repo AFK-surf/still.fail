@@ -244,9 +244,13 @@ export class Secrets {
   #restoreRemoveItem: ReturnType<DatabaseSync["prepare"]> | undefined;
   #restoreRead: ReturnType<DatabaseSync["prepare"]> | undefined;
   #restoreConfirm: ReturnType<DatabaseSync["prepare"]> | undefined;
-  /// Carried saves to reconcile after the old process can no longer write their requests.
+  /// Saves to reconcile after the old process can no longer write requests or device certificates.
   readonly #carriedSaves = new Set<string>();
   #carriedSavesWaiting = false;
+  /// Certificate writes can succeed even if a competing request write delays reboxing. Retry while the fields live here.
+  readonly #reboxPending = new Map<string, { ws: string; device: string; delay: number }>();
+  #reboxFibers: Fibers | null = null;
+  #reboxScheduled = false;
   /// Commands sent to other stations, by the id they say how they ended under (`vault.done`).
   readonly #away = new Map<string, Away>();
   readonly #incoming = new Map<string, { peer: string; revoked: boolean }>();
@@ -507,7 +511,8 @@ export class Secrets {
   async close(): Promise<void> {
     this.#restoreClosed = true;
     this.#restorePending.clear();
-    await Promise.all([this.#uses.close(), this.#restoreFibers?.close()]);
+    this.#reboxPending.clear();
+    await Promise.all([this.#uses.close(), this.#restoreFibers?.close(), this.#reboxFibers?.close()]);
   }
 
   #scopeSave(id: string, ws: string, owner: string) {
@@ -601,7 +606,7 @@ export class Secrets {
     if (this.#carriedSaves.size > 0) this.#waitForCarriedSaves();
   }
 
-  /// Once the old process cannot write any more, reconcile each carried save with its owner's current certificates.
+  /// Once the old process cannot write any more, reconcile each waiting save with its owner's current certificates.
   /// A device may have registered before the carry arrived, and a request may not have been written at that point.
   #waitForCarriedSaves() {
     if (this.#carriedSavesWaiting) return;
@@ -609,6 +614,7 @@ export class Secrets {
     const previous = this.#d.backfill?.previousGone ?? Promise.resolve();
     void previous.then(() => {
       this.#carriedSavesWaiting = false;
+      if (this.#restoreClosed) return;
       // Older handovers did not carry a workspace or owner; one compatibility scan recovers those scopes.
       if (this.#unscopedSaves.size > 0) {
         const rows = this.#pendingForRecovery();
@@ -634,19 +640,24 @@ export class Secrets {
     });
   }
 
+  #sealCurrentSave(request: Request): boolean {
+    if (request.owner === undefined) return false;
+    const lock = this.#d.lock(request.ws);
+    if (lock === null || lock.ws !== request.ws) return false;
+    const certs = membersWithEmail(lock, request.owner).flatMap(({ sub }) => this.#certsOf(lock, sub).map((cert) => ({ cert, sub })));
+    certs.sort((a, b) => a.cert.device < b.cert.device ? -1 : a.cert.device > b.cert.device ? 1 : 0);
+    let changed = false;
+    for (const { cert, sub } of certs) changed = this.#sealSave(request, lock, cert, sub, request.owner) || changed;
+    return changed;
+  }
+
   #reconcileCarriedSave(id: string) {
     let found = false;
     for (const { ws, owner } of this.#saveScopes.get(id) ?? []) {
       const kept = this.#kept(ws, id);
       if (kept?.request.status !== "pending" || !kept.request.save || kept.request.owner !== owner) continue;
       found = true;
-      const lock = this.#d.lock(ws);
-      if (lock === null || lock.ws !== ws) continue;
-      const certs = membersWithEmail(lock, owner).flatMap(({ sub }) => this.#certsOf(lock, sub).map((cert) => ({ cert, sub })));
-      certs.sort((a, b) => a.cert.device < b.cert.device ? -1 : a.cert.device > b.cert.device ? 1 : 0);
-      let changed = false;
-      for (const { cert, sub } of certs) changed = this.#sealSave(kept.request, lock, cert, sub, owner) || changed;
-      if (changed) {
+      if (this.#sealCurrentSave(kept.request)) {
         this.#save(kept);
         this.#told(kept.request);
       }
@@ -1309,10 +1320,13 @@ export class Secrets {
       box: lock === null ? "" : this.keeper.open(id), at: Math.floor(requestedAt / 1000), status: "pending", owner: email, save, ...(from ? { runOn: from } : {}),
       ...(lock !== null && fields !== null ? { sealed: this.#certsOf(lock, sub!).map((c) => this.#sealTo(c, ws, id, fields)) } : {}),
     };
+    const duringHandover = lock !== null && fields !== null && !this.#previousExited;
     if (fields !== null) {
       this.#unsaved.set(id, fields);
       this.#scopeSave(id, ws, email);
       this.#postingSaves.set(id, request);
+      // The previous process cannot rebox a save whose fields exist only in this process.
+      if (duringHandover) { this.#carriedSaves.add(id); this.#waitForCarriedSaves(); }
     }
     const kept: Kept = { request, thread: null, cardTs: null };
     try {
@@ -1321,6 +1335,9 @@ export class Secrets {
         kept.cardTs = a.quiet ? null : await this.#postSave(session, thread, request);
         kept.thread = thread.thread.id;
       }
+      // If the predecessor exited while the card was being posted, its last certificate must be included before this
+      // request is written. The exit callback may already have observed the still-unwritten posting above.
+      if (duringHandover && this.#previousExited) this.#sealCurrentSave(request);
       this.#save(kept);
     } catch (error) {
       this.#forgetSave(id);
@@ -1391,10 +1408,59 @@ export class Secrets {
 
   /// A device's box key published (PUT vault/boxes, checked): the secrets waiting to be kept for its person sealed to
   /// it too, so that they may approve them from it.
-  boxed(lock: LockState, cert: BoxCert) {
+  boxed(lock: LockState, cert: BoxCert): boolean {
+    try {
+      const complete = this.#boxed(lock, cert);
+      if (!complete) this.#queueRebox(lock.ws, cert.device);
+      return complete;
+    } catch (error) {
+      this.#queueRebox(lock.ws, cert.device);
+      throw error;
+    }
+  }
+
+  #queueRebox(ws: string, device: string) {
+    if (this.#restoreClosed) return;
+    const key = `${ws}\0${device}`;
+    if (!this.#reboxPending.has(key)) this.#reboxPending.set(key, { ws, device, delay: 250 });
+    this.#scheduleRebox(0);
+  }
+
+  #scheduleRebox(delay: number) {
+    if (this.#restoreClosed || this.#reboxScheduled || this.#reboxPending.size === 0) return;
+    this.#reboxScheduled = true;
+    this.#reboxFibers ??= new Fibers("vault reboxing");
+    this.#reboxFibers.after(delay, () => this.#retryRebox());
+  }
+
+  #retryRebox() {
+    this.#reboxScheduled = false;
+    if (this.#restoreClosed) return;
+    const next = this.#reboxPending.entries().next().value;
+    if (next === undefined) return;
+    const [key, pending] = next;
+    const { ws, device } = pending;
+    this.#reboxPending.delete(key);
+    let retry = false, delay = pending.delay;
+    try {
+      const lock = this.#d.lock(ws);
+      if (lock === null) { retry = true; delay = Math.max(delay, 5_000); }
+      else {
+        const cert = this.#d.vaults.box(ws, device);
+        if (cert !== null && cert.ws === ws && cert.device === device && certOk(lock, cert) === null) retry = !this.#boxed(lock, cert);
+      }
+    } catch (error) {
+      retry = true;
+      log.warn("vault", "a certificate could not rebox its pending saves", { error: (error as Error).message });
+    }
+    if (retry && !this.#reboxPending.has(key)) this.#reboxPending.set(key, { ws, device, delay: Math.min(delay * 2, 30_000) });
+    this.#scheduleRebox(retry ? delay : 0);
+  }
+
+  #boxed(lock: LockState, cert: BoxCert): boolean {
     const sub = lock.devices.get(cert.device)?.sub;
     const email = sub === undefined ? undefined : lock.members.get(sub)?.email.toLowerCase();
-    if (sub === undefined || email === undefined) return;
+    if (sub === undefined || email === undefined) return true;
     // A handover from an older station may contain a save not written yet. Recheck those known ids in this workspace;
     // reboxed has already scoped those it could find. New saves and handovers carry their own scope.
     if (this.#unscopedSaves.size > 0) {
@@ -1408,16 +1474,38 @@ export class Secrets {
     }
     // Request ids are ASCII ULIDs: retain the old workspace scan's primary-key order for notifications.
     const requests = [...(this.#savesByOwner.get(lock.ws)?.get(email) ?? [])].sort();
+    if (requests.length === 0) return true;
+    const read = this.#d.db.prepare("SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'");
+    const write = this.#d.db.prepare(`UPDATE vault_requests SET body = ?
+      WHERE ws = ? AND id = ? AND status = 'pending' AND body = ? AND thread IS ? AND card_ts IS ?
+        AND EXISTS (SELECT 1 FROM vault_boxes WHERE ws = ? AND device = ? AND body = ?)`);
+    let checked = JSON.stringify(cert), complete = true;
     for (const id of requests) {
-      const posting = this.#postingSaves.get(id);
-      if (posting !== undefined) this.#sealSave(posting, lock, cert, sub, email);
-      const row = this.#d.db.prepare("SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'").get(lock.ws, id) as { body: string; thread: number | null; card_ts: string | null } | undefined;
-      if (row === undefined) continue;
-      const k: Kept = { request: JSON.parse(row.body), thread: row.thread ?? null, cardTs: row.card_ts ?? null };
-      if (!this.#sealSave(k.request, lock, cert, sub, email)) continue;
-      this.#save(k);
-      this.#told(k.request);
+      let settled = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        // Another connection may have published a certificate after this callback was scheduled. Only trust that
+        // replacement after checking it against the lock, and write a request only while both records are unchanged.
+        const held = this.#d.vaults.boxSnapshot(lock.ws, cert.device);
+        if (held === null) break;
+        if (held.body !== checked) {
+          if (held.value === null || typeof held.value !== "object" || held.value.ws !== lock.ws || held.value.device !== cert.device || certOk(lock, held.value) !== null) break;
+          checked = held.body;
+        }
+        const posting = this.#postingSaves.get(id);
+        if (posting !== undefined) this.#sealSave(posting, lock, held.value, sub, email);
+        const row = read.get(lock.ws, id) as { body: string; thread: number | null; card_ts: string | null } | undefined;
+        if (row === undefined) { settled = true; break; }
+        const k: Kept = { request: JSON.parse(row.body), thread: row.thread ?? null, cardTs: row.card_ts ?? null };
+        if (!this.#sealSave(k.request, lock, held.value, sub, email)) { settled = true; break; }
+        if (write.run(JSON.stringify(k.request), lock.ws, id, row.body, k.thread, k.cardTs, lock.ws, cert.device, held.body).changes === 0) continue;
+        this.#trackSaved(k);
+        this.#told(k.request);
+        settled = true;
+        break;
+      }
+      if (!settled) complete = false;
     }
+    return complete;
   }
 
   /// POST vault/saves: a secret asked to be kept, written by `sub`'s app into their vault `vault` (under the request's

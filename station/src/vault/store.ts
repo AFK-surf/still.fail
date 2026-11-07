@@ -198,11 +198,26 @@ export class VaultStore {
   }
 
   box(ws: string, device: string): BoxCert | null {
-    return parse<BoxCert>(this.#db.prepare("SELECT body FROM vault_boxes WHERE ws = ? AND device = ?").all(ws, device))[0] ?? null;
+    return this.boxSnapshot(ws, device)?.value ?? null;
+  }
+
+  boxSnapshot(ws: string, device: string): { value: BoxCert; body: string } | null {
+    const row = this.#db.prepare("SELECT body FROM vault_boxes WHERE ws = ? AND device = ?").get(ws, device) as { body: string } | undefined;
+    return row ? { value: JSON.parse(row.body) as BoxCert, body: row.body } : null;
   }
 
   putBox(cert: BoxCert): void {
     this.#db.prepare("INSERT INTO vault_boxes (ws, device, body) VALUES (?, ?, ?) ON CONFLICT (ws, device) DO UPDATE SET body = excluded.body").run(cert.ws, cert.device, JSON.stringify(cert));
+  }
+
+  /// Do not replace a certificate written after the caller checked the one held.
+  putBoxIf(cert: BoxCert, previous: string | null): boolean {
+    const body = JSON.stringify(cert);
+    if (previous === null) return this.#db.prepare(`INSERT INTO vault_boxes (ws, device, body)
+      SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM vault_boxes WHERE ws = ? AND device = ?)`)
+      .run(cert.ws, cert.device, body, cert.ws, cert.device).changes > 0;
+    return this.#db.prepare("UPDATE vault_boxes SET body = ? WHERE ws = ? AND device = ? AND body = ?")
+      .run(body, cert.ws, cert.device, previous).changes > 0;
   }
 }
 
