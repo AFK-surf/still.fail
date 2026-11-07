@@ -1632,9 +1632,11 @@ export class Views implements Owner {
       const channelName = text("channelName");
       // A Feishu chat's: its group by name, no #.
       const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
-      const place = text("channel") === null && channelName === null ? null : format.placeName(text("surface") ?? "slack", text("channel") ?? "", channelName ?? "");
-      row.originKind = feishu ? "feishu" : "slack";
-      row.originText = [feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
+      // A Comma Task's: Comma and the Group, no place (a Task is not in a channel).
+      const comma = text("surface")?.startsWith("comma:") === true;
+      const place = comma || (text("channel") === null && channelName === null) ? null : format.placeName(text("surface") ?? "slack", text("channel") ?? "", channelName ?? "");
+      row.originKind = comma ? "comma" : feishu ? "feishu" : "slack";
+      row.originText = [comma ? "Comma" : feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
     if (isObject(row.last)) {
       const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));

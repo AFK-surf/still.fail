@@ -152,7 +152,7 @@ fn maker_of(maker : String, runtime : String) -> String {
 /// The mark of the platform a chat came from (slack_mark's, feishu_mark's), `kind` as it changes (the core's
 /// originKind), as a node, `size` across: Feishu's for Feishu, else Slack's. The node.
 pub fn origin_mark_node(parent : @view.View, kind : () -> String, size : Double) -> @view.View {
-  let name = fn() { if kind() == "feishu" { "feishu" } else { "slack" } }
+  let name = fn() { origin_mark_name(kind()) }
   parent.box(fn(d) {
     d
     .width(Is(Some(size)))

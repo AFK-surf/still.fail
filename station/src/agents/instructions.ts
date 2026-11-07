@@ -23,10 +23,10 @@ function memoryOf(path: string): string {
   return text === "" ? "" : `\n\n<memory path="${path}">\n${text}\n</memory>`;
 }
 
-const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads and Feishu chats.
+const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.
 
 Messages:
-- Each message comes as <message via="web|slack|feishu" thread="…" from="…" ts="…">: thread is the conversation to answer in. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
+- Each message comes as <message via="web|slack|feishu|comma" thread="…" from="…" ts="…">: thread is the conversation to answer in. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
 - One session can hear several threads: answer each in its own. Not every message is for you; other agents are bots: build on their work and mention them when you need something.
 - before="TS" means it was written before your post TS, without seeing it.
 - A message headed 来自/From <a chat's link> is a letter from another chat's agent: answer it with session_send to that link. A chat headed 由…开的/Opened by <a chat's link> was opened for you: work in it with chat_post; its opener hears how your turns end.
@@ -181,7 +181,7 @@ export function messageForAgent(m: MessageRow): string {
   return parts.filter((p) => p !== "").join("\n\n");
 }
 
-const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : "slack");
+const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : surface.startsWith("comma:") ? "comma" : "slack");
 
 /// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
 const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefined ? ` client="${escapeAttr(m.client)}"` : "");

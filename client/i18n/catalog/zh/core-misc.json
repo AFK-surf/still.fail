@@ -111,6 +111,7 @@
   "core-misc.connect.title.feishuWay": "创建飞书机器人",
   "core-misc.connect.title.feishuScan": "扫码创建",
   "core-misc.connect.title.feishuApp": "使用已有应用",
+  "core-misc.connect.title.commaLine": "连接 Comma",
   "core-misc.connect.token_changed": "token 已更改，请重新校验",
   "core-misc.connect.working": "正在处理这一步",
   "core-misc.connect.feishu.waiting": "使用飞书扫描二维码，按提示创建机器人",

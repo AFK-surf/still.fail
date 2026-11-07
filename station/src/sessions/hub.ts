@@ -32,7 +32,7 @@ import { allLeft, liveRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
-import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, commaSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
 import type { DeliveryCardState, PendingMessage } from "../store/rows.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
@@ -1153,7 +1153,9 @@ export class Hub {
   /// ids are the app's own, so another bot's in the same chat are other people).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
-    if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
+    const kind = this.config().connects.find((c) => c.id === connect)?.kind;
+    if (kind === "feishu") return feishuSurface(connect);
+    if (kind === "comma") return commaSurface(connect);
     return slackSurface(connect, this.chatOf(connect)?.workspace() ?? null);
   }
 

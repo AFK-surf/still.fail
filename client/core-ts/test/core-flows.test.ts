@@ -2391,6 +2391,44 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   core.close();
 });
 
+test("connect_wizard_offers_comma_where_its_station_has_it_and_adds_a_connect_of_the_line_comma_shows", async () => {
+  const { host, core } = await choosing();
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/comma/connects") return { id: "comma" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const topic = connectTopic("comma");
+  const form = { station: "ws/st", form: "comma" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  const flow = core.inner.forms.connects;
+  withFeishu(core, []);
+  assert.deepEqual(flow.value(topic).platforms, ["slack", "feishu"], "a station from before the Comma connect does not offer it");
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), comma: true });
+  assert.deepEqual(flow.value(topic).platforms, ["slack", "feishu", "comma"]);
+  flow.go(topic, ui, "commaBind");
+  let view = flow.value(topic);
+  assert.deepEqual([view.step, view.platform, view.back, view.number, view.total], ["commaBind", "comma", "platform", 2, 3]);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "connect-new:comma", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:comma" });
+  flow.go(topic, ui, "commaLine");
+  flow.edit(topic, ui, { comma: { line: "tailcat 1.2.3.4 4750" } });
+  assert.equal(flow.value(topic).comma.ready, false);
+  assert.throws(() => flow.begin(topic, ui, "create", {}, false), "not a line Comma shows");
+  flow.edit(topic, ui, { comma: { line: " comma https://api.comma.surf salix_conn_abc12345 " } });
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.back, view.comma.ready], ["commaLine", "commaBind", true]);
+  const shaped = present.decorate(topic, structuredClone(view), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  await ask(host, core, ui, 4, "connect.flow.create", form);
+  const sent = stationPosted(host, "/comma/connects");
+  assert.deepEqual([sent.length, sent[0].line, sent[0].bind.runtime, sent[0].bind.model], [1, "comma https://api.comma.surf salix_conn_abc12345", "codex", "gpt-6-astra"]);
+  assert.equal(flow.value(topic).step, "done");
+  core.close();
+});
+
 test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_made", async () => {
   const { host, core } = await choosing();
   let verified = 0;

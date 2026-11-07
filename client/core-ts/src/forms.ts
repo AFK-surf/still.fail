@@ -406,6 +406,12 @@ const feishuKey = (f: J) => JSON.stringify([str(f.appId).trim(), str(f.appSecret
 
 const FEISHU_STEPS = ["feishuBind", "feishuWay", "feishuScan", "feishuApp"];
 
+/// The Comma path's own: its agents' model, then the line Comma's still.fail plugin shows (`comma <server> <token>`).
+const COMMA_STEPS = ["commaBind", "commaLine"];
+
+/// Whether `line` reads as the line Comma shows: `comma`, Comma's address, the token.
+const commaLineReady = (line: string) => /^comma\s+https?:\/\/\S+\s+[A-Za-z0-9_-]{8,512}$/.test(line.trim());
+
 function initial(input: J): J {
   const name = brand.name();
   const resume = typeof get(input, "resume") === "string";
@@ -414,6 +420,7 @@ function initial(input: J): J {
     step: resume ? "install" : "platform",
     platform: resume ? "slack" : null,
     feishu: feishuBlank(),
+    comma: { line: "", error: null },
     resume: get(input, "resume") ?? null,
     mobile: get(input, "mobile") === true,
     team: null,
@@ -528,7 +535,12 @@ export class ConnectFlows {
     for (const field of ["adding", "requireMention", "threads"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
     if (get(patch, "mode") !== undefined && patch.mode !== "single-session" && patch.mode !== "multi-session") throw CoreError.invalid(t("core-misc.connect.no_such_mode"));
     const platform = get(patch, "platform");
-    if (platform !== undefined && platform !== "slack" && platform !== "feishu") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    if (platform !== undefined && platform !== "slack" && platform !== "feishu" && platform !== "comma") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    const comma = get(patch, "comma");
+    if (comma !== undefined) {
+      if (!isObject(comma) || (get(comma, "line") !== undefined && typeof comma.line !== "string")) throw CoreError.invalid(t("core-misc.params.not_text"));
+      if (typeof comma.line === "string") Object.assign(d.value.comma, { line: comma.line, error: null });
+    }
     const feishu = get(patch, "feishu");
     if (feishu !== undefined) {
       if (!isObject(feishu)) throw CoreError.invalid(t("core-misc.params.not_text"));
@@ -549,7 +561,8 @@ export class ConnectFlows {
     const step = str(view.step, "team");
     const allowed =
       to === "back" ||
-      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")))) ||
+      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")) || (target === "commaBind" && view.platforms.includes("comma")))) ||
+      (step === "commaBind" && target === "commaLine" && view.canCreate === true) ||
       (step === "feishuBind" && target === "feishuWay" && view.canCreate === true) ||
       (step === "feishuWay" && target === "feishuApp") ||
       ((step === "feishuScan" || step === "feishuApp") && target === "feishuWay") ||
@@ -560,7 +573,7 @@ export class ConnectFlows {
     if (!allowed) throw CoreError.invalid(t("core-misc.connect.not_ready"));
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.busy"));
-    if (step === "platform") d.value.platform = target === "team" ? "slack" : "feishu";
+    if (step === "platform") d.value.platform = target === "team" ? "slack" : target === "commaBind" ? "comma" : "feishu";
     d.value.step = target;
     this.#store.invalidate(topic);
     return {};
@@ -581,14 +594,17 @@ export class ConnectFlows {
     const picked = p !== undefined ? p.ok : null;
     // A station without the Feishu connect (one from before it) says no `feishuRegistrations`: Slack's at once.
     const feishuOffered = Array.isArray(get(overview, "feishuRegistrations"));
-    v.platforms = feishuOffered ? ["slack", "feishu"] : ["slack"];
+    // One with the Comma connect says `comma` in its overview.
+    v.platforms = [...(feishuOffered ? ["slack", "feishu"] : ["slack"]), ...(get(overview, "comma") === true ? ["comma"] : [])];
     let step = str(v.step, "team");
     if (step === "platform" && !feishuOffered) step = "team";
     v.step = step;
     const feishu = v.platform === "feishu" && (FEISHU_STEPS.includes(step) || step === "done");
+    const comma = v.platform === "comma" && (COMMA_STEPS.includes(step) || step === "done");
     const mobile = v.mobile === true;
     const title = step === "platform" ? "core-misc.connect.title.platform"
-      : step === "feishuBind" ? "core-misc.connect.title.bind"
+      : step === "feishuBind" || step === "commaBind" ? "core-misc.connect.title.bind"
+      : step === "commaLine" ? "core-misc.connect.title.commaLine"
       : FEISHU_STEPS.includes(step) ? `core-misc.connect.title.${step}`
       : step === "team" && !mobile && teams.length === 0
         ? "core-misc.connect.title.get_token"
@@ -600,12 +616,15 @@ export class ConnectFlows {
               ? `core-misc.connect.title.${step}`
               : "core-misc.connect.title.bind";
     const slackOrder = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
-    const order = feishu
+    const order = comma
+      ? ["platform", ...COMMA_STEPS]
+      : feishu
       ? ["platform", "feishuBind", "feishuWay", step === "feishuApp" ? "feishuApp" : "feishuScan"]
       : feishuOffered && typeof v.resume !== "string" ? ["platform", ...slackOrder] : slackOrder;
     const back =
       step === "platform" ? "close"
-        : step === "feishuBind" ? "platform"
+        : step === "feishuBind" || step === "commaBind" ? "platform"
+        : step === "commaLine" ? "commaBind"
         : step === "feishuWay" ? "feishuBind"
         : step === "feishuScan" || step === "feishuApp" ? "feishuWay"
         : step === "team"
@@ -634,6 +653,7 @@ export class ConnectFlows {
     v.made = made;
     v.pick = picked;
     v.feishu = feishuView(v.feishu, overview, d.pending);
+    v.comma = { line: str(v.comma?.line), ready: commaLineReady(str(v.comma?.line)), error: v.comma?.error ?? null };
     v.modeWords = present.modeWords(feishu ? "feishu" : null);
     v.sections = present.slackSections();
     return v;
@@ -655,6 +675,7 @@ export class ConnectFlows {
       const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
       [name, p] = ["feishu.createConnect", { feishu: v.threads === true ? { ...app, threads: true } : app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
     }
+    else if (action === "create" && step === "commaLine" && v.canCreate === true && v.comma.ready === true) [name, p] = ["comma.createConnect", { line: v.comma.line.trim(), bind: bindOf(v.pick) }];
     else if (action === "create" && step === "bind" && v.canCreate === true && verified) {
       let slack: J = { ...tokenInput };
       if (typeof get(v.made, "state") === "string") slack = { appToken: tokenInput.appToken ?? null, install: v.made.state };
@@ -713,6 +734,7 @@ export class ConnectFlows {
     d.pending = false;
     if (action === "create") d.value.feishu.creating = false;
     if ("err" in result && d.value.platform === "feishu" && (action === "create" || action === "register")) d.value.feishu.error = result.err.message;
+    if ("err" in result && d.value.platform === "comma" && action === "create") d.value.comma.error = result.err.message;
     if ("ok" in result) {
       const r = result.ok;
       if (action === "config") Object.assign(d.value, { team: get(r, "teamId") ?? null, config: "", adding: false, step: "app" });

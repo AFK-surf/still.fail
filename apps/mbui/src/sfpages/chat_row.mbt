@@ -350,7 +350,12 @@ pub fn chat_row(
                 if item.connect {
                   let said = if item.origin_text != "" { item.origin_text } else { "Slack" }
                   let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
-                    (if item.origin_kind == "feishu" { @sf.feishu_mark(c, kind_mark) } else { @sf.slack_mark(c, kind_mark) })
+                    // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
+                    @sf.drawable(c, @sf.origin_mark_name(item.origin_kind), kind_mark, tint?=if item.origin_kind == "comma" {
+                      Some(t.p.text)
+                    } else {
+                      None
+                    })
                     |> ignore
                   })
                   c.semantics(b, Image, id=away, label=said)

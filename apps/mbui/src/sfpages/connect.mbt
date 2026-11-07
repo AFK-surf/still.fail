@@ -76,6 +76,8 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
   let station = text(item, "station")
   let id = text(cv, "id")
   let feishu = text(cv, "kind") == "feishu"
+  // (a Comma connect has no app of its own: its line is all it connects with)
+  let comma = text(cv, "kind") == "comma"
   let blocks : Array[() -> Unit] = []
   // (each block by what it is and what it shows: one come or gone opens or closes where it is, one showing another
   // thing goes to its height, @sf.page's `keys`)
@@ -83,7 +85,7 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
   let sign = json_sign(cv)
   // what its link needs: Slack's tokens, or why it fails (a Feishu connect's only why)
   let state = text(field(cv, "connection"), "state")
-  if !feishu && state == "no_tokens" {
+  if !feishu && !comma && state == "no_tokens" {
     blocks.push(fn() { cd_slack_section(c, core, station, cv) })
     keys.push(("tokens", sign))
   } else if cd_trouble(cv) != "" {
@@ -97,7 +99,7 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : P
       blocks.push(fn() { cd_feishu_section(c, core, station, cv) })
       keys.push(("feishu", sign))
     }
-  } else {
+  } else if !comma {
     blocks.push(fn() { slack_app_section(c, core, station, cv) })
     keys.push(("app", sign))
   }
@@ -195,6 +197,7 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
   let me = station + "/" + id
   let on = [("station", station), ("id", id)]
   let feishu = text(cv, "kind") == "feishu"
+  let comma = text(cv, "kind") == "comma"
   let reconnecting = is_doing(core, ["connect.reconnect"], on)
   let saving = is_doing(core, ["connect.put"], on)
   let conn = field(cv, "connection")
@@ -229,7 +232,10 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
         cd_act(core, station, id, @sf.t("web-pages.connect.reconnect"), "connect.reconnect", [], done=@sf.t("web-pages.connect.reconnected"))
       }),
     ),
-    Some(
+  ]
+  // (a Comma connect's line is made again in Comma: there is no token of its own to replace here)
+  if !comma {
+    items.push(Some(
       @sf.menu_item_of(@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" }), icon="key", fn() {
         if feishu {
           cd_secret_dialog(core, station, cv)
@@ -237,9 +243,9 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
           cd_token_dialog(core, station, cv)
         }
       }),
-    ),
-  ]
-  if !feishu && slack_url != "" {
+    ))
+  }
+  if !feishu && !comma && slack_url != "" {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.openSlack"), icon="external", fn() { (core.open_link)(slack_url) })))
   }
   if feishu && console != "" {

@@ -362,10 +362,12 @@ fn cn_avatar(c : @ui.Ctx, core : Core, cv : Json?) -> Unit {
 }
 
 ///|
-/// What a connect connects to (ConnectKindIcon): Slack's mark or Feishu's.
+/// What a connect connects to (ConnectKindIcon): Slack's mark, Feishu's or Comma's (one colour: in the page's ink).
 fn cn_kind(c : @ui.Ctx, kind : String, size : Double) -> Unit {
   if kind == "feishu" {
     @sf.feishu_mark(c, size) |> ignore
+  } else if kind == "comma" {
+    @sf.drawable(c, "comma", size, tint=@sf.theme().p.text) |> ignore
   } else {
     @sf.slack_mark(c, size) |> ignore
   }

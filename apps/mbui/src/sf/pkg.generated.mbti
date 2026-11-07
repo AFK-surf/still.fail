@@ -1314,6 +1314,8 @@ pub let option_check_share : Double
 
 pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?, chosen? : Int32?, wide? : Bool, history? : Bool, waits? : Array[Bool], waits_why? : String) -> Int32?
 
+pub fn origin_mark_name(String) -> String
+
 pub fn outset(Double) -> @ui.Style
 
 pub fn outset_bottom(Double) -> @ui.Style
