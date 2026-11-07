@@ -129,7 +129,7 @@ let view_moves : Array[(Double, Double, Double)] = []
 ///|
 /// The moves kept (view_moves) told what holds them as one, at the last one's moment and place, the others before it
 /// for how fast it goes (Tree::drag_at's `track`); the hold called off meanwhile, nobody's.
-fn view_moves_told(tree : Tree) -> Unit {
+fn view_moves_told(tree : @view.Tree) -> Unit {
   guard view_moves.pop() is Some((at, x, y)) else { return }
   let before = view_moves.copy()
   view_moves.clear()
