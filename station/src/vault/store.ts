@@ -121,6 +121,28 @@ export class VaultStore {
     }
   }
 
+  /// Save only if the version checked by the caller is still the one held. `null` means there was no vault.
+  putVaultIf(v: Vault, previous: string | null): boolean {
+    const body = JSON.stringify(v);
+    const save = () => previous === null
+      ? this.#db.prepare(`INSERT INTO vaults (ws, id, seq, body)
+          SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM vaults WHERE ws = ? AND id = ?)`)
+        .run(v.ws, v.id, v.seq, body, v.ws, v.id).changes > 0
+      : this.#db.prepare("UPDATE vaults SET seq = ?, body = ? WHERE ws = ? AND id = ? AND body = ?")
+        .run(v.seq, body, v.ws, v.id, previous).changes > 0;
+    if (!v.deleted) return save();
+    this.#db.exec("SAVEPOINT vault_delete_if");
+    try {
+      const saved = save();
+      if (saved) this.#db.prepare("DELETE FROM vault_items WHERE ws = ? AND vault = ?").run(v.ws, v.id);
+      this.#db.exec("RELEASE vault_delete_if");
+      return saved;
+    } catch (error) {
+      try { this.#db.exec("ROLLBACK TO vault_delete_if; RELEASE vault_delete_if"); } catch { /* SQLite may already have rolled back. */ }
+      throw error;
+    }
+  }
+
   /// A vault's items, latest versions (deleted ones too: a version saying so).
   items(ws: string, vault: string): Item[] {
     return parse(this.#db.prepare("SELECT body FROM vault_items WHERE ws = ? AND vault = ? ORDER BY id").all(ws, vault));
@@ -146,6 +168,21 @@ export class VaultStore {
 
   putItem(i: Item): void {
     this.#db.prepare("INSERT INTO vault_items (ws, vault, id, version, body) VALUES (?, ?, ?, ?, ?) ON CONFLICT (ws, vault, id) DO UPDATE SET version = excluded.version, body = excluded.body").run(i.ws, i.vault, i.id, i.version, JSON.stringify(i));
+  }
+
+  /// The parent vault and the previous item must both still be the bodies the caller checked.
+  putItemIf(i: Item, vaultBody: string, previous: string | null): boolean {
+    const body = JSON.stringify(i);
+    if (previous === null) {
+      return this.#db.prepare(`INSERT INTO vault_items (ws, vault, id, version, body)
+        SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM vaults WHERE ws = ? AND id = ? AND body = ?)
+          AND NOT EXISTS (SELECT 1 FROM vault_items WHERE ws = ? AND vault = ? AND id = ?)`)
+        .run(i.ws, i.vault, i.id, i.version, body, i.ws, i.vault, vaultBody, i.ws, i.vault, i.id).changes > 0;
+    }
+    return this.#db.prepare(`UPDATE vault_items SET version = ?, body = ?
+      WHERE ws = ? AND vault = ? AND id = ? AND body = ?
+        AND EXISTS (SELECT 1 FROM vaults WHERE ws = ? AND id = ? AND body = ?)`)
+      .run(i.version, body, i.ws, i.vault, i.id, previous, i.ws, i.vault, vaultBody).changes > 0;
   }
 
   /// The box certificates published in a workspace, one per device (its latest).

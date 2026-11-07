@@ -33,10 +33,10 @@ test("an item validated before another connection deletes its vault is not writt
     vaults.putVault(v.vault);
     let raced = false;
     const interleaved = new Proxy(vaults, { get(target, property) {
-      if (property === "putItem") return (item: Item) => {
+      if (property === "putItemIf") return (item: Item, vaultBody: string, previous: string | null) => {
         raced = true;
         fromOther.putVault(deleted);
-        return target.putItem(item);
+        return target.putItemIf(item, vaultBody, previous);
       };
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
@@ -87,10 +87,10 @@ test("a vault update validated before another connection deletes it cannot undo 
     vaults.putVault(v.vault);
     let raced = false;
     const interleaved = new Proxy(vaults, { get(target, property) {
-      if (property === "putVault") return (vault: Vault) => {
+      if (property === "putVaultIf") return (vault: Vault, previous: string | null) => {
         raced = true;
         fromOther.putVault(deleted);
-        return target.putVault(vault);
+        return target.putVaultIf(vault, previous);
       };
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
