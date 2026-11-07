@@ -1660,7 +1660,10 @@ export class Views implements Owner {
     // regardless of the chat's state or whether it is recommended for archiving.
     if (row.offline === undefined && row.pending !== true) {
       row.swipeArchive = true;
-      const ask = present.swipeAsk(agents);
+      // (one someone else started: archiving it archives it for everyone in the workspace)
+      const shown = get(row.creator, "shown");
+      const starter = isObject(shown) && get(shown, "mine") !== true ? str(get(shown, "name")) : null;
+      const ask = present.swipeAsk(agents, starter, typeof row.hidden === "boolean");
       if (ask !== null) row.swipeAsk = ask;
     }
     const line = present.rowStateLine(row);

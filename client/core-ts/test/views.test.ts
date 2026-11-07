@@ -1001,6 +1001,45 @@ test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", a
   assert.equal(u.value.days.flatMap((d: J) => d.items).some((i: J) => i.swipeArchive === true), false);
 });
 
+test("a_chat_someone_else_started_asks_before_its_swipe_archives_it_for_the_whole_workspace", async () => {
+  const t = setup();
+  const now = t.host.nowMs();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  await t.host.time.pass(100);
+  const other = { id: "ana@x.com", email: "ana@x.com", name: "Ana", via: "web" };
+  const mine = { id: "me@x.com", email: "me@x.com", name: "我", via: "web" };
+  const running = { ...row("running", now - 3), creator: other };
+  running.agents[0].process = "running";
+  const watching = { ...row("watching", now - 5), creator: other };
+  watching.agents[0].watch = { names: ["CI"], since: 1, at: 2 };
+  const mineRunning = { ...row("mine-running", now - 6), creator: mine };
+  mineRunning.agents[0].process = "running";
+  t.set(rows("ws/st"), [
+    { ...row("theirs", now), creator: other },
+    { ...row("theirs-hides", now - 1), creator: other, hidden: false },
+    { ...row("mine", now - 2), creator: mine },
+    running,
+    row("nobody", now - 4),
+    watching,
+    mineRunning,
+  ]);
+  await t.read(u, 1);
+  const asks = Object.fromEntries(u.value.days.flatMap((d: J) => d.items).filter((i: J) => i.swipeAsk !== undefined).map((i: J) => [i.id, i.swipeAsk]));
+  // Archived, a chat is off the lists of everyone in the workspace, not the viewer's alone: one someone else started is
+  // asked about first, the viewer's own way to take it off only their list said where it has one (its 隐藏).
+  assert.deepEqual(asks, {
+    theirs: "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。",
+    "theirs-hides": "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。只想从自己的列表移走，可以长按选「隐藏」。",
+    // (at work or keeping watch as well: both said, who it reaches first)
+    running: "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
+    watching: "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。「CI」仍在监控。归档会停止监控。",
+    "mine-running": "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
+  });
+});
+
 test("pinned_rows_go_above_the_days_the_latest_pinned_first", async () => {
   const t = setup();
   const now = t.host.nowMs();

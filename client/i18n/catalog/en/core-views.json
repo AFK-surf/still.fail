@@ -293,6 +293,7 @@
   "core-views.present.host.uptime_days_hours": "{days}d {hours}h",
   "core-views.present.host.uptime_hours": "{hours}h",
   "core-views.present.host.process": "Process uses {size}",
+  "core-views.present.asks_both": "{first} {then}",
   "core-views.present.local_page": "Local admin page",
   "core-views.present.models_other": "Other",
   "core-views.present.need_help": "Needs you: {need}",
@@ -307,6 +308,8 @@
   "core-views.present.net.relay_named": "{name} relay",
   "core-views.present.net.total_session": "Session ↓ {down} · ↑ {up}",
   "core-views.present.net.total_today": "Today ↓ {down} · ↑ {up}",
+  "core-views.present.others_ask": "{name} started this chat. Archiving it takes it off everyone's list in the workspace, and its agent stops getting new messages.",
+  "core-views.present.others_ask_hide": "{name} started this chat. Archiving it takes it off everyone's list in the workspace, and its agent stops getting new messages. To take it off only your own list, long-press it and choose Hide.",
   "core-views.present.processes.none": "No agent processes running",
   "core-views.present.processes.running": {
     "one": "1 agent process, {size}",
