@@ -10,7 +10,7 @@
 import { type LockState, admit } from "../../cloud/lock.ts";
 import type { Viewer } from "../../mesh/credential.ts";
 import { type BoxCert, type Item, type Vault, TAG, certOk, itemOk, itemSupersedes, signedOk, signerOf, vaultOk, vaultSupersedes } from "../../vault/crypto.ts";
-import type { VaultStore } from "../../vault/store.ts";
+import { isDeletedVaultWrite, type VaultStore } from "../../vault/store.ts";
 import type { Route } from "../admin.ts";
 import type { Events, To } from "../events.ts";
 import { type Answer, type Request, json, param } from "../request.ts";
@@ -115,7 +115,13 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         // (a sibling checked as a first copy, of the same vault and owner: what it follows is not kept here)
         const why = sibling ? vaultOk(l, null, next, true) ?? (next.owner !== prev!.owner ? "a vault's owner does not change" : null) : vaultOk(l, prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
-        vaults.putVault(next);
+        try { vaults.putVault(next); }
+        catch (error) {
+          if (!isDeletedVaultWrite(error)) throw error;
+          const current = vaults.vault(l.ws, next.id);
+          if (current === null || !sees(current, r.viewer)) return refuse(404, "vault_unknown", "no such vault here, or not one of yours");
+          return refuse(409, "vault_conflict", "that vault was deleted", { vault: current });
+        }
         tell("vault", next, `vault\0${next.id}`, members(next));
         const gone = (prev?.members ?? []).filter((m) => !next.members.includes(m));
         // (the version taking them out told them too: what they check it by)
@@ -161,7 +167,11 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         }
         const why = itemOk(l, vault, sibling ? null : prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
-        vaults.putItem(next);
+        try { vaults.putItem(next); }
+        catch (error) {
+          if (!isDeletedVaultWrite(error)) throw error;
+          return refuse(404, "vault_unknown", "that vault was deleted");
+        }
         tell("vault-item", next, `vault-item\0${vault.id}\0${next.id}`, members(vault));
         return json(200, JSON.stringify({ item: next }));
       },
