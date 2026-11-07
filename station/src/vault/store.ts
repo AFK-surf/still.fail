@@ -6,6 +6,13 @@ import type { DatabaseSync } from "node:sqlite";
 import type { BoxCert, Item, Vault } from "./crypto.ts";
 import { initializeVaultMembers } from "./member-index.ts";
 
+const DELETED_WRITE = "vault was deleted during the write";
+
+/// A concurrent deletion blocked a write after its caller had already checked the vault.
+export function isDeletedVaultWrite(error: unknown): boolean {
+  return error instanceof Error && error.message === DELETED_WRITE;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vaults (
   ws TEXT NOT NULL,
@@ -28,6 +35,33 @@ CREATE TABLE IF NOT EXISTS vault_boxes (
   body TEXT NOT NULL,
   PRIMARY KEY (ws, device)
 );
+-- A previous station can have validated a write before this station commits a deletion. These checks also apply to
+-- its already-prepared UPSERT statements when it resumes, without scanning old rows during installation.
+CREATE TRIGGER IF NOT EXISTS vault_item_deleted_insert BEFORE INSERT ON vault_items
+  WHEN EXISTS (SELECT 1 FROM vaults v WHERE v.ws = NEW.ws AND v.id = NEW.vault
+    AND CASE WHEN json_valid(v.body) THEN json_type(v.body, '$.deleted') = 'true' ELSE 0 END)
+  BEGIN SELECT RAISE(ABORT, '${DELETED_WRITE}'); END;
+CREATE TRIGGER IF NOT EXISTS vault_item_deleted_update BEFORE UPDATE ON vault_items
+  WHEN EXISTS (SELECT 1 FROM vaults v WHERE v.ws = NEW.ws AND v.id = NEW.vault
+    AND CASE WHEN json_valid(v.body) THEN json_type(v.body, '$.deleted') = 'true' ELSE 0 END)
+  BEGIN SELECT RAISE(ABORT, '${DELETED_WRITE}'); END;
+CREATE TRIGGER IF NOT EXISTS vault_deleted_stays_deleted_insert BEFORE INSERT ON vaults
+  WHEN EXISTS (SELECT 1 FROM vaults v WHERE v.ws = NEW.ws AND v.id = NEW.id
+    AND CASE WHEN json_valid(v.body) THEN json_type(v.body, '$.deleted') = 'true' ELSE 0 END)
+    AND (CASE WHEN json_valid(NEW.body) THEN json_type(NEW.body, '$.deleted') IS NOT 'true' ELSE 1 END)
+  BEGIN SELECT RAISE(ABORT, '${DELETED_WRITE}'); END;
+CREATE TRIGGER IF NOT EXISTS vault_deleted_stays_deleted BEFORE UPDATE OF body ON vaults
+  WHEN (CASE WHEN json_valid(OLD.body) THEN json_type(OLD.body, '$.deleted') = 'true' ELSE 0 END)
+    AND (CASE WHEN json_valid(NEW.body) THEN json_type(NEW.body, '$.deleted') IS NOT 'true' ELSE 1 END)
+  BEGIN SELECT RAISE(ABORT, '${DELETED_WRITE}'); END;
+-- Older stations save the deleted version and remove its items in separate statements. Do the removal inside their
+-- first statement as well, so a crash or error between those statements does not leave the items behind.
+CREATE TRIGGER IF NOT EXISTS vault_deleted_items_insert AFTER INSERT ON vaults
+  WHEN CASE WHEN json_valid(NEW.body) THEN json_type(NEW.body, '$.deleted') = 'true' ELSE 0 END
+  BEGIN DELETE FROM vault_items WHERE ws = NEW.ws AND vault = NEW.id; END;
+CREATE TRIGGER IF NOT EXISTS vault_deleted_items_update AFTER UPDATE OF body ON vaults
+  WHEN CASE WHEN json_valid(NEW.body) THEN json_type(NEW.body, '$.deleted') = 'true' ELSE 0 END
+  BEGIN DELETE FROM vault_items WHERE ws = NEW.ws AND vault = NEW.id; END;
 `;
 
 const parse = <T>(rows: unknown[]): T[] => rows.map((r) => JSON.parse((r as { body: string }).body) as T);
