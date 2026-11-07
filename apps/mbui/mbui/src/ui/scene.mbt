@@ -530,9 +530,9 @@ fn inset_corner(
 
 ///|
 fn pop_clip() -> Unit {
-  for _ in 0..<clip_n {
-    clip_stack.pop() |> ignore
-  }
+  // (cut, not popped: a Double popped comes boxed in its Option, an allocation each)
+  let len = clip_stack.length() - clip_n
+  clip_stack.truncate(if len < 0 { 0 } else { len })
   while clip_window.length() > clip_stack.length() / clip_n {
     clip_window.pop() |> ignore
   }
