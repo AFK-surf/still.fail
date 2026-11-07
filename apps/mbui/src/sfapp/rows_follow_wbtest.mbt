@@ -1,6 +1,8 @@
 // A chat's rows as the reader scrolls away from its end and back while what is in it changes (a message coming while
 // away and while at the end, one leaving and coming back by the same key, one waiting to be sent): what is drawn at
-// each moment is what working the rows out anew each frame draws, at the display's frame rates and with none between.
+// each moment is what working the rows out anew each frame draws, at 60 Hz and 120 Hz and at the Tester's own frames (no
+// display period: those due, owed and of each drag step). Each run is compared with its own anew run, not the runs with each
+// other.
 
 ///|
 /// How long after each step the list is looked at.
@@ -8,8 +10,8 @@ let rows_follow_step_ms : Double = 400.0
 
 ///|
 /// The steps, each moment's drawing after it; the rows each frame made of the chat's entries as the last frame left
-/// them where they can be (`made`), or worked out anew every frame; frames every `period` ms (none between moments
-/// at 0).
+/// them where they can be (`made`), or worked out anew every frame; frames every `period` ms (at 0 the
+/// Tester's own: those due, owed and of each drag step).
 fn rows_follow_run(made : Bool, period : Double) -> Array[Array[String]] {
   new_run()
   let base = fixture("chat")
@@ -125,7 +127,7 @@ fn rows_follow_same(period : Double) -> Unit raise {
 }
 
 ///|
-test "a chat scrolled away from its end and back as its rows change: drawn as working them out anew draws them" {
+test "a chat scrolled away from its end and back as its rows change, at the Tester's own frames: drawn as working them out anew draws them" {
   rows_follow_same(0.0)
 }
 
