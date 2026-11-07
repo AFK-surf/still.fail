@@ -15,14 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: 10430afc4c86af24323c9655a298f46f004f26fa
+          ref: 6e7115675283a6ad1056180374652dde8d3330d7
       - uses: actions/cache/restore@v4
         id: units
         with:
           path: |
             .ci/mbc-store
             .ci/hbc
-          key: mbui-mac-73945814edcc4d0f
+          key: mbui-mac-d347032292716aa5
           fail-on-cache-miss: true
       - uses: ./.github/actions/mbui-moonbit
       - uses: actions/cache/restore@v4
@@ -30,7 +30,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
-          key: mbui-mac-moon-10430afc4c86af24323c9655a298f46f004f26fa
+          key: mbui-mac-moon-6e7115675283a6ad1056180374652dde8d3330d7
           fail-on-cache-miss: true
       - name: Compare saved dependencies with this image
         shell: bash
@@ -39,7 +39,7 @@ jobs:
           cc --version
           cd apps/mbui
           python3 - <<'PY'
-          import collections, hashlib, os
+          import collections, hashlib, os, shutil, subprocess
           from pathlib import Path
           root = Path(os.environ['GITHUB_WORKSPACE'])
           store = root / '.ci/mbc-store'
@@ -69,11 +69,22 @@ jobs:
           print(f'unit entries {entries}, dependency mismatch {bad_entries}, distinct paths {len(cache)}')
           for path, n in bad.most_common(35):
               print(f'{n} units: {path}')
-          stamps = list(Path('_build').rglob('*.mbc'))
+          stamps = [p for p in Path('_build').rglob('*.mbc') if p.is_file()]
           print(f'local object stamps restored: {len(stamps)}')
           if stamps:
               head = stamps[0].read_bytes().splitlines()
               if len(head) >= 2:
                   print('stamp command:', head[0].replace(b'\x1f', b' ').decode(errors='replace')[:800])
                   print('stamp compiler identity:', head[1].decode(errors='replace'))
+                  command = head[0].split(b'\x1f')
+                  compiler = os.fsdecode(command[0])
+                  compiler = compiler if Path(compiler).is_file() else shutil.which(compiler)
+                  print('compiler path:', compiler)
+                  if compiler:
+                      binary = hashlib.sha1(Path(compiler).read_bytes()).hexdigest().encode()
+                      version = subprocess.check_output([compiler, '--version'], stderr=subprocess.STDOUT)
+                      identity = hashlib.sha1(binary + b'\0' + version).hexdigest()
+                      print('compiler binary SHA-1:', binary.decode())
+                      print('compiler identity now:', identity)
+                      print('compiler identity matches stamp:', identity.encode() == head[1])
           PY
