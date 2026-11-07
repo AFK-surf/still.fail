@@ -51,7 +51,7 @@ const verifies = (id: string, sig: string, bytes: Uint8Array) => {
 };
 
 export type Device = { key: string; id: string; label: string };
-export type Chain = { devices: Map<string, Device>; hash: string | null };
+export type Chain = { readonly devices: ReadonlyMap<string, Device>; readonly hash: string | null };
 
 const crypto = {
   sha256Hex: (text: string) => hex(sha256(utf8(text))),
@@ -64,7 +64,8 @@ const crypto = {
 /// not hold.
 export function checkChain(entries: readonly Entry[], sub: string): Chain | null {
   if (entries.length === 0) return { devices: new Map(), hash: null };
-  // (a chain kept is replaced whole, never changed in place: what it said once it says until then)
+  // (a chain kept is replaced whole, never changed in place: what it said once it says until then, the same Chain to
+  // each who asks, read only)
   const was = folded.get(entries);
   if (was !== undefined && was.sub === sub) return was.chain;
   const out = rules.person_fold_js(entries, sub, crypto) as J;
