@@ -90,8 +90,7 @@ priv struct RowNodes {
   /// it: what the performance record names it by (told_said)
   mut named : String
   mut made_at : SourceLoc?
-  /// the frame and the moment it was last built (said where it parts from it built whole: rows_check_end)
-  mut built_frame : Int
+  /// the moment it was last built (said where it parts from it built whole: rows_check_end)
   mut built_at : Double
   /// the frame it was last laid in
   mut shown : Int
@@ -100,10 +99,9 @@ priv struct RowNodes {
   holder : Ref[RowNodes?]
   /// the parts kept as their nodes among its own, where among them (from its first): their nodes theirs, out of its
   /// own as it is taken out of the frame's and put back with them as it is put back; and those put among them by the
-  /// build going on, and where it began
+  /// build going on
   mut inner : Array[(RowNodes, Int)]
   inner_now : Array[RowNodes]
-  mut building_at : Int
 }
 
 ///|
@@ -587,13 +585,11 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     lists: [],
     key: "",
     read: false,
-    built_frame: -1,
     built_at: -1.0,
     shown: -1,
     holder,
     inner: [],
     inner_now: [],
-    building_at: 0,
     named: "",
     made_at: None,
   }
@@ -793,7 +789,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.again.clear()
   rn.laid.clear()
   rn.inner_now.clear()
-  rn.building_at = self.count
   {
     census,
     info: self.info_reads.length(),
@@ -811,7 +806,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   if !part && rn.reads_all {
     nodes_run.built_read = nodes_run.built_read + 1
   }
-  rn.built_frame = self.frame_no
   rn.built_at = self.clock
   rn.base = r
   rn.said_base = r

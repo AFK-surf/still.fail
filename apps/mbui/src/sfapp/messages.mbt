@@ -1,46 +1,5 @@
-// What the phone's chat keeps of its messages (the flight of words sent, notices opened) and the
-// chat's colours. The messages themselves are drawn as their chat draws them, by sfpages' rows (message.mbt,
-// message_files.mbt); what a post asks, under it, by sfpages' decision.mbt.
-///|
-/// The chat's own colours (ChatInk.kt): the wide screen's tokens over the phone's paper; `neutral` is its bubble.
-priv struct Ink {
-  text : Int64
-  muted : Int64
-  subtle : Int64
-  neutral : Int64
-  name : Int64
-  card : Int64
-  accent : Int64
-  canvas : Int64
-}
-
-///|
-fn ink() -> Ink {
-  if @sf.theme().dark {
-    {
-      text: 0xE9E9EAFFL,
-      muted: 0xA3A5A9FFL,
-      subtle: 0x8C8F94FFL,
-      neutral: 0x313237FFL,
-      name: 0xFC9B6FFFL,
-      card: 0x27282BFFL,
-      accent: 0xF57E4DFFL,
-      canvas: 0x1F2023FFL,
-    }
-  } else {
-    {
-      text: 0x24272BFFL,
-      muted: 0x646970FFL,
-      subtle: 0x73787DFFL,
-      neutral: 0xE8E4DCFFL,
-      name: 0xA23203FFL,
-      card: 0xF6F6F7FFL,
-      accent: 0xEF6A3CFFL,
-      canvas: 0xFFFFFFFFL,
-    }
-  }
-}
-
+// The flight of words sent, notices opened and the last quoted image. Messages are drawn by sfpages' rows
+// (message.mbt, message_files.mbt); what a post asks, under it, by sfpages' decision.mbt.
 ///|
 /// Times in messages say how long ago; a tap on one says when, in all of them, until tapped again.
 

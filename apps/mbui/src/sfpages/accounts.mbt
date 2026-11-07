@@ -7,10 +7,9 @@
 
 ///|
 /// What a profile's page keeps of its own while it is open: what is typed to name one more model,
-/// a sign-in's code, the command shown, the account's key being replaced (what is typed), the variables' rows.
+/// The command shown and the variables' rows while editing an account.
 priv struct ProfileEdit {
   mut command : String
-  mut replacing : String
   mut env_open : String
   env_rows : Array[EnvRow]
   mut env_of : String
@@ -30,7 +29,7 @@ priv struct EnvRow {
 
 ///|
 // kept across runs: said by the page's presses; profile_page_reset puts it back
-let profile_edit : ProfileEdit = { command: "", replacing: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
+let profile_edit : ProfileEdit = { command: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
 
 ///|
 /// The fields of a profile's page, by their key (made as first drawn).
@@ -40,7 +39,6 @@ let profile_fields : Map[String, @ui.Field] = {}
 ///|
 fn profile_page_reset() -> Unit {
   profile_edit.command = ""
-  profile_edit.replacing = ""
   profile_edit.env_open = ""
   profile_edit.env_rows.clear()
   profile_edit.env_of = ""

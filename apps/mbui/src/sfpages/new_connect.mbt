@@ -13,7 +13,6 @@
 priv struct NcFlow {
   station : String
   form : String
-  resume : String
   app_id : @ui.Field
   app_secret : @ui.Field
   mut app_id_sent : String
@@ -53,7 +52,6 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
   let f : NcFlow = {
     station,
     form: "desk-connect-" + nc_made.val.to_string(),
-    resume,
     app_id: @ui.Field::new(),
     app_secret: @ui.Field::new(),
     app_id_sent: "",
