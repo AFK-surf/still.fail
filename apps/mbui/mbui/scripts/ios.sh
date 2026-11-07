@@ -188,6 +188,7 @@ case "${1:-build}" in
       "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
       "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \
         --link-flags=$OUT/link-flags.txt \
+        --extra=$ROOT/src/svgrender/stub.c \
         --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
         $EXTRA $APP_EXTRA "$GEN" > $OUT/objs.txt
     fi

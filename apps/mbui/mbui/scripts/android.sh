@@ -190,6 +190,7 @@ case "${1:-build}" in
     else
       "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --gen-flags=-Dmain=mbui_main --obj=$OUT/obj \
         --link-flags=$OUT/link-flags.txt \
+        --extra=$ROOT/src/svgrender/stub.c \
         --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
         $EXTRA "$GEN" > $OUT/objs.txt
     fi
