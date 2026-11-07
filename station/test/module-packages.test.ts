@@ -4,7 +4,7 @@
 // that never comes up; and refused: a signature by a key it does not take, words that are not this module's release,
 // an archive that is not the one signed, a release for a newer station, one older than what came up. A module with a
 // native part (ffmpeg) packed once per platform, its programs in bin/: installed as this machine's, started told where
-// they are (MODULE_BIN_DIR). The real media service packed the same way runs too.
+// they are (MODULE_BIN_DIR).
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,10 +12,9 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
-import { PLATFORMS, changes, pack } from "../../scripts/module-bundle.ts";
+import { PLATFORMS, pack } from "../../scripts/module-bundle.ts";
 import { filesOf as nativeFiles } from "../../scripts/native.ts";
 import { stationDrive } from "../src/drive/drive.ts";
 import { ask, forward } from "../src/modules/forward.ts";
@@ -32,7 +31,6 @@ import { KEY, OTHER, signed, trusted } from "./release-fakes.ts";
 delete process.env.STILLFAIL_CONFIG;
 delete process.env.EMBER_CONFIG;
 
-const MEDIA = fileURLToPath(new URL("../../media/service", import.meta.url));
 const temp = (prefix: string) => realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 
 /// Looks every 20 ms until `what` holds; cancellation stops the wait, and checks use the signal for their resources.
@@ -340,9 +338,6 @@ test("a module with a native part: packed once per platform it is built for, its
   const first = readFileSync(join(out, names[0]!));
   packNative(out, 42, natives);
   assert.deepEqual(readFileSync(join(out, names[0]!)), first);
-  // What the native part is made of is what the package is: a change to it is a new version.
-  assert.equal(changes(["scripts/ffmpeg.ts"]), true);
-  assert.equal(changes(["scripts/native.ts"]), false);
 });
 
 test("a package with programs: its platform's archive installed, the programs executable, the module told where they are", async (t) => {
@@ -513,24 +508,4 @@ test("the station's updates read the packages with the rest, a line each after t
   await assert.rejects(updates.update("module:other", "en"), /No item module:other/);
   leave();
   assert.equal(updates.get("en").some((l) => l.id.startsWith("module:")), false);
-});
-
-test("the media service, packed as CI packs it (one bundled main.mjs, ffmpeg in bin/), installed and run as module media", async (t) => {
-  const machine = platform();
-  if (machine === null || !PLATFORMS.includes(machine)) return t.skip(`no modules on ${machine}`);
-  const r = await releases(t);
-  const { natives } = fakeNatives(t);
-  const names = pack(MEDIA, r.dir, { beta: true, build: 3600, unsignedOk: false, natives, env: { ...process.env, CI: "", RELEASE_SIGNING_KEY: KEY.pem } });
-  assert.deepEqual(names, [...PLATFORMS.map((p) => `modules/media/media-0.1.3600-${p}.tar.gz`), "modules/media/media-beta.json"]);
-  const s = station(t, r.base, { station: 4000, modules: [{ id: "media", package: "media" }] });
-  await until(() => s.modules.get("media")?.running === true, t.signal);
-  const at = s.packages.appOf("media");
-  assert.deepEqual(readInstalled(at).current, 3600);
-  assert.deepEqual(readdirSync(join(at, "3600")).sort(), ["bin", "main.mjs", "module.json"]);
-  assert.deepEqual(readdirSync(join(at, "3600", "bin")).sort(), nativeFiles("ffmpeg", machine).sort());
-  assert.equal(JSON.parse(readFileSync(join(at, "3600", "module.json"), "utf8")).entry, "main.mjs");
-  assert.deepEqual(s.modules.get("media")!.spec.args, [join(at, "3600", "main.mjs")]);
-  assert.equal(s.modules.get("media")!.spec.env.MODULE_BIN_DIR, join(at, "3600", "bin"));
-  // Its data where it always was, beside the code.
-  await until(() => existsSync(join(s.data, "modules", "media", "media.db")), t.signal);
 });

@@ -78,7 +78,7 @@ shell_prebuilt() {
 # The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as still.fail's
 # client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020, async functions as generators; Babel's class
 # transform, as Hermes 0.81 has no classes nor async functions; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
-# default core/hermes.ts: still.fail's alone; core/media-hermes.ts with the media module), `@core/` and `@stillfail/`
+# default core/hermes.ts: still.fail's), `@core/` and `@stillfail/`
 # aliased (`@core/` is client/core-ts/src, `@stillfail/` this checkout). hermesc: $HERMESC, else the one kept in ~/Library/Caches/stillfail-build, else
 # fetched (npm pack react-native@0.81.4) into out/core/hermesc.
 HERMES_RN=0.81.4
@@ -165,7 +165,7 @@ hermes() {
   fi
   # never an old core.hbc after a failed step (it would hide a module gone missing)
   rm -f $OUT/core-hermes.js $OUT/core.hbc $OUT/core.hbc.stamp
-  # what an app's modules import from npm (media/core's effect) found in the core's own node_modules
+  # what an app's modules import from npm found in the core's own node_modules
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
     --format=iife --platform=neutral --main-fields=module,main --conditions=hermes --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none \
     --alias:@core=$CORE_TS/src --alias:@stillfail=$SF_SRC --resolve-extensions=.ts,.js,.mjs \
@@ -259,9 +259,9 @@ engine() {
 
 # What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
 # by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
-# bytecode (ENTRY, by default the media app's entry, as Android's). apple-native is what the app's link takes (all
+# bytecode (ENTRY, by default still.fail's own, as Android's). apple-native is what the app's link takes (all
 # but the bytecode, which only its bundle carries: scripts/mac.sh makes that beside the app's compile, `hermes apple`).
-APPLE_ENTRY=$ROOT/core/media-hermes.ts
+APPLE_ENTRY=$ROOT/core/hermes.ts
 apple_native() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1

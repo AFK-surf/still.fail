@@ -10,9 +10,9 @@
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SF_SRC=${SF_SRC:-$(cd "$H/../../.." && pwd)}
 APP_KIND=core
-# mbui/core's queue, the keyboard's files (src/pinyin) and the app's engine (src/<app>/android_engine.c, which includes
+# mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes
 # src/sfcore/android_engine.c)
-APP_EXTRA="--extra=src/core/core_native.c --extra=src/pinyin/read_file.c --extra=src/$PKG/android_engine.c"
+APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
 # (the engine's C API, engine.h)
 CFLAGS="$CFLAGS -I$H/../engine"
@@ -46,14 +46,11 @@ app_assets() {
     # a script in the core's place (listen-test: core/listen-test.js)
     SF_SRC=$SF_SRC "$H/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
   else
-    SF_SRC=$SF_SRC ENTRY=${ENTRY:-$PWD/core/media-hermes.ts} "$H/core.sh" hermes \
-      || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
+    SF_SRC=$SF_SRC "$H/core.sh" hermes \
+      || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }
   fi
   cp -p out/core/core.hbc $apk/assets/
   echo "core.hbc $(size $apk/assets/core.hbc)"
-  # the keyboard's words (src/pinyin, mbui's Keyboard.java copies assets/keyboard to where the keyboard reads them)
-  mkdir -p $apk/assets/keyboard
-  cp -p src/pinyin/words.txt $apk/assets/keyboard/
 }
 
 app_cmd() {

@@ -48,7 +48,6 @@
       "src/sf/tokens.mbt"
     ],
     "outside": [
-      "src/keyboard/*.mbt",
       "src/sffilmcheck/main.mbt"
     ]
   },
@@ -264,10 +263,7 @@
       "src/sfkit/glass.mbt": 49,
       "src/sfkit/kit.mbt": 29,
       "src/sfpages/service.mbt": 13,
-      "src/shelf/reader.mbt": 136,
-      "src/shelf/view.mbt": 48,
-      "src/stillfail/main.mbt": 3,
-      "src/videos/view.mbt": 82
+      "src/stillfail/main.mbt": 3
     },
     "box-loose": {
       "src/coredemo/main.mbt": 20,
@@ -315,10 +311,7 @@
       "src/sfkit/kit.mbt": 20,
       "src/sfpages/service.mbt": 14,
       "src/sfpages/service_marks.mbt": 1,
-      "src/shelf/reader.mbt": 73,
-      "src/shelf/view.mbt": 28,
-      "src/stillfail/main.mbt": 2,
-      "src/videos/view.mbt": 48
+      "src/stillfail/main.mbt": 2
     },
     "style-exact": {
       "src/sf/tokens.mbt": 28
@@ -392,8 +385,7 @@
     },
     "fixture-import": {},
     "motion-spring": {
-      "src/gallery/view.mbt": 1,
-      "src/shelf/reader.mbt": 1
+      "src/gallery/view.mbt": 1
     },
     "built-by-hand": {
       "src/sf/parts.mbt": 2,

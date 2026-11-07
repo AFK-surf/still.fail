@@ -13,7 +13,6 @@ src/host/apple_core.mm  the engine on macOS and iOS (Objective-C++, ARC): Hermes
 src/host/apple_auth.m   a sign-in's browser page: ASWebAuthenticationSession (macOS and iOS)
 src/host/android_core.c the engine on Android: still.fail's own, prebuilt (below)
 core/hermes.ts          still.fail's entry: still.fail's hosts/hermes-start.ts, no app's modules
-core/media-hermes.ts    the media app's entry (still.fail's core with the media module): what the apps ship
 core/smoke.m            headless smoke test on macOS: accounts, auth.begin, stop
 core/delta-vectors.ts   test vectors from core-ts's diff and apply -> src/core/vectors_test.mbt
 src/core                mbui/core: the MoonBit client (subscriptions, deltas, calls, sign-in) and its C queue
@@ -36,8 +35,8 @@ scripts/core.sh deps                 # pnpm install --frozen-lockfile in client/
 scripts/core.sh hermes-apple         # Hermes for macOS and iOS, fetched once (out/core/hermes, a link into the cache)
 scripts/core.sh engine [TARGET]      # out/core/<target>/libmbui_core.a: src/host/apple_core.mm (when it changed)
 scripts/core.sh shell [TARGET]       # out/core/<target>/libstillfail_shell.a (+ shell-<target>.libs), built here by cargo
-scripts/core.sh hermes               # out/core/core.hbc (ENTRY: core/hermes.ts, or core/media-hermes.ts)
-scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the shell by its key; the media entry)
+scripts/core.sh hermes               # out/core/core.hbc (ENTRY: core/hermes.ts, or another entry)
+scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the shell by its key)
 scripts/core.sh smoke                # out/core/smoke built and run twice against https://app.still.fail
 scripts/core.sh listen               # listen.* with core/listen-test.js in the core's place
 scripts/core.sh exit                 # exit() with the core in a task (core/exit_test.m, core/exit-test.js)
@@ -204,8 +203,7 @@ Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engi
   `out/android/apk/jniLibs`, which Gradle packs; nothing is committed. (Until 2026-10-23 the engine was still.fail's
   Kotlin app's, JNI and all, built in its tree; that app is gone.)
 - **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as still.fail's `hermes-bundle.ts` does (esbuild, Babel's
-  class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts` (still.fail alone) or, for coredemo by default,
-  `core/media-hermes.ts` (with the media module). It goes into the APK's assets.
+  class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts`. It goes into the APK's assets.
 - **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): starts the engine through its C
   API (`sf_engine_start`, os `android`); what the core says (a message, or one with bytes) comes back on the core's
   thread straight through core_native.c into mbui's queue (`mb_post`), which asks for the frame that takes it, and

@@ -357,11 +357,6 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
-  // the app as the system's keyboard (mbui's Keyboard.java, in a process of its own): the keyboard alone
-  if @ui.env("MBUI_KEYBOARD") == "1" {
-    @keyboard.run()
-    return
-  }
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
