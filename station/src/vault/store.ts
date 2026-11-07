@@ -86,6 +86,13 @@ export class VaultStore {
     return parse(this.#db.prepare("SELECT body FROM vault_boxes WHERE ws = ? ORDER BY device").all(ws));
   }
 
+  /// The certificates held for these device ids, in the same order as the workspace's full list.
+  boxesFor(ws: string, devices: readonly string[]): BoxCert[] {
+    if (devices.length === 0) return [];
+    return parse(this.#db.prepare("SELECT body FROM vault_boxes WHERE ws = ? AND device IN (SELECT value FROM json_each(?)) ORDER BY device")
+      .all(ws, JSON.stringify(devices)));
+  }
+
   box(ws: string, device: string): BoxCert | null {
     return parse<BoxCert>(this.#db.prepare("SELECT body FROM vault_boxes WHERE ws = ? AND device = ?").all(ws, device))[0] ?? null;
   }
