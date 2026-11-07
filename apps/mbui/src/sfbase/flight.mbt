@@ -174,14 +174,35 @@ pub fn flight_start(
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
+  flight_begin(c, chat, turns, key, words, room, files, field, hold, desk, marks, runs, false)
+}
+
+///|
+/// Capture the field and start its flight, carrying a new chat's first message as one block.
+fn flight_begin(
+  c : @ui.Ctx,
+  chat : String,
+  turns : String,
+  key : String,
+  words : String,
+  room : Double,
+  files : Array[FlyingFile],
+  field : String,
+  hold : (Double) -> Unit,
+  desk : Bool,
+  marks : Array[(Int, Int)],
+  runs : Json?,
+  carried : Bool,
+) -> Unit {
   send_flight.set(None)
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
   match c.field_words(field) {
     Some(((x, y), (rx, ry, w, h))) => {
-      // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
-      let (lines, lead) = field_lines_of(c, field, words)
+      // A carried file-only message rises from its first tile; carried words travel as one block.
+      let from_top = if carried && words == "" { files[0].from.1 } else { y - 8.0 }
+      let (lines, lead) = if carried { (None, 0) } else { field_lines_of(c, field, words) }
       send_flight.set(Some({
         chat,
         turns,
@@ -205,9 +226,9 @@ pub fn flight_start(
         placed_frame: -1,
         way: @motion.Anim::new(0.0),
         gone: leaving(),
-        carried: false,
-        from_top: y - 8.0,
-        ms: flight_len(desk),
+        carried,
+        from_top,
+        ms: if carried { flight_carry_ms } else { flight_len(desk) },
         timed: false,
         set_out: -1.0,
         after: 0.0,
@@ -215,7 +236,9 @@ pub fn flight_start(
       hold(flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
       // wait for nothing (list_turns.mbt)
-      turns_of(turns).send(c, flight_wait_ms + flight_len(desk))
+      if !carried {
+        turns_of(turns).send(c, flight_wait_ms + flight_len(desk))
+      }
     }
     None => ()
   }
@@ -246,53 +269,7 @@ pub fn flight_carry_start(
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
 ) -> Unit {
-  send_flight.set(None)
-  if @ui.reduced_motion() || (words == "" && files.is_empty()) {
-    return
-  }
-  match c.field_words(field) {
-    Some(((x, y), (rx, ry, w, h))) => {
-      // without words, the list comes up from where the first file was (ChatHost.kt landingFile: rise)
-      let from_top = if words != "" {
-        y - 8.0
-      } else {
-        files[0].from.1
-      }
-      send_flight.set(Some({
-        chat,
-        turns: "",
-        text: words,
-        from_x: x,
-        from_y: y,
-        field_x: rx,
-        field_y: ry,
-        field_w: w,
-        field_h: h,
-        room: 0.0,
-        hold,
-        desk,
-        // (carried with the list as its chat comes up: as one block)
-        lines: None,
-        lead: 0,
-        marks,
-        runs,
-        files,
-        key: "",
-        placed: false,
-        placed_frame: -1,
-        way: @motion.Anim::new(0.0),
-        gone: leaving(),
-        carried: true,
-        ms: flight_carry_ms,
-        timed: false,
-        set_out: -1.0,
-        after: 0.0,
-        from_top,
-      }))
-      hold(flight_wait_ms)
-    }
-    None => ()
-  }
+  flight_begin(c, chat, "", "", words, 0.0, files, field, hold, desk, marks, runs, true)
 }
 
 ///|
