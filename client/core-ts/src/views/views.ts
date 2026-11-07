@@ -2667,15 +2667,17 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   const view = { ...(out.ok as J) };
   const agents = arr(view.agents);
   const keys = new Set(agents.map((a) => str(get(a.session, "key"))).filter((k): k is string => k !== null));
-  const owner = (path: unknown) => {
+  // An agent's message's files are its own session's even when the chat's agents leave it out (its detail not had):
+  // asked of another agent's session they answered 404, shown as 暂时无法预览 for good (左子健, 2026-11-08).
+  const owner = (path: unknown, author: string | null) => {
     const by = typeof path === "string" ? agents.find((a) => path.startsWith(`${str(get(a.session, "workspace")) ?? "\0"}/`)) : undefined;
-    return str(get((by ?? agents[0])?.session, "key"));
+    return str(get(by?.session, "key")) ?? author ?? str(get(agents[0]?.session, "key"));
   };
-  const own = (files: unknown): J => {
+  const own = (files: unknown, author: string | null = null): J => {
     if (!Array.isArray(files)) return files;
     return files.map((f) => {
       if (!isObject(f)) return f;
-      const key = owner(get(f, "path"));
+      const key = owner(get(f, "path"), author);
       // One sent from here before it was up: its picture is still here, under its upload's id.
       const upload = uploadOf(get(f, "path"));
       const path = str(get(f, "path")) ?? "";
@@ -2689,7 +2691,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   };
   const messages: J[] = arr(view.messages).map((m) => {
     if (!isObject(m)) return m;
-    const files = own(m.attachments);
+    const files = own(m.attachments, m.authorKind === "agent" ? str(m.author) : null);
     const out: J = { ...m, by: here(m.by), attachments: files };
     // The chats it links to, each with its title (one linked bare reads as it) and whether it is archived.
     const chats = linked?.(str(m.text) ?? "") ?? [];
