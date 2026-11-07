@@ -1420,6 +1420,72 @@ sim("the_same_offer_again_is_not_made_anew", async (s) => {
   await s.settle(endpoint.close());
 });
 
+/// A file a station's agent sends (phone_send): fetched a part at a time as a chat's file is, written where adb's shell
+/// reads; cut short, asked again it goes on from what the phone has.
+sim("fetches_a_file_the_station_sends_and_goes_on_from_what_it_has", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  const said: J[][] = [];
+  let fetch: (ask: J) => Promise<void> = async () => {};
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = (await conn.acceptBi())!;
+    await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+    fetch = async (ask) => {
+      const stream = await conn.openBi();
+      await stream.write(Buffer.from(`${JSON.stringify(ask)}\n`));
+      await stream.finish();
+      const lines: J[] = [];
+      const carry = { bytes: Buffer.alloc(0) };
+      for (let line = await Station.readLine(stream, carry); line !== null; line = await Station.readLine(stream, carry)) lines.push(JSON.parse(line));
+      said.push(lines);
+    };
+  })().catch(() => {});
+  const file = Buffer.from("0123456789");
+  const asked: [string, string, number][] = [];
+  let failAt: number | null = 8;
+  const part = (station: StationAddr, key: string, name: string, offset: number, length: number) => {
+    asked.push([station.toString(), `${key}/${name}`, offset]);
+    if (offset === failAt) return Effect.fail(new CoreError("mesh", "the link went"));
+    return Effect.succeed({ total: file.length, bytes: new Uint8Array(file.subarray(offset, Math.min(offset + length, offset + 4))) });
+  };
+  let staged = Buffer.alloc(0);
+  (s.host as J).stage = (name: string, offset: number, bytes: Uint8Array) => Effect.sync(() => {
+    if (offset >= 0) staged = Buffer.concat([staged.subarray(0, offset), Buffer.from(bytes)]);
+    return { path: `/sdcard/Android/data/fail.still.android/files/station/${name}`, size: staged.length };
+  });
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true, part });
+  takeAll(adb);
+  const station = `ws/${endpoint.id()}`;
+  await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
+  await s.until(() => adb.value().adb === "connected");
+  const ask = { fetch: { key: "k1", name: "ab12-app.apk", size: file.length } };
+  void fetch(ask);
+  await s.until(() => said.length === 1);
+  assert.deepEqual(said[0], [{ at: 4 }, { at: 8 }, { error: "the link went", at: 8 }]);
+  failAt = null;
+  void fetch(ask);
+  await s.until(() => said.length === 2);
+  assert.deepEqual(said[1], [{ at: 10 }, { path: "/sdcard/Android/data/fail.still.android/files/station/ab12-app.apk" }]);
+  assert.deepEqual(asked.map(([, , at]) => at), [0, 4, 8, 8]);
+  assert.deepEqual(asked[0]!.slice(0, 2), [station, "k1/ab12-app.apk"]);
+  assert.equal(staged.toString(), "0123456789");
+  // A name that would leave its folder is not written.
+  void fetch({ fetch: { key: "k1", name: "../x", size: 1 } });
+  await s.until(() => said.length === 3);
+  assert.deepEqual(said[2], [{ error: "invalid fetch" }]);
+  await s.run(adb.run({ kind: "stop" }));
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
 /// 2026-11-04: a chat's own screen up on the phone (the station's displays.ts) is said with how the station holds it, and
 /// the notification names its chat; said no longer, it is gone.
 sim("the_chats_with_screens_up_on_the_phone_are_said", async (s) => {

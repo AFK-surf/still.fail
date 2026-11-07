@@ -284,6 +284,7 @@ export class Core {
         credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null, inner.meshNow()?.lockClaim(workspace, device) ?? null),
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
         off: (workspace) => inner.cloudSync.workspaceOff(workspace),
+        part: (station, key, name, offset, length) => inner.stations.requests.filePart(station, key, name, offset, length, null, undefined, undefined, undefined, true),
         lends: () => inner.host.tcp !== undefined && (inner.data.shared({ topic: "prefs" }) as { device?: { app?: unknown } } | undefined)?.device?.app === "android",
         personal: new PersonalLock({
           host: inner.host,

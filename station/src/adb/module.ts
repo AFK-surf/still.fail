@@ -18,7 +18,9 @@ import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { PhoneDisplays } from "./displays.ts";
 import { grantChatTitle } from "./title.ts";
-import { adbTools, phoneTools, reached } from "./tool.ts";
+import { PHONE_SEND, adbTools, phoneTools, reached } from "./tool.ts";
+import { fetchOnPhone, staged } from "./send.ts";
+import { fromSandbox } from "../sessions/conversations.ts";
 import { Shares, adbPath, answerAdb } from "./link.ts";
 
 export const AdbLive = Layer.effectDiscard(
@@ -158,6 +160,27 @@ export const AdbLive = Layer.effectDiscard(
         return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null, display);
       }),
     );
+    parts.tools([
+      {
+        ...PHONE_SEND,
+        run: async (session, args, signal) => {
+          const grant = grants.held(session)[0];
+          if (grant === undefined) return "This chat holds no phone grant: ask for the phone with phone_use first.";
+          const share = [...lent.byKey.values()].find((s) => s.owner.email.toLowerCase() === grant.owner);
+          if (share === undefined) return "Granted, but the phone is not lent to this station right now: call phone_use to see why.";
+          const workspace = store.getSession(session)?.workspace;
+          if (workspace === undefined) throw new Error(`unknown session ${session}`);
+          // (a sandboxed agent's file brought here first, as chat_post's are)
+          const given = (await fromSandbox(hub, session, { files: [typeof args.path === "string" ? args.path : ""] }, false)).files as string[];
+          const { name, size } = await staged(workspace, given[0]!);
+          grants.used(grant.id, true);
+          const r = await fetchOnPhone(share.conn, session, name, size, () => grants.used(grant.id, true), signal);
+          if ("path" in r) return `On the phone at ${r.path} (${size} bytes). pm cannot read that folder: to install an APK, adb … shell 'cp ${r.path} /data/local/tmp/a.apk && pm install -r /data/local/tmp/a.apk'.`;
+          if (r.old) return "The still.fail app on the phone is too old to take files this way: use adb push, or ask its person to update the app.";
+          return `Not all there: the phone has ${r.at} of ${size} bytes (${r.error}). Call phone_send again to go on from there.`;
+        },
+      },
+    ]);
     parts.tools(
       // Phones lent with an app's switch (from before grants): any agent's. A phone granted to chats is theirs alone.
       adbTools(() => lent.list().filter((p) => grants.grantedOfOwner(p.owner.email).length === 0)),

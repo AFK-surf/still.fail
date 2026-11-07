@@ -108,6 +108,30 @@ final class CoreHost {
         for (int lid : listens.keySet()) Loopback.close(lid);  // every listener of this core closes with it
     }
 
+    /**
+     * A file a station's agent sends this phone (the core's adb.ts fetch), in the app's own folder of shared storage
+     * (Android/data/…/files/station), which adb's shell reads and the person's other apps do not: {@code bytes} written
+     * at {@code offset}, 0 beginning it anew; -1 only asks. Answered with its path and size.
+     */
+    private static String stage(String name, long offset, byte[] bytes) throws Exception {
+        if (name.isEmpty() || name.contains("/") || name.equals(".") || name.equals("..")) throw new IllegalArgumentException("bad name");
+        File dir = StillfailApp.app.getExternalFilesDir("station");
+        if (dir == null) throw new java.io.IOException("no shared storage");
+        dir.mkdirs();
+        File file = new File(dir, name);
+        if (offset >= 0) {
+            try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(file, "rw")) {
+                f.setLength(offset);
+                f.seek(offset);
+                if (bytes != null) f.write(bytes);
+            }
+        }
+        JSONObject o = new JSONObject();
+        o.put("path", file.getAbsolutePath());
+        o.put("size", file.exists() ? file.length() : 0);
+        return o.toString();
+    }
+
     void onApp(long id, String op, byte[] json, byte[] bytes) {
         if (op.startsWith("picked.")) {
             // a file picked too big to be read whole (mbui's Picks.Held), read a part at a time as it goes up
@@ -141,11 +165,15 @@ final class CoreHost {
             // a file the app kept in Downloads read back (the core's downloads: hosts/bridge.ts kept.read)
             pickedCalls.execute(() -> {
                 try {
+                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
+                    if (op.equals("kept.stage")) {
+                        answer(id, stage(a.getString("name"), a.getLong("offset"), bytes), null, null);
+                        return;
+                    }
                     if (!op.equals("kept.read")) {
                         answer(id, null, "unsupported", null);
                         return;
                     }
-                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
                     byte[] b = Keeps.read(a.getString("at"), a.getLong("start"), a.getLong("end"));
                     if (b == null) answer(id, "{\"none\":true}", null, null);
                     else answer(id, "{}", null, b);
