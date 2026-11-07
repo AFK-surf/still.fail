@@ -89,7 +89,7 @@ let local_face : String = "local:"
 /// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages):
 /// with none chosen for the app's words, the desktop app's in the wide frame (`wide`).
 pub fn faces(src : Source, wide : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   guard prefs is Some(_) else { return }
   vector_cjk_had(src, prefs)
   let shown = field(prefs, "faces")

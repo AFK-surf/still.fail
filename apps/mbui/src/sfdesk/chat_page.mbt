@@ -66,7 +66,7 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 ///|
 /// The chat `r` in the pane (ChatPage.tsx ChatScreen).
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
-  let chat = (src.topic)("chat", chat_params(r)).value
+  let chat = src.topic("chat", chat_params(r)).get().value
   let view = view_of_chat(src, r).0
   let key = chat_key(r)
   let list = chat_find_list(r)
@@ -74,7 +74,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if find_chat() != "" && find_chat() != key {
     (list.forget)()
   }
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   match view {
     Some(v) => {
       // coming to need the viewer while open, felt (feel.mbt)
@@ -119,7 +119,7 @@ let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 /// and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file picker for its draft
 /// (composer.file); Space with no field focused, the composer (composer.focus).
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   if @settings.action_pressed(c, prefs, "chat.jobs") {
     toggle_jobs_pop()
   }
@@ -242,7 +242,7 @@ fn chat_bar(
   list : FindList,
 ) -> Unit {
   // the workspace's stations, as the bar shows the chat's (its tag, its first agent's tile)
-  let station = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
+  let station = stations_of(src.topic("stations", { "scope": Json::string(w.id) }).get().value)
     .iter()
     .find_first(fn(x) { x.address == r.station })
   let bar = c.id("chat-bar")
@@ -346,7 +346,7 @@ fn chat_bar(
             } else {
               None
             }
-            let jobs_view = (src.topic)("chatJobs", chat_jobs_summary_params(r)).value
+            let jobs_view = src.topic("chatJobs", chat_jobs_summary_params(r)).get().value
             let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
               Some((jobs_toggle, text(jobs_view, "alarm") != ""))
             } else {
@@ -441,7 +441,7 @@ fn chat_bar(
 fn chat_title(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
   let on = [("station", r.station), ("session", r.session)]
   let mut renaming = ""
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let dv = Some(d)
     if text(dv, "call") == "chat.rename" &&
       text(dv, "stage") != "failed" &&
@@ -572,7 +572,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
   if c.clicked(id) {
     side_toggle(src, r, a.key)
   }
-  let chat = (src.topic)("chat", chat_params(r)).value
+  let chat = src.topic("chat", chat_params(r)).get().value
   let aj = agent_json(chat, a.key)
   let said = @sf.t("web-pages.chat.historyOf", args=[("agent", a.who)])
   let hot = c.lit(id)
@@ -772,7 +772,7 @@ fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
         side_change(src, r, "open", Some("jobs"))
       }
       // (a service's own tab is not here yet: it opens in 任务 too)
-      jobs_popover(c, src, r.station, (src.topic)("chatJobs", chat_params(r)).value, open, open)
+      jobs_popover(c, src, r.station, src.topic("chatJobs", chat_params(r)).get().value, open, open)
     },
   )
   |> ignore

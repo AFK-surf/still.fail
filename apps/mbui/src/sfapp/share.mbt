@@ -126,7 +126,7 @@ fn over_view(c : @ui.Ctx, src : Source) -> Unit {
 /// The sheet over another app (ShareSheet.kt ShareSheetContent): the chats once the core says them, the workspace the
 /// app was last in (else the first); reading meanwhile; signed out, to sign in first (SignInFirst).
 fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
-  let accounts = (src.topic)("accounts", {})
+  let accounts = src.topic("accounts", {}).get().snapshot()
   let (source, title) = match share_in.shared.get() {
     Some(s) => s
     None => return
@@ -155,8 +155,8 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
       |> ignore
     }
     Some(Array(_)) => {
-      let ws = (src.topic)("workspaces", {})
-      let prefs = (src.topic)("prefs", {})
+      let ws = src.topic("workspaces", {}).get().snapshot()
+      let prefs = src.topic("prefs", {}).get().snapshot()
       let (all, answered, _) = workspaces_of(ws.value)
       let kept = text(prefs.value, "workspace")
       match all.iter().find_first(fn(w) { w.id == kept }) {
@@ -435,11 +435,11 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
     None => return
   }
   let query = share_in.query.get()
-  let topic = (src.topic)("shareIn", {
+  let topic = src.topic("shareIn", {
     "scope": Json::string(w.id),
     "source": Json::string(source),
     "query": Json::string(if share_in.searching.get() { query.trim().to_owned() } else { "" }),
-  })
+  }).get().snapshot()
   let v = topic.value
   let rows = items(v, "items")
   if share_in.files.get().length() > 0 {

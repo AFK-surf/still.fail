@@ -18,11 +18,11 @@ fn downloads_src(
   let base = fixture(mode)
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "downloads" {
         { value: Some({ "downloads": Json::array(list), "keeping": Json::array(keeping) }), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

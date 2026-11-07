@@ -104,12 +104,12 @@ test "a new chat's model panel opens where it stays: what the page has shown unt
   let base = fixture_app("newchat-crowded-model")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       @settings.fixture_followed()
       if name == "pick" && held.val {
         { value: None, error: None, version: -1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

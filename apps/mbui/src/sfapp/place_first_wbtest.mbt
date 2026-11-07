@@ -99,11 +99,11 @@ test "stations: the first list after a wait or an empty list appears in place" {
     let base = fixture("settings")
     let src : Source = {
       ..base,
-      topic: fn(name, params) {
+      topic_read: fn(name, params) {
         if name == "stations" && !ready.get() {
           { value: if empty { Some([]) } else { None }, error: None, version: 0 }
         } else {
-          (base.topic)(name, params)
+          base.topic(name, params).get().snapshot()
         }
       },
     }
@@ -130,8 +130,8 @@ test "stations: a station added to a list already shown opens its place" {
   let base = fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let answer = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let answer = base.topic(name, params).get().snapshot()
       if name == "stations" && added.get() {
         match answer.value {
           Some(Array(rows)) => {
@@ -169,11 +169,11 @@ test "shared debugging: its first read shows its sections in place" {
   let base = fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "adbShare" && !ready.get() {
         { value: None, error: None, version: 0 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

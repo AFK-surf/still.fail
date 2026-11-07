@@ -72,8 +72,8 @@ test "a face being fetched: how far said on its row, the app's own standing in u
 fn kept_here(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       if name == "prefs" {
         match field(t.value, "faces") {
           Some(Object(faces)) =>

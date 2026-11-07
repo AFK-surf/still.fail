@@ -27,9 +27,9 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   let t = @sf.theme()
   let look = look_of(c)
   let ws = here.workspace
-  let view = (core.topic)("vaults", { "workspace": str(ws) }).value
-  let list = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(vault) }).value
-  let uses = (core.topic)("vaultUses", { "workspace": str(ws), "vault": str(vault), "item": str(item) }).value
+  let view = (core.topic)("vaults", { "workspace": str(ws) }).get().value
+  let list = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(vault) }).get().value
+  let uses = (core.topic)("vaultUses", { "workspace": str(ws), "vault": str(vault), "item": str(item) }).get().value
   let key = "vault-item/" + vault + "/" + item
   let back = @sf.t("web-pages.vault.title")
   guard view is Some(_) && list is Some(_) else {

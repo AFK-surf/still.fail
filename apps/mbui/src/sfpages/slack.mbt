@@ -108,7 +108,7 @@ fn tokens_drop(core : Core, key : String) -> Unit {
 ///|
 /// The draft as the core has it.
 fn tokens_view(core : Core, tk : SlackTokens) -> Json? {
-  (core.topic)("slackTokens", { "station": str(tk.station), "form": str(tk.form) }).value
+  (core.topic)("slackTokens", { "station": str(tk.station), "form": str(tk.form) }).get().value
 }
 
 ///|

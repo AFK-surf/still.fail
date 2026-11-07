@@ -105,7 +105,7 @@ fn tape_source(tape : Tape, at : () -> Double, base : Source) -> Source {
     ..base,
     // the wall clock as Android's had it: from the tape's start on, at its moments
     now: fn() { tape.wall + at() },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       let want = tape_topic_key(name, params)
       let mut value : Json? = None
       let mut version = 0

@@ -9,7 +9,7 @@
 /// The page (AppearancePage, AppearanceScreen), in the frame it is given.
 pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
-  let prefs = (core.topic)("prefs", Map::new()).value
+  let prefs = (core.topic)("prefs", Map::new()).get().value
   // a choice of a few (Segmented, Seg), its kept value or the one just chosen while the core takes it
   let choice = fn(key : String, options : Array[(String, String)], now : String) {
     let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(0)

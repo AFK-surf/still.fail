@@ -66,6 +66,9 @@ pub fn Flow::start(
     Some(t) => t.dispose()
     None => ()
   }
+  // Legacy scopes outlive a frame's tree. Release the previous run's watches before its core is replaced, so their
+  // reset notifications cannot subscribe them into the next recording. Tester::new resets the rest of the app later.
+  @sfbase.reset()
   let r = @core.Replay::parse(trace)
   use_recorded_jobs(r)
   // (asks the run's timing made, with what came for them: each test says which and why)

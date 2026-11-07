@@ -1066,9 +1066,9 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
   {
     ..base,
     call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms(), fn() { done(r) }) }) },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       @settings.fixture_followed()
-      let t = (base.topic)(name, params)
+      let t = base.topic(name, params).get().snapshot()
       let k = name + Json::object(params).stringify()
       // (its first value come late: set at its moment and told then (fix_later), what reads it following the made-up
       // core's changes as it reads it (fixture_followed); nothing set as it is read)
@@ -1091,11 +1091,11 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
 pub fn held_topics(base : Source, held : Array[String]) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if held.contains(name) {
         { value: None, error: None, version: -1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -1107,11 +1107,11 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
 pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if failed.contains(name) {
         { value: None, error: Some({ "message": Json::string(why) }), version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -1271,7 +1271,7 @@ pub fn fixture(mode : String) -> Source {
     }
   }
   {
-    topic: fn(name, params) { fixture_topic(f, name, params) },
+    topic_read: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
       // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
       let done = fn(r) {
@@ -1552,6 +1552,7 @@ pub fn fixture(mode : String) -> Source {
     },
     cancel: fn(_) {  },
     waits: fn(_, _) { false },
+    generation: fn(_, _) { (0, true) },
     call_bytes: fn(name, params, bytes, done) {
       match fixture_kept(name, params, Some(bytes)) {
         Some(r) => {
@@ -1581,6 +1582,8 @@ pub fn fixture(mode : String) -> Source {
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
+    release: fn(_, _) {  },
+    refresh: fn(_, _) {  },
     read_only: false,
   }
 }

@@ -8,11 +8,11 @@ fn desk_login(calls : Array[Made], login : Json) -> @ui.Tester {
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "machineLogin" => { value: Some(login), error: None, version: 1 }
         "machineLogins" => { value: Some({ "canLogin": true, "canRelay": true }), error: None, version: 1 }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

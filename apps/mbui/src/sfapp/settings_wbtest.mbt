@@ -605,11 +605,11 @@ fn stations_unread_net() -> @ui.Tester {
   let base = fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "stationNet" {
         { value: Some(Json::null()), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

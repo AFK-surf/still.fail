@@ -182,7 +182,7 @@ fn app_over(tape : Tape) -> @sfapp.Source {
     }
   }
   let base = @sfapp.fixture_json_app(Json::object({ "open": Json::array(open) }).stringify())
-  { ..base, topic: fn(name, params) { tape.topic(name, params) } }
+  { ..base, topic_read: fn(name, params) { tape.topic(name, params) } }
 }
 
 ///|

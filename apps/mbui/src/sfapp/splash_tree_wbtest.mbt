@@ -13,11 +13,11 @@ fn splash_case(fatal : String?) -> Source {
   {
     ..base,
     fatal: fn() { fatal },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "accounts" {
         { value: None, error: None, version: 0 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

@@ -144,7 +144,7 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
 /// while shown; none before a connection of its own is open).
 fn station_net(core : Core, s : Json?) -> Json? {
   // (the view's null: no connection of this device's own open yet, as none; Stations.kt's StationNet?)
-  match (core.topic)("stationNet", { "station": str(text(s, "station")) }).value {
+  match (core.topic)("stationNet", { "station": str(text(s, "station")) }).get().value {
     Some(Object(_)) as v => v
     _ => None
   }

@@ -56,8 +56,8 @@ fn edited_core(
   let base = fixture(mode)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       // (a change the test makes is a new version of what the core says: `epoch` set as it makes it, followed as the
       // core's is)
       match t.value {

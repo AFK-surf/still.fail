@@ -14,14 +14,15 @@ test "desk: a chat switched to shows once its view has come, the chat before it 
   let key = fn(name : String, params : Map[String, Json]) { name + " " + Json::object(params).stringify() }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if slow.get() && !asked.contains(key(name, params)) {
         return { value: None, error: None, version: 0 }
       }
       asked[key(name, params)] = true
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
     leave: fn(name, params) { asked.remove(key(name, params)) },
+    release: fn(name, params) { asked.remove(key(name, params)) },
   }
   let chat = fn(session : String) -> ChatRef { { station: "ws1/st1", session, title: "", station_name: "Willow" } }
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }

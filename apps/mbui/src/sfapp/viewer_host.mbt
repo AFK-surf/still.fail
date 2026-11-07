@@ -98,7 +98,7 @@ let reader_set : Map[String, Json] = Map([])
 /// How the reader lays text out (the core fills in what is not kept): size 12–32, the lines' height 1.2–2.4 of it,
 /// the margin 8–44, the face, the indent, the paper.
 fn reader_prefs(src : Source) -> @sf.ReaderStyle {
-  let kept = field((src.topic)("prefs", {}).value, "reader")
+  let kept = field(src.topic("prefs", {}).get().value, "reader")
   let get = fn(k : String) -> Json? {
     match reader_set.get(k) {
       Some(v) => Some(v)

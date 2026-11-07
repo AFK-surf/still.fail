@@ -16,7 +16,7 @@ fn reading_case(
   let base = fixture("landing")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "workspaces" => ws.get()
         "status" => {
@@ -24,7 +24,7 @@ fn reading_case(
           let lines = if s == "" { [] } else { [Json::string(s)] }
           { value: Some({ "text": Json::string(s), "lines": Json::array(lines) }), error: None, version: s.length() + 1 }
         }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
   }

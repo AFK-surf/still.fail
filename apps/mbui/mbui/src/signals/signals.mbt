@@ -31,7 +31,7 @@ priv struct Run {
   /// how deep in flushes, and what is to be done once the outermost is over (after_flush): not this library's
   /// algorithm, a hook beside it for what reads where a change left things once all it told is told
   mut flushing : Int
-  afters : Array[() -> Unit]
+  afters : Array[(() -> Unit)?]
   /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
   mut draining : Bool
 }
@@ -73,6 +73,12 @@ priv struct ComputedState[T] {
   mut value : T?
   getter : (T?) -> T
   same : ((T, T) -> Bool)?
+  /// A resource-bearing computed does not keep its dependencies after a one-off, untracked read.
+  mut untracked_dispose : Bool
+  /// What a graph reader follows alongside this computed; one-off reads do not acquire it.
+  mut read_dependency : Computed[Unit]?
+  /// An optional direct answer for an untracked read, without installing graph dependencies.
+  mut untracked_read : (() -> T?)?
 }
 
 ///|
@@ -162,8 +168,12 @@ fn unwatched(node : ReactiveNode) -> Unit {
         node.flags = MUTABLE | DIRTY
         dispose_all_deps_in_reverse(node)
       }
-    // (nothing for signals: always mutable, never dirty until their pending value changes)
-    SignalNode => ()
+    // A resource can ask to be told when its signal loses its last reader.
+    SignalNode =>
+      match node.cleanup {
+        Some(f) => untracked(f)
+        None => ()
+      }
     EffectNode => effect_oper(node)
     ScopeNode | TriggerNode | WatchNode => effect_scope_oper(node)
   }
@@ -245,7 +255,7 @@ pub fn[T] signal(initial : T, same? : (T, T) -> Bool) -> Signal[T] {
 ///|
 /// A computed: `getter` worked out (given what it made last) as it is read after what it read changed.
 pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
-  let state : ComputedState[T] = { value: None, getter, same }
+  let state : ComputedState[T] = { value: None, getter, same, untracked_dispose: false, read_dependency: None, untracked_read: None }
   Computed(
     ReactiveNode::new(
       NONE,
@@ -254,6 +264,24 @@ pub fn[T] computed(getter : (T?) -> T, same? : (T, T) -> Bool) -> Computed[T] {
     ),
     state,
   )
+}
+
+///|
+/// A computed which releases its dependencies after a one-off read outside the graph. When read by another signal,
+/// its dependencies stay until the last reader leaves, just as for any computed.
+pub fn[T] computed_scoped(getter : (T?) -> T, same? : (T, T) -> Bool, untracked_read? : (() -> T?)? = None) -> Computed[T] {
+  let c = computed(getter, same?)
+  c.1.untracked_dispose = true
+  c.1.untracked_read = untracked_read
+  c
+}
+
+///|
+/// A value whose graph readers also follow a shared resource. A one-off read acquires no resource and leaves no links.
+pub fn[T] computed_following(getter : (T?) -> T, dependency : Computed[Unit], same? : (T, T) -> Bool) -> Computed[T] {
+  let c = computed_scoped(getter, same?)
+  c.1.read_dependency = Some(dependency)
+  c
 }
 
 ///|
@@ -477,7 +505,9 @@ fn flush() -> Unit {
     // main thread 3.2 s, 0.1.7302, 2026-11-05)
     let mut a = 0
     while a < run.afters.length() {
-      let f = run.afters[a]
+      let f = run.afters[a].unwrap()
+      // Array::clear keeps its removed slots: release each completed callback before the queue is cleared.
+      run.afters[a] = None
       a += 1
       f()
     }
@@ -492,7 +522,7 @@ fn flush() -> Unit {
 /// one change left things and never half of it (where a window's tree stands as the next change comes).
 pub fn after_flush(f : () -> Unit) -> Unit {
   if run.flushing > 0 || run.batch_depth > 0 || run.draining {
-    run.afters.push(f)
+    run.afters.push(Some(f))
   } else {
     f()
   }
@@ -503,6 +533,22 @@ pub fn after_flush(f : () -> Unit) -> Unit {
 pub fn[T] Computed::get(self : Computed[T]) -> T {
   let node = self.0
   let state = self.1
+  if run.active_sub is None {
+    match state.untracked_read {
+      Some(read) => match read() {
+        Some(value) => return value
+        None => ()
+      }
+      None => ()
+    }
+  }
+  if run.active_sub is Some(_) {
+    match state.read_dependency {
+      Some(dependency) => dependency.get()
+      None => ()
+    }
+  }
+  let untracked = state.untracked_dispose && run.active_sub is None
   let flags = node.flags
   let stale = if (flags & DIRTY) != 0 {
     true
@@ -531,7 +577,11 @@ pub fn[T] Computed::get(self : Computed[T]) -> T {
     node.flags = node.flags & RECURSED_CHECK.lnot()
   }
   track(node)
-  state.value.unwrap()
+  let value = state.value.unwrap()
+  if untracked && node.subs is None {
+    unwatched(node)
+  }
+  value
 }
 
 ///|
@@ -700,6 +750,12 @@ pub fn[T] Computed::dispose(self : Computed[T]) -> Unit {
 /// Whether anything reads the signal (a computed, an effect).
 pub fn[T] Signal::watched(self : Signal[T]) -> Bool {
   self.0.subs is Some(_)
+}
+
+///|
+/// Tell a resource when the last graph reader of this signal leaves. The callback stays installed for later readers.
+pub fn[T] Signal::on_unwatched(self : Signal[T], f : () -> Unit) -> Unit {
+  self.0.cleanup = Some(f)
 }
 
 ///|
@@ -984,4 +1040,3 @@ pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
   guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
   o.marked.val = Some(f)
 }
-

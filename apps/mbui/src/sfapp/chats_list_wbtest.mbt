@@ -202,8 +202,8 @@ test "a row pinned, renamed or archived: no spinner while its station answers (t
       )
       let src : Source = {
         ..base,
-        topic: fn(name, params) {
-          let got = (base.topic)(name, params)
+        topic_read: fn(name, params) {
+          let got = base.topic(name, params).get().snapshot()
           if name == "doing" {
             { ..got, value: Some({ "doing": doing }) }
           } else {

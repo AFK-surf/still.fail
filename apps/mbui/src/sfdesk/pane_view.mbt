@@ -482,7 +482,7 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   v.reacts(
     fn() {
       match @sfbase.workspace_in_view(src).0 {
-        Some(w) if (src.topic)("prefs", {}).value is Some(_) => w.id + "\n" + side_group(src, w.id)
+        Some(w) if src.topic("prefs", {}).get().value is Some(_) => w.id + "\n" + side_group(src, w.id)
         _ => ""
       }
     },

@@ -16,6 +16,12 @@ own source, not from what the port seems to want.
   with a computed nothing reads any more: under reference counting a computed left linked to a signal would never be
   let go), `Signal::watched`, `Computed::watched` (a part kept as it was drawn, `Ctx::kept_part`, follows what its
   build read: what follows a computed keeps it), `untracked`.
+- `computed_scoped` is a computed for a resource: a read outside the signal graph releases its dependencies before
+  returning; tracked reads keep them until the last reader leaves. `Signal::on_unwatched` tells a resource when its last
+  graph reader goes, including after a subsequent reader has come and gone.
+- `computed_following` exposes a normal computed while each graph reader also follows a shared resource computed.
+  An untracked read only reads the value; it does not acquire that resource. The resource and value's backing state
+  must not retain the output computed, so they can be released under native reference counting.
 - Added for a computed that holds what is built for it after it ran (a part kept holds its list's rows, laid out
   after the part's build): `Computed::reading` (what a function reads, read by the computed as well, as though its
   run read it last) and `Computed::lend` (what one computed read, read by another as well). Let go as the computed's

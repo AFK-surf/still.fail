@@ -100,7 +100,7 @@ fn sv_reset() -> Unit {
 /// The service `job` of chat `r`'s station, beside the chat: the page while it is up (and as it starts again), what
 /// stopped it said otherwise.
 fn service_pane(c : @ui.Ctx, src : Source, r : ChatRef, job : String, close? : (() -> Unit)? = None) -> Unit {
-  let found = (src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) })
+  let found = src.topic("job", { "station": Json::string(r.station), "id": Json::string(job) }).get().snapshot()
   let j = found.value
   let name = match text(j, "name") {
     "" => svc("android-chat.preview.service")
@@ -188,7 +188,7 @@ let sv_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, cente
 /// A web service asked as a page (a link's `?service=<job>`, OpenJobs' open): on the desktop its chat (the one of the
 /// agent that runs it, as the station says) with it beside it, the page the chat's; not found, said so.
 fn service_beside(c : @ui.Ctx, src : Source, w : Workspace, station : String, job : String) -> Unit {
-  let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
+  let found = src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().snapshot()
   match text(found.value, "session") {
     "" =>
       match found.error {

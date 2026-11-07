@@ -16,7 +16,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   } else {
     @sf.t("web-pages.settings.account.google")
   }
-  let accounts = match (core.topic)("accounts", Map::new()).value {
+  let accounts = match (core.topic)("accounts", Map::new()).get().value {
     Some(Array(a)) => a
     _ => []
   }
@@ -209,7 +209,7 @@ let own_face_mark : Double = 14.0
 /// in and until when; 退出 on the others (`loginSession.revoke`). Narrow, on a card. Read the first time, rows' shapes
 /// where their card's rows will be (settings.tsx: Waiting, 3).
 fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let topic = (core.topic)("loginSessions", { "account": str(here.sub) })
+  let topic = (core.topic)("loginSessions", { "account": str(here.sub) }).get()
   let list = match topic.value {
     Some(Array(a)) => a
     _ => {
@@ -318,7 +318,7 @@ fn pick_own_picture(core : Core, sub : String) -> Unit {
 /// Whether the account `sub` shows a picture of its own (the `workspaces` topic's `ownPicture`), rather than its
 /// sign-in's.
 fn own_picture_of(core : Core, sub : String) -> Bool {
-  match (core.topic)("workspaces", Map::new()).value {
+  match (core.topic)("workspaces", Map::new()).get().value {
     Some(Array(entries)) =>
       entries.iter().any(fn(e) { text(field(Some(e), "account"), "sub") == sub && flag(Some(e), "ownPicture") })
     _ => false

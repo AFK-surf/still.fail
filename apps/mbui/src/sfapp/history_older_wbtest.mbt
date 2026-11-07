@@ -26,11 +26,11 @@ test "an agent's history read up to its top asks for the page before once, what 
   let asked : Array[Int] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(older_history(from.get())), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

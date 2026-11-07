@@ -75,8 +75,8 @@ fn screen_rig(
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let tp = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let tp = base.topic(name, params).get().snapshot()
       if name == "stations" && os != "" {
         { ..tp, value: Some([{ "station": "ws-1/st-1", "host": { "os": os } }]) }
       } else if name == "prefs" && (touch_.get() != "" || quality_.get() != "" || fps_.get() != 0) {

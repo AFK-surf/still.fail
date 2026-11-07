@@ -391,7 +391,7 @@ fn chat_entry_tail(out : Array[Entry], v : ChatView) -> Unit {
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
   let key = chat_inputs_key(r)
   match chat_inputs.peek(key) {
-    Some(input) if !physical_equal(input.source, src.topic) => chat_inputs.forget(key)
+    Some(input) if !physical_equal(input.source, src.topic_read) => chat_inputs.forget(key)
     _ => ()
   }
   let live = match chat_inputs.peek(key) {
@@ -408,7 +408,7 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
       }
     } else {
       let (read, topic) = chat_read.read(src, chat_params(r))
-      { source: src.topic, read, topic, live }
+      { source: src.topic_read, read, topic, live }
     }
   }, same=fn(a, b) {
     b.live.val && physical_equal(a, b)

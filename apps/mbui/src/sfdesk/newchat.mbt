@@ -21,7 +21,7 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
 /// (useStationDrive: as the view has its stations), on a station it can start on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   new_keys(c, src)
-  let v = (src.topic)("newChat", { "scope": Json::string(w.id) }).value
+  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
   let frame = new_frame(src, w)
   let station = field(v, "station")
   let address = text(station, "station")
@@ -81,7 +81,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// The new chat's own key, as a chat's (chat_keys): Space with no field focused, its composer (composer.focus), as its
 /// hint 按空格输入 says.
 fn new_keys(c : @ui.Ctx, src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
     c.focus_editor(@sfpages.composer_field_key)
   }
@@ -91,7 +91,7 @@ fn new_keys(c : @ui.Ctx, src : Source) -> Unit {
 /// The station workspace `w`'s new chat starts on, where the stations lend their files (useStationDrive: as the view
 /// has its stations): its 文件 tab is had; None where it is not (blocked, no station, none with a drive).
 fn new_drive_station(src : Source, w : Workspace) -> String? {
-  let v = (src.topic)("newChat", { "scope": Json::string(w.id) }).value
+  let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
   let station = field(v, "station")
   let address = text(station, "station")
   let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
@@ -146,7 +146,7 @@ pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> 
 /// Whether the workspace's new chat has its 文件 tab open (what the core keeps for it on this device, the prefs'
 /// `chatTabs` by `new:<workspace>`).
 fn new_files_open(src : Source, ws : String) -> Bool {
-  let kept = field(field((src.topic)("prefs", {}).value, "chatTabs"), "new:" + ws)
+  let kept = field(field(src.topic("prefs", {}).get().value, "chatTabs"), "new:" + ws)
   items(kept, "tabs").contains(Json::string("files"))
 }
 
@@ -191,7 +191,7 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
   })
   |> ignore
   // (panel.close: the panel closed)
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   if @settings.action_pressed(c, prefs, "panel.close") {
     new_files_set(src, w.id, false)
   }

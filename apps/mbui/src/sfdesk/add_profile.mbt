@@ -65,7 +65,7 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
       }
     })
   }
-  let topic = (core.topic)("profileFlow", { "station": str(station), "form": str(form) })
+  let topic = (core.topic)("profileFlow", { "station": str(station), "form": str(form) }).get()
   let d = topic.value
   let edit = fn(input : Array[(String, Json)]) {
     @settings.act(

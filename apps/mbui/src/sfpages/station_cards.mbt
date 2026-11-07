@@ -354,7 +354,7 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
 /// pressed open to them. Nothing when there are none. Away (`online` false), no card of one under way: it can be
 /// neither done nor cancelled until it is back.
 fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = true) -> Unit {
-  let view = (core.topic)("machineLogins", { "station": str(station) }).value
+  let view = (core.topic)("machineLogins", { "station": str(station) }).get().value
   let logins = items(view, "logins")
   let active = if online { logins.filter(fn(l) { flag(Some(l), "active") }) } else { [] }
   let tools = items(view, "tools")

@@ -281,9 +281,9 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
-  let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
+  let stations = stations_of(src.topic("stations", { "scope": Json::string(w.id) }).get().value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))
+  let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().snapshot()
   let has_jobs = flag(jobs.value, "hasJobs") || items(jobs.value, "jobs").length() > 0
   let archive = v.archivable && !v.archived
   // 归档 comes and goes as nothing is left in the chat or something is again (Chat.kt ChatBar: 280 ms, ArchiveEase;
@@ -384,7 +384,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       true,
       on_info=fn() { open_info(src, r) },
       on_more=fn(id) {
-        let chat = (src.topic)("chat", chat_params(r)).value
+        let chat = src.topic("chat", chat_params(r)).get().value
         @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat), from=Of(id))
       },
     )

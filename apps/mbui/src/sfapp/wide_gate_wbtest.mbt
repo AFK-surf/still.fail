@@ -17,8 +17,8 @@ test "a waiting device enters a security code on the digits keyboard and approva
         (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let topic = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let topic = base.topic(name, params).get().snapshot()
       if name == "lock" && approved.get() {
         {
           ..topic,
@@ -101,8 +101,8 @@ fn lock_wait_tester(waiting : @signals.Signal[Bool], calls : Array[String]) -> @
       calls.push(name)
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
-      let topic = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let topic = base.topic(name, params).get().snapshot()
       if name == "lock" && waiting.get() {
         {
           ..topic,
@@ -319,8 +319,8 @@ test "wide: while the device looks for its trusted devices, 没收到？重新�
       calls.push(name)
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
-      let topic = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let topic = base.topic(name, params).get().snapshot()
       if name == "lock" {
         {
           ..topic,

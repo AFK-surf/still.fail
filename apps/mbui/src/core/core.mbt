@@ -103,10 +103,22 @@ pub fn track(start : (String) -> Int, end : (Int) -> Unit) -> Unit {
 }
 
 ///|
-/// The subscription to `topic` (see Client::subscribe): the same one each time it is asked, so a view can call it
-/// every frame.
+/// The subscription to `topic` (see Client::subscribe): repeated reads share one Sub and one direct hold, so a view
+/// can call it every frame. They are not independently releasable direct handles.
 pub fn subscribe(topic : String, params? : Map[String, Json] = {}) -> Sub {
   client.subscribe(topic, params~)
+}
+
+///|
+/// Read a source topic as a signal dependency, or as a legacy untracked source hold.
+pub fn follow_topic(topic : String, params? : Map[String, Json] = {}) -> Sub {
+  client.follow_topic(topic, params~)
+}
+
+///|
+/// Refresh an existing topic without interrupting its readers.
+pub fn refresh_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.refresh_topic(topic, params~)
 }
 
 ///|
@@ -194,7 +206,7 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
-/// Ends a subscription.
+/// Releases a direct subscription; other readers keep it until they leave.
 pub fn unsubscribe(s : Sub) -> Unit {
   client.unsubscribe(s)
 }
@@ -203,6 +215,18 @@ pub fn unsubscribe(s : Sub) -> Unit {
 /// Ends a topic if it was asked, without starting a new subscription for it.
 pub fn unsubscribe_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
   client.unsubscribe_topic(topic, params~)
+}
+
+///|
+/// A graph-owned reader ended; keep a topic still held by another reader.
+pub fn release_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.release_topic(topic, params~)
+}
+
+///|
+/// A legacy source reader ended; a direct subscription remains held.
+pub fn leave_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.leave_topic(topic, params~)
 }
 
 ///|

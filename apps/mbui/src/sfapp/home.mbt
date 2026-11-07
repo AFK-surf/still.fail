@@ -75,7 +75,7 @@ fn top_bar(
           }
           // A long name gives way to the controls actually present, including the sync mark while it exits.
           top_bar_title(c, w.name, look=@sf.home_workspace_title_look, cut=true) |> ignore
-          let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+          let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
           match field(marks.value, "others") {
             // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
             // invitation waiting (sfpages' workspace_mark.mbt)

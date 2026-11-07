@@ -10,7 +10,7 @@
 /// The core's `resources` view of the workspace in view, for station `address` (read, the station looking often,
 /// while shown).
 fn resources_of(core : Core, here : Here, address : String) -> Json? {
-  (core.topic)("resources", { "scope": str(here.workspace), "station": str(address) }).value
+  (core.topic)("resources", { "scope": str(here.workspace), "station": str(address) }).get().value
 }
 
 ///|

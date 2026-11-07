@@ -45,7 +45,7 @@ pub fn service_view(
   close? : (() -> Unit)? = None,
 ) -> Unit {
   svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
-  let p = service_page_for(station, job, prefs=(src.topic)("prefs", {}).value)
+  let p = service_page_for(station, job, prefs=src.topic("prefs", {}).get().value)
   p.port = port
   p.name = name
   p.session = session
@@ -379,7 +379,7 @@ fn load_of(src : Source, station : String, port : Int, fixed : Bool) -> Json? {
   if fixed {
     None
   } else {
-    (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
+    src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
   }
 }
 
@@ -1152,7 +1152,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
 /// most (Preview.css.ts loadList: min(320px, 55vh)) on every screen.
 fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
   let t = @sf.theme()
-  let v = (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
+  let v = src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
   let all = items(v, "resources")
   let row = fn(rr : Json?) {
     let failed = text(rr, "error") != "" || number(rr, "status") >= 400.0
@@ -1253,7 +1253,7 @@ let service_restart_room : @ui.Style = @ui.css("w=Full h=Full pb=S5 align=ACente
 /// sheet with touch short of Large.
 fn service_load_panel(src : Source, station : String, port : Int, from : @sf.Anchor) -> Unit {
   let words = fn() {
-    load_label((src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value)
+    load_label(src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value)
   }
   @sf.panel(words(), fn(c, _) { load_list(c, src, station, port) }, from~, live=fn() { (words(), "", "") })
 }

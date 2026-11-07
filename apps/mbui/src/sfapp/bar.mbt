@@ -1648,7 +1648,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let w = l.w
   let slot = (w - 2.0 * c0) / 3.0
   // the dots: a station in trouble (red)
-  let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
+  let chats = src.topic("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) }).get().snapshot()
   let dots : Map[String, Int64] = Map([])
   match field(chats.value, "trouble") {
     Some(Object(_)) => dots["stations"] = t.p.red
