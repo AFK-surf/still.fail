@@ -704,3 +704,57 @@ test "a timer set between frames with the frame's time ahead, no frame built aga
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }
 }
+
+///|
+/// A device's frames' clock counts from its start (an iPhone's, CACurrentMediaTime: days on, 4 for #4589's): the
+/// display's frames on their period from a moment of days are each a period after the one before, as from a second's.
+let device_clock_ms : Double = 4.0 * 24.0 * 3600.0 * 1000.0
+
+///|
+test "the display's frames on their period on a device's clock of days: each a period after the one before" {
+  let t = Tester::new(fn(c) { c.text("still", wrap=false) |> ignore }, time=device_clock_ms)
+  t.set_frame_period(1000.0 / 60.0)
+  let start = t.time()
+  for k in 1..=4 {
+    t.frame_at(t.next_frame_time())
+    let d = t.time() - start - k.to_double() * t.frame_period()
+    assert_true(d < wake_near_ms && d > -wake_near_ms, msg="frame \{k} at \{t.time() - start} ms on")
+  }
+}
+
+///|
+/// One of a double's representable steps at a clock of days (from 2^28 ms to 2^29: 2^-24 ms).
+let days_step_ms : Double = 1.0 / 16777216.0
+
+///|
+/// A moment said on a device's clock of days (run_for), on one of the display's frames, a step of a double before it or
+/// after it, at 60, 90 and 120 frames a second: drawn on to the first of the display's frames not before the moment,
+/// worked out here from the frames' origin and period, and no further, the frame before it before the moment.
+test "a moment said on a device's clock of days: drawn to the first of the display's frames not before it, no further" {
+  for period in [1000.0 / 60.0, 1000.0 / 90.0, 1000.0 / 120.0] {
+    for off in [-days_step_ms, 0.0, days_step_ms] {
+      let t = Tester::new(fn(c) { c.text("still", wrap=false) |> ignore }, time=device_clock_ms)
+      t.set_frame_period(period)
+      let origin = t.time()
+      t.frame_at(t.next_frame_time())
+      t.frame_at(t.next_frame_time())
+      let frame = origin + 10.0 * period
+      // (a step of a double there: the frames 4 days on are between 2^28 ms and 2^29)
+      assert_true(frame - (frame - days_step_ms) == days_step_ms && frame + days_step_ms - frame == days_step_ms, msg="\{frame}")
+      let ms = frame + off - t.time()
+      let target = t.time() + ms
+      let mut k = ((target - origin) / period).floor() - 1.0
+      while origin + k * period < target {
+        k = k + 1.0
+      }
+      let first = origin + k * period
+      let drawn = []
+      t.each_frame(Some(fn() { drawn.push(t.time()) }))
+      t.run_for(ms)
+      t.each_frame(None)
+      let n = drawn.length()
+      let said = "at \{period} ms a frame, \{off} off the frame: drawn \{drawn.map(fn(d) { d - origin })} ms on, for \{target - origin}"
+      assert_true(n >= 2 && drawn[n - 1] == first && drawn[n - 2] < target && t.time() == first, msg=said)
+    }
+  }
+}

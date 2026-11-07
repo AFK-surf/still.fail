@@ -668,16 +668,31 @@ fn Tester::clock_frame(self : Tester, ms? : Double = 0.0) -> Unit {
 
 ///|
 /// The display's first frame after `t` (Tester::frame): of its frames' times (set_frame_times) while they last, else on
-/// its period.
+/// its period (a moment a hair short of one of its frames, grid_hair, that frame's own).
 fn Tester::tick_after(self : Tester, t : Double) -> Double {
   match self.times.search_by(fn(f) { f > t }) {
     Some(i) => self.times[i]
     None => {
-      let k = ((t - self.origin) / self.period + 1.0e-9).floor() + 1.0
+      if t == @double.infinity {
+        return t
+      }
+      // (counted on the frames' times as they are summed, not by dividing a moment back into periods: on a clock of days,
+      // as a device's frames' is from its start, a frame's own time divided comes out short of its count by more than
+      // the hair, and the frame after it would be that frame again: frames after it never drawn)
+      let hair = grid_hair * self.period
+      let mut k = ((t - self.origin) / self.period).floor() - 1.0
+      while self.origin + k * self.period <= t + hair {
+        k = k + 1.0
+      }
       self.origin + k * self.period
     }
   }
 }
+
+///|
+/// How far short of one of the display's frames a moment may be and be that frame's (a share of its period): a moment
+/// summed one way or another.
+let grid_hair : Double = 1.0e-9
 
 ///|
 /// The display's first frame at or after `t`.
@@ -685,7 +700,15 @@ fn Tester::tick_at(self : Tester, t : Double) -> Double {
   match self.times.search_by(fn(f) { f >= t }) {
     Some(i) => self.times[i]
     None => {
-      let k = ((t - self.origin) / self.period - 1.0e-9).ceil()
+      if t == @double.infinity {
+        return t
+      }
+      // (counted on the frames' times, as tick_after)
+      let hair = grid_hair * self.period
+      let mut k = ((t - self.origin) / self.period).floor() + 2.0
+      while self.origin + (k - 1.0) * self.period >= t - hair {
+        k = k - 1.0
+      }
       self.origin + k * self.period
     }
   }
