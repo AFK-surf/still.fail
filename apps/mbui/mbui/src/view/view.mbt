@@ -2743,13 +2743,6 @@ pub fn Tree::set_pixel_grid(self : Tree, g : Double) -> Unit {
 }
 
 ///|
-/// The thumbs of its columns' bars living now (View::scroll_bar's), for a test: where each takes the pointer is
-/// Tree::input_bounds'.
-pub fn Tree::thumbs_now(self : Tree) -> Array[NodeId] {
-  self.thumbs.values().filter(fn(id) { self.is_thumb(id) }).collect()
-}
-
-///|
 /// Whether node `id` is the thumb of one of its columns' bars (View::scroll_bar's), living.
 pub fn Tree::is_thumb(self : Tree, id : NodeId) -> Bool {
   self.thumbs.get(id.at) == Some(id) && self.nodes[id.at].live
@@ -2934,7 +2927,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
 }
 
 ///|
-/// Where it is laid out in the window as of the logic's moment, and how big (as laid_place_now, each that holds it where
+/// Where it is laid out in the window as of the logic's moment, and how big (each that holds it where
 /// it is laid out too, drawn off and grown or shrunk by nothing): where a change told now puts it, said once at that
 /// moment, never followed.
 pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
@@ -2953,21 +2946,6 @@ pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
     i = m.parent
   }
   (x, y, n.flex.width, n.flex.height)
-}
-
-///|
-/// Where it is laid out in what holds it as of the logic's moment, and how big (what the change under way set so far
-/// counted, as a frame would lay it out; its offset with it): where it goes for that change's cause, said once at that
-/// moment (View::laid_size's terms), never followed.
-pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
-  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
-  self.tree.measured_now()
-  (
-    n.flex.left + n.look.dx + n.look.sx * n.flex.width,
-    n.flex.top + n.look.dy + n.look.sy * n.flex.height,
-    n.flex.width,
-    n.flex.height,
-  )
 }
 
 ///|
@@ -3400,26 +3378,7 @@ pub fn Tree::modal_top(self : Tree) -> NodeId? {
 }
 
 ///|
-/// Where node `at` is in the tree: each node's index among what holds it, from the root's down to it; none where it is
-/// held by nothing the root holds (made, not yet put in what holds it).
-fn Tree::path_of(self : Tree, at : Int) -> Array[Int]? {
-  let path : Array[Int] = []
-  let mut i = at
-  while self.nodes[i].parent >= 0 {
-    let p = self.nodes[i].parent
-    guard self.nodes[p].kids.search(i) is Some(k) else { return None }
-    path.push(k)
-    i = p
-  }
-  if i != 0 {
-    return None
-  }
-  path.rev_in_place()
-  Some(path)
-}
-
-///|
-/// Whether the node at `a` (a path: Tree::path_of) is drawn after the one at `b`: after what it is held by, after what
+/// Whether the node at `a` (a path: Tree::layer_path) is drawn after the one at `b`: after what it is held by, after what
 /// is before it among what holds them both.
 fn drawn_after(a : Array[Int], b : Array[Int]) -> Bool {
   for i in 0..<a.length() {
@@ -6588,7 +6547,7 @@ fn Tree::root_layers(self : Tree) -> Array[Int] {
 }
 
 ///|
-/// Where node `at` is drawn among the rest (Tree::path_of), what the root holds counted in their order in the window's
+/// Where node `at` is drawn among the rest, what the root holds counted in their order in the window's
 /// stack of layers (Tree::root_layers): what is over what, of two.
 fn Tree::layer_path(self : Tree, at : Int) -> Array[Int]? {
   let top = self.top_of(at)
@@ -7800,7 +7759,7 @@ pub fn Tree::pointed_now(self : Tree) -> NodeId? {
 
 ///|
 /// Whether node `a` is drawn after node `b` as the tree is now (after what holds it, after what is before it among what
-/// holds them both: Tree::path_of): what is over what, of two that take the same input. False where either is held by
+/// holds them both: Tree::layer_path): what is over what, of two that take the same input. False where either is held by
 /// nothing the root holds.
 pub fn Tree::drawn_later(self : Tree, a : NodeId, b : NodeId) -> Bool {
   guard self.alive_id(a) && self.alive_id(b) else { return false }

@@ -889,7 +889,7 @@ pub fn Flow::drag_at(self : Flow, x : Double, y : Double, dx : Double, dy : Doub
 
 ///|
 /// The lowest `what` (`top`: the highest) tapped and the frames that tap draws, nothing more: what the core says to
-/// it comes as the clock goes on (until_moving, Tester::run_for), a motion it sets off seen on its way. The frame after
+/// it comes as the clock goes on (Tester::run_for), a motion it sets off seen on its way. The frame after
 /// the one that took the tap: where what the tap sets off from the next frame starts (a card let go: decide.mbt
 /// ask_dismiss, marked as the tap is taken, going from the frame after).
 pub fn Flow::tap_now(self : Flow, what : String, top? : Bool = false) -> Double {
@@ -919,49 +919,9 @@ pub fn Flow::answer_taken(self : Flow, call : String) -> Double {
 }
 
 ///|
-/// The display's frame that took the latest message in `which` holds for (Replay::given_at_where: a topic's change):
-/// where what it sets off starts. -1 while none is given.
-pub fn Flow::message_taken(self : Flow, which : (Json) -> Bool) -> Double {
-  self.frame_taking(self.r.given_at_where(which))
-}
-
-
-///|
 fn Flow::frame_taking(self : Flow, given : Double?) -> Double {
   // (Replay::deliver's taken_at: the display's frame that took it)
   given.unwrap_or(-1.0)
-}
-
-///|
-/// The clock stepped a frame at a time, what is due given as it comes, until something said to move holds `name`
-/// (Tester::moving, Tester::rest_of): when it is at rest. The test fails if nothing more may come first and none does.
-pub fn Flow::until_moving(self : Flow, name : String) -> Double {
-  // (one the last step that acts began: one of its name moving as it was taken, its coming in not over at a tap, is not
-  // it)
-  let told = fn() { self.t.moving().iter().any(fn(l) { l.contains(name) && !self.at_step.contains(l) }) }
-  while !told() || self.t.rest_of(name) <= self.t.time() {
-    if self.t.posted() == 0 && self.r.next_due() is None {
-      // (what it waits for came while the run's script was in its next step that waits (until 已保留 after the tap):
-      // waiting too, it is in that step with it: taken now, the clock not run to when the run took it, for what comes
-      // after it to come at its pace from here, a frame at a time)
-      match self.r.next_step() {
-        Some(l) if waiting_step(l) => {
-          if self.r.step_taken(l) {
-            continue
-          }
-        }
-        _ => ()
-      }
-      self.fail("nothing moves that is " + name)
-      return -1.0
-    }
-    self.t.run_for(frame_ms)
-  }
-  // (told, not started yet: it starts with the frame after)
-  if self.t.rest_of(name) == @double.infinity {
-    self.t.draw()
-  }
-  self.t.rest_of(name)
 }
 
 ///|

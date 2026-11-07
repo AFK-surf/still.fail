@@ -58,7 +58,6 @@ pub fn Flow::hold(Self, String, Double) -> Unit
 pub fn Flow::hover(Self, String) -> Unit
 pub fn Flow::incidental_calls(Self, Array[String]) -> Unit
 pub fn Flow::key(Self, String) -> Unit
-pub fn Flow::message_taken(Self, (@json.Json) -> Bool) -> Double
 pub fn Flow::no_notice(Self, String) -> Unit
 pub fn Flow::noticed(Self, String) -> Unit
 pub fn Flow::open_page(Self, @sfbase.Page) -> Unit
@@ -86,7 +85,6 @@ pub fn Flow::tap_now(Self, String, top? : Bool) -> Double
 pub fn Flow::toast_gone(Self) -> Unit
 pub fn Flow::type_text(Self, String) -> Unit
 pub fn Flow::until(Self, () -> Bool) -> Unit
-pub fn Flow::until_moving(Self, String) -> Double
 pub fn Flow::wheel(Self, Double) -> Unit
 pub fn Flow::wheel_at(Self, String, Double) -> Unit
 
