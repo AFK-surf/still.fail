@@ -2,7 +2,7 @@
 #   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
-#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview, share and youdid.wtf,
+#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf,
 #             its station release (then the configured test station updates to it), its Android app and its desktop app (built
 #             and signed on GitHub's macOS runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
