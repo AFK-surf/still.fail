@@ -22,6 +22,8 @@
 // as they are drawn (the user, 2026-11-03: 「平滑圆角只是在原有圆角的描述上做平滑」「边距应该是整数」): the web's
 // `calc(inner + pad)` is `inner + pad` here and its `calc(outer - pad)` is `@ui.concentric(outer, pad)`, `outer - pad`;
 // a circle or a capsule in a corner stands its half less than the corner in (`around`, `capsule_in`).
+//
+// Numbers here are not written by pages (the user, 2026-10-25: 「所有菜单浮窗的边距需要规范一下」).
 
 ///|
 /// The corner of a container whose corner holds a whole circle (or a capsule) of `inner` radius `inset` in from both

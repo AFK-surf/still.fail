@@ -1,4 +1,4 @@
-// What the station holds of the secrets agents use (docs/vault.md, keeper): for each request still waiting, the private
+// What the station holds of the secrets agents use (keeper): for each request still waiting, the private
 // half of the box its secret is to be sealed to; for each grant, the opened secret, until it is used up, runs out or
 // its chat is archived. Only in memory: no secret is written to disk or logged, and a restart forgets the vaults'
 // grants (the agent asks again); a handover to the next process (an update) carries them over, from memory to memory
@@ -175,7 +175,7 @@ export class Keeper {
     return null;
   }
 
-  /// Holds an item of the plain library for `request`, as its owner decided (docs/vault.md 不加锁的库): no seal and no
+  /// Holds an item of the plain library for `request`, as its owner decided ( 不加锁的库): no seal and no
   /// signature, the secret read from the station's own store; the same limits as a grant's otherwise.
   /// `lasts`: the longest grant it is given for (the item's own, else its owner's for the library; none: any).
   hold(request: Request, d: { scope: Scope; hosts: string[]; listing: { modes: Mode[]; hosts: string[] }; lasts: Scope | null; timeout?: { kind: "idle" | "fixed"; seconds: number } }, secret: Secret): string | null {

@@ -1,5 +1,5 @@
-// One UI client of the still.fail core, over whatever carries the protocol's JSON (still.fail docs/client-core.md,
-// Protocol): `{id, call, params}` and `{id, subscribe, keyed}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`
+// One UI client of the still.fail core, over whatever carries the protocol's JSON:
+// `{id, call, params}` and `{id, subscribe, keyed}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`
 // and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
 // changes with every message for it, so a view can tell what changed since its last frame without comparing values;
 // and a signal of its changes (mbui/signals) set as each comes, and as it ends: what reads the topic in a computed

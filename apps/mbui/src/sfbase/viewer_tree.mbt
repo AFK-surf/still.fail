@@ -1,5 +1,5 @@
 // The image viewer as nodes of the window's tree (every shell's: sfapp's narrow_shell.mbt, tape_shell.mbt;
-// docs/retained.md), made as it opens and let go as it has gone, over the pages:
+//), made as it opens and let go as it has gone, over the pages:
 //
 //   - its layer: the whole window, a modal layer while it is the one open (View::modal: what is under it, the pages
 //     and what the shell draws round them, takes no press, key, wheel or stop of Tab, and is read out none, as the old

@@ -5,7 +5,7 @@
 # and carried by the app: Frameworks/hermes.framework (React Native 0.81.4's, the simulator's or the device's slice)
 # and core.hbc. MetricKit for the app's crash reports (src/host/apple_reports.m), and PostHog's project they go to in
 # its Info.plist (StillfailPosthogHost, StillfailPosthogKey) from the file STILLFAIL_POSTHOG names ({host, key}:
-# docs/telemetry.md), as Android's apk.json strings: the TestFlight build's (scripts/testflight.sh, POSTHOG_JSON); a
+#), as Android's apk.json strings: the TestFlight build's (scripts/testflight.sh, POSTHOG_JSON); a
 # build without it sends nothing.
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # (a device's app, mbui's MBUI_IOS_SDK=iphoneos: the device's target and Hermes's device slice)

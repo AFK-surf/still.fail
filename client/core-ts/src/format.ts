@@ -336,7 +336,7 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   return [where, when];
 }
 
-/// A Feishu chat's id (`oc_…`, docs/feishu.md).
+/// A Feishu chat's id (`oc_…`).
 export const isFeishuChat = titles.isFeishuChat;
 
 /// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.

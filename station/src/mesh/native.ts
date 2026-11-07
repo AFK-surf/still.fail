@@ -1,4 +1,4 @@
-// The native mesh addon (native/mesh, docs/station-ts-native.md §3): what it offers (iroh, and the image codecs of the
+// The native mesh addon (native/mesh §3): what it offers (iroh, and the image codecs of the
 // thumbnails), and where it is. A release has it beside the station's code (mesh.node); a checkout has it where cargo
 // built it; STILLFAIL_MESH_NATIVE says otherwise.
 import { existsSync } from "node:fs";

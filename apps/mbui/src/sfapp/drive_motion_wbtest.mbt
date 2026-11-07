@@ -1,4 +1,4 @@
-// The files' rows as the folder changes (rows_view by their keys, docs/list-motion.md): a file made comes where it is,
+// The files' rows as the folder changes (rows_view by their keys, mbui's view/list_motion.mbt): a file made comes where it is,
 // its room opening; one taken out goes where it was, its room closing; none at once.
 
 ///|

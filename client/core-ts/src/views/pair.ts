@@ -1,4 +1,4 @@
-// Approving a new device face to face (docs/workspace-lock.md 新设备; the exchange is src/pair.ts), both ends, with no
+// Approving a new device face to face ( 新设备; the exchange is src/pair.ts), both ends, with no
 // cloud between them: the new device dials its person's trusted devices straight (iroh, PAIR_ALPN, the ids its lock
 // names), each that answers shows a fresh code, and the code typed on the new device lets the one showing it sign it in.
 //
@@ -112,7 +112,7 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 /// A new device showing this one's code: who, where it asks, the code, how to turn it away.
 /// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
 /// `personal`: it asks into this person's own locks, each account's it can be let into here, not a workspace
-/// (docs/personal-lock.md); `places` is empty then. `seed`: the key, read as the person was asked before the code showed.
+///; `places` is empty then. `seed`: the key, read as the person was asked before the code showed.
 /// A place's `joins`: the lock there has not heard of this person (made a member since it was turned on).
 type Asking = { personal?: { subs: string[]; key: string; seed: Uint8Array | null }; device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string; joins?: boolean }[]; hidden: boolean; away: Deferred.Deferred<void> };
 

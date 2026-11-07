@@ -156,7 +156,7 @@ test("a_workspaces_status_is_its_own_waits_its_accounts_socket_and_the_relay", (
   assert.deepEqual(texts(value([[w1, "all"], [w2, "all"], [device, "all"]])), ["无法连接 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
 });
 
-/// docs/multi-workspace.md: one station in two workspaces, named the same in each. Said together (the `status` topic of
+/// one station in two workspaces, named the same in each. Said together (the `status` topic of
 /// no workspace), each wait says its workspace; apart, they were one line.
 test("said_together_each_workspaces_stations_are_said_with_its_name", () => {
   const host = new FakeHost();

@@ -1,5 +1,5 @@
 // The room a press has (mbui's Tester::room_faults and hover_only_faults, rooms.mbt; still.fail's rules 1 and 2,
-// docs/architecture.md: room, what takes presses 44×44 at least; apart, no two such rooms overlapping; hover, what only
+// room, what takes presses 44×44 at least; apart, no two such rooms overlapping; hover, what only
 // a resting pointer shows reached by a hold too) on the same screens and windows the corner rule is held on
 // (corners_wbtest.mbt, each screen opened once for all), in Chinese. Each rule's faults, all screens in all windows,
 // keep to the bar here: one more fails, and one less until the bar comes down to it. Every fault is printed

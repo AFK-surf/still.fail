@@ -29,7 +29,7 @@ export type ConnectsOptions = {
   /// Whether the station is in its workspace: only then are connects connected.
   bound: () => boolean;
   /// Whether the station is in a connect's workspace (null: its home one) now: a joined workspace's connects
-  /// disconnect once it leaves that workspace (docs/multi-workspace.md). Absent: every one.
+  /// disconnect once it leaves that workspace. Absent: every one.
   inWorkspace?: (workspace: string | null) => boolean;
 };
 

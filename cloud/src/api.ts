@@ -108,7 +108,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/relays/load" && method === "POST") return receiveLoad(request, env);
 
   // ── stations, authenticated by their own key ────────────────────────────
-  // Enrolling moves the station to the token's workspace, out of any other; joining (docs/multi-workspace.md) adds that
+  // Enrolling moves the station to the token's workspace, out of any other; joining adds that
   // workspace to those it is in. The same body and proof (the token says where, the signature that the key is held);
   // a route of its own, so that a cloud from before it refuses rather than moves the station. Both answer with `home`.
   if ((path === "/v1/stations/enroll" || path === "/v1/stations/join") && method === "POST") {
@@ -287,7 +287,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
   if (kind === "credential" && !target && method === "POST") {
     if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
-    // A newer client names its base key and proves the endpoint is its own (docs/workspace-lock.md): kept for the
+    // A newer client names its base key and proves the endpoint is its own: kept for the
     // owner to check when the lock is turned on. An older one names only the endpoint.
     const base = validKeyHex(input.base) && typeof input.proof === "string" && (await verifyKeySignature(input.base, input.proof, `stillfail-lock-endpoint/1\0${ws}\0${input.device}`)) ? input.base : undefined;
     if (input.base !== undefined && base === undefined) return reply({ error: "invalid_proof" }, 400);
@@ -379,7 +379,7 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     return blockAccount(env, block[1]!, input.on as boolean);
   }
   if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
-  // A workspace made for a company (docs/cloud.md「企业 workspace」): { name, owners: [email], members, stations }.
+  // A workspace made for a company (「企业 workspace」): { name, owners: [email], members, stations }.
   if (path === "/v1/admin/workspaces" && method === "POST") return directory(() => dir.adminCreateWorkspace(claims.sub, input));
   // Its limits: { members, stations }.
   const limits = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/limits$/.exec(path);

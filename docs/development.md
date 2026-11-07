@@ -183,7 +183,7 @@ The mock login routes are for loopback development only. Restarting the local cl
 
 ## A station on Windows (proof of concept)
 
-The station runs natively on Windows x64 from a checkout; there is no Windows installer or release yet (docs/station-ts-native.md, "Windows"). It needs Git for Windows: jobs and device commands run under its `sh`, as Claude Code's own commands do there. From PowerShell (Git Bash's `tar` takes `C:` for a host, so `scripts/native.ts` runs from PowerShell):
+The station runs natively on Windows x64 from a checkout; there is no Windows installer or release yet ("Windows"). It needs Git for Windows: jobs and device commands run under its `sh`, as Claude Code's own commands do there. From PowerShell (Git Bash's `tar` takes `C:` for a host, so `scripts/native.ts` runs from PowerShell):
 
 ```powershell
 corepack pnpm install --frozen-lockfile --ignore-scripts
@@ -202,6 +202,6 @@ The desktop apps are mbui's (`apps/mbui/`): `apps/mbui/scripts/mac-app.sh` makes
 
 ## Production self-hosting
 
-The production path is Cloudflare-specific: Workers, Durable Objects, R2 and the relay Container, plus your own domains and Google OAuth client. Review `cloud/wrangler*.jsonc`, `cloud/deploy.py` and [cloud.md](cloud.md) before adapting it. The checked-in routes and release scripts target the maintainers' hosted service. Do not run them unchanged against a different account.
+The production path is Cloudflare-specific: Workers, Durable Objects, R2 and the relay Container, plus your own domains and Google OAuth client. Review `cloud/wrangler*.jsonc` and `cloud/deploy.py` before adapting it. The checked-in routes and release scripts target the maintainers' hosted service. Do not run them unchanged against a different account.
 
 Keep secrets in an external deployment directory selected by `STILLFAIL_DEPLOY_DIR`; see the inputs documented at the top of `cloud/deploy.py`. Firebase push, Axiom and PostHog are additional integrations, not prerequisites for the mocked local cloud. Existing operations notes include historical deployment details and are not a turnkey self-hosting guide.

@@ -31,7 +31,7 @@ pub(all) struct Look {
   /// the opacity of all it holds over its own (`alpha`), past its own ground, edge and shadow: its words, its drawing,
   /// every box in it and what they draw, as one (words_alpha). A panel coming in whole under what it holds before that
   /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
-  /// over that's (docs/motion.md rule 4); then all it holds at once, never its words after its icons and pictures
+  /// over that's (sf/motion.mbt rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
 } derive(Show, Eq, Debug)
 
@@ -427,7 +427,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     notch_by: None,
     cut_by: None,
   }
-  // (held by the node: docs/retained.md, the way there's 1; in the build's entries too, for a row's build to know what
+  // (held by the node, the way there's 1; in the build's entries too, for a row's build to know what
   // it said a look of: Ctx::nodes_end)
   if dr.framing {
     n.drawn = Some(e)
@@ -542,7 +542,7 @@ pub fn Ctx::glyphs_by(self : Ctx, i : Int, f : (GlyphAt) -> GlyphLook) -> Unit {
 
 ///|
 /// Node `i`'s ground drawn in the colour `f` gives as it is painted (RRGGBBAA), in place of its own: read as it is
-/// drawn, not as it is built (a control's ground easing as the pointer comes and goes: docs/retained.md, motion in what
+/// drawn, not as it is built (a control's ground easing as the pointer comes and goes, motion in what
 /// is made once). What `f` reads (where a motion is, read by the clock; a signal) paints the frame again as it changes,
 /// nothing built or laid out (frame_watch.mbt). `f` works out the same for the same state and time.
 pub fn Ctx::bg_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {

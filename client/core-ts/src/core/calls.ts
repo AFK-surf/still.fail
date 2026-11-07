@@ -87,7 +87,7 @@ export type Call =
   | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null; quiet?: boolean; from?: unknown }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
-  /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
+  /// A login's page to open: a loopback login's callback listened for here first, unless the
   /// station is this machine (`here`).
   | { kind: "machineLoginOpen"; station: string; id: string; here: boolean }
   | { kind: "drivePlace"; station: string; root: string; path: string; at: number; of: number | null }
@@ -911,7 +911,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         keep: p.keep && p.size !== null ? (p.size as number) : null, ...fromOf(params),
       };
     }
-    // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
+    // The station's drive: a part of a file read, a part of one written, a folder read again.
     case "drive.read": {
       const p = read(params, [
         ["station", S, "req"],

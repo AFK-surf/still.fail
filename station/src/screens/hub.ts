@@ -1,4 +1,4 @@
-// The station's screens (docs/remote-screens.md): the registry its parts add their sources to (source.ts
+// The station's screens: the registry its parts add their sources to (source.ts
 // `makeScreens`), and who is on each now. What members are told of them (GET /admin/api/screens, `screens` on the
 // event stream, the agents' `screen` tool) is said here; the views themselves go over the member link (mesh/screens.ts).
 import { wall } from "../ops/fibers.ts";
@@ -14,7 +14,7 @@ import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, ty
 /// how a member elsewhere ends it or stops its input being taken, `by` naming them.
 export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void; device?: string; self?: string; client?: string; app?: string; agent?: boolean; end?(by: string): void; watchOnly?(): void };
 
-/// One view as members are told of it (docs/remote-screens.md "Who is on a screen"): `id`, the hub's, to end it by; `at`,
+/// One view as members are told of it: `id`, the hub's, to end it by; `at`,
 /// when it opened (ms).
 export type ViewShown = { id: string; name: string; control: boolean; at: number; device?: string; self?: string; client?: string; app?: string; agent?: boolean };
 
@@ -69,7 +69,7 @@ export function accessShown(access: ScreenAccess | undefined, lang: Lang): Acces
 export const WATCH_HELD_MS = 90_000;
 
 export type HubOptions = {
-  /// Where a file a person drops into a view is put on this machine (docs/remote-screens.md `drop`, the drive's
+  /// Where a file a person drops into a view is put on this machine (the drive's
   /// `dropFolder`); none: files are not taken.
   drop?: () => string | null;
 };

@@ -1,4 +1,4 @@
-// The station's logins to command-line tools (docs/remote-login.md) as a part of the station (parts.ts): each told on
+// The station's logins to command-line tools as a part of the station (parts.ts): each told on
 // the event streams as it changes, its screen followed by the pages; one an agent started tells that agent as it asks
 // something and as it ends, its cards closed. Its routes (machine-logins) and the agents' `login` tool. A login on
 // another station of the workspace (the tool's `station`) is that station's, asked over the station transport

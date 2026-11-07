@@ -1,4 +1,4 @@
-// The grants of data outflow (docs/data-outflow.md): which program on this machine may read which kinds of the
+// The grants of data outflow: which program on this machine may read which kinds of the
 // station's data (or of every station of its workspace), given by an admin of the workspace in still.fail, kept until
 // revoked; and the requests the admins have not answered yet, or whose program has not come for its token yet. Kept
 // in <data>/outflow.json (0600): each grant with the SHA-256 of its token (never the token), the program as the system
@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { log } from "../ops/log.ts";
 
 /// The kinds of data a program may be granted.
-/// `operate` is no read: its program acts in the station as the workspace's members do (docs/data-outflow.md).
+/// `operate` is no read: its program acts in the station as the workspace's members do.
 export const SCOPES = ["usage", "chats", "messages", "operate"] as const;
 export type Scope = (typeof SCOPES)[number];
 

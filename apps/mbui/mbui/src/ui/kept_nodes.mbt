@@ -1,4 +1,4 @@
-// A list's row kept as the nodes its build made (docs/incremental.md, the way there's 5): a row built and laid out is a
+// A list's row kept as the nodes its build made (the way there's 5): a row built and laid out is a
 // value, its nodes as laid out and what its build said of the frame besides them. It is built under a watch of its own
 // (what it reads of signals and of time, the frames' clock and the moments it shows changing at, followed by it alone:
 // kept_part.mbt's KeptClock), and is not built again while nothing it read changed, nothing it was built from changed
@@ -7,7 +7,7 @@
 // it is laid now, and what it said of the frame that its nodes do not hold is said again there (said.mbt's build
 // lists, what it marked used this frame, what it read of the layout, read back as it read it; what takes the focus,
 // what is read out, its corners, what scrolls, its words, its looks and what it showed of what moves are its nodes':
-// docs/retained.md, the way there's 1).
+// the way there's 1).
 // Its layout is kept with it; what lays out its list places it, and it is painted as what is built is.
 //
 // What is said of the frame in no way that is said again here (a layer it opened over the page, how a list stands, a

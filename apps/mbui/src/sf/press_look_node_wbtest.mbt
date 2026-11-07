@@ -126,7 +126,7 @@ test "a press's ripple on a node, motion reduced: there at once as the old view'
 ///|
 test "a press on a node standing on its own ground sinks it while held to the old view's box's depth, on the hand's spring from the moment it went down, and back as it is let go; on a faint ground (a marking tool's chosen one) neither sinks" {
   // (the old box, pressed first, is drawn at its depth from the press's first frame on: its sink's motion made at its
-  // target as it is first asked for, @motion.animate; the node goes there on lift_spring from the press, docs/motion.md)
+  // target as it is first asked for, @motion.animate; the node goes there on lift_spring from the press, sf/motion.mbt)
   let sizes = fn(chosen : Int64) {
     let on = @signals.signal(true, same=fn(a, b) { a == b })
     let there = @signals.signal(true, same=fn(a, b) { a == b })

@@ -101,10 +101,10 @@ export type EventsDeps = {
   processState?(key: string): string;
   /// Someone follows again, after nobody did (allowances are read again then).
   followed?(): void;
-  /// Whether `viewer` sees a session, a thread or a job: those of their workspace's chats (docs/multi-workspace.md).
+  /// Whether `viewer` sees a session, a thread or a job: those of their workspace's chats.
   /// None: every one.
   seen?(viewer: Viewer, of: { session: string } | { thread: number } | { job: string }): boolean;
-  /// A login's terminal (docs/remote-login.md): `send` given its screen now and as it changes, until the returned
+  /// A login's terminal: `send` given its screen now and as it changes, until the returned
   /// function is called.
   loginScreen?(id: string, send: (screen: { rows: string[]; cursor: { x: number; y: number }; echo: boolean; live: boolean }) => void): () => void;
   /// Whether `viewer` is a member of that vault of their workspace now (vault/secrets.ts `inVault`): whom its requests
@@ -117,7 +117,7 @@ export type EventsDeps = {
 };
 
 /// A viewer's streams in one language: what their sidebar and overview are told by. A person in two of the station's
-/// workspaces is two viewers (docs/multi-workspace.md).
+/// workspaces is two viewers.
 const viewerKey = (viewer: Viewer, lang: Lang) => `${viewer.email}\0${viewer.workspace}\0${lang}`;
 
 /// Whom an event is for, as data (what is kept goes over to the next process with it): the streams all it says holds
@@ -372,7 +372,7 @@ export class Events {
     Object.assign(this.deps, more);
   }
 
-  /// The station's screens changed (docs/remote-screens.md): `screens` as GET /screens answers it, in each stream's
+  /// The station's screens changed: `screens` as GET /screens answers it, in each stream's
   /// language (`listed`), the latest alone kept for one coming back.
   screens(listed: (lang: Lang) => unknown) {
     for (const lang of new Set(this.clients.map((c) => c.lang))) this.emit("screens", listed(lang), { lang }, `screens\0${lang}`);
@@ -384,7 +384,7 @@ export class Events {
     this.emit(event, data, to, of);
   }
 
-  /// A login changed (docs/remote-login.md): told to everyone as `machine-logins`, a read-only member given `limited`
+  /// A login changed: told to everyone as `machine-logins`, a read-only member given `limited`
   /// (how it stands only).
   machineLogins(data: { login: unknown }, limited: { login: unknown }, of: string) {
     this.emit("machine-logins", data, { readOnly: false }, `machine-logins\0${of}`);

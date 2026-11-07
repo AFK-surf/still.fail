@@ -5,7 +5,7 @@
   "imports": {
     "#mermaid-lib": { "hermes": "./src/mermaid-lib-hermes.ts", "default": "./src/mermaid-lib.ts" }
   },
-  "description": "The still.fail client core in TypeScript (docs/core-ts.md): the same protocol, data and words as client/core-ts",
+  "description": "The still.fail client core in TypeScript: the same protocol, data and words as client/core-ts",
   "scripts": {
     "check": "tsgo --noEmit",
     "shapes": "node scripts/shapes.ts",

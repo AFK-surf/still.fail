@@ -314,7 +314,7 @@ pub fn composer(
     @motion.tween(flight_desk_ms, ease=Flight)
   } else if composer_let_go(c, spec.draft) {
     // (let go by words sent from it: down on their flight's clock, with its room, composer_hold)
-    // det-ok(motion-length): words sent's own, set with their flight (docs/motion.md kind 4)
+    // det-ok(motion-length): words sent's own, set with their flight (sf/motion.mbt kind 4)
     @motion.tween(@sfbase.sent_down_of(spec.draft), ease=Move)
   } else if opening && !moved {
     // (opened from a capsule or let go to one: its field passes by its ＋ and send on their way, kept off them only on
@@ -433,7 +433,7 @@ pub fn composer(
   // here (a new chat's choices) carried on its ground (morph.ts morph), what it held there and does not here leaving
   // on it; words sent from it, as they let go of it (held till then: composer_hold). Moved by nothing of these (the
   // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
-  // where it is laid out at once (docs/motion.md)
+  // where it is laid out at once (sf/motion.mbt)
   composing.roomy = Some(spec.roomy)
   // (at a page's foot down the system's column, not roomy in a new chat's middle: opened from its foot, a keyboard
   // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
@@ -985,7 +985,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
 ///|
 /// What waits in it (a quote's card, a file's: node `i`, keyed `key`) put in while it shows comes in (`@sf.waiting_in`, the
 /// web's enterUp on composerQuote, fileCard and composerThumb), the first frame it is built; what a draft opened with,
-/// or the composer gone to another page with, is there at once (docs/motion.md: what is on a page does not move of its
+/// or the composer gone to another page with, is there at once (sf/motion.mbt: what is on a page does not move of its
 /// own as it comes), though said so as it is (built again the frame after, it was there before). Below what the room
 /// shows as it opens for it (`room`, composer_extras), it grows with it from its top, as a row coming where it is
 /// (@ui.Ctx::held_look's size; faded in by its entrance alone): whole, as far as the room has reached down it.
@@ -2025,7 +2025,7 @@ fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Un
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
   a.snap(1.0)
   // (down on the flight's clock of what was sent, as its ground does: composer_let_go)
-  // det-ok(motion-length): words sent's own, set with their flight (docs/motion.md kind 4)
+  // det-ok(motion-length): words sent's own, set with their flight (sf/motion.mbt kind 4)
   a.animate(0.0, @motion.tween(@sfbase.sent_down_of(draft), ease=Move, delay=ms))
   let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
   b.snap(box)

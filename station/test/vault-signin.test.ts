@@ -1,4 +1,4 @@
-// Signing in to a site from a card (vault/signin.ts, docs/vault.md 登录态 "Signing in from a card"): one call of the
+// Signing in to a site from a card (vault/signin.ts 登录态 "Signing in from a card"): one call of the
 // agent's, the vault's sign-in asked for where it keeps one; else a card the person answers from their app, what their
 // password manager gave typed in by the station step by step, a code asked on the card, a person given the tab where
 // only they can go on, the agent told when the page left its sign-in and kept in the vault, with no card of its own,

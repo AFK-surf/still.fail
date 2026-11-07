@@ -1,4 +1,4 @@
-// What the people of a chat hear about while no client of theirs runs (admin/notify.rs, docs/notifications.md): an
+// What the people of a chat hear about while no client of theirs runs (admin/notify.rs): an
 // agent's turn ending in one of the station's own chats (done with something said, or blocked), something going wrong
 // there (the station says so, ⚠️ first), and a person saying something there. Worked out here, off the main thread,
 // from a store change the station saw; the station posts them to still.fail cloud (src/cloud/notify.ts).

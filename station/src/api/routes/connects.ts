@@ -88,7 +88,7 @@ export function connectEdits(deps: ConnectEditDeps) {
   };
   const raw = () => config.raw();
   const connectsRaw = (raw: Json): Json[] => (Array.isArray(raw.connects) ? raw.connects : (raw.connects = []));
-  /// A connect is of the workspace it was added in (docs/multi-workspace.md; none said: the station's home one), and
+  /// A connect is of the workspace it was added in (none said: the station's home one), and
   /// only that workspace's people see and change it. One of another workspace is no connect of theirs (404).
   const home = () => deps.place?.()?.workspace ?? null;
   const ofViewer = (r: Request, c: Json) => home() === null || ((typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : home()) === r.viewer.workspace);

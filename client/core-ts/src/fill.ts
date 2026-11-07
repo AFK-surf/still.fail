@@ -1,4 +1,4 @@
-// What was opened and let go is brought whole all the same, after everything else (docs/core-ts.md, rule 6): a chat's
+// What was opened and let go is brought whole all the same, after everything else (rule 6): a chat's
 // file or a drive's video or song a viewer read a part of (drive-kept.ts `chat`, `played`), saying where it was opened
 // (`from`: written down beside it, `origin`; a still read off a film in its message says none, and is not brought),
 // and let go of (a preview

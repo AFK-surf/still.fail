@@ -1,4 +1,4 @@
-// What a station lets another one read of its drive for a member (docs/drive.md "Copying between stations"): a grant
+// What a station lets another one read of its drive for a member: a grant
 // it signs when the member asks (POST /drive/grant, checked as any of their reads is: they may read those names there,
 // and, for a move, may write there too), which the member hands to the station the files go to. That station reads the
 // files with it over the station transport (`drive.walk`, `drive.part`, `drive.release`), and this one checks its own

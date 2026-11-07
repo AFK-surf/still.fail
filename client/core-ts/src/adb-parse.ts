@@ -20,7 +20,7 @@ export type AdbCall =
   | { kind: "revoke"; station: string; request: string }
   /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
   | { kind: "lasts"; lasts: "hour" | "chat" }
-  /// The person's own lock (docs/personal-lock.md): this device asks to join it, types the code shown on one on it, stops
+  /// The person's own lock: this device asks to join it, types the code shown on one on it, stops
   /// asking; a device taken off; the lock pinned here left, and one begun anew.
   /// (`sub`: whose: a device may be signed in to several accounts, each with a lock of its own.)
   | { kind: "personalOpen"; sub: string }

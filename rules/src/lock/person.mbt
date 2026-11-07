@@ -1,4 +1,4 @@
-// A person's own lock (docs/personal-lock.md): a chain of the keys their app devices sign with, written only by a device
+// A person's own lock: a chain of the keys their app devices sign with, written only by a device
 // on it, the one thing a workspace's list and a phone's grant go back to. What station, cloud and devices all decide it
 // by; what takes keys is the caller's (`Crypto`), as for the workspace's lock.
 

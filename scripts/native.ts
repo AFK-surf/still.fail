@@ -176,7 +176,7 @@ function fail(message: string): never {
   throw new Error(message);
 }
 const STATION: Target[] = ["darwin-arm64", "linux-x64", "linux-arm64"];
-/// The station's own executables: Windows' too (docs/station-ts-native.md, "Windows"), named as it names them.
+/// The station's own executables: Windows' too ("Windows"), named as it names them.
 const STATION_BINS: Target[] = [...STATION, "win32-x64"];
 const exe = (name: string) => (t: Target) => (t === "win32-x64" ? `${name}.exe` : name);
 
@@ -282,7 +282,7 @@ const PARTS: Record<string, Part> = {
   "mbui-figure": mbuiRenderer("sffigure", "figure-run.sh"),
   "mbui-film": mbuiRenderer("sffilm", "media.sh"),
   "mbui-film-wasm": mbuiWasmFilm(),
-  // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the core on Node (its tests,
+  // The station's iroh and image codecs, a Node addon ( §3); the core on Node (its tests,
   // apps/mbui's e2e peer) uses it too.
   mesh: {
     ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),
@@ -293,7 +293,7 @@ const PARTS: Record<string, Part> = {
   // On Windows with stillfail-station-w.exe beside it: the launcher as the logon task runs it, with no window.
   launcher: withHidden(stationCrate("station/native/launcher", exe("stillfail-station"), exe("stillfail-station"))),
   runner: { ...stationCrate("station/native/runner", exe("stillfail-runner"), exe("stillfail-runner")), targets: STATION_BINS, env: "STILLFAIL_RUNNER" },
-  // Windows' display as the station's desktop screen (docs/remote-screens.md), what still.fail Helper is on macOS.
+  // Windows' display as the station's desktop screen, what still.fail Helper is on macOS.
   screen: { ...stationCrate("station/native/screen", () => "stillfail-screen.exe", "stillfail-screen.exe"), targets: ["win32-x64"], env: "STILLFAIL_SCREEN" },
   // For the station's tests: the Rust station's cold storage as a command (test/cold-compat.test.ts), and a member's
   // client asking a station over iroh (tools/load: test/e2e.sh, compare.sh). This machine's only.
@@ -390,8 +390,8 @@ const PARTS: Record<string, Part> = {
       engineAndroid(out);
     },
   },
-  // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
-  // grants an app (the screen, docs/remote-screens.md), Swift built with the Mac's Xcode, put in its bundle with its
+  // still.fail Helper (station/native/helper §4): the station's macOS app for what macOS
+  // grants an app (the screen), Swift built with the Mac's Xcode, put in its bundle with its
   // Info.plist and still.fail's icon (its permission window and System Settings show it) and signed ad hoc (a
   // release signs it again, scripts/station-bundle.sh).
   helper: {
@@ -439,7 +439,7 @@ const PARTS: Record<string, Part> = {
     },
   },
   // agent-desktop (vercel-labs/agent-desktop, Apache-2.0): the apps' accessibility trees, read and acted on by ref
-  // (docs/remote-screens.md, "Agents on a screen"). Its release's own build, checked against the SHA-256 its
+  // ("Agents on a screen"). Its release's own build, checked against the SHA-256 its
   // checksums.txt gives: still.fail Helper carries macOS's, the station Windows' beside stillfail-screen.exe.
   "agent-desktop": {
     files: (t) => (t === "win32-x64" ? AGENT_DESKTOP_FILES.win32 : AGENT_DESKTOP_FILES.darwin),

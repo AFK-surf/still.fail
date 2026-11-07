@@ -1,5 +1,5 @@
 import { bindStationOperations } from "./core/operations.ts";
-// A station's data, through the client core (docs/client-core.md): screens
+// A station's data, through the client core: screens
 // subscribe to the views the core puts together; what they have done is a
 // call by its name (client/core-ts/src/ops.ts), never a request made here, and the
 // core brings whatever it touches up to date before it answers. Types come
@@ -129,14 +129,14 @@ export interface MachineSession {
 /** Something said in one of the machine's sessions: by the person, else by its agent; when, in ms. */
 interface MachineSaid { person: boolean; text: string; at: number | null }
 
-/** A channel or group a connect's bot is in (docs/relay.md): a Slack channel, a Feishu topic group, a Feishu group; `used`
+/** A channel or group a connect's bot is in: a Slack channel, a Feishu topic group, a Feishu group; `used`
  * when a chat was last relayed there (ms), if ever. */
 export interface RelayPlace { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean; used?: number }
 
 /** A connect a chat can be relayed through, with its places (none, and why, when they could not be read). */
 export interface RelayConnect { id: string; kind: "slack" | "feishu" | "lark"; name: string; team: string | null; botImage?: string | null; preferred?: boolean; places: RelayPlace[]; error?: string }
 
-/** A person in a place, as a relayed chat's note can mention them (docs/relay.md「附言里 @ 人」). */
+/** A person in a place, as a relayed chat's note can mention them (「附言里 @ 人」). */
 export interface RelayPerson { id: string; name: string; aka?: string; picture?: string }
 
 /** Where a chat was relayed: the place's name, and its link where the platform has one. */

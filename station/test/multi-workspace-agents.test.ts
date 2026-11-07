@@ -1,4 +1,4 @@
-// One station in two workspaces, as its agents see it (docs/multi-workspace.md): a session of workspace W reaches W's
+// One station in two workspaces, as its agents see it: a session of workspace W reaches W's
 // chats and stations only (chat_list, chat_read, session_send, station_list, station_task), what other stations ask
 // reaches that workspace's chats only, sessions run on the profiles allowed there, and each workspace has its own
 // memory and skills. The transport is a direct call that checks what mesh/peer.ts checks (`member`).

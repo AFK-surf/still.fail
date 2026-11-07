@@ -1,4 +1,4 @@
-// Feishu as a chat surface (docs/feishu.md), on a socket kept up as every connect's is (connects/surface.ts): its long
+// Feishu as a chat surface, on a socket kept up as every connect's is (connects/surface.ts): its long
 // connection for what Feishu tells the station, the OpenAPI for what the station and its agents say and ask. One
 // FeishuSurface per connected connect.
 import { readFile } from "node:fs/promises";
@@ -92,7 +92,7 @@ export type FeishuSurfaceOptions = {
   appSecret: string;
   domain: Domain;
   threads: FeishuThreads;
-  /// In a group, one conversation for each thread, begun by an @ and answered in it (docs/feishu.md「会话怎么分」); else
+  /// In a group, one conversation for each thread, begun by an @ and answered in it (「会话怎么分」); else
   /// one for the group.
   threadMode?: boolean;
   /// Keeps names across restarts and lets the admin API ask without waiting (knownPerson, knownChannel).
@@ -268,7 +268,7 @@ export class FeishuSurface extends ConnectedSurface {
     if (this.called.size > 500) this.called.delete(this.called.keys().next().value!);
   }
 
-  /// Which thread a message is in (docs/feishu.md「会话怎么分」): a topic group's topic is its own; in thread mode a
+  /// Which thread a message is in (「会话怎么分」): a topic group's topic is its own; in thread mode a
   /// group's thread is, by its first message (one that @s the bot outside a thread begins one); anything else said in
   /// the chat is the chat's conversation now, begun by the first message that @s the bot (or a new one asked for).
   private async heard(m: FeishuMessage, handler: Handler) {
@@ -410,7 +410,7 @@ export class FeishuSurface extends ConnectedSurface {
   }
 
   /// A new message in the chat, as the agent's words are (rich text): in a topic group a topic of its own; elsewhere the
-  /// chat's conversation from now on, as a new one asked for in it begins (docs/feishu.md「会话怎么分」).
+  /// chat's conversation from now on, as a new one asked for in it begins (「会话怎么分」).
   async begin(chat: string, message: string): Promise<{ thread: ThreadRef; ts: string }> {
     const { topics } = await this.chatInfo(chat);
     let first: Json = null;

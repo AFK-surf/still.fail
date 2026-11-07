@@ -283,7 +283,7 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
 
 ///|
 test "a row archived: it closes where it was, the row under it coming up whole, laid out where it is drawn" {
-  // (2026-10-31: a row gone closes its room where it was, the rows under it coming up as it closes, docs/list-motion.md;
+  // (2026-10-31: a row gone closes its room where it was, the rows under it coming up as it closes, mbui's view/list_motion.mbt;
   // before it, Home.kt's animateItem moved the whole of SwipeToArchive, its clip with it)
   let t = tester("home")
   let under = "把旧的截图都换成新的"

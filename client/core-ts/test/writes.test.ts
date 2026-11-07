@@ -1,4 +1,4 @@
-// scripts/writes.ts: what a function writes on that it was given (docs/core-ts.md「谁能改什么」).
+// scripts/writes.ts: what a function writes on that it was given (「谁能改什么」).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

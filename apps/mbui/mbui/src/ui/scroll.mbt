@@ -17,7 +17,7 @@
 //   mouse drag coasts, slowing 0.997 per ms, and stops at the ends (a
 //   trackpad's momentum comes from the system as wheel events).
 //
-// Each is said once as it sets out and is a function of the time from there (docs/determinism.md, "Motion is data"):
+// Each is said once as it sets out and is a function of the time from there ("Motion is data"):
 // the curves, the springs and the stretch's mapping are @view's (list_motion.mbt), one for these lists and the window's
 // tree's columns that scroll as a page's list does (@view.Scroll::list).
 

@@ -1,4 +1,4 @@
-// The programs granted a station's data (the `outflowGrants` topic, docs/data-outflow.md): read as a page shows it,
+// The programs granted a station's data (the `outflowGrants` topic): read as a page shows it,
 // told as the station says, revoked with `outflow.revoke`; a station from before has none.
 import assert from "node:assert/strict";
 import { test } from "node:test";

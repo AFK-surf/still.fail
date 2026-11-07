@@ -337,11 +337,7 @@
   // corner.sl begin (scripts/chk corner-sl: not edited here)
   #define float2 vec2
   #define float4 vec4
-  // How mbui draws a corner, for every renderer: src/paint/smooth.mbt says what and why, and these are its functions, number
-  // for number (scripts/chk corner-sl holds their numbers alike). Metal's, Direct3D's and both GLs' shaders take this in as it
-  // is (corner_sl.h; web/host.js between its "corner.sl" lines), written in what the four have in common (float2: GLSL's
-  // vec2, defined so before it). Its scalar part is C too: apple_views.m's masks take that with MB_CORNER_SCALARS.
-  // Made into those by scripts/chk corner-sl, which CI runs with --check.
+  // smooth.mbt's corners for the renderers; scripts/chk corner-sl makes corner_sl.h and web/host.js from it.
   //
   // How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1
   // superellipse(1.5) over r a quarter longer; between, as far as the room goes.
@@ -998,7 +994,7 @@
     gl.uniform4f(PU.u_b, (sw - 0.5) / src.w, (sh - 0.5) / src.h, dx, dy);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
-  // ---- partial redraw (docs/partial-redraw.md) ----
+  // ---- partial redraw ----
   // A frame is drawn into a canvas of its own (cv, a framebuffer), kept across frames, and copied onto the page's
   // canvas (whose drawing buffer is gone once shown); where the app says only some parts differ from the frame before
   // (H.renderDirty, @hostapi.render_dirty), only those parts of it are drawn again, each cut to it (the scissor, `cut`:

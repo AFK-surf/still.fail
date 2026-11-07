@@ -149,7 +149,7 @@ fn text_frame() -> Bool {
     text_cache.generation = g
     glyphs_forget()
     // (and the frame drawn whole: its glyphs drawn again where they were, the same numbers, other pixels: hostcall.mbt
-    // `presented`, docs/partial-redraw.md)
+    // `presented`)
     presented.forget()
     if !first {
       clear_shapes()

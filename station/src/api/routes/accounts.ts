@@ -29,7 +29,7 @@ export type AccountsRouteDeps = {
   sharing?: Sharing;
   /// GET /overview's answer for the request's viewer, in its language: what edits answer with.
   overview(r: Request): Promise<unknown> | unknown;
-  /// Where a joined workspace's archive policy is kept (docs/multi-workspace.md: one each), and the review of the done
+  /// Where a joined workspace's archive policy is kept (one each), and the review of the done
   /// chats asked again once it changed. The home workspace's is the accounts'.
   policies?: { store: Parameters<typeof savePolicy>[0]; review(): void };
 };
@@ -67,7 +67,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     }
     if (changed !== null) policies.review();
   };
-  // The station's accounts are every workspace's it is in alike (docs/multi-workspace.md); the archive policy is each
+  // The station's accounts are every workspace's it is in alike; the archive policy is each
   // workspace's own.
   const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>): Route => ({ method, pattern, handle });
 

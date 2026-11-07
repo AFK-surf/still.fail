@@ -3,7 +3,7 @@
 // the core's scripts/shapes.ts) made long, with a line break and words that break late in it, as an agent's notice, a
 // chat's title or a station's error may be. A fixture says what a screen shows; what the outside writes there has no
 // length a fixture can promise, so each screen is held to fit it at its longest: what does not, gives way (words cut
-// short, a part left out, words wrapped: mbui's docs/style.md, Short of room). The words made long: fixture_said.mbt.
+// short, a part left out, words wrapped: mbui's ui/squeeze.mbt). The words made long: fixture_said.mbt.
 
 ///|
 test "said_stretch: the words at a path at their longest, each item of a list or a map, none left none, the rest as it was" {

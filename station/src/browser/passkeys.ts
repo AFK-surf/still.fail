@@ -1,4 +1,4 @@
-// Passkeys in a chat's browser (docs/vault.md 登录态, docs/remote-screens.md "Passkeys of the vault"): each tab of a
+// Passkeys in a chat's browser ( 登录态): each tab of a
 // chat's context has an authenticator of Chrome's own (DevTools' WebAuthn domain, a virtual one: internal, with resident
 // keys and the person verified, presence given without asking), so a site's "add a passkey" makes one there and a
 // site's sign-in with a passkey is signed there, as a phone's or a laptop's would be, with no window. A context's

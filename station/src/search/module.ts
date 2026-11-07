@@ -1,4 +1,4 @@
-// What a search finds on this station (docs/search.md) as a part of the station (parts.ts): its index of the station's
+// What a search finds on this station as a part of the station (parts.ts): its index of the station's
 // data and the machine's files as they are asked for, kept current while the station runs; GET /search and its
 // settings, the agents' `search` tool, and what other stations of the workspace ask of it (`search.query` on the bus).
 import { Effect, Layer } from "effect";

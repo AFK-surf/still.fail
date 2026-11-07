@@ -279,7 +279,7 @@ pub fn rows_view(
   let extra = if head is Some(_) { 1 } else { 0 }
   let empty_n = if lines.is_empty() && empty is Some(_) { 1 } else { 0 }
   // the list's rows by what each is (a file by its folder and name; its head, an empty folder's words and its foot
-  // too): one made, taken out or moved comes and goes where it is, as a chat's rows do (ListRows, docs/list-motion.md);
+  // too): one made, taken out or moved comes and goes where it is, as a chat's rows do (ListRows, mbui's view/list_motion.mbt);
   // a folder's rows all others now (another folder, its first read) as they are
   let lr = drive_rows_of(key)
   let all : Array[ListLine] = []

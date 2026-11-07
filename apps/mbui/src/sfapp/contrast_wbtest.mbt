@@ -1,4 +1,4 @@
-// The contrast rule (mbui's Tester::contrast_faults; still.fail's docs/ui-panels.md「对比度」: words 4.5 to 1, large ones
+// The contrast rule (mbui's Tester::contrast_faults; mbui ui/contrast.mbt: words 4.5 to 1, large ones
 // 3, an icon 3, as WCAG's AA asks; what is drawn with nothing in it, a gauge's empty cell, a track, a line, a
 // placeholder's block, a grip, 1.25 to 1 off what it lies on) on every screen sffix opens, in every window the corner
 // test opens it in (corners_wbtest.mbt), in both themes:
@@ -12,7 +12,7 @@ fn contrast_wrong(at : String, faults : Array[String]) -> String? {
   guard faults.length() > 0 else { None }
   Some(
     "\{at}: \{faults.length()} drawn too faint to be read or seen on what they lie on (words and icons in the theme's " +
-    "inks, what has nothing in it in its line; docs/ui-panels.md 对比度)\n  " +
+    "inks, what has nothing in it in its line; mbui ui/contrast.mbt)\n  " +
     faults.join("\n  "),
   )
 }

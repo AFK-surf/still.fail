@@ -193,7 +193,7 @@ Slack thread) is HTML/CSS drawn to the product's own values at 1:1 (`.mk*` in 05
 Inter + PingFang type, its radii, its demo data: lin@acme.dev, Willow, Mini, the same chats); a whole picture is
 scaled with `zoom` (or, in the scroll scene, a transform), never by shrinking its type, and the product's own oranges
 are used, not the brand's. Pictures are `aria-hidden`, unselectable and take no pointer events. The phones follow the
-app (`apps/mbui`): the phone chat's top bar has no line under it (docs/mobile-parity.md); the iPhone Duo open is its
+app (`apps/mbui`): the phone chat's top bar has no line under it (sfapp/bar.mbt); the iPhone Duo open is its
 inner screen (890 × 626 points) with the sidebar ending on the fold, the panes as cards and no rail, the places, the
 chat's actions, the bell and the new chat in iOS 27.1's own column down the trailing edge (`sf/native_bars.mbt`,
 `host/ios_nav.h`); Android shows the debug share's ongoing notification as `AdbShare.java` builds it, in the pulled-down

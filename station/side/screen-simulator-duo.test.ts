@@ -1,4 +1,4 @@
-// An iPhone Duo folded through still.fail Helper's view as a person folds it (docs/remote-screens.md "Simulators"), on a real
+// An iPhone Duo folded through still.fail Helper's view as a person folds it, on a real
 // Mac with Xcode: a simulator of this test's own, no window of Device Hub's. Each pose's panel shows in the view's picture,
 // and its panels' corners are read from its type's masks. STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper; SIM_OUT:
 // where its pictures go. A side test.

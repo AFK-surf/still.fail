@@ -1,4 +1,4 @@
-// The station process before this one (a launcher's handover, docs/station-ts.md): it holds the sessions, the agents'
+// The station process before this one (a launcher's handover): it holds the sessions, the agents'
 // door, Slack's socket and the mesh's fixed port until it exits. What only one process may have waits for it to be
 // gone; making the parts must not (the launcher stops the old process once this one says it is ready).
 import { readFileSync } from "node:fs";

@@ -1,4 +1,4 @@
-// The agents' computer tool (docs/remote-screens.md, "Agents on a screen") on a fake screen source: screenshots and
+// The agents' computer tool ("Agents on a screen") on a fake screen source: screenshots and
 // how their pixels map to the contract's 0..1, each action's input events, one view per session and screen closed when
 // idle, a person driving the screen holding the agent off, a missing grant answered with the person's link, and the
 // screenshot as MCP image content. Time is the test's own (FakeTimers).

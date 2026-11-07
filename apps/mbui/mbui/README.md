@@ -40,7 +40,7 @@ src/ui      the framework (MoonBit, target independent)
   overlay.mbt layers over the page: stacked, dismissed, the focus trapped; Popper
   scene.mbt   paint: one flat array of 24-float instances
   app.mbt     frame loop, input dispatch, bench mode
-src/kit     the components (Radix Primitives' set, docs/components.md): behaviour,
+src/kit     the components (Radix Primitives' set, mbui's kit/styles.mbt): behaviour,
             semantics and a default look from the theme; the time they keep
 src/kitdemo their gallery, light beside dark (APP=kitdemo, MBUI_SCREEN=<page>)
 src/text    Unicode text segmentation (target independent, no host calls)

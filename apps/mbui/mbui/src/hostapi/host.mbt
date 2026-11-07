@@ -2943,7 +2943,7 @@ fn ncall_end(id : Int) -> Unit {
 
 ///|
 /// A part of the next frame presented that changed from the one before (points), for a host that keeps its picture
-/// and draws only those parts again, the rest as it drew it (docs/partial-redraw.md): said once for each part before
+/// and draws only those parts again, the rest as it drew it: said once for each part before
 /// `present`; `w` < 0, all of it; once with `w` 0, none. A frame nothing was said for is drawn whole.
 pub fn render_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit {
   current.val.rn_dirty(x, y, w, h)

@@ -1,8 +1,8 @@
 // What this station shares with the other stations of its workspaces, and what it uses of theirs
-// (docs/station-share.md). It is between the stations only (the station transport, `share.*`, jobs/remote.ts hands
+//. It is between the stations only (the station transport, `share.*`, jobs/remote.ts hands
 // them here); still.fail cloud says nothing of it beyond which stations are in each workspace.
 //
-// - Which stations a share is for (docs/multi-workspace.md): a profile, those of every workspace this station is in
+// - Which stations a share is for: a profile, those of every workspace this station is in
 //   that it serves (all but those it is withheld from); a skill, those of the home workspace, whose agents' skills it
 //   is. Its `allow` narrows that. A copy of a profile serves only the workspaces its host shares it in (it says which,
 //   `share.workspaces`); a copy of a skill is linked into the skills of the workspace it was had in.

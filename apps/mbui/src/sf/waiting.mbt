@@ -1,4 +1,4 @@
-// What waits, drawn one way everywhere (web/ui waiting.tsx, waiting.css.ts, styles/spinner.css.ts; docs/ui-panels.md
+// What waits, drawn one way everywhere (web/ui waiting.tsx, waiting.css.ts, styles/spinner.css.ts; sf/align.mbt
 // 「等待」; Android's ui/Waiting.kt the same), the phone's pages and the desktop's alike. Three kinds:
 // - a page or a list read for the first time: `waiting`, what will come drawn as it will be, of made-up words, in its
 //   bones (`bones`: its words bars, its pictures and icons shapes, its outline its own), breathing, no words; what
@@ -8,6 +8,9 @@
 //   `progress_spinner`.
 // Words (a pill, a line) come only after a moment (later_ms), so what is there at once shows none; what failed says so
 // at once, in red.
+//
+// A first read draws the real parts as bones, so the outline cannot differ from the content's. No bones where the
+// content is already here (the user, 2026-10-31: 「进 chat 有加载骨架，按理说不应该存在」).
 
 ///|
 /// Words about a wait show only once it has taken this long.
@@ -30,7 +33,7 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 /// What waits, node `node`, breathing (the placeholders, to 0.5: waiting.css.ts breathe; a service restarting, its dot
 /// to 0.35: Jobs.css.ts jobBreathe): whole to `low` and back in breath_ms, each way on CSS's ease-in-out, worked out as
 /// each frame is drawn, never built anew for it (Ctx::cycle_look); still and whole when what it waits on failed (the
-/// red words over them say so: faded, they were drawn too faint to be seen, docs/ui-panels.md 对比度). `resident`: a
+/// red words over them say so: faded, they were drawn too faint to be seen, mbui ui/contrast.mbt). `resident`: a
 /// state's for as long as it lasts (a service restarting), on the one clock's steps, not a wait's (Ctx::cycle).
 /// `share`: how much of its breath it takes (0 … 1), what stops waiting going back to whole over a while, not at once.
 pub fn breathe(
@@ -279,7 +282,7 @@ pub let updating_rise_ms : Double = 1400.0
 let updating_stand : Double = 0.4
 
 ///|
-/// The spinner, or how far what it waits on has come once that is known (docs/ui-panels.md 等待: a transfer in a
+/// The spinner, or how far what it waits on has come once that is known (sf/waiting.mbt: a transfer in a
 /// spinner's place, a message's files going up, a picture going up, an update round its key's mark): the same ring,
 /// the accent from its top as far round as it has come (`coming`, 0 to 1), going to a part told anew as a progress
 /// bar's fill does (`key` its own); None, the spinner's quarter turning. `size` across, its line `stroke` wide.

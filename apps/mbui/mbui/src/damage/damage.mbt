@@ -1,4 +1,4 @@
-// What of a frame differs from the one presented before it (docs/partial-redraw.md): the parts a renderer that keeps
+// What of a frame differs from the one presented before it: the parts a renderer that keeps
 // its last picture (a canvas of its own, the window's size) draws again, the rest left as it drew it. Worked out here
 // once, from the instances (src/ui/scene.mbt's 60 numbers), for every host: each renderer is told the rects
 // (@hostapi.render_dirty) and only cuts its drawing to them. Parts near each other are one, and there are at most

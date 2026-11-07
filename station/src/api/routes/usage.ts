@@ -64,7 +64,7 @@ export const routes = (tools: Tools): Route[] => {
         read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
     },
     // The agents' memory, for the pages to show: the global one, and the shared skills (projects' memories among them).
-    // A member of a workspace the station joined sees that workspace's (docs/multi-workspace.md).
+    // A member of a workspace the station joined sees that workspace's.
     {
       method: "GET",
       pattern: /^\/memory$/,

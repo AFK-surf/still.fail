@@ -1,4 +1,4 @@
-// What a finger holds for its menu, lifted toward it (iOS's context menu; docs/motion.md kind 7, a control answering:
+// What a finger holds for its menu, lifted toward it (iOS's context menu; sf/motion.mbt kind 7, a control answering:
 // held, its menu open): a little as it is held, all the way once its menu opens, back down as the menu goes. Lifted,
 // it is drawn over the menu's scrim and under the menu (Stratum's OverScrim), so that what the menu is of stands out of what
 // it dims; a sheet coming up over where it is, it goes up before it, clear of it, and back down with it as it goes.

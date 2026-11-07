@@ -1,4 +1,4 @@
-// A view of one of the station's screens over a member's link (docs/remote-screens.md, "Wire"): a stream whose head
+// A view of one of the station's screens over a member's link ("Wire"): a stream whose head
 // line has a `screen` object, answered 200 `application/x-stillfail-screen`, then frames both ways, each a kind byte,
 // its payload's length (4 bytes, big-endian) and the payload. Station → client: `config`, `video`, `state`; client →
 // station: `input`, `ack`, `keyframe`, `look` (the part of the screen it shows, zoomed in: its frames are then of that

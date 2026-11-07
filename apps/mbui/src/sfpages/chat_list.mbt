@@ -215,7 +215,7 @@ pub fn chat_list(
       // (what comes at its end while it is held there opens its room under what is in view, which goes up with it:
       // nothing to glide after)
       glide_on_growth=false,
-      // (what came, went and changed: by its rows' keys, the list's own, docs/list-motion.md)
+      // (what came, went and changed: by its rows' keys, the list's own, mbui's ui/list_size.mbt)
       sized=rd.rows.sized(),
       // (short of the pane, its rows at its end by the composer: what comes pushes what is over it up from the first
       // message, never down till the pane is full and up from then: rows_steady.mbt)

@@ -1,4 +1,4 @@
-// A person's own lock (docs/personal-lock.md): a chain, kept by the cloud and carried to their devices, of the keys that
+// A person's own lock: a chain, kept by the cloud and carried to their devices, of the keys that
 // person's app devices sign with. Only a device on it adds or removes one; a new device joins face to face
 // (views/pair.ts). What they sign with it means more than a login does: their phone lends itself to a chat only on a
 // grant signed so, which it checks itself against the lock it pinned, whatever a station or the cloud says.

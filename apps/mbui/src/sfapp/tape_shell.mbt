@@ -1,5 +1,5 @@
 // Signed in with a workspace in view, on the tape (laid out Medium with a sidebar to show: sfdesk's tape_holds): the
-// shell as nodes of the window's tree (mbui's view package, docs/retained.md, the way there's 4), made once, its panels
+// shell as nodes of the window's tree (mbui's view package, the way there's 4), made once, its panels
 // the tape's nodes (sfdesk's tape_view.mbt), what they hold and what floats over them old views (islands):
 //
 //   - under all of it, what the frame does in every tier before its pages (signed_in_frame) and what the tape's frame

@@ -1,4 +1,4 @@
-// still.fail Helper's grants end to end on a Mac (docs/remote-screens.md "Grants"): a dev cloud (cloud/test/dev.ts), a
+// still.fail Helper's grants end to end on a Mac: a dev cloud (cloud/test/dev.ts), a
 // station of this checkout started as launchd starts one (a job in the GUI session), and a member's device on iroh. It
 // reads the overview's `permissions` (the helper's real grants on this Mac), asks for one (GRANT, default the first
 // folder not granted, else desktop) with POST /permissions/request, sees the window said to be up, and, where the

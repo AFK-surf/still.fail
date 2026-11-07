@@ -185,7 +185,7 @@ interface MbHostPush {
   requestFrame?(): void;
 }
 
-/// Pushes while no page of the app is open (docs/notifications.md), through the service worker (/sw.js) as the web's
+/// Pushes while no page of the app is open, through the service worker (/sw.js) as the web's
 /// pages had them (src/notify.ts syncPush): once the browser lets the page notify, this browser's subscription to the
 /// cloud's key, given to the app as its push token (`web`), which registers it with the accounts as its `notify` says
 /// (apps/mbui sfbase/notices.mbt push_sync). A push's notification clicked opens its chat in the app.

@@ -115,7 +115,7 @@ export function screenOfLink(href: string): { station: string; screen: string } 
 }
 
 /// The station a link to its 共享调试 names (`…/w/<workspace>/s/<station>/adb`, as its agents' `adb_devices` tool links
-/// it: docs/adb-share.md), as `<workspace>/<station>`. Null otherwise.
+/// it), as `<workspace>/<station>`. Null otherwise.
 export function adbOfLink(href: string): string | null {
   const m = /^(?:https?:\/\/[^/]+)?\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/adb\/?$/.exec(href);
   if (!m) return null;

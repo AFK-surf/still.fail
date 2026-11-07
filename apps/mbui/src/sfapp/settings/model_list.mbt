@@ -102,7 +102,7 @@ fn model_list(
             None => false
           }
           // not usable here till borrowed: its name in the muted grey, until it is the one picked (where it comes from as
-          // it is: at half it was 1.9 to 1, docs/ui-panels.md 对比度)
+          // it is: at half it was 1.9 to 1, mbui ui/contrast.mbt)
           let faint = text(mv, "availability") == "borrowable" && !is_on
           let from = field(mv, "fromStation")
           if @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {

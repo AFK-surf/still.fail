@@ -1,4 +1,4 @@
-// The workspace lock across a whole world (docs/workspace-lock.md), tested by its properties: the control plane, three
+// The workspace lock across a whole world, tested by its properties: the control plane, three
 // stations (their own code: cloud.json and lock.json on disk, the presence socket's frames, the mesh's lock sync, a
 // device's hello) and the members' devices, each step drawn from a seed: an entry signed on a device and brought to the
 // plane and the stations, a device connecting, a line cut or back, a station stopped or started, the plane holding
@@ -9,7 +9,7 @@
 // is checked: every station level with the longest chain, the plane too once one station reaches it, every approved
 // device let in everywhere and every removed one nowhere. A failure is cut down to the fewest steps that still fail and
 // says its seed: LOCK_WORLD_SEED=<seed> runs only that one (LOCK_WORLD_RUNS=<n> runs n seeds from 1). There are two
-// workspaces, each its own lock (docs/multi-workspace.md): every station's home one, and one two of them joined.
+// workspaces, each its own lock: every station's home one, and one two of them joined.
 import assert from "node:assert/strict";
 import { createPrivateKey, createPublicKey, sign as nodeSign } from "node:crypto";
 import { mkdtempSync } from "node:fs";

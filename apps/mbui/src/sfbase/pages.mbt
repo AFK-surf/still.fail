@@ -218,7 +218,7 @@ pub fn open_chat(r : ChatRef) -> Unit {
 }
 
 ///|
-/// Page `p` opened, where the layout has it (Shell's `open`: the pane table, docs/architecture.md): what pages, links
+/// Page `p` opened, where the layout has it (Shell's `open`: the pane table): what pages, links
 /// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
   if window_front(p) {

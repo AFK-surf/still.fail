@@ -1,5 +1,5 @@
 // ⌘K (the web's Switcher.tsx ChatSwitcher and Finder, Switcher.css.ts): a panel high on the window over a scrim, the
-// search on top (搜索全部内容和操作), under it what a few words find in the workspace (the core's `search`, docs/search.md:
+// search on top (搜索全部内容和操作), under it what a few words find in the workspace (the core's `search`, 
 // its chats, the messages that have them, what every station finds besides, each kind under its heading, a few of each;
 // 查看更多 that kind alone, 全部结果 or Esc back to all) and what can be done here by its name (the core's
 // `commands.find` of what the frame offers now). With nothing typed, the latest chats, then what can be done. ↑ / ↓

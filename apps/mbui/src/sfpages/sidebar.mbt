@@ -282,7 +282,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   }
   // its lines and their keys: what came, went, changed its place among them worked out by the list (ListRows): a row
   // or a day new to it comes where it is, one gone leaves where it was, a row gone ahead of others both
-  // (docs/list-motion.md); while it showed the frame before (back to it, its pane slid to: as it is)
+  // (mbui's view/list_motion.mbt); while it showed the frame before (back to it, its pane slid to: as it is)
   let all_lines = lines.copy()
   let all_keys = lines.map(line_key)
   all_lines.append(day)

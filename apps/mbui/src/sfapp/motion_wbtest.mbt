@@ -1,4 +1,4 @@
-// still.fail's motion over its made-up chats, frame by frame (docs/motion.md): Home's rows as the list
+// still.fail's motion over its made-up chats, frame by frame (sf/motion.mbt): Home's rows as the list
 // changes, words sent flying into their bubble, the way to the newest coming and going.
 
 ///|
@@ -373,7 +373,7 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   t.assert_idle()
 }
 
-// What leaves is only drawn (docs/motion.md): a sheet going down and its scrim fading, the bar
+// What leaves is only drawn (sf/motion.mbt): a sheet going down and its scrim fading, the bar
 // going down under a page pushed. A tap meanwhile is what is under them's.
 
 ///|

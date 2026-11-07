@@ -1,4 +1,4 @@
-// Data outflow from another machine, through Tailcat (docs/data-outflow.md, 「经 Tailcat 从别的机器申请」): an admin
+// Data outflow from another machine, through Tailcat (「经 Tailcat 从别的机器申请」): an admin
 // turns it on in 数据外流, and the station serves the same requests as on its socket at a loopback port that a
 // `tailcat serve` of its own forwards a Tailcat address to. Whoever is given that address (and its port) reaches them
 // from anywhere, without an account or an open port; a connection to the port counts only when it is that tailcat's

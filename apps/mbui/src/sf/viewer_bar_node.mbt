@@ -1,5 +1,5 @@
 // The bar across the top of a file opened over a wide window (viewer_bar's, ViewerBar.tsx) as nodes of the window's
-// tree (the way there, docs/retained.md 4): what it says bound to what says it as that changes (the way back's words,
+// tree (the way there 4): what it says bound to what says it as that changes (the way back's words,
 // the name, the line about it, where the file is, the window's width, the ink), its tools nodes of their own
 // (tool_node), its way back and each tool done at the press's moment. Gone up out of the way (hidden: a picture left
 // alone) from the moment it is told so, as far as that way has it by the moment each frame is drawn, whatever frames

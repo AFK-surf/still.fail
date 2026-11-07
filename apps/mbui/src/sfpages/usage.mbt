@@ -10,6 +10,9 @@
 // Not here: the subscriptions' allowances (the profiles' page says them, now), nor the calls and tokens (no model's
 // tokens are another's: nothing to decide by).
 // Everything shown is the core's: the page only picks the days, the split, the one alone and the day.
+//
+// Laid out as Codex's `/usage` with still.fail's own figures (the user, 2026-11-02: 「抄 codex」「连续多少天那个没用
+// 」).
 
 ///|
 /// What the page picked: its days, how the summary's year is drawn (0 by day, 1 by week, 2 their running total), what

@@ -1,4 +1,4 @@
-// What Feishu's events say, as the station takes them (docs/feishu.md「收到的内容」): someone's message in a chat or a
+// What Feishu's events say, as the station takes them (「收到的内容」): someone's message in a chat or a
 // topic, with its text and files, or an answer from a card's button or form.
 import type { InboundFile } from "../sessions/chat.ts";
 

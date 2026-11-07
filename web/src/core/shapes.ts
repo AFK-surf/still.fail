@@ -1428,7 +1428,7 @@ export interface BarPrefs {
 	current: number;
 }
 
-/** The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md). */
+/** The faces chosen on this device, by place (client/core-ts/src/fonts.ts, sf/faces.mbt). */
 export interface FontChoices {
 	/** The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face. */
 	ui?: string;

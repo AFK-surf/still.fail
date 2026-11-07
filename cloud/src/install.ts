@@ -2,7 +2,7 @@
 // machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
 // bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` into
 // ~/.local/bin, joins the workspace the token is for (a station already in one
-// stays in it and joins this one beside it, `enroll --stay`: docs/multi-workspace.md), and runs the station as
+// stays in it and joins this one beside it, `enroll --stay`), and runs the station as
 // a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
 // it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd

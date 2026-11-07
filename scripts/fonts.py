@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The faces still.fail offers beside the system's (client/core-ts/src/fonts.ts, docs/fonts.md), made from where each is
+"""The faces still.fail offers beside the system's (client/core-ts/src/fonts.ts, sf/faces.mbt), made from where each is
 published into what the apps take, under fonts/<id>/<version>/ in the releases bucket (served at /releases/fonts/…):
 
 - for pages, font.css and its woff2 files: a Chinese face cut by unicode-range into the slices Google Fonts cuts Noto

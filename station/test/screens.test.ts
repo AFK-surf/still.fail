@@ -1,4 +1,4 @@
-// The station's screens (docs/remote-screens.md): the view wire over a member's link in memory (framing, at most
+// The station's screens: the view wire over a member's link in memory (framing, at most
 // as many frames not acknowledged as the pace lets go, read-only members, who is on a screen, how a view ends), with a fake source; the
 // list (GET /screens, `screens` on the event stream); a person's input as macOS posts it; the desktop source with a
 // fake helper (its grants, its view protocol); the clipboard both ways and files dropped (only for a view that drives,

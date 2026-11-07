@@ -1,4 +1,4 @@
-// A simulator's device as Xcode draws it (docs/remote-screens.md "Simulators"): its case and buttons, whose pictures its
+// A simulator's device as Xcode draws it: its case and buttons, whose pictures its
 // station makes of what Xcode has on that Mac (screens/sim-chrome.ts; `screen.chrome`), turned as the device stands. The
 // case has the panel's shape cut out of it, so the picture shows through it, on the system's video layer or drawn here
 // alike; its buttons are pressed where they are, held as long as they are here. Until a device's pictures have come, or

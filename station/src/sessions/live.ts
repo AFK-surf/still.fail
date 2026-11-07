@@ -3,7 +3,7 @@
 // the transcript's entries as each is written whole. What a step writes as it goes (the runtime's deltas) is not sent:
 // a step's words come with its entry; how fast it writes is, now and then. Nothing here is stored: the steps in flight
 // live in memory until they end, and the transcript stays the record, read as it grows and kept in memory while someone
-// watches. Redesigned on one point (docs/station-ts.md, push not poll): a watched transcript is followed by the file
+// watches. Redesigned on one point (push not poll): a watched transcript is followed by the file
 // system's change events (fs.watch), not looked at every 250 ms.
 import type { Clock } from "effect";
 import { existsSync, type FSWatcher, watch } from "node:fs";

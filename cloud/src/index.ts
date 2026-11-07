@@ -209,7 +209,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
-  // The console's bug reports for the team's feedback monitor (docs/feedback.md): FEEDBACK_TOKEN reads them and nothing else.
+  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and nothing else.
   if (path === "/v1/admin/feedback/list" && request.method === "POST") {
     const supplied = bearerToken(request);
     if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();

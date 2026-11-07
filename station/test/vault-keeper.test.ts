@@ -1,4 +1,4 @@
-// Agents using the vault's secrets (docs/vault.md, agent 用密钥; src/vault/keeper.ts, proxy.ts, ssh-agent.ts, scrub.ts,
+// Agents using the vault's secrets (agent 用密钥; src/vault/keeper.ts, proxy.ts, ssh-agent.ts, scrub.ts,
 // run.ts, secrets.ts): whose grant is taken and for what, the proxy putting the value in only for the granted hosts,
 // the ssh-agent's signatures, output with the value hidden, and a request from the tool to the grant. Servers listen on
 // loopback ports of the run's own; nothing waits on time (the keeper's clock is the test's).

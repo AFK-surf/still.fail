@@ -189,7 +189,7 @@ pub(all) struct Reading {
   mut motion_list : String
   mut motion_keys : Array[String]
   /// its rows as last shown, by key and what each shows (ListRows: what came, went and changed worked out by the
-  /// list, docs/list-motion.md)
+  /// list, mbui's ui/list_size.mbt)
   rows : @ui.ListRows[Entry]
 }
 
@@ -879,7 +879,7 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
       took += h
     }
   }
-  // the rows over it making way for the line gone (docs/motion.md kind 3, its cause the line's going): from where they
+  // the rows over it making way for the line gone (sf/motion.mbt kind 3, its cause the line's going): from where they
   // stood, on the rows' spring, nothing dropped at once and no room left empty for good (whether rows came before
   // the line went or after, the list at rest the same)
   if rd.floor > rd.floor_was {
@@ -1358,14 +1358,14 @@ pub fn row_keys(
     None
   }
   // (what changes comes, goes and changes on the list's way whether the list follows its end or is read up it: the
-  // row read from stays where it shows, what is over and under it moving away from it, docs/list-motion.md; nothing
+  // row read from stays where it shows, what is over and under it moving away from it, mbui's ui/list_size.mbt; nothing
   // at once in view, 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」)
   shown_rows(c, rd, list, keys, !v.newer, flight)
 }
 
 ///|
 /// A chat's rows as they show (`list`, `keys`): with what went from them in among them while its room closes, what
-/// came and changed said from now while its newest are in it (docs/list-motion.md); what words sent fly to opening its
+/// came and changed said from now while its newest are in it (mbui's ui/list_size.mbt); what words sent fly to opening its
 /// room as long as their flight.
 fn shown_rows(
   c : @ui.Ctx,

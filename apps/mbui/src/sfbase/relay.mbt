@@ -1,4 +1,4 @@
-// A chat relayed to a channel (docs/relay.md), for both frames: the places its station's bots are in, read as the
+// A chat relayed to a channel, for both frames: the places its station's bots are in, read as the
 // picker opens (`chat.relayPlaces`), what the picker shows of them for what is typed and the bot picked (the core's:
 // `chat.relayView`, relay-pick.ts), the people there its note can mention once an `@` is typed in it (`chat.relayPeople`,
 // then the core's `chat.relayMentions`), and the chat relayed where it was picked (`chat.relay`). The desktop's dialog

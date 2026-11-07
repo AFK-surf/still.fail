@@ -1,5 +1,5 @@
-// What the core does to bring a file on a station onto this device and hand it to the system (docs/client-core.md,
-// Downloads): a chat's file a message names, a file of a station's drive, or a folder of it (zipped on the station
+// What the core does to bring a file on a station onto this device and hand it to the system:
+// a chat's file a message names, a file of a station's drive, or a folder of it (zipped on the station
 // first, `drive.zip`), whatever page asked and whatever becomes of it (a preview closed, another opened, the app closed
 // and opened again). It fetches the file a part at a time, each part kept as a reader of it keeps it (drive-kept.ts: a
 // chat's `chat`, a drive's `file`), and goes on from what is kept: what a viewer read of it before, what a download

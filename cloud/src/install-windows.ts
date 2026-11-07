@@ -1,7 +1,7 @@
 // The still.fail station's installer for Windows, served at /install.ps1 (install.ts is macOS's and Linux's): in
 // PowerShell on the machine that is to be a station, `& ([scriptblock]::Create((irm <origin>/install.ps1))) <token> [<lock>]`
-// (the workspace lock's hash to pin, docs/workspace-lock.md).
-// It does what install.sh does, the Windows way (docs/station-ts-native.md, "Windows"):
+// (the workspace lock's hash to pin).
+// It does what install.sh does, the Windows way ("Windows"):
 // - the release (stillfail-station-win32-x64.zip) in ~\.stillfail\app; the Node it runs on (NODE_VERSION) downloaded
 //   once per version into ~\.stillfail\node\v<version> and checked, then copied to <app>\node (no links: they take a
 //   privilege on Windows); the machine's own node.exe when it is that very version;

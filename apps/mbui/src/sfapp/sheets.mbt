@@ -1053,7 +1053,7 @@ fn job_meta(c : @ui.Ctx, job : Json?, size : Double) -> Unit {
 
 ///|
 /// A job's row (JobInfoRow): its dot on its name's line, what it is up to under it; an over one's name stepped back to
-/// the muted grey, not faded (at 55% its words were 2.3 to 1: docs/ui-panels.md 对比度).
+/// the muted grey, not faded (at 55% its words were 2.3 to 1: mbui ui/contrast.mbt).
 fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
   let t = @sf.theme()
   let off = job_tint(text(job, "tone")) is None

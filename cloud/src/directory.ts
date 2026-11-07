@@ -168,7 +168,7 @@ export class Directory extends DurableObject<Env> {
   /**
    * A station was in one workspace, its row in `stations` saying which and what it is called there (with an emoji and
    * an icon, which it gained later: absent from a table older than them). It may be in several now: `stations` keeps
-   * the machine, `station_members` each workspace it is in, named there (docs/multi-workspace.md). An old table is
+   * the machine, `station_members` each workspace it is in, named there. An old table is
    * split here, each row into one of each; one already split has no `workspace` and is left alone.
    */
   protected migrateStationMembers(): void {
@@ -505,7 +505,7 @@ export class Directory extends DurableObject<Env> {
       .map(({ joined, ...row }) => ({ ...row, ...(joined ? { joined: true } : {}) })) as unknown as (StationView & { workspace: string })[];
   }
 
-  // ── the workspace lock (docs/workspace-lock.md, lock.ts): kept and carried, not trusted ─────────────────────────
+  // ── the workspace lock (lock.ts): kept and carried, not trusted ─────────────────────────
 
   /** Workspaces whose kept chain was checked while this object lives (#lockChecked). */
   protected readonly lockSeen = new Set<string>();
@@ -981,7 +981,7 @@ export class Directory extends DurableObject<Env> {
   /**
    * A station redeems an enrollment token. The caller has checked that the station holds the key for `station`.
    * Re-enrolling moves the station: it leaves every other workspace it is in. Joining (`join`, POST /v1/stations/join)
-   * it stays in them and joins this one too (docs/multi-workspace.md); a station whose home is locked joins locked
+   * it stays in them and joins this one too; a station whose home is locked joins locked
    * workspaces only (an unlocked one's members are this cloud's word, which the home's lock took away). It pins each
    * locked workspace's lock there. `home` is the workspace it joined first, whose say goes for the machine.
    */
@@ -1102,7 +1102,7 @@ export class Directory extends DurableObject<Env> {
     }
   }
 
-  // ── push registrations (docs/notifications.md) ──────────────────────────
+  // ── push registrations ──────────────────────────
   // A device's push subscription (Web Push) or token (FCM, APNs) is registered with each account signed in on it, one row
   // each, which belongs to the sign-in session that registered it last; signing that session out takes it
   // (revokeSessions).
@@ -1268,7 +1268,7 @@ export class Directory extends DurableObject<Env> {
   }
 
   /**
-   * The admin makes a workspace for a company (docs/cloud.md「企业 workspace」): its owners by email, members at once or
+   * The admin makes a workspace for a company (「企业 workspace」): its owners by email, members at once or
    * when they first sign in, and limits of its own, the creator's plan aside. The admin is its creator but not in it.
    */
   adminCreateWorkspace(by: string, input: { name?: unknown; owners?: unknown; members?: unknown; stations?: unknown }): { id: string; joined: string[]; added: string[] } {

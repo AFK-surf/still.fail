@@ -331,7 +331,7 @@ test "lines are drawn where they are said to be" {
 }
 
 ///|
-/// A screen in which only a spinner moves (docs/partial-redraw.md), at `phase` of its turn: in a window 240 by 200 at
+/// A screen in which only a spinner moves, at `phase` of its turn: in a window 240 by 200 at
 /// scale 2, under a bar of frosted glass whose capture reaches it, a box turned with it, a card with a
 /// shadow, shapes, and far from it a dot whose colour changes with it. Its two moments drawn one after the other, the second only where it differs, are the second
 /// drawn whole, to the byte (mbui-render MBUI_DL_FROM: scripts/render_offscreen.sh, render_check.sh).

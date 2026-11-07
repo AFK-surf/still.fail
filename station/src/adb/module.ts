@@ -62,7 +62,7 @@ export const AdbLive = Layer.effectDiscard(
     }, grant, holders);
     const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath, join(data, "run", "adb-servers.json"), admit)), (s) => Effect.promise(() => s.close()));
     void servers.reap(previous.gone).catch(() => undefined);
-    // Chats' grants of people's phones (docs/adb-share.md): told to the owner's devices, their phones connected anew in
+    // Chats' grants of people's phones: told to the owner's devices, their phones connected anew in
     // the grants' adb servers, a grant's server stopped as it ends.
     let shares: Shares | null = null;
     // The chats' own screens on the phones (displays.ts): their phones' offers say which chats have one up.

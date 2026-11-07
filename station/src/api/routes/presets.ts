@@ -1,4 +1,4 @@
-// A workspace's presets (sessions/presets.ts, docs/presets.md): GET /presets lists them with the directories offered
+// A workspace's presets (sessions/presets.ts): GET /presets lists them with the directories offered
 // for a new one; POST makes one, PUT /presets/:id changes it, DELETE removes it. Each member sees and changes their own
 // workspace's. Any of those changed, or the machine's repositories found after they were asked for, is told
 // (`presets`): the devices read them again. A chat is opened with one by POST /sessions `preset` (routes/hub.ts).

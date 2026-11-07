@@ -63,7 +63,7 @@ render_matte() {
   echo "render_$host: pictures and mattes share their rounded frames"
 }
 
-# Partial redraw (docs/partial-redraw.md): out/render/partial.png, partial-b.dl drawn only where it differs from
+# Partial redraw: out/render/partial.png, partial-b.dl drawn only where it differs from
 # partial-a.dl drawn before it, the same to the byte as partial.whole.png, partial-b.dl drawn whole ($1: the host's
 # name, said).
 render_partial() {

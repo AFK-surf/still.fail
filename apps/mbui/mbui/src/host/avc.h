@@ -1,4 +1,4 @@
-// H.264 as a remote screen sends it (still.fail's docs/remote-screens.md, its Android app's remote/Avc.kt): a config's
+// H.264 as a remote screen sends it (its Android app's remote/Avc.kt): a config's
 // avcC (ISO/IEC 14496-15 AVCDecoderConfigurationRecord), then access units in AVCC, each NAL after its length. What a
 // decoder takes of them: Android's MediaCodec the parameter sets as csd-0 (SPS) and csd-1 (PPS) and each access unit in
 // Annex B (a start code in place of each length); Apple's VideoToolbox the sets themselves and the access units as they

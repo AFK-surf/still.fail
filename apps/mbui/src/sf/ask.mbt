@@ -1,8 +1,11 @@
-// A card that asks (docs/ui-panels.md, 要人拍板的卡片): its title the question, the one line the answer turns on, its
+// A card that asks (sf/align.mbt, 要人拍板的卡片): its title the question, the one line the answer turns on, its
 // buttons in its foot corners; one alone in the middle of what it is over (a player's), all of it in its middle and its
 // buttons across its foot. An agent's ask in a chat (settings' vault_ask, phone_ask; sfbase's adb_link_card) and
 // what a player asks over its picture (player.mbt: 无法播放, 播放结束) alike; on the night (on_night: a player's, a
 // stage's) in the night's words and buttons.
+//
+// Answered stays where it is: the list changes height only for what is new (the user, 2026-10-29: 「有个勾不就行了吗
+// ？为啥非要冒一行字？」).
 
 ///|
 /// What is asked, over the answer: its lines 2 apart (VaultAsk.css.ts what).

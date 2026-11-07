@@ -1,5 +1,5 @@
 // Programs on this machine reaching a web service on another station of the workspace as if it were here
-// (docs/station-peers.md "Web services of other stations"): http://127.0.0.1:<agents' door>/peer/<station>/<port>/<path>
+//: http://127.0.0.1:<agents' door>/peer/<station>/<port>/<path>
 // is http://localhost:<port>/<path> there, its WebSockets too. No port is opened anywhere: the requests go over the mesh,
 // on an ALPN of their own, admitted as the station transport admits (peer.ts `member`: the workspaces' rosters, failing
 // closed while they are not current). One request a stream: a JSON head line `{workspace, port, method, path, headers,

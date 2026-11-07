@@ -1,4 +1,4 @@
-// A view's pace (mesh/screen-pace.ts, docs/remote-screens.md "Pace"): which frames may go, and the bit rate its source
+// A view's pace (mesh/screen-pace.ts): which frames may go, and the bit rate its source
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";

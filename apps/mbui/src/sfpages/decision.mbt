@@ -307,7 +307,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
 }
 
 ///|
-/// An agent's request for its person's phone in place of its post's words (docs/adb-share.md): its card while it waits
+/// An agent's request for its person's phone in place of its post's words: its card while it waits
 /// (answered with `adb.decide` on the chat's station), then a line saying how it went: decided on screen, the card
 /// stays, the answer given marked, till it is out of sight (vault_ask_card's).
 fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : PhoneAsk) -> Unit {

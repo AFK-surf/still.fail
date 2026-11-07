@@ -221,7 +221,7 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
     }
     // a station's 共享调试, as its agent asks for it (adb_devices): the page, sharing only once its person taps; a login
-    // an agent started on a station (docs/remote-login.md): its card on the station's page, marked, brought into view
+    // an agent started on a station: its card on the station's page, marked, brought into view
     "adbShare" | "login" => {
       if t.station == "" || (t.opens == "login" && t.login == "") {
         return false
@@ -265,7 +265,7 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
       open_page(Service(address, t.service))
     }
-    // one of a station's screens, as its agent asks a person to take over (docs/remote-screens.md): the viewer over
+    // one of a station's screens, as its agent asks a person to take over: the viewer over
     // whatever page is open (back comes back to it)
     "screen" => {
       if t.screen == "" || t.station == "" {

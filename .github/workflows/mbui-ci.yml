@@ -35,7 +35,7 @@ jobs:
       - name: The steps' network is none (a connection out fails at once)
         run: if curl -fsS --max-time 5 -o /dev/null https://github.com; then echo "reached github.com"; exit 1; fi
       - uses: ./.github/actions/mbui-moonbit
-      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint, docs/detlint.md)"
+      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint)"
         run: scripts/detlint
       - name: "The outsides' kinds: each its own number in src/ui/hostcall.mbt, every host's named the same (scripts/chk outside-kinds)"
         run: scripts/chk outside-kinds
@@ -61,7 +61,7 @@ jobs:
           moon test --target native -p mbui/text 2>&1 | tail -4
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
-      - name: "signals (alien-signals ported: its own tests and the conformance suite it runs, docs/signals.md)"
+      - name: "signals (alien-signals ported: its own tests and the conformance suite it runs)"
         run: |
           set -o pipefail
           moon test --target native -p mbui/signals 2>&1 | tail -3

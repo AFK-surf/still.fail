@@ -1,4 +1,4 @@
-// What the core keeps in sync with the stations, by itself, whatever the UI shows (docs/core-ts.md, rule 6; station.rs
+// What the core keeps in sync with the stations, by itself, whatever the UI shows (rule 6; station.rs
 // and sync.rs for what a station says and how). Every station of every workspace an account reaches has a link
 // (link.ts): its events stream, held open while the station is reached. What a station holds is of two sorts, kept in
 // sync each its own way:
@@ -85,7 +85,7 @@ const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
-/// times a second, each search asked again a search of the machine's files there (docs/search.md).
+/// times a second, each search asked again a search of the machine's files there.
 export const SEARCH_STALE_MS = 2_000;
 /// How often a shown resources page asks a station from before telling them again (the station, asked, looks as often
 /// itself); and how long one that tells them is waited on after its last before the stream is taken for gone.
@@ -117,7 +117,7 @@ export function applyStep(view: LiveView, event: unknown, now: number, held = 0)
     if (typeof parent === "string" && parent !== "") step.parent = parent;
     view.steps.push(step);
   } else if (kind === "end") {
-    // On new steps: the ones there are in the live topic's value as it was made (shared, docs/core-ts.md).
+    // On new steps: the ones there are in the live topic's value as it was made (shared).
     view.steps = view.steps.map((s) => (equal(get(s, "id"), id) && isObject(s) ? { ...s, ended: true, held } : s));
   }
 }
@@ -151,7 +151,7 @@ export class StationsSync {
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
   onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
-  /// The loopback relays of logins this device takes the callback of (docs/remote-login.md).
+  /// The loopback relays of logins this device takes the callback of.
   readonly relays: Relays;
   /// Told of entries that came as they were said (an event): they come in with a motion.
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
@@ -379,7 +379,7 @@ export class StationsSync {
     }
   }
 
-  /// The station's screens as it has them now (docs/remote-screens.md), in its link's memory (kept: what was said last
+  /// The station's screens as it has them now, in its link's memory (kept: what was said last
   /// shows as the app opens again, until they are read). A station from before screens has none (404): it is held so,
   /// and said (`outdated`).
   #screens(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
@@ -463,7 +463,7 @@ export class StationsSync {
     });
   }
 
-  /// The programs granted the station's data (GET /outflow/grants, the `outflowGrants` topic, docs/data-outflow.md),
+  /// The programs granted the station's data (GET /outflow/grants, the `outflowGrants` topic),
   /// read each time a page shows them; then as the station tells (`outflow-grants`). A station from before: none.
   outflowShown(address: string): void {
     this.#enqueue(address, "outflowGrants", Priority.shown, this.#outflow(address));
@@ -533,7 +533,7 @@ export class StationsSync {
 
   /// A job's log as it is now (its `lines` last lines), once a run: its topic opened (what was kept of it shows
   /// meanwhile). The station's stream says how it grows from then on (an older station's does not: its log is as it was
-  /// when opened, docs/core-ts.md).
+  /// when opened).
   readLog(address: string, job: string, lines: number): void {
     const key = logKey(job, lines);
     if (this.#links.get(address)?.memory.fresh(key)) return;
@@ -555,7 +555,7 @@ export class StationsSync {
     );
   }
 
-  /// What a search finds on the station (`stationSearch`, docs/search.md): asked a moment after the words stop changing
+  /// What a search finds on the station (`stationSearch`): asked a moment after the words stop changing
   /// (one shown that long), at the urgency of what is shown, and again as it is shown again; held in memory while
   /// shown, the station's answer as it came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
   /// `again`: asked again as the station's chats changed (said to it: `again=1`, answered as found lately).
@@ -740,7 +740,7 @@ export class StationsSync {
     });
   }
 
-  /// The station's logins (docs/remote-login.md), read whole: in its link's memory, as its stream then tells them. A
+  /// The station's logins, read whole: in its link's memory, as its stream then tells them. A
   /// station from before them answers 404: it has none (the page offers none).
   #machineLogins(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
@@ -1472,11 +1472,11 @@ export class StationsSync {
         this.#usageChanged(address, null, typeof from === "number" && Number.isFinite(from) ? from : null);
         return;
       }
-      // Its screens came or went, or who is on them changed (docs/remote-screens.md).
+      // Its screens came or went, or who is on them changed.
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
-      // A login of the station's (docs/remote-login.md).
+      // A login of the station's.
       case "machine-logins": {
         const link = this.#links.get(address);
         if (!link) return;
@@ -1488,7 +1488,7 @@ export class StationsSync {
       case "presets":
         if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
         return;
-      // The programs granted the station's data changed, or read it (docs/data-outflow.md).
+      // The programs granted the station's data changed, or read it.
       case "outflow-grants": {
         const link = this.#links.get(address);
         if (!link || !Array.isArray(get(data, "grants"))) return;

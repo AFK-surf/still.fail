@@ -659,7 +659,7 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
 
 ///|
 test "an image right clicked: its one menu, again on that menu still the one; in the preview over the chat, the picture's own, never the chat's 引用" {
-  // (macOS: a mouse; Large, menus beside what opened them, the chat its own column: docs/architecture.md, rule 3)
+  // (macOS: a mouse; Large, menus beside what opened them, the chat its own column, rule 3)
   let (t, x, y) = image_in_chat("compare.png", platform=0, w=1280.0)
   // (引用 a press reaches: a menu's, not what lies under what is over it)
   let quotes = fn() { t.reachable("引用").length() }

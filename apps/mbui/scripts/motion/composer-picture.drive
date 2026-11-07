@@ -1,5 +1,5 @@
 # A chat on a computer: a picture picked into its composer with words in it: the box opens for it, the picture growing
-# with the room it opens, whole (docs/motion.md: what is put in the composer).
+# with the room it opens, whole (sf/motion.mbt: what is put in the composer).
 # MBUI_FIXTURE=webdemo MBUI_WIN=1280x800.
 timeout 20000
 until 新建对话

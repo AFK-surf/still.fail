@@ -1,4 +1,4 @@
-// The station topics (docs/client-core.md, Topics), read from what the sync holds (rule 6): the data center's records,
+// The station topics (Topics), read from what the sync holds (rule 6): the data center's records,
 // a thread's or a transcript's items, and what a link holds beyond them (its state, the sessions at work, host samples,
 // jobs' logs). A topic subscribed makes what it shows more urgent in the sync; it never asks for anything itself. A
 // thread's window and a transcript's page are the topic's own state: where the reader is.

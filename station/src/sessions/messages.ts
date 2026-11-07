@@ -86,7 +86,7 @@ function chatOf(hub: Hub, key: string, named: string): [string, string | null] {
 }
 
 /// session_send from session `key`: to a chat of its workspace (or one shared with it to write in), on this station or
-/// another of that workspace (docs/multi-workspace.md).
+/// another of that workspace.
 export async function sessionSend(hub: Hub, key: string, args: Args): Promise<string> {
   const to = (args.to === undefined ? "" : jsString(args.to)).trim();
   const text = (args.text === undefined ? "" : jsString(args.text)).trim();

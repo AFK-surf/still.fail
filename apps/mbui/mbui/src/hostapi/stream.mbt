@@ -1,4 +1,4 @@
-// A picture the host decodes frame by frame (@ui's Stream: a remote screen's frames, still.fail's docs/remote-screens.md),
+// A picture the host decodes frame by frame (@ui's Stream: a remote screen's frames),
 // drawn by the app as an image: H.264 (a config, the avcC and the picture's size, then access units in AVCC, each NAL
 // after its length) or JPEG frames, each with its time `ts` (the sender's, only compared and handed back).
 //

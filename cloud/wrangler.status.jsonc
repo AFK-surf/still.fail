@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // still.fail/status (status/status.html, docs/cloud.md): its page, a static file as it is, nothing built. A Worker of
+  // still.fail/status (status/status.html): its page, a static file as it is, nothing built. A Worker of
   // its own, not the official site's: the site goes out only with a stable release. A route takes precedence over the
   // site's Custom Domain on the same host.
   "name": "still-fail-status",

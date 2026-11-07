@@ -32,7 +32,7 @@ globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding:
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
 globalStyle(inNarrow(list), { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /**
- * On a settings page a list is a list card, on every width as the narrow screen's and the app's are (docs/ui-panels.md
+ * On a settings page a list is a list card, on every width as the narrow screen's and the app's are (sf/align.mbt
  * 页面卡片, 列表卡; the user, 2026-10-26: 「设置感觉很乱」, a wide page's rows were on the page or on cards for no reason):
  * at the column's edges as the page's other cards, its rows' grounds LIST_PAD in, their words CARD_PAD in, their corners
  * concentric with its. Here, after the two above, so it wins over them.

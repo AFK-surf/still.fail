@@ -1,4 +1,4 @@
-// A page's sign-in with a passkey, signed on this device (still.fail docs/remote-screens.md, "Signing in with a passkey"):
+// A page's sign-in with a passkey, signed on this device ("Signing in with a passkey"):
 // while this viewer drives a tab of a station's browser whose page asks for one, the station says the site and the
 // client data to sign (the tab's origin, as the browser has its address); the person's own device (@hostapi
 // passkeys.mbt: Windows, or a Mac whose app is entitled as a browser, which asks them itself) signs it with a passkey of theirs for that site, and what it signed

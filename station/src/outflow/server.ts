@@ -1,4 +1,4 @@
-// Data outflow's own socket (docs/data-outflow.md): <data>/run/outflow.sock, on this machine alone, HTTP. A program
+// Data outflow's own socket: <data>/run/outflow.sock, on this machine alone, HTTP. A program
 // here asks for some kinds of the station's data (POST /v1/request): the station says who it is by the other end of the
 // socket (never by what it says of itself), an admin of the workspace answers in still.fail, and the program gets a
 // token. With it, it reads what it was granted (GET /v1/stations, /v1/usage, /v1/chats,
@@ -58,7 +58,7 @@ const BODY_MAX = 16 * 1024;
 /// A request `POST /v1/operate` carries, at most: an API request and what it uploads, in base64.
 const OPERATE_MAX = 64 * 1024 * 1024;
 /// What a program granted `operate` is not given, whoever it acts as: the grants it holds would be its own to answer,
-/// and a vault opens only in a person's app (docs/vault.md).
+/// and a vault opens only in a person's app.
 const NOT_OPERATED = /^\/*(outflow|vault|vault-requests)(\/|$)/;
 /// Read as the admin API's routes read a path, slashes repeated and all; one that cannot be read so is refused too.
 export function notOperated(path: string): boolean {

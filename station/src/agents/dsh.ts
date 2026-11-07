@@ -2,7 +2,7 @@
 // the station's own driver plugin in it (./dsh-bridge.mjs) in place of dsh's ACP server: dsh's ACP and SDK servers take
 // no input for a running turn, and its SDK cannot stop one. The plugin speaks a line of JSON per message (its header).
 //
-// Behaviour pinned against dsh 0.2 (docs/dsh.md):
+// Behaviour pinned against dsh 0.2:
 // - `open` makes the session (dsh names it) or resumes a persisted one; the station's tools are dsh's mcp-client in the
 //   patch, the session's token read from the environment;
 // - `prompt` queues a message for the next turn (one starts at once when none runs); `steer` puts one in the running

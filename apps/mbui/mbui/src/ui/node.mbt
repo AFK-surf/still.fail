@@ -76,7 +76,7 @@ struct Node {
   mut hit : Bool
   // (with `hit` false: pointed at, never pressed: Ctx::box's `points`)
   mut points : Bool
-  /// what its build said of it as a target, held by it (docs/retained.md, the way there's 1): the pointer's shape over it
+  /// what its build said of it as a target, held by it (the way there's 1): the pointer's shape over it
   /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
   /// holds_through, menu_asked); 0 none said
   mut marks : Int
@@ -105,7 +105,7 @@ struct Node {
   /// (words_after_layout)
   mut words : WordsMark?
   /// what takes the presses landing on it, which takes none itself (Ctx::presses_to: a target's id), and where that
-  /// was said; held by it (docs/retained.md, the way there's 1)
+  /// was said; held by it (the way there's 1)
   mut press_owner : (Int, SourceLoc)?
   /// the node of the window's tree that takes the presses landing on it (Ctx::presses_to_node: drawn here, pressed
   /// there), if any
@@ -125,7 +125,7 @@ struct Node {
   mut first : Int
   mut last : Int
   mut next : Int
-  /// who it is (docs/incremental.md, What decides the work): what holds it and its key there (its id, or how many
+  /// who it is (What decides the work): what holds it and its key there (its id, or how many
   /// before it there have none), not where it falls in the frame's order; the slot of the frame's nodes it was last
   /// put in; how many of what it holds have no id, as they are built (`keyless`: it is one of them); the pass of a build
   /// that last made it

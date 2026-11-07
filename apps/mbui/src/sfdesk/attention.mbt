@@ -5,6 +5,9 @@
 // one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it fails again). A
 // station's trouble is the same: listed until the panel has shown it, then the Station's place
 // says it, until the trouble changes (kept on this device).
+//
+// Only what has come to you and you have not seen; there is no list of every open decision (奏 removed, the user,
+// 2026-10-30: 「把奏删掉吧」).
 
 ///|
 /// What the panel keeps: what was let go in it (忽略) until the core no longer lists it, by station and chat; the

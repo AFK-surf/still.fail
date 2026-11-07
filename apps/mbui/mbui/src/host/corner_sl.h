@@ -1,11 +1,7 @@
 // src/host/corner.sl as a C string (scripts/chk corner-sl makes it: edit corner.sl, then run it). The shaders
 // write float2; GLSL's take it with `#define float2 vec2` and `#define float4 vec4` before it.
 #define MB_CORNER_SL \
-  "// How mbui draws a corner, for every renderer: src/paint/smooth.mbt says what and why, and these are its functions, number\n" \
-  "// for number (scripts/chk corner-sl holds their numbers alike). Metal's, Direct3D's and both GLs' shaders take this in as it\n" \
-  "// is (corner_sl.h; web/host.js between its \"corner.sl\" lines), written in what the four have in common (float2: GLSL's\n" \
-  "// vec2, defined so before it). Its scalar part is C too: apple_views.m's masks take that with MB_CORNER_SCALARS.\n" \
-  "// Made into those by scripts/chk corner-sl, which CI runs with --check.\n" \
+  "// smooth.mbt's corners for the renderers; scripts/chk corner-sl makes corner_sl.h and web/host.js from it.\n" \
   "//\n" \
   "// How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1\n" \
   "// superellipse(1.5) over r a quarter longer; between, as far as the room goes.\n" \

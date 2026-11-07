@@ -591,7 +591,7 @@ export class Requests {
     });
   }
 
-  /// A view of the station's screen `id` (docs/remote-screens.md): open once the station answers 200, its frames
+  /// A view of the station's screen `id`: open once the station answers 200, its frames
   /// both ways then (screen-frames.ts). A station that refuses says why (`httpError`: 404 no such screen, or no such
   /// route on a station from before screens). A station from before screens that takes the stream for a request
   /// waits for a body never finished: the open is given up after SOCKET_OPEN_MS.

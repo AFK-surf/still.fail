@@ -700,7 +700,7 @@ let pick_pop_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-/// Pointed at: a step towards the page, as every solid ground (docs/ui-panels.md 悬停).
+/// Pointed at: a step towards the page, as every solid ground (mbui ui/hand_moves.mbt).
 // kept across runs: a value (no field of it changes)
 let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=Over(Primary, A(Bg, O15))"))
 

@@ -1,5 +1,5 @@
 // A tone's ground (green_bg, red_bg, accent_bg…: a pill's, a mention's) seen on every ground of its palette, and its
-// ink read on it (docs/ui-panels.md 对比度): 1.25 to 1 off what it lies on, as what is drawn to be seen; 4.5 to 1 for
+// ink read on it (mbui ui/contrast.mbt): 1.25 to 1 off what it lies on, as what is drawn to be seen; 4.5 to 1 for
 // its words. Grounds fitted to the page alone, opaque, were 1.0 to 1.1 off a card in the dark (2026-10-27).
 
 ///|

@@ -1,10 +1,10 @@
 // still.fail's own host's side of src/stillfail/reports.mbt on iOS (src/stillfail/core_engine.m includes it there), what
-// Android's Crashes.java does (docs/telemetry.md → iOS): the app's crashes and hangs, to still.fail's PostHog project as
+// Android's Crashes.java does: the app's crashes and hangs, to still.fail's PostHog project as
 // `$exception` events. iOS lets no app see its own end: MetricKit (MXMetricManager) gives the system's report of each
 // crash, and of each hang, as the app starts the next time. Each is kept in the app's files as it comes
 // (crashes/<id>.json: what MetricKit gave, its kind and when) and goes once an account is signed in, as it, in one
 // batch to /batch/; what fails to go goes at the next start. A report's frames are the system's, unsymbolicated: each
-// binary's name, UUID and offset into its text, for the build's dSYM (docs/telemetry.md says how).
+// binary's name, UUID and offset into its text, for the build's dSYM ( says how).
 //
 // A build without PostHog's key (Info.plist's StillfailPosthogKey: scripts/ios-core.sh writes it from the file
 // STILLFAIL_POSTHOG names, the TestFlight build's POSTHOG_JSON) sends nothing and keeps nothing, and answers `hello` 0:

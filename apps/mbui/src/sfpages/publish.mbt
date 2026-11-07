@@ -979,7 +979,7 @@ let publish_said : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 /// A message's box to tick (on the page): in a column of its own before the picture's words, the paper's edge's room
-/// before it and 12 after it (doc/ui-panels.md: what goes before a row is a column of its own, the words start after
+/// before it and 12 after it (sf/align.mbt: what goes before a row is a column of its own, the words start after
 /// it), not over the message; on the middle of the message's first line (first_line_h).
 // kept across runs: a value (no field of it changes)
 let publish_message_tick : @ui.Style = @ui.css("w=Full align=AStart")

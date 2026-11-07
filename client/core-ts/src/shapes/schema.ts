@@ -1,4 +1,4 @@
-// What the core gives its clients, declared once (docs/client-core.md, Types): every value the core sends on a topic
+// What the core gives its clients, declared once (Types): every value the core sends on a topic
 // passes through its shape first (conform.ts), and the web's types are made from these by scripts/shapes.ts —
 // web/src/core/shapes.ts, checked in CI so it cannot drift. A field a client
 // reads is here, with its type, or it is not sent. Whole numbers (times in ms, counts) are `i64` on the wire and `I54`
@@ -2196,7 +2196,7 @@ export const SHAPES: Record<string, Shape> = {
     ["ui", opt("String"), { doc: "The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face." }],
     ["text", opt("String"), { doc: "What people and agents wrote (messages, the composer); none: as `ui`." }],
     ["code", opt("String"), { doc: "Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page)." }],
-  ], { default: true, doc: "The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md)." }),
+  ], { default: true, doc: "The faces chosen on this device, by place (client/core-ts/src/fonts.ts, sf/faces.mbt)." }),
   FontsView: struct([
     ["ui", "FontFace"],
     ["text", "FontFace"],

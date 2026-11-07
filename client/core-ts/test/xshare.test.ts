@@ -1,4 +1,4 @@
-// A chat shared with the viewer's other workspaces (views/xshare.ts, docs/chat-share.md): what its "…" shows, and
+// A chat shared with the viewer's other workspaces (views/xshare.ts): what its "…" shows, and
 // `chat.xshare` — the chat's station told first, then each workspace newly given it through one of its own stations
 // that answers; shown at once and under way (`doing`) until its station has it.
 import assert from "node:assert/strict";

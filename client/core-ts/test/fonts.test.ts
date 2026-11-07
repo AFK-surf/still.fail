@@ -1,4 +1,4 @@
-// The faces a device's pages are set in (src/fonts.ts, docs/fonts.md): each place's as chosen, whole as it goes out,
+// The faces a device's pages are set in (src/fonts.ts, sf/faces.mbt): each place's as chosen, whole as it goes out,
 // text as ui's until it is chosen, one installed on the device by its family; a face not there refused.
 import assert from "node:assert/strict";
 import { test } from "node:test";

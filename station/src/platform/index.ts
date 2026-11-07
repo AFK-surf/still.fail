@@ -235,10 +235,10 @@ export type Platform = {
   hasFolderPermissions: boolean;
   /// Spotlight's index of the machine's files, asked with `mdfind` (macOS's): the search finds files through it.
   hasSpotlight: boolean;
-  /// What shows the machine's display to a client and drives it (docs/remote-screens.md): still.fail Helper (macOS),
+  /// What shows the machine's display to a client and drives it: still.fail Helper (macOS),
   /// stillfail-screen (Windows), X11 (Linux), or nothing.
   desktopScreen: "helper" | "screen" | "x11" | null;
-  /// Unix domain sockets at a path: how the station and its modules talk (docs/station-modules.md).
+  /// Unix domain sockets at a path: how the station and its modules talk.
   hasUnixSockets: boolean;
 };
 

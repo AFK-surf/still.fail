@@ -594,7 +594,7 @@ fn center_panel(
         done()
       }
     }
-    // Its other views, this person's on other devices and others' alike (docs/remote-screens.md "Who is on a screen").
+    // Its other views, this person's on other devices and others' alike.
     let others = items(s.state, "otherViews")
     if others.length() > 0 &&
       @sf.menu_item(c, @sf.t("web-pages.screen.endOthers", args=[("count", others.length().to_string())]), key="screen-end-others", panel=true, icon="close") {

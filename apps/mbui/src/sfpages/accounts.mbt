@@ -449,7 +449,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
 /// `key`: whose steps they are; `send`: a code pasted back sent, then `sent` (its field emptied); `sending` while it is.
 /// Where its job says the station has a browser of its own (`browser`), the same page there (`in_station`: the
 /// station's name, whether it is being opened, and what opens it given what it is called), seldom used: in a ⋯ after
-/// the page's button (docs/ui-panels.md: what is used least goes into the row's ⋯). Its tab's view opens here, gone
+/// the page's button (sf/align.mbt: what is used least goes into the row's ⋯). Its tab's view opens here, gone
 /// back from as the sign-in ends; Claude's comes back to its command there, with no code to paste.
 pub fn login_steps(
   c : @ui.Ctx,

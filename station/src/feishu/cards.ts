@@ -1,4 +1,4 @@
-// What the station posts in Feishu (docs/feishu.md「发出去的样子」): an agent's words as rich-text messages (`post`, an
+// What the station posts in Feishu (「发出去的样子」): an agent's words as rich-text messages (`post`, an
 // `md` element: Feishu reads Markdown much as still.fail does, and other bots can read them back, as they cannot a
 // card), and as message cards (JSON 2.0) a question's buttons or field, the answer it got, and the line saying what the
 // agent is doing.

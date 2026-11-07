@@ -1,4 +1,4 @@
-// The workspace lock (docs/workspace-lock.md, src/cloud/lock.ts): who may sign what, passkeys, which device a
+// The workspace lock (src/cloud/lock.ts): who may sign what, passkeys, which device a
 // connection is; and, once a station pins it, what the control plane can no longer do — swap the grant key, add a
 // station to the roster, move the station — while an unlocked station goes on as before. Keys are made per run;
 // nothing depends on time or on how fast the machine is.

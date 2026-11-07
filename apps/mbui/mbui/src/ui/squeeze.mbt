@@ -7,6 +7,10 @@
 // those said to be: `w=Cut`), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one),
 // what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says so: a
 // margin below 0 (faces in a stack), a layer, something put where it is said.
+//
+// Controls neither scroll sideways nor wrap (the user, 2026-10-25: both ugly). The last-resort cutting is so the
+// worst case stays readable (2026-10-26: 「保证在最差的情况下也没有现在这么差」). Words of uncertain length get
+// their own line (2026-10-26: 「如果文字长度是不可确定的，那就应该尽量让它独立」).
 
 ///|
 /// How far two things may run into each other, or past the window, and still be apart: the layout's rounding.

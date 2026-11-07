@@ -1,4 +1,4 @@
-// What a search looks through of the station's own data (docs/search.md), read as it is asked for from its store as
+// What a search looks through of the station's own data, read as it is asked for from its store as
 // the readers read it (read/store.ts, a read-only connection) and from the files beside it:
 //
 // - a thread: its chat (`c:<id>`) and each message as it reads now (`m:<id>:<n>`), an archived one's from its file.

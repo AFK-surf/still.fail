@@ -5,6 +5,9 @@
 // the rest a row each. Pressed, a picture or a file opens in the preview (an image stepping through the chat's), a
 // link or a pull request in the browser; held or right clicked, its menu goes to the message it was last said in (在对话
 // 里看). The chat's info names its pull requests itself (things_pulls).
+//
+// Pictures keep their shape: square crops of screenshots all look alike (the user, 2026-10-29: 「太丑了，而且不好用
+// 」).
 
 ///|
 /// Each chat's page of things as it was left: the kind chosen ("" the first it has) and the words found by.

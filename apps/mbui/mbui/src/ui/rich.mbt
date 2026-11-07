@@ -942,7 +942,7 @@ pub fn Ctx::rich(
 ///|
 /// The paragraph laid out in `max_w`; as text_layout, one layout serves
 /// every width from its widest line up to the one it was laid out in. On one line (not wrapped) and laid out
-/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (style.md, Short of room); not cut, it
+/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (ui/squeeze.mbt); not cut, it
 /// serves every width it fits in.
 fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
   match self.rich {

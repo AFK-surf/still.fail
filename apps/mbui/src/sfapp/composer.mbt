@@ -2459,7 +2459,7 @@ fn card_close(c : @ui.Ctx, remove : Int, label? : String = "", icon? : String = 
 ///|
 /// What waits to go with the message (a picture's tile, a file's card), its remove button over its top right corner,
 /// reaching `picture_remove_out` beyond it, its centre on the corner's curve (Composer.kt: a picture's; a card's the
-/// same, docs/ui-panels.md); `label` what a screen reader calls it.
+/// same, sf/align.mbt); `label` what a screen reader calls it.
 fn with_remove(c : @ui.Ctx, remove : Int, w : Double, label : String, body : () -> Unit) -> Unit {
   let t = @sf.theme()
   // (as wide as what it holds and its button's reach: never squeezed by a row too narrow for all of them)

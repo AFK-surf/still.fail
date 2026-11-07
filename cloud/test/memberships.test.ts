@@ -1,4 +1,4 @@
-// One station in several workspaces (docs/multi-workspace.md): `stations` keeps the machine, `station_members` each
+// One station in several workspaces: `stations` keeps the machine, `station_members` each
 // workspace it is in. Enrolling moves a station as it always did; joining (/v1/stations/join) adds a workspace. Its
 // state says its home (the workspace it joined first) at the top, as before, and the others in `workspaces`.
 import assert from "node:assert/strict";

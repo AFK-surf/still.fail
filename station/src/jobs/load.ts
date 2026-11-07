@@ -1,4 +1,4 @@
-// What a station tells the others of its machine and how busy it is (docs/station-peers.md "Load"), for agents choosing
+// What a station tells the others of its machine and how busy it is, for agents choosing
 // where a station_task runs: `describe` answers it as `load`, station_list says it. Measured where the station's own
 // pages measure it (api/host.ts: GET /host and the events' host samples, the ten-second cache shared), plus what only
 // this needs: the CPUs over about a minute (Host.recentBusy), the GPUs (gpu.ts), what runs here and the relay.

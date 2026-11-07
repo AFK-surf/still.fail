@@ -137,7 +137,7 @@ test("retrying a new chat after the station restarts returns the same chat", asy
   }
 });
 
-test("a chat's relaying through the routes (docs/relay.md): where to, read past the thread's other actions; to where, checked", async () => {
+test("a chat's relaying through the routes: where to, read past the thread's other actions; to where, checked", async () => {
   const r = rig();
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });

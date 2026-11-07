@@ -16,7 +16,7 @@ export const pageHead = style({
 });
 export const identity = style({ display: "flex", alignItems: "center", gap: "16px", marginBottom: "28px" });
 /**
- * Page cards (docs/ui-panels.md 页面卡片), two kinds, each its corner from what stands in it:
+ * Page cards (sf/page.mbt), two kinds, each its corner from what stands in it:
  * - a card of words (a title, what it says, maybe a button: `card`): its words and what has a ground of its own (a
  *   button: its ground's edge, not its words, is what the eye lines up) on one line, CARD_PAD in from every side. With
  *   a button at its foot (`cardFoot`), the button is in its corner, concentric with it: the card's corner is CARD_PAD

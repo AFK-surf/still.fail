@@ -523,7 +523,7 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-// Partial redraw (docs/partial-redraw.md): the surface's frame is drawn into a canvas of its own (canvas_fb), kept
+// Partial redraw: the surface's frame is drawn into a canvas of its own (canvas_fb), kept
 // across frames, and copied onto the surface (what the surface held is gone once shown); where the app says only some
 // parts differ from the frame before (@hostapi.render_dirty), only those parts of the canvas are drawn again, each cut
 // to it (the scissor, `cut`: x, y from the foot, w, h; while `cut_on`), the frame's ground over it first (the instance

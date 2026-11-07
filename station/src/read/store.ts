@@ -123,7 +123,7 @@ export function getSession(s: Store, key: string): SessionRow | null {
 /// own), not from the sessions themselves.
 export const SEEN_OF = "SELECT key, ws FROM sessions INDEXED BY sessions_ws";
 
-/// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
+/// Which sessions `viewer` sees: those whose chat is in their workspace (one not there: the
 /// home one's). A read made for no one (null) sees every one. For a viewer, `keys` limits the work and the predicate
 /// to those keys, including missing sessions (which still count as the home workspace's).
 export function seenBy(s: Store, viewer: InWorkspace | null | undefined, keys?: readonly string[]): (key: string) => boolean {

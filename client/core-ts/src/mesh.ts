@@ -1,6 +1,6 @@
 // This device's iroh endpoint and its links to stations (mesh.rs), over the iroh a host gives (iroh.ts). One endpoint
 // per core, its key the device key (storage `device`). A link is to a station's address, `<workspace>/<station>`: a
-// station in several workspaces has a link in each (docs/multi-workspace.md), dialled to the same station id. A link is
+// station in several workspaces has a link in each, dialled to the same station id. A link is
 // opened with this device's member credential for its address's workspace and presents it again every RENEW_MS on its
 // control stream; a closed link is opened again on the next request. Wire format (station/src/mesh/serve.ts): ALPN `stillfail/admin/1`; the first bi-stream
 // carries `{"credential": …}` lines, each further bi-stream one request: a JSON head line `{method, path, headers}`
@@ -68,13 +68,13 @@ const DEAD_PINGS = 3;
 /// EXPLORE_MS kept a phone on the station's LAN on a relay for minutes after a link of it went quiet (2026-10-17).
 export const REDIAL_MAIN_MS = 30_000;
 export const DIRECT_RECALL_MS = 10 * 60_000;
-/// The `pinned` of a link on the endpoint that dials a station by its LAN addresses alone (docs/mesh-lan.md): no relay,
+/// The `pinned` of a link on the endpoint that dials a station by its LAN addresses alone: no relay,
 /// no hole punching. A path iroh punched through to a station on the LAN stopped answering seconds after it opened, and
 /// requests on it waited out iroh's timeout before going back to a relay; a connection
 /// dialled by address kept working.
 export const LAN = "lan";
-/// The `pinned` of a link on the endpoint that dials a station at its Tailscale addresses alone (docs/mesh-lan.md,
-/// Tailscale): as the LAN endpoint, no relay and no hole punching, Tailscale carrying it however it does (straight, or
+/// The `pinned` of a link on the endpoint that dials a station at its Tailscale addresses alone:
+/// as the LAN endpoint, no relay and no hole punching, Tailscale carrying it however it does (straight, or
 /// through relays of its own when it could not punch through). So it is not taken over the others as a LAN way is: it
 /// is compared by how it answers, as a relay's way is.
 export const TAILNET = "tailnet";
@@ -95,7 +95,7 @@ export const DIRECT_HOLD_MS = 2 * 60_000;
 export const DIRECT_HOLD_MAX_MS = 30 * 60_000;
 /// While a way on the LAN endpoint answered within this long, the requests keep off the main endpoint unless no other
 /// way is up: the LAN way is enough, and the main endpoint's link would only punch one more path to the station
-/// (docs/mesh-lan.md).
+///.
 export const LAN_RECALL_MS = DIRECT_RECALL_MS;
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
 export const HEDGE_FLOOR_MS = 1_000;
@@ -117,7 +117,7 @@ export const SPEED_KEPT_MS = 6 * 3600_000;
 /// line more crowded, a hop further), and is no longer taken to be as fast as it once was.
 export const SPEED_FRESH_MS = 10 * 60_000;
 /// How often a way's speed is told to telemetry (`mesh.speed`) at most, for each station and relay: how fast each
-/// relay brings replies to devices, beside the network the device is on (the cloud adds it, docs/telemetry.md), is how
+/// relay brings replies to devices, beside the network the device is on (the cloud adds it), is how
 /// the relays are compared; one a minute is enough for that, and a video's every part would be far too many.
 export const SPEED_SAID_MS = 60_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
@@ -534,7 +534,7 @@ export class Link {
     return this.#duplex({ method: head.method, path: head.path, headers: Object.fromEntries(head.headers), socket: true });
   }
 
-  /// A view of one of the station's screens (docs/remote-screens.md): its head line carries `screen`, and the stream
+  /// A view of one of the station's screens: its head line carries `screen`, and the stream
   /// stays open both ways for the frames.
   screen(head: RequestHead, screen: J): Effect.Effect<[Reply, SocketOut], CoreError> {
     return this.#duplex({ method: head.method, path: head.path, headers: Object.fromEntries(head.headers), screen });
@@ -805,7 +805,7 @@ export class Mesh {
     return o?.result && "ok" in o.result ? o.result.ok : null;
   }
 
-  /// Where the station said it is on its LAN (docs/mesh-lan.md), none until it did.
+  /// Where the station said it is on its LAN, none until it did.
   lan(addr: string): string[] {
     return this.#said[addr]?.lan ?? [];
   }
@@ -871,7 +871,7 @@ export class Mesh {
     if (slower && via !== null && relayKey(via) === key) this.#choose(addr, "slow");
   }
 
-  /// A reply's speed through a relay, told to telemetry (`mesh.speed`, docs/telemetry.md), at most once every
+  /// A reply's speed through a relay, told to telemetry (`mesh.speed`), at most once every
   /// SPEED_SAID_MS for each station and relay: every one seen, slower ones too, not only the fastest that `noteSpeed`
   /// keeps, so the relays' speeds are seen as devices get them, network by network.
   #saySpeed(addr: string, relay: string, bytes: number, ms: number, now: number): void {
@@ -1638,7 +1638,7 @@ export class Mesh {
     // the direct way waited its turn (2026-10-17).
     if (!held && mine.samples > 0 && mine.link.pinned !== LAN) {
       // One on the LAN endpoint is taken over the main endpoint's punched path as well: that one stopped answering seconds
-      // after it opened (docs/mesh-lan.md).
+      // after it opened.
       const lan = up.find((w) => w.link !== cur && w.link.pinned === LAN && w.samples > 0 && w.missed === 0);
       if (lan !== undefined && (mine.key() === "direct" || clearlyBetter(this.#score(addr, mine), this.#score(addr, lan)))) {
         this.#promote(addr, lan, "lan");
@@ -1837,7 +1837,7 @@ export class Mesh {
   }
 
   /// 2026-10-17: a phone's punched paths went quiet seconds after they opened, which no Mac on the LAN did again
-  /// (docs/mesh-lan.md). Each tick, a `mesh.path` span says a way's paths changed (one opened, one went, another chosen)
+  ///. Each tick, a `mesh.path` span says a way's paths changed (one opened, one went, another chosen)
   /// (or first seen, direct) or that it missed its first ping in a row: its paths now and as the tick before saw them,
   /// round trips and counts.
   #watchPaths(addr: string, w: Way): void {

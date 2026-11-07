@@ -1,4 +1,4 @@
-// The station's queue for other stations' tasks (station_task, jobs/remote.ts; docs/station-scheduling.md): a task
+// The station's queue for other stations' tasks (station_task, jobs/remote.ts): a task
 // that arrives while the machine is busy waits here, so agents that each looked at the load and saw room do not all
 // start at once. Nothing is estimated beforehand (a build takes more or less by its caches): what is measured decides.
 //

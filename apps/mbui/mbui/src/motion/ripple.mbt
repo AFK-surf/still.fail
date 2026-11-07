@@ -8,7 +8,7 @@
 // progress, its edge soft from half that radius to half again (softCircle, blur 1: drawn here as the disc blurred, its
 // middle where the edge's is). Its sparkles (white specks in the growing ring, on the clock's noise) are not drawn.
 // While a finger is on it, the box it ripples sinks a little (drawn smaller about its middle, by a few points however
-// large it is: press_sink), and springs back as it lifts (docs/motion.md kind 7, a control answering: pressed): a box
+// large it is: press_sink), and springs back as it lifts (sf/motion.mbt kind 7, a control answering: pressed): a box
 // that stands on a ground of its own (a button, a card: Ctx::own_ground), not a row lying in a list or a card, whose
 // press is its ground lit (a row sunk in its card is drawn in from the card's edges, as if pressed out of it).
 

@@ -4,7 +4,7 @@
 
 ///|
 /// The room under a post going to its new height: a Move as long as its way is far, as every row's height in a chat's
-/// list goes (docs/list-motion.md: what changes together moves as one, on one curve from one moment).
+/// list goes (mbui's view/list_motion.mbt: what changes together moves as one, on one curve from one moment).
 // kept across runs: a curve, never written
 pub let close_gap : @motion.Spec = @motion.move()
 
@@ -34,7 +34,7 @@ pub let under_ends : Map[String, @motion.Anim] = {}
 ///|
 /// The list's way each block under a post last went on (Ctx::row_way: its start and how long), by its key: the way set
 /// out again (another change in the list come while it goes), it goes on from where it is on the new one, as every row
-/// does, so that the rows' sum goes one way (docs/list-motion.md)
+/// does, so that the rows' sum goes one way (mbui's view/list_motion.mbt)
 // kept across runs: put back by under_reset (sfbase's reset)
 let under_ways : Map[String, (Double, Double)] = {}
 
@@ -116,7 +116,7 @@ pub fn under_post(
 fn on_row_way(c : @ui.Ctx, a : @motion.Anim, to : Double, way : (Double, Double)) -> Unit {
   let (at, ms) = way
   let later = dmax(at - c.moment(), 0.0)
-  // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (docs/list-motion.md)
+  // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (mbui's view/list_motion.mbt)
   a.animate(to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
 }
 

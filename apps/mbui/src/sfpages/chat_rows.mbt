@@ -870,7 +870,7 @@ let chat_empty_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted)
 
 ///|
 /// What was sent from here, its words and files; what did not go as they are, not faded (at 55% its words were 3.4 to 1:
-/// docs/ui-panels.md 对比度), the red under it saying so.
+/// mbui ui/contrast.mbt), the red under it saying so.
 // kept across runs: a value (no field of it changes)
 let outbox_words : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
 

@@ -1,4 +1,4 @@
-// What a few words find in a workspace (the core's `search` topic: SearchView, docs/search.md), as the phone's search
+// What a few words find in a workspace (the core's `search` topic: SearchView), as the phone's search
 // and the desktop's ⌘K both read it, and where what it found opens (the core's `SearchItem.open`): the page each frame
 // shows it on is the same page of the stack (app.nav).
 

@@ -13,7 +13,7 @@ import { type Provider, providerOf } from "./provider.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
 
-/// A workspace the station is in besides its home one (docs/multi-workspace.md): what it is called there, the other
+/// A workspace the station is in besides its home one: what it is called there, the other
 /// stations there and what that workspace takes back.
 /// `locked`: that workspace is in security mode, as the control plane says (its lock is pinned here before any of its
 /// members is taken).
@@ -53,7 +53,7 @@ const statePath = (data: string) => join(meshDir(data), "cloud.json");
 export const lockPath = (data: string) => join(meshDir(data), "lock.json");
 /// The lock `enroll --lock <hash>` said to pin once the control plane brings it: `{hash}`.
 export const pendingLockPath = (data: string) => join(meshDir(data), "lock-pending.json");
-/// A workspace the station joined: the lock it pinned there, and the one joining said to pin (docs/multi-workspace.md),
+/// A workspace the station joined: the lock it pinned there, and the one joining said to pin,
 /// beside the home one's, by the workspace's id.
 const fileOf = (ws: string) => (/^[0-9A-Za-z_-]{1,64}$/.test(ws) ? ws : Buffer.from(ws).toString("hex").slice(0, 64));
 export const joinedLockPath = (data: string, ws: string) => join(meshDir(data), "locks", `${fileOf(ws)}.json`);
@@ -290,7 +290,7 @@ export class Cloud {
     this.planeLockSeqs.delete(ws);
   }
 
-  /// A workspace it joined takes over as its home one, the home it was taken out of gone (docs/multi-workspace.md): that
+  /// A workspace it joined takes over as its home one, the home it was taken out of gone: that
   /// workspace's lock, pinned or named by joining, is the home one's now (lock.json, lock-pending.json), the old home's
   /// forgotten. Refused (false) while the home one is locked and that workspace's lock is not pinned here: the station
   /// stays where its lock keeps it.
@@ -446,7 +446,7 @@ export class Cloud {
     return s && s.workspace && !this.removed() ? s.workspace : null;
   }
 
-  /// Every workspace the station is in now, its home one first (docs/multi-workspace.md). A joined workspace with a
+  /// Every workspace the station is in now, its home one first. A joined workspace with a
   /// lock counts once this station pinned it (until then it waits: joining it said which to pin), its roster only the
   /// stations that lock names. A locked station is in locked workspaces only: an unlocked one's members are the control
   /// plane's word, which its home's lock took away.

@@ -375,7 +375,7 @@ pub fn file_card(
 ///|
 /// What waits to go with a message (a composer's picture, a file's card, a quote), `w` wide (none: the width it is
 /// given) and rounded `corner`, with its ✕
-/// hung on its top right corner (docs/ui-panels.md: the user, 2026-10-17, on the corner, not in it): 20 round, solid
+/// hung on its top right corner (sf/align.mbt: the user, 2026-10-17, on the corner, not in it): 20 round, solid
 /// (the ink's, the page's ✕ on it: part of it is on the ground round it), its centre on the corner's curve where it
 /// turns 45° (on_corner), reaching past the top as far as past the right edge. `w` wide, the room for that kept at its
 /// end, so what comes next in its row stands the row's gap past it; the width it is given (a quote: nothing beside it),

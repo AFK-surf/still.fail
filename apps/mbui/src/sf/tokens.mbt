@@ -140,7 +140,7 @@ pub(all) struct Bars {
 }
 
 ///|
-/// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
+/// A row's roles on the screen in force (the same on every screen and what differs): how high it
 /// is at least (the items' least: one height for a row by the native input), its title's words and its note's, a
 /// tick's box, a short field and a switch in it. Touch's: a finger's (the phone's mRowTitle, its body's 15, the
 /// scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by 36, a switch 44 by 26, its mSwitch); keyboard and
@@ -177,7 +177,7 @@ pub(all) struct Items {
 }
 
 // ---------------------------------------------------------------------------
-// Measures (docs/ui-panels.md; styles/align.ts, pages.css.ts)
+// Measures (sf/align.mbt; styles/align.ts, pages.css.ts)
 
 // (a small panel's padding, its words' room and its pills: align.mbt panel_pad, text_in, panel_pill)
 
@@ -221,7 +221,7 @@ pub let lit_apart : Double = 2.0
 ///|
 /// How far in from the sides of what holds it a row that lights up under the hand stands, where it runs across it
 /// (Theme::lit_reach, the spacing rules' 7): a small panel's padding, so a menu's rows, a list card's and a card of
-/// options' alike (docs/ui-panels.md 列表卡; the user, 2026-10-26: a card of options' grounds 10 in, 「6px 就差不多了」).
+/// options' alike (sf/page.mbt; the user, 2026-10-26: a card of options' grounds 10 in, 「6px 就差不多了」).
 pub let lit_reach : Double = panel_pad
 
 ///|
@@ -950,7 +950,7 @@ pub let large_from : Double = 840.0
 
 ///|
 /// How opaque a tone's ink is as its ground (a pill's, a mention's, an error's card: green_bg, red_bg…), in the light
-/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, docs/ui-panels.md 对比度),
+/// themes and the dark: far enough off whatever it lies on to be seen (1.25 to 1 and more, mbui ui/contrast.mbt),
 /// and its ink on it still read (4.5 to 1). Grounds fitted to the page alone, opaque, were 1.0 to 1.1 to 1 off a card
 /// in the dark (a pull request's 开启, 2026-10-27): its words seen, not its pill.
 let tone_light : Double = 0.18
@@ -1265,7 +1265,7 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// The native input (原生操控: docs/architecture.md, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
+/// The native input (原生操控, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
 /// the app is started, the same the whole run: the theme's sizes (words, rows, what a press reaches), how what shows
 /// only under a pointer is reached, what Enter does, scroll bars, and with the screen's tier how the presenters show
 /// (a sheet or beside what opened it) and how search is opened (a field over the list or ⌘K). As the host tells it at
@@ -1335,7 +1335,7 @@ fn screen_layout(width : Double) -> Layout {
 }
 
 ///|
-/// The theme for this frame (docs/architecture.md, the terms): its sizes by the native input alone (rule 4: the screen
+/// The theme for this frame (the terms): its sizes by the native input alone (rule 4: the screen
 /// says how things are laid out, never how large they are), a finger's on a touch device (Android's app, a tablet's
 /// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
 /// or dark as set: call at the top of a view.
@@ -1666,7 +1666,7 @@ let ground_over : Ref[Int] = Ref(0)
 
 ///|
 /// A link's ink: the accent's ink (its darker one on paper, its lighter one in the dark), which reads in words; the
-/// accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度).
+/// accent itself in the dark was 4.3 to 1 on a raised ground (mbui ui/contrast.mbt).
 pub fn link_ink() -> Int64 {
   theme().p.accent_text
 }
@@ -1780,7 +1780,7 @@ pub fn mix_seen(a : Int64, share : Double, b : Int64) -> Int64 {
 }
 
 // ---------------------------------------------------------------------------
-// mbui's tokens (its docs/style.md): what still.fail's styles (styles.mbt) say by name. The numbers are here and
+// mbui's tokens (its mbui's ui/style.mbt): what still.fail's styles (styles.mbt) say by name. The numbers are here and
 // nowhere else; a value off mbui's scale is one of the few `Exact`s below.
 
 ///|
@@ -1966,7 +1966,7 @@ let ui_theme_made : Ref[(Palette, Type, @ui.Theme)?] = Ref(None)
 fn ui_theme_of(t : Theme) -> @ui.Theme {
   let base = if t.dark { @ui.Theme::narrow_dark() } else { @ui.Theme::narrow_light() }
   // a link's ink: the accent's ink (the darker one on paper, the lighter in the dark), which reads in words; the
-  // accent itself in the dark was 4.3 to 1 on a raised ground (docs/ui-panels.md 对比度)
+  // accent itself in the dark was 4.3 to 1 on a raised ground (mbui ui/contrast.mbt)
   {
     ..base,
     text: text_roles(t.t),
@@ -2071,7 +2071,7 @@ pub let share_w_most : Double = 360.0
 pub let share_ink : Int64 = 0xF4F4F5FFL
 
 ///|
-/// (thinned to 62%: 7.0 to 1 on the night, 6.5 on a card: docs/ui-panels.md 对比度)
+/// (thinned to 62%: 7.0 to 1 on the night, 6.5 on a card: mbui ui/contrast.mbt)
 pub let share_dim : Int64 = 0xF4F4F59EL
 
 ///|
@@ -2531,7 +2531,7 @@ pub let quote_pop_h : @ui.Len = Fixed(26.0)
 
 ///|
 /// The widest a page is laid out as the web's narrow app lays its pages out (max-width 640, where its narrow app takes
-/// over): wider, as its desktop pages are. A page's own width, not the tier (docs/architecture.md Pages).
+/// over): wider, as its desktop pages are. A page's own width, not the tier ( Pages).
 pub let page_narrow_most : Double = 640.0
 
 ///|
@@ -2892,7 +2892,7 @@ pub let menu_row_min : Double = 36.0
 
 ///|
 /// A small panel's row (a menu's item, the `@` menu's chat, a picker's) as high as the screen's at least (Theme::rows
-/// pick: keyboard and mouse's 34, a finger's 44, docs/architecture.md: touch targets 44 at least with touch), for a row
+/// pick: keyboard and mouse's 34, a finger's 44, touch targets 44 at least with touch), for a row
 /// given as a style.
 pub fn pick_high() -> @ui.Style {
   if theme().touch {

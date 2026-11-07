@@ -1,4 +1,4 @@
-// Stations sharing profiles and skills (src/share/index.ts, docs/station-share.md): two stations, a cloud that only
+// Stations sharing profiles and skills (src/share/index.ts): two stations, a cloud that only
 // lists who hosts what (as cloud/src/directory.ts `stationShare` keeps it), and the station transport as a direct call.
 import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from "node:fs";

@@ -1,4 +1,4 @@
-// A bar's tool as a node of the window's tree (the way there, docs/retained.md 4: the library's parts given their
+// A bar's tool as a node of the window's tree (the way there 4: the library's parts given their
 // made-once form beside their old one): viewer_tool's, drawn and answering as it does, each of what it shows bound to
 // what it says as that changes (its icon, its words, whether it is on or can be pressed, its ink), read where it is
 // drawn, not taken once as it is made; its corner as what holds it says (round, or linked to the window's).

@@ -1,7 +1,7 @@
 // The search (still.fail web/src/Switcher.tsx Finder, Found; web/src/mobile/Home.tsx SearchPage, FoundRow, FoundChatRow,
 // FoundItemRow; Switcher.css.ts, mobile/Home.css.ts mFound…): one in every tier, its words and what they find; where
 // it sits is its frame's (⌘K's panel over the window, the phone's page over Home's list: sfdesk's switcher.mbt, sfapp's
-// search.mbt). What a few words find in the workspace is the core's `search` (docs/search.md: its chats, the messages
+// search.mbt). What a few words find in the workspace is the core's `search` (its chats, the messages
 // that have them, what every station finds besides, each kind under its heading, a few of each; 查看更多 that kind
 // alone, 全部结果 back to all), and what can be done here by its name the core's `commands.find` of what the frame
 // offers. With nothing typed, the latest chats where the frame says so (⌘K), then what can be done. One line for all it

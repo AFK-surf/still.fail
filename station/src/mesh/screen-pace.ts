@@ -1,4 +1,4 @@
-// How fast a view's frames go (docs/remote-screens.md, "Pace"): which may be sent now, and the bit rate its source is
+// How fast a view's frames go ("Pace"): which may be sent now, and the bit rate its source is
 // asked to encode at. Both from what the client's acknowledgements say of the link: how long a frame takes from sent to
 // decoded (the round trip), and how much went through in the last second.
 //

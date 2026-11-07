@@ -1,5 +1,5 @@
 // A local directory of a source session mirrored on another station for its remote tasks (station_task's `dir`,
-// docs/station-peers.md "Directories"). Each start brings the mirror up to date before the command runs there:
+//). Each start brings the mirror up to date before the command runs there:
 //
 // - Which files: in a Git work tree what `git ls-files -co --exclude-standard` names (tracked, and untracked but not
 //   ignored), so node_modules, target and dist stay home; elsewhere every file but IGNORED. `.git` is not synced,

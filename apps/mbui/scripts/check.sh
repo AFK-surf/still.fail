@@ -1,6 +1,6 @@
 #!/bin/bash
 # Check the native core's build cache, then type-check every target of this module (and mbui with it). The determinism
-# lint (mbui's tools/detlint, docs/detlint.md, with apps/mbui/detlint.json) reports errors before type-checking.
+# lint (mbui's tools/detlint, with apps/mbui/detlint.json) reports errors before type-checking.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 node --test "$D/waitfor.test.mjs" "$D/recording-privacy.test.mjs" "$D/toolchain-env.test.mjs" "$D/e2e-local-cleanup.test.mjs" || exit 1

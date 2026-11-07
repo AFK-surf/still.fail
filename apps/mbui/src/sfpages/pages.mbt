@@ -1,4 +1,4 @@
-// The pages, one for every tier and either input (docs/architecture.md: Pages): each drawn in the box it is given,
+// The pages, one for every tier and either input (Pages): each drawn in the box it is given,
 // what it does read from the input, never the tier; what it opens asked of the shell.
 
 ///|

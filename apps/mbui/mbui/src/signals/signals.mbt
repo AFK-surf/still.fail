@@ -5,7 +5,7 @@
 // an effect's fn and a watch's in the node's `own` (system.mbt); an effect's cleanup is said by which of `effect` and `effect_cleanup` makes it;
 // nothing throws, so nothing is put back in a `finally`; and "the same value" is `same` (physical_equal without one:
 // index.ts's `!==`, but for strings, which it compares by their words: say `same=fn(a, b) { a == b }` where that
-// matters). Added for what keeps its own computeds (docs/signals.md): Computed::peek, Computed::dispose,
+// matters). Added for what keeps its own computeds: Computed::peek, Computed::dispose,
 // Signal::watched, untracked; and for what holds what another computed builds after it ran: Computed::reading,
 // Computed::lend; Computed::invalidate.
 

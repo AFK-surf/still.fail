@@ -39,7 +39,7 @@ export const btnDangerSolid = style({
   // red, white on which was 2.5:1)
   background: vars.red, borderColor: vars.red, color: vars.onPrimary,
   selectors: {
-    // A solid ground pointed at: a step towards the page, as the primary's (docs/ui-panels.md 悬停).
+    // A solid ground pointed at: a step towards the page, as the primary's (mbui ui/hand_moves.mbt).
     "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, ${vars.canvas})` },
   },
 });
@@ -64,7 +64,7 @@ export const input = style({
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 /**
- * Every small panel (docs/ui-panels.md): menus, selects, popovers, hover cards, the station's cards. One ground, padded
+ * Every small panel (sf/align.mbt): menus, selects, popovers, hover cards, the station's cards. One ground, padded
  * PANEL_PAD (6) as far as what has a ground of its own (rows, buttons) stands from its edge, its corner what sits in it
  * (`--panel-in`) and that together. A panel of words (`panelCard`) gives them room of their own; a list's rows carry theirs.
  */

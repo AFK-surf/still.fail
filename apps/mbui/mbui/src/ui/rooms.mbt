@@ -1,4 +1,4 @@
-// The room a press has (still.fail's rules 1 and 2, its docs/architecture.md: the user, 2026-10-26), measured on the
+// The room a press has (still.fail's rules 1 and 2, its the user, 2026-10-26), measured on the
 // frame just built, as the corner and the spacing rules are (corners.mbt, gaps.mbt). Each fault a line saying its
 // rule, the boxes (Ctx::named) and by how much:
 //

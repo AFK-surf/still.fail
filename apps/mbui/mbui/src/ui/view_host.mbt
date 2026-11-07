@@ -1,4 +1,4 @@
-// The window as a tree made once (docs/retained.md, the way there's 3): every window (ui.run's, a Tester's) is a tree of
+// The window as a tree made once (the way there's 3): every window (ui.run's, a Tester's) is a tree of
 // the view package (src/view) whose root is the window's, and the old view, built as it is built, is in nodes of it
 // (`old`: an old island; at first one, the whole window's room; set_view_app for another tree). The tree lays out,
 // orders and draws the window, each old view in its place in that order: built for its node's room as a subtree of the

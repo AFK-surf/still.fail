@@ -1,5 +1,5 @@
 // The Rust core's station/tests.rs, ported (same names; the checks as the TS core's design has them: the station is
-// read into records by its sync, and its topics read only those; docs/core-ts.md). The Rust tests drove the station
+// read into records by its sync, and its topics read only those). The Rust tests drove the station
 // module with a fake wire and sink; these drive a core over the host's fetch (station-fixture.ts).
 import assert from "node:assert/strict";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
@@ -1035,7 +1035,7 @@ test("a_jobs_log_is_read_once_and_then_kept_current_by_the_stations_events", asy
 });
 
 test("a_jobs_log_on_a_station_that_does_not_follow_it_is_read_again_less_often_while_it_stays_the_same", async () => {
-  // Deliberately otherwise (docs/core-ts.md, rule 2): the Rust core read an older station's log again and again,
+  // Deliberately otherwise (rule 2): the Rust core read an older station's log again and again,
   // backing off; the TS core reads it once as it opens and never again.
   const answers: J = { ...base(), "GET /jobs/j1/log?lines=1": { text: "a", outputAt: 5 } };
   const { host, core } = await started(answers);

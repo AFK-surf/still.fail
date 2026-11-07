@@ -1,4 +1,4 @@
-// The vault as a part of the station (parts.ts, docs/vault.md): its store in the station's database, the agents'
+// The vault as a part of the station (parts.ts): its store in the station's database, the agents'
 // requests for its secrets and the grants they hold, its routes (the vaults, by the lock pinned in the asker's
 // workspace; the requests and grants), its tools for the agents and its events (`vault-request`), and its requests of
 // the other stations (`vault.`: a command run there with a secret, a secret read there). A part of the agents' side: its
@@ -42,7 +42,7 @@ export const VaultLive = Layer.effectDiscard(
       db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
       title: (session) => sender(hub, session)[0] ?? null,
       titleIfReady: (session) => senderTitleIfReady(hub, session),
-      // Commands with a secret on another station of the workspace (docs/vault.md 在另一台 station 上用).
+      // Commands with a secret on another station of the workspace ( 在另一台 station 上用).
       peer: (given) => {
         if (given === cloud.state?.station || cloud.memberships().some((m) => m.name.toLowerCase() === given.toLowerCase())) return null;
         const { id } = peerNamed(cloud, given);
@@ -52,7 +52,7 @@ export const VaultLive = Layer.effectDiscard(
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
       coming: () => coming,
       backfill: { previousGone: previous.exited, priority: store.backfillPriority },
-      // Sign-ins (kind browser) go into each chat's own context in the station's browser (docs/vault.md 登录态).
+      // Sign-ins (kind browser) go into each chat's own context in the station's browser ( 登录态).
       browsers: {
         cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d), extendSignIn: (session, request, until) => browsers.extendSignIn(session, request, until),
         passkeysIn: (session, d) => browsers.passkeysIn(session, d),

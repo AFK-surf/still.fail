@@ -341,7 +341,7 @@ export class NodeHost implements Host {
 /// starts another.
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
-/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding"). `sealer`: what seals
+/// `commaAccountProvider({origin, bearer})`, "Account providers and embedding"). `sealer`: what seals
 /// values for it (an Electron app's main process).
 export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer } = {}) {
   service.name = "stillfail-native";

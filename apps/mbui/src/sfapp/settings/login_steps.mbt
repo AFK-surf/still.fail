@@ -69,7 +69,7 @@ let code_finish_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold,
 
 ///|
 /// A step's button: true on the frame after it was pressed. `more`: other ways of doing the step, seldom used, in a ⋯
-/// at its end (docs/ui-panels.md: what is used least goes into the row's ⋯): a round one as high, on the grey.
+/// at its end (sf/align.mbt: what is used least goes into the row's ⋯): a round one as high, on the grey.
 fn step_button_of(
   c : @ui.Ctx,
   key : String,

@@ -1,4 +1,4 @@
-// Styles (docs/style.md): what a box or a line of words looks like, said once as a value and named, built of the
+// Styles (mbui's ui/style.mbt): what a box or a line of words looks like, said once as a value and named, built of the
 // theme's tokens, not of numbers. A style says token names (`px=S4`, `bg=Card`, `radius=Xl2`); what they come to is
 // looked up in the theme in force as the node is built (Ctx::box, Ctx::text), so one style is a constant, right in
 // light and dark, wide and narrow. Its states (pressed, hovered, focused, selected, disabled, dark, narrow) are blocks

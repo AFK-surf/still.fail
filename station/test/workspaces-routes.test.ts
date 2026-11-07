@@ -1,4 +1,4 @@
-// One station in two workspaces (docs/multi-workspace.md), as the pages see it: a member of one workspace sees, reads and
+// One station in two workspaces, as the pages see it: a member of one workspace sees, reads and
 // changes only its chats; another workspace's sessions, chats and jobs are none for them (404), its changes are not told
 // on their event streams, and each workspace keeps its own archive policy. Chats from before (no workspace) are the
 // home workspace's. A real store and readers in a temporary data directory, a hub with runtimes scripted in-process.

@@ -234,7 +234,7 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// admin/views.rs `usage`: what the agents spent from `from` until `to` (ms), by day in the asker's time zone
 /// (`utcOffsetMin`), with the threads, people and profiles the rows name. `from`/`to` are i64s, written as such.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
-/// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
+/// only the calls of their workspace's chats (those of sessions gone, the home one's); all of
 /// them for a read made for no one.
 // A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
 // log, so the absence of that warning alone cannot show whether the cache is used.

@@ -152,7 +152,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
       // (the frame before not the display's last, or the list not free: from here anew)
       let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
       // (a row coming in where it is from nothing, its room opening: it has no place before this one to go on from: a
-      // row gone ahead of others leaves by a copy and comes in so, docs/list-motion.md)
+      // row gone ahead of others leaves by a copy and comes in so, mbui's view/list_motion.mbt)
       let anew = match st.causes {
         Some(c) if n.item >= 0 && n.item < keys.length() =>
           match c.by.get(keys[n.item]) {

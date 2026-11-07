@@ -1,5 +1,5 @@
 // Files picked on the device that go onto the machine of a screen being driven (still.fail apps/android
-// app/remote/ScreenDrops.kt; docs/remote-screens.md "Clipboard and files"): each up with the drive's upload
+// app/remote/ScreenDrops.kt): each up with the drive's upload
 // (`drive.upload.part`), its root the folder the screen's state names (`drop`), one after another, under a free name
 // beside one already there; once there, where it is, for the viewer to paste its path or show it in the machine's file
 // manager. They go on past 只看 and the view opening again; the page's end ends them.

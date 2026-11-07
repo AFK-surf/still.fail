@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The host's and the text's contracts on iOS (docs/determinism.md, "What is compared, and where"; scripts/
+# The host's and the text's contracts on iOS ("What is compared, and where"; scripts/
 # host_contract.sh), on macos-ci's simulator (mbui's runner there, label mbui-render; scripts/ios.sh's ios-mbui-sf):
 # kitdemo's controls page run with its scripted taps, its tape made a Tester's test and run here (every frame the
 # same), then the committed tape's text (ios_controls) asked of Core Text there again (every answer the same). When

@@ -1,4 +1,4 @@
-// This phone's adb, lent to a station's agents (adb.rs; docs/adb-share.md): the `adbShare` topic and the `adb.*`
+// This phone's adb, lent to a station's agents (adb.rs): the `adbShare` topic and the `adb.*`
 // calls. While it is offered (until stopped or its hour is up) a stream on the station's link says so, opened again on
 // each link that takes the place of one, and every stream the station opens on that link is a tunnel to the phone's
 // own adbd. The offers kept in memory only: a core started anew offers again as its app asks (the grants it lends
@@ -463,7 +463,7 @@ class Lend {
   }
 }
 
-/// This phone's adb (docs/adb-share.md): while its switch is on (`adb.on`), lent to each station a chat's grant of it is live on (`wanted`), with the ports
+/// This phone's adb: while its switch is on (`adb.on`), lent to each station a chat's grant of it is live on (`wanted`), with the ports
 /// its app found (`adb.ports`); and, from an app before grants, to the one station its switch lent it to (`adb.share`).
 /// The grants, every station's, as each says them; decided and taken back here (`adb.decide`, `adb.revoke`).
 export class Adb {
@@ -674,7 +674,7 @@ export class Adb {
     return sub !== null && this.#env.personal.standing(sub) === "member";
   }
 
-  /// What this device signs to allow a chat a phone (docs/personal-lock.md).
+  /// What this device signs to allow a chat a phone.
   #signed(station: string, request: string, scope: "hour" | "chat"): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const sub = this.#subAt(station);
@@ -712,7 +712,7 @@ export class Adb {
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(REVOKED_KEY, utf8(JSON.stringify(Object.fromEntries(this.#revoked)))), { log: "Unhandled", message: "debugging grants taken back kept" }));
   }
 
-  /// This phone paired with its own adbd (docs/adb-share.md, 2026-10-31): once, whichever station's page or card asked,
+  /// This phone paired with its own adbd (2026-10-31): once, whichever station's page or card asked,
   /// and every station it lends to offered again, so that each connects at once.
   #pairHere(own: NonNullable<AdbEnv["host"]["adb"]>, typed: string): Effect.Effect<unknown, CoreError> {
     const code = [...typed].filter((c) => c >= "0" && c <= "9").join("");

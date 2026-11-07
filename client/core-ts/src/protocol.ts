@@ -1,4 +1,4 @@
-// Messages between a UI and the core (protocol.rs; docs/client-core.md, Protocol). The JSON is the Rust core's.
+// Messages between a UI and the core (protocol.rs, Protocol). The JSON is the Rust core's.
 import type { CoreError } from "./error.ts";
 import type { AnyOp } from "./collections.ts";
 import { isObject, toJson } from "./util.ts";

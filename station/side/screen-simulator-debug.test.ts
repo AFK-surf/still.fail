@@ -1,4 +1,4 @@
-// A simulator's logs and apps (screens/sim-debug.ts, docs/remote-screens.md "Simulators") on a real Mac with Xcode: a
+// A simulator's logs and apps (screens/sim-debug.ts) on a real Mac with Xcode: a
 // simulator of this test's own made and booted (deleted afterwards), a small app built for it that logs twice a second,
 // installed, found, started again, and its lines read as a person's 日志 reads them. Real time, a real device: a side test.
 import assert from "node:assert/strict";

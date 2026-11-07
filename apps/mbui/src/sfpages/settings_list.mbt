@@ -239,7 +239,7 @@ pub fn settings_parts(
   if platform == 0 {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
-  // 共享调试, the phone's (docs/adb-share.md): its page says which chats it is lent to
+  // 共享调试, the phone's: its page says which chats it is lent to
   if platform == 2 {
     device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
   }

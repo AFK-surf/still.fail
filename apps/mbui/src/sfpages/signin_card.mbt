@@ -1,4 +1,4 @@
-// An agent's ask to sign in to a site, in place of its post's words (still.fail docs/vault.md 登录态, "Signing in from a
+// An agent's ask to sign in to a site, in place of its post's words ( 登录态, "Signing in from a
 // card"; station vault/signin.ts): the one card a sign-in takes. Its person signs in from it with their own password
 // manager, asked here as a page's login is filled from the remote screen (screen_fill.mbt: 1Password's command-line
 // tool, which asks them itself, or the system's autofill service), and what it gives goes to the station

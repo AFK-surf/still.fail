@@ -1,4 +1,4 @@
-// The workspace's lock (docs/workspace-lock.md) as station/src/cloud/lock.ts has it, entry by entry: which entries
+// The workspace's lock as station/src/cloud/lock.ts has it, entry by entry: which entries
 // follow, who signed them, what they change, who a connection is. The same answers, the same words: rules/test runs
 // both on the same chains. What takes keys (hashing, signatures, a key's form) is the caller's (`Crypto`): node's on the
 // stations, @noble's on devices.
@@ -82,7 +82,7 @@ pub(all) struct LockState {
   signed : Map[String, Unit]
   stations : Map[String, Station]
   gateways : Map[String, Unit]
-  /// The person's own lock each member bound themselves to (`person` entries, docs/personal-lock.md): its genesis's hash.
+  /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
   persons : Map[String, String]
   disabled : Bool
 }

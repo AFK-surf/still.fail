@@ -1,4 +1,4 @@
-// What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, docs/list-motion.md):
+// What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, mbui's view/list_motion.mbt):
 // words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
 // its avatar, what comes under a post (what is answered there goes only out of sight: Turns::in_turn). Each waits its
 // turn here, in the order they came, but words sent: they fly at once, in the list the frame they are sent
@@ -270,7 +270,7 @@ pub fn Turns::next_ask(self : Turns) -> Int? {
 /// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), the
 /// list at rest, and it asked.
 pub fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
-  // (nothing waits for another: docs/list-motion.md)
+  // (nothing waits for another: mbui's view/list_motion.mbt)
   a.at
 }
 

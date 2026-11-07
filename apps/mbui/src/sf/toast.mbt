@@ -39,7 +39,7 @@ pub fn toast_look(c : @ui.Ctx, s : @kit.ToastState, action? : String = "", actio
   let mut pressed = false
   let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
   // (its ground whole by half its way in, its words from there, as a panel's: motion's Trans `ground_first`; never
-  // its words and what it is over both seen in one place, docs/motion.md rule 4)
+  // its words and what it is over both seen in one place, sf/motion.mbt rule 4)
   let ground = if 2.0 * k > 1.0 { 1.0 } else { 2.0 * k }
   let words = if ground > 0.0 && 2.0 * k > 1.0 { (2.0 * k - 1.0) / ground } else { 0.0 }
   let tb = c.box(

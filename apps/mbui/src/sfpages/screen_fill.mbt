@@ -1,4 +1,4 @@
-// A page's login filled from this device's password manager (still.fail docs/remote-screens.md, "Filling a login"): while
+// A page's login filled from this device's password manager ("Filling a login"): while
 // this viewer drives a tab of a station's browser whose focus is in a login field, the station says the site (the
 // tab's address, not the page's word); the person's own 1Password (@hostapi passwords.mbt: its command-line tool,
 // which asks them itself) is asked for that site's logins, they pick one where there are more, and its account and

@@ -1,4 +1,4 @@
-// A column's edge as a node of the window's tree (the way there, docs/retained.md 4: handle_drag and edge_tip given
+// A column's edge as a node of the window's tree (the way there 4: handle_drag and edge_tip given
 // their made-once form beside their old one): what is done with it taken at each event's own moment, whatever frames
 // come. A mouse drags it at once; a finger only once held still on it a long press's while (a swipe that passes over
 // it is what lies under it's: View::gesture's `held_first`), felt as the hold takes it; dragged, the width it is

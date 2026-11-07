@@ -1,4 +1,4 @@
-// Presets: what a chat starts knowing, chosen as it is opened (docs/presets.md). A preset names the directories its
+// Presets: what a chat starts knowing, chosen as it is opened. A preset names the directories its
 // chats work with and what people want of them there; it does not bind the agent to them (it runs in its own session
 // workspace as every chat does). A workspace's presets are its agent home's presets.json; a chat opened with one keeps a
 // copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats

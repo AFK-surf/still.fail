@@ -1,6 +1,6 @@
 // Each frame a Tester draws as a host would see it: whether the app asked for it, whether it drew something else than
 // the frame before, why the old frame was built whole, what of the window a host that keeps its picture draws again
-// (the parts h_present works out, docs/partial-redraw.md). Counts and moments, never times: the same on every machine.
+// (the parts h_present works out). Counts and moments, never times: the same on every machine.
 // A frame no one asked for that drew something else is one a phone never shows; a frame asked for that changed
 // nothing is work a phone does for nothing. Both are asserted here, as a host would meet them.
 

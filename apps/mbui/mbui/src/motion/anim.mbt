@@ -245,7 +245,7 @@ pub fn Anim::ends(self : Anim) -> Double {
 ///|
 /// Whether the end it declared as it was told (`ends()`) has come, on the frames' clock: what waits for a motion (what
 /// is shown after it, a press it holds back, state let go once it is over) waits till then, from its cause, not for it
-/// to be seen still (docs/motion.md: no logic reads whether a motion runs). Never told: it has; told between frames,
+/// to be seen still (sf/motion.mbt: no logic reads whether a motion runs). Never told: it has; told between frames,
 /// not before it starts; with motion reduced, as it was told.
 pub fn Anim::over(self : Anim) -> Bool {
   let c = @ui.current()
@@ -464,7 +464,7 @@ pub fn animate(
 /// The number kept as `key` (anim), told as it is built that it goes to `target` by `spec` (animate's way: at the
 /// target the first time, then on to each new target from where it is): read where it is shown (Anim::get as it is
 /// painted: Ctx::bg_by, Ctx::look_by), not as it is built, so what builds it is not built again each frame it goes
-/// (docs/retained.md, motion in what is made once). Telling it reads no clock.
+/// (motion in what is made once). Telling it reads no clock.
 #callsite(autofill(loc))
 pub fn told(c : @ui.Ctx, key : String, target : Double, spec? : Spec = spring(), loc~ : SourceLoc) -> Anim {
   @signals.untracked(fn() {

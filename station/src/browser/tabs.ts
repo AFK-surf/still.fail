@@ -1,6 +1,6 @@
 // The tabs of the station's browser, as its DevTools tell of them (Target.setDiscoverTargets on the station's own
 // connection): listed to the agents, and each a screen source (`browser:<targetId>`) in the station's Screens while it
-// is there, saying the session that opened it (owners.ts) and closed from a person's app (docs/remote-screens.md).
+// is there, saying the session that opened it (owners.ts) and closed from a person's app.
 import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";

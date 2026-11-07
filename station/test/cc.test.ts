@@ -1,5 +1,5 @@
-// A person's message in a still.fail chat copied to the Slack or Feishu thread the chat is linked to (docs/relay.md
-// "抄送"): which thread that is, what the bot says there, what is kept of it, a copy that did not go, and the page's
+// A person's message in a still.fail chat copied to the Slack or Feishu thread the chat is linked to:
+// which thread that is, what the bot says there, what is kept of it, a copy that did not go, and the page's
 // side of it (the chat's `cc`, a message sent with `cc`).
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";

@@ -56,7 +56,7 @@ fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> 
 }
 
 ///|
-/// What a timed motion's curve says it is (still.fail's docs/motion.md, Curves): one curve for each, so what moves the
+/// What a timed motion's curve says it is (sf/motion.mbt, Curves): one curve for each, so what moves the
 /// same way moves alike everywhere. No other: what is sprung is @motion's (its springs: rows making way, a sheet, a
 /// thing let go with the hand's speed, a thing lifted).
 pub(all) enum Ease {

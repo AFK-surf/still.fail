@@ -1,4 +1,4 @@
-// What the station keeps of the vaults it holds (docs/vault.md): each vault's and each item's latest version, as signed,
+// What the station keeps of the vaults it holds: each vault's and each item's latest version, as signed,
 // and the box certificates the workspace's app devices published. Ciphertext and signatures only; who may write what is
 // checked before (crypto.ts). Its tables beside the store's, in the same database (`CREATE TABLE IF NOT EXISTS`: a
 // station from before has none, and one from before opens this one's database as it was).

@@ -1,4 +1,4 @@
-// permissions (docs/remote-screens.md "Grants"): what macOS lets still.fail Helper do on this Mac (Screen Recording and
+// permissions: what macOS lets still.fail Helper do on this Mac (Screen Recording and
 // Accessibility for its screen, the folders macOS protects for the drive), and a grant asked for: the helper's window up
 // on the Mac for it, once in a while as the drive does, with how a person gives it: from wherever they are through the
 // screen when it can be seen and driven (its link, to post with need_human), else at the Mac itself.

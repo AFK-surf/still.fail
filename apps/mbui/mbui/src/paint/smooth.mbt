@@ -1,21 +1,4 @@
-// Corners: the only place that says how a box's corner is drawn. Every renderer's copy is src/host/corner.sl, the same
-// functions number for number (scripts/chk corner-sl holds their numbers alike and makes corner_sl.h and web/host.js).
-//
-// A corner has a radius, and how it is drawn, which are two things (the user, 2026-11-07: 「圆角是圆角，平滑是平滑」). The
-// radius is what layout knows: what lies in a corner stands by the radius as given, and the drawing moves nothing
-// (concentric; 2026-11-03: 「平滑圆角只是在原有圆角的描述上做平滑」「边距应该是整数」). Every corner is smooth (2026-11-07:
-// 「所有圆角都有平滑」), a capsule by a capsule's smoothing (「胶囊有胶囊的平滑」):
-// - a rounded rectangle's: superellipse(1.5), |x|^n + |y|^n = R^n with n = 2^1.5 over R a quarter longer than the radius.
-// - a capsule's end (the radius half the box's shorter side): a circle's arc at its middle that eases into its long edges
-//   (capsule_ease; 2026-10-31: 「苹果的那个按钮就看不出直线和半圆的接点」). The same curve for a height however long the
-//   capsule is (2026-11-07: 「这跟长度有个屁的关系」); only a box too short to hold it has less, and a circle none: a circle
-//   is a circle.
-// Between the two a box whose room is passing from one to the other goes over evenly (`s`, smoothness), so a capsule of one
-// line taking a second never jumps (2026-11-07: 「还是要插值」「我们有两个的过渡效果」).
-//
-// Every box with a radius is so, with no switch: ground, edge, shadow, glass, what a clip cuts and where a press lands.
-// A corner given is never times 1.25 by hand. Only + - × ÷ and √ (exact in IEEE, the same on every target): a power is
-// `det_pow`'s.
+// Corners as drawn; host/corner.sl is the renderers' copy. A corner's radius places things, its smoothing only draws.
 
 ///|
 /// How much longer a smooth corner's radius is (the web's --corner-scale), and its exponent (CSS superellipse(1.5): 2^1.5).

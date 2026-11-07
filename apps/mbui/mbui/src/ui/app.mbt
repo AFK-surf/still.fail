@@ -2548,7 +2548,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double, tree? : Doub
       probe_worst.val = (work + present, why)
     }
   }
-  // (how much of the window each drew again, docs/partial-redraw.md; the GPU's time of the last done)
+  // (how much of the window each drew again; the GPU's time of the last done)
   let share = presented_share.val
   probe_parts[if share >= 1.0 { 0 } else if share > 0.0 { 1 } else { 2 }] += 1
   probe_why[presented.why()] += 1

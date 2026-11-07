@@ -284,7 +284,7 @@ pub fn row_name(item : ChatItem) -> String {
 ///|
 /// What leads a row's second line (the core's `stateLead`): done and offered to archive (`settled`), the archive box in
 /// the check's place (ChatMark.tsx rowLead). Its title goes no lighter than the muted grey and still reads, so the mark
-/// says it (docs/ui-panels.md 对比度).
+/// says it (mbui ui/contrast.mbt).
 pub fn row_lead(item : ChatItem) -> String {
   if item.settled && item.state_lead == "done" {
     "archive"

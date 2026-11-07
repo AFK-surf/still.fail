@@ -13,8 +13,8 @@
 #   stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] [--join | --stay]
 #                                                       joins a workspace in still.fail cloud (or in Comma), leaving
 #                                                       those it is in; --join stays in them, --stay too when it is in
-#                                                       one (docs/multi-workspace.md); --lock pins that workspace lock
-#                                                       (docs/workspace-lock.md)
+#                                                       one; --lock pins that workspace lock
+#
 #   stillfail station id
 #   stillfail lock status|reset                         the workspace lock on this station: what is pinned, or taking
 #                                                       it away (when every device that could sign is lost)

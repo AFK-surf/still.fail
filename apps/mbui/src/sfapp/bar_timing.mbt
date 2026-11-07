@@ -1,4 +1,4 @@
-// How long a switch between places on the bottom bar takes (still.fail's Android app's BarTiming.kt, docs/telemetry.md
+// How long a switch between places on the bottom bar takes (still.fail's Android app's BarTiming.kt
 // → 安卓 `bar_switch`): the host is told as a place's page is put on the stack in place of another's (go_place), and as
 // the frame that first built it is over. The times are the host's (src/stillfail: Android's BarTiming.java, logcat
 // StillfailTiming and PostHog), from the finger lifted; nothing here reads a clock, and under a Tester nothing is told.

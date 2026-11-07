@@ -1,7 +1,7 @@
 # Working in mbui (for agents)
 
 These are the owner's rules. They are not reviewed PR by PR: you are expected to follow them yourself, and what can be
-checked is checked by CI (`scripts/detlint`, docs/detlint.md; the Tester's own checks). Where a rule has no check
+checked is checked by CI (`scripts/detlint`; the Tester's own checks). Where a rule has no check
 yet and you can add one, add it.
 
 ## Time in a test is declared, never waited for
@@ -12,7 +12,7 @@ yet and you can add one, add it.
 - A test walks to what it tests step by step (taps, types, data), then says the moment it looks at (`run_for` a
   declared duration, by name) and asserts. The frames in between must not matter: a picture or a state at a moment is
   a function of the inputs and that moment, at 60 Hz, at 120 Hz, or in one jump.
-- Motion is data (docs/determinism.md "Motion is data"): said once with where from, where to, curve and start; its
+- Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
   off by its cause, never found by comparing frames (a laid-out box or a measured size that differs from last frame's),
@@ -51,7 +51,7 @@ yet and you can add one, add it.
 - A check that fails and then passes on the same commit means something uncontrolled got into the system (real time,
   a host callback's order, a core answer's order, the network, an emulator's state, another job's files). Do not
   rerun it green and move on, do not call it "偶发", do not add retries or waits. Find what came in uncontrolled and
-  route it through what is recorded and given again (docs/determinism.md rule 1), or take it out of the run.
+  route it through what is recorded and given again, or take it out of the run.
 
 ## Tools are MoonBit, not Python
 

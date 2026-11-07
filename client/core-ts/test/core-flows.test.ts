@@ -1,5 +1,5 @@
 // The Rust core's core/tests.rs, the rest ported (same names; the checks as the TS core's design has them, its
-// deliberate differences in docs/core-ts.md): workspaces kept apart, the beta channel, previews, traces, choices,
+// deliberate differences): workspaces kept apart, the beta channel, previews, traces, choices,
 // drafts, decisions, the chat list's local overlays, jobs, the archive, forms, the changelog.
 import assert from "node:assert/strict";
 import { Effect, Queue } from "effect";
@@ -255,7 +255,7 @@ test("a capacity notice and its cancel action pass through the real core", async
 });
 
 test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", async () => {
-  // Deliberately otherwise (docs/core-ts.md, rule 6): a chat opening reads only what is held, so it asks the station
+  // Deliberately otherwise (rule 6): a chat opening reads only what is held, so it asks the station
   // nothing; what the Rust core's chat.open traced is the station's own reading, one trace from its connecting on.
   const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 1);
   const ui = core.connect();
@@ -2148,7 +2148,7 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   await ask(host, core, ui, 4, "changelog.seen", {});
   answersOf(host, values);
   assert.equal(v(values, 2).news, undefined);
-  // Read once at each start (the TS core reads it then and as the cloud's socket opens: docs/core-ts.md).
+  // Read once at each start (the TS core reads it then and as the cloud's socket opens).
   assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
   core.close();
 });
@@ -2721,7 +2721,7 @@ test("a_phone_shows_each_chat_once_ordered_by_the_last_actual_use", async () => 
   assert.deepEqual(core.inner.adb.grants().map((g: J) => [g.id, g.chat, g.lastUsedAt]), [
     ["new", "chat-a", at - 60_000], ["other", "chat-b", at - 90_000], ["unknown", "chat-c", undefined],
   ]);
-  // (a station's word alone, nothing signed: shown, and lends nothing: docs/personal-lock.md)
+  // (a station's word alone, nothing signed: shown, and lends nothing)
   assert.deepEqual(core.inner.adb.wanted(), []);
   // The view has the title and relative time, and that time advances while the page remains open.
   core.keepTime();

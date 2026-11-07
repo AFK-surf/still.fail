@@ -1,6 +1,6 @@
 // A part kept as its nodes (Ctx::kept_part): what the view builds in it is kept as the nodes it built, under a watch of
 // its own, and built again only as what it read changes, what it is built from besides (`key`) does, or what is no
-// signal came (kept_nodes.mbt). `own`: an island (docs/retained.md, the way there's 3), kept whatever else the frame
+// signal came (kept_nodes.mbt). `own`: an island (the way there's 3), kept whatever else the frame
 // built anew.
 //
 // What a build reads of time is read as signals here (KeptClock): the frame, where what it shows changes each frame (a
@@ -104,7 +104,7 @@ pub fn Ctx::kept_part(
   loc~ : SourceLoc,
 ) -> Unit {
   // kept as its nodes, under a watch of its own (kept_nodes.mbt); `own`: built from its key and what it reads alone,
-  // nothing handed it as what builds it was built, so kept whatever else the frame built anew (docs/retained.md, the
+  // nothing handed it as what builds it was built, so kept whatever else the frame built anew (the
   // way there's 3: an island). `rows_stay`: a part in what is built again: built from its key and what it reads alone as
   // well, and the rows of the lists in it go on as it does (a frame built anew builds a list's rows anew otherwise)
   self.part_nodes(id, key, body, read_out, own~, rows_stay~, made_at=loc)

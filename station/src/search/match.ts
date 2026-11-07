@@ -1,4 +1,4 @@
-// What a search finds among what the station has (docs/search.md): nothing is indexed, everything is looked through as
+// What a search finds among what the station has: nothing is indexed, everything is looked through as
 // it is asked for (search/worker.ts reads it). Each thing found is a document: its kind, whom it is for (the workspace
 // it is in, and a scope a viewer must have), what it is called, what it says, when, and what opens it.
 

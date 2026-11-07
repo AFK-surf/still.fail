@@ -1,4 +1,4 @@
-// One login (docs/remote-login.md, 怎么做到): a login command run on this machine in a pseudo-terminal (the system's
+// One login (怎么做到): a login command run on this machine in a pseudo-terminal (the system's
 // `script`, 200 × 40), with stand-ins for the browser (BROWSER, and `open`, `xdg-open`, `osascript` first on its PATH)
 // that hand the page it would open to the station instead. What a person has to do is read from three places: the page
 // it opens, what it prints (pages, a device code, prompts), and whether it has stopped on a prompt. Its screen is kept by

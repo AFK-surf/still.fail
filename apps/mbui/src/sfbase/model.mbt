@@ -483,7 +483,7 @@ pub fn this_machine() -> String {
 
 
 ///|
-/// Whether `screen` of `station` is this machine's own display (its `desktop` screen: docs/remote-screens.md): seen
+/// Whether `screen` of `station` is this machine's own display (its `desktop` screen): seen
 /// from here it would only show itself, a window inside a window inside a window, and driven from here it would drive
 /// the very pointer driving it. A browser's tab or a simulator of this machine is a screen of its own, and is not this.
 pub fn own_screen(station : String, screen : String) -> Bool {

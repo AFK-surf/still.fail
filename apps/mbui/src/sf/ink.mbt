@@ -33,7 +33,7 @@ priv enum Scope {
 ///|
 /// vitesse-light's colour (its tokenColors), each made to read on a code block's ground (4.5:1, WCAG's AA: its hue
 /// and chroma, its lightness moved the least; a string's and a property's quotes as the words they hold, not faded,
-/// docs/ui-panels.md 对比度).
+/// mbui ui/contrast.mbt).
 fn Scope::light(self : Scope) -> Int64 {
   match self {
     Text => 0x393A34FFL

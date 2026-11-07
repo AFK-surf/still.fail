@@ -1,4 +1,4 @@
-// Traces (docs/telemetry.md). Clients and stations send their spans here, to
+// Traces. Clients and stations send their spans here, to
 // POST /v1/telemetry/traces, and still.fail cloud passes them on to Axiom with its
 // own token, which never leaves the Worker. It records spans of its own for
 // the /v1/* calls that carry a recorded W3C traceparent, sent straight to
@@ -178,7 +178,7 @@ const NETWORK_KEYS = new Set(["stillfail.net.asn", "stillfail.net.org", "stillfa
  * The network a batch was sent from, as Cloudflare saw it (its `cf`): the carrier (its AS number and name) and where,
  * to the province and city, never the address. Put on every resource of a batch of spans, so a device's ways through
  * the relays (`mesh.speed`, `mesh.connect`, `mesh.route`) are compared network by network: 湖南移动 through Shenzhen and
- * through Hong Kong (docs/telemetry.md). What the sender said of these itself is not kept. A device behind a VPN shows
+ * through Hong Kong. What the sender said of these itself is not kept. A device behind a VPN shows
  * the VPN's network: its spans say the network its telemetry left by, which its ways to stations need not have taken.
  */
 export function networkOf(cf: unknown): { key: string; value: { stringValue: string } | { intValue: string } }[] {
@@ -272,7 +272,7 @@ export async function recordCall(env: Env, parent: TraceParent, request: Request
     ],
     status: { code: response.status >= 500 ? 2 : 1 },
   };
-  // Named after the Worker (stillfail-cloud), as the queries in docs/telemetry.md know it.
+  // Named after the Worker (stillfail-cloud), as the queries know it.
   const body = JSON.stringify({ resourceSpans: [{ resource: { attributes: [attribute("service.name", "stillfail-cloud")] }, scopeSpans: [{ scope: { name: "stillfail-cloud" }, spans: [span] }] }] });
   await toAxiom(env, body).catch(() => false);
 }

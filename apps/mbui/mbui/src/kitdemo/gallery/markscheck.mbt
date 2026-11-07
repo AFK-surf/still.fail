@@ -1,4 +1,4 @@
-// The marks' contract (docs/determinism.md, "What is compared, and where"; scripts/host_contract.sh HOST marks): on a
+// The marks' contract ("What is compared, and where"; scripts/host_contract.sh HOST marks): on a
 // real host, MBUI_MARKS=<the marks' JSON, base64> MBUI_MARKS_IMAGE=<the picture's bytes, base64> (test/marks/): the
 // marks drawn onto the picture by the host (@hostapi.draw_marks), the PNG it made written on the log in base64 (`MARKS
 // png <part>` lines, then `MARKS done N bytes`), then the app's end. `MARKS none` where the host draws none (Windows,

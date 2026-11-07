@@ -85,7 +85,7 @@ const key = (path: string) => platform.paths.key(path);
 const within = (path: string, dir: string) => platform.paths.within(key(path), key(dir));
 
 /// The roots config.json names (`drive.roots`): absolute paths, as written. Those of a workspace the station joined are
-/// `drive.workspaces[<id>]` (docs/multi-workspace.md); none named, its home workspace's.
+/// `drive.workspaces[<id>]`; none named, its home workspace's.
 export function rootsOf(raw: any, workspace: string | null = null): string[] {
   const roots = workspace === null ? raw?.drive?.roots : raw?.drive?.workspaces?.[workspace];
   return Array.isArray(roots) ? roots.filter((r: unknown): r is string => typeof r === "string" && platform.paths.rooted(r)).map((r) => platform.paths.clean(r)) : [];
@@ -121,7 +121,7 @@ function granted(files: Protected, top: string): boolean {
   return known?.state === "granted";
 }
 
-/// Where a file a person drops into one of the station's screens is put (docs/remote-screens.md `drop`): the machine's
+/// Where a file a person drops into one of the station's screens is put: the machine's
 /// Downloads, where files from elsewhere land (a browser's, AirDrop's) and where its file dialogs look first; the home
 /// where it has none. Only the folder's own entry is looked at, never what is in it: on macOS listing a protected
 /// folder can put a privacy prompt up and hold the caller until it is answered (a whole station, for a sync call). A

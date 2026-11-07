@@ -55,7 +55,7 @@ let nav_trailing : @ui.Style = @ui.css("row h=S8 align=ACenter")
 
 ///|
 /// Back: a chevron and where to in a link's ink, the accent's that reads on the page (Parts.kt NavBack; the accent
-/// itself, a fill's, was 2.8 to 1 there: docs/ui-panels.md 对比度). Its word no wider than `max_w`
+/// itself, a fill's, was 2.8 to 1 there: mbui ui/contrast.mbt). Its word no wider than `max_w`
 /// (when that is said): there whole or not at all (Ctx::box drop), the chevron alone where it has not the room, as
 /// iOS's back button gives way; never cut short past knowing (the user, 2026-10-25). It is still what the button is
 /// called. True on the frame after it was tapped.

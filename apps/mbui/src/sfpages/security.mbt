@@ -133,7 +133,7 @@ fn sec_group(c : @ui.Ctx, look : Look, body : () -> Unit, top_button? : Bool = f
 /// A row of a section, going nowhere: `mark` before it, its title, `note` under it (narrow) or after it (wide; amber
 /// where `warn`; where `drops`, whole or not at all where the row has not the room), `end` at its end; `acts`, what
 /// it does where its title is words of no length known (a device's name): at its end wide, narrow a line of its own
-/// under its words, the title never squeezed by it (docs/ui-panels.md 字和别的东西并排时). `over`: the name of the
+/// under its words, the title never squeezed by it (mbui ui/squeeze.mbt). `over`: the name of the
 /// rows it starts, over it at its mark (a person's devices of one app: still.fail 桌面版), `apart` from the rows
 /// before it.
 fn sec_line(

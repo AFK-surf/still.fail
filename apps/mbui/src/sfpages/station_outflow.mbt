@@ -1,5 +1,5 @@
 ///|
-/// A station page's 数据外流 (docs/data-outflow.md): the programs of its machine asking for its data, then those
+/// A station page's 数据外流: the programs of its machine asking for its data, then those
 /// granted it. A request is a row naming the program, who signed it as the system said, what it said of itself and
 /// when it asked; for an admin of the workspace (`answers`), each kind it asks for with what it gives away, a tick each,
 /// and 这个 workspace 的所有 station where it asks for that, then 不允许 and 允许, which asks once more, saying all
@@ -181,7 +181,7 @@ fn outflow_view(core : Core, station : String) -> Json? {
 }
 
 ///|
-/// The Tailcat link (docs/data-outflow.md): a switch, its state in its note, and running, the address and port to give
+/// The Tailcat link: a switch, its state in its note, and running, the address and port to give
 /// the program on the other machine, copied in one press.
 fn outflow_link(c : @ui.Ctx, core : Core, station : String, link : Json?) -> Unit {
   @sf.group(c, fn() {

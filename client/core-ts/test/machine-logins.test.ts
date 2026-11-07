@@ -1,4 +1,4 @@
-// A station's logins in the core (docs/remote-login.md): read when its stream opens and told as they change, shown in
+// A station's logins in the core: read when its stream opens and told as they change, shown in
 // words; a station from before has none; a terminal's screen told on the stream while it is shown; a loopback login's
 // callback taken on this device (a host that can listen) and handed to the station, only the one it waits for, once.
 import assert from "node:assert/strict";

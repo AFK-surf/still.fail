@@ -6,7 +6,7 @@ as `agentEnv` (a map of names to one-line strings), read by `station/src/ops/age
 
 ## Where they go
 
-- The runtimes (Claude Code, Codex, dsh), the profiles' sign-ins, the machine's command-line logins (docs/remote-login.md),
+- The runtimes (Claude Code, Codex, dsh), the profiles' sign-ins, the machine's command-line logins,
   the CLIs a profile is checked with, and the agents' background jobs: `startEnv` (and `cleanEnv`, agents/runtime.ts) is
   the station's own environment with these over it, less what each scrubs. A profile's own variables go over them.
 - With a proxy among them, this machine is kept out of it: `localhost,127.0.0.1,::1` are added to `NO_PROXY` and

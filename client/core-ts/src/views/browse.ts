@@ -1,4 +1,4 @@
-// A station's files as they are browsed on this device (docs/drive.md "Clients"): the core's part of drive-browse.ts's
+// A station's files as they are browsed on this device: the core's part of drive-browse.ts's
 // `Browsing` — the prefs it keeps and reads, the folders held, the workspace's stations with a drive — and the topics and
 // calls it answers. A client draws what it is told and does what a call answers (another folder shown, an entry
 // opened…).

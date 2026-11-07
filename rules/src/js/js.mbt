@@ -385,7 +385,7 @@ fn person_json(p : @lock.Person) -> Json {
 }
 
 ///|
-/// A person's own lock, its chain checked (docs/personal-lock.md): `{sub, genesis, head, seq, devices}` or `{error}`.
+/// A person's own lock, its chain checked: `{sub, genesis, head, seq, devices}` or `{error}`.
 pub fn person_fold_js(entries : JsValue, sub : String, crypto : JsCrypto) -> JsValue {
   let answer = try person_json(@lock.fold_person(entries_of(entries), sub, crypto)) catch {
     @lock.Refused(why) | @lock.Refusal(why) => Json::object(Map([("error", Json::string(why))]))

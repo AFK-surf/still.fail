@@ -1,4 +1,4 @@
-// One station in several workspaces (views/memberships.ts, docs/multi-workspace.md): which stations of the viewer's
+// One station in several workspaces (views/memberships.ts): which stations of the viewer's
 // other workspaces could be added to one (`joinable`), `station.join` (an enrollment made there, the station told to
 // join with it over its home link) and what it says when it cannot, and the workspaces a station is in.
 import assert from "node:assert/strict";

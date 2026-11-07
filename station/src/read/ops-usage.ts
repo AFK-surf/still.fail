@@ -28,7 +28,7 @@ export const usageOps: Record<string, ReadOp> = {
   usageCalls: (store, a) => usageCallsPage(store, String(a.session), BigInt(a.from), BigInt(a.to), [BigInt(a.beforeAt), BigInt(a.beforeSeq)],
     Math.min(Math.max(num(a.limit), 1), 200), a.viewer ?? null),
   resourceChats: (store, a) => resourceChats(store, a.sessions ?? [], a.viewer ?? null),
-  // What a program granted data outflow reads (docs/data-outflow.md), in its version's shape.
+  // What a program granted data outflow reads, in its version's shape.
   // `ws`: another station's program reads the chats of that workspace (outflow/module.ts); absent, the home one's.
   outflowUsage: (store, a) => outflowUsage(store, a.lang, num(a.from), Math.min(num(a.to), num(a.from) + SPAN_MAX_MS), Math.max(-1440, Math.min(num(a.tz), 1440)), outflowOf(a.ws)),
   // `limit`: a page of them, after `before`; absent, all.

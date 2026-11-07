@@ -273,7 +273,7 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
   ...over,
 });
 
-/// `workspaces`: those the station is in, its home one first (docs/multi-workspace.md); a session's link names its own.
+/// `workspaces`: those the station is in, its home one first; a session's link names its own.
 /// `askToName`: asked to name an untitled chat as its turn ends (off unless a test looks at it).
 export type Setup = { maxNudges?: number; askToName?: boolean; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[] };
 

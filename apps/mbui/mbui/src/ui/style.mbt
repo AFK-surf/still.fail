@@ -1,4 +1,4 @@
-// Style values (docs/style.md): a box's (Style, its state blocks Patch) and words' (TextStyle, TextPatch); made with
+// Style values (mbui's ui/style.mbt): a box's (Style, its state blocks Patch) and words' (TextStyle, TextPatch); made with
 // `style(…)`, `patch(…)`, `text_style(…)`, `text_patch(…)`, or a Style read from its text (`css("…")`, style_css.mbt:
 // what a named constant is said with), put together with `then`. Every property is a token of
 // style_tokens.mbt; one not said is the default (Ctx::box's, Ctx::text's) or what the style under it says.

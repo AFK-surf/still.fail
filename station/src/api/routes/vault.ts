@@ -1,4 +1,4 @@
-// The vaults this station holds (docs/vault.md): GET/PUT vault/vaults, GET/PUT vault/items, GET/PUT vault/boxes. Only
+// The vaults this station holds: GET/PUT vault/vaults, GET/PUT vault/items, GET/PUT vault/boxes. Only
 // where the station pinned its workspace's lock (`vault_needs_lock` otherwise): the lock is what says which devices sign
 // and whose they are, without it the control plane could add a device of its own and be given the keys. A member sees
 // the vaults they are a member of and those vaults' items; each write is checked against the lock and the version it

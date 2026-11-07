@@ -13,7 +13,7 @@
 //   Cursor is no command: its SDK's package, in the station's own npm prefix (agents/cursor.ts), its version the package's.
 //   Running agents go on with what they started with; the next process starts the new one.
 //
-// The TS release (docs/station-ts-native.md) is updated by the same files as the Rust one was:
+// The TS release is updated by the same files as the Rust one was:
 // run/update.started (this side's, so the process that runs after a handover or restart follows the update to its
 // end), run/update.step (download | handoff | drain | restart, the installer's), run/update.log and run/update.exit,
 // and the installer is given STILLFAIL_CHANNEL and STILLFAIL_DATA as it was (and now what release.ts

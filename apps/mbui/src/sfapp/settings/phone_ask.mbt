@@ -1,4 +1,4 @@
-// An agent's request to debug its person's phone as a card (docs/adb-share.md, 2026-10-29: as a vault request's): what
+// An agent's request to debug its person's phone as a card (2026-10-29: as a vault request's): what
 // is asked in its title, the agent's reason under it, and at its foot 允许 as the one solid button, 拒绝 beside it, and
 // how long it is allowed a choice beside them that starts at the longest (`adb.decide` on the chat's station). Only the
 // viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went. What it

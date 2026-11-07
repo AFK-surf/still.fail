@@ -68,7 +68,7 @@ export function questionBlocks(text: string, question: Json, lang: Lang): Json[]
   return blocks.filter((b) => b !== null);
 }
 
-/// A login card (docs/remote-login.md): the agent's words (with the login's link), a button that opens its page, and a
+/// A login card: the agent's words (with the login's link), a button that opens its page, and a
 /// field for the code that page gives with a button that hands it to the login's command (the code is never said in the
 /// thread); or, for a device code, that code to enter on the page. Without the page (a channel shared with another
 /// organization, or one too long for a button): the words and the field, or the words alone for a device code; the

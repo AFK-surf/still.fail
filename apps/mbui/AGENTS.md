@@ -6,7 +6,7 @@ applies here as well. In short, and what is particular to this app:
 
 ## The terms (术语)
 
-Four things decide how the app looks and answers (docs/architecture.md, the terms):
+Four things decide how the app looks and answers:
 
 - **屏幕** (the screen): 小屏 / 中屏 / 大屏 (`@sf.layout`: `Small`, `Medium`, `Large`), plus the special screens (a fold
   half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged, and
@@ -39,23 +39,23 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## The component library
 
-- The parts pages are made of are the library's, `src/sf` (docs/library.md): the counterpart of the web's `web/ui`,
+- The parts pages are made of are the library's, `src/sf` (sf/styles.mbt): the counterpart of the web's `web/ui`,
   one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
 
 - A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
   as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
-  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui/docs/style.md). Why (2026-10-24): moonc made
+  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui's ui/style.mbt). Why (2026-10-24): moonc made
   each `@ui.style(…)` constant ~5-10 KB of C in the program's start, ~1400 of them ~11.8 MB of one function compiled
   again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
   way and prints the text to write.
 
 ## One app: tiers, input, pages, shell
 
-- `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
+- How the app is built, in short:
   - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
-  - Six principles come first (the user, 2026-10-26; docs/architecture.md): every function as easy with either
+  - Six principles come first (the user, 2026-10-26): every function as easy with either
     input; what always shows is pressed in 44×44 at least, overlapping none; menus and picks from the foot on Small,
     beside what opened them on Medium and Large; the screen decides the arrangement, the input only how things
     answer and the size they are drawn at; the same content and actions on the three screens, each arranged as is
@@ -72,7 +72,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
   - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
     `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
-  - Both go into `sfpages` and `sfshell` as pages merge (`docs/architecture.md`, the way there).
+  - Both go into `sfpages` and `sfshell` as pages merge.
 - **What doesn't change:**
   - Something both need moves down into `sfbase` or the library, once.
   - Logic is the core's, never a page's.
@@ -81,7 +81,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
     width. Nor on the native input (`@sf.native_input()`): what differs by it is the theme's, the library
-    parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
+    parts', the presenters' and the shell's (the same on every screen and what differs); a page
     that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
     library's primitives (`c.lit`, `c.menu_asked`, tips).
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
@@ -90,7 +90,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## Motion
 
-- `docs/motion.md` says what moves and how; read it before adding or changing a motion. In short (the user,
+- `sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
   2026-10-25):
   - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
     scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.

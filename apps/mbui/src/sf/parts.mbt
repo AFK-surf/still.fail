@@ -106,7 +106,7 @@ fn button_part(
     }
   } else {
     // the phone's (Parts.kt): the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
-    // solid ground a step towards the page and a quiet one the hover's step darker (docs/ui-panels.md 悬停)
+    // solid ground a step towards the page and a quiet one the hover's step darker (mbui ui/hand_moves.mbt)
     match tone {
       Primary => {
         let g = mix(p.primary_hover, h, p.primary)
@@ -234,7 +234,7 @@ fn button_part(
   )
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
   // the curve a thing reshaped is moved by, not at once (the user, 2026-10-30: 按钮的变长应该也有过渡; their cause,
-  // its words: docs/motion.md 3)
+  // its words: sf/motion.mbt 3)
   if key != "" {
     @motion.reshape(c, b, "sf-btn/shape/" + key, by=label, spec=button_reshape)
     @motion.layout(c, words_at, "sf-btn/words/" + key, by=label, spec=button_reshape)
@@ -710,7 +710,7 @@ pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit
 }
 
 // ---------------------------------------------------------------------------
-// Small panels (docs/ui-panels.md)
+// Small panels
 
 ///|
 /// A small panel's ground (controls.css.ts popover): the canvas (the raised
@@ -1369,6 +1369,8 @@ pub fn dropdown(
 /// A line between parts of a small panel (controls.css.ts menuSep): the words' ink faintly (in dark the panel is
 /// lighter than the page: its line a groove), 1 high, 6 over and under it, as wide as its rows' grounds (at the
 /// panel's padding), so a row pointed at beside it ends where it does.
+/// Rules are for menus alone; elsewhere room, a heading or a ground groups things (the user, 2026-10-25: 「除了菜单感
+/// 觉都应该去掉」).
 pub fn menu_rule(c : @ui.Ctx) -> Unit {
   c.box(style=menu_rule_at, fn() { c.box(style=rule_line.then(@ui.style(bg=Data(rule_ink(c)))), fn() {  }) |> ignore })
   |> ignore
@@ -3039,7 +3041,7 @@ pub fn choices(
               }
             })
             |> ignore
-            // (its mark in its end's middle: concentric with the card's corners, docs/ui-panels.md)
+            // (its mark in its end's middle: concentric with the card's corners, sf/align.mbt)
             c.box(style=choice_mark_at, fn() {
               c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
                 if s.on {
@@ -3052,7 +3054,7 @@ pub fn choices(
           })
           |> ignore
           // (parts.css.ts choiceExtra: 14 in at its sides, 12 over and 14 under what it holds; no line over it: only
-          // a menu's parts are set apart by one, docs/ui-panels.md. Narrow, its rows each a ground pressed whole: those
+          // a menu's parts are set apart by one, sf/align.mbt. Narrow, its rows each a ground pressed whole: those
           // a step of the ladder in from its sides and foot, round as that step, their words their own padding in)
           match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
@@ -3996,7 +3998,7 @@ let options_card_pad : Double = list_pad
 let option_row_corner : Double = row_corner
 
 ///|
-/// An option's measures, the theme's for the screen (decided once: docs/architecture.md): its number's disc a list
+/// An option's measures, the theme's for the screen (decided once): its number's disc a list
 /// item's mark, as far in from the row's top and side as makes it concentric with the row (its corner less the disc's
 /// half); its label in the controls' words, what it leads to in the meta's. Keyboard and mouse's as the web's
 /// (Decisions.css.ts choice: a 20 disc 8 in, 13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
@@ -4741,7 +4743,7 @@ pub fn update_key(
 }
 
 ///|
-/// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of
+/// The list catching up on what changed while away (the chats' `syncing`; sf/waiting.mbt): beside the keys of
 /// the bar it stands in, `side` across, the refresh mark (`mark`, in the grey of what it says nothing of) turning, a
 /// turn each sync_turn_ms, slow at its ends (by the clock as each frame is drawn: nothing built anew for it); `text` its tip and what it is said to be. Only once it has gone on later_ms
 /// (a moment's catching up shows nothing). Once all is here, the mark becomes a tick: it goes on from where it is and as

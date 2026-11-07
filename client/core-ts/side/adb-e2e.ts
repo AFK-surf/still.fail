@@ -1,4 +1,4 @@
-// A phone's adb lent to a real station end to end (docs/adb-share.md): a dev cloud (cloud/test/dev.ts), a real station
+// A phone's adb lent to a real station end to end: a dev cloud (cloud/test/dev.ts), a real station
 // with the fake adb (station/test/fake/adb.mjs) on its PATH, and this core's mesh and Adb over real iroh, its adbd an
 // echo server. The phone offers, the station `adb connect`s through a tunnel, then pairs a few times a while: each
 // pairing is a tunnel of its own, opened as the mesh's ways come and go.

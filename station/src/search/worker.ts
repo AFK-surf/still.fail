@@ -1,4 +1,4 @@
-// The search's thread (docs/search.md): answers what is looked for by looking through the station's data as it is then,
+// The search's thread: answers what is looked for by looking through the station's data as it is then,
 // on a read-only connection to the store of its own, as a reader does (read/store.ts). Nothing is kept between searches.
 // The execution histories are looked through only when asked for (agents ask, people do not), file by file, the thread
 // let through between them, so a search asked meanwhile is answered.

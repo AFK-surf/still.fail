@@ -1,4 +1,4 @@
-// A face's files kept by the core for an app that keeps none (src/font-files.ts, docs/fonts.md): fetched in parts, how
+// A face's files kept by the core for an app that keeps none (src/font-files.ts, sf/faces.mbt): fetched in parts, how
 // far said each percent; kept by hash, gzipped as fetched, then as the app unzipped them; every face fetched stays;
 // previews fetched once.
 import assert from "node:assert/strict";

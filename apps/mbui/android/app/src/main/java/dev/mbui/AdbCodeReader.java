@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Reads the pairing dialog's code off Settings while 共享调试 pairs (docs/adb-share.md; still.fail's AdbCodeReader.kt),
+ * Reads the pairing dialog's code off Settings while 共享调试 pairs (still.fail's AdbCodeReader.kt),
  * so nobody types it: the dialog closes as soon as Settings is paused, a field popping up over it hides the code under
  * the keyboard, and Settings hides other apps' windows over it. An accessibility service, as only one may read another
  * app's window, turned on by the person (the 共享调试 page asks). It reads only Settings (res/xml/adb_code_reader.xml),

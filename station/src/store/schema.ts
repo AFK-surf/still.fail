@@ -349,7 +349,7 @@ CREATE TABLE IF NOT EXISTS opened_chats (
   PRIMARY KEY (child_station, child)
 );
 CREATE INDEX IF NOT EXISTS opened_chats_by_key ON opened_chats (parent_station, parent, key, child_station);
--- Chats shared with other workspaces (docs/chat-share.md, xshare/), by the session key their links name: to whom
+-- Chats shared with other workspaces (xshare/), by the session key their links name: to whom
 -- (to: JSON [{workspace, name}]), whether they may write in it, who changed it last and when.
 CREATE TABLE IF NOT EXISTS chat_shares (
   session TEXT PRIMARY KEY,
@@ -360,7 +360,7 @@ CREATE TABLE IF NOT EXISTS chat_shares (
 );
 -- Chats published as snapshots, gone with public sharing.
 DROP TABLE IF EXISTS published;
--- Where chats were relayed (docs/relay.md, sessions/relay.ts): each connect's channel or group, by when a chat was last
+-- Where chats were relayed (sessions/relay.ts): each connect's channel or group, by when a chat was last
 -- relayed there, so the picker offers the places used before first.
 CREATE TABLE IF NOT EXISTS relayed_to (
   connect TEXT NOT NULL,
@@ -1340,7 +1340,7 @@ export function addListState(db: DatabaseSync): void {
   }
 }
 
-/// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat
+/// The columns a station in several workspaces came with: which workspace a session's chat
 /// is in (sessions.ws) and whose archive policy a row is (archive_policy.ws); NULL is the station's home workspace.
 export function addWorkspaceColumns(db: DatabaseSync): void {
   if (!has(db, "sessions", "ws")) db.exec("ALTER TABLE sessions ADD COLUMN ws TEXT");

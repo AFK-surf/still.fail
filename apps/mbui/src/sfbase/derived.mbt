@@ -1,5 +1,5 @@
 // What the pages work out of the core's topics, worked out once: alien-signals' computed (mbui/signals, its
-// docs/signals.md), following the core's changes from the core on. Each subscription's changes are a signal the core
+//), following the core's changes from the core on. Each subscription's changes are a signal the core
 // client sets as the core's message for it comes, and as it ends (src/core client.mbt Sub.changes); a topic read
 // (Source.topic) reads it, so what a computed reads of a topic it follows, wherever it reads it (in a computed it reads
 // in turn too). A page reads a field or two of a topic as it is; what it makes of the whole of it (a chat's messages,

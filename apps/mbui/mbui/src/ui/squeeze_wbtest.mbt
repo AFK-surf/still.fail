@@ -1,4 +1,4 @@
-// Short of room (docs/style.md): what holds its size, what gives way and how, and what Tester::squeeze_faults says.
+// Short of room (mbui's ui/style.mbt): what holds its size, what gives way and how, and what Tester::squeeze_faults says.
 
 ///|
 /// Box `id` as the last frame laid it out (x, y, w, h) and how it shows (its opacity).

@@ -1,4 +1,4 @@
-// Memory and time to the first view, of one core in this process (docs/core-ts.md, 测量): the fake cloud and a station
+// Memory and time to the first view, of one core in this process (测量): the fake cloud and a station
 // with `chats` chats of `per` entries each (harness/station.ts, in a process of its own: harness/serve.ts) over the host
 // wire.
 //

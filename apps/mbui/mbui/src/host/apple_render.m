@@ -708,7 +708,7 @@ static void keep_under(const float *f, int32_t start, int32_t count, int32_t pie
 // where the pieces of the frame's shapes start (src/ui/shape.mbt: the instances of kind 12 after every one drawn)
 static int32_t seg_base;
 
-// Partial redraw (docs/partial-redraw.md): a window's frame is drawn into a canvas of its own, kept across frames, and
+// Partial redraw: a window's frame is drawn into a canvas of its own, kept across frames, and
 // copied into the drawable; where the app says only some parts of it differ from the frame before
 // (@hostapi.render_dirty), only those parts of the canvas are drawn again, a pass each: it loads what the canvas holds,
 // cut to the part (the pass's scissor, `sc`, while `sc_on`), the frame's ground drawn over the part first (the

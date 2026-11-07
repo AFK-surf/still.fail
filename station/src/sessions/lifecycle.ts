@@ -70,7 +70,7 @@ export function bindSingle(hub: Hub, connectId: string, target: string | null, t
   const row = hub.store.getSession(target);
   if (!row) throw new Error(`unknown session ${target}`);
   if (row.runtime !== connect.bind.runtime) throw new Error(`session ${target} runs ${row.runtime}, the connect runs ${connect.bind.runtime}`);
-  // A connect's sessions are its workspace's chats (docs/multi-workspace.md): none of another workspace.
+  // A connect's sessions are its workspace's chats: none of another workspace.
   const home = hub.workspaces()[0] ?? null;
   if (home !== null && hub.wsOf(row) !== (connect.workspace ?? home)) throw new Error(`session ${target} is in another workspace than the connect`);
   hub.store.setBinding(connect.id, target);
@@ -103,7 +103,7 @@ export function addToThread(hub: Hub, thread: number, session: string) {
   stillfailChat(hub, thread);
   const row = hub.store.getSession(session);
   if (row === null) throw new Error(`unknown session ${session}`);
-  // A chat is one workspace's (docs/multi-workspace.md): no session of another joins it. Outside any workspace, all are
+  // A chat is one workspace's: no session of another joins it. Outside any workspace, all are
   // the same one's.
   const there = hub.store.threadSessions(thread)[0];
   if (hub.workspaces().length > 0 && there !== undefined && hub.wsOf(there.session) !== hub.wsOf(row)) throw new Error(`session ${session} is in another workspace than the chat`);
@@ -123,7 +123,7 @@ export function say(hub: Hub, thread: number, user: string, text: string, attach
 
 /// A session of its own, talked to in the station's chat: the runtime, model and effort chosen by whoever starts it
 /// rather than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on. Only
-/// the profiles allowed in its workspace (docs/multi-workspace.md).
+/// the profiles allowed in its workspace.
 export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang()): [string, ThreadRow] {
   const config = hub.config();
   const client = trimmed(options.clientKey);

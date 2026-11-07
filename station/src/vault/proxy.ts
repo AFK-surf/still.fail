@@ -1,4 +1,4 @@
-// The keeper's proxy (docs/vault.md, 三种用法 › 代理): a command run with a grant gets HTTPS_PROXY pointing here, with
+// The keeper's proxy (三种用法 › 代理): a command run with a grant gets HTTPS_PROXY pointing here, with
 // credentials that name its run, and the grant's placeholder (`stillfail-secret:<grant>`) where its token goes. HTTPS to
 // one of the grant's hosts is opened here (with a certificate of the keeper's CA, which the command is told to trust)
 // so the placeholder in the request's headers can be replaced with the secret on its way out; nothing else of the

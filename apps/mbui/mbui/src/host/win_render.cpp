@@ -564,7 +564,7 @@ static void make_pipeline(void) {
   rd.CullMode = D3D11_CULL_NONE;
   rd.DepthClipEnable = TRUE;
   dev->CreateRasterizerState(&rd, &raster);
-  // (a part drawn again: cut to it, docs/partial-redraw.md)
+  // (a part drawn again: cut to it)
   rd.ScissorEnable = TRUE;
   dev->CreateRasterizerState(&rd, &raster_cut);
 }
@@ -677,7 +677,7 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   ctx->Draw(3, 0);
 }
 
-// Partial redraw (docs/partial-redraw.md): a window's frame is drawn into a canvas of its own, kept across frames, and
+// Partial redraw: a window's frame is drawn into a canvas of its own, kept across frames, and
 // copied into the swap chain's buffer (a flip model's holds a frame before the last); where the app says only some
 // parts differ from the frame before (@hostapi.render_dirty), only those parts of the canvas are drawn again, each cut
 // to it (the scissor, `cut`, while `cut_on`), the frame's ground over it first (the instance after the frame's,
@@ -1090,7 +1090,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
 }
 
 // Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every
-// Windows: what the references are of, docs/determinism.md), a texture the size a window's swap chain would be as
+// Windows: what the references are of), a texture the size a window's swap chain would be as
 // the target, the text at the list's scale. A frame drawn there is drawn as a window's is, and its snapshot is of it.
 static ID3D11Texture2D *off_target;
 

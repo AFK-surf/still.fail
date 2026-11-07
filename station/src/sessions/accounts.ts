@@ -36,7 +36,7 @@ export type AccountsDeps = {
   running(except?: string): string[];
   /// Its time.
   clock: Clock.Clock;
-  /// Whether session `key` may run on a profile: one allowed in its workspace (docs/multi-workspace.md); absent: any.
+  /// Whether session `key` may run on a profile: one allowed in its workspace; absent: any.
   allows?(key: string, profile: Profile): boolean;
 };
 
@@ -133,7 +133,7 @@ export class Accounts {
     return profile;
   }
 
-  /// Whether session `key` may run on `profile` (its workspace's, docs/multi-workspace.md).
+  /// Whether session `key` may run on `profile` (its workspace's).
   allows(key: string, profile: Profile): boolean {
     return profile.enabled !== false && (this.deps.allows?.(key, profile) ?? true);
   }

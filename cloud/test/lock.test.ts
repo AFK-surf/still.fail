@@ -1,4 +1,4 @@
-// The workspace lock as still.fail cloud keeps it (docs/workspace-lock.md, src/lock.ts): one chain, each entry following
+// The workspace lock as still.fail cloud keeps it (src/lock.ts): one chain, each entry following
 // the last and signed by whom it may be, as a station checks it (station/test/lock.test.ts tests those rules); carried
 // to the stations on their presence sockets and to members; the devices that asked for credentials, for the owner to
 // check; devices waiting to be confirmed.

@@ -1,4 +1,4 @@
-// The vault on this device (docs/vault.md): the vaults and items a workspace's stations hold, kept here as they do
+// The vault on this device: the vaults and items a workspace's stations hold, kept here as they do
 // (only ciphertext and signatures), what the pages show of them, and what a person does with them. Keys live in the
 // system's secure storage (Host `secureGet`…: an app's; a web page has none and is refused); a vault's key, once
 // unsealed, is kept in memory UNLOCK_MS. Nothing a station or the cloud says is trusted for a key: a vault's version
@@ -17,7 +17,7 @@
 //   workspace's, wherever the person is: `vault.addDevice {vault, device}` gives it, `vault.hidePrompt` puts one away
 //   until that device asks again; `vaultAsks` here)
 //
-// Without security mode the library is plain (docs/vault.md 不加锁的库): each station keeps the person's items as they
+// Without security mode the library is plain ( 不加锁的库): each station keeps the person's items as they
 // are (`vault/plain`), shown as one vault, `plain`; the calls below take it as they take a vault, with nothing to
 // encrypt, sign or ask the person for. Security mode on, what is left of it is moved into their vault (`migrate`).
 // Calls (vault.<name> {workspace, …}):
@@ -894,7 +894,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
   return { vault: id, name: v.name, open: key !== null, items: list };
 }
 
-// ── security mode turned off (docs/vault.md 一个库) ──
+// ── security mode turned off ( 一个库) ──
 
 /// What the person's own vaults hold, opened on this device while the lock is still on (the person asked, saying
 /// `reason`, unless the vaults are unlocked; `asked` told when they were): none where this device keeps no vault keys
@@ -1550,7 +1550,7 @@ class Vaults {
       const unsealed: { priv?: Uint8Array } = {};
       const key = yield* self.#key(v, who, true, t("core-misc.vault.reason.approve", { name: item.listing?.name ?? v.name }), true, (p) => (unsealed.priv = p));
       let bytes = yield* self.#plain(lock, v, item, key);
-      // A sign-in's newer cookies (docs/vault.md 登录态 写回): written as its next version, and granted.
+      // A sign-in's newer cookies ( 登录态 写回): written as its next version, and granted.
       const renewal = r.mode === "browser" ? r.renewal?.sealed.find((x) => x.device === who.device) : undefined;
       const priv = unsealed.priv;
       if (renewal !== undefined && priv !== undefined) {
@@ -1706,7 +1706,7 @@ class Vaults {
     });
   }
 
-  // ── the plain library (docs/vault.md 不加锁的库) ──
+  // ── the plain library ( 不加锁的库) ──
 
   /// An item of the plain library written on its station (a new one on the station keeping the library), the version
   /// after the one held.

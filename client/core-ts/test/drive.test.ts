@@ -1,4 +1,4 @@
-// A station's drive in the core (docs/drive.md): a folder read as it is shown and kept on the device, said refused
+// A station's drive in the core: a folder read as it is shown and kept on the device, said refused
 // when the station refuses it, said why where it could not be read and nothing is held (the station down, no answer in
 // time, failing), read again after a change of it and as its station is back; parts of a file written with what the
 // station has.

@@ -1,4 +1,4 @@
-// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), grouped by the kind of account
+// The workspace's profiles in one list (the `profiles` view), grouped by the kind of account
 // (Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, Devin's, keys), one row an account: the same
 // subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
 // between stations or signed in on several of them each, is one row; its stations are its members, each with what it

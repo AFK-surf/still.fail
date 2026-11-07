@@ -104,7 +104,7 @@ function lockProof(v: any): { base: string; proof: string } | undefined {
 /// How many entries a hello may bring (they come in its first line, MAX_HEAD at most).
 const BROUGHT_MOST = 64;
 
-/// The entries a device brings with its hello (`lock.entries`, docs/workspace-lock.md): what put it in the lock, which
+/// The entries a device brings with its hello (`lock.entries`): what put it in the lock, which
 /// this station has not heard of yet (the cloud, or the device that signed them, has not reached it). Taken as any
 /// are, entry by entry, only onto a lock this station has pinned (they never pin one); whether any was. Nothing is
 /// checked (no signature) unless they could let this very device in: one of them names its base key, and they go on
@@ -188,7 +188,7 @@ export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number;
 /// {entries}: more of the pinned lock, checked entry by entry; or, unpinned, a lock to pin, from its genesis: brought by
 /// its owner, on a device the genesis names (until then the control plane's word is what this station goes by, and the
 /// owner it names is who may turn the lock on).
-/// The lock is the asker's workspace's (each workspace the station is in has its own, docs/multi-workspace.md).
+/// The lock is the asker's workspace's (each workspace the station is in has its own).
 export function lockRoute(cloud: Cloud, method: string, query: [string, string][], body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
   const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
   if (method === "GET") {
@@ -254,7 +254,7 @@ export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, 
 }
 
 /// Not in the workspace's lock as a device, on the person's own lock its member bound there (`lock.person`, the chain a
-/// hello brings: docs/personal-lock.md). The chain is checked and kept here as long as it goes on from the one this
+/// hello brings). The chain is checked and kept here as long as it goes on from the one this
 /// station has: an older one brought again (a device taken off since) is judged as the longer it has. Null when the
 /// hello brings none; throws a LockRefusal why not.
 function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string, hello: any): Admitted | null {
@@ -278,7 +278,7 @@ export type Members = {
   up(): boolean;
   /// The part that answers a kind of request on a member's link itself (parts.ts `streams`: a phone lent over it).
   streams?: (head: any) => ((ask: MemberAsk) => Promise<void>) | undefined;
-  /// The screens members see and drive (docs/remote-screens.md); none: no view is answered.
+  /// The screens members see and drive; none: no view is answered.
   screens?: ScreenHub;
   /// The mesh's spans, when traces are on.
   traces?: Traces;
@@ -325,7 +325,7 @@ export async function serve(m: Members, conn: Connection) {
     wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
     throw e;
   }
-  // How far its lock goes, when it has one (a device that has more brings it, docs/workspace-lock.md).
+  // How far its lock goes, when it has one (a device that has more brings it).
   const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
   const lan = m.lan?.() ?? [];
   const tailnet = m.tailnet?.() ?? [];

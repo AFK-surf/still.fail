@@ -1,4 +1,4 @@
-// The library not locked (docs/vault.md 不加锁的库): in a workspace without security mode, a person's secrets kept on
+// The library not locked ( 不加锁的库): in a workspace without security mode, a person's secrets kept on
 // this station as they are, in plain text, beside the profiles' keys in config.json. Nothing here is encrypted: who
 // may read an item is only who it is (its owner, by the email the cloud's credential says), and the agents of the
 // station could read the database. What it gives is the same way of using them as the vault's (a request, its card,

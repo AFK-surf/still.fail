@@ -1,4 +1,4 @@
-// The agents' tools for the vault's secrets (docs/vault.md, agent 用密钥): secret_list, secret_use, secret_run, and
+// The agents' tools for the vault's secrets (agent 用密钥): secret_list, secret_use, secret_run, and
 // secret_save to ask to keep one (agent 存入). The value of a secret is never what a tool gives back: a command is run
 // with it, through the proxy, an ssh-agent or its environment, and the agent sees what the command said, with the value
 // hidden; one to keep is sealed to its owner's devices, printed by a command whose output the agent never sees, or typed

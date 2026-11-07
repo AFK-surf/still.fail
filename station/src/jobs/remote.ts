@@ -1388,7 +1388,7 @@ export class Remote {
           ? this.seen(workspace, peer, session)
           : join(this.room(workspace, peer, session), "work")
         : join(dir, "work");
-    // A task with a directory runs in its mirror, a directory of the session's (docs/station-peers.md "Directories").
+    // A task with a directory runs in its mirror, a directory of the session's.
     const mirror = typeof meta.mirror === "string" ? meta.mirror : null;
     const room = this.room(workspace, peer, session);
     const manifestPath = mirror === null ? "" : join(room, "mirrors", `${mirror}.json`);
@@ -1708,7 +1708,7 @@ export class Remote {
   }
 
   /// The workspace a session's tasks go in (mesh/cloud.json): its chat's, the home one for those from before; while the
-  /// station is still in it (docs/multi-workspace.md).
+  /// station is still in it.
   private workspace(own: string | null): string {
     const state = readJson(join(this.data, "mesh", "cloud.json"));
     if (field(state, "removed_at") !== null) throw new Error("station was removed from workspace");

@@ -1,4 +1,4 @@
-// Feishu on the station (docs/feishu.md): its connects as every platform's are kept (connects/connects.ts: connected as
+// Feishu on the station: its connects as every platform's are kept (connects/connects.ts: connected as
 // config.json and the station's workspace say, what Feishu calls people and chats in <data>/feishu-names.json), where
 // its chats' words go (<data>/feishu-threads.json), and the apps being made by a scan.
 import { join } from "node:path";

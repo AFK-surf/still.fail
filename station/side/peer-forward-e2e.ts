@@ -1,4 +1,4 @@
-// A port of another station forwarded to this one end to end (docs/station-peers.md "Forwarded ports"), on a dev cloud
+// A port of another station forwarded to this one end to end, on a dev cloud
 // (cloud/test/dev.ts) with two real stations of one workspace over real local iroh: an agent's session on "here" calls
 // peer_forward through its MCP door; a web page served on "there" (absolute asset paths, a WebSocket) and raw TCP go
 // through the forwarded port; the session archived closes it; "there" stopped is said to be offline. Rough latency

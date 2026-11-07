@@ -1,4 +1,4 @@
-// A chat relayed to a channel (docs/relay.md; web/src/Relay.tsx useRelay, RelayDialog, and the phone's RelaySheet in
+// A chat relayed to a channel (web/src/Relay.tsx useRelay, RelayDialog, and the phone's RelaySheet in
 // mobile/Chat.tsx; Relay.css.ts), one on every screen: from a chat's row's menu, its title bar's panel or its info, the
 // picking opens through the presenters (a dialog with 取消 and 接力 at its foot, a sheet from the foot with touch
 // short of Large). It offers the channels and groups one of the station's connects' bots is in (the chat's own bot as

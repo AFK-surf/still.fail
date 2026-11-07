@@ -1,5 +1,5 @@
 // A station's screen, full screen (still.fail apps/android app/remote/ScreenViewer.kt, ScreenActivity.kt;
-// docs/remote-screens.md): the frame fitted whole (letterboxed), zoomed in place with two fingers; while driving it, a
+//): the frame fitted whole (letterboxed), zoomed in place with two fingers; while driving it, a
 // tap clicks, a long press right-clicks, a drag drags, two fingers moving together scroll, and the keyboard types into
 // it. Upright, the bar is above the frame (close, the title, how the view goes and who is on it, 只看/控制, pasting,
 // 控制中心: screen_panel.mbt); sideways, a rail beside it; 全屏, the screen alone, sideways, its tools folded into one
@@ -684,7 +684,7 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
     match k {
       Text(words) => {
         type_words(send, u.held, words)
-        // (no paste on Xcode 27's yet: docs/remote-screens.md, the keys; said when it is what was just typed)
+        // (no paste on Xcode 27's yet, the keys; said when it is what was just typed)
         if s.simulator() && text(s.state, "title").contains("iOS 27") && words.iter().any(fn(ch) { ch.to_int() > 0x7e }) {
           u.logs.relaunch_said = @sf.t("web-pages.screen.debug.keysNote")
         }

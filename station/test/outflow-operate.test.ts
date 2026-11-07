@@ -1,4 +1,4 @@
-// `operate` of data outflow (docs/data-outflow.md, 「操作」): a program granted it makes admin API requests as a member.
+// `operate` of data outflow (「操作」): a program granted it makes admin API requests as a member.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { request as http } from "node:http";

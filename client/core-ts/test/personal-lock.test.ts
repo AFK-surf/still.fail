@@ -1,4 +1,4 @@
-// A person's own lock (src/personal-lock.ts, docs/personal-lock.md): only a device on it writes it, each use of its key
+// A person's own lock (src/personal-lock.ts): only a device on it writes it, each use of its key
 // asks the person, and a phone lends only on a grant signed by a device on the lock it pinned: not on a station's word,
 // a signature for something else, a key off the lock, one past its time, or one taken back here.
 import assert from "node:assert/strict";

@@ -1,4 +1,4 @@
-// The station's watch over the memory of what its agents run (docs/station-scheduling.md): their jobs and other
+// The station's watch over the memory of what its agents run: their jobs and other
 // stations' tasks here, and the commands the agents' runtimes run themselves (a test an agent starts in its own shell).
 // Nothing is stopped for using much: its agent is told. Only when the system says it is about to run out of memory
 // (critical) is the largest of them stopped, one at a time, its agent told why: the machine is kept up.
