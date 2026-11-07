@@ -132,6 +132,11 @@ export type MessageRow = {
   apart?: true;
 };
 
+/// What delivery tells an agent about a card ended by a person's message.
+export type DeliveryCardState = {
+  ended: Pick<MessageRow, "author" | "ts">; card: Json; current: Pick<MessageRow, "ts"> | null;
+};
+
 /// A card someone answered (`answersSince`).
 export type CardAnswer = { question: MessageRow; card: Json; by: string; at: number; answer: MessageRow | null };
 

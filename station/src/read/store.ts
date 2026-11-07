@@ -32,7 +32,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
+  type CardAnswer, type DeliveryCardState, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -987,6 +987,29 @@ export function pendingCardNumber(s: Store, thread: number): number | null {
     if (one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked.n)) return null;
     return asked.n;
   } finally { s.db.exec("RELEASE pending_card_number_read"); }
+}
+
+/// The card state delivered with a person's message. Its author, timestamp and original card do not depend on edits.
+export function deliveryCardState(s: Store, thread: number, n: number): DeliveryCardState | null {
+  s.db.exec("SAVEPOINT delivery_card_state_read");
+  try {
+    if (!one(s, "SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND author_kind = 'person'", thread, n)) return null;
+    if (!cardPostsReady(s.db, thread)) {
+      if (threadsWithCards(s, [thread]).length === 0) return null;
+      throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify([thread]));
+    }
+    const asked = one(s, CARD_POST_BEFORE, thread, n)?.n;
+    if (asked === null || asked === undefined) return null;
+    if (one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n)) return null;
+    if (one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked)) return null;
+    const post = one(s, "SELECT ts, author, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, asked);
+    if (!post) return null;
+    const card = cardOf(post.card, post.options);
+    if (card === undefined) return null;
+    const currentN = pendingCardNumber(s, thread);
+    const current = currentN === null ? null : one(s, "SELECT ts FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, currentN) ?? null;
+    return { ended: { author: post.author, ts: post.ts ?? "" }, card, current: current === null ? null : { ts: current.ts ?? "" } };
+  } finally { s.db.exec("RELEASE delivery_card_state_read"); }
 }
 
 /// Prepare only threads a read will actually ask about, together so a list is not rebuilt once per old chat.
