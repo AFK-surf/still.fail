@@ -494,7 +494,8 @@
     "motion-spring": {},
     "built-by-hand": {},
     "layout-read-back": {
-      "src/sf/markdown.mbt": 1
+      "src/sf/markdown.mbt": 1,
+      "src/sfpages/search_marks.mbt": 1
     },
     "motion-length": {
       "src/sfbase/under_post.mbt": 1,

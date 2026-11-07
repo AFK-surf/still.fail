@@ -49,32 +49,33 @@ pub fn found_line(
           text.length()
         }
         let base = if lay.line_y.length() > 0 { lay.line_y[0] + lay.line_base[0] } else { 0.0 }
-        c.layer(fn() {
-          for i, m in marks {
-            let (from, to) = m
-            let to = if to < end { to } else { end }
-            if from >= to {
-              continue
-            }
-            let part = stroke_part(at_ms, i)
-            if part <= 0.0 {
-              continue
-            }
-            match lay.rects(from, to).get(0) {
-              Some((rx, _, rw, _)) => {
-                let left = rx - 2.0
-                let right = rx + rw + 2.0
-                let (cx, cy) = stroke_corner(line_stroke)
+        for i, m in marks {
+          let (from, to) = m
+          let to = if to < end { to } else { end }
+          if from >= to {
+            continue
+          }
+          let part = stroke_part(at_ms, i)
+          if part <= 0.0 {
+            continue
+          }
+          match lay.rects(from, to).get(0) {
+            Some((rx, _, rw, _)) => {
+              let left = rx - 2.0
+              let right = rx + rw + 2.0
+              let (cx, cy) = stroke_corner(line_stroke)
+              // Each mark is positioned from the line's origin, not below the previous mark.
+              c.layer(fn() {
                 c.box(tx=left - cx, ty=base + 3.0 - cy, fn() {
                   hand_stroke(c, line_stroke, right - left, part, t.p.accent) |> ignore
                 })
                 |> ignore
-              }
-              None => ()
+              })
+              |> ignore
             }
+            None => ()
           }
-        })
-        |> ignore
+        }
       }
       _ => ()
     }
