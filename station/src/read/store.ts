@@ -450,14 +450,18 @@ export class LegacyEditsUnavailable extends Refused {
 
 // The caller holds the message and edit lookup in one snapshot. Without a prepared lookup, a recent edit (or a
 // short chat) proves the latest edit; an old index can prove it when at most one bounded batch matches.
-function mergedWithBoundedEdit(s: Store, thread: number, n: string): MessageRow | null {
+function boundedEditKey(s: Store, thread: number, n: string): string | null {
   let edit = one(s, LAST_MESSAGE_RECENT_EDIT, thread, n) as { n: string | null; count: number };
   if (edit.n === null && edit.count === 65) {
     const meta = one(s, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1");
     if (meta?.scanned === 0 && meta.old_index === 1) edit = one(s, LAST_MESSAGE_OLD_EDITS, thread, n);
     if (edit.count === 65) throw new LegacyEditsUnavailable();
   }
-  const r = one(s, LAST_MESSAGE_WITH_EDIT, thread, n, edit.n);
+  return edit.n;
+}
+
+function mergedWithBoundedEdit(s: Store, thread: number, n: string): MessageRow | null {
+  const r = one(s, LAST_MESSAGE_WITH_EDIT, thread, n, boundedEditKey(s, thread, n));
   return r ? toMessage(r) : null;
 }
 
@@ -499,8 +503,15 @@ export function lettersBefore(s: Store, thread: number, n: bigint | null, limit:
 
 /// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
 export function lastSaid(s: Store, thread: number): MessageRow | null {
-  const r = one(s, "SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
-  return r ? toMessage(r) : null;
+  s.db.exec("SAVEPOINT last_said_read");
+  try {
+    if (legacyMergedReadReady(s.db)) {
+      const r = one(s, "SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
+      return r ? toMessage(r) : null;
+    }
+    const n = one(s, "SELECT CAST(said_n AS TEXT) AS n FROM thread_state WHERE thread=?", thread)?.n as string | null | undefined;
+    return n == null ? null : mergedWithBoundedEdit(s, thread, n);
+  } finally { s.db.exec("RELEASE last_said_read"); }
 }
 
 /// When the latest message was written, without loading its text or edits.
@@ -604,8 +615,20 @@ export function threadPeople(s: Store, thread: number, surface: string): string[
 
 /// The first thing a person said in it (up to 300 characters).
 export function firstText(s: Store, thread: number): string | null {
-  const r = one(s, "SELECT substr(m.text, 1, 300) AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?", thread);
-  return r ? r.t : null;
+  s.db.exec("SAVEPOINT first_text_read");
+  try {
+    if (legacyMergedReadReady(s.db)) {
+      const r = one(s, "SELECT substr(m.text, 1, 300) AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?", thread);
+      return r ? r.t : null;
+    }
+    const n = one(s, "SELECT CAST(person_n AS TEXT) AS n FROM thread_state WHERE thread=?", thread)?.n as string | null | undefined;
+    if (n == null) return null;
+    const edit = boundedEditKey(s, thread, n);
+    const r = one(s, `SELECT substr(CASE WHEN e.n IS NULL THEN m.text ELSE e.text END,1,300) AS t
+      FROM entries m LEFT JOIN entries e ON e.thread=m.thread AND e.n=CAST(?3 AS INTEGER)
+      WHERE m.thread=?1 AND m.n=CAST(?2 AS INTEGER) AND m.kind='message'`, thread, n, edit);
+    return r ? r.t : null;
+  } finally { s.db.exec("RELEASE first_text_read"); }
 }
 
 // ── entries ──
