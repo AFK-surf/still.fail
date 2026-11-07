@@ -6,7 +6,7 @@ const BATCH = 64;
 const exists = (db: DatabaseSync, type: string, name: string) =>
   db.prepare("SELECT 1 FROM sqlite_master WHERE type=? AND name=?").get(type,name) !== undefined;
 
-type MergedView = { version: number; legacy: boolean; indexed: boolean; oldIndexMissing: boolean };
+type MergedView = { version: number; legacy: boolean; indexed: boolean; oldIndex: boolean; oldIndexMissing: boolean };
 const mergedViews = new WeakMap<DatabaseSync, MergedView>();
 const schemaStatements = new WeakMap<DatabaseSync, StatementSync>();
 
@@ -18,8 +18,9 @@ function mergedView(db: DatabaseSync): MergedView {
   if (!view || view.version !== version) {
     const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='view' AND name='merged'").get()?.sql;
     const legacy = typeof sql === "string" && sql.includes("legacy_edit_meta");
-    view = { version, legacy, indexed: exists(db, "index", "entries_edits"),
-      oldIndexMissing: legacy && typeof sql === "string" && sql.includes("INDEXED BY entries_target") && !hasOldEditIndex(db) };
+    const oldIndex = legacy && typeof sql === "string" && sql.includes("INDEXED BY entries_target");
+    view = { version, legacy, indexed: exists(db, "index", "entries_edits"), oldIndex,
+      oldIndexMissing: oldIndex && !hasOldEditIndex(db) };
     mergedViews.set(db, view);
   }
   return view;
@@ -29,6 +30,14 @@ function mergedView(db: DatabaseSync): MergedView {
 export function legacyMergedNeedsRepair(db: DatabaseSync): boolean {
   const view = mergedView(db);
   return view.oldIndexMissing || (!view.legacy && !view.indexed);
+}
+
+/// The card lookup matching the current view and indexes. Call in the same snapshot as the message and card reads.
+export function legacyMergedEditMode(db: DatabaseSync): "repair" | "native" | "legacy" | "legacy-old-index" {
+  const view = mergedView(db);
+  if (view.oldIndexMissing || (!view.legacy && !view.indexed)) return "repair";
+  if (view.indexed) return "native";
+  return view.oldIndex ? "legacy-old-index" : "legacy";
 }
 
 /// A single merged-message lookup is bounded once the old scan has finished and at most one batch of changed keys
@@ -52,6 +61,8 @@ export function hasLegacyEdits(db: DatabaseSync): boolean {
     throw new Error("legacy edit lookup has an unsupported version");
   return true;
 }
+
+export const usesLegacyEdits = (db: DatabaseSync): boolean => !exists(db, "index", "entries_edits") && hasLegacyEdits(db);
 
 export function hasOldEditIndex(db: DatabaseSync): boolean {
   const columns = db.prepare("SELECT name,coll FROM pragma_index_xinfo('entries_target') WHERE \"key\"=1 ORDER BY seqno")

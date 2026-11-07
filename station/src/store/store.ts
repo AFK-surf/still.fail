@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, MESSAGE_PAGE_ENTRIES, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdits, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, repairMergedEditLookup, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
 import { installPeopleSinceIndex } from "./legacy-people-since.ts";
 import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, hasLegacyArchivePolicy, installArchivePolicyIndex } from "./archive-policy-index.ts";
@@ -57,7 +57,7 @@ import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsRea
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
-import { checkWidgetSources, installWidgetSources, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
+import { checkWidgetSources, installWidgetSources, widgetSourceBeforeAddNeedsRepair, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
   WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
 import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
 import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_SMALL, SESSION_CHAT_VERSION, SessionChatUnavailable } from "./session-chat-index.ts";
@@ -69,7 +69,7 @@ import { archiveLastRead, installArchiveLast } from "./archive-last.ts";
 import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
-import { legacyEditLatest, legacyEditsUseOldIndex, legacyMergedNeedsRepair, legacyMergedReadReady } from "./legacy-edits-build.ts";
+import { legacyEditLatest, legacyMergedEditMode, legacyMergedNeedsRepair, legacyMergedReadReady } from "./legacy-edits-build.ts";
 import { boundedEditKey, LAST_MESSAGE_WITH_EDIT } from "./legacy-edits-read.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
@@ -485,8 +485,6 @@ export class Store {
   readonly #legacySaid: boolean;
   readonly #legacyAgent: boolean;
   readonly #legacyLoginCards: boolean;
-  readonly #legacyEdits: boolean;
-  readonly #legacyEditsOldIndex: boolean;
   readonly #legacyArchivePolicy: boolean;
   readonly #legacyDecisionTime: boolean;
   #legacyDecisionSession: "shared" | "separate" | "repair" | null;
@@ -518,8 +516,6 @@ export class Store {
     this.#legacySaid = hasLegacySaid(db);
     this.#legacyAgent = hasLegacyAgent(db);
     this.#legacyLoginCards = hasLegacyLoginCards(db);
-    this.#legacyEdits = usesLegacyEdits(db);
-    this.#legacyEditsOldIndex = this.#legacyEdits && legacyEditsUseOldIndex(db);
     this.#legacyArchivePolicy = hasLegacyArchivePolicy(db);
     this.#legacyDecisionTime = hasLegacyDecisionTime(db);
     this.#legacyDecisionSession = db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session'").get()
@@ -2581,21 +2577,42 @@ export class Store {
   /// it, said on the post itself (a vault request's outcome). Whether the post was found.
   restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json): boolean {
     return this.#with((changes) => {
-      const r = this.#one("SELECT card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
-      const message = r === undefined ? null : this.#messageAt(thread, ts);
-      if (r === undefined || message === null) return false;
-      // The latest restated card, else the post's. Older stores use the same prepared target lookup as merged.
-      const last = this.#legacyEdits
-        ? this.#one(`SELECT x.card FROM entries x WHERE x.thread=?1 AND x.n=(${legacyEditLatest("?1","?2","x.kind='edit' AND x.card IS NOT NULL",this.#legacyEditsOldIndex)})`,thread,message.n)
-        : this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1",thread,message.n);
-      this.#append(
-        {
-          agentIdentity: undefined, thread, n: 0, kind: "edit", target: message.n, ts: null,
-          authorKind: message.authorKind, author: message.author, text: message.text, attachments: message.attachments, quotes: message.quotes,
-          declared: null, client: null, profile: null, runtime: null, options: undefined, card: card(parsed(last?.card ?? r.card)), at: this.now(),
-        },
-        changes,
-      );
+      // The view and its old index can change while this Store is open. Read the message, lookup choice and card in
+      // one snapshot, rather than keeping the old index choice from the time the Store opened.
+      this.db.exec("SAVEPOINT restate_card_read");
+      let current: { message: MessageRow; card: Json } | null = null;
+      let broken = false;
+      try {
+        const r = this.#one("SELECT CAST(n AS TEXT) AS n,card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
+        if (r === undefined) return false;
+        const mode = legacyMergedEditMode(this.db);
+        broken = mode === "repair";
+        const latest = broken ? this.#one("SELECT CAST(MAX(n) AS TEXT) AS n FROM entries WHERE thread=?1 AND target=CAST(?2 AS INTEGER)", thread, r.n)?.n ?? null : null;
+        const row = broken ? this.#one(LAST_MESSAGE_WITH_EDIT, thread, r.n, latest) : undefined;
+        const message = broken ? (row === undefined ? null : toMessage(row)) : this.#messageAt(thread, ts);
+        if (message === null) return false;
+        const last = mode === "legacy" || mode === "legacy-old-index"
+          ? this.#one(`SELECT x.card FROM entries x WHERE x.thread=?1 AND x.n=(${legacyEditLatest("?1","?2","x.kind='edit' AND x.card IS NOT NULL",mode === "legacy-old-index")})`, thread, r.n)
+          : this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, r.n);
+        current = { message, card: parsed(last?.card ?? r.card) };
+      } finally { this.db.exec("RELEASE restate_card_read"); }
+      if (current === null) return false;
+      if (broken || widgetSourceBeforeAddNeedsRepair(this.db)) repairMergedEditLookup(this.db);
+      const { message } = current;
+      const entry: EntryRow = {
+        agentIdentity: undefined, thread, n: 0, kind: "edit", target: message.n, ts: null,
+        authorKind: message.authorKind, author: message.author, text: message.text, attachments: message.attachments, quotes: message.quotes,
+        declared: null, client: null, profile: null, runtime: null, options: undefined, card: card(current.card), at: this.now(),
+      };
+      try { this.#append(entry, changes); }
+      catch (error) {
+        // An index can disappear after the read snapshot. The failed insert was rolled back; repair and retry that
+        // same entry without applying the caller's card transformation a second time.
+        if (!(error instanceof Error) || !error.message.includes("no such index: entries_target") ||
+          (!legacyMergedNeedsRepair(this.db) && !widgetSourceBeforeAddNeedsRepair(this.db))) throw error;
+        repairMergedEditLookup(this.db);
+        this.#append(entry, changes);
+      }
       return true;
     });
   }

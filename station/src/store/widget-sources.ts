@@ -1,6 +1,5 @@
-import type { DatabaseSync } from "node:sqlite";
-import { usesLegacyEdits } from "./schema.ts";
-import { legacyEditLatest, legacyEditsUseOldIndex } from "./legacy-edits-build.ts";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
+import { legacyEditLatest, legacyEditsUseOldIndex, usesLegacyEdits } from "./legacy-edits-build.ts";
 
 // The effective files of messages in threads whose widget sources have been requested. Triggers follow both old and new
 // station processes while those threads are prepared. The source of truth remains the merged view.
@@ -109,31 +108,47 @@ const afterDelete = `DELETE FROM widget_source_rows WHERE (thread,n) IN (${oldMe
 const updated = `OLD.rowid IS NOT NEW.rowid OR OLD.thread IS NOT NEW.thread OR OLD.n IS NOT NEW.n OR OLD.kind IS NOT NEW.kind
   OR OLD.target IS NOT NEW.target OR OLD.ts IS NOT NEW.ts OR OLD.attachments IS NOT NEW.attachments OR OLD.at IS NOT NEW.at`;
 
+/// Whether the installed insert trigger still matches the edit lookup. A previous repair may have replaced the merged
+/// view without replacing the gated trigger, which can otherwise still require a removed entries_target index.
+// The old-index flag changes in the same transaction as the merged view's DDL, so the schema cookie changes with it.
+const gateSchemas = new WeakMap<DatabaseSync, { version: number; needsRepair: boolean }>();
+const gateSchemaStatements = new WeakMap<DatabaseSync, StatementSync>();
+export function widgetSourceBeforeAddNeedsRepair(db: DatabaseSync): boolean {
+  let statement = gateSchemaStatements.get(db);
+  if (!statement) { statement = db.prepare("PRAGMA schema_version"); gateSchemaStatements.set(db, statement); }
+  const version = Number(statement.get()!.schema_version);
+  const cached = gateSchemas.get(db);
+  if (cached?.version === version) return cached.needsRepair;
+  const sql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='widget_source_before_add'").get() as { sql: string } | undefined)?.sql;
+  if (sql === undefined) { gateSchemas.set(db, { version, needsRepair: false }); return false; }
+  const gated = sql.includes("widget_source_before_gate");
+  const gate = db.prepare("SELECT 1 FROM sqlite_master WHERE type='view' AND name='widget_source_before_gate'").get() !== undefined;
+  const gateSql = (db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='widget_source_before_gate_run'").get() as { sql: string } | undefined)?.sql;
+  const legacy = usesLegacyEdits(db);
+  const oldIndex = legacy && legacyEditsUseOldIndex(db);
+  const needsRepair = gated !== legacy || gate !== legacy || (gateSql !== undefined) !== legacy
+    || (!gated && sql.includes("FROM entries x INDEXED BY entries_target"))
+    || (legacy && gateSql !== undefined && gateSql.includes("INDEXED BY entries_target") !== oldIndex);
+  gateSchemas.set(db, { version, needsRepair });
+  return needsRepair;
+}
+
+/// Called while the caller holds the write transaction, after changing the merged lookup.
+export function repairWidgetSourceBeforeAdd(db: DatabaseSync): void {
+  if (!widgetSourceBeforeAddNeedsRepair(db)) return;
+  const legacy = usesLegacyEdits(db);
+  db.exec(`DROP TRIGGER widget_source_before_add;
+    DROP TRIGGER IF EXISTS widget_source_before_gate_run; DROP VIEW IF EXISTS widget_source_before_gate;
+    ${legacy ? beforeGate(legacyEditsUseOldIndex(db)) : ""} ${beforeAdd(legacy)}`);
+}
+
 export function installWidgetSources(db: DatabaseSync): void {
   const installed = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='widget_source_meta'").get() !== undefined;
-  const beforeAddSql = () => (db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='widget_source_before_add'").get() as { sql: string } | undefined)?.sql;
-  const needsBeforeAdd = () => {
-    const sql = beforeAddSql();
-    if (sql === undefined) return false;
-    const gated = sql.includes("widget_source_before_gate");
-    const gate = db.prepare("SELECT 1 FROM sqlite_master WHERE type='view' AND name='widget_source_before_gate'").get() !== undefined;
-    const gateTrigger = db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='widget_source_before_gate_run'").get() !== undefined;
-    const legacy = usesLegacyEdits(db);
-    return gated !== legacy || gate !== legacy || gateTrigger !== legacy || (!gated && sql.includes("FROM entries x INDEXED BY entries_target"));
-  };
-  const updateBeforeAdd = () => {
-    if (needsBeforeAdd()) {
-      const legacy = usesLegacyEdits(db);
-      db.exec(`DROP TRIGGER widget_source_before_add;
-        DROP TRIGGER IF EXISTS widget_source_before_gate_run; DROP VIEW IF EXISTS widget_source_before_gate;
-        ${legacy ? beforeGate(legacyEditsUseOldIndex(db)) : ""} ${beforeAdd(legacy)}`);
-    }
-  };
   if (installed()) {
     checkWidgetSources(db);
-    if (!needsBeforeAdd()) return;
+    if (!widgetSourceBeforeAddNeedsRepair(db)) return;
     db.exec("BEGIN IMMEDIATE");
-    try { checkWidgetSources(db); updateBeforeAdd(); db.exec("COMMIT"); }
+    try { checkWidgetSources(db); repairWidgetSourceBeforeAdd(db); db.exec("COMMIT"); }
     catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
     return;
   }
@@ -170,7 +185,7 @@ export function installWidgetSources(db: DatabaseSync): void {
         WHEN NOT EXISTS (SELECT 1 FROM entries WHERE thread=OLD.id)
         BEGIN DELETE FROM widget_source_scopes WHERE thread=OLD.id; END;
     `);
-    } else { checkWidgetSources(db); updateBeforeAdd(); }
+    } else { checkWidgetSources(db); repairWidgetSourceBeforeAdd(db); }
     db.exec("COMMIT");
   } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
 }
