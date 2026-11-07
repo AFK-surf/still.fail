@@ -29,7 +29,7 @@ export const VaultLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const plane = yield* ControlPlane;
     const cloud = plane.state;
-    const { hub, remote } = yield* Agents;
+    const { hub, remote, cardOutcomes } = yield* Agents;
     // A workspace's lock: the home workspace's is the station's own (null), another's by its id.
     const lock = (ws: string | null) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null;
     const vaults = vaultStore(store.db);
@@ -66,7 +66,7 @@ export const VaultLive = Layer.effectDiscard(
     // password manager filling the chat's tab.
     const covers = (hosts: string[], site: string) => ofSites(site, hosts) || hosts.some((h) => ofSites(h, [site]));
     const signIns = new SignIns({
-      db: store.db, hub, now: () => wall.now(), after: (ms, f) => wall.after(ms, f),
+      db: store.db, hub, cardOutcomes, now: () => wall.now(), after: (ms, f) => wall.after(ms, f),
       backfill: { previousGone: previous.exited, priority: store.backfillPriority },
       workspace: (session) => store.getSession(session)?.ws ?? cloud.home(),
       screenLink: (tab) => {
