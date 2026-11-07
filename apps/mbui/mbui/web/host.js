@@ -2299,8 +2299,9 @@
     takePresses = (el) => {
       el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        // (a box over a site goes as the app says, the press going on: `under` stays)
-        (under || canvas).setPointerCapture(e.pointerId);
+        // (a box over a site goes as the app says, the press going on: `under` stays; when the canvas takes the
+        // press, it stays too and can capture it itself)
+        (el === canvas ? canvas : under || el).setPointerCapture(e.pointerId);
         if (touch(e)) ptr(10, e, e.pointerId);
         else ptr(0, e, e.button);
         // keep the keyboard on the textarea while an editor has focus
@@ -2309,8 +2310,13 @@
       el.addEventListener('pointermove', (e) => (touch(e) ? ptr(11, e, e.pointerId) : ptr(1, e, 0)));
       el.addEventListener('pointerup', (e) => (touch(e) ? ptr(12, e, e.pointerId) : ptr(2, e, e.button === 2 ? 2 : 0)));
       el.addEventListener('pointercancel', (e) => (touch(e) ? ptr(13, e, e.pointerId) : ptr(3, e, 0)));
-      // the pointer gone out of the page (nothing hovered); a right click is the app's (its context menus)
-      el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') cb.pointer(7, -1, -1, 0); });
+      // A move or a capture transfer between the app's own input layers is not leaving the window. Leaving them for
+      // a site or the outside is: nothing of the app is hovered there.
+      el.addEventListener('pointerleave', (e) => {
+        const to = e.relatedTarget;
+        const appInput = to === canvas || (to != null && (to === under || coverBoxes.includes(to)));
+        if (e.pointerType === 'mouse' && !appInput) cb.pointer(7, -1, -1, 0);
+      });
       el.addEventListener('contextmenu', (e) => e.preventDefault());
       el.addEventListener('wheel', (e) => {
         const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
