@@ -26,7 +26,7 @@ import { CARD_OCCUPIED, cardPlace, recordPostedCard } from "../sessions/card-pla
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
 import { stateOf } from "../browser/signins.ts";
-import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, type Sealed, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
+import { type BoxCert, type Deny, type Grant, type Item, type Kind, type Listing, type Mode, type Request, type Save, type Scope, type Sealed, type Vault, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
 import { type Carried, type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
@@ -761,6 +761,11 @@ export class Secrets {
     return items.flatMap((i) => (!i.deleted && i.listing ? [{ vault: PLAIN, item: i.id, owner: i.owner, listing: i.listing }] : []));
   }
 
+  #vaultListings(lock: LockState, vault: Vault, items: Item[]): Listed[] {
+    return items.flatMap((item) => !item.deleted && item.listing !== undefined && item.epoch === vault.epoch
+      ? [{ vault: vault.id, item: item.id, owner: lock.members.get(vault.owner)?.email ?? null, listing: item.listing }] : []);
+  }
+
   #listingsAt(ws: string, lock: LockState | null, email: string): Listed[] {
     if (lock === null) {
       return this.#plainListings(this.#d.plain.items(ws, email));
@@ -770,8 +775,7 @@ export class Secrets {
     return this.#d.vaults
       .vaults(lock.ws)
       .filter((v) => v.members.includes(sub))
-      .flatMap((vault) => this.#d.vaults.items(lock.ws, vault.id).flatMap((i) =>
-        !i.deleted && i.listing !== undefined && i.epoch === vault.epoch ? [{ vault: vault.id, item: i.id, owner: lock.members.get(vault.owner)?.email ?? null, listing: i.listing }] : []));
+      .flatMap((vault) => this.#vaultListings(lock, vault, this.#d.vaults.items(lock.ws, vault.id)));
   }
 
   /// A use needs only the first matching listing. Names can equal another item's id, so retain the list's order.
@@ -780,17 +784,40 @@ export class Secrets {
     const email = this.#starter(session);
     if (email === null) return undefined;
     const matches = (l: Listed) => l.item.toLowerCase() === wanted || l.listing.name.toLowerCase() === wanted;
-    if (lock === null) {
-      // Keep both reads in one snapshot: another connection may change an earlier item between the two.
-      this.#d.db.exec("SAVEPOINT vault_find_listing");
-      try {
+    // Keep the prefix and any remaining reads in one snapshot: another connection may change an earlier item between them.
+    this.#d.db.exec("SAVEPOINT vault_find_listing");
+    try {
+      if (lock === null) {
         const prefix = this.#d.plain.firstItems(ws, email, LISTING_PREFIX);
         const found = this.#plainListings(prefix.map((entry) => entry.value)).find(matches);
         if (found !== undefined || prefix.length < LISTING_PREFIX) return found;
         return this.#plainListings(this.#d.plain.itemsAfter(ws, email, prefix.at(-1)!.id)).find(matches);
-      } finally { this.#d.db.exec("RELEASE vault_find_listing"); }
-    }
-    return this.#listingsAt(ws, lock, email).find(matches);
+      }
+      const sub = memberWithEmail(lock, email)?.sub;
+      if (sub === undefined) return undefined;
+      const inVault = (vault: Vault, short: boolean): Listed | undefined => {
+        if (!vault.members.includes(sub)) return undefined;
+        const listings = (items: Item[]) => this.#vaultListings(lock, vault, items);
+        // After the short vault prefix, use the original full item read: a miss across many vaults should not pay a
+        // prefix probe for every vault.
+        if (!short) return listings(this.#d.vaults.items(lock.ws, vault.id)).find(matches);
+        const prefix = this.#d.vaults.firstItems(lock.ws, vault.id, LISTING_PREFIX);
+        const found = listings(prefix.map((entry) => entry.value)).find(matches);
+        if (found !== undefined || prefix.length < LISTING_PREFIX) return found;
+        return listings(this.#d.vaults.itemsAfter(lock.ws, vault.id, prefix.at(-1)!.id)).find(matches);
+      };
+      const prefix = this.#d.vaults.firstVaults(lock.ws, LISTING_PREFIX);
+      for (const entry of prefix) {
+        const found = inVault(entry.value, true);
+        if (found !== undefined) return found;
+      }
+      if (prefix.length < LISTING_PREFIX) return undefined;
+      for (const vault of this.#d.vaults.vaultsAfter(lock.ws, prefix.at(-1)!.id)) {
+        const found = inVault(vault, false);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    } finally { this.#d.db.exec("RELEASE vault_find_listing"); }
   }
 
   /// Whether `viewer` decides request `r`: the plain library's item's owner, a member of the vault.
