@@ -451,7 +451,9 @@ test "bar: a ride set out long before what it rides on rests, off its steps from
     to = anchor(dmin(s, still))
     legs.push((s, x, v, to))
   }
-  let whole : Ride = { legs, k, ratio, to, end: r.end, from, stopped: false }
+  let end = s + @motion.spring_duration(ratio, k, x - to, v, ball_rest_within)
+  assert_true((r.end - end).abs() < 0.000001, msg="ends \{r.end}, the whole way \{end}")
+  let whole : Ride = { legs, k, ratio, to, end, from, stopped: false }
   for at in [still - 9.0, still - 1.0, still + 9.0, still + 40.0, still + 200.0] {
     let (a, _) = r.at(at)
     let (b, _) = whole.at(at)
