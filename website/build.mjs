@@ -41,7 +41,7 @@ export const pageUrl = (cfg, loc) => cfg.origin + loc.prefix;
  *  The template is monoid.build's; --site names another. */
 export const SITES = {
   "monoid.build": { name: "monoid", app: "https://app.monoid.build", cloud: "https://app.monoid.build", beta: false },
-  "monoid.zone": { name: "monoid.zone", app: "https://app.monoid.zone", cloud: "https://app.monoid.build", beta: true },
+  "monoid.zone": { name: "monoid", app: "https://app.monoid.zone", cloud: "https://app.monoid.build", beta: true },
   "still.fail": { name: "still.fail", app: "https://app.still.fail", cloud: "https://app.still.fail", beta: false },
   "youdid.wtf": { name: "youdid.wtf", app: "https://app.youdid.wtf", cloud: "https://app.still.fail", beta: true },
 };

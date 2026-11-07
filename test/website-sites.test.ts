@@ -28,8 +28,8 @@ test("still.fail's page is named still.fail and opens and downloads still.fail's
 
 test("a test channel's page opens its own web app and downloads the beta apps from its cloud", () => {
   const zone = rebrand(page, "monoid.zone");
-  assert.match(zone, /<title>monoid\.zone · /);
-  assert.match(zone, /href="https:\/\/app\.monoid\.zone">Open monoid\.zone</);
+  assert.match(zone, /<title>monoid · /, "monoid.zone is named monoid, as monoid.build");
+  assert.match(zone, /href="https:\/\/app\.monoid\.zone">Open monoid</);
   assert.match(zone, /https:\/\/app\.monoid\.build\/releases\/latest\/mac-beta"/);
   assert.match(zone, /https:\/\/app\.monoid\.build\/releases\/latest\/android-beta"/);
   assert.match(zone, /curl -fsSL https:\/\/app\.monoid\.build\/install\.sh/);
