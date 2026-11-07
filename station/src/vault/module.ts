@@ -58,6 +58,7 @@ export const VaultLive = Layer.effectDiscard(
         passkeysIn: (session, d) => browsers.passkeysIn(session, d),
       },
     });
+    yield* Effect.addFinalizer(() => Effect.promise(() => secrets.close()));
     browsers.onTakenOut((session, request, cookies, workspace) => secrets.renewed(session, request, cookies, workspace));
     browsers.onFresh((session) => secrets.signInAgain(session));
     browsers.onUsed((session, host) => secrets.browserUsed(session, host));

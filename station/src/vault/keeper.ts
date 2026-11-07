@@ -26,7 +26,12 @@ export type Carried = { boxes: [string, string][]; held: Held[] };
 
 /// What a keeper is told of: whether a session's chat is over (archived or gone), and where its grants are kept
 /// across restarts (`save` each grant taken or used, `forget` each one gone).
-export type KeeperDeps = { ended?(session: string): boolean; kept?: { save(h: Held): void; forget(h: Held): void; spendOnce?(h: Held): boolean | null } };
+export type KeeperDeps = { ended?(session: string): boolean; kept?: {
+  save(h: Held): void; forget(h: Held): void; spendOnce?(h: Held): boolean | null;
+  spendAgain?(h: Held): boolean | null; renew?(h: Held, until: number): number | false | null;
+  current?(h: Held): { uses: number; until?: number } | false | null;
+  expire?(h: Held, now: number): boolean | null;
+} };
 
 /// Whether `host` is one of `patterns`: the same name, or under a `*.` pattern's domain (not the domain itself).
 export function hostAllowed(host: string, patterns: string[]): boolean {
@@ -133,21 +138,22 @@ export class Keeper {
     if (ids.size === 0) this.#heldBySession.delete(session);
   }
 
-  #schedule(h: Held) {
+  #schedule(h: Held, delay?: number) {
     const id = h.request.id;
     const old = this.#timers.get(id);
     if (old !== undefined) old();
-    const ms = Math.max(0, ((h.until ?? h.grant.exp) - this.#now()) * 1000);
+    const ms = delay ?? Math.max(0, ((h.until ?? h.grant.exp) - this.#now()) * 1000);
     const timer = wall.after(ms, () => {
       const current = this.#held.get(id);
       if (current === undefined) return;
-      if ((current.until ?? current.grant.exp) <= this.#now()) this.#forget(id);
+      if (!this.#refresh(current)) return;
+      if ((current.until ?? current.grant.exp) <= this.#now()) this.#expire(current);
       else this.#schedule(current);
     });
     this.#timers.set(id, timer);
   }
 
-  #forget(id: string) {
+  #forget(id: string, persisted = true) {
     const timer = this.#timers.get(id);
     if (timer !== undefined) timer();
     this.#timers.delete(id);
@@ -156,8 +162,40 @@ export class Keeper {
       this.#held.delete(id);
       this.#removeFromSession(h.request.session, id);
       this.#heldOrder.delete(id);
-      this.#d.kept?.forget(h);
+      if (persisted) this.#d.kept?.forget(h);
     }
+  }
+
+  #refresh(h: Held): boolean {
+    const current = this.#d.kept?.current?.(h);
+    if (current === false) {
+      // Another connection removed or replaced the durable grant. Do not delete its newer record.
+      this.#forget(h.request.id, false);
+      return false;
+    }
+    if (current !== null && current !== undefined) {
+      h.uses = Math.max(h.uses, current.uses);
+      const previousUntil = h.until;
+      if (current.until === undefined) delete h.until;
+      else h.until = current.until;
+      if (h.until !== previousUntil) this.#schedule(h);
+    }
+    return true;
+  }
+
+  /// Expire only the version that is still due; another station may have renewed it after our last read.
+  #expire(h: Held): boolean {
+    const id = h.request.id;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const removed = this.#d.kept?.expire?.(h, this.#now());
+      if (removed === null || removed === undefined) { this.#forget(id); return true; }
+      if (removed) { this.#forget(id, false); return true; }
+      if (!this.#refresh(h)) return true;
+      if ((h.until ?? h.grant.exp) > this.#now()) { this.#schedule(h); return false; }
+    }
+    // Keep the row and retry later if another writer keeps changing it.
+    this.#schedule(h, 250);
+    return true;
   }
 
   /// A box for request `id`'s secret: its public half, to be sealed to; the private half stays here.
@@ -269,9 +307,9 @@ export class Keeper {
     const h = this.#held.get(id);
     if (h === undefined) return "no such grant here: secret_list shows the grants you hold (a restart of the station forgets them; ask again)";
     if (h.request.session !== session) return "this grant is another session's";
+    if (!this.#refresh(h)) return "this grant was ended or changed: ask again";
     if ((h.until ?? h.grant.exp) <= this.#now()) {
-      this.#forget(id);
-      return "this grant ran out: ask again";
+      if (this.#expire(h)) return "this grant ran out: ask again";
     }
     if (this.#d.ended?.(session)) {
       this.#forget(id);
@@ -285,7 +323,9 @@ export class Keeper {
   active(session: string, id: string): boolean {
     const h = this.#held.get(id);
     if (h === undefined || h.request.session !== session) return false;
-    if ((h.until ?? h.grant.exp) <= this.#now() || this.#d.ended?.(session)) { this.#forget(id); return false; }
+    if (!this.#refresh(h)) return false;
+    if ((h.until ?? h.grant.exp) <= this.#now() && this.#expire(h)) return false;
+    if (this.#d.ended?.(session)) { this.#forget(id); return false; }
     return true;
   }
 
@@ -293,10 +333,13 @@ export class Keeper {
   spend(id: string): boolean {
     const h = this.#held.get(id);
     if (h === undefined || (h.grant.scope === "once" && h.uses > 0)) return false;
-    const saved = h.grant.scope === "once" ? this.#d.kept?.spendOnce?.(h) : null;
+    const previousUntil = h.until;
+    const saved = h.grant.scope === "once" ? this.#d.kept?.spendOnce?.(h) : this.#d.kept?.spendAgain?.(h);
+    // A conditional write can lose to another valid use. Leave the local grant available for a fresh check and retry.
     if (saved === false) return false;
     h.uses++;
     if (saved !== true) this.#d.kept?.save(h);
+    if (h.until !== previousUntil) this.#schedule(h);
     return true;
   }
 
@@ -304,9 +347,12 @@ export class Keeper {
   renew(session: string, id: string) {
     const h = this.usable(session, id);
     if (typeof h === "string" || h.grant.timeout?.kind !== "idle") return;
-    h.until = this.#now() + h.grant.timeout.seconds;
+    const until = this.#now() + h.grant.timeout.seconds;
+    const saved = this.#d.kept?.renew?.(h, until);
+    if (saved === false) return;
+    h.until = saved ?? until;
     this.#schedule(h);
-    this.#d.kept?.save(h);
+    if (saved === undefined || saved === null) this.#d.kept?.save(h);
   }
 
   /// A request decided otherwise (denied, expired): its box is dropped.
@@ -323,6 +369,11 @@ export class Keeper {
   /// Whether `session` holds a grant here (used up or not).
   holds(session: string): boolean {
     return this.#heldBySession.has(session);
+  }
+
+  /// Whether a particular grant has already been accepted or restored.
+  hasGrant(id: string): boolean {
+    return this.#held.has(id);
   }
 
   /// `session`'s chat archived or gone: its grants end.
