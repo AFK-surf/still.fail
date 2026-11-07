@@ -111,7 +111,7 @@ jobs:
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
       MAC_SIGN_IDENTITY: '-'
       UNSIGNED: 1
-      RELEASE_DIR: ${{ runner.temp }}/release
+      RELEASE_DIR: ${{ github.workspace }}/.ci/release-out
     steps:
       - uses: actions/checkout@v5
         with: { ref: '9140074f72da582de141b2dfc9efa0727872739a', fetch-depth: 0, filter: 'blob:none' }
