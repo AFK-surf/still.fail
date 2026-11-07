@@ -2498,7 +2498,7 @@ test("connect_wizard_rechecks_a_finished_scan_when_the_model_becomes_available",
 });
 
 test("connect_wizard_shows_a_station_saved_scan_even_if_the_model_is_no_longer_available", async () => {
-  const { core } = await choosing();
+  const { host, core } = await choosing();
   withFeishu(core, []);
   const ui = core.connect();
   const topic = connectTopic("saved-scan");
@@ -2514,6 +2514,7 @@ test("connect_wizard_shows_a_station_saved_scan_even_if_the_model_is_no_longer_a
   picked = { ...selected, valueOption: null };
   const at = { topic: "overview", station: "ws/st" };
   core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), feishuRegistrations: [{ id: "saved", url: "", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_saved", domain: "feishu" }], connects: [{ id: "bot", kind: "feishu", feishu: { appId: "cli_saved" } }] });
+  await host.settle(); // The overview's database write notifies its watchers on commit.
   assert.deepEqual([flow.value(topic).step, flow.value(topic).feishu.connect, createRequests], ["done", "bot", 0]);
   flow.drop(topic, ui);
   core.close();
