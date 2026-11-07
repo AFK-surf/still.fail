@@ -59,7 +59,9 @@ function notice(s: Store, thread: number, seq: number | null, session: string, k
   const muted = store.mutedViewers(s, thread, recipients);
   const to = recipients.filter((email) => !muted.has(email));
   if (to.length === 0) return null;
-  return { to, kind, session, thread, seq, title: titleOf(t, store.firstText(s, thread), null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
+  // Our own chats use their given title or the untitled label, never the first message (core's chatTitle rule).
+  const first = t.surface === STILLFAIL_SURFACE ? null : store.firstText(s, thread);
+  return { to, kind, session, thread, seq, title: titleOf(t, first, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }
 
 /// A session changed: its last turn, if it ended since `since` and is not `ended` (the end already told), told to its
