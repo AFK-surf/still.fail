@@ -240,7 +240,7 @@ function mbuiRenderer(app: string, launcher: string): Part {
     publish: [],
     rust: false,
     // Generated interface summaries are not compiler inputs; `moon check` can rewrite them without changing a scene.
-    inputs: ["apps/mbui/src", "apps/mbui/mbui/src", "apps/mbui/mbui/tools", "apps/mbui/mbui/scripts",
+    inputs: ["apps/mbui/src", "apps/mbui/mbui/src", "apps/mbui/mbui/tools", "apps/mbui/mbui/scripts", "apps/mbui/mbui/native/svg",
       "apps/mbui/moon.mod", "apps/mbui/moon.work", "apps/mbui/mbui/moon.mod",
       "apps/mbui/scripts/env.sh", "apps/mbui/scripts/mbui.sh", "apps/mbui/scripts/mac.sh", `apps/mbui/scripts/${launcher}`,
       ":(exclude,glob)apps/mbui/**/*_test.mbt", ":(exclude,glob)apps/mbui/**/*_wbtest.mbt",
