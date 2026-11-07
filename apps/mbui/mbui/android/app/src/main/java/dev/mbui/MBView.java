@@ -604,8 +604,14 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                     ys[p * (h + 1) + h] = e.getY(p) / density;
                 }
                 toGL(() -> {
-                    for (int k = 0; k <= h; k++)
-                        for (int p = 0; p < n; p++) Native.touch(11, ids[p], xs[p * (h + 1) + k], ys[p * (h + 1) + k], ts[k]);
+                    // (a section of a system trace's (Perfetto's): what a move costs between frames)
+                    android.os.Trace.beginSection("mbui moves");
+                    try {
+                        for (int k = 0; k <= h; k++)
+                            for (int p = 0; p < n; p++) Native.touch(11, ids[p], xs[p * (h + 1) + k], ys[p * (h + 1) + k], ts[k]);
+                    } finally {
+                        android.os.Trace.endSection();
+                    }
                 });
                 return true;
             }
