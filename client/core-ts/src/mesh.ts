@@ -249,6 +249,8 @@ export class Way {
   missed = 0;
   /// A ping of it is under way (one not answered yet is not sent again over it).
   pinging = false;
+  /// What its link's replies had brought as it was last pinged: a ping late while more came is not missed (`brought`).
+  rx = 0;
   /// Its first ping answered: not counted, it carried the link's own start (its first streams, the station taking the
   /// credential), and smoothed an eighth at a time it kept a way just dialled looking slower than it is.
   warm = false;
@@ -258,6 +260,15 @@ export class Way {
 
   constructor(link: Link) {
     this.link = link;
+  }
+
+  /// Whether its link's replies brought anything since this was last asked. A ping waits behind the replies on its line:
+  /// a phone downloading through a slow relay missed three pings behind a part of the file, its one connection was let
+  /// go as dead, and the download was cut every few seconds (2026-11-07).
+  brought(): boolean {
+    const more = this.link.came > this.rx;
+    this.rx = this.link.came;
+    return more;
   }
 
   note(ms: number): void {
@@ -431,6 +442,8 @@ export class Link {
   /// their tailnet); null on the main one.
   readonly pinned: string | null;
   counted: [number, number] = [0, 0];
+  /// The bytes its replies have brought so far, their heads and bodies (`Way.brought`).
+  came = 0;
   /// Where the station said a device on its LAN, on its tailnet, dials it (`ip:port`), in its answer to the first
   /// credential.
   lan: string[] = [];
@@ -486,7 +499,7 @@ export class Link {
     }).pipe(Effect.onExit((exit) => (exit._tag === "Success" ? Effect.void : Effect.sync(() => opened?.reset(0)))));
   }
 
-  static #body(stream: IrohStream, lines: Lines): Pull<Uint8Array> & { claim(): Uint8Array | null; restore(prefix: Uint8Array): void } {
+  static #body(link: Link, stream: IrohStream, lines: Lines): Pull<Uint8Array> & { claim(): Uint8Array | null; restore(prefix: Uint8Array): void } {
     let carry: Uint8Array | null = lines.carry.length > 0 ? lines.carry : null;
     let done = false;
     let started = false;
@@ -513,6 +526,7 @@ export class Link {
           Effect.tapError(stream.read(), () => Effect.sync(() => (done = true))),
           (chunk) => {
             if (chunk === null) done = true;
+            else link.came += chunk.length;
             return chunk;
           },
         );
@@ -524,7 +538,7 @@ export class Link {
   request(head: RequestHead, body: Uint8Array, wrote?: (sent: number) => void): Effect.Effect<Reply, CoreError> {
     const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers) };
     return Effect.mapError(
-      Effect.map(this.#open(wire, true, body, wrote), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) })),
+      Effect.map(this.#open(wire, true, body, wrote), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(this, stream, lines), cancel: () => stream.reset(0) })),
       (e) => this.refused ?? e,
     );
   }
@@ -546,7 +560,7 @@ export class Link {
         write: (bytes) => Effect.mapError(stream.write(bytes), cut),
         finish: () => void Effect.runFork(Effect.ignore(stream.finish())),
       };
-      const body = Link.#body(stream, lines);
+      const body = Link.#body(this, stream, lines);
       const tapping = stream.tap;
       // (what came past the reply goes to the host with it, so it reads the frames from their start)
       const tap =
@@ -568,7 +582,7 @@ export class Link {
   /// This phone's adb offered to the station, or asked about (adb.ts).
   adb(head: RequestHead, ask: J): Effect.Effect<Reply, CoreError> {
     const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers), adb: ask };
-    return Effect.map(this.#open(wire, true, null), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) }));
+    return Effect.map(this.#open(wire, true, null), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(this, stream, lines), cancel: () => stream.reset(0) }));
   }
 
   /// The next stream the station opens on the link; null once it closed.
@@ -1570,11 +1584,12 @@ export class Mesh {
   #ping(way: Way): Effect.Effect<void> {
     return Effect.suspend(() => {
       if (way.pinging) {
-        way.missed++;
+        if (!way.brought()) way.missed++;
         way.note(PING_TIMEOUT_MS);
         return Effect.void;
       }
       way.pinging = true;
+      way.brought();
       const link = way.link;
       const answered = Deferred.makeUnsafe<number | null>();
       let late = false;
@@ -1594,7 +1609,7 @@ export class Mesh {
       return Effect.map(Effect.raceFirst(Deferred.await(answered), Effect.as(Effect.sleep(PING_TIMEOUT_MS), null)), (ms) => {
         if (ms === null) {
           late = true;
-          way.missed++;
+          if (!way.brought()) way.missed++;
           way.note(PING_TIMEOUT_MS);
         } else {
           way.missed = 0;
