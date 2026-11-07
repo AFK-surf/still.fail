@@ -208,7 +208,7 @@
     },
     "at-rest-wait": {
       "src/sfapp/service_link_wbtest.mbt": 1,
-      "src/sfreplay/steps.mbt": 3
+      "src/sfreplay/steps.mbt": 2
     },
     "frame-count": {},
     "literal-time": {},
