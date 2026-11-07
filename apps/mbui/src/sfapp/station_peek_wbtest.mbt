@@ -1,4 +1,4 @@
-// From a chat's agent (AgentSheet.kt): its station opens the station's card in place of the agent's (Stations.kt
+// From a chat's agent: its station opens the station's card in place of the agent's (Stations.kt
 // openStationPeek: what it says of itself, what is left of its machine, its network, its files, its page); its account
 // opens how it runs in the shared model picker.
 

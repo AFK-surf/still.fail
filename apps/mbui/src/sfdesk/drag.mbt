@@ -24,7 +24,7 @@ priv struct FTarget {
 }
 
 ///|
-/// A name already where files go, asked about (transfer.ts Clash): what comes (its size, its station's name) and what
+/// A name already where files go, asked about: what comes (its size, its station's name) and what
 /// is there.
 pub(all) struct Clash {
   name : String
@@ -35,7 +35,7 @@ pub(all) struct Clash {
 }
 
 ///|
-/// What is asked now (transfer.ts Asking): where they go, its name, how many go, the names there, the answers so far,
+/// What is asked now: where they go, its name, how many go, the names there, the answers so far,
 /// whether the next is said for all the rest, and what is done with the answers.
 pub(all) struct Asking {
   into : DriveAt
@@ -347,7 +347,7 @@ fn fdrag_drop(c : @ui.Ctx, src : Source, ws : String, item : Dragged, t : FTarge
 }
 
 ///|
-/// `item` into the folder `into` (transfer.ts transfer): not into itself, nor where it is already; a name there asked
+/// `item` into the folder `into`: not into itself, nor where it is already; a name there asked
 /// about first. Moved within its station by a root both places are under (the core's `drive.moves`), it is a rename
 /// there (the one there to the trash first, or this one beside it named as Finder names a copy kept: `drive.name`);
 /// anything else the stations' transfer (`drive.transfer`). False while the folder it goes into is not read yet
@@ -490,7 +490,7 @@ fn fdrag_transfer(
 }
 
 ///|
-/// What is asked about a name already where files go (Transfers.tsx TransferAsk): each name in turn (or all the rest
+/// What is asked about a name already where files go: each name in turn (or all the rest
 /// the same way): 跳过, 保留两者, 替换; let go, nothing goes. The library's dialog (@sf.panel, opened by nothing), up
 /// while something is asked: its title and what it is about as the name asked about now says them.
 fn clash_dialog(c : @ui.Ctx) -> Unit {
@@ -695,7 +695,7 @@ fn dv_kind_of(name : String) -> String {
 }
 
 ///|
-/// A folder of the sidebar that takes a drop (FilesNav.tsx FolderDrop): its row, ringed while what it takes is over it,
+/// A folder of the sidebar that takes a drop: its row, ringed while what it takes is over it,
 /// saying what a drop does; its corner the row's (the theme's chats' list's `side_drop`: a row's, as the row it rings,
 /// flush in it, is round).
 fn fdrag_side_row(
@@ -797,7 +797,7 @@ pub fn drag_ask(a : Asking) -> Unit {
   clash_changed()
 }
 ///|
-/// The clash's facts (DrivePane.css.ts facts: two columns, 4 by 12 between; what is said muted).
+/// The clash's facts (4 by 12 between; what is said muted).
 // kept across runs: a value (no field of it changes)
 let fclash_said_column : @ui.Style = @ui.css("gap=S1")
 

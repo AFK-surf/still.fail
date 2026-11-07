@@ -1,4 +1,4 @@
-// The phone's bottom bar (still.fail apps/android shared/ui/Bar.kt BottomBar, shared/Places.kt PlaceBar): a floating capsule
+// The phone's bottom bar: a floating capsule
 // of the places of one bar, 22 in from the screen's sides and its foot (the system's bars are the host's: the view is
 // laid out inside them); a ball over the place shown that travels on a spring stretched by its speed and goes where a
 // finger takes it; the page's primary action in a notch cut out of the bar's top (令, a new chat, on the chats'
@@ -7,14 +7,14 @@
 // motion is a number on a spring (or a timed glide) stepped a frame at a time. Shown on a place's top page with
 // nothing over it; gone down out of the way (300 ms) under a page pushed, back up (380 ms) as it comes back.
 //
-// All of it is frosted glass of one capture (Bar.kt: Haze, the pages its one source): the bar (its notch cut out of
+// All of it is frosted glass of one capture (the pages its one source): the bar (its notch cut out of
 // it, a box's `notch_*`), the action in the notch and the ball frost the pages under them, not each other
 // (@ui.Glass::sharing). Where glass is drawn solid, the bar is its ground (Glass.kt `floating`: --raised at 72% over
 // the paper). What moves is only drawn so (src/motion's rule): the bar going down and coming back, the action growing
 // and shrinking, its icon swapping, a bar chosen in the panel sliding down into the bar's place are looks over where
 // they are laid out, and what leaves is drawn only.
 
-// ── geometry (Bar.kt, dp) ──────────────────────────────────────────────
+// ── geometry (dp) ──────────────────────────────────────────────
 
 ///|
 let bar_track : Double = 56.0
@@ -90,7 +90,7 @@ let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
 let chat_family : Array[String] = ["chats", "archive"]
 
 ///|
-/// The places' middles on a bar `w` wide holding `n` with the notch `k` open (Bar.kt barCentres).
+/// The places' middles on a bar `w` wide holding `n` with the notch `k` open.
 fn bar_centres(w : Double, k : Double, n : Int) -> Array[Double] {
   let closed = (w - 2.0 * c0) / 3.0
   let open = w / 2.0 - (drop / 2.0 + notch_gap) - 6.0 - ball_rest / 2.0 - c0
@@ -203,7 +203,7 @@ let ball_grow_ms : Double = 250.0
 pub let icon_swap_ms : Double = 300.0
 
 ///|
-/// One number on a spring (react-spring's tension and friction, mass 1; Bar.kt BarSpring), its way solved
+/// One number on a spring (react-spring's tension and friction, mass 1), its way solved
 /// (@ui.SpringPath): `x`, `v` and `to` where it is, how fast it goes and where to, as of this frame (sample).
 priv struct Spr {
   mut path : @ui.SpringPath?
@@ -547,7 +547,7 @@ fn Spr::ride_on(
 }
 
 ///|
-/// One number gliding to where it is sent over a time on a curve (Bar.kt Glide), its way said once as it sets out (where
+/// One number gliding to where it is sent over a time on a curve, its way said once as it sets out (where
 /// from, how fast, where to, by what, when): where it is at a moment a function of that moment alone (`value` and
 /// `target` as of the moment last sampled, BarModel::sample). `key`: what it is in the motion log.
 priv struct Glide {
@@ -643,7 +643,7 @@ fn Glide::snap(self : Glide, v : Double) -> Unit {
 }
 
 ///|
-/// A bar chosen in the panel, sliding down into the bar's place (Bar.kt Swap): which (`i`), its row in the panel
+/// A bar chosen in the panel, sliding down into the bar's place: which (`i`), its row in the panel
 /// (`n`), how open the panel was (`from`), the place tapped in it; the bars as they were (`sets`, `cur`), which the
 /// stack sliding down is laid out by; the rows' fade and offset then and how lit each place was, which it starts
 /// from.
@@ -668,7 +668,7 @@ fn Swap::t(self : Swap, o : Double) -> Double {
 }
 
 ///|
-/// The rows' look as the panel opens (Bar.kt rowsAlpha, rowsShift): they come in over 0.35 to 1, a little low, then up
+/// The rows' look as the panel opens (rowsShift): they come in over 0.35 to 1, a little low, then up
 /// with its overshoot.
 fn rows_alpha(o : Double) -> Double {
   dclamp((o - 0.35) / 0.65, 0.0, 1.0)
@@ -680,7 +680,7 @@ fn rows_shift(o : Double, reach : Double) -> Double {
 }
 
 ///|
-/// The chosen bar's places' middles and their height (in the panel's frame) as it comes down (Bar.kt swapAt): from
+/// The chosen bar's places' middles and their height (in the panel's frame) as it comes down: from
 /// its row in the panel to exactly where the bar's places are drawn as the notch is (`k_now`).
 fn swap_at(s : Swap, o : Double, w : Double, k_now : Double, row_top : Double) -> (Array[Double], Double) {
   let into = s.sets[s.i]
@@ -699,7 +699,7 @@ fn swap_at(s : Swap, o : Double, w : Double, k_now : Double, row_top : Double) -
 }
 
 ///|
-/// What the bar keeps between frames (Bar.kt BarModel, BallMotion).
+/// What the bar keeps between frames (BallMotion).
 priv struct BarModel {
   /// the panel of the other bars open (or opening, or the finger's)
   mode : @signals.Signal[Bool]
@@ -855,7 +855,7 @@ fn BarModel::k_now(self : BarModel) -> Double {
 }
 
 ///|
-/// Where everything is this frame, by what it was told before (Bar.kt: told as it is composed, it moves from there).
+/// Where everything is this frame, by what it was told before (it moves from there).
 fn BarModel::sample(self : BarModel) -> Unit {
   let now = bar_clock.now
   for s in [self.o, self.k, self.held, self.up, self.ball_x, self.ball_y] {
@@ -1002,7 +1002,7 @@ fn at(
 }
 
 ///|
-/// The notch cut into the glass's top (Bar.kt outline, notch): a circle of radius `r` about the top's middle, `cy`
+/// The notch cut into the glass's top (notch): a circle of radius `r` about the top's middle, `cy`
 /// below the edge (above it as it opens), met by the edge through fillets; where it meets the edge on the left and
 /// right of a glass `w` wide; None while it is closed (the circle not through the edge).
 fn notch_lips(w : Double, cy : Double, r : Double) -> (Double, Double)? {
@@ -1140,7 +1140,7 @@ fn disc_look(c : @ui.Ctx, disc : Int, moves : Bool, k_now : Double, up_now : Dou
 }
 
 ///|
-/// The bar's shadow (Bar.kt): a blurred rounded rectangle 4 lower, outside the glass's outline only (clipOutPath: the
+/// The bar's shadow: a blurred rounded rectangle 4 lower, outside the glass's outline only (clipOutPath: the
 /// glass frosts nothing of it), none above its top (none in the notch or over the edge the action stands on), and
 /// coming in down its rounded ends, from nothing at its top to whole a radius down (no step where it begins).
 fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
@@ -1156,7 +1156,7 @@ fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
         w=Px(w),
         h=Px(h),
         radius=r,
-        // (Bar.kt: BlurMaskFilter of a CSS deviation of 6)
+        // 
         shadow=6.0,
         shadow_color=color,
         shadow_y=bar_shadow_y,
@@ -1167,7 +1167,7 @@ fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
     })
     |> ignore
   }
-  // its rounded ends' top, in bands, each as far in as the fade is there (Bar.kt's LinearGradient over the radius)
+  // its rounded ends' top, in bands, each as far in as the fade is there
   for k in 0..<bar_shadow_fade {
     let y0 = r * k.to_double() / bar_shadow_fade.to_double()
     let bh = r / bar_shadow_fade.to_double()
@@ -1185,7 +1185,7 @@ fn bar_shadow(c : @ui.Ctx, w : Double, top : Double, bottom : Double) -> Unit {
 let action_ink : Double = 0.86
 
 ///|
-/// How far below the glass its shadow falls (Bar.kt: translate 4).
+/// How far below the glass its shadow falls.
 let bar_shadow_y : Double = 4.0
 
 ///|
@@ -1269,7 +1269,7 @@ fn tint_of(id : String, on : Bool, now : Double) -> Tint {
 }
 
 ///|
-/// The bottom bar over the pages of `w` (Places.kt PlaceBar, Bar.kt BottomBar). `shown`: on a place's top page with
+/// The bottom bar over the pages of `w`. `shown`: on a place's top page with
 /// nothing over it; `active`: the place shown (its top page's).
 fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
   // a part of its own, kept as its nodes (mbui's Ctx::kept_as_nodes: what floats over the pages said again with it):
@@ -1290,7 +1290,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
 }
 
 ///|
-/// The page's primary action in the notch (Places.kt PlaceBar) where it is the settings' (Station's ＋ adds a station,
+/// The page's primary action in the notch where it is the settings' (Station's ＋ adds a station,
 /// Profile's a profile, 连接's a connect: what the settings' page of the place says).
 fn bar_place_add(src : Source, ws : Workspace, active : String?) -> ((@sf.Beside) -> Unit)? {
   match active {
@@ -1308,7 +1308,7 @@ fn bar_place_add(src : Source, ws : Workspace, active : String?) -> ((@sf.Beside
 
 ///|
 /// The notch's action's icon ("" none: the notch closed): 令 on the chats' pages, 文件's ＋ while it can lend a folder
-/// (Files.kt), the settings' ＋ where the place's page has one (`place_add`), none on the others yet.
+/// , the settings' ＋ where the place's page has one (`place_add`), none on the others yet.
 fn bar_action(src : Source, ws : Workspace, active : String?, place_add : ((@sf.Beside) -> Unit)?) -> String {
   match active {
     Some(a) if chat_family.contains(a) => "ling"
@@ -1582,7 +1582,7 @@ fn bar_finger(
 }
 
 ///|
-/// The ball riding place `j` of bar chosen `s` as it lands (Bar.kt ride), the bar `w` wide, its track's top `row_top`:
+/// The ball riding place `j` of bar chosen `s` as it lands, the bar `w` wide, its track's top `row_top`:
 /// where its place is at a time, by the panel's and the notch's ways (as swap_at has it each frame), ridden after on the
 /// ball's springs, worked out once as it sets out at `at` (Ride), again only when those ways change.
 fn BarModel::ride(self : BarModel, s : Swap, j : Int, w : Double, row_top : Double, at : Double) -> Unit {
@@ -1655,7 +1655,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     Some(Object(_)) => dots["stations"] = t.p.red
     _ => ()
   }
-  // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), and in words
+  // the stations at a glance in Station's place, and in words
   let (glyph, said) = stations_at_glance(src, ws.id)
   bar_glyph.val = Some(glyph)
   bar_stations_said.val = said
@@ -1751,7 +1751,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     c.spacer()
     holder = c.box(w=Px(w), h=Px(panel), tx=22.0, ty=-foot, fn() {
       bar_shadow(c, w, clip_top, panel)
-      // under the glass, 令's own disc: the glass frosts it as it frosts the pages (Bar.kt: the action a haze source),
+      // under the glass, 令's own disc: the glass frosts it as it frosts the pages,
       // its warmth round the notch, fading down from it; the disc itself under 令, as large and as grown
       if k_moves || k_now > 0.001 {
         let under = at(
@@ -1899,7 +1899,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         None => ()
         Some(s) => {
           // a bar being chosen: the stack of bars slides down inside the closing glass, the chosen one into the
-          // bar's place, what is not chosen cut off by the glass's edge (Bar.kt). It starts as the rows and the bar
+          // bar's place, what is not chosen cut off by the glass's edge. It starts as the rows and the bar
           // were drawn (the rows' fade and offset, each place as lit as it was) and comes to the bar's look as it
           // lands. The chosen bar is the bar's places, laid out where they are and drawn coming down; the rest
           // leaves, drawn only.
@@ -2043,7 +2043,7 @@ fn place_at(
     let face = c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
       place_face(c, key, idle, lit, tint, dots.get(key).unwrap_or(0L))
     })
-    // what a screen reader says of it (Bar.kt Place: its label; Station's, the stations in words)
+    // what a screen reader says of it (Station's, the stations in words)
     c.semantics(face, Tab, label=if key == "stations" && bar_stations_said.val != "" { bar_stations_said.val } else { place_label(key) })
   })
 }
@@ -2155,7 +2155,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
     }
   }
   // another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
-  // closes like a window over a stack of bars, the chosen one sliding down into the bar's place (Bar.kt pick)
+  // closes like a window over a stack of bars, the chosen one sliding down into the bar's place
   let pick = fn(i : Int, key : String?) {
     if m.swap_at(t) is Some(_) {
       return
@@ -2522,10 +2522,10 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
 }
 
 ///|
-/// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (the
+/// A place's top page other than the chats (with the bar under it): Home's top bar over it (the
 /// place's name, settings), what it shows the settings' page of it (src/sfapp/settings).
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  // what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling under it)
+  // what it shows runs under the top bar, frosted over it (scrolling under it)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     // what it shows: the settings' page of the same place (src/sfapp/settings), in place of its own bar
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -2549,7 +2549,7 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 }
 
 ///|
-/// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): the place's name, the page's actions
+/// A place's top bar at the stack's root: the place's name, the page's actions
 /// (`@sf.named_actions`), settings at the right edge; frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()

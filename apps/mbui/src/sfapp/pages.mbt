@@ -1,9 +1,9 @@
 // The pages pushed from Home, as far as these slices go: a chat (chat.mbt), the archive and settings (Parts.kt NavBar
-// over nothing yet); the filter's menu (Sheet.kt MenuHost) and the workspaces' sheet (Workspaces.kt WorkspacesSheet, in
+// over nothing yet); the filter's menu and the workspaces' sheet (Workspaces.kt WorkspacesSheet, in
 // Sheet.kt's frame).
 
 ///|
-/// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
+/// A page's compact bar: back to the chats, in the accent; its title in the middle.
 fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
   if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title, top=status_top()) {
     @sfbase.go_back() |> ignore
@@ -11,7 +11,7 @@ fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
 }
 
 ///|
-/// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
+/// A list card on a sheet: its rows list_pad in, its corner concentric round theirs; its ground the
 /// caller's (the workspace in use: the chips' grey).
 // kept across runs: a value (no field of it changes)
 let chip_list_card : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, clip=true)
@@ -34,7 +34,7 @@ fn menu_height(n : Int) -> Double {
 }
 
 ///|
-/// A phone menu's panel (Sheet.kt MenuHost) at (`tx`, `ty`): 180 wide, the surface, the menu's shadow, its rows
+/// A phone menu's panel at (`tx`, `ty`): 180 wide, the surface, the menu's shadow, its rows
 /// menu_pad in, its corner concentric round theirs (concentricOut(MENU_ROW, MENU_PAD)).
 fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> Unit) -> Int {
   let t = @sf.theme()

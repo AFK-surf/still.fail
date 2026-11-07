@@ -4,8 +4,8 @@
 //         moon's build of PKG with stand-ins for its C compiler and archiver (scripts/mbc-stub.sh): only moonc runs.
 //         Prints the generated .c; fails if moon did not write it anew. (Android, iOS: their compiler is not moon's.)
 //     mbc compile --cc CC --cflags FLAGS [--gen-flags F] [--init-flags F] [--extra FILE…] [--optional FILE…]
-//                 [--objc-flags F] --obj DIR [-j N] [--link-flags FILE] FILE.c
-//         FILE.c split into units and compiled with the extra C/Objective-C files, all at once (-j, default the
+//  [--objc-flags F] --obj DIR [-j N] [--link-flags FILE] FILE.c
+//  FILE.c split into units and compiled with the extra C/Objective-C files, all at once (-j, default the
 //         cores); prints the objects. An object whose command and inputs (its depfile's, by content) did not change
 //         is kept. --optional files that do not compile are left out (as the runtime's that a platform lacks).
 //     mbc wrap --real CC -- ARGS…
@@ -17,8 +17,8 @@
 //         the --dep ones). wrap's link is the same.
 //     mbc shim DIR
 //         DIR/cc (Windows: DIR/cl.exe, lib.exe, link.exe) running `mbc wrap` over the real one; prints DIR.
-//     mbc check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
-//         The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
+//  mbc check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
+//  The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
 //         defined twice among the units.
 //     mbc work MOON.WORK COPY
 //         A workspace's moon.work for a copy of its module elsewhere: the module ".", its other members by absolute

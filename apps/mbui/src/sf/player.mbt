@@ -1,4 +1,4 @@
-// The one player of films and songs (web/ui viewer/Player.tsx, the web's one player too): a video is a video,
+// The one player of films and songs (the web's one player too): a video is a video,
 // whether a chat's recording of a screen or a film of a station's drive, and is watched both ways. To look closely:
 // paused, a step to the frame before or after (the file's own frames, read by the host), the time to the millisecond
 // and which frame of how many at what rate, slow speeds (0.1×, 0.25×, 0.5×), the picture zoomed and moved, the frame
@@ -37,7 +37,7 @@ pub fn clock(ms : Double) -> String {
 }
 
 ///|
-/// `m:ss.mmm` (`h:mm:ss.mmm` past an hour): a frame's time, to the millisecond (web/ui viewer/playing.ts clockMs).
+/// `m:ss.mmm` (`h:mm:ss.mmm` past an hour): a frame's time, to the millisecond.
 pub fn clock_ms(ms : Double) -> String {
   let all = (if ms < 0.0 { 0.0 } else { ms }).round().to_int64()
   let total = all / 1000L
@@ -2258,7 +2258,7 @@ fn phone_timeline_box() -> @ui.Style {
 }
 
 ///|
-/// The keys' row: 2 apart at least (media.css.ts vvGroup), so the one kept on (the subtitle, sideways) never meets the
+/// The keys' row: 2 apart at least, so the one kept on (the subtitle, sideways) never meets the
 /// one pressed, as far as makes each a press's room across (keys_gap); 40 high, as tall as a press's room where that is
 /// more (its keys in its middle).
 fn phone_keys_row() -> @ui.Style {
@@ -2319,7 +2319,7 @@ let desk_cover_icon : Double = 72.0
 let desk_half : Double = 0.5
 
 ///|
-/// The time where the pointer is (Player.css.ts pointed): over the timeline, 4 above it, on black at 75%, 11 in white.
+/// The time where the pointer is: over the timeline, 4 above it, on black at 75%, 11 in white.
 let desk_pointed_w : Double = 56.0
 
 ///|
@@ -2394,7 +2394,7 @@ fn desk_cue_over(width : Double) -> Double {
 let desk_cue_apart : Double = 16.0
 
 ///|
-/// Over a phone's controls: 112 off the foot (Player.kt), and as much more as the controls are taller where their
+/// Over a phone's controls: 112 off the foot, and as much more as the controls are taller where their
 /// timeline and keys' row are a press's room (phone_timeline_h, phone_row_h, phone_controls_foot).
 fn phone_cue_over() -> Double {
   phone_cue_least + (phone_timeline_h() - phone_timeline_least) + (phone_row_h() - phone_key_side) / 2.0

@@ -1,4 +1,4 @@
-// Markdown as nodes of the window's tree, made once (markdown's: Markdown.kt's, the web's `.markdown`): the blocks the
+// Markdown as nodes of the window's tree, made once (the web's `.markdown`): the blocks the
 // core read the words in (blocks_of over md_core's tree, asked of the core once for all that read the same words:
 // md_ask, md_answered), each as markdown draws it, as far apart as the larger of the margins between each two; each
 // paragraph's words in pieces as the core read them (runs_of: bold, italic, code, struck through, links, a chat's
@@ -7,7 +7,7 @@
 
 ///|
 /// `text` as Markdown in `parent` (markdown's): `tree`, its reading where it is told one (a message's `md`: nothing
-/// asked of the core); `size` its words', as it changes (0: the theme's body), on lines `line` times it high (0: Markdown.kt's 1.65);
+/// asked of the core); `size` its words', as it changes (0: the theme's body), on lines `line` times it high;
 /// `ink` (0: the theme's text); `document`: its headings a document's; `bleed`: how far past its column either side its
 /// tables scroll; `copy`: its tables offer to be copied; `paths`: the files its paths name are a session's (chips);
 /// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held; `chat_title`, what a bare
@@ -850,7 +850,7 @@ fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, col
 }
 
 ///|
-/// The copy key's words (common.copied, common.copy: Markdown.kt's).
+/// The copy key's words (common.copied).
 fn md_copy_words(copied : Bool) -> String {
   if language() == "en" {
     if copied { "Copied" } else { "Copy" }

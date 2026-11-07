@@ -1,4 +1,4 @@
-// GET /events (the Rust station's admin/events.rs): what changed, as it changes, pushed. Changes that come in a burst go out
+// GET /events: what changed, as it changes, pushed. Changes that come in a burst go out
 // as one event per session, and one round of sidebar rows; a thread's entries go out as they are written; `host` adds
 // host samples, `job` a job's output as it grows, `live` sessions as they run. Keepalives and host samples only while
 // someone follows. The same event names and data as the Rust station's; what is told to everyone also carries an
@@ -82,11 +82,11 @@ export type EventsDeps = {
   subscribe(listener: (change: StoreChange) => void): () => void;
   /// A host sample (GET /host's answer).
   host(): Promise<unknown>;
-  /// A job's log path and how its lines are read (jobs.rs `tail`, `output_at`).
+  /// A job's log path and how its lines are read (`output_at`).
   jobLog(id: string): string | null;
   tail(path: string, lines: number): string;
   outputAt(path: string): number | null;
-  /// A session's live steps, from `from`, to `send`, until the returned function is called (live.rs); its transcript
+  /// A session's live steps, from `from`, to `send`, until the returned function is called; its transcript
   /// entries in brief (`brief`, read/transcript.ts) for a client that asks so.
   live?(key: string, from: number, last: number | null, send: (message: unknown) => void, brief: boolean): () => void;
   /// The sessions at work the station follows itself (sessions/live.ts `running`), and each as it is now (where its

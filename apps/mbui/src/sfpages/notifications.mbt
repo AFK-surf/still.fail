@@ -5,7 +5,7 @@
 // with a picture of it, each kind of thing that happens with which of those it uses (opened, each way on or off), and
 // the rest. The preview and the pictures are of this device's system (notice_look: where its banners come, its
 // icons), and the badge is a way only where the system shows the app's number (@ui.badge_shown): elsewhere a switch of
-// it would change nothing. The phone's settings have a switch of their own (SettingsHome.kt's).
+// it would change nothing. The phone's settings have a switch of their own.
 
 // ---------------------------------------------------------------------------
 // 通知

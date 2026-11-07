@@ -1,4 +1,4 @@
-// A chat's link, as it is given away (ChatLink.kt, the web's chatRefs.ts shareLink and copyChatLink): from a row's
+// A chat's link, as it is given away: from a row's
 // menu, a chat's sheet, an agent's history.
 
 ///|
@@ -11,7 +11,7 @@ pub fn cloud_origin() -> String {
 }
 
 ///|
-/// A chat's still.fail link (ChatLink.kt chatLink): <cloud>/o/<workspace>/<station>/<session>; "" for a station of no
+/// A chat's still.fail link: <cloud>/o/<workspace>/<station>/<session>; "" for a station of no
 /// workspace or a chat with no session yet.
 pub fn chat_link(station : String, session : String) -> String {
   match station.find("/") {
@@ -43,7 +43,7 @@ pub fn message_link(station : String, session : String, seq : Double) -> String 
 }
 
 ///|
-/// Copies a chat's link as a reference is sent (ChatLink.kt copyChatLink, chatLinkText): `[title](link)`.
+/// Copies a chat's link as a reference is sent (chatLinkText): `[title](link)`.
 pub fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
   let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_string()
   let shown = if shown == "" { link } else { shown }
@@ -62,5 +62,5 @@ pub fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
 }
 
 ///|
-/// How much of a chat's title its copied link carries (ChatLink.kt chatLinkText: 120 characters).
+/// How much of a chat's title its copied link carries.
 let chat_link_most : Int = 120

@@ -19,7 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Holds the app up while the phone is lent (a foreground service; still.fail's AdbShareService, AdbShare.kt): finds
+ * Holds the app up while the phone is lent (a foreground service; still.fail's AdbShareService): finds
  * Wireless debugging's ports and tells the core each time they change, says in its notification how it stands, takes
  * the pairing code typed there (or read off the dialog, AdbCodeReader), and ends when the core's `adbShare` says the
  * phone is lent no longer (stopped, its hour up, the station too old). The core asked through AdbCore, which goes on

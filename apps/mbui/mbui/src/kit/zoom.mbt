@@ -554,7 +554,7 @@ pub fn Zoom::pan(self : Zoom, dx : Double, dy : Double, at? : Double) -> Unit {
 }
 
 ///|
-/// By `zoom` around (ax, ay) on the stage, and moved by (dx, dy): two fingers pinching (Zoom.kt transform), the point
+/// By `zoom` around (ax, ay) on the stage, and moved by (dx, dy): two fingers pinching, the point
 /// under them staying under them.
 pub fn Zoom::transform(
   self : Zoom,

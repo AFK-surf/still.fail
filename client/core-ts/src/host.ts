@@ -1,4 +1,4 @@
-// What differs per platform (host.rs), as Effects. The Node host (hosts/node.ts) implements it over fetch, the `ws`
+// What differs per platform, as Effects. The Node host (hosts/node.ts) implements it over fetch, the `ws`
 // package, node:sqlite and files; the web's over fetch, WebSocket, IndexedDB and SQLite's WASM build on OPFS;
 // Android's over the native shell (client/shell: reqwest, SQLite) through JSI. Tests use testing.ts. Waiting is not the host's: the core sleeps on Effect's Clock.
 //

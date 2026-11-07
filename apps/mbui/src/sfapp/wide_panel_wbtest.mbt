@@ -163,7 +163,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
   assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Willow")
-  // another row dragged off the tab onto the chat (ChatSide.tsx useChatDrop): let go there, into its draft too
+  // another row dragged off the tab onto the chat: let go there, into its draft too
   let (x, y) = match t.find("长篇小说.txt") {
     Some(at) => at
     None => fail("no 长篇小说.txt in the tab")

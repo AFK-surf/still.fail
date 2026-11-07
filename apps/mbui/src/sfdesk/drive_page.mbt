@@ -46,7 +46,7 @@ pub fn folder_page(
 }
 
 ///|
-/// The folder's head (Drive.tsx FolderView's pageHead; the phone's Crumbs and mCount): its way (its station's button,
+/// The folder's head (the phone's Crumbs and mCount): its way (its station's button,
 /// then the way down from its root to it), its name where the frame's bar has not said it (`titled`: h1), what it holds
 /// in a line, or why it was not read again (its 重试). In as far as the rows' words are, wherever it is shown.
 fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, titled : Bool, count : String?) -> Unit {

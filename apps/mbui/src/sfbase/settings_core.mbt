@@ -121,7 +121,7 @@ fn settings_core_of(
     set_bars: fn(sets, cur) { set_bars(src, w.id, sets, cur) },
     place_icon: fn(c, place, color) {
       if place == "stations" {
-        // one station on, as no station is meant (BarSettings.kt Still)
+        // one station on, as no station is meant
         let still : @sf.GlyphCounts = { online: 1, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
         @sf.station_glyph(c, still, 28.0, color, @sf.theme().p.red) |> ignore
       } else {

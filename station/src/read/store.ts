@@ -1747,7 +1747,7 @@ export function remoteRunCount(s: Store, viewer: InWorkspace | null): number {
     : Number(one(s, "SELECT n FROM remote_run_counts WHERE ws = ?", viewer.workspace)?.n ?? 0);
 }
 
-// ── what the session and job reads add (admin/views.rs sessions, session, threads; jobs.rs) ──
+// ── what the session and job reads add (session, threads) ──
 
 /// Rust's ordering of String keys (a BTreeMap's): by their UTF-8 bytes.
 export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
@@ -1791,7 +1791,7 @@ export function participants(s: Store, session: string | string[] | null): Map<s
   return out;
 }
 
-/// Store::list_turns: a session's turns, oldest first, each its summary and id (as views.rs `session` shows them).
+/// Store::list_turns: a session's turns, oldest first, each its summary and id.
 /// A session's turns, the first first; `last`: only that many of the latest (by the index of its turns, read from its
 /// end), none of those before them read.
 export function listTurns(s: Store, session: string, last: number | null = null): Json[] {

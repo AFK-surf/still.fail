@@ -1,4 +1,4 @@
-// Every model a run can move to (still.fail apps/android shared/screens/SettingParts.kt ModelList), by series as the core
+// Every model a run can move to, by series as the core
 // lists them: a field to filter them by once there are more than 8, a series' name over its models where there is
 // more than one series, each model with its maker's mark, where it comes from after its name (ModelFrom), faint until
 // borrowed when it is not usable here yet; said so when none matches.
@@ -15,7 +15,7 @@ let model_list_page : @ui.Style = @ui.css("w=Full h=Full")
 let model_filter_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 
 ///|
-/// A series' name (Controls.kt GroupLabel: 13, muted, 14 over it and 4 under), at the rows' words.
+/// A series' name (muted, 14 over it and 4 under), at the rows' words.
 // kept across runs: a value (no field of it changes)
 let model_group_room : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1")
 

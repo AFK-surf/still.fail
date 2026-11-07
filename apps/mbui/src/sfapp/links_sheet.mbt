@@ -47,7 +47,7 @@ fn invite_reset() -> Unit {
 }
 
 ///|
-/// An invitation's link opened in the app (Workspaces.kt openInvite): what it leads to, before it is accepted.
+/// An invitation's link opened in the app: what it leads to, before it is accepted.
 fn open_invite(token : String) -> Unit {
   invite_reset()
   invite.token.set(Some(token))
@@ -57,7 +57,7 @@ fn open_invite(token : String) -> Unit {
 
 ///|
 /// The token of an invitation's link (`<cloud>/invite#<token>`), or what was pasted when it is a token by itself
-/// (Workspaces.kt invitationToken).
+/// .
 fn invitation_token(words : String) -> String? {
   let t = words.trim(chars=" \n\t").to_string()
   if t == "" {
@@ -91,7 +91,7 @@ let invite_body : @ui.Style = @ui.css("w=Full h=Full px=S5 gap=S2_5 clip")
 let invite_buttons : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S6 gap=S2 justify=JEnd")
 
 ///|
-/// The field a link is pasted in (Controls.kt Field): the surface, a line round it, 12 round, 12 and 10 in.
+/// The field a link is pasted in: the surface, a line round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
 let invite_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
@@ -109,14 +109,14 @@ let invite_label : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, co
 let invite_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
-/// The invitation's sheet with no link yet: one to paste (Workspaces.kt openInviteLink): the landing's 用邀请链接加入.
+/// The invitation's sheet with no link yet: one to paste: the landing's 用邀请链接加入.
 fn open_invite_link() -> Unit {
   invite_reset()
   raise_sheet(InviteLink)
 }
 
 ///|
-/// The sheet (Workspaces.kt InviteLinkSheet), over the pages or the sign-in page.
+/// The sheet, over the pages or the sign-in page.
 fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let accounts = (src.topic)("accounts", {})

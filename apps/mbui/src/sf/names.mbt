@@ -1,5 +1,5 @@
 // A folder's names as a viewer reads them (web/ui viewer/names.ts): in their numbers' order (the playlist), and the
-// subtitle beside a video. Plain functions over names (zdrive's Playlist.kt and SideSubtitles.kt, as Android had them).
+// subtitle beside a video. Plain functions over names (as Android had them).
 
 ///|
 /// The playable names of a folder in the order a person would watch them: numbers as numbers (E2 before E10).

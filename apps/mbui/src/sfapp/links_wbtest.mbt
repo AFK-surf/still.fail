@@ -45,7 +45,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   // (its menu, the presenters': a sheet with a finger, in)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("打开链接") is Some(_))
-  // felt as it opened, once (Links.kt: LongPress)
+  // felt as it opened, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // no words picked by the same press
   assert_eq(pk.ts, "")

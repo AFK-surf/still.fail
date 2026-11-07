@@ -434,7 +434,7 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
 }
 
 ///|
-/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox): on surface2, a block of the
+/// A command to run elsewhere, with a button that copies it: on surface2, a block of the
 /// ladder's (round by its row corner), its copy button the ladder's inset in from its top and end, as tall as two of
 /// its lines and its inset under them (so with one or two lines as far from its foot too), round by the ladder's next
 /// step there (mbui works it out). `reach`: in a card's foot corners, how it reaches past the card's words

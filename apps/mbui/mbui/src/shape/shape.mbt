@@ -1,4 +1,4 @@
-// Shaping a run with the default shaper (harfrust's shape.rs): Unicode properties, clusters, normalization and
+// Shaping a run with the default shaper: Unicode properties, clusters, normalization and
 // glyph mapping, GSUB, advances, GPOS (or the old `kern` table), mark widths and default ignorables.
 
 ///|
@@ -352,7 +352,7 @@ fn setup_masks(plan : ShapePlan, buffer : Buffer) -> Unit {
 }
 
 ///|
-/// The old `kern` table's pairs, split between the two glyphs (aat/kern.rs, its format 0 subtables).
+/// The old `kern` table's pairs, split between the two glyphs (its format 0 subtables).
 fn apply_kern_table(face : @font.Face, plan : ShapePlan, buffer : Buffer) -> Unit {
   if !plan.requested_kerning || !buffer.direction.is_horizontal() {
     return

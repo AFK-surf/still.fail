@@ -1,4 +1,4 @@
-// An agent's request about a vault item on its card (vault_approval.mbt; VaultAsk.tsx). The vault's page itself:
+// An agent's request about a vault item on its card. The vault's page itself:
 // src/sfpages vault_wbtest.mbt.
 
 ///|

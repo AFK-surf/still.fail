@@ -457,7 +457,7 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
 
 
 ///|
-/// What is at work steps round (Spokes.kt, the web's spokes.ts): eight, the brightest a step further every 100 ms,
+/// What is at work steps round: eight, the brightest a step further every 100 ms,
 /// the others fading behind it. It steps, it does not turn: a frame for each step, none between, on the clock every
 /// resident decoration steps on (@ui.cycle_step_ms).
 pub let spoke_step_ms : Double = @ui.cycle_step_ms
@@ -471,12 +471,12 @@ fn spoke_turn(c : @ui.Ctx, node : Int) -> Unit {
 }
 
 ///|
-/// The spokes' strength from the brightest back (Spokes.kt SPOKE_ALPHA).
+/// The spokes' strength from the brightest back.
 // kept across runs: a table, never written
 let spoke_alpha : Array[Double] = [1.0, 0.75, 0.55, 0.42, 0.32, 0.25, 0.2, 0.2]
 
 ///|
-/// The eight spokes in a box `size` across (Spokes.kt drawSpokes, the web's 24-unit drawing): each from 4.8 to 9.6
+/// The eight spokes in a box `size` across (the web's 24-unit drawing): each from 4.8 to 9.6
 /// out, 2.9 thick with round ends, the first straight up and the rest clockwise, in a box `box` across about its
 /// middle (`size` by default).
 pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
@@ -503,7 +503,7 @@ pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
 }
 
 ///|
-/// The same steps as a ring of eight arcs round an avatar (Spokes.kt drawSegments, the web's `segments`): in a box
+/// The same steps as a ring of eight arcs round an avatar (the web's `segments`): in a box
 /// `size` across, a circle `stroke` thick on its edge, each arc 31° of its 45° with round ends (shortened by their
 /// ends' reach, so the gaps stay 14°), the first straight up. Each in `color` at its strength over `ground` (what is
 /// under it), mixed: an arc is drawn as pieces whose round ends lie over each other, which see-through ink shows as
@@ -531,7 +531,7 @@ pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64, grou
 }
 
 ///|
-/// A ring that says how far (PreviewLoad.kt's): `size` square, a track of `color` at 18% and `part` of a turn of it
+/// A ring that says how far: `size` square, a track of `color` at 18% and `part` of a turn of it
 /// from the top, clockwise, on the icon family's 24-unit grid (radius 8.5, stroke 1.75).
 pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -> Int {
   c.shapes(ring_shapes(size, part, color), w=Px(size), h=Px(size))

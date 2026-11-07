@@ -1,5 +1,5 @@
 // The gallery's own state (what its live controls keep: controls.mbt and the other pages) as the app starts with it:
-// a kept run's test starts from it (textrec_NAME_wbtest.mbt), as the host's run did, whatever a test before it tapped.
+// a kept run's test starts from it, as the host's run did, whatever a test before it tapped.
 // detlint's `globals` (src/kitdemo is among its roots) fails a global this does not put back.
 
 ///|

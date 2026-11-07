@@ -1,5 +1,5 @@
 // Bug reports to the still.fail team as a part of the station (parts.ts): from stations on the stable channel
-// (updates.rs `channel_of`), in still.fail cloud only (feedback is no part of the control plane: another provider's
+// , in still.fail cloud only (feedback is no part of the control plane: another provider's
 // stations send none). The agents' tool to send one, and each session told when one it sent is fixed and out: a few
 // minutes after the start and every hour (the cloud has no way to say so as it happens). A failure notice in a chat
 // reported by a person (its 上报, feedback/notice.ts), and the overview's `feedback` saying the station takes them.

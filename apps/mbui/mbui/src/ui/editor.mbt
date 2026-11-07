@@ -945,7 +945,7 @@ pub let caret_blink_ms : Double = 530.0
 pub let caret_blinks_for_ms : Double = 30000.0
 
 ///|
-/// Android's: Compose's text field's, shown the first 500 ms of each second (TextFieldCursor.kt cursorAnimationSpec).
+/// Android's: Compose's text field's, shown the first 500 ms of each second.
 pub let caret_blink_android_ms : Double = 500.0
 
 ///|

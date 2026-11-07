@@ -1,5 +1,5 @@
-// Checking a profile (profiles.rs check_profile) against local providers and stand-in CLIs, and finding what it can
-// decide with (decision/profiles.rs discover).
+// Checking a profile against local providers and stand-in CLIs, and finding what it can
+// decide with.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";

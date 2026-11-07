@@ -1,4 +1,4 @@
-// The admin's console (views/admin.rs): still.fail cloud's operator lists as its pages show them, so the page only
+// The admin's console: still.fail cloud's operator lists as its pages show them, so the page only
 // draws. `adminList`: one list found, filtered and sorted, with how many each filter holds; `adminItem`: one user's,
 // workspace's or bug report's page; `adminOverview`: the counts and what wants a look. Times stay in seconds.
 import { CoreError } from "../error.ts";

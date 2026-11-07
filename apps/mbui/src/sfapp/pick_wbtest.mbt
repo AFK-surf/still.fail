@@ -1,4 +1,4 @@
-// Picking a passage of a message (pick.mbt, MessagePick.kt), over the made-up chat. The fake host has no word
+// Picking a passage of a message (pick.mbt), over the made-up chat. The fake host has no word
 // boundaries of its own: a Han character is a word, letters and digits together are one.
 
 ///|
@@ -31,7 +31,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
   assert_eq(pk.sel.b - pk.sel.a, 1)
-  // felt as it picked, once (MessagePick.kt: LongPress)
+  // felt as it picked, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("引用") is Some(_))
   assert_true(t.find("复制") is Some(_))

@@ -947,7 +947,7 @@ fn Ctx::place_list(
       st.above(st.count) - st.above(last + 1) + (bottom - bottom_edge)
     }
     // a row followed from its top: its top `follow_margin` under the view's, or the end, whichever comes first
-    // (Follow.kt left)
+    // 
     let mut left = to_end
     if st.follow_item >= 0 {
       for r in order {

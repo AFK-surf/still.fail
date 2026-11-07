@@ -1273,7 +1273,7 @@ export class Accounts {
     throw new Refusal(502, t("station.quota.resetUnconfirmed"));
   }
 
-  // ── the automatic decisions (admin/decision.rs) ──
+  // ── the automatic decisions ──
 
   /// The models the decisions may ask: each a usable profile's verified one, with the profiles that have it.
   decisionModels(): { id: string; name: string; profiles: string[] }[] {
@@ -1359,7 +1359,7 @@ export class Accounts {
     if (errors.length > 0) throw errors[0];
   }
 
-  // ── what the overview shows of the accounts (admin/views.rs `overview`) ──
+  // ── what the overview shows of the accounts ──
 
   /// What the session's chat is called in the chat list; its key only where it has no chat.
   private chatTitleOf(session: string): string {

@@ -1,4 +1,4 @@
-// The UI coming back after being away, or the network changing under it: what is under way is suspect (wake.rs).
+// The UI coming back after being away, or the network changing under it: what is under way is suspect.
 //
 // - a request still unanswered that has waited a while (QUIET_MS) fails, for its caller to ask again;
 // - a stream that heard nothing for a while ends, and is opened again;
@@ -243,7 +243,7 @@ export class WakingHost implements Host {
     return Effect.map(opening, (response) => ({ ...response, body: quietEnds(this.inner, this.wakes, response.body) }));
   }
 
-  /// Its frames are left to the core (account_state.ts `followSocket`); only its opening is given up.
+  /// Its frames are left to the core; only its opening is given up.
   websocket(url: string, protocols: string[]): Effect.Effect<Pull<string>, HostError, Scope.Scope> {
     return Effect.suspend(() => unlessDropped(this.wakes, this.inner.nowMs(), this.inner.websocket(url, protocols)));
   }

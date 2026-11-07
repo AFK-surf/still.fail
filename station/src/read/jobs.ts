@@ -89,7 +89,7 @@ export function rustLines(text: string): string[] {
   return parts.map((l, i) => (i < parts.length - 1 || ended) && l.endsWith("\r") ? l.slice(0, -1) : l);
 }
 
-/// GET /jobs (views.rs `open_jobs`): the jobs still up (running, or a service being started again), newest first, each
+/// GET /jobs: the jobs still up (running, or a service being started again), newest first, each
 /// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived). Those of the
 /// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
 /// with every job the station ever ran, the whole sidebar and (for a session whose own chat is not listed) the whole

@@ -1,4 +1,4 @@
-// Tasks on other stations of the workspace (the Rust station's remote.rs). Workspace peers call named operations over an
+// Tasks on other stations of the workspace. Workspace peers call named operations over an
 // authenticated station transport (`stillfail/station/1`, the mesh layer's); shell tasks are one service on it, never an
 // admin API proxy. Any station of the workspace may run them (the transport checks the roster), as its agents may open a
 // chat here whose agent runs the same commands: shell execution as the station's OS user, not a sandbox. A source session's
@@ -2360,7 +2360,7 @@ function asI64(v: unknown): number | null {
   return typeof v === "number" && Number.isInteger(v) ? v : null;
 }
 
-/// The target side of the station transport (peer.rs `serve`): a request taken in, its answer as the wire has it
+/// The target side of the station transport: a request taken in, its answer as the wire has it
 /// (`{"result": …}` or `{"error": "…"}`). The transport checks the peer and its workspace before.
 export async function answerPeer(remote: Remote, workspace: string, peer: string, request: Json): Promise<Json> {
   try {

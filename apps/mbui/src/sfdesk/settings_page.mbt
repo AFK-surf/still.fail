@@ -47,7 +47,7 @@ using @sfpages {
 }
 
 ///|
-/// What the option chosen above it does (chat.css.ts appearanceHint: 8 under it, the meta's 12 muted, 52em at most).
+/// What the option chosen above it does (the meta's 12 muted, 52em at most).
 fn desk_hint(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=desk_hint_box, fn() { c.text(words, style=desk_hint_words) |> ignore }) |> ignore
 }

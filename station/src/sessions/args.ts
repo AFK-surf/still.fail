@@ -1,4 +1,4 @@
-// The agents' tool arguments as the station reads them (the Rust station's hub.rs, its argument functions): how a turn ends
+// The agents' tool arguments as the station reads them (its argument functions): how a turn ends
 // (`kind`, in today's words and those from before), what goes with it (`need`, `done`, `about`), the card a post carries
 // (`card`, or `options` from before cards; JSON text from a runtime whose tool list is older), and how posts with files
 // are kept. Every rule and every word of what an agent is told when it is refused is the Rust station's.
@@ -9,10 +9,10 @@ import type { Attachment } from "../store/store.ts";
 type Json = any;
 export type Args = Record<string, Json>;
 
-/// A value as JavaScript's String() writes it (hub.rs `js_string`), for arguments given as another type than asked.
+/// A value as JavaScript's String() writes it, for arguments given as another type than asked.
 export const jsString = (value: Json): string => (typeof value === "string" ? value : value === null ? "null" : JSON.stringify(value));
 
-/// A number, or a string holding one (hub.rs `js_number`).
+/// A number, or a string holding one.
 export function jsNumber(value: Json): number | null {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return null;

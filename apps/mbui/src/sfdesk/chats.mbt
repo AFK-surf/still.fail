@@ -1,8 +1,8 @@
-// The band over the sidebar's chats' lists (still.fail web/src/SidebarList.tsx NavTop; SidebarActions.tsx): 新建对话 and the
+// The band over the sidebar's chats' lists: 新建对话 and the
 // filter; the lists under it are sfpages' (sidebar.mbt).
 
 ///|
-/// The band over the lists (SidebarList.tsx NavTop): its top row, then 新建对话 and the filter (SidebarActions.tsx),
+/// The band over the lists: its top row, then 新建对话 and the filter,
 /// then 待处理 where the rail has no bell; on the sidebar's own ground, whole (no glass: asked, 2026-10-24), the closed
 /// bar's as it closes (moved with it).
 fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
@@ -51,7 +51,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
     })
     |> ignore
-    // with no bell in the rail: 待处理 under 新建对话 (cloud/workspace.tsx SidebarTodo); the column's beside the system's
+    // with no bell in the rail: 待处理 under 新建对话; the column's beside the system's
     if !@sf.native_on() {
       side_todo(c, src, w)
     }
@@ -274,7 +274,7 @@ let side_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=
 let side_words_bad : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L6)
 
 ///|
-/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, unmarked whichever list is shown, its tip 筛选会话; pressed, its menu (filter_menu).
+/// The list's filter (compact): a circle 32 across, unmarked whichever list is shown, its tip 筛选会话; pressed, its menu (filter_menu).
 fn filter_button(
   c : @ui.Ctx,
   src : Source,

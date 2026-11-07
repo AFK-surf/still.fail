@@ -1,4 +1,4 @@
-// What changed in still.fail, for people (changelog.rs; the `changelog` topic, scripts/changelog.ts): still.fail cloud's
+// What changed in still.fail, for people (the `changelog` topic, scripts/changelog.ts): still.fail cloud's
 // changelog with what each part has out on this app's channel, one tab a part (this app's first; this app's alone where
 // they would all be the same, as the stable channel's are: a release an entry, each every part's), by day, newest first;
 // and what this app got since it

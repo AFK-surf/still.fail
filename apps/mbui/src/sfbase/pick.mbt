@@ -209,7 +209,7 @@ pub fn mouse_picks() -> Bool {
 }
 
 ///|
-/// A message's words to be picked from (MessagePick.kt messagePick), round what draws them (`body`): its ts, who said
+/// A message's words to be picked from, round what draws them (`body`): its ts, who said
 /// it and as what, its words; `fill`, as wide as its column (else as its words: the viewer's bubble). With a mouse
 /// (`mouse`), what of it the page's selection holds is told the pill, and a right click on it offers its turn shared
 /// (`share`, where it is given: share_offered); held with a finger, its bar shares its turn and copies `link` too
@@ -348,7 +348,7 @@ pub let picked_alpha : Double = 0.26
 let pick_felt : Ref[Int] = Ref(-1)
 
 ///|
-/// Over list `list` (MessagePick.kt PickLayer): the picked passage's handles and its bar (over it; under it when the
+/// Over list `list`: the picked passage's handles and its bar (over it; under it when the
 /// bar over the list is too near: `top`, where the list's bar ends; `foot`, what is kept clear at its foot), the bar
 /// gone while the list moves or the passage is being changed; with a mouse (`mouse`), the pill. A tap anywhere else
 /// lets go of it, as back does. Quoted: `quote` told whose words, the words, their message and its role. After what
@@ -544,7 +544,7 @@ pub fn pick_layer(
 }
 
 ///|
-/// What the mouse picked in a message (Chat.tsx useSelectionQuote, Chat.css.ts quotePop): once it is let go, a small
+/// What the mouse picked in a message (Chat.tsx useSelectionQuote): once it is let go, a small
 /// dark pill 8 over where the pointer let it go (Ctx::selection_end: the end it dragged, on its line), 引用 with its
 /// mark, quoting it (whose words they are, as the message says: pickable). ⌘C copies it (Ctx::selectable); a press
 /// elsewhere lets it go.
@@ -621,7 +621,7 @@ let pick_line : @ui.Style = @ui.css("w=S0_5 bg=Accent")
 let pick_knob : @ui.Style = @ui.css("w=S3 h=S3 radius=Full bg=Accent")
 
 ///|
-/// The bar (MessagePick.kt PickBar): in the middle of its row, 40 high, 4 in, round, raised on its line and shadow;
+/// The bar: in the middle of its row, 40 high, 4 in, round, raised on its line and shadow;
 /// its buttons 32 high, 12 in, their mark 5 before their words (14, the ink).
 // kept across runs: a value (no field of it changes)
 let pick_bar_row : @ui.Style = @ui.css("row w=Full justify=JCenter")

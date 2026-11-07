@@ -113,7 +113,7 @@ pub(all) struct ChatItem {
   origin_text : String
   /// the kind of connect it came from (slack | feishu: the core's originKind), for its mark
   origin_kind : String
-  /// the people in it in words, for a screen reader (RowPicture.kt Faces)
+  /// the people in it in words, for a screen reader
   people_text : String
   pending : Bool
   settled : Bool
@@ -460,7 +460,7 @@ pub fn workspace_of(station : String) -> String {
 
 
 ///|
-/// The station this machine is (thisMachine.ts: "<workspace>/<station>"), as its host says (its station's cloud.json),
+/// The station this machine is, as its host says (its station's cloud.json),
 /// read once it is one; "" where it is none, asked again (one 添加这台 Mac adds, known without the app opened again).
 pub fn this_machine() -> String {
   match machine_here.val {

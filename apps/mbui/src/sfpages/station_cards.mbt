@@ -311,7 +311,7 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
         c.box(style=sw_switches, fn() {
           if beta && has(v, "channel") {
             let busy_ch = is_doing(core, ["software.channel"], [("station", station)])
-            // (what it means over it while it is pointed at: Versions.tsx's tips)
+            // 
             let line = c.id("software-beta-line/" + station)
             c.box(style=sw_switch_line, id=line, taps=false, points=true, fn() {
               c.text(@sf.t("web-main.versions.beta"), style=sw_switch_word) |> ignore

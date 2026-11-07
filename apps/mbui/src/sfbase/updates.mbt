@@ -459,7 +459,7 @@ pub fn update_again(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// How this build's update stands, as 关于's version row says it (SettingsHome.kt Version): what pressing it does, the
+/// How this build's update stands, as 关于's version row says it: what pressing it does, the
 /// line under it, how far (a bar while something is under way: None, a piece sweeping across), whether it is under way,
 /// and whether newer builds are asked for here at all.
 pub fn update_stands() -> @settings.VersionNow {

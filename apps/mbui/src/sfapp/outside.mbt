@@ -17,7 +17,7 @@ fn sharing_go(key : String) -> Unit {
   @sfbase.sharing_go(key)
 }
 
-// ── the sheet (Composer.kt askToShare) ────────────────────────────────
+// ── the sheet ────────────────────────────────
 
 ///|
 /// What it says first: 14/20, muted, 8 over the chats.

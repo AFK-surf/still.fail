@@ -1,6 +1,6 @@
 // The operations' contracts (src/ops.ts `PARAMS`) say exactly what each reads of its params: the UIs' bindings are
 // made from them (scripts/operations.ts), so a field the core reads that a binding cannot send, or one it sends that
-// the core ignores, would be a bug either way. (scripts/operations.py checked this against ops.rs's source.)
+// the core ignores, would be a bug either way.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PARAMS, request } from "../src/ops.ts";

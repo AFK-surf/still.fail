@@ -169,7 +169,7 @@ pub fn days_new(key : String, days : Array[ChatDay]) -> Bool {
 }
 
 ///|
-/// `days` as shown (ListMotion.kt HeldOrder): while `hold` (a finger on the list, or it moving) rows keep their
+/// `days` as shown: while `hold` (a finger on the list, or it moving) rows keep their
 /// places and their days, each with what is new of it, so the row about to be tapped does not move away; ones gone
 /// go, new ones come in where they would be in their day (a day not shown yet comes where it would be). Let go, the
 /// list is as it is.
@@ -239,7 +239,7 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
 }
 
 ///|
-/// Whether a row shown in list `key` was moved by the viewer since: pinned or let go (Sidebar.tsx pinMoved), or
+/// Whether a row shown in list `key` was moved by the viewer since: pinned or let go, or
 /// written in by them, here or elsewhere (its last message theirs, one not shown before). It goes where it now is at
 /// once, even while the list is held still: the hand on the list keeps rows from moving away under it, not the
 /// viewer's own doing from showing (a pointer left resting on the list while they type is no tap to come). Nothing
@@ -275,7 +275,7 @@ pub fn row_is(item : ChatItem, r : ChatRef) -> Bool {
 }
 
 ///|
-/// A row's name in the list, kept as it changes (ListMotion.kt rowKey): its station and chat, a chat asked for here by
+/// A row's name in the list, kept as it changes: its station and chat, a chat asked for here by
 /// its `clientKey` before and after its station makes it.
 pub fn row_name(item : ChatItem) -> String {
   item.station + "/" + (if item.client_key != "" { item.client_key } else { item.id })
@@ -283,7 +283,7 @@ pub fn row_name(item : ChatItem) -> String {
 
 ///|
 /// What leads a row's second line (the core's `stateLead`): done and offered to archive (`settled`), the archive box in
-/// the check's place (ChatMark.tsx rowLead). Its title goes no lighter than the muted grey and still reads, so the mark
+/// the check's place. Its title goes no lighter than the muted grey and still reads, so the mark
 /// says it (mbui ui/contrast.mbt).
 pub fn row_lead(item : ChatItem) -> String {
   if item.settled && item.state_lead == "done" {
@@ -294,7 +294,7 @@ pub fn row_lead(item : ChatItem) -> String {
 }
 
 ///|
-/// What a chat's row says of it (Home.kt rowTone): the core's `tone` when it says one, else from its state.
+/// What a chat's row says of it: the core's `tone` when it says one, else from its state.
 pub fn row_tone(item : ChatItem) -> String {
   match item.tone {
     "alert" | "busy" | "done" | "wait" => item.tone

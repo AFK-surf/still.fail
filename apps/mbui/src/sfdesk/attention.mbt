@@ -41,7 +41,7 @@ fn attention_set(open : Bool) -> Unit {
 let attention_size : FixedArray[Double] = [0.0]
 
 ///|
-/// 待处理's panel (Attention.tsx): beside the rail's bell, 10 past it (with no bell in the rail, under 待处理 under
+/// 待处理's panel: beside the rail's bell, 10 past it (with no bell in the rail, under 待处理 under
 /// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble not looked at yet (looked at as it opens:
 /// listed while open, then no longer, until the trouble changes, kept on this device) and the services left up long
 /// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
@@ -99,7 +99,7 @@ pub fn open_attention() -> Unit {
 }
 
 ///|
-/// The panel 300 wide (Attention.css.ts panel: its trigger's width, 300 at least), 10 past the rail's bell, 6 under
+/// The panel 300 wide (300 at least), 10 past the rail's bell, 6 under
 /// 待处理.
 let attention_w : Double = 300.0
 
@@ -160,7 +160,7 @@ fn bell_trouble(src : Source, w : Workspace) -> String {
 
 ///|
 /// Whether the rail's bell has its dot: something in its panel, the chats (less what was let go here), the stations'
-/// trouble not looked at or services left up long it has not shown yet (Attention.tsx `lit`).
+/// trouble not looked at or services left up long it has not shown yet.
 pub fn bell_lit(src : Source, w : Workspace) -> Bool {
   attention_groups(src, w, true).length() > 0 || bell_trouble(src, w) != "" || long_jobs_lit(src, w)
 }
@@ -307,7 +307,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
       }
     })
   }
-  // 通知设置: small words, quiet (Attention.css.ts foot, link)
+  // 通知设置: small words, quiet (link)
   c.box(style=att_foot, fn() {
     if attention_link(c, "attention/settings", @sf.t("web-main.attention.settings")) {
       close()
@@ -318,7 +318,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
 }
 
 ///|
-/// A row of 待处理's panel (Attention.css.ts item): its dot (amber waiting on the viewer, red gone wrong), its title
+/// A row of 待处理's panel: its dot (amber waiting on the viewer, red gone wrong), its title
 /// (500) and its line; 忽略 at its end while pointed at, when it can be let go (`note` its tip). Pressed, `go`.
 fn attention_item(
   c : @ui.Ctx,
@@ -380,7 +380,7 @@ fn attention_link(c : @ui.Ctx, key : String, label : String) -> Bool {
 
 
 ///|
-/// The panel's groups 2 apart (Attention.css.ts panel); one with no name 6 further (group + group).
+/// The panel's groups 2 apart; one with no name 6 further (group + group).
 // kept across runs: a value (no field of it changes)
 let att_list : @ui.Style = @ui.css("w=Full gap=S0_5")
 
@@ -389,7 +389,7 @@ let att_list : @ui.Style = @ui.css("w=Full gap=S0_5")
 let att_group_next : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
-/// A workspace's mark before its name over its chats (Attention.tsx: 14).
+/// A workspace's mark before its name over its chats.
 let att_ws_mark : Double = 14.0
 
 ///|
@@ -465,7 +465,7 @@ let att_link_on : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, leading=L4
 
 ///|
 /// A wanting chat's line without its lead (the core's `what`: 要你帮忙：, 出问题：, 待处理 · taken off; the dot before it
-/// says that), else its station's name (Attention.tsx line).
+/// says that), else its station's name.
 fn attention_line(v : Json?) -> String {
   match text(v, "what") {
     "" => text(v, "stationName")

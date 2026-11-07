@@ -1,9 +1,9 @@
-// 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
+// 外观, one page for every frame: how this
 // device shows still.fail, its settings (@sf.settings: wide, rows of one list card, each choice at its row's end;
 // narrow, a block each): 主题, 主题色, 字体 (the faces chosen, opening their page: FontRow; font_setting.mbt), 动画, 震动, 语言; with
 // keyboard and mouse the files dragged into a chat too, and laid out wide the rail changed in place (as the web's,
 // `wideOnly`). Each choice is the core's prefs (`prefs.set`), shown at once. When a done chat is offered to archive is
-// 归档's (archiving.mbt), as the web's.
+// 归档's, as the web's.
 
 ///|
 /// The page (AppearancePage, AppearanceScreen), in the frame it is given.
@@ -144,7 +144,7 @@ fn fonts_said(prefs : Json?) -> String {
 }
 
 ///|
-/// 字体's page, one for every frame (mobile/Fonts.tsx FontScreen, opened from 外观's row narrow): what it is for under
+/// 字体's page, one for every frame (opened from 外观's row narrow): what it is for under
 /// its title, the setting (font_setting.mbt).
 pub fn fonts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   @sf.page(c, on_back=core.pop, frame~, "fonts", @sf.t("web-pages.appearance.fonts.title"), fonts_blocks(c, core), lead=@sf.t(

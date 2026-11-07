@@ -346,7 +346,7 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
 }
 
 ///|
-/// A file of the drive (a folder zipped) downloaded to this device (Transfers.tsx DownloadRow): what, how far (a bar
+/// A file of the drive (a folder zipped) downloaded to this device: what, how far (a bar
 /// while it comes), how it stands; stopped while it comes, tried again once failed.
 fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
   let t = @sf.theme()

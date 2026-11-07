@@ -13,7 +13,7 @@ fn chat_tester(mode : String) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
-  // its people in the bar lettered as it calls them: the viewer 「你」, not their name (Parts.kt PeopleStack)
+  // its people in the bar lettered as it calls them: the viewer 「你」, not their name
   let bar = t.words().filter(fn(w) { w.2 < 100.0 }).map(fn(w) { w.0 })
   assert_true(bar.contains("你"))
   assert_true(!bar.contains("林"))

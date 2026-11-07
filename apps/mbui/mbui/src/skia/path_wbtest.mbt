@@ -1,4 +1,4 @@
-// tiny-skia's own tests of its stroker and dasher (path/src/stroker.rs, dash.rs).
+// tiny-skia's own tests of its stroker and dasher.
 
 ///|
 fn bits(u : UInt) -> Float {

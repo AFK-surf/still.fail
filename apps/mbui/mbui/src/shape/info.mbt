@@ -1,4 +1,4 @@
-// harfrust's glyph info helpers (ot/layout.rs): the modified general category and combining class kept in
+// harfrust's glyph info helpers: the modified general category and combining class kept in
 // unicode_props, joiners, ligature ids and components in lig_props, GDEF classes and what GSUB did in glyph_props.
 
 ///|

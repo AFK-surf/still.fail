@@ -511,7 +511,7 @@ let lc_card_step : @ui.Style = lc_card.then(@ui.css("hovered{bg=Hover}"))
 let lc_card_marked : @ui.Style = lc_card.then(@ui.css("bg=A(Accent,O10)"))
 
 ///|
-/// Ended (ended: Decisions.css.ts settledLine): 12 on 18 in the subtle ink; failed, red.
+/// Ended: 12 on 18 in the subtle ink; failed, red.
 // kept across runs: a value (no field of it changes)
 let lc_ended : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
 

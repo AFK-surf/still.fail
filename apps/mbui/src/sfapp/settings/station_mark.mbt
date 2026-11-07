@@ -1,4 +1,4 @@
-// A station's or a workspace's mark picked in a sheet (Settings.kt openMarkPick; the web's MarkPick.tsx): one of
+// A station's or a workspace's mark picked in a sheet: one of
 // still.fail's icons (in a colour, or the words') or an emoji (any, pasted or typed), a picture put up, or none; set at
 // once by `save`. What is sent is web/src/stationPick.ts's: a glyph keeps its emoji beside it for older clients, an
 // emoji or a picture takes the other away.
@@ -13,7 +13,7 @@ let station_emoji : Array[String] = [
 ]
 
 ///|
-/// The colours a glyph can be given, in the picker's order (Parts.kt MARK_COLORS).
+/// The colours a glyph can be given, in the picker's order.
 // kept across runs: a table of constants, never written
 let mark_colors : Array[String] = ["red", "orange", "amber", "green", "teal", "blue", "purple", "pink"]
 
@@ -142,7 +142,7 @@ fn picture_mark(bytes : Bytes) -> String? {
 }
 
 ///|
-/// A picture too large to put up as it is made small (Settings.kt stationPictureOf): its middle square at 96 px, read
+/// A picture too large to put up as it is made small: its middle square at 96 px, read
 /// at least 192 on its shorter side, as a JPEG (85) on white where it is clear (this app writes no WebP); None when
 /// even that is too large.
 fn picture_mark_small(w : Int, h : Int, px : FixedArray[Byte]) -> String? {

@@ -167,7 +167,7 @@ pub fn open_triple_panel(
 ///|
 /// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
 /// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
-/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12). `saved`: what is said once a model picked
+/// a composer's row (its words 12). `saved`: what is said once a model picked
 /// (onConfirm's toast: a chat's, from its next turn; a connect's, its model bound; nothing where nothing runs on it yet,
 /// a new chat's or a new connect's). `floating`: over a page rather than in a row (a new chat's over its
 /// composer, narrow): a capsule of the composer's glass.
@@ -878,7 +878,7 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
   }
   let choices = [
     @sf.choice("standard", @sf.t("web-main.model.standard")),
-    // (Fast its bolt, and what it costs: ModelTriple.tsx's fastNote)
+    // (Fast its bolt)
     @sf.choice("fast", "Fast", note=@sf.t("web-main.model.fastNote"), icon="zap"),
   ]
   let id = c.id("triple/fast")
@@ -991,7 +991,7 @@ fn triple_model_row(
     Some(String(r)) => r
     _ => text(field(v, "value"), "runtime")
   }
-  // (its ids, a line each, over it while it is pointed at: ModelTriple.tsx's tip)
+  // (its ids, a line each)
   let ids = items(o, "ids").filter_map(fn(i) { if i is String(s) { Some(s) } else { None } }).join("\n")
   let usual = text(o, "usualText")
   let from_station = match field(o, "fromStation") {
@@ -1326,7 +1326,7 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
 }
 
 ///|
-/// Borrowing the picked model's account from another station, asked first (ModelTriple.tsx's Dialog): what it does,
+/// Borrowing the picked model's account from another station, asked first: what it does,
 /// 取消 and its action.
 fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let me = station + "\u{1}" + of
@@ -1396,7 +1396,7 @@ fn wide_confirm(
 }
 
 ///|
-/// A small panel's small pill (ModelTriple.css.ts btnSm): 24 high, 10 in, its words in 12; `primary` dark with light
+/// A small panel's small pill: 24 high, 10 in, its words in 12; `primary` dark with light
 /// words, else quiet with the ground on hover; not pressed while `on` is false. True on the frame after a press.
 fn small_button(c : @ui.Ctx, key : String, words : String, primary : Bool, on : Bool) -> Bool {
   let id = c.id(key)
@@ -1428,7 +1428,7 @@ let triple_part : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 let triple_alone : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// The order the control's line leaves its parts out in, short of room (ModelTriple.tsx DROPS): who runs it by name
+/// The order the control's line leaves its parts out in, short of room: who runs it by name
 /// (in its part), who runs it, the runtime, how hard it thinks and how fast.
 let triple_drop_name : Int = 1
 

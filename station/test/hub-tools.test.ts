@@ -1,4 +1,4 @@
-// The agents' tools (src/tools/chat.ts, slack.ts, stations.ts, adb.ts, feedback.ts) on the hub: their definitions, and
+// The agents' tools (src/tools/chat.ts, slack.ts, adb.ts, feedback.ts) on the hub: their definitions, and
 // what they do (ported from the Rust station's hub tests): posts, cards, states and what they are about, history, other
 // chats, session_send, slack_api, files, titles, the archive suggestion after all_done.
 import assert from "node:assert/strict";

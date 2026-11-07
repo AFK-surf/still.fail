@@ -2003,7 +2003,7 @@ pub fn set_dark(dark : Bool) -> Unit {
 }
 
 ///|
-/// Turned sideways for a film (still.fail's player, Player.kt): landscape asked for (a phone with rotation locked
+/// Turned sideways for a film (still.fail's player): landscape asked for (a phone with rotation locked
 /// turns too) and the system's bars out of the way (a swipe brings them for a while); `false`, upright as it was.
 /// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
 /// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.

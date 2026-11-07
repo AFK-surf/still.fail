@@ -184,7 +184,7 @@ export function writesIn(file: string, code: string): Write[] {
     const s = stateOf(target);
     if (s === "given" || (s === "copied" && deep)) out.push({ file, line: p.node.loc?.start.line ?? 0, what: code.slice(p.node.start ?? 0, Math.min(p.node.end ?? 0, (p.node.start ?? 0) + 80)).split("\n")[0] });
   };
-  /// The object a written member belongs to, and whether it is reached through another (`a.b.c = …` writes on `a.b`).
+  /// The object a written member belongs to, and whether it is reached through another.
   const written = (p: NodePath, member: NodePath) => {
     const object = unwrap(member.get("object") as NodePath);
     say(p, object, object.isMemberExpression() || object.isOptionalMemberExpression());

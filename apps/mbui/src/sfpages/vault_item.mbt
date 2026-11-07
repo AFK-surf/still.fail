@@ -1,5 +1,5 @@
 // A secret's page, one in every frame (设置 › 密钥 › it; web/src/cloud/VaultItem.tsx, Vault.css.ts; the narrow app's
-// mobile/Vault.tsx VaultItemScreen), laid out by its width (page_look.mbt), as a profile's is: what it is and where it
+// mobile/Vault.tsx VaultItemScreen), laid out by its width, as a profile's is: what it is and where it
 // is kept; in a library not locked, that it is not encrypted and the way to lock it; its content masked until shown
 // (each field's eye opens it, `vault.open`, and shows that field), copied; how agents may use it; when they did, each
 // use leading to its chat. 编辑 opens it first, then its editor (the presenters'). What it says is the core's
@@ -335,7 +335,7 @@ fn secret_field(c : @ui.Ctx, key : String, label : String, value : String, secre
   |> ignore
 }
 
-// ── styles (Vault.css.ts) ───────────────────────────────────────────────
+// ── styles ───────────────────────────────────────────────
 
 ///|
 /// How long a secret copied stays on the clipboard (copySecret: 30 s).

@@ -1,4 +1,4 @@
-// A profile's page past its check, allowance and models (Profiles.kt ProfileScreen): its "…" (renaming, checking,
+// A profile's page past its check, allowance and models: its "…" (renaming, checking,
 // deleting or stopping it), signing its subscription in (SignIn, LoginSteps), its sharing with the workspace's other
 // stations (ShareSection) and the workspaces it serves (WorkspacesSection), how it runs (default Fast, commands put
 // to the background), its key or its variables changed, what to do when it is in trouble (ProfileRecovery); the

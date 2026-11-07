@@ -1,4 +1,4 @@
-// 字体, one setting for every frame (web/src/FontSetting.tsx, mobile/Fonts.tsx FontScreen, the Android app's Fonts.kt):
+// 字体, one setting for every frame:
 // a face chosen for each of three places (界面, 正文, 代码) and the chat they make seen as it is chosen. What it is for is
 // one thing on every screen, so it is one design: the place in view by a choice of three; a chat as the faces set it
 // right under that, where the eye is as a face is chosen; the place's faces in a group, each row its name and a line
@@ -205,7 +205,7 @@ fn face_words(c : @ui.Ctx, key : String, name : String, face : Int, status : Str
 }
 
 ///|
-/// 本机字体 (FontSetting.tsx LocalTile): a row, the family chosen's name in itself where one is (else 本机字体);
+/// 本机字体: a row, the family chosen's name in itself where one is (else 本机字体);
 /// pressed, a list of the families installed here under it, a field to find one, each pointed at tried in the chat,
 /// one chosen as the place's face (`local:<family>`).
 fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit {
@@ -289,7 +289,7 @@ fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : Str
 }
 
 ///|
-/// A chat as the faces set it (FontSetting.tsx Preview, Fonts.kt FontPreview): their message in its bubble, an agent's
+/// A chat as the faces set it: their message in its bubble, an agent's
 /// under its name and when, its words as a chat's are (body_size), on a card of the page; their bubble in its
 /// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
 /// 20 in. `ui_face` is the interface's host face (0: as chosen); `text_face` and `code_face` are tried in their

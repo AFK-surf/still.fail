@@ -121,11 +121,11 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-model-accounts" => @sfpages.open_triple_accounts(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
-    // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
+    // the sheet that publishes the chat, what a snapshot would hold read
     "chat-publish" => {
       @sfpages.publish_set(r, 7.0, @sffixture.fix_preview())
     }
-    // its station's card, from the agent's (Stations.kt openStationPeek)
+    // its station's card, from the agent's
     "chat-peek" => @settings.open_station_peek(r.station, from=Unanchored)
     _ => ()
   }
@@ -355,7 +355,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode == "lock-security" || mode == "lock-upgrade" {
     open_setting(@settings.fixture_page("settings-security"))
   }
-  // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)
+  // ⌘/'s shortcuts at a glance
   if mode == "keys-dialog" {
     @sfdesk.wide.keys_open.set(true)
   }
@@ -551,11 +551,11 @@ pub fn open_mode(mode : String) -> Unit {
     // Small its page
     app.nav.push(Archived)
   } else if mode.has_prefix("place-") {
-    // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
+    // a place of the rail's in the wide frame: place-stations, place-profiles, place-connects,
     // place-usage
     app.nav.replace(Place(mode.view(start_offset=6).to_string()))
   } else if mode.has_prefix("files-") {
-    // the files' page in the wide frame (wide_files.mbt) at Willow's 文档: files-columns (设计稿 open beside it, chosen),
+    // the files' page in the wide frame at Willow's 文档: files-columns (设计稿 open beside it, chosen),
     // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two
     // tabs, the one shown split)
     let docs : DriveAt = { station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "" }
@@ -589,7 +589,7 @@ pub fn open_mode(mode : String) -> Unit {
         @sfdesk.nav_open("ws1/st1")
       }
       "files-list" => @sffixture.fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
-      // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
+      // a copy asked about a name there: 说明.txt into 会议记录, which has one
       "files-clash" =>
         @sfdesk.drag_ask({
           into: { station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "会议记录" },
@@ -617,7 +617,7 @@ pub fn open_mode(mode : String) -> Unit {
         })
         @sfdesk.transfers_open()
       }
-      // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
+      // the preview beside the list, 发布清单.md chosen
       "files-preview" => {
         @sffixture.fix_browse_prefs_set({ "driveViews": { "preview": "shown" } }) |> ignore
         browse({ "act": "choose", "view": "columns", "folder": "", "name": "发布清单.md" })

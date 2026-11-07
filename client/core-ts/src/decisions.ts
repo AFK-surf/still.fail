@@ -1,4 +1,4 @@
-// Cards (decisions.rs): what an agent's post asks people to answer it with (options to pick from, or a field to write
+// Cards: what an agent's post asks people to answer it with (options to pick from, or a field to write
 // in), for the viewer: a row's card and line (待处理 · …), how each card in a chat's messages stands, the options in the
 // order they are shown (the recommended one last). Dismissing one is kept by the station for the viewer.
 import * as format from "./format.ts";

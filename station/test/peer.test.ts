@@ -1,4 +1,4 @@
-// Stations of a workspace calling each other over the mesh (peer.rs), its endpoints connected in memory
+// Stations of a workspace calling each other over the mesh, its endpoints connected in memory
 // (memory-mesh.ts): a request answered by the other's remote tasks; its refusal a Refused; who may call only the
 // roster's stations, while the roster is current.
 import assert from "node:assert/strict";

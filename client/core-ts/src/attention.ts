@@ -1,4 +1,4 @@
-// The core's part of attention (core.rs, routing.rs, execute.rs for attend.rs and notices.rs): the `notices` and
+// The core's part of attention (core.rs): the `notices` and
 // `notify` topics, a chat's value as its UIs attend to it, the attention calls, push registration. The chat rows that
 // change are looked at as the data says them (rule 2: pushed, never polled): what changed is noticed, and what a page
 // is to show now goes out.

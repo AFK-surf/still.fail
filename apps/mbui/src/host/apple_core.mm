@@ -675,7 +675,7 @@ extern "C" int mb_core_secure_test(void) {
   return 1;
 }
 
-// ── listen.* (still.fail client/core-ts hosts/bridge.ts; Android's Loopback.kt) ──
+// ── listen.* (still.fail client/core-ts hosts/bridge.ts) ──
 //   listen.open {port, host} → {id, port}, or the error (the port taken: "Address already in use")
 //   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
 //   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}

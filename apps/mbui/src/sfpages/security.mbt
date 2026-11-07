@@ -1,5 +1,5 @@
 // 安全, one page in every frame (web/src/cloud/Security.tsx SecuritySettings, Off, On, StationRow, DeviceRow,
-// SecurityOpen; the narrow app's mobile/Security.tsx), laid out by its width (page_look.mbt): what the lock is; off, a
+// SecurityOpen; the narrow app's mobile/Security.tsx), laid out by its width: what the lock is; off, a
 // card of what it is now and once on, and the way to turn it on; on, a card of how many sign and what it protects, this
 // device's own pairing where it waits, the devices waiting to be confirmed, its people and their devices, its stations,
 // what a web page may do, and turning it off. All of it the core's (`lock`, `lockDraft`, their words included);
@@ -369,7 +369,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
             }
           })
           |> ignore
-        // at the foot, in red, on a card of its own (Security.tsx's mobile On)
+        // at the foot, in red, on a card of its own
         Narrow =>
           c.box(style=acc_narrow_foot, fn() {
             @sf.group(c, fn() {
@@ -465,7 +465,7 @@ fn sec_device_row(
 }
 
 ///|
-/// 移除「…」？ (Security.tsx's): a device taken out of the lock, said what that means first.
+/// 移除「…」？: a device taken out of the lock, said what that means first.
 pub fn remove_dialog(core : Core, ws : String, device : String, name : String) -> Unit {
   @sf.confirm(
     @sf.t("web-pages.security.removeTitle", args=[("name", name)]),
@@ -684,7 +684,7 @@ fn sec_check_line(c : @ui.Ctx, look : Look, key : String, title : String, note :
 }
 
 ///|
-/// A station of the workspace not in the lock, taken in once its owner says it is theirs (Security.tsx's join dialog).
+/// A station of the workspace not in the lock, taken in once its owner says it is theirs.
 pub fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
   @sf.confirm(
     @sf.t("web-pages.security.joinTitle", args=[("name", name)]),
@@ -704,7 +704,7 @@ pub fn join_dialog(core : Core, ws : String, station : String, name : String) ->
 }
 
 ///|
-/// 关闭安全模式？ (Security.tsx TurnOff): what turning it off gives up, a line each, and the workspace's name typed
+/// 关闭安全模式？: what turning it off gives up, a line each, and the workspace's name typed
 /// before it can go (`lock.disable`, Enter too); written in as it opens.
 pub fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
   let key = "lock-off/" + (desk_dialogs.val + 1).to_string()
@@ -748,7 +748,7 @@ pub fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
 }
 
 ///|
-/// One thing turning it off gives up (Security.css.ts point): its icon, muted, beside a line of it.
+/// One thing turning it off gives up: its icon, muted, beside a line of it.
 fn sec_off_point(c : @ui.Ctx, icon : String, words : String) -> Unit {
   let t = @sf.theme()
   c.box(style=sec_point_line, fn() {
@@ -902,7 +902,7 @@ let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color
 
 ///|
 /// A person's devices, 42 in, 8 apart; by app, its name (the meta's 12 in 500, muted, on a line) over the first, a
-/// group 14 from the one before it (Security.tsx's devices, deviceGroup, deviceApp).
+/// group 14 from the one before it (deviceGroup, deviceApp).
 // kept across runs: a value (no field of it changes)
 let sec_devices : @ui.Style = @ui.css("w=Full pl=S10 gap=S2")
 
@@ -947,7 +947,7 @@ let sec_said : @ui.TextStyle = desk_muted
 let sec_note_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 ///|
-/// Narrow: a person's device under them, further in (Security.tsx's mobile DeviceRow: 14 more); what it is amber where
+/// Narrow: a person's device under them, further in; what it is amber where
 /// it is to be renewed soon; what a row says at its end (the secondary's, on one line).
 // kept across runs: a value (no field of it changes)
 let sec_narrow_row_in : @ui.Style = @ui.css("row w=Full pl=S6 pr=S3 py=S2_5 gap=S3 radius=Inner align=ACenter")

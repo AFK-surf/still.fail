@@ -150,7 +150,7 @@ test "a screen its station no longer has: its title muted; a live one's in the i
   let t = screen_links_core(streams, cancelled, calls)
   scroll_to_words(t, "此屏幕已不存在")
   let c = t.ctx()
-  // (the phone's muted, as the card's line under it: ScreenLinks.kt's C.muted for both)
+  // (the phone's muted)
   assert_eq(inks_of(t, "浏览器标签页"), inks_of(t, "此屏幕已不存在"))
   assert_true(inks_of(t, "浏览器标签页") != [c.color(Fg)])
   scroll_to_words(t, "发布清单预览")

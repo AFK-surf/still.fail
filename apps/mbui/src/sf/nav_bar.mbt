@@ -14,7 +14,7 @@
 let nav_back_box : @ui.Style = @ui.css("row pr=S1_5 pt=S1 pb=S1 radius=Lg align=ACenter")
 
 ///|
-/// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
+/// Back's word in a link's ink, its chevron the accent (490 C.accent).
 // kept across runs: a value (no field of it changes)
 let nav_back_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, color=Link, wrap=false)
 

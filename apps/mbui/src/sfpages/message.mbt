@@ -8,7 +8,7 @@
 ///|
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
 /// message (by its seq, and the passage of it a quote's card pressed quoted: lit alone there); None out of one (a letter, a decision's). `inline`: no margin for
-/// the pictures (a side panel's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
+/// the pictures, each over its head's start. `gutter`: the
 /// room beside the words either side that is only the page's margin (`--list-gutter`: a list's sides, narrow or wide,
 /// its pictures out in it standing by their heads' line; none out of a list), which the message's own tables scroll
 /// out over to the pane's edges. In its chat's list (`list`), how it moves there: its list's turns (what it asks
@@ -757,7 +757,7 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             |> ignore
           } else {
             // its words as Markdown, as the core read them (a chat it opened: a link to it), of the notice's size open
-            // or closed (the pill's one size: Chat.css.ts msgSystemBox); closed, their first block on one line
+            // or closed; closed, their first block on one line
             let (meta, _) = c.text_size(notice_size)
             @sf.markdown(
               c,
@@ -1169,7 +1169,7 @@ let agent_mark_side : Double = 12.0
 let place_corner_side : Double = 9.0
 
 ///|
-/// The viewer's bubble's sides (chat.css.ts msgMine msgBubble: `bubble`'s px=S3_5).
+/// The viewer's bubble's sides.
 let bubble_side : Double = 14.0
 
 
@@ -1470,7 +1470,7 @@ let msg_route : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 let route_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// The place (later.css.ts hPlace): its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
+/// The place: its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
 /// link's the hover ground under the pointer.
 // kept across runs: a value (no field of it changes)
 let route_place : @ui.Style = @ui.css("row px=S1_5 py=SPx gap=S1 radius=Md bg=Neutral align=ACenter")

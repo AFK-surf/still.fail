@@ -1,4 +1,4 @@
-// What the core is waiting on, for the one place a UI says so (the `status` topic; status.rs): requests under way to the
+// What the core is waiting on, for the one place a UI says so (the `status` topic): requests under way to the
 // stations and to still.fail cloud, connections being opened, still.fail cloud's events sockets that are down, and how
 // fast bytes come in. Only what has taken a while (SLOW_MS) or is down is worth a word. Each workspace has its own
 // waits; the device's are apart. While anything is waited on, the topic is computed again each second.

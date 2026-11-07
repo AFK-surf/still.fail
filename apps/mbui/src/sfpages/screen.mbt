@@ -46,7 +46,7 @@ fn part_of(v : Json?) -> Part? {
 }
 
 ///|
-/// A copy made on the screen, for the device's clipboard (ScreenClips.kt Copied): its text, or its PNG.
+/// A copy made on the screen, for the device's clipboard: its text, or its PNG.
 priv enum Copied {
   CopiedText(String)
   CopiedPng(Bytes)
@@ -338,7 +338,7 @@ fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
 }
 
 ///|
-/// A call nobody waits for (`screen.ack`, `screen.input`: StillFailCore.kt tell): sent in order with the rest, its
+/// A call nobody waits for (`screen.ack`): sent in order with the rest, its
 /// answer (or error) let go.
 fn screen_tell(src : Source, name : String, params : Map[String, Json]) -> Unit {
   (src.call)(name, Json::object(params), fn(_) {  })
@@ -653,7 +653,7 @@ fn screen_fps(src : Source) -> Int {
 }
 
 ///|
-/// 帧率's choices, 自动 (0) first (web/src/screen/frames.ts FPS_CHOICES).
+/// 帧率's choices, 自动 (0) first.
 // kept across runs: a table, never written
 let screen_fps_choices : Array[Int] = [0, 120, 90, 60, 30, 15]
 
@@ -669,7 +669,7 @@ fn asks_into(params : Map[String, Json], quality : String, fps : Int) -> Unit {
 }
 
 ///|
-/// The bounds a 画质 asks for (web/src/screen/frames.ts QUALITY): `original` the largest a view may ask (the screen's own
+/// The bounds a 画质 asks for: `original` the largest a view may ask (the screen's own
 /// size); 自动 as large as the stage the picture is shown on, in this device's pixels (the user, 2026-10-29: a 4K
 /// window was sent 1920×1080 and its text blurred), screen_max_w × screen_max_h before it is laid out.
 fn ScreenSess::bounds(self : ScreenSess, quality : String) -> (Int, Int) {
@@ -971,7 +971,7 @@ pub fn screen_unread_calls() -> Array[String] {
 }
 
 ///|
-/// A value of the call: taken apart, the heavy parts handed on (ScreenSession.kt take). What screen_value_quiet says
+/// A value of the call: taken apart, the heavy parts handed on. What screen_value_quiet says
 /// changes nothing a frame reads is taken as it comes, before the frame is built: what a frame or a sound's packet sets
 /// here is read by no build.
 fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
@@ -1152,7 +1152,7 @@ fn ScreenSess::came(self : ScreenSess) -> (Int, Int) {
 }
 
 ///|
-/// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts; ScreenClips.kt).
+/// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts).
 let clip_png_max : Int = 8 * 1024 * 1024
 
 

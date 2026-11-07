@@ -1,6 +1,6 @@
-// An agent's request about a vault item as a card (VaultAsk.tsx AskCard, VaultApproval.tsx VaultActions): to use one
+// An agent's request about a vault item as a card: to use one
 // or to keep one ( 申请和授权, agent 存入). One card wherever such a request is answered: in place of the
-// agent's post in its chat (src/sfapp/vault_approval.mbt) and among the vault page's waiting requests. A card of words
+// agent's post in its chat and among the vault page's waiting requests. A card of words
 // (@sf.card): what is asked in its title, the command it is for, a risk only where there is one, and the answer at its
 // foot: the answer most give as the one solid button (允许 / 存入), the other beside it (拒绝 / 不存), how long a use is
 // allowed a choice beside them that starts at the longest the item is given for (`vault.approve`, `vault.deny`). Only
@@ -11,7 +11,7 @@
 // typed goes only with `vault.approve`, and is let go once it went.
 
 ///|
-/// What a request's card says (VaultAsk.tsx Asked): the item's name, how it would be given (`mode`), the command it is
+/// What a request's card says: the item's name, how it would be given (`mode`), the command it is
 /// for; one to keep a secret, what it is (`save_kind`: login, token, ssh_key, file), its account (a file: its name),
 /// and whether the person types it in (`typed`; a file: picks it); another station of the workspace its commands run
 /// on, by name (empty: the chat's).
@@ -143,7 +143,7 @@ fn typed_field(request : String, part : String) -> @ui.Field {
 }
 
 ///|
-/// How a request is answered here (VaultApproval.tsx VaultActions' cases), what its card's foot is.
+/// How a request is answered here, what its card's foot is.
 pub(all) enum Answer {
   /// 允许 / 存入 and 拒绝 / 不存: a use given for as long as `lasts` at the longest (unused for a secret to keep)
   Approve(String)
@@ -773,12 +773,12 @@ fn vaults_of(core : Core, ws : String) -> Json? {
 let ask_command : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color=Muted, wrap=false, max_lines=1, w=Full)
 
 ///|
-/// What the person types in, over the answer: its fields 8 apart, the card's width (VaultAsk.css.ts typed).
+/// What the person types in, over the answer: its fields 8 apart, the card's width.
 // kept across runs: a value (no field of it changes)
 let ask_typed : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
-/// A file to pick: its name and size, then the button that picks it, 8 apart (VaultAsk.css.ts typedFile).
+/// A file to pick: its name and size, then the button that picks it, 8 apart.
 // kept across runs: a value (no field of it changes)
 let ask_file : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 

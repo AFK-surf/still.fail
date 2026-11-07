@@ -29,7 +29,7 @@ function overviewOf(store: Store, station: string): J {
   return v === undefined ? null : v.ok;
 }
 
-// ── an automatic-decision rule (decision_form.rs) ──
+// ── an automatic-decision rule ──
 
 type DecisionDraft = { owner: ClientId; value: J; pickedModel: string | null; pending: boolean; watch: Watch };
 
@@ -294,7 +294,7 @@ export class PolicyForms {
   }
 }
 
-// ── a Slack token form (slack_tokens.rs) ──
+// ── a Slack token form ──
 
 type TokenDraft = { owner: ClientId; revision: number; checking: boolean; input: J; verified: J; errors: string[] };
 
@@ -389,7 +389,7 @@ export class Tokens {
   }
 }
 
-// ── the Slack connection wizard (connect_flow.rs) ──
+// ── the Slack connection wizard ──
 
 export const pickOf = (station: string, form: string): Topic => ({ topic: "pick", station, of: `connect-new:${form}` });
 export const tokensOf = (station: string, form: string): Topic => ({ topic: "slackTokens", station, form });
@@ -792,7 +792,7 @@ function feishuView(f: J, overview: J, pending: boolean): J {
   return out;
 }
 
-// ── the add-profile pages (profile_flow.rs) ──
+// ── the add-profile pages ──
 
 const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.agy, "agy"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
 const usesTextOf = present.usesText;

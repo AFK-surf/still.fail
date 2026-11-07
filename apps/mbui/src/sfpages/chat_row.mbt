@@ -54,7 +54,7 @@ fn chat_rows_reset() -> Unit {
 }
 
 ///|
-/// How long a finger holds a row before its time shows (mobile/Home.tsx: 450 ms).
+/// How long a finger holds a row before its time shows.
 pub let hold_ms : Double = 450.0
 
 ///|
@@ -100,7 +100,7 @@ fn unprime(src : Source, r : ChatRef) -> Unit {
 let row_held : Ref[(Int, Bool)] = Ref((0, false))
 
 ///|
-/// A chat's row in a list (Sidebar.tsx ChatRow, mobile/Home.tsx ChatRow): `lead` whose pictures lead, `on` its chat the
+/// A chat's row in a list: `lead` whose pictures lead, `on` its chat the
 /// page in view, `list_ground` the list's ground (round its faces), `more` another row under it (@sf.list_more).
 /// `lifted`: how far it is in going ahead of others (its ground of its own over them; -1 not); `unghost` whether it
 /// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found, or a recent chat
@@ -148,7 +148,7 @@ pub fn chat_row(
       (src.topic)("chat", chat_params(r)) |> ignore
     }
   }
-  // (one under way still has it: Sidebar.tsx; what it asks again waits on the station)
+  // (what it asks again waits on the station)
   let menu = item.offline is None && !item.pending && !found
   // right clicked, or held long by a finger (Ctx::menu_asked, each part asked once): its menu
   let asked = parts.fold(init=None, fn(at, p) { if at is Some(_) { at } else { c.menu_asked(p) } })
@@ -159,7 +159,7 @@ pub fn chat_row(
     }
     _ => ()
   }
-  // held by a finger a while: its time shows (mobile/Home.tsx `held`)
+  // held by a finger a while: its time shows
   let held = finger && !found && @kit.after(c, "row-hold/" + key, pressed && row_held.val.0 == id, hold_ms)
   let menu_on = row_menu_open(item)
   // pressed and let go: its chat opened then, before the next frame is built (Ctx::on_press: a frame that built the
@@ -180,7 +180,7 @@ pub fn chat_row(
         Some(f) => f(r)
         None => {
           // pressed on its state line while the core says which message that is about, nothing in it unread: its
-          // chat goes there as it opens (ChatMark.tsx jumpFromLine)
+          // chat goes there as it opens
           match item.state_about {
             Some(seq) if c.clicked_on(id, line) && !item.unread && item.thread is Some(_) =>
               @sfbase.go_to(r, seq)
@@ -562,7 +562,7 @@ let row_left : Ref[(String, Bool)] = Ref(("", false))
 let lift_ms : Double = 480.0
 
 ///|
-/// A finger's row's height (the theme's touch lists': mobile/Home.css.ts mChatRow).
+/// A finger's row's height.
 pub let touch_row_h : Double = @sf.touch_list_row_h
 
 ///|
@@ -632,7 +632,7 @@ let kind_glyph : Double = 16.0
 let row_icon : Double = 16.0
 
 ///|
-/// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
+/// A row's menu, from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
 /// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
 /// 转到频道 (a thread with an agent), 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 (share_items): two groups, a line
@@ -674,8 +674,8 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
   items.push(
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.rename"), icon="edit", fn() {
-        // asked where the presenters ask it: with keyboard and mouse the row's title its own field (Rename.tsx TitleInput), on a
-        // touch over the page (mobile/Home.tsx ask)
+        // asked where the presenters ask it: with keyboard and mouse the row's title its own field, on a
+        // touch over the page
         @sf.ask_here(
           @sf.t("android-chat.rename.title"),
           @sf.t("common.save"),
@@ -861,7 +861,7 @@ fn rename(src : Source, item : ChatItem, title : String) -> Unit {
 }
 
 ///|
-/// A row's title as a field (Rename.tsx TitleInput, from a mouse's 重命名): Enter saves it (`chat.rename`), Esc or
+/// A row's title as a field (from a mouse's 重命名): Enter saves it (`chat.rename`), Esc or
 /// leaving it lets it be.
 fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
   let key = "row/rename"
@@ -924,7 +924,7 @@ fn stop_rename() -> Unit {
 }
 
 ///|
-/// The field in the title's place (Rename.css.ts titleInput): the row's head across, its mark's place too (the mark
+/// The field in the title's place: the row's head across, its mark's place too (the mark
 /// left out while it shows), 24 high on the canvas, 4 taller than the title's line without making the row taller; a 1
 /// line round it in the strong grey; the title's words (13 on 24). In the row's top corners: a capsule (its shape its
 /// height's) standing where it is concentric with both (@sf.capsule_in: the row's 18 its distance and its half, 6), as
@@ -972,7 +972,7 @@ let rename_line : Double = 24.0
 let listed : Ref[Array[ChatItem]] = Ref([])
 
 ///|
-/// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
+/// Archives a row's chat: its 归档 key, its menu's, its swipe;
 /// one keeping watch only once asked, in the core's words (its swipe also one at work: `ask`, the core's swipeAsk). Its chat in view goes to
 /// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
 /// list has it gone); why not, when not (`failed` told then).
@@ -1039,7 +1039,7 @@ fn leave_archived(item : ChatItem) -> Unit {
 }
 
 ///|
-/// Let go past this share of its width (or flung left), a swiped row is archived (mobile/Home.tsx TAKES).
+/// Let go past this share of its width (or flung left), a swiped row is archived.
 let archive_at_share : Double = 0.35
 
 ///|
@@ -1073,7 +1073,7 @@ fn swipe_claims(dx : Double, dy : Double) -> Bool {
 let swipe_fill_ms : Double = 140.0
 
 ///|
-/// A finger's row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
+/// A finger's row, swiped left to archive it: it follows the finger in its
 /// slot (cut to its corners where its list stands, `at`), uncovering 归档 at the right edge (filled in ink once letting
 /// go would archive it); let go past `archive_at_share` of its width or flung left, it goes off to the left and is
 /// archived, else it springs back. Archiving refused, it comes back; one the core asks about (keeping watch, at work)
@@ -1137,7 +1137,7 @@ fn swipe_to_archive(
       back(0.0)
     })
   }
-  // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)
+  // past the line letting go archives at: felt as it is passed
   let past = moved < -width * archive_at_share
   // (only while it is past the line or was: a row at rest tells nothing, as one coming into view as its list scrolls
   // would tell otherwise than the frame before and build the next whole, frame_watch.mbt's told_same)
@@ -1153,7 +1153,7 @@ fn swipe_to_archive(
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=@sf.list_row_slot(at), fn() {
       if moved < 0.0 {
-        // at the end it uncovers, as far as the row has gone and no further (mobile/Home.tsx mSwipeUnder): quiet until
+        // at the end it uncovers, as far as the row has gone and no further: quiet until
         // letting go would archive it, then ink. Never under the row, whose edges would show round it.
         let ground = @ui.style(w=Fixed(-moved), bg=Data(@sf.mix(t.p.text, fill, t.p.chip)))
         c.box(style=ground, top=0.0, right=0.0, bottom=0.0, fn() {  }) |> ignore

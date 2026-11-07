@@ -1,4 +1,4 @@
-// Slack on the station (server.rs's part of it, admin/slack.rs `remember_identities`): its connects as every
+// Slack on the station (server.rs's part of it): its connects as every
 // platform's are kept (connects/connects.ts: connected as config.json and the station's workspace say, the names Slack
 // gives people and channels in <data>/slack-names.json), and the app API with the configuration tokens in config.json.
 import type { Clock } from "effect";
@@ -225,13 +225,13 @@ export function makeConnections(options: SlackOptions) {
     },
     apps,
     client,
-    /// What the overview says of Slack for a viewer (views.rs): the apps they made that wait for a connect, and the
+    /// What the overview says of Slack for a viewer: the apps they made that wait for a connect, and the
     /// Slack workspaces they can make apps in (never a token).
     overview: (viewer: string) => slackOverview(config.raw(), viewer),
   };
 }
 
-/// The overview's Slack parts for a viewer (admin/views.rs `overview`'s slackApps, `slack_teams`).
+/// The overview's Slack parts for a viewer (`slack_teams`).
 export function slackOverview(raw: Json, by: string): { slackApps: Json[]; slackTeams: Json[] } {
   const tokens = configTokens(raw);
   const slackApps = madeApps(raw)

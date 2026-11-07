@@ -1,4 +1,4 @@
-// An agent's answer coming out of its activity's avatar (emit.mbt, ChatMotion.kt), over the fixture's station: what
+// An agent's answer coming out of its activity's avatar (emit.mbt), over the fixture's station: what
 // is sent sets its agent to work (its activity shows), its answer is said while the chat shows.
 
 ///|
@@ -73,7 +73,7 @@ test "an answer taller than the window out of the avatar, the list at its end: r
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   t.run_for(emit_all_ms() + 1000.0)
-  // its top in view under the bar (Follow.kt), not the list at the end of it
+  // its top in view under the bar, not the list at the end of it
   guard t.drawn_of(first) is Some((_, y)) else { fail("the answer's top is not in view") }
   assert_true(y > bar_foot() && y < 844.0 / 2.0, msg="the answer's top at \{y}, the bar's foot at \{bar_foot()}")
   emit_restore()
@@ -193,7 +193,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
       None => ()
     }
   }
-  // 16 ms frames: Float 440 ms, Spit 380 (ChatMotion.kt), Return at least 230 (as long as its way home: 320 over a
+  // 16 ms frames: Float 440 ms, Spit 380, Return at least 230 (as long as its way home: 320 over a
   // row or two, a Move's least over none), each to its end
   assert_true(frames.get("Float").unwrap_or(0) >= 26)
   assert_true(frames.get("Spit").unwrap_or(0) >= 22)

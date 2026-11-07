@@ -51,7 +51,7 @@ pub fn landing_reset() -> Unit {
 }
 
 ///|
-/// still.fail cloud's invite-code errors (Calls.kt INVITE_ERRORS) and limits (LIMIT_ERRORS), by their codes.
+/// still.fail cloud's invite-code errors and limits (LIMIT_ERRORS), by their codes.
 pub fn invite_error_key(code : String) -> String? {
   match code {
     "invite_code_required" => Some("android-misc.invite.codeRequired")
@@ -63,7 +63,7 @@ pub fn invite_error_key(code : String) -> String? {
 }
 
 ///|
-/// An error in words (Calls.kt errorText): an invite code's or a limit's as still.fail says them, else the core's.
+/// An error in words: an invite code's or a limit's as still.fail says them, else the core's.
 pub fn landing_error_words(e : Json) -> String {
   let code = text(Some(e), "code")
   match invite_error_key(code) {
@@ -110,12 +110,12 @@ let code_form : @ui.Style = @ui.css("w=Full gap=S2")
 let code_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
-/// The field (Controls.kt Field): on the surface, a hairline round it, 12 round, 12 and 10 in.
+/// The field: on the surface, a hairline round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
 pub let code_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Surface border=B1 border_color=Line")
 
 ///|
-/// Signed in with no workspace in view (CloudApp.tsx SignedIn, App.kt), in the box the frame gives it (inside the
+/// Signed in with no workspace in view (CloudApp.tsx SignedIn), in the box the frame gives it (inside the
 /// system's bars): an account the app may not be used with first, else the landing. `by_link` is 用邀请链接加入's:
 /// the frame's sheet of an invitation's link, one to paste.
 pub fn no_workspace(c : @ui.Ctx, src : Source, ws : Json?, by_link : () -> Unit) -> Unit {
@@ -351,7 +351,7 @@ fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
 }
 
 ///|
-/// A role in words (Accounts.kt ROLE_LABEL).
+/// A role in words.
 pub fn role_words(role : String) -> String {
   match role {
     "owner" => "Owner"

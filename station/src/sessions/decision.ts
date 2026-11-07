@@ -1,5 +1,5 @@
-// Typed choices asked of a decision model (the Rust station's decision.rs), and the transport a profile gives them
-// (decision/profiles.rs), as far as the hub uses them: after an agent ends a turn all_done, whether the chat has
+// Typed choices asked of a decision model, and the transport a profile gives them
+// , as far as the hub uses them: after an agent ends a turn all_done, whether the chat has
 // anything left in it (the archive suggestion). Token probabilities are not calibrated confidence. Discovery (probing
 // a profile's models) is the accounts module's; its result reaches here as the profile's check (`decision`).
 import type { Clock } from "effect";
@@ -31,7 +31,7 @@ export type ChoiceQuestion = { instructions: string; criteria: [string, string][
 
 export type ChoiceResult = { probabilities: Record<string, number>; selected: string; model: string; source: "native" | "token_logprobs"; retainedMass: number };
 
-/// What a profile's check says it can decide with (profiles.rs Capability, camelCase JSON). `detail` is in Chinese, for
+/// What a profile's check says it can decide with (camelCase JSON). `detail` is in Chinese, for
 /// cores from before `reason`, which names it for the core to say in the viewer's language.
 export type Capability = { state: string; detail: string; reason?: string; model: string | null; provider: Provider | null; fingerprint: string; models?: string[] };
 
@@ -182,7 +182,7 @@ export async function decide(config: DecisionConfig, question: ChoiceQuestion, s
   return parse(config, question, raw);
 }
 
-// ── the profile's transport (decision/profiles.rs) ──
+// ── the profile's transport ──
 
 type Connection = { base: string; key: string; provider: Provider; sessionHeader: boolean };
 
@@ -312,7 +312,7 @@ export function resolvedModel(profile: Profile, capability: Capability, chosen: 
   return transport(c, chosen);
 }
 
-// ── what a profile can decide with (decision/profiles.rs `discover`), found when the profile is checked ──
+// ── what a profile can decide with, found when the profile is checked ──
 
 /// Stable preference: a native decision model, then small models that answer without thinking (the probe asks for one
 /// token, and a model that thinks first has none to spare): qwen's flash, deepseek's flash, other small ones; the rest

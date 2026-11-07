@@ -1,4 +1,4 @@
-// An image of a message held in the chat (its menu's 引用, sfpages menus.mbt; MessagePick.kt quoteFile): quoted into the draft,
+// An image of a message held in the chat (its menu's 引用, sfpages menus.mbt): quoted into the draft,
 // its file going again with the message; a quote's own file in its card, not among the files (Chat.kt QuoteCards,
 // besideQuotes; Composer.kt DraftExtras).
 

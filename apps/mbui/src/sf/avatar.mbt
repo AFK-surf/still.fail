@@ -1,15 +1,15 @@
-// A person's round picture (Android's ui/Parts.kt Avatar, avatarColor, initial), wherever one is shown: the chat's
+// A person's round picture (avatarColor, initial), wherever one is shown: the chat's
 // bar and messages, the list's rows, the settings' people.
 
 ///|
-/// The people's colours (Parts.kt AVATAR).
+/// The people's colours.
 // kept across runs: a table, never written
 let avatar_colors : Array[Int64] = [
   0x5877AEFFL, 0x248753FFL, 0xB9471FFFL, 0x8768ADFFL, 0x32818DFFL, 0x9A6F11FFL,
 ]
 
 ///|
-/// A person's colour, by their id lowered (Parts.kt avatarColor: Java's hashCode, floorMod).
+/// A person's colour, by their id lowered (floorMod).
 pub fn avatar_color(id : String) -> Int64 {
   let n = avatar_colors.length()
   let mut h = 0
@@ -22,7 +22,7 @@ pub fn avatar_color(id : String) -> Int64 {
 }
 
 ///|
-/// The first letter of a name, upper case (Parts.kt initial); "?" for none.
+/// The first letter of a name, upper case; "?" for none.
 pub fn initial(name : String) -> String {
   for ch in name {
     let k = ch.to_int()
@@ -44,13 +44,13 @@ pub fn initial(name : String) -> String {
 let avatar_disc : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
 
 ///|
-/// A face's initial: semibold, white on every theme (Parts.kt: Color.White), on one line (its size, half the face's,
+/// A face's initial: semibold, white on every theme, on one line (its size, half the face's,
 /// said where it is drawn).
 // kept across runs: a value (no field of it changes)
 let avatar_letter : @ui.TextStyle = @ui.text_style(weight=Semibold, color=Data(face_ink), wrap=false)
 
 ///|
-/// A person, round (Parts.kt Avatar): `picture` (an image's key, "" while it comes or without one) once it is decoded
+/// A person, round: `picture` (an image's key, "" while it comes or without one) once it is decoded
 /// at the size it is shown, at once, as Compose draws the bitmap it was handed; their initial on their colour until
 /// then, and for good when it cannot be decoded (rememberPicture: null).
 pub fn avatar(c : @ui.Ctx, id : String, name : String, picture : String, size : Double) -> Unit {

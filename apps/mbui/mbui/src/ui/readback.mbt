@@ -132,7 +132,7 @@ fn Ctx::cut_after_layout(self : Ctx) -> Unit {
 /// is rightmost): its innermost parts that show something (words, a field, a picture, a drawing; not an empty box,
 /// whose ground may reach past what is drawn), those of them inside the box, none in a box moved by the name `but`
 /// (Ctx::box `moves`: a page's bar, across it whole). None where it showed nothing, or was not laid out last frame.
-/// The web's measure of a page's content (Rail.tsx peekShift). Not read back: for what is said once from it as a state
+/// The web's measure of a page's content. Not read back: for what is said once from it as a state
 /// changes, not for what is built by it every frame (that reads Ctx::laid_rect). Asked every frame it may be wanted: a
 /// frame that does not ask it lets it go.
 pub fn Ctx::shown_across(self : Ctx, id : Int, but? : String = "") -> (Double, Double)? {

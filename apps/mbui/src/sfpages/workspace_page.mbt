@@ -5,7 +5,7 @@
 // by the owner, moving them out: a panel, popover or sheet as the presenters say); 添加成员 at the title's end; its
 // 连接方式 a row, its relays and the ways to its stations in a panel it opens (2026-10-29 the user: 不要平铺这么多
 // 设置); leaving or deleting it in red at its foot, asked first. Its rows a list card's on either width (@sf.group), laid
-// out by the page's width (page_look.mbt).
+// out by the page's width.
 
 ///|
 /// The workspace's page (WorkspaceSettings, WorkspaceScreen), in the frame it is given.

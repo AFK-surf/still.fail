@@ -4,7 +4,7 @@
 // another as the filter changes (240 ms) with nothing to wait for, as the core's `chats` view lists each: its days
 // under their headings, a row each (chat_row.mbt); while it is read the rows to come, what is wrong over them, an
 // empty list's words. While a finger is on a list, the pointer over it or it moves, its rows keep their places
-// (listMotion.ts useHeldOrder); they move as it changes (useListMotion). The frame it is drawn in says what is over
+// ; they move as it changes (useListMotion). The frame it is drawn in says what is over
 // it and at its foot (the bar it is under, the bottom bar), what it adds at each list's top (a search's field, what is
 // left up long), and the lists that follow the three on the track (已归档, where the frame has it so).
 
@@ -36,7 +36,7 @@ pub(all) struct ListsFrame {
 
 ///|
 /// Something a frame puts in a list: its key among the list's lines, what draws it, and whether the list is first
-/// shown scrolled past it (a phone's search over the first row, there once scrolled to: Home.kt).
+/// shown scrolled past it (a phone's search over the first row).
 pub(all) struct ListPart {
   key : String
   draw : () -> Unit
@@ -62,7 +62,7 @@ fn lists_kept_key(frame : ListsFrame, w : Double, h : Double) -> String {
 }
 
 ///|
-/// The lists the track holds first, in this order (Sidebar.tsx, mobile/Home.tsx: all, mine, watching).
+/// The lists the track holds first, in this order (mine, watching).
 // kept across runs: a table, never written
 pub let list_filters : Array[String] = ["all", "mine", "watching", "hidden"]
 
@@ -155,7 +155,7 @@ priv enum Line {
 }
 
 ///|
-/// A line's key among the list's (listMotion.ts: a row by its station and key, a day by its heading).
+/// A line's key among the list's (a day by its heading).
 fn line_key(line : Line) -> String {
   match line {
     Top => "top"
@@ -245,7 +245,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   // its foot
   let lines : Array[Line] = [Top]
   // its search at its top where the screen has no keys for ⌘K (touch's: the theme's), out of view until
-  // scrolled to (Home.kt top), while it has rows to look in
+  // scrolled to, while it has rows to look in
   if !@sf.theme().chat_list.keys && !@sf.native_able() {
     match view {
       Some({ note: Some({ empty: true, .. }), .. }) | None => ()
@@ -398,7 +398,7 @@ fn open_chat() -> ChatRef? {
 pub let lists_top_in : Double = 4.0
 
 ///|
-/// Whether list `key` keeps its rows where they are (listMotion.ts usePointerOver, ListMotion.kt HeldOrder): it moving,
+/// Whether list `key` keeps its rows where they are: it moving,
 /// or the pointer over it (a mouse's, a finger down on it).
 fn list_held(c : @ui.Ctx, key : String, pane : Int) -> Bool {
   if c.list_moving(key) {
@@ -462,7 +462,7 @@ fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?, at : @sf.ListAt)
 }
 
 ///|
-/// A list with nothing in it (mobile/Home.tsx Empty; Sidebar.tsx's navEmpty): in a box a phone wide or wider, the
+/// A list with nothing in it: in a box a phone wide or wider, the
 /// phone's illustration and what to do (a new chat; with no station, the stations); narrower, the sidebar's words
 /// (with no station, its link to the stations).
 fn list_empty(c : @ui.Ctx, v : ChatsView, filter : String) -> Unit {
@@ -585,7 +585,7 @@ pub fn filter_menu_open() -> Bool {
 }
 
 ///|
-/// The filter's menu (components.tsx MineFilter's DropdownMenu, mobile/Home.tsx FilterButton), opened by `from`: 全部会话,
+/// The filter's menu, opened by `from`: 全部会话,
 /// 我参与的, 监控中, then 已归档, a menu of choices, the list `shown` (all, mine, watching, archive) checked. Chosen, `go` is
 /// given which: where it goes is the frame's (a filter its list, 已归档 its page or list).
 pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> Unit {

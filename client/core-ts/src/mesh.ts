@@ -1,4 +1,4 @@
-// This device's iroh endpoint and its links to stations (mesh.rs), over the iroh a host gives (iroh.ts). One endpoint
+// This device's iroh endpoint and its links to stations, over the iroh a host gives (iroh.ts). One endpoint
 // per core, its key the device key (storage `device`). A link is to a station's address, `<workspace>/<station>`: a
 // station in several workspaces has a link in each, dialled to the same station id. A link is
 // opened with this device's member credential for its address's workspace and presents it again every RENEW_MS on its
@@ -124,7 +124,7 @@ export const SPEED_SAID_MS = 60_000;
 const MAX_HEAD = 64 * 1024;
 /// How many links in a row a read is asked again on when each is found gone under it.
 const LOST_TRIES = 3;
-/// How long a write gone unanswered is asked again with its key (station.rs RECHECK_MS).
+/// How long a write gone unanswered is asked again with its key.
 export const RECHECK_MS = 5 * 60 * 1000;
 
 const noAnswer = () => t("core-logic.mesh.no_answer");

@@ -394,7 +394,7 @@ test "Java's hashCode" {
 }
 
 ///|
-/// A row held long (Home.kt's onLongPress) at `title`'s words, then let go there.
+/// A row held long at `title`'s words, then let go there.
 fn hold_row(t : @ui.Tester, title : String) -> Unit {
   let (x, y) = t.find(title).unwrap()
   t.press_at(x, y)
@@ -504,12 +504,12 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
   t.drag(300.0, y, 290.0, y + 120.0)
   assert_eq(named(calls, "chat.archive").length(), 0)
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
-  // across past a third of the row: it goes off, then is archived (Home.kt: the call once it has gone)
+  // across past a third of the row: it goes off, then is archived
   t.drag(340.0, y, 120.0, y)
   assert_eq(named(calls, "chat.archive").length(), 0)
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
-  // its line felt as it was passed, once (Home.kt: TextHandleMove); archived, as something done (act's 已归档)
+  // its line felt as it was passed, once; archived, as something done (act's 已归档)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove, @ui.Haptic::Confirm])
 }
 

@@ -218,7 +218,7 @@ export function configProfiles(dataDir: string): Record<string, Json> {
   return out;
 }
 
-// ── people (views.rs `creator`, as views.ts has it) ──
+// ── people (as views.ts has it) ──
 
 /// A creator reference in words. No Slack connection knows anyone: a Slack user goes by their id, with no email.
 function creator(s: Store, lang: Lang, reference: string): Json {

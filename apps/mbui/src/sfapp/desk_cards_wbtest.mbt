@@ -1,4 +1,4 @@
-// The desktop chat's login card (sfdesk/login_card.mbt; web MachineLogins.tsx LoginCard) under the fixture's post that
+// The desktop chat's login card (sfdesk/login_card.mbt) under the fixture's post that
 // starts one, its login as each case has it, the calls kept.
 
 ///|

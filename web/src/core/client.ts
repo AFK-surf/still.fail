@@ -95,9 +95,9 @@ export type Topic =
   // A chat's services and background jobs as its pages show them (the same thread or session as its `chat`).
   // A chat's agent in brief, for its card over its avatar: what it did, cost and used, its account and quota, its jobs.
   | { topic: "agentCard"; station: string; key: string }
-  // What a chat's agents and other chats' wrote each other, not said in it (Letters.tsx).
+  // What a chat's agents and other chats' wrote each other, not said in it.
   | { topic: "chatLetters"; station: string; thread: number }
-  // What was said in a chat besides words: its pictures, files, links and pull requests (Things.tsx).
+  // What was said in a chat besides words: its pictures, files, links and pull requests.
   | { topic: "chatThings"; station: string; thread: number; q?: string }
   | { topic: "chatJobs"; station: string; thread: number }
   | { topic: "chatJobs"; station: string; session: string }
@@ -155,7 +155,7 @@ export type Topic =
   // A station's screens a person can see and drive: a core from before it answers an error.
   | { topic: "screens"; station: string }
   | { topic: "screenCard"; station: string; screen: string }
-  // A link to a station's 共享调试 as a message shows it (AdbLink.tsx).
+  // A link to a station's 共享调试 as a message shows it.
   | { topic: "adbCard"; station: string }
   // The vault (client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
   // them; a vault's items. A core from before has neither.

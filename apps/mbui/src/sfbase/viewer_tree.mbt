@@ -183,7 +183,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       }
     },
   )
-  // the stage: the room it is laid out in (the keyboard over it, not the stage made shorter for it: FilePreview.kt),
+  // the stage: the room it is laid out in (the keyboard over it),
   // and the picture's size (as sent, else as decoded, else its stand-in's: followed by its own decodes), told the zoom
   // at the moment either changes
   n.reacts(
@@ -1212,7 +1212,7 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
     ink,
     fn() { @sf.viewer_page_glass() },
     fn(row) {
-      // while it comes, how much of it has, once the core has said (FilePreview.tsx: FileComing in the floating head)
+      // while it comes, how much of it has, once the core has said
       row.show(fn() { vw.coming() && vw.got.get() is Some(_) }, fn(r) {
         file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
       })
@@ -1266,7 +1266,7 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
     fn() { stage().0 },
     ink,
     fn(row, corner) {
-      // (while it comes, how much of it has: FilePreview.tsx FileComing in the bar, from the start)
+      // (while it comes, from the start)
       row.show(fn() { vw.coming() }, fn(r) {
         @sf.viewer_coming_node(r, fn() { vw.got.get() }, fn() { vw.file.size }, ink) |> ignore
       })
@@ -1320,7 +1320,7 @@ fn image_steps(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
 }
 
 ///|
-/// A picture's tools in a bar's row `row` (FilePreview.tsx: its `controls`, then copy and download): mark and copy once its picture is all here (copied:
+/// A picture's tools in a bar's row `row` (then copy and download): mark and copy once its picture is all here (copied:
 /// a check for copied_ms, from the press's moment); download (unable while there is nothing to save; a ring while the
 /// core downloads it; none while it comes). Each `corner` round, in `ink`, its tip in `tips`; each press done at its
 /// moment, what a download asks for told once, as it is asked.
@@ -1358,7 +1358,7 @@ fn image_tools(
     )
     |> ignore
   })
-  // 标注图片: once its whole picture is here, a picture it shows (annotate/ImageMarks.tsx)
+  // 标注图片: once its whole picture is here, a picture it shows
   row.show(fn() { whole() && vw.markable() }, fn(r) {
     @sf.tool_node(
       r,
@@ -1370,7 +1370,7 @@ fn image_tools(
     )
     |> ignore
   })
-  // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage); one too big to show
+  // 复制: the whole picture on the clipboard, a check a moment after; one too big to show
   // too, once read
   row.show(fn() { whole() && vw.shown_kind() == Some(KImage) }, fn(r) {
     let t = @sf.tool_node(
@@ -1434,7 +1434,7 @@ fn download_told(src : Source, vw : Viewer) -> Unit {
 }
 
 ///|
-/// How much of a file has come (file_progress's, FilePreview.kt FileProgress) as nodes in `parent`: "正在读取 **4 MB** /
+/// How much of a file has come (file_progress's) as nodes in `parent`: "正在读取 **4 MB** /
 /// 12 MB" (the size so far in bold, in the words' ink) over a bar, on the surface (surface2 dark), 14 round, 14 and 12
 /// in, 220 wide; its size not known (neither the station's, `got`'s, nor the one it was sent with, `sent`), 正在读取 over
 /// a bar that sweeps. Each as it changes: what has come, the words' language, the theme. The card's node.
@@ -1935,7 +1935,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
     }
     failed(fn() { if text(dl(), "state") == "failed" { Some(text(dl(), "statusText")) } else { None } })
     failed(fn() { vw.error.get().map(fn(e) { @sf.t("web-main.preview.loadFailed", args=[("error", e)]) }) })
-    // an APK: 安装 first, handed to the system's installer (FilePreview.kt: install, strong); 下载 then the quieter
+    // an APK: 安装 first, handed to the system's installer (strong); 下载 then the quieter
     let apk = @sf.lower(vw.file.name).has_suffix(".apk")
     if apk {
       @sf.button_node(r, fn() { pv("android-chat.file.install") }, fn() { vw.ask_install(@ui.current()) }, tone=Primary)
@@ -1951,7 +1951,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
 }
 
 ///|
-/// What shows while it comes (FilePreview.tsx FileComing, WaitLine): how much has come out of its size once
+/// What shows while it comes (WaitLine): how much has come out of its size once
 /// the core has said, else 正在打开 by a spinner, after a moment (wait_line's).
 fn viewer_coming_node(f : @view.View, vw : Viewer) -> Unit {
   f.show(fn() { vw.got.get() is Some(_) }, fn(r) {

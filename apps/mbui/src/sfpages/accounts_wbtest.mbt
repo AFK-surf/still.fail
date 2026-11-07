@@ -1,4 +1,4 @@
-// A profile's page (accounts.mbt, the web's Accounts.tsx AccountView) alone over the settings' fixture: Willow's
+// A profile's page (accounts.mbt) alone over the settings' fixture: Willow's
 // (ws1/st1) Claude subscription and its API key, wide; ChatGPT 团队's.
 
 ///|
@@ -367,7 +367,7 @@ test "a profile's page, wide: a profile one of the station's lists no more says 
   assert_true(t.find("找不到 ID 为 gone 的 Profile") is Some(_))
 }
 
-// A profile's quota reset and its models (Accounts.tsx QuotaSection) over ChatGPT 团队: a reset used once asked, its
+// A profile's quota reset and its models over ChatGPT 团队: a reset used once asked, its
 // models all listed, one named by hand and taken off again.
 
 ///|

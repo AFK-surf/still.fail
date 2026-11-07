@@ -1,4 +1,4 @@
-// The agents' home (from the Rust station's agent_home.rs): one MEMORY.md and one skills/ directory used by every
+// The agents' home: one MEMORY.md and one skills/ directory used by every
 // profile of every runtime. It lives in the data dir, not the repository, since it holds team-specific memory. A
 // workspace the station joined has its own, beside it (`workspaceAgentHome`). A session is
 // given its workspace's, not through the profile's home (a profile serves every workspace): the memory with its

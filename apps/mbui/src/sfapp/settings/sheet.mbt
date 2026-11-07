@@ -33,7 +33,7 @@ pub fn field_of(key : String) -> @ui.Field {
 }
 
 ///|
-/// A line to type in (Controls.kt Field): mbui's field in its look (@sf.field_look), its placeholder until it has
+/// A line to type in: mbui's field in its look (@sf.field_look), its placeholder until it has
 /// words, its words 15 on 21 (`secret`: as dots).
 fn field_box(
   c : @ui.Ctx,
@@ -51,7 +51,7 @@ fn field_box(
 }
 
 ///|
-/// Asks for a line (PageParts.kt ask: @sf.ask, in place of the sheet up): its title, the field (with `value` in it at
+/// Asks for a line (in place of the sheet up): its title, the field (with `value` in it at
 /// first), a hint under it, then 取消 and `action`, which can be pressed once the line has words and differs from
 /// `value`. Said, it closes and `run` goes on with the line, trimmed.
 pub fn ask(
@@ -67,7 +67,7 @@ pub fn ask(
 }
 
 ///|
-/// Asks before something that cannot be undone (PageParts.kt confirm: @sf.confirm, in place of the sheet up): its
+/// Asks before something that cannot be undone (in place of the sheet up): its
 /// title, what it does, 取消 and `action` (red when `danger`). Said, it closes and `run` goes on.
 pub fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
   @sf.confirm(title, words, action, run, danger~)

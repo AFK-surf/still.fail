@@ -20,7 +20,7 @@ fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
 }
 
 ///|
-/// A bar key's icon (Preview.kt BarIcon: 14).
+/// A bar key's icon.
 let bar_icon_size : Double = 14.0
 
 ///|
@@ -32,7 +32,7 @@ let mark_key : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=
 let mark_key_on : @ui.Style = mark_key.then(@ui.style(bg=@sf.mark_key_on))
 
 ///|
-/// The address's place while marking (Preview.kt Bar's `instead`: 4 in at each side, all the room there is).
+/// The address's place while marking (all the room there is).
 // kept across runs: a value (no field of it changes)
 let mark_mode_place : @ui.Style = @ui.css("w=Full px=S1")
 
@@ -72,7 +72,7 @@ let mark_dot_on : @ui.Style = mark_dot.then(@ui.css("bg=Accent"))
 
 ///|
 /// What it says: how many (or what to do), 13 medium in the ink; 可继续点选 muted; why it failed in red; all on one line,
-/// in what the bar leaves, cut short with an ellipsis where that is less (Marks.css.ts modeText: flex 1, min-width 0),
+/// in what the bar leaves, cut short with an ellipsis where that is less (min-width 0),
 /// four of its characters kept (what is beside it in the page's bar gives way first: service.mbt bar_drop_nav).
 // kept across runs: a value (no field of it changes)
 let mark_words_box : @ui.Style = @ui.css("row w=Full gap=S2")
@@ -122,11 +122,11 @@ let mark_put_words : @ui.TextStyle = @ui.text_style(
 )
 
 ///|
-/// A small icon in marking's bar (Preview.kt: 12).
+/// A small icon in marking's bar.
 let mark_small_icon : Double = 12.0
 
 ///|
-/// In the address's place while marking (Preview.kt MarkMode): what to do or how many, then putting them into the
+/// In the address's place while marking: what to do or how many, then putting them into the
 /// chat.
 fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeView) -> Unit {
   let t = @sf.theme()
@@ -181,7 +181,7 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
 }
 
 ///|
-/// A mark's box on its element (Preview.kt MarksOver): 4 round, its edge the accent's 55% (1.5), open the accent (2)
+/// A mark's box on its element: 4 round, its edge the accent's 55% (1.5), open the accent (2)
 /// over its 8%.
 // kept across runs: a value (no field of it changes)
 let mark_box_open : @ui.Style = @ui.style(radius=Base, border=B2, border_color=Accent, bg=@sf.mark_open_bg)
@@ -228,7 +228,7 @@ let mark_said : @ui.Style = @ui.style(
 let mark_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
-/// The marks over the page, where it is drawn (Preview.kt MarksOver): each a box on its element, a numbered pin on its
+/// The marks over the page, where it is drawn: each a box on its element, a numbered pin on its
 /// corner (kept in sight at the page's edges), what is said of it beside the pin, or its note open. `ox`, `oy`: the
 /// page's top left on the stage; `view_w` its width there before its scale; `stage_w` the stage's width.
 fn page_marks_over(
@@ -305,7 +305,7 @@ fn page_marks_over(
 }
 
 ///|
-/// Where a pin sits (Preview.kt MarksOver): 24 wide, its point 2 in from its left and 22 down, kept 2 from the
+/// Where a pin sits: 24 wide, its point 2 in from its left and 22 down, kept 2 from the
 /// stage's left and 24 from its top; what is said 36 right of its point (28 past it), 220 wanted there, else left of it
 /// (14 clear, 6 from the pin), 40 at least.
 let pin_w : Double = 24.0
@@ -335,7 +335,7 @@ let said_beside : Double = 6.0
 let said_least : Double = 40.0
 
 ///|
-/// A mark's note (Preview.kt Note): 280 wide at most (8 clear of the stage's sides), 36 high, round, frosted, a
+/// A mark's note: 280 wide at most (8 clear of the stage's sides), 36 high, round, frosted, a
 /// stronger shadow, 12 in at its start and 4 at its end, 6 apart; 28 right of the pin's point and 28 above it (8 from
 /// the stage's top at least).
 // kept across runs: a value (no field of it changes)
@@ -377,7 +377,7 @@ let note_font : Double = 13.0
 let note_icon : Double = 14.0
 
 ///|
-/// What is said about one mark, in a bubble beside its pin (Preview.kt Note): what it is for while empty; done, closed;
+/// What is said about one mark, in a bubble beside its pin: what it is for while empty; done, closed;
 /// its remove key takes the mark off the page too.
 fn page_mark_note(
   c : @ui.Ctx,

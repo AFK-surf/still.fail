@@ -1,5 +1,5 @@
-// The file viewers on a desktop (the library's viewer_bar.mbt, reader.mbt; preview_desk.mbt): over the wide frame's whole
-// window, as the desktop app's (FilePreview.tsx docked, viewer/Reader.tsx with a mouse).
+// The file viewers on a desktop (the library's viewer_bar.mbt, reader.mbt): over the wide frame's whole
+// window, as the desktop app's.
 
 ///|
 /// The fixture's `mode` in a desktop's window: a chat's file open in its preview (chat-preview-…), a drive's text read

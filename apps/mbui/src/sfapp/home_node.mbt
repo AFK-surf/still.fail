@@ -14,7 +14,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     }
   }
   let frame : @sfpages.ListsNodeFrame = {
-    // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8); over the bottom bar
+    // under the top bar, the status bar's height and its own; over the bottom bar
     top: fn() { status_top_now(v.window().0) + bar_h + 8.0 },
     under: fn() { status_top_now(v.window().0) + bar_h },
     foot: fn() { nav_foot() + bar_room_now() },
@@ -30,7 +30,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
       }
       parts
     },
-    // what is left up a long while on the stations (OpenJobs.kt): nothing while there is none
+    // what is left up a long while on the stations: nothing while there is none
     after: fn(_, _) {
       match workspace() {
         Some(w) if items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").length() > 0 =>
@@ -54,7 +54,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
   // (while the app's first page waits for what it shows: drawn at none, the splash in its place, as the old views are)
   v.grow(Is(1.0)).min_height(Is(Some(0.0))).alpha(By(fn() { if @sfbase.first_page_waits.get() { 0.0 } else { 1.0 } }))
   |> ignore
-  // under a finger's search the bar faded with the lists going away (Home.kt `away`), the search over them (its old
+  // under a finger's search the bar faded with the lists going away, the search over them (its old
   // view, hosted)
   let away = @sfpages.search_away_node(v)
   v.box(fn(lists) {

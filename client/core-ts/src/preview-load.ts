@@ -1,4 +1,4 @@
-// Resource progress shared by every preview transport (preview_load.rs; the `previewLoad` topic). No response bodies
+// Resource progress shared by every preview transport (the `previewLoad` topic). No response bodies
 // are kept.
 import { topicKey, type Topic } from "./protocol.ts";
 

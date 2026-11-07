@@ -274,7 +274,7 @@ export class Local {
     return sends;
   }
 
-  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`).
+  /// The rows of the chats asked for here on a station that its rows do not have yet.
   pendingRows(station: string): J[] {
     const out: J[] = [];
     for (const [key, chat] of this.#pending) {

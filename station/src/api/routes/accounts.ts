@@ -1,4 +1,4 @@
-// The accounts' part of the admin API (admin/mod.rs, admin/edits.rs, admin/decision.rs): profiles made, edited,
+// The accounts' part of the admin API (admin/mod.rs): profiles made, edited,
 // checked, signed in and deleted; allowances read and reset; sign-ins for new profiles; the automatic decisions'
 // settings. Edits answer with the overview, as the Rust station's do.
 import { type Request, type Answer, error, segment, ok, input } from "../request.ts";
@@ -35,7 +35,7 @@ export type AccountsRouteDeps = {
 };
 
 
-/// The key a write is asked under (once.rs KEY), when it has a usable one.
+/// The key a write is asked under, when it has a usable one.
 const idempotencyKey = (r: Request): string | undefined => {
   const found = Object.entries(r.headers).find(([k]) => k.toLowerCase() === "idempotency-key")?.[1];
   return found !== undefined && found !== "" && found.length <= 200 ? found : undefined;

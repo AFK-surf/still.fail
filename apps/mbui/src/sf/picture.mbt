@@ -89,7 +89,7 @@ pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
 }
 
 ///|
-/// Marks drawn in one colour, the page's ink (Parts.kt MONO); the others in
+/// Marks drawn in one colour, the page's ink; the others in
 /// their own.
 let mono_makers : Array[String] = [
   "anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter",
@@ -99,7 +99,7 @@ let mono_makers : Array[String] = [
 ]
 
 ///|
-/// The mark of the company that made a model (Parts.kt MakerIcon): the core's
+/// The mark of the company that made a model: the core's
 /// `maker` id when there is a mark for it, else its runtime's maker's
 /// (codex: OpenAI's, dsh its own, grok xAI's, Cursor's and Devin's their own, else Anthropic's).
 pub fn maker_mark(
@@ -114,7 +114,7 @@ pub fn maker_mark(
 }
 
 ///|
-/// A program a station logs in to (the core's `MachineLoginTool.mark`; the web's MachineLogins.tsx ToolMark): its
+/// A program a station logs in to (the core's `MachineLoginTool.mark`): its
 /// maker's mark in its colours, those whose colour is black in the page's ink; a terminal's where it has none.
 pub fn tool_mark(c : @ui.Ctx, mark : String, size : Double) -> Unit {
   let name = "tool_" + mark.replace_all(old="-", new="_")
@@ -207,7 +207,7 @@ pub fn has_station_mark(emoji : String, icon : String) -> Bool {
 }
 
 ///|
-/// A station where it is named (Parts.kt StationMark): its `icon` first, a
+/// A station where it is named: its `icon` first, a
 /// glyph (glyph:<name>, glyph:<name>:<colour>, in that colour, else `tint`)
 /// or a picture put up (its address, or a data URL); else its emoji.
 pub fn station_mark(
@@ -302,7 +302,7 @@ pub fn station_mark(
     }
     return
   }
-  // none of its own: `none`'s icon, if given (Parts.kt StationMark's `none`)
+  // none of its own: `none`'s icon, if given
   match none {
     Some(n) => icon_named(c, n, size, tint) |> ignore
     None => ()
@@ -468,7 +468,7 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
 let glyphs_read : Map[String, (Array[String], Array[String])] = {}
 
 ///|
-/// Whose service a profile runs on (ProviderLogo; Parts.kt ProviderMark): OpenCode's square, a listed provider's maker
+/// Whose service a profile runs on (ProviderLogo): OpenCode's square, a listed provider's maker
 /// (`mark`; the plug where there is none), else Anthropic, xAI, Cursor, Devin, Hermes or OpenAI by its runtime (`kind`
 /// the profile's access: an API provider's, OpenCode Go's, Anthropic's API).
 pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {

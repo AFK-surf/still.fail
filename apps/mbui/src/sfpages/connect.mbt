@@ -1,4 +1,4 @@
-// A connect's page, one in every frame, laid out by its width (page_look.mbt) (web/src/pages/Connect.tsx ConnectPage, ConnectDetail, SlackSection,
+// A connect's page, one in every frame, laid out by its width (web/src/pages/Connect.tsx ConnectPage, ConnectDetail, SlackSection,
 // ConnectTrouble, TokenDialog, ModeChoices, RunSection, ModeDialog, ChooseSessionDialog, ConnectSessions,
 // OwnerDialog; Connect.css.ts; FeishuConnect.tsx FeishuSection, SecretDialog; FeishuConnect.css.ts): back to the
 // connects; who it is and whether it is up (its picture, its name, how it is, where it is reached, its station, who
@@ -299,7 +299,7 @@ fn cd_trouble(cv : Json?) -> String {
 }
 
 ///|
-/// What is wrong said on amber (additions.css.ts callout amber: 12 by 14 in, a corner of 14, the ui's 13 in the ink).
+/// What is wrong said on amber (a corner of 14, the ui's 13 in the ink).
 fn cd_callout(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=cd_amber.then(@ui.style(bg=Data(@sf.theme().p.amber_bg))), fn() {
     c.text(words, style=cd_words) |> ignore
@@ -505,7 +505,7 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
 }
 
 ///|
-/// Words to press beside a row's (chat.css.ts textButton in a runCardRow: underlined, the ui's 13 muted); whether it
+/// Words to press beside a row's (the ui's 13 muted); whether it
 /// was pressed.
 fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = false) -> Bool {
   let id = c.id(key)
@@ -518,7 +518,7 @@ fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = 
 }
 
 ///|
-/// A link in its words (chat.css.ts inlineLink: the accent's ink, underlined); whether it was pressed.
+/// A link in its words (underlined); whether it was pressed.
 fn cd_link(c : @ui.Ctx, key : String, label : String) -> Bool {
   let id = c.id(key)
   let b = c.box(style=cd_link_box, id~, fn() { c.rich([@ui.span(label, underline=true)], style=cd_link_words) |> ignore })

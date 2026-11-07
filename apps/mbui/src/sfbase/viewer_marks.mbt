@@ -1,4 +1,4 @@
-// Marking an image opened in the viewer (still.fail apps/android chat/screens/ImageMarks.kt; web/src/annotate/ImageMarks.tsx):
+// Marking an image opened in the viewer:
 // boxes, arrows, lines drawn by hand and words, drawn on the image where it is shown (zoomed and panned with it); a
 // mark picked again to move, stretch, recolour or remove; undo and redo. Boxes and arrows are numbered: a pin on each,
 // and something said about it in a note. Done, the image with its marks (and their pins), drawn again at its own size
@@ -10,7 +10,7 @@
 // whatever it is.
 
 ///|
-/// The tools (ImageMarks.kt MarkTool).
+/// The tools.
 pub(all) enum MarkTool {
   Select
   Rect
@@ -97,7 +97,7 @@ pub fn Mark::moved(self : Mark, dx : Double, dy : Double) -> Mark {
 }
 
 ///|
-/// Stretched from `anchor` (ax, ay) by (`sx`, `sy`) (ImageMarks.kt scaled): words evenly, by `sx`, their size with
+/// Stretched from `anchor` (ax, ay) by (`sx`, `sy`): words evenly, by `sx`, their size with
 /// them.
 pub fn Mark::scaled(self : Mark, ax : Double, ay : Double, sx : Double, sy : Double) -> Mark {
   if self.kind == "words" {
@@ -109,7 +109,7 @@ pub fn Mark::scaled(self : Mark, ax : Double, ay : Double, sx : Double, sy : Dou
 }
 
 ///|
-/// A handle of the picked mark (ImageMarks.kt MarkHandle): a corner of its box (`Corner(1, 1)` its foot right; the
+/// A handle of the picked mark: a corner of its box (`Corner(1, 1)` its foot right; the
 /// corner across stays), or an end of an arrow (0 its tail, 1 its point).
 pub(all) enum MarkHandle {
   Corner(Int, Int)
@@ -166,7 +166,7 @@ pub fn Mark::dragged(self : Mark, h : MarkHandle?, dx : Double, dy : Double) -> 
 }
 
 ///|
-/// An arrow's barbs (ImageMarks.kt barbs): back from its point, a half its size apart.
+/// An arrow's barbs: back from its point, a half its size apart.
 pub fn arrow_barbs(ax : Double, ay : Double, bx : Double, by : Double, w : Double) -> (Double, Double, Double, Double) {
   let dx = bx - ax
   let dy = by - ay
@@ -256,7 +256,7 @@ pub(all) struct Marking {
   /// what is said of each numbered mark (by its id), and the one whose note is open (-1 none)
   comments : Map[Int, String]
   mut note : Int
-  /// the note whose box came in last (it pops in as it opens: Notes.kt pop), -1 none
+  /// the note whose box came in last, -1 none
   mut popped : Int
   mut busy : Bool
   mut error : String
@@ -442,7 +442,7 @@ pub fn marks_drawn() -> Array[Mark] {
 }
 
 ///|
-/// A finger on the image while marking (ImageMarks.kt down, move, up): `px`, `py` on the stage, `r` the picture's
+/// A finger on the image while marking (move, up): `px`, `py` on the stage, `r` the picture's
 /// place (x, y, w, h) on it, `nw` its natural width; what `phase` is: 0 down, 1 moved, 2 up.
 pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double, Double, Double, Double), nw : Double) -> Unit {
   let (rx, ry, rw, _) = r
@@ -534,7 +534,7 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
   }
   let reach = mark_reach / k
   if marking.tool == Select || marking.tool == Words {
-    // the picked mark's handles first (ImageMarks.kt down), then the marks, the topmost first
+    // the picked mark's handles first, then the marks, the topmost first
     if marking.tool == Select {
       match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked }) {
         Some(s) =>
@@ -668,7 +668,7 @@ pub fn marks_lines(r : (Double, Double, Double, Double), nw : Double) -> (Array[
 }
 
 ///|
-/// How much bigger an open note's pin is (ImageMarks.kt Pins: 1.12, from its point).
+/// How much bigger an open note's pin is (from its point).
 pub let pin_open_scale : Double = 1.12
 
 ///|
@@ -744,7 +744,7 @@ pub fn dashes(path : Array[(Double, Double)], out : Array[@ui.Line]) -> Unit {
 }
 
 ///|
-/// The words the marked image's quotes say (ImageMarks.kt quotes): a quote per numbered mark, where it is (for the
+/// The words the marked image's quotes say: a quote per numbered mark, where it is (for the
 /// agent), on which image, what was said of it.
 pub fn marks_quotes(made : String, original : String, nw : Double, nh : Double) -> Array[(String, String, String)] {
   let numbers = mark_numbers(marking.shapes)
@@ -805,7 +805,7 @@ pub fn marks_json(nw : Double, nh : Double) -> String {
 
 
 ///|
-/// Back while marking (ImageMarks.kt back): closes a note, puts down the words being written, closes the colours,
+/// Back while marking: closes a note, puts down the words being written, closes the colours,
 /// lets go of the picked mark, else stops marking.
 pub fn marks_back(c : @ui.Ctx) -> Unit {
   if marking.note >= 0 {
@@ -841,9 +841,9 @@ pub fn marks_any() -> Bool {
 }
 
 ///|
-/// In the top bar while marking (ImageMarks.kt MarksActions): why it failed, 取消, 下载标注后的图片, 添加到对话 (when
+/// In the top bar while marking: why it failed, 取消, 下载标注后的图片, 添加到对话 (when
 /// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
-/// `ink`: what its words and icons are drawn in (a desktop's bar is the page's, preview_desk.mbt).
+/// `ink`: what its words and icons are drawn in (a desktop's bar is the page's).
 pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
   let ready = !marking.busy && marks_any()
   // as wide as they are: the file's name before them cut short instead
@@ -903,7 +903,7 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
 }
 
 ///|
-/// The corner of what is on the viewer's bars (ImageMarks.kt PICTURE_KEY): round, half their 32 (in the middle of a
+/// The corner of what is on the viewer's bars: round, half their 32 (in the middle of a
 /// bar's capsule ends, 6 in, concentric with them: picture_bar_corner).
 pub let picture_key : Double = 16.0
 
@@ -917,7 +917,7 @@ pub let marks_put_room : @ui.Style = @ui.css("pl=S1")
 let marks_notes_over_tools : Double = 10.0
 
 ///|
-/// The numbered marks' notes in their numbers' order (ImageMarks.kt notes): the mark's id, its number, what it is (框,
+/// The numbered marks' notes in their numbers' order: the mark's id, its number, what it is (框,
 /// 箭头), its colour.
 pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
   let numbers = mark_numbers(marking.shapes)
@@ -932,7 +932,7 @@ pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
 }
 
 ///|
-/// The note of the mark `id` opened (ImageMarks.kt open): what was being written put down, nothing picked.
+/// The note of the mark `id` opened: what was being written put down, nothing picked.
 pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
   marks_put_down(c)
   marking.picked = -1
@@ -943,7 +943,7 @@ pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
 }
 
 ///|
-/// How a note's box comes in (Notes.kt pop: from nothing and 97% of its size, 140 ms on Arrive).
+/// How a note's box comes in (140 ms on Arrive).
 pub let note_pop_ms : Double = 140.0
 
 ///|
@@ -963,8 +963,8 @@ let note_card_w : Double = 160.0
 let note_more_w : Double = 56.0
 
 ///|
-/// A note's card's corner in the tray: the ladder's row step (Notes.kt Card's 16 before it), its pin concentric in it;
-/// its pin's side, its first line's height, its room at its end and its foot (Notes.kt Card: 12, 9).
+/// A note's card's corner in the tray: the ladder's row step, its pin concentric in it;
+/// its pin's side, its first line's height, its room at its end and its foot (9).
 let note_card_corner : Double = @sf.row_corner
 
 ///|
@@ -980,8 +980,8 @@ let note_card_end : Double = 12.0
 let note_card_foot : Double = 9.0
 
 ///|
-/// The dark theme's colours the notes take (Theme.kt Dark): the page, its words, muted, subtle, the accent; their
-/// ground the raised grey at 72% over the page (Glass.kt floatingStill).
+/// The dark theme's colours the notes take: the page, its words, muted, subtle, the accent; their
+/// ground the raised grey at 72% over the page.
 pub let note_bg : Int64 = 0x1B1C1FFFL
 
 ///|
@@ -1004,7 +1004,7 @@ pub let note_ground : Int64 = @sf.over(note_bg, @sf.alpha(0x2A2C31FFL, 0.72))
 pub let note_box_corner : Double = 26.0
 
 ///|
-/// The bars' corner over a picture (ImageMarks.kt PictureBar): its keys' 16 and the 6 they stand in (外圆角 = 距离 +
+/// The bars' corner over a picture: its keys' 16 and the 6 they stand in (外圆角 = 距离 +
 /// 半高): a capsule 44 high.
 pub let picture_bar_corner : Double = picture_bar_in + picture_key
 
@@ -1071,9 +1071,9 @@ pub fn marks_writing_bottom_in(z : @kit.Zoom, r : (Double, Double, Double, Doubl
 }
 
 ///|
-/// The room the open note's box takes under its pin (ImageMarks.kt NOTE_BOX).
+/// The room the open note's box takes under its pin.
 pub let note_box_room : Double = 140.0
 
 ///|
-/// How far what is being written stays over the keyboard (FilePreview.kt: 24).
+/// How far what is being written stays over the keyboard.
 pub let marks_keyboard_gap : Double = 24.0

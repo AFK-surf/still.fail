@@ -1,4 +1,4 @@
-// GET /overview (admin/views.rs `overview`): the station as its settings pages show it — still.fail cloud, connects,
+// GET /overview: the station as its settings pages show it — still.fail cloud, connects,
 // profiles, the agents' processes, counts, the disk, logins, updates — as the viewer sees it. Answered on the main
 // thread from what is in memory and the config; told again on /events when it changes (`overview`).
 import { statfsSync } from "node:fs";

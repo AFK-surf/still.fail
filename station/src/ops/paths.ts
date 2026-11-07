@@ -1,4 +1,4 @@
-// Paths as the station checks them (the Rust station's Path, files.rs `clean`): absolute, worked out without following
+// Paths as the station checks them (the Rust station's Path): absolute, worked out without following
 // links, and compared component by component, as the machine has them (platform.paths: on Windows `\` and `/` both
 // separate, a drive or a share starts an absolute path, and case does not tell two paths apart).
 import { createHash } from "node:crypto";

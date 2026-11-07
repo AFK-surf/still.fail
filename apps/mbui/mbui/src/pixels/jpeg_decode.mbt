@@ -644,7 +644,7 @@ fn jpeg_scan(
   }
 }
 
-// ── IDCT (zune-jpeg idct/scalar.rs) ───────────────────────────────────
+// ── IDCT ───────────────────────────────────
 
 ///|
 fn jclamp(a : Int) -> Int {
@@ -845,7 +845,7 @@ fn jpeg_idct_4x4(inp : FixedArray[Int], out : FixedArray[Int], at : Int, stride 
   }
 }
 
-// ── upsampling (zune-jpeg upsampler/scalar.rs, worker.rs) ─────────────
+// ── upsampling ─────────────
 
 ///|
 /// A component's plane at the image's sampling: rows as wide as its plane times the horizontal ratio.

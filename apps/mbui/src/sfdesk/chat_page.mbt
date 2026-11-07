@@ -64,7 +64,7 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 }
 
 ///|
-/// The chat `r` in the pane (ChatPage.tsx ChatScreen).
+/// The chat `r` in the pane.
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let chat = (src.topic)("chat", chat_params(r)).value
   let view = view_of_chat(src, r).0
@@ -114,7 +114,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
 let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
+/// The chat's own keys (keymap.ts): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
 /// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
 /// and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file picker for its draft
 /// (composer.file); Space with no field focused, the composer (composer.focus).
@@ -189,7 +189,7 @@ fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : 
 }
 
 ///|
-/// The chat into the archive (ChatPage.tsx archive): on to the chat below it in the list (or above, at the end), so
+/// The chat into the archive: on to the chat below it in the list (or above, at the end), so
 /// the keys go on working, the list if none; said at once, or why not.
 fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let here = fn() {
@@ -230,7 +230,7 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
 }
 
 ///|
-/// The chat's bar (ChatPage.tsx header, sidebar.css.ts pageBar: 45 high, its line at its foot): the title, its station
+/// The chat's bar (sidebar.css.ts pageBar: 45 high, its line at its foot): the title, its station
 /// while no agent is in it, its people, its agents; at its end what is done with it, or ⌘F's bar.
 fn chat_bar(
   c : @ui.Ctx,
@@ -502,7 +502,7 @@ fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
 }
 
 ///|
-/// The card of the station a chat runs on (ChatPage.tsx StationHover, StationCard): over where the chat names it
+/// The card of the station a chat runs on (StationCard): over where the chat names it
 /// (`trigger`) while the pointer rests there; a finger, which rests on nothing, taps it for the card from the
 /// presenters (a sheet short of Large).
 fn station_card_on(c : @ui.Ctx, key : String, station : String, trigger : Int) -> Unit {
@@ -515,7 +515,7 @@ fn station_card_on(c : @ui.Ctx, key : String, station : String, trigger : Int) -
 }
 
 ///|
-/// How a station is reached, as a dot (StationLink.css.ts dot): straight there green, through a relay amber, away red,
+/// How a station is reached, as a dot: straight there green, through a relay amber, away red,
 /// else (coming back, a way still chosen) grey.
 fn via_dot(c : @ui.Ctx, via : String) -> Unit {
   c.box(
@@ -531,7 +531,7 @@ fn via_dot(c : @ui.Ctx, via : String) -> Unit {
 }
 
 ///|
-/// People overlapping a little (components.tsx PeopleStack): `most` of them at most, each a 16 circle (their picture, or
+/// People overlapping a little: `most` of them at most, each a 16 circle (their picture, or
 /// their initial), each 4 over the one before; more than that, +n after them; their names in its tip.
 fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person], most : Int) -> Unit {
   let shown = if people.length() > most { people[:most].to_array() } else { people }
@@ -541,7 +541,7 @@ fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person],
   let letter = people_letter_box.then(@ui.style(bg=Data(t.p.paper)))
   c.box(style=people_row, id~, fn() {
     for i, p in shown {
-      // each ringed 1.5 in the sidebar's ground, 4 over the one before (later.css.ts peopleStack)
+      // each ringed 1.5 in the sidebar's ground, 4 over the one before
       c.box(style=if i == 0 { ring.then(person_first) } else { ring.then(person_next) }, fn() {
         if p.picture != "" {
           // (the picture as the core gives it: Source.picture)
@@ -640,7 +640,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
       c.semantics(b, Button, id~, label=said)
     }
   }
-  // the pointer resting on it: its card (AgentCard.tsx); with touch, held, the tile's whole: its card and its
+  // the pointer resting on it: its card; with touch, held, the tile's whole: its card and its
   // station's as one (the user, 2026-10-27: 它们是一体的), each as the pointer's shows it
   match station {
     Some(_) if @sf.tile_whole() =>
@@ -779,7 +779,7 @@ fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 }
 
 ///|
-/// How wide the info's popover and the services' are (ChatPage.css.ts chatInfo, jobsPanel).
+/// How wide the info's popover and the services' are (jobsPanel).
 let chat_info_w : Double = 320.0
 
 ///|
@@ -968,7 +968,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     Some(id) => @sfpages.things_now(src, r.station, id)
     None => (0, [])
   }
-  // the stations' files beside the chat, where they lend them (ChatPage.tsx onFiles: useStationDrive)
+  // the stations' files beside the chat, where they lend them
   let files = dv_stations(src, scope_of(r.station)).0.unwrap_or([]).iter().any(fn(s) { s.drive })
   if pulls.length() > 0 || said > 0 || files || v.letters > 0 {
     c.box(style=info_tools(true), fn() {
@@ -1197,7 +1197,7 @@ let chat_station_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg,
 let chat_station_mark : Double = 12.0
 
 ///|
-/// How a station is reached, a dot 7 across (StationLink.css.ts dot): green, amber, red, grey.
+/// How a station is reached, a dot 7 across: green, amber, red, grey.
 // kept across runs: a value (no field of it changes)
 let via_direct : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Positive")
 

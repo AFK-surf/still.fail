@@ -1,6 +1,6 @@
-// A runtime's own session transcript as one readable timeline for the pages (the Rust station's transcript.rs), read whole
-// as a session nobody watches is (live.rs `before`): its file, or its `.zst` once put away; the agent's own posts left
-// out of it and woven back in from the station's record of them (hub.rs `post_entries`).
+// A runtime's own session transcript as one readable timeline for the pages, read whole
+// as a session nobody watches is: its file, or its `.zst` once put away; the agent's own posts left
+// out of it and woven back in from the station's record of them.
 // - claude: <home>/projects/<cwd>/<id>.jsonl, lines of {type: user|assistant, message: {content: string | blocks}}
 // - codex: <home>/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning | …}
 // - dsh: <home>/dsh-sessions/<cwd>/<id>/session.v<N>.jsonl, lines of {type: user/message | assistant/message |

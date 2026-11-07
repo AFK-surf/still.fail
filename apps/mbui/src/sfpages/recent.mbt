@@ -1,4 +1,4 @@
-// ＋'s recent photos and videos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos, latest): the gallery's
+// ＋'s recent photos and videos (still.fail's Android app, latest): the gallery's
 // latest across the top of the sheet after the camera, a video's tile marked with a play badge in its corner, a tap
 // putting one in the message (most of what goes to an agent is a screenshot just taken); read again as the sheet opens
 // and on each answer of the gallery's (@hostapi.gallery_*). Several go together as the system's photo picker and
@@ -202,7 +202,7 @@ fn recent_choose(src : String) -> Unit {
 }
 
 ///|
-/// The strip (Attach.kt RecentPhotos): the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
+/// The strip: the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
 /// tapped: 0 the camera, 1… a photo (none chosen: it alone), -1 the asking tile. A photo's ring (a finger's reach round
 /// it), or any of a photo while some are chosen, chooses it or not.
 pub fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
@@ -290,7 +290,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
                   |> ignore
                 })
                 |> ignore
-                // a video's still, its play mark in its foot corner (Attach.kt Thumbnail: 22 round, black at 45%)
+                // a video's still, its play mark in its foot corner (black at 45%)
                 if p.video {
                   @sf.play_mark(c, recent_mark_side, A(Theater, O45)) |> ignore
                 }
@@ -326,7 +326,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
 let recent_strip_row : @ui.Style = @ui.css("row w=Full pb=S3 gap=S1_5 clip")
 
 ///|
-/// The room under ＋'s tiles (照片 文件 Station 文件, 添加 n 个): in a sheet 18 (Attach.kt); in a small panel none past
+/// The room under ＋'s tiles (照片 文件 Station 文件, 添加 n 个): in a sheet 18; in a small panel none past
 /// its padding, so they stand as far from its foot as the strip from its sides and top.
 pub fn attach_foot() -> Double {
   if @sf.in_small_panel() {
@@ -378,7 +378,7 @@ pub fn attach_block_radius() -> @ui.Radius {
 let recent_marks : @ui.Style = @ui.css("w=Full h=Full justify=JBetween align=AStart")
 
 ///|
-/// The marks' side (Attach.kt Thumbnail's play mark: 22).
+/// The marks' side.
 let recent_mark_side : Double = 22.0
 
 ///|

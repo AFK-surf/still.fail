@@ -31,7 +31,7 @@ export const text = (v: unknown): string => (v === undefined || v === null ? "" 
 /// serde's `Value::get`: a field of an object, nothing of anything else.
 export const get = (v: unknown, key: string): unknown => (isObject(v) ? v[key] : undefined);
 
-/// Who asks: their id (an email), their name, whether they manage the workspace (access.rs `Viewer`).
+/// Who asks: their id (an email), their name, whether they manage the workspace.
 export const idOf = (v: Viewer) => v.email;
 export const nameOf = (v: Viewer) => (v.name === "" ? v.email : v.name);
 export const manages = (v: Viewer) => v.role === "owner" || v.role === "admin";
@@ -98,7 +98,7 @@ export function connectEdits(deps: ConnectEditDeps) {
     return id;
   };
 
-  /// A connect added or edited (edits.rs `put_connect`): its kind's part as `deps.entry` makes it. Another runtime, model,
+  /// A connect added or edited: its kind's part as `deps.entry` makes it. Another runtime, model,
   /// effort or profile is what its new sessions start on, and reaches a single-session connect's session too, from its
   /// next turn on, as a chat's own change does (lifecycle.ts `configure`).
   const putConnect = async (r: Request, id: string, i: Input) => {
@@ -261,7 +261,7 @@ export const connectRoutes = (deps: ConnectRoutesDeps): Route[] => {
   ];
 };
 
-/// Who a connect belongs to (edits.rs `owner_of`): whoever added it, unless `requested` hands it to someone else. Only
+/// Who a connect belongs to: whoever added it, unless `requested` hands it to someone else. Only
 /// a workspace owner or admin, or the current owner, may do that.
 function ownerOf(current: Json, requested: unknown, viewer: Viewer, lang: Lang): { id: string; name: string } | null {
   if (requested === undefined) return isObject(current) ? (current as { id: string; name: string }) : { id: idOf(viewer), name: nameOf(viewer) };

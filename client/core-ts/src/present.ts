@@ -1,4 +1,4 @@
-// What the clients show of a value, decided once (present.rs): times in words beside the times, and each topic's
+// What the clients show of a value, decided once: times in words beside the times, and each topic's
 // value through its shape (client/core-ts/src/shapes/schema.ts) as it goes out.
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
@@ -175,7 +175,7 @@ export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { 
 }
 
 
-// ── Sessions and rows (present.rs) ──
+// ── Sessions and rows ──
 
 const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 
@@ -1396,7 +1396,7 @@ export function installView(runtime: string, updates: J[], manages: boolean): J 
   return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
 }
 
-/// A piece of software as it is said (the web's Versions.tsx describe): its version as shown, what is said of it on
+/// A piece of software as it is said: its version as shown, what is said of it on
 /// hover (up to date, or that the last check failed), and while it updates or once that failed, in words.
 export function software(u: J): J {
   const installed = get(u, "installed") === true;

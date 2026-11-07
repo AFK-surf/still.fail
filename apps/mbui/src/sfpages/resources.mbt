@@ -1,6 +1,6 @@
 // What still.fail uses of a station's machine, as Activity Monitor says it (still.fail web/src/Resources.tsx ResourcesBody,
 // Resources.css.ts; the core's `resources` view, client/core-ts/src/views/resources.ts): a station's page's 进程, and
-// the line its overview says it in (StationCards.tsx Uses). Its totals with the last minutes' line under each, whose
+// the line its overview says it in. Its totals with the last minutes' line under each, whose
 // uses what (a chat, the agents, the desktop app, the station) grouped or every process flat, sorted by a column, a
 // chat's process ended from its row (asked first). Laid out by its own width: the totals four in a row or two over
 // two; the table's columns each as wide as its widest figure, so its rows line up, and where its names would have too
@@ -689,7 +689,7 @@ fn station_uses(c : @ui.Ctx, address : String, uv : Json?) -> Unit {
   c.semantics(b, Link, id~, label=name)
 }
 
-// ── styles (Resources.css.ts; StationCards.css.ts uses) ────────────────
+// ── styles ────────────────
 
 ///|
 /// Its 进程 (processes): the line on what is counted over the page, 16 apart.

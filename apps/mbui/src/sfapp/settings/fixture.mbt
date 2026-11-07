@@ -1368,7 +1368,7 @@ fn fx_station(address : String) -> Json {
           ),
           (
             "archiving",
-            // (the core's words and choices, as it gives them: archiving.ts in the core)
+            // (the core's words and choices)
             obj([
               ("days", Json::number(1.0)),
               ("slackDays", Json::number(3.0)),

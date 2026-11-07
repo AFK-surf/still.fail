@@ -1,4 +1,4 @@
-// Claude Code driver (the Rust station's runtime/claude.rs): one `claude -p` stream-json process per session, under a
+// Claude Code driver: one `claude -p` stream-json process per session, under a
 // runner whose id comes from the session key.
 //
 // Behaviour pinned by spikes:
@@ -183,7 +183,7 @@ const SETTINGS = {
   },
 };
 
-/// A session as a next station takes it up (claude.rs Handed: the turn as its last handled line left it).
+/// A session as a next station takes it up.
 export type ClaudeSnapshot = {
   runtime: "claude";
   id: string;
@@ -210,7 +210,7 @@ export type ClaudeDriverOptions = {
 
 const interruptRequest = () => JSON.stringify({ type: "control_request", request_id: `interrupt-${uuid()}`, request: { subtype: "interrupt" } });
 
-/// What a frame does to the turn (claude.rs on_frame). `interrupt` is how an auth failure stops the turn; `now` when a
+/// What a frame does to the turn. `interrupt` is how an auth failure stops the turn; `now` when a
 /// task it tells of starts. What it has going in the background, said again (a `tasks` live event) as it changes.
 export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void, now: () => number = wall.now) {
   const before = JSON.stringify(backgroundOf(turn));
@@ -337,7 +337,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
     env.STILLFAIL_RUNTIME_SESSION_ID = sessionId;
-    // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
+    // A machine profile runs on the machine's own login, handed over as its current token.
     // Another station's subscription the same way, with the token that station lends.
     const renew = this.renewer(options.profile);
     const machine = renew ? await renew() : undefined;
@@ -345,7 +345,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
       env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
       Object.assign(env, RENEWED);
     } else {
-      // Its own login stays in its home's file when it refreshes it (no_keychain.rs).
+      // Its own login stays in its home's file when it refreshes it.
       await takeBack(home);
       fileCredentials(env);
     }

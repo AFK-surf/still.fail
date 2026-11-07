@@ -1,4 +1,4 @@
-// tiny-skia's path stroker (path/src/stroker.rs, after Skia's SkStroke.cpp): a path's outline at a width, its caps
+// tiny-skia's path stroker (after Skia's SkStroke.cpp): a path's outline at a width, its caps
 // and joins, curves offset as quads to within the resolution. Rust's out-parameters are results here; its cap and join
 // function pointers are the enums they are made from.
 

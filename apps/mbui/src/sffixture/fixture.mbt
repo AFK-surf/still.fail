@@ -274,7 +274,7 @@ pub fn last(text : String) -> Json {
 }
 
 ///|
-/// The web's demo's chats (still.fail web/src/demo/fixtures.ts startingChats), its one station's, as its core lists them:
+/// The web's demo's chats, its one station's, as its core lists them:
 /// MBUI_FIXTURE=webdemo, the wide frame beside the web's story app-chat with the same chats (their people's pictures
 /// letters here).
 pub fn webdemo_days() -> Array[Json] {
@@ -881,7 +881,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "messagePeek" => Some(fixture_message_peek())
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
     "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
-    // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
+    // signed in with no workspace yet: landing, landing-invited (an invitation waiting), blocked (the
     // account not let into this app), landing-code (still.fail cloud asking for an invite code to make one)
     "workspaces" if f.mode == "landing" ||
       f.mode == "landing-invited" ||
@@ -986,7 +986,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "lines": ["本机数据无法打开，只能从网络读取"],
       })
     "status" => Some({ "items": [] })
-    // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
+    // what the last update brought: said on MBUI_FIXTURE=home-news only
     "changelog" if f.mode == "home-news" =>
       Some({
         "build": 1310,
@@ -1199,7 +1199,7 @@ pub fn fixture(mode : String) -> Source {
   }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
-    // coming, going (ListMotion.kt), for the recordings of the Home rows' motion
+    // coming, going, for the recordings of the Home rows' motion
     let at = {
       let w = @ui.env("MBUI_MOTION_AT")
       let mut v = 0
@@ -1543,7 +1543,7 @@ pub fn fixture(mode : String) -> Source {
       fixture_fetch(name, params, done)
     },
     stream: fn(name, params, _bytes, on_value, done) {
-      // a player's part read (preview.mbt stream_part): as read_bytes answers it, its bytes in one piece
+      // a player's part read: as read_bytes answers it, its bytes in one piece
       if name == "station.file.part" || name == "drive.read" {
         read_bytes(name, params, fn(r) {
           match r {

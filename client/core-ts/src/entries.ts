@@ -1,4 +1,4 @@
-// A thread's entries merged into its messages (entries.rs): the one place edits are applied. A message shows its
+// A thread's entries merged into its messages: the one place edits are applied. A message shows its
 // latest edit's text, attachments and quotes, marked edited.
 import { get, isObject } from "./util.ts";
 

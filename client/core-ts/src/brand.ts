@@ -1,4 +1,4 @@
-// The name the product goes by in what the core says to people (brand.rs): still.fail, or youdid.wtf in still.fail's
+// The name the product goes by in what the core says to people: still.fail, or youdid.wtf in still.fail's
 // own app on the test channel; monoid and monoid.zone where its cloud is monoid's (app.monoid.build: the same code,
 // another product, cloud/deploy.py CLOUDS). An app of its own that runs this core (still.fail mbui: `client.device`'s
 // `client`) calls it by the stable name on either channel. Set as the core starts, from its host (its channel, its

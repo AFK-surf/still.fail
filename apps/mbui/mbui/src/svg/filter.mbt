@@ -492,7 +492,7 @@ fn transform_light_source(source : LightSource, region : @skia.IntRect, ts : @sk
   }
 }
 
-// ── box blur (filter/box_blur.rs) ─────────────────────────────────────
+// ── box blur ─────────────────────────────────────
 
 ///|
 fn create_box_gauss(sigma : Float) -> FixedArray[Int] {
@@ -638,7 +638,7 @@ fn box_blur_horz(radius : Int, src : FixedArray[Byte], dst : FixedArray[Byte], w
   }
 }
 
-// ── IIR blur (filter/iir_blur.rs) ─────────────────────────────────────
+// ── IIR blur ─────────────────────────────────────
 
 ///|
 /// compiler-rt's __powidf2.
@@ -1057,7 +1057,7 @@ fn morphology(dilate : Bool, rx : Float, ry : Float, src : @skia.Pixmap) -> Unit
   }
 }
 
-// ── turbulence (filter/turbulence.rs) ─────────────────────────────────
+// ── turbulence ─────────────────────────────────
 
 ///|
 fn turb_random(seed : Int) -> Int {
@@ -1306,7 +1306,7 @@ fn noise2(
   lerp(sy, a, b)
 }
 
-// ── lighting (filter/lighting.rs) ─────────────────────────────────────
+// ── lighting ─────────────────────────────────────
 
 ///|
 priv struct V3 {

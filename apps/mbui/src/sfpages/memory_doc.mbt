@@ -201,7 +201,7 @@ fn doc_page(
   ])
 }
 
-// ── styles (Memory.css.ts) ──────────────────────────────────────────────
+// ── styles ──────────────────────────────────────────────
 
 ///|
 /// When it is read (memoryWhen: the muted; its head over it, the subtle, 2 apart).

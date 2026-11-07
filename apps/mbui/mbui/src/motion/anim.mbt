@@ -2,7 +2,7 @@
 // animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. A motion told
 // in a frame starts there, at its time (that frame draws it at its start; its end known as it is told); told between
 // frames, at the next. Its time goes by the frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) puts every
-// motion at its end at once (Motion.kt: one clock for all of it); a screenshot's run moves as any run.
+// motion at its end at once; a screenshot's run moves as any run.
 
 ///|
 /// A number that animates (Compose's Animatable).
@@ -344,7 +344,7 @@ pub fn Anim::animate(
   // (started earlier: stepped this frame to where it is by now, as get() asks)
   self.stepped = if start_at is Some(_) { -1 } else { c.frame_number() }
   self.stepped_at = c.moment()
-  // motion reduced: its length none (Motion.kt), there at once, its end the moment it was told, so a chain goes on
+  // motion reduced: its length none, there at once, its end the moment it was told, so a chain goes on
   // from it in the same build, all of it there at once
   if c.still() {
     self.dur = 0.0
@@ -376,7 +376,7 @@ pub fn Anim::animate(
 }
 
 ///|
-/// Off to `target`, unless it goes there already or is there (Motion.kt Follower.to; animate*AsState): told again
+/// Off to `target`, unless it goes there already or is there (animate*AsState): told again
 /// mid-way it goes on from where it is, as fast as it goes.
 #callsite(autofill(loc))
 pub fn Anim::follow(self : Anim, target : Double, spec : Spec, loc~ : SourceLoc) -> Unit {

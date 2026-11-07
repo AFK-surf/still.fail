@@ -5,7 +5,7 @@
 // its key masked. (Signing a subscription in, adding a profile, its "…" and its sharing are a later slice's.)
 
 ///|
-/// Why an allowance could not be read, in the provider's words (Profiles.kt quotaTrouble).
+/// Why an allowance could not be read, in the provider's words.
 fn quota_trouble(q : Json?) -> String {
   match text(q, "state") {
     "blocked" | "unavailable" => text(q, "detail")
@@ -137,7 +137,7 @@ fn group_by(list : Array[Json]) -> Array[(String, String, Array[Json])] {
 }
 
 ///|
-/// A kind of account's mark, before its section's title (Profiles.kt GroupMark), and before an account's row of 全部密钥:
+/// A kind of account's mark, before its section's title, and before an account's row of 全部密钥:
 /// its vendor's for a subscription, a key for keys.
 pub fn group_mark(c : @ui.Ctx, group : String) -> Unit {
   match group {
@@ -153,7 +153,7 @@ pub fn group_mark(c : @ui.Ctx, group : String) -> Unit {
 }
 
 ///|
-/// The workspace's profiles (Profiles.kt WorkspaceList): a section a kind of account, a shared one once, where it is
+/// The workspace's profiles: a section a kind of account, a shared one once, where it is
 /// under it; one whose station is away dimmed, said why.
 fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit] {
   let t = @sf.theme()
@@ -256,7 +256,7 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                     )
                   }
                   c.text(join([text(p, "planText"), line], " · "), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
-                  // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
+                  // its allowance a line of its own, so the name and where it is keep the row's width
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
                     // (each window in words, 每周剩余 78%: a row has the room, and a touch has no tip to say what W is)
@@ -312,7 +312,7 @@ fn profile_list_sample(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
-/// A profile in a station's list (Profiles.kt ProfileRow): whether it works, what it is, how many of its models are
+/// A profile in a station's list: whether it works, what it is, how many of its models are
 /// on, why its provider refuses it; its allowance.
 fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
   let t = @sf.theme()
@@ -374,7 +374,7 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
 }
 
 ///|
-/// The profile's allowance (Profiles.kt QuotaSection), the card under its account's, no title over it (its windows
+/// The profile's allowance, the card under its account's, no title over it (its windows
 /// say what they are): its windows large, its credits, its resets; when it was read under them (read again from the
 /// page's "…" with its check: open_profile_menu). One that could not be read says why; none to read (a key's), no card.
 fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Array[() -> Unit] {
@@ -485,7 +485,7 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
 let quota_read_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
-/// An allowance on its own page (Parts.kt QuotaDials): each window's number large, ten cells lit as far as is left,
+/// An allowance on its own page: each window's number large, ten cells lit as far as is left,
 /// its name and when it refills.
 fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
   let t = @sf.theme()
@@ -526,7 +526,7 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
 }
 
 ///|
-/// A grouped profile's allowance, a line under its words (Profiles.kt: padding top 6).
+/// A grouped profile's allowance, a line under its words.
 // kept across runs: a value (no field of it changes)
 let quota_line : @ui.Style = @ui.css("w=Full pt=S1_5")
 

@@ -1,12 +1,12 @@
 // The sheets over a chat (slice 8): its own, from "…" (still.fail apps/android chat/screens/ChatInfo.kt openChatInfo,
 // askTitle, InfoList, InfoRow), an agent's card (AgentSheet.kt openAgent, AgentStatus, AgentLines, AgentTiles,
 // AgentNotes, StopButton), its services and jobs and one job (Jobs.kt openJobs, JobGroups, JobInfoRow, JobDot, metaOf,
-// openJob, JobBody), and the jobs left up a long while at the top of Home (OpenJobs.kt). What they show is the core's
+// openJob, JobBody), and the jobs left up a long while at the top of Home. What they show is the core's
 // (the `chat`, `agentCard`, `stations`, `chatJobs`, `jobLog` and `longJobs` views); what is done goes through its calls.
 //
 // An agent's station opens the station's card in its place (settings/station_peek.mbt), its account how it runs.
 //
-// The jobs' and a job's sheets drag between half and nearly all of the screen, as Android's (Jobs.kt: draggable).
+// The jobs' and a job's sheets drag between half and nearly all of the screen, as Android's.
 
 // ── parts ───────────────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ fn state_of_badge(badge : String) -> String {
 }
 
 ///|
-/// A model's mark as a sheet and the history have it (Parts.kt ModelMark): its maker's mark on a tile with a hairline,
+/// A model's mark as a sheet and the history have it: its maker's mark on a tile with a hairline,
 /// the ladder's small block's 10 round (Parts.kt's 11: concentric so in a row's corner, 10 in, all four alike; 6 under
 /// 30), and its state's badge over the corner (Badge: solid accent waiting on someone, an accent ring
 /// at work, red failed) ringed in `around`.
@@ -92,7 +92,7 @@ let info_row_radius : Double = @sf.row_corner
 let info_list_radius : Double = @sf.card_corner
 
 ///|
-/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows the ladder's inset in, the ink at 5%.
+/// Rows on one quiet card: its rows the ladder's inset in, the ink at 5%.
 // kept across runs: a value (no field of it changes)
 let info_list_style : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(p=@sf.room_of(@sf.corner_inset)))
 
@@ -184,7 +184,7 @@ fn tone_color(tone : String) -> Int64 {
 }
 
 ///|
-/// For how long it has stood where it does (AgentSheet.kt agentSince): at work since its turn began, waiting as long
+/// For how long it has stood where it does: at work since its turn began, waiting as long
 /// as it has (of at most), else when it was last at it.
 fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
   let wait = field(a, "wait")
@@ -219,7 +219,7 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
 }
 
 ///|
-/// Where it stands (AgentSheet.kt AgentStatus): a dot in its tone on the first line's middle, its words and, muted,
+/// Where it stands: a dot in its tone on the first line's middle, its words and, muted,
 /// for how long; two lines at most.
 fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
   let t = @sf.theme()
@@ -239,10 +239,10 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
   |> ignore
 }
 
-// ── the chat's own sheet (ChatInfo.kt) ──────────────────────────────────
+// ── the chat's own sheet ──────────────────────────────────
 
 ///|
-/// The chat itself, from ⓘ (ChatInfo.kt openChatInfo): its name (with a way to change it) over who started it, how
+/// The chat itself, from ⓘ: its name (with a way to change it) over who started it, how
 /// many take part and when it was last written in; its agents, each where it stands (a tap opens its card); then what
 /// is in it: its pull requests, what else was said, what its agents and other chats' wrote each other, its public
 /// links. What is done with it is the "…"'s menu, a row of the list's. As tall as what it shows.
@@ -322,7 +322,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       if people.length() > 0 {
         let shown = if people.length() > 5 { people[:5].to_array() } else { people }
         c.box(w=Px(19.0 + 14.0 * (shown.length() - 1).to_double()), fn() {
-          // ringed in the sheet's ground (ChatInfo.kt: C.surface)
+          // ringed in the sheet's ground
           people_stack(c, src, shown, 16.0, ring=t.p.card)
         })
         |> ignore
@@ -457,7 +457,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             }
           _ => ()
         }
-        // what its agents and other chats' wrote each other, not in the chat: their own sheet (Letters.kt)
+        // what its agents and other chats' wrote each other, not in the chat: their own sheet
         match opt_number(thread, "id") {
           Some(th) if letters > 0.0 =>
             if info_row(c, "info/letters", fn() {
@@ -561,7 +561,7 @@ fn open_info(src : Source, r : ChatRef) -> Unit {
 }
 
 ///|
-/// The chat renamed (ChatInfo.kt askTitle), asked for its name as it was (@sf.ask): said, the core's `chat.rename`.
+/// The chat renamed, asked for its name as it was (@sf.ask): said, the core's `chat.rename`.
 fn open_rename(src : Source, r : ChatRef, thread : Double?, was : String, from~ : @sf.Anchor) -> Unit {
   @sf.ask(
     tr("android-chat.rename.title"),
@@ -587,10 +587,10 @@ fn open_rename(src : Source, r : ChatRef, thread : Double?, was : String, from~ 
   )
 }
 
-// ── an agent's card (AgentSheet.kt) ─────────────────────────────────────
+// ── an agent's card ─────────────────────────────────────
 
 ///|
-/// An agent of the chat in brief (AgentSheet.kt openAgent): what it runs and where it stands (with a stop while it
+/// An agent of the chat in brief: what it runs and where it stands (with a stop while it
 /// works), its latest lines, the figures that say most, then where to go on: the station it runs on, its screens, its
 /// account, its history, its jobs; and its context by hand (context.mbt).
 fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -> Unit) -> Unit {
@@ -778,7 +778,7 @@ fn open_agent(src : Source, r : ChatRef, key : String) -> Unit {
 }
 
 ///|
-/// A row of the card (AgentSheet.kt AgentRow): what it is about, what there is of it (`under` it what goes with it:
+/// A row of the card: what it is about, what there is of it (`under` it what goes with it:
 /// an account's allowance, a line of its own), what is under way at its end (`trailing`), where a tap leads.
 fn agent_row(
   c : @ui.Ctx,
@@ -842,7 +842,7 @@ let info_agent_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, c
 let info_agent_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// Stopping its turn, while it works (AgentSheet.kt StopButton): red on its tint, a spinner while it is asked.
+/// Stopping its turn, while it works: red on its tint, a spinner while it is asked.
 fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let t = @sf.theme()
   let skey = "stop/" + station + "/" + key
@@ -1004,10 +1004,10 @@ fn agent_notes(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
   |> ignore
 }
 
-// ── jobs (Jobs.kt, OpenJobs.kt) ─────────────────────────────────────────
+// ── jobs ─────────────────────────────────────────
 
 ///|
-/// A job's dot's colour (Jobs.kt toneTint): a service up or a job alive green, one restarting amber, one that died
+/// A job's dot's colour: a service up or a job alive green, one restarting amber, one that died
 /// red; one over the subtle grey (None: the text's own for its word).
 fn job_tint(tone : String) -> Int64? {
   let t = @sf.theme()
@@ -1076,7 +1076,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
 }
 
 ///|
-/// A group's label (Controls.kt GroupLabel): 13, muted, 14 above it and 4 under.
+/// A group's label: 13, muted, 14 above it and 4 under.
 fn group_label(c : @ui.Ctx, label : String) -> Unit {
   c.box(style=@sf.panel_words_in(), pt=14.0, pb=4.0, fn() {
     c.text(label, size=@sf.theme().t.meta, color=@sf.theme().p.muted, wrap=false) |> ignore
@@ -1085,7 +1085,7 @@ fn group_label(c : @ui.Ctx, label : String) -> Unit {
 }
 
 ///|
-/// Services, then background jobs (Jobs.kt JobGroups), each group's head with how many are up or alive; a service up
+/// Services, then background jobs, each group's head with how many are up or alive; a service up
 /// or being started again opens its page (service.mbt), one that did not start (or is over) and any job its sheet.
 fn job_groups(
   c : @ui.Ctx,
@@ -1107,7 +1107,7 @@ fn job_groups(
       for j in services {
         let id = text(Some(j), "id")
         if job_row(c, "job/" + id, Some(j)) {
-          // up or being started again: its page (Preview.kt); else what it said and its output (picked where it is
+          // up or being started again: its page; else what it said and its output (picked where it is
           // shown beside the list: the wide frame's 任务 tab)
           let tone = text(Some(j), "tone")
           if pick is Some(f) && tone != "up" && tone != "restart" {
@@ -1146,7 +1146,7 @@ fn job_groups(
 }
 
 ///|
-/// What matters now of the chat's services and jobs (Jobs.kt openJobs), from the bar's button: those over are not
+/// What matters now of the chat's services and jobs, from the bar's button: those over are not
 /// shown (the core leaves them out).
 fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
@@ -1210,7 +1210,7 @@ fn waiting_rows(c : @ui.Ctx, error : Json?, sample : () -> Unit) -> Unit {
 }
 
 ///|
-/// A job, from the chat's sheet (Jobs.kt openJob, JobBody): its name and how it stands, what it said or its output as it
+/// A job, from the chat's sheet (JobBody): its name and how it stands, what it said or its output as it
 /// grows (a service has only its output), stopped from here while it runs.
 fn job_body(c : @ui.Ctx, src : Source, r : ChatRef, id : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
@@ -1252,7 +1252,7 @@ fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
 }
 
 ///|
-/// A job, what it is, said and wrote (Jobs.kt openJob's body): its dot, name and line, its command, then what it said
+/// A job, what it is, said and wrote: its dot, name and line, its command, then what it said
 /// or its output (a service's output alone), and stopping it while it runs. In its panel (open_job), on its words' line
 /// (the wide frame's 任务 tab has its own: sfdesk's jobs.mbt).
 fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) -> Unit {
@@ -1322,7 +1322,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
         |> ignore
       }
     } else {
-      // in a terminal's colours where the core says them (its `runs`: Jobs.kt termText), else as words
+      // in a terminal's colours where the core says them, else as words
       let output = job_output_lines(src, r.station, id, 300.0, t.p.text, t.dark)
       c.box(
         w=Fill(1.0),
@@ -1408,7 +1408,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
 }
 
 ///|
-/// What is left up a long while on the workspace's stations (OpenJobs.kt), at the top of Home's list: web services and
+/// What is left up a long while on the workspace's stations, at the top of Home's list: web services and
 /// background jobs, each under its heading, three of a group and the rest folded under 还有 N 个; nothing while there
 /// are none. A row leads to its chat; its stop at its end.
 fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
@@ -1459,7 +1459,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A job left up (OpenJobs.kt OpenRow): its dot, its name over where it is and how long; the row to its chat, stop at
+/// A job left up: its dot, its name over where it is and how long; the row to its chat, stop at
 /// its end.
 fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let t = @sf.theme()
@@ -1473,7 +1473,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   if chat is Some(Object(_)) && c.clicked(row) {
     @sfbase.history_push()
     app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
-    // a service: its page over its chat (OpenJobs.kt OpenRow)
+    // a service: its page over its chat
     if flag(job, "service") {
       app.nav.push(Service(station, id))
     }
@@ -1576,7 +1576,7 @@ fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 }
 
 ///|
-/// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
+/// A chat written with, its row in the letters' sheet: 18 in, 10 over and under, its two lines 2 apart;
 /// pressed a shade.
 // kept across runs: a value (no field of it changes)
 let letters_row : @ui.Style = @ui.css("w=Full py=S2_5 gap=S0_5 pressed{bg=Hover}")

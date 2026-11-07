@@ -1,4 +1,4 @@
-// Going somewhere on the files' page (still.fail web/src/pages/FilesGo.tsx, FilesGo.css.ts): another station from a
+// Going somewhere on the files' page: another station from a
 // folder's trail (the station's button at its start: the same folder there when it has one, else its home; ⌥ in a new
 // tab), and a folder by its path (⌘⇧G, as Finder's 前往文件夹): `mba:~/Projects` names the station before the colon, `~`
 // its home, a path without a slash in front is under the folder shown; Tab completes a folder's name, as a terminal

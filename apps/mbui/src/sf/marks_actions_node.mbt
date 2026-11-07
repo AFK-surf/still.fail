@@ -1,4 +1,4 @@
-// Marking's actions in a picture's bar as nodes of the window's tree (marks_actions's, ImageMarks.kt MarksActions):
+// Marking's actions in a picture's bar as nodes of the window's tree (marks_actions's):
 // why making the marked picture failed, 取消, 下载标注后的图片, and 添加到对话 where there is a chat's draft to put it in;
 // each what it says bound to what says it as that changes, each done at the moment its press is let go on it.
 
@@ -23,7 +23,7 @@ pub(all) struct MarksActionsSaid {
 let marks_error_ink : Int64 = 0xFF7B6BFFL
 
 ///|
-/// 添加到对话's ground (ImageMarks.kt: the accent of its own), its words and icon on it.
+/// 添加到对话's ground, its words and icon on it.
 let marks_put_ground : Int64 = 0xE5704AFFL
 
 ///|

@@ -457,7 +457,7 @@ pub fn chat_row_node(
 ///|
 /// What a finger's row `row` swiped left uncovers in its slot as it has gone `off` (points, from 0 to as wide as the
 /// slot), in a node past its end that goes with it: at that end as far as the row has gone and no further
-/// (mobile/Home.tsx mSwipeUnder), quiet until letting go would archive it (`past`), then ink (over swipe_fill_ms); 归档
+/// , quiet until letting go would archive it (`past`), then ink (over swipe_fill_ms); 归档
 /// at the slot's end in it, laid out the slot across so it is whole (what of it the row has not uncovered yet, cut
 /// with it). Nothing while the row is where it rests.
 fn swipe_under_node(
@@ -498,7 +498,7 @@ fn swipe_under_node(
 }
 
 ///|
-/// A finger's row (mobile/Home.tsx SwipeArchive) swiped left in its slot `sw` to archive its chat (swipe_to_archive's):
+/// A finger's row swiped left in its slot `sw` to archive its chat (swipe_to_archive's):
 /// left past the slop and plainly across first it is the swipe (swipe_claims: the row's press and hold let go), else the list's (or what the row is on:
 /// the tape's, to the right). The row follows the finger, `off` how far (points); let go past `archive_at_share` of
 /// its width or flung left it goes off to the left as fast as the finger let it go and, there, its chat is archived
@@ -644,7 +644,7 @@ fn row_aside_w_node(item : ChatItem, lead : String) -> Double {
 }
 
 ///|
-/// A row's title as a field in its place (row_rename's, Rename.tsx TitleInput, from a mouse's 重命名) in `n`: its words
+/// A row's title as a field in its place (row_rename's, from a mouse's 重命名) in `n`: its words
 /// the title's, the focus in it as it comes; Enter saves it (`chat.rename`), Esc or leaving it lets it be.
 fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
   rows.rename_field.set(@signals.untracked(item).title)

@@ -1,6 +1,6 @@
 // The native shell of a program run in classic Wasm (the user, 2026-11-03: no C compiled for an app in development):
 // the C host linked as the native program links it, and the program, an app's .wasm, run by wasmtime over it. Its
-// imports are the host's C calls (wasm_thunks.c, written by tools/wasmhost), what its calls of the host give and take
+// imports are the host's C calls (written by tools/wasmhost), what its calls of the host give and take
 // (mbw_take_string, mbw_take_bytes: mbui/wasmrt), and what MoonBit's own runtime asks (a line written, an exit, the
 // time, the process's arguments and environment). The program's main runs as the native program's does: the host's
 // run (mb_host_run) does not come back while the app is up, the program called into from inside it.

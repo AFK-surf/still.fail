@@ -141,7 +141,7 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
         }
         None => false
       }
-      // a screen reader's (BarSettings.kt's actions 左移, 右移): one slot along
+      // a screen reader's (右移): one slot along
       if c.action_asked(id, Decrement) && j > 0 {
         move(j, j - 1)
       }
@@ -209,7 +209,7 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
   |> ignore
 }
 
-// ── styles (BarSettings.kt) ─────────────────────────────────────────────
+// ── styles ─────────────────────────────────────────────
 
 ///|
 /// The slots side by side, each a quarter of the card, as far apart as they go where it is wider than four slots.

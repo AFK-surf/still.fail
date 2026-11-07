@@ -1,4 +1,4 @@
-// A segmented choice as the web's narrow pages have it (web/src/mobile/parts.tsx Seg; Android's Parts.kt Seg): mbui's
+// A segmented choice as the web's narrow pages have it (web/src/mobile/parts.tsx Seg): mbui's
 // sliding toggle group in Seg's look. Not a part of its own: `segmented` (parts.mbt) draws it on a narrow page, the
 // web's Segmented on a wide one.
 
@@ -64,7 +64,7 @@ fn seg(
       id=track,
       h=Px(height),
       radius~,
-      // det-ok(style-literal): the ink at 6%, Seg's own (Parts.kt)
+      // det-ok(style-literal): the ink at 6%, Seg's own
       bg=alpha(t.p.text, 0.06),
       inner,
     )

@@ -1,4 +1,4 @@
-// A chat's side panel (web/src/pages/ChatPage.tsx, the mbui app's wide_panel.mbt): the tabs open beside it and the one in
+// A chat's side panel (the mbui app's wide_panel.mbt): the tabs open beside it and the one in
 // front, kept on this device for each chat (prefs `chatTabs`, by `<station>:<session>` as its page names it; `new:<workspace>`
 // for a workspace's new chat). What a client draws is the chat view's `tabs`: those kept that the chat has, and the one
 // in front; it changes them with `chat.tabs.open/close/front/clear`, which keep the result. Self-contained: the web's
@@ -21,7 +21,7 @@ export type Kept = { tabs: string[]; active?: string };
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
-/// A visualization's tab (`file:["<session>","<path>","<name>"]`, web/src/Preview.tsx fileService).
+/// A visualization's tab (`file:["<session>","<path>","<name>"]`).
 function isFile(key: string): boolean {
   if (!key.startsWith("file:")) return false;
   try {
@@ -32,7 +32,7 @@ function isFile(key: string): boolean {
   }
 }
 
-/// A station's screen beside the chat (`screen:["<station>","<screen>"]`, web/src/screen/ScreenLink.tsx screenTab): its
+/// A station's screen beside the chat (`screen:["<station>","<screen>"]`): its
 /// station's address and the screen's id, any station's (a link to it in a message).
 function isScreen(key: string): boolean {
   if (!key.startsWith("screen:")) return false;

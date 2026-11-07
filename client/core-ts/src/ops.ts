@@ -1,4 +1,4 @@
-// What the UIs can have done on a station or on still.fail cloud, each by its name (ops.rs). A UI never makes a request
+// What the UIs can have done on a station or on still.fail cloud, each by its name. A UI never makes a request
 // itself: it names what it wants done and with what, and the core knows the request that does it and what it changes
 // (the effects declared beside each operation).
 import { CoreError } from "./error.ts";
@@ -47,7 +47,7 @@ export type Request = {
   effect: Effect;
 };
 
-/// Percent-encodes a path segment like encodeURIComponent (station.rs `encode`).
+/// Percent-encodes a path segment like encodeURIComponent.
 export function encode(text: string): string {
   let out = "";
   for (const b of utf8(text)) {
@@ -63,7 +63,7 @@ const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "account", "a
 /// What each operation takes (`field:type`, `field?:type` when it may be left out; types: string, number, boolean,
 /// strings, json), station operations first: the contract the UIs' bindings are made from (scripts/operations.ts:
 /// web/src/core/operations.ts, the Android app's data/Operations.kt). It names exactly what `request` reads of the
-/// params (test/ops.test.ts checks it), besides `station` and `account`.
+/// params, besides `station` and `account`.
 export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
   "session.cancelRetry": "key:string thread:number seq:number",

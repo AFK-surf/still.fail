@@ -1,5 +1,5 @@
 // The language's own async primitives, bound as moonbitlang/async binds them
-// (internal/coroutine/async_primitive.mbt). Everything in effect.mb is built on
+// . Everything in effect.mb is built on
 // these four: a task is a chain of continuations the scheduler resumes, and
 // cancellation is the language's (`defer` runs, `catch` cannot swallow it).
 

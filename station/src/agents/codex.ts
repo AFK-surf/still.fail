@@ -1,4 +1,4 @@
-// Codex driver (the Rust station's runtime/codex.rs): one shared `codex app-server` per profile, under a runner whose id comes
+// Codex driver: one shared `codex app-server` per profile, under a runner whose id comes
 // from the profile, one thread per session.
 //
 // Pinned by spikes:
@@ -435,7 +435,7 @@ class Host {
 /// `draining`: being replaced, its turns ending on it (`drain`).
 export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean; runtimeStale?: boolean; keep?: number; draining?: boolean };
 
-/// A thread as a next station takes it up (codex.rs HandedThread), with what its app-server needs (HandedHost).
+/// A thread as a next station takes it up, with what its app-server needs (HandedHost).
 export type CodexSnapshot = {
   runtime: "codex";
   threadId: string;
@@ -502,7 +502,7 @@ const TAKE_UP_LINES = 4096;
 const UNTOLD = ['{"method":"turn/diff/updated"', '{"method":"item/commandExecution/outputDelta"'];
 
 /// A borrowed login this close to its end is replaced in its home's auth.json, under the app-server running on it: Codex
-/// reads that file again when it is refused (UnauthorizedRecovery's first step, codex-rs login/src/auth/manager.rs) and
+/// reads that file again when it is refused (UnauthorizedRecovery's first step) and
 /// goes on with the new one, its threads and their turns as they were.
 const LENT_RENEW_MS = 6 * 3600_000;
 

@@ -1348,7 +1348,7 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 ///|
 /// A box laying out its children in a row or a column, flexbox style. `notch_r` > 0 cuts a notch into its top edge
 /// (its ground, border and glass alike): a circle of that radius about the middle of its top, `notch_y` below the edge
-/// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch). `aspect` > 0: its
+/// (above it when negative), met by the edge through fillets of `notch_fillet`. `aspect` > 0: its
 /// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
 /// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what

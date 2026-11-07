@@ -109,7 +109,7 @@ export type AdminDeps = {
   parts?: StationParts;
 };
 
-/// The header a write's key comes in, and how long an answer is kept (once.rs).
+/// The header a write's key comes in, and how long an answer is kept.
 const ONCE_KEY = "idempotency-key";
 const ONCE_KEEP_MS = 10 * 60_000;
 type Kept = { status: number; headers: Record<string, string>; body: Buffer };
@@ -242,7 +242,7 @@ export class Admin {
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
-    // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
+    // A write with a key is done once, however often it is asked; the key is the viewer's own.
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
     const answer = keyed ? await this.once(`${r.viewer.email}\0${r.path}\0${key}`, () => this.answer(r)) : await this.answer(r);
@@ -252,7 +252,7 @@ export class Admin {
     return runtimeCompatible(r, answer);
   }
 
-  /// `write`'s answer, or the answer the first write under `key` had (once.rs): while the first is under way the
+  /// `write`'s answer, or the answer the first write under `key` had: while the first is under way the
   /// others wait for it; a 5xx is not kept (the write may not have happened: asked again, it is tried again).
   private async once(key: string, write: () => Promise<Answer>): Promise<Answer> {
     const now = (this.deps.clock ?? liveClock).currentTimeMillisUnsafe();

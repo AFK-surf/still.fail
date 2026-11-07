@@ -1,4 +1,4 @@
-// What a chat runs on, chosen (choose.rs). A new chat's page (`newChat`): the station it starts on and the model,
+// What a chat runs on, chosen. A new chat's page (`newChat`): the station it starts on and the model,
 // runtime, depth and account it runs there, as last picked on this device (records in the data center's `choice`
 // table, each workspace's apart). A model control (`pick`): what a chat, a connect or a new chat runs on now, what is
 // picked in its panel until saved, and what that means. Profiles a station has not checked since it started are
@@ -986,7 +986,7 @@ export class Choose implements Owner {
     return op;
   }
 
-  /// What a connect being added will run on (connect_flow.rs).
+  /// What a connect being added will run on.
   adding(station: string, form: string): J {
     return this.#adding.get(`${station}\u0001${form}`);
   }

@@ -27,7 +27,7 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 /// its panel).
 fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
+  // with the bell in the rail, they are in its panel
   if rail_items(src, w.id).contains("attention") {
     return
   }
@@ -244,7 +244,7 @@ fn archive_open(it : Json) -> Unit {
 }
 
 ///|
-/// Looking for one (Archive.css.ts search): a field at the list's top on the pointer's ground, as what stands over a
+/// Looking for one: a field at the list's top on the pointer's ground, as what stands over a
 /// sidebar's list is (the theme's band's: its height, its words' room, its mark, its words).
 fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
   let t = @sf.theme()
@@ -320,7 +320,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
       fn() {
         @sf.name_words(c, title, l.title) |> ignore
         if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
-          // (where it was, on hover: Archive.tsx's tip)
+          // (where it was)
           let kind = c.id("side/archived-kind/" + key)
           c.box(style=@sfpages.kind_slot, id=kind, taps=false, points=true, fn() {
             @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark_of(text(v, "stationIcon")), t.p.muted)
@@ -370,7 +370,7 @@ fn archive_sample(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// An archived chat's 恢复 and 删除 (Archive.css.ts actions: 2 apart, @sf.row_key_box); one under way: turning.
+/// An archived chat's 恢复 and 删除 (@sf.row_key_box); one under way: turning.
 fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int, busy : Bool) -> Unit {
   let t = @sf.theme()
   let v = Some(it)
@@ -524,7 +524,7 @@ let arch_empty_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, 
 let arch_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, leading=L6)
 
 ///|
-/// 待处理 under 新建对话 where the rail has no bell (Attention.tsx AttentionEntry, not the rail's): the bell, its
+/// 待处理 under 新建对话 where the rail has no bell (not the rail's): the bell, its
 /// words, how many there are (a small red count, none read since they came); pressed, the panel of them under it.
 /// Nothing while there is nothing.
 fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {

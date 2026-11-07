@@ -110,7 +110,7 @@ const INVITE_KEY = "stillfail.invite";
  * workspace is made.
  */
 export function inviteCode(): string {
-  // None on a page built to HTML (the site's demo has the workspace's pages: demo/prerender.tsx).
+  // None on a page built to HTML.
   if (typeof location === "undefined") return "";
   let given = new URLSearchParams(location.search).get("invite");
   try {

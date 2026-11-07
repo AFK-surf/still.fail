@@ -1,5 +1,5 @@
 // The native shell's side of a program run in classic Wasm (wasm_shell.c): what the calls tools/wasmhost writes
-// (wasm_thunks.c) ask of it. The program's memory holds its values as the native program's heap does ([rc][length],
+//  ask of it. The program's memory holds its values as the native program's heap does ([rc][length],
 // then what it holds), so a borrowed one is given to the C host where it lies.
 #ifndef MBUI_WASMHOST_H
 #define MBUI_WASMHOST_H

@@ -1,4 +1,4 @@
-// What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, mbui's view/list_motion.mbt):
+// What changes the height of a chat's list plays one at a time (mbui's view/list_motion.mbt):
 // words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
 // its avatar, what comes under a post (what is answered there goes only out of sight: Turns::in_turn). Each waits its
 // turn here, in the order they came, but words sent: they fly at once, in the list the frame they are sent
@@ -27,7 +27,7 @@ pub(all) enum TurnFor {
 
 ///|
 /// A turn asked for: what for, how long its motion takes (inf: till said over), and whether it goes after the others
-/// asked with it (an agent's line, after what closes under a post as it starts: Chat.kt `after`).
+/// asked with it (an agent's line).
 pub(all) struct TurnAsk {
   what : TurnFor
   ms : Double
@@ -116,7 +116,7 @@ let turn_owed_ms : Double = 1.0
 pub let turn_calm_ms : Double = 2.0 * 1000.0 / 60.0
 
 ///|
-/// The most a turn holds the next one back, whatever it does (one whose motion never ends: ListTurns.kt MOST_MS).
+/// The most a turn holds the next one back, whatever it does.
 pub let turn_most_ms : Double = 3000.0
 
 ///|
@@ -124,7 +124,7 @@ pub fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after?
   self.asked_n = self.asked_n + 1
   // (said once as it is asked, from the moment it is: frames until its turn is played, Moving below)
   let at = self.moment(c)
-  // (one going after the others asked with it asked a couple of frames on: ListTurns.kt take's `after`)
+  // 
   self.asks.push({ what, ms, after, at: if after { at + turn_calm_ms } else { at }, n: self.asked_n })
 }
 
@@ -203,7 +203,7 @@ pub let unseen_at : Double = -1.0e9
 ///|
 /// The row of what the viewer just did here (a card's option picked: their answer, in the outbox) takes its turn as
 /// they do it, before what comes of it (the agent's line taking it up): the next row asked comes in it
-/// (web/src/listQueue.ts reserveRow), the options staying as they are, none pressed. No row by
+/// , the options staying as they are, none pressed. No row by
 /// turn_most_ms (an option that closes the card without one), the turn goes.
 pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
   ignore(self)
@@ -287,7 +287,7 @@ pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 ///|
 /// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
 /// `list_rest`: when the list's glide after what came is over (Ctx::list_info's `glide_rest`; inf: under way, its end
-/// not known), not the reader's hand on it (listQueue.ts listStill).
+/// not known), not the reader's hand on it.
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
   self.list_rest = list_rest
   self.stepped = c.frame_number()
@@ -362,9 +362,9 @@ impl @ui.Moving for Turns with rest_at(self, now, frame) {
 }
 
 ///|
-/// How long a turn holds the next: a row coming in (its rise: Chat.kt admit, 320), an agent's line (its room opening,
-/// 220), a decision's options closing (their leave and the delayed close: ListMotion.kt CLOSE_TURN_MS), 忽略 going
-/// (Chat.kt AskDismiss, 280).
+/// How long a turn holds the next: a row coming in (320), an agent's line (its room opening,
+/// 220), a decision's options closing, 忽略 going
+/// (280).
 pub let row_turn_ms : Double = 320.0
 
 ///|

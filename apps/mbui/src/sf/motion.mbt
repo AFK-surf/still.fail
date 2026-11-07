@@ -22,7 +22,7 @@ pub let enter_ms : Double = 220.0
 pub let enter_rise : Double = 6.0
 
 ///|
-/// What goes from a list (LEAVE, LEAVE_TO: listMotion.ts, settling.tsx): a copy where it was, shrinking to 0.9 as it
+/// What goes from a list (LEAVE): a copy where it was, shrinking to 0.9 as it
 /// fades over 200 ms on CSS's ease-out (`leave`).
 pub let leave_ms : Double = 200.0
 
@@ -41,13 +41,13 @@ pub let leave : @motion.Trans = @motion.trans(fade=0.0, scale=leave_scale, spec=
 pub let waiting_in : @motion.Trans = @motion.trans(fade=0.0, dy=enter_rise, spec=@motion.tween(180.0, ease=Out))
 
 ///|
-/// A page over the whole window, a picture to share (FilePreview.css.ts fp: fadeInKeyframes): faded in over 140 ms on
+/// A page over the whole window, a picture to share: faded in over 140 ms on
 /// the ease-out; gone by kit's pop_out, as a dialog.
 // kept across runs: a value (no field of it changes)
 pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out))
 
 ///|
-/// A row new to a list (listMotion.ts): grown in where it is from 0.9 and clear over 240 ms on the ease-out, 100 ms
+/// A row new to a list: grown in where it is from 0.9 and clear over 240 ms on the ease-out, 100 ms
 /// after the list changed (what makes way for it moves first).
 // kept across runs: a value (no field of it changes)
 pub let row_grown_in : @motion.Trans = @motion.trans(
@@ -99,6 +99,6 @@ pub let wake_ms : Double = @kit.media_wake_ms
 pub let sleep_ms : Double = @kit.media_sleep_ms
 
 ///|
-/// One breath of what waits (waiting.css.ts breathe, Jobs.css.ts jobBreathe): 1.4 s, from whole to `low` and back on
+/// One breath of what waits (waiting.css.ts breathe): 1.4 s, from whole to `low` and back on
 /// CSS's ease-in-out each way.
 pub let breath_ms : Double = 1400.0

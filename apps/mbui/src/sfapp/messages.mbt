@@ -10,7 +10,7 @@ priv struct Here {
 }
 
 ///|
-/// The chat's own colours (ChatInk.kt): the wide screen's tokens over the phone's paper; `neutral` is its bubble.
+/// The chat's own colours: the wide screen's tokens over the phone's paper; `neutral` is its bubble.
 priv struct Ink {
   text : Int64
   muted : Int64
@@ -65,7 +65,7 @@ let opened_notices : Map[String, Bool] = {}
 let image_quoted_at : Ref[Int] = { val: -1 }
 
 ///|
-/// The kind of a file by its name (FileKinds.kt kindOf): image, video, or anything else.
+/// The kind of a file by its name: image, video, or anything else.
 fn kind_of(name : String) -> String {
   let lower = @sf.lower(name)
   let ext = match lower.rev_find(".") {
@@ -95,7 +95,7 @@ fn owner_of(here : Here, a : Attachment) -> String {
 }
 
 ///|
-/// What an activity shows, steadied (Chat.kt steady): another thing replaces the shown one once it has stayed 700 ms
+/// What an activity shows, steadied: another thing replaces the shown one once it has stayed 700 ms
 /// (a passing 请求中 does not flicker by); the same thing's new words show at once. Per row: what shows (its key, its
 /// words), what showed before it, and when it came (the frames' clock).
 priv struct Steady {
@@ -109,12 +109,12 @@ priv struct Steady {
 let steadies : Map[String, Steady] = {}
 
 ///|
-/// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).
+/// How far an activity's ring reaches round its avatar (its ring 3dp round it).
 let ring_room : Double = 3.0
 
 ///|
-/// An agent's ring round its avatar (Chat.kt WorkRing): at work, eight arcs in the accent, the brightest a step further
-/// round every 100 ms (Spokes.kt); waiting on work it started, a still, quiet whole ring.
+/// An agent's ring round its avatar: at work, eight arcs in the accent, the brightest a step further
+/// round every 100 ms; waiting on work it started, a still, quiet whole ring.
 fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
   let t = @sf.theme()
   if waiting {

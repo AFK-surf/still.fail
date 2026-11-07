@@ -1,4 +1,4 @@
-// The Indic shaper (harfrust's ot/shaper/indic.rs, indic_machine.rs, syllabic.rs, vowel_constraints.rs): syllables
+// The Indic shaper: syllables
 // found by the Ragel machine, consonants placed by what the font's below/post/pre-base forms would substitute, the
 // initial reordering before the basic features and the final one after them.
 
@@ -535,7 +535,7 @@ fn find_syllables_indic(buffer : Buffer) -> Unit {
 }
 
 ///|
-/// Inserts a dotted circle at the start of each broken syllable (syllabic.rs).
+/// Inserts a dotted circle at the start of each broken syllable.
 fn insert_dotted_circles(face : @font.Face, buffer : Buffer, broken : Int, category : Int, repha : Int, position : Int) -> Bool {
   if (buffer.scratch_flags & SCRATCH_HAS_BROKEN_SYLLABLE) == 0 {
     return false

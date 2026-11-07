@@ -76,7 +76,7 @@ static NSString *sf_signal_name(long sig) {
   }
 }
 
-/// A Mach exception's name (<mach/exception_types.h>), as a crash log says it.
+/// A Mach exception's name, as a crash log says it.
 static NSString *sf_mach_name(long type) {
   switch (type) {
     case 1: return @"EXC_BAD_ACCESS";

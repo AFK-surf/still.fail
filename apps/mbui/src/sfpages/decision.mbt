@@ -113,7 +113,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             _ => ()
           }
           match m.card {
-            // an agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words
+            // an agent's request for a vault item: approved here, not answered in words
             Some({ vault, assignee, .. }) if vault != "" =>
               match here.core {
                 Some(core) => @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, assignee))
@@ -123,7 +123,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
               match (options, thread) {
                 (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn(i) {
                     // the answer's row comes in first, in a turn kept for it now, they close in the next; the list
-                    // following its end for it, as for words sent (Decisions.tsx DecisionOptions' pick). An option
+                    // following its end for it, as for words sent. An option
                     // that closes the card says nothing: no row comes, nothing waits for one
                     match turns {
                       Some(tu) if !list[i].closes => {
@@ -217,9 +217,9 @@ fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body
 }
 
 ///|
-/// An agent's request about a vault item, in place of its post `m`'s words (VaultAsk.tsx VaultAsk): what is asked as a
-/// card, as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer
-/// at its foot as the core said it with the message (`ask.answer`: the vault it holds; VaultApproval.tsx VaultCard), so
+/// An agent's request about a vault item, in place of its post `m`'s words: what is asked as a
+/// card, as wide as what it says (320 at least where there is the room), its answer
+/// at its foot as the core said it with the message (`ask.answer`: the vault it holds), so
 /// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided on screen, the
 /// card stays as it is, the answer given marked and none pressed any more, and is that line once out of sight, as a
 /// post's answered options are (message_decision, Turns::in_turn). Where nothing is answered (no core: a letter's), the
@@ -570,7 +570,7 @@ let decision_box : @ui.Style = @ui.css("w=Full gap=S1_5 align=AStart")
 let decision_rooms : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
-/// The options (Decisions.css.ts options): 8 over them.
+/// The options: 8 over them.
 // kept across runs: a value (no field of it changes)
 let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
 

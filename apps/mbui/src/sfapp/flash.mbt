@@ -1,4 +1,4 @@
-// A message gone to flashing (still.fail apps/android chat/screens/ChatMotion.kt flash, flashed): which, how lit, and the
+// A message gone to flashing (flashed): which, how lit, and the
 // accent's ground it is drawn in (by its message: messages.mbt).
 
 ///|
@@ -6,7 +6,7 @@
 let flashing : Ref[(String, Double)] = Ref(("", 0.0))
 
 ///|
-/// The accent's ground in a chat (ChatMotion.kt accentBg: web --accent-bg).
+/// The accent's ground in a chat.
 fn flash_ground() -> Int64 {
   if @sf.theme().dark {
     0x43251AFFL

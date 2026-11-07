@@ -84,7 +84,7 @@ export default defineConfig(({ mode }) => {
         // still.fail's app drawn by mbui (mbui.html: src/mbui/core.ts) beside the web's own pages, on the same core
         ...(consoleBuild ? {} : { input: { main: here("index.html"), mbui: here("mbui.html") } }),
         output: {
-          // Scripts that come in as files (pdf.js's worker, `pdf.worker.min.mjs?url`) keep their .mjs, and a module
+          // Scripts that come in as files (pdf.js's worker) keep their .mjs, and a module
           // loaded from a file served as application/octet-stream fails (strict MIME). The dev cloud and older hosts
           // only know .js as JavaScript, so name them .js.
           assetFileNames: (asset) => (asset.names.some((n) => n.endsWith(".mjs")) ? "assets/[name]-[hash].js" : "assets/[name]-[hash][extname]"),

@@ -8,7 +8,7 @@ import { STILLFAIL_SURFACE, cardOfEntry } from "../../store/rows.ts";
 import type { Store } from "../../store/store.ts";
 
 
-/// The most a widget's state takes, as JSON (web/src/Viz.tsx keeps no more); the most of its modelContent the agent
+/// The most a widget's state takes, as JSON; the most of its modelContent the agent
 /// is told, in characters.
 const WIDGET_STATE_MAX = 16384;
 const WIDGET_MODEL_MAX = 4000;

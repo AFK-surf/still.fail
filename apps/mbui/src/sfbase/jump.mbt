@@ -1,4 +1,4 @@
-// A message a chat is to show (still.fail web/src/jumpTo.ts): a row's state line pressed where the core says what its
+// A message a chat is to show: a row's state line pressed where the core says what its
 // state is about, a notification's, a search's. Asked for here as the chat is opened (by either frame); its page takes
 // it once the message is in, goes there and flashes it.
 
@@ -8,7 +8,7 @@ pub let go_tos : Map[String, Double] = {}
 
 ///|
 /// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
-/// there), which flashes (ChatHost.kt goTo, jumpTo.ts jumpTo): only the `passage` of it a quote quoted, where its words
+/// there), which flashes: only the `passage` of it a quote quoted, where its words
 /// have it (Chat.tsx Quotes' jump); the whole message else.
 pub fn go_to(r : ChatRef, seq : Double, passage? : String = "") -> Unit {
   let k = r.station + "\u{1}" + r.session
@@ -25,8 +25,8 @@ pub fn go_to(r : ChatRef, seq : Double, passage? : String = "") -> Unit {
 pub let go_to_passages : Map[String, String] = {}
 
 ///|
-/// The words a search opened each chat at its message with (Screen.Chat.words, jumpTo.ts `words`), by chat: marked in
-/// that message rather than it flashing (Chat.kt host.goToWords).
+/// The words a search opened each chat at its message with (Screen.Chat.words), by chat: marked in
+/// that message rather than it flashing.
 pub let go_to_words : Map[String, Array[String]] = {}
 
 ///|

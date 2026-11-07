@@ -1,4 +1,4 @@
-// A runtime's stream as live steps (runtime/claude.rs LiveFromClaude, runtime/codex.rs LiveFromCodex): a step starts,
+// A runtime's stream as live steps: a step starts,
 // grows by deltas and ends; the phase says where the turn stands with the model. What each keeps between frames is
 // plain data (`state`), so a station taking a session up goes on with the steps in flight.
 import type { LiveEvent } from "./runtime.ts";

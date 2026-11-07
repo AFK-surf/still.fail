@@ -15,7 +15,7 @@ pub fn decode_charset(data : Bytes, charset : String) -> String? {
 }
 
 ///|
-/// A file's bytes as text, and the encoding that made it (still.fail's Android app's TextModel.kt decodeText): a byte
+/// A file's bytes as text, and the encoding that made it: a byte
 /// order mark settles it; else strict UTF-8 (a character cut in half at the end of a `truncated` front, or of a
 /// half-copied file, dropped); else GB18030, as the system's tables decode it (decode_charset); UTF-8 with replacement
 /// characters where the host knows no GB18030. The encoding as "UTF-8", "UTF-8 BOM", "UTF-16LE", "UTF-16BE",

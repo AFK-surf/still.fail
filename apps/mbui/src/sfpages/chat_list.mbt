@@ -544,7 +544,7 @@ fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, 
 }
 
 ///|
-/// The list's ⌘F goes along (ChatFind.tsx `virtual`): the messages showing, the list to a message with the words marked
+/// The list's ⌘F goes along: the messages showing, the list to a message with the words marked
 /// in it, its marks let go.
 pub fn chat_find_list(r : ChatRef) -> FindList {
   let k = chat_key(r)
@@ -594,7 +594,7 @@ fn list_reset() -> Unit {
 
 ///|
 /// How far the rows stand in from the pane's sides: the column 760 wide at most in its middle, 40 in at least
-/// (session.css.ts chatList).
+/// .
 fn native_row_inset() -> Double {
   @sf.pane_foot_rest(holds=@sf.theme().round.side) + @sf.composer_pad + 8.0
 }
@@ -620,7 +620,7 @@ let dense_row_side : Double = 48.0
 
 ///|
 /// Where the round buttons over the list go: right over the send button, the composer's column in the pane's middle
-/// (Chat.css.ts chatToBottom: 6 in from it).
+/// .
 fn float_right(c : @ui.Ctx) -> Double {
   (c.width - composer_width(c.width)) / 2.0 + float_in
 }
@@ -644,12 +644,12 @@ let row_side_least : Double = 40.0
 let chat_row_est : Double = 90.0
 
 ///|
-/// The rows 28 apart (session.css.ts chatList gap), one sent soon after the one before 4 under it.
+/// The rows 28 apart, one sent soon after the one before 4 under it.
 let list_gap : Double = 28.0
 
 ///|
-/// The widest a list is laid out narrow (Chat.css.ts `max-width: 700px`), and then 20 between its messages (the web's
-/// mobile --list-gap) and 16 in from its sides (session.css.ts chatList).
+/// The widest a list is laid out narrow, and then 20 between its messages (the web's
+/// mobile --list-gap) and 16 in from its sides.
 pub let chat_narrow_w : Double = 700.0
 
 ///|
@@ -879,7 +879,7 @@ fn passage_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : Strin
 let float_place : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// A round button over the list (chatToBottom): 32 high (the desktop's: Chat.css.ts at a desktop's width), round, a line round it on the canvas, a shadow under it; its
+/// A round button over the list (chatToBottom): 32 high, round, a line round it on the canvas, a shadow under it; its
 /// count beside its arrow; the hover ground under the pointer.
 // kept across runs: a value (no field of it changes)
 let float_button : @ui.Style = @ui.css(
@@ -906,7 +906,7 @@ pub fn composer_width(pane : Double) -> Double {
 }
 
 ///|
-/// The composer's widest (dock.css.ts: 760 and its curve each side), its clearance from the pane's sides.
+/// The composer's widest, its clearance from the pane's sides.
 let composer_most : Double = 804.0
 
 ///|

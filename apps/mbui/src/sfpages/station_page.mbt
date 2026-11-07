@@ -1,4 +1,4 @@
-// A station's own page, one in every frame, laid out by its width (page_look.mbt) (web/src/cloud/StationPage.tsx StationSettings, Head, Body, Overview,
+// A station's own page, one in every frame, laid out by its width (web/src/cloud/StationPage.tsx StationSettings, Head, Body, Overview,
 // Settings, Machine; StationPage.css.ts): its head (its mark and name, which its managers change where they are, how it
 // is and what it is, what is wrong with it, trying it again while away, its ⋯), then its parts one at a time: how it
 // is and what runs on it (what is left of the machine, its screens, profiles, connects and folders), what it is let do
@@ -202,7 +202,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
 }
 
 ///|
-/// Where a station another workspace lent is from (StationCards.tsx joinedText): its home workspace's name, else that
+/// Where a station another workspace lent is from: its home workspace's name, else that
 /// it is another's; "" for one whose home is here.
 fn joined_text(s : Json?) -> String {
   if !flag(s, "joined") {
@@ -824,7 +824,7 @@ fn grant_mark_by_button() -> @ui.Style {
 }
 
 ///|
-/// A grant's mark (StationPermissions.tsx GRANT_MARK): the screen's two by what they do, the folders by what they
+/// A grant's mark: the screen's two by what they do, the folders by what they
 /// hold, the LAN by the devices on it.
 fn grant_icon(id : String) -> String {
   match id {
@@ -1131,7 +1131,7 @@ fn station_search(c : @ui.Ctx, core : Core, address : String, search : Json?, ma
 }
 
 ///|
-/// What it sends still.fail to find its problems by (StationDiagnostics.tsx): whether its log goes, scrubbed, said by the
+/// What it sends still.fail to find its problems by: whether its log goes, scrubbed, said by the
 /// workspace's managers (others read it).
 fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics : Json?, manager : Bool) -> Unit {
   st_section(c, @sf.t("web-pages.stations.diagnostics.section"), fn() {
@@ -1160,7 +1160,7 @@ fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics :
 }
 
 ///|
-/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): the station default
+/// How it goes on with a session whose prompt cache is over: the station default
 /// and its estimated cost threshold, said by the workspace's managers (others read them).
 fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
   let cost = match field(context, "afreshAbove") {
@@ -1252,7 +1252,7 @@ fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
 }
 
 ///|
-/// Whether a Windows station runs as the machine's administrator (StationElevation.tsx ElevationSection): switched by
+/// Whether a Windows station runs as the machine's administrator: switched by
 /// the workspace's managers, Windows asking on the machine and the station restarting; what it means or how a change
 /// goes under it, how the last one failed under that.
 fn station_elevation(c : @ui.Ctx, core : Core, address : String, elevation : Json?) -> Unit {
@@ -1334,7 +1334,7 @@ fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
 }
 
 ///|
-/// A workspace's mark before its name (StationPage.tsx WorkspaceNamed: 16).
+/// A workspace's mark before its name.
 let st_ws_mark : Double = 16.0
 
 // ── Machine ─────────────────────────────────────────────────────────────
@@ -1394,7 +1394,7 @@ fn station_machine(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array
   ]
 }
 
-// ── styles (StationPage.css.ts, settings.css.ts workspaceHead) ──────────
+// ── styles ──────────
 
 ///|
 let st_mark_glyph : Double = 28.0

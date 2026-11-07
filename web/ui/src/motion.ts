@@ -8,11 +8,11 @@ import { MOVE_FAR_MS, moveEase } from "./curves.ts";
 export { animate, type AnimationPlaybackControls };
 /** The page's --ease-out, as CSS. */
 const EASE_OUT_CSS = "cubic-bezier(0.2, 0.7, 0.2, 1)";
-export { LEAVE_EASE_CSS, MOVE_EASE_CSS, MOVE_FAR_MS, MOVE_NEAR_MS, MOVE_PAGE_MS, moveEase } from "./curves.ts";
+export { LEAVE_EASE_CSS, MOVE_EASE_CSS, MOVE_FAR_MS, moveEase } from "./curves.ts";
 /**
  * One way in and one way out for what comes and goes in the message list (a message, what settles under it): coming,
  * up from a little below as it fades in (as `[data-enter]` draws a new message); going, a copy where it was shrinking a
- * little as it fades (as a sidebar's row goes, listMotion.ts). Their room opens and closes by the list's law (GLIDE_*),
+ * little as it fades (as a sidebar's row goes). Their room opens and closes by the list's law (GLIDE_*),
  * not by these.
  */
 export const ENTER = { duration: 220, easing: EASE_OUT_CSS } as const;
@@ -65,7 +65,7 @@ const SPOKES_SHOWN = '[data-tone="busy"], [data-badge="run"], [data-spokes]';
 let spokesStepping = false;
 
 /**
- * The spokes' one clock (styles/spokes.ts spokesTurn): a step every 100 ms said on the root as `data-spoke`, while any
+ * The spokes' one clock: a step every 100 ms said on the root as `data-spoke`, while any
  * show and the page is seen; with motion reduced, none said (they stand at the first step).
  */
 function stepSpokes(): void {

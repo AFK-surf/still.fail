@@ -1,4 +1,4 @@
-// How the remote screen's viewer looks (still.fail apps/android app/remote/ScreenViewer.kt), its sizes as Android says
+// How the remote screen's viewer looks, its sizes as Android says
 // them: on the scale's steps where they are one, else named in src/sf/tokens.mbt.
 
 // ── the page ──────────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ let undriven_icon : Double = 16.0
 let undriven_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, max_lines=3)
 
 ///|
-/// On its way (Waiting.kt WaitPill floating over the frame): 24 round it, the capsule floating still with no ground of
+/// On its way: 24 round it, the capsule floating still with no ground of
 /// its own, 12 and 6 in, the spinner (12) 8 before the words (13 on 18, the ink, two lines).
 // kept across runs: a value (no field of it changes)
 let wait_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=ACenter radius=Full bg=Floating shadow=Sm")
@@ -374,7 +374,7 @@ let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(On
 let ended_keys : @ui.Style = @ui.css("row gap=S2 justify=JCenter")
 
 ///|
-/// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
+/// 重新打开 (16 in, 12 more under the words): the ink with the page's colour on it in
 /// the dark theme, a solid light grey with the ink on it in the light one (on the screen's dark veil, not the page: the
 /// neutral ground, the ink at an opacity, came out as dark as the veil, 1.2 to 1 under its words).
 // kept across runs: a value (no field of it changes)
@@ -502,7 +502,7 @@ let row_key_round : @ui.Style = @ui.style(
 let drop_key_icon : Double = 16.0
 
 ///|
-/// A button that is not the main one (Controls.kt Button: 38 high, 16 in, the chip under the ink's words, 14 semibold).
+/// A button that is not the main one (16 in, the chip under the ink's words, 14 semibold).
 // kept across runs: a value (no field of it changes)
 let soft_button_box : @ui.Style = @ui.style(
   h=@sf.button_38,

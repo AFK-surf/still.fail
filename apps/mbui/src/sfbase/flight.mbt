@@ -1,4 +1,4 @@
-// Words sent flying (ChatHost.kt Flight, FlightLayer; web madeChat.ts): what is sent is in the list the frame it is
+// Words sent flying (FlightLayer): what is sent is in the list the frame it is
 // sent, waiting for nothing (chat.mbt LocalSent: the core's row goes on from it once it comes), the words drawn where
 // they were typed until its row is laid out; then its bubble goes from the words' place in the field to its own, over
 // the composer: across first and up a little after, so the words rise on a curve (Ease.Flight over 80% of its 600 ms, up 12% late), its ground coming
@@ -11,13 +11,13 @@
 //
 // The words are set alike in the field and in their message, and break their lines alike (the theme's `words`, the
 // composer's width: SendText.kt), so that only where they are changes: from the frame their message is laid out they
-// go in pieces (ChatHost.kt Flight.pieces), what is on one line in the field and on one line in the message (a line
+// go in pieces, what is on one line in the field and on one line in the message (a line
 // each, but where a column narrower than the composer breaks a long one anew), each from where it was typed to where
 // the message has it, as the bubble goes. Each piece is a copy of the message's words cut to it, so that it is what
 // the message draws there as they land; meanwhile the message's own words are not drawn. Words their message has some
 // other way (a reference to a chat a chip there) go as one block with their bubble.
 //
-// The files sent with them go from their tiles in the composer (ChatHost.kt FlyingFile, landingFile, files): drawn as
+// The files sent with them go from their tiles in the composer (landingFile, files): drawn as
 // their tiles were where they were until the row is in the list, then each to its place in the message, across and up
 // as the words go: a picture's box growing from the tile's to the picture's own in the message (a letterboxed one's
 // share of its box), the picture cropped to it as it is (opening out from the tile's square crop), on no ground and
@@ -30,7 +30,7 @@
 // the card in the message, as a picture sent with them goes. Sent with no words, the row comes in where it is, its files and quotes flying
 // into it, and the composer's hint stays away while a quote is over it.
 //
-// A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
+// A new chat's first words are carried: drawn where they were typed from
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
 // becomes it), until their row is laid out in the chat's list; then the list comes up out of the composer with them,
 // on the way any words sent go (520 ms on the flight's curve, across first and up a little after: one motion with every
@@ -38,12 +38,12 @@
 // of the page at once, the composer going down to the chat's foot meanwhile: sfpages composer.mbt), their bubble's
 // ground and time coming in as they go across. The composer is held as tall as it was while they and their files are in it,
 // the new chat's and then its chat's, as for words sent in a chat, till they set out. The list is not cut at the composer's top as
-// Android's is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts
+// Android's is: their bubble, in it, is drawn over the composer only while nothing over it cuts
 // what it draws (@ui.Stratum's Flying), and what else is in it then (its time) is all but clear there.
 
 ///|
 pub(all) struct SendFlight {
-  /// the chat it was sent in (its draft's key; its list's turns', turns.mbt), its words, and where they were: their
+  /// the chat it was sent in (its draft's key; its list's turns'), its words, and where they were: their
   /// first line's top left, the field's room (a new chat's: its own, then its chat's as the page becomes it)
   mut chat : String
   mut turns : String
@@ -92,7 +92,7 @@ pub(all) struct SendFlight {
 }
 
 ///|
-/// A file sent with the words (ChatHost.kt FlyingFile): the file it is in its message (file_key: one put up from here
+/// A file sent with the words: the file it is in its message (file_key: one put up from here
 /// its upload, from before it is up on; any other the station's path), its tile in the composer (x, y, w, h in the
 /// window), a picture's key (None a card, Some("") a picture still coming), and the tile as the composer drew it (what
 /// is drawn where it was while the row is not in the list). Its landing supplies the same picture painter its message
@@ -142,7 +142,7 @@ let landing_shares : Map[String, (Double, Double, Bool)] = {}
 
 ///|
 /// How long the words take to their place, the share of it they fly (the rest they settle), and from when they
-/// settle (ChatHost.kt FLIGHT_MS, FLY, SETTLE).
+/// settle (FLY, SETTLE).
 pub let flight_ms : Double = 600.0
 
 ///|
@@ -252,7 +252,7 @@ pub fn flight_carry_start(
   }
   match c.field_words(field) {
     Some(((x, y), (rx, ry, w, h))) => {
-      // without words, the list comes up from where the first file was (ChatHost.kt landingFile: rise)
+      // without words, the list comes up from where the first file was
       let from_top = if words != "" {
         y - 8.0
       } else {
@@ -343,7 +343,7 @@ pub fn flight_carry_gone(from : String) -> Unit {
 
 ///|
 /// How far the list of chat `chat` is drawn below its place while a new chat's first words carry it up out of the
-/// composer (ChatHost.kt Flight.shift): from where they were typed to where their row has them, less as they go; 0
+/// composer: from where they were typed to where their row has them, less as they go; 0
 /// none. Where their row is is where this frame lays it out: read once it is laid out (@motion.placed), the list
 /// drawn up by it in the same frame, never a frame behind.
 pub fn flight_carry_shift(c : @ui.Ctx, chat : String) -> Double {
@@ -403,7 +403,7 @@ pub fn flight_p(c : @ui.Ctx, f : SendFlight) -> Double {
 }
 
 ///|
-/// Its ways across and up (ChatHost.kt Flight.across, up), eased. A new chat's first words are words sent as any are:
+/// Its ways across and up (up), eased. A new chat's first words are words sent as any are:
 /// on the same way, as long (the desktop's: what every composer sends with), the list coming up with them on their way
 /// up (flight_carry_shift).
 pub fn flight_across_of(c : @ui.Ctx, f : SendFlight) -> Double {
@@ -444,8 +444,8 @@ pub fn flight_up(p : Double, desk : Bool) -> Double {
 }
 
 ///|
-/// The desktop's flight is the web's (madeChat.ts sendingHere): 520 ms, flown the whole of it, its bubble's ground and
-/// its time coming in as it goes across; the phone's (ChatHost.kt) 600, flown over 80%, settling from 24%.
+/// The desktop's flight is the web's: 520 ms, flown the whole of it, its bubble's ground and
+/// its time coming in as it goes across; the phone's 600, flown over 80%, settling from 24%.
 pub fn flight_len(desk : Bool) -> Double {
   if desk {
     flight_desk_ms
@@ -613,7 +613,7 @@ pub fn flight_ms_of(f : SendFlight) -> Double {
 
 ///|
 /// How long a new chat's first words take to their place (as long as any words sent: flight_len), from how long after
-/// their row is laid out (on a phone, once its choices have faded: ChatHost.kt's delay; web madeChat.ts).
+/// their row is laid out (on a phone).
 pub let flight_carry_ms : Double = flight_desk_ms
 
 ///|
@@ -634,7 +634,7 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
         // laid out (its layer's corner, wherever the page is in the window: a pane beside the sidebar)
         let room = c.box(style=@ui.style(w=Fixed(f.field_w), h=Fixed(f.field_h), clip=true), fn() {
           let words = c.box(style=@sf.full_width, fn() {
-            // in the face chosen for what people write (ChatHost.kt SendTextFaced), as their message will draw them
+            // in the face chosen for what people write, as their message will draw them
             c.rich(person_runs(f.text, f.runs, t.p.accent), key="flight/words", style=t.t.words, link_color=t.p.blue, trim=true, w=Fill(1.0), words=true)
             |> ignore
           })
@@ -645,7 +645,7 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
           @ui.look(dx=f.field_x - x, dy=f.field_y - y)
         })
       })
-      // drawn only (ChatHost.kt FlightLayer draws it): not the message, which is not in the list yet
+      // drawn only: not the message, which is not in the list yet
       c.draw_only(l)
     }
     _ => ()
@@ -672,7 +672,7 @@ pub fn flight_landing_words(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
 }
 
 ///|
-/// A piece of the words sent (ChatHost.kt Piece): what is on one line both in the field and in their message, from
+/// A piece of the words sent: what is on one line both in the field and in their message, from
 /// `a` until `b` of them; where it stood in the field (its x and its line's top, in the window), and its room in the
 /// message's words (x, y, w, h, from their top left).
 pub(all) struct FlightPiece {
@@ -683,7 +683,7 @@ pub(all) struct FlightPiece {
 }
 
 ///|
-/// The words sent cut into the pieces that go on their own (ChatHost.kt Flight.pieces), with their message's words as
+/// The words sent cut into the pieces that go on their own, with their message's words as
 /// laid out: what is on one line in the field and on one line in the message, each from where it was typed to where
 /// the message has it, set alike in both (the theme's `words`), so that only where each is changes. None until their
 /// message's words are laid out, or when those are not the words sent (a run the core changed, such as a link written out), nor for
@@ -1043,7 +1043,7 @@ fn flight_shown(c : @ui.Ctx, node : Int, shown : @ui.DrawnState?, from : (Double
 }
 
 ///|
-/// Each file sent (ChatHost.kt FlightLayer, files): as its tile was, where it was, until the row is in the list; then a
+/// Each file sent (files): as its tile was, where it was, until the row is in the list; then a
 /// picture from there to its place in the message (where the message's own box is laid out: flight_landing), its box
 /// growing to its picture's there (a letterboxed one's share of it). Over the composer and the list, drawn only.
 pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
@@ -1113,7 +1113,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
   })
   // The quote cards also fly: draw their pictures later in that same stratum, over the cards' grounds.
   c.stratum(l, Flying)
-  // drawn only (ChatHost.kt FlightLayer draws them): not the files, which are the message's
+  // drawn only: not the files, which are the message's
   c.draw_only(l)
   // What belongs only to a quote in the composer goes with its card, leaving from the frame it is sent. Draw it over
   // the card in its own layer: a layer drawn only is over the rest of that layer alone.
@@ -1173,7 +1173,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
 
 ///|
 /// A file of the message words were sent to (node `i`, the box it is laid out in; the file it is, `key`: file_key),
-/// while a file flies there (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by
+/// while a file flies there: where it is, kept for the picture flying to it (drawn there by
 /// flight_files, not here), and the `share` of the box its picture takes (a letterboxed one's, centred); a card,
 /// carried from its tile on the words' way, grown from the tile's size to its own.
 pub fn flight_landing(

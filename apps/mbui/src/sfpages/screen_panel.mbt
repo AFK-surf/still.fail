@@ -1,4 +1,4 @@
-// What the screen's bar has beside 只看/控制, as the web's (web/src/screen/ScreenPanel.tsx): how the view goes (a signal
+// What the screen's bar has beside 只看/控制, as the web's: how the view goes (a signal
 // mark and how long it has been seen, under the title on a phone, a chip of the viewer's bar with keyboard and mouse;
 // pressed, its figures under the round trip, 复制诊断) and 控制中心 (a round button, or one of the bar's tools), what can be done
 // with the view: 画质 (how large a picture is asked for), 缩放 (the screen's own display scale, where its station changes it: Windows), 组合键 (the keys a phone has none of, or its own

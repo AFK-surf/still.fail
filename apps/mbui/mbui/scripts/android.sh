@@ -69,7 +69,7 @@ sync() {
   # macOS link flags (the core's Apple shell among them) stay as they are
 }
 
-# the photos app's pictures (see pictures/android.mbt): copied into the
+# the photos app's pictures: copied into the
 # app's files, and one served over http to the emulator's 10.0.2.2 (on 5590:
 # the emulator itself takes 5580 and 5581)
 photos() {

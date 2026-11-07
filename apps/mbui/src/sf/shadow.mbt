@@ -51,7 +51,7 @@ pub let sheet_raised : Raised = raised(24.0)
 pub let menu_raised : Raised = raised(18.0)
 
 ///|
-/// A bar of choices over what was picked (MessagePick.kt: shadow(8)); a capsule of a service's page (Preview.kt: 8).
+/// A bar of choices over what was picked (MessagePick.kt: shadow(8)); a capsule of a service's page.
 pub let pick_raised : Raised = raised(8.0)
 
 ///|

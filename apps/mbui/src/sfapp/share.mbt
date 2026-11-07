@@ -1,4 +1,4 @@
-// Sharing (still.fail apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand).
+// Sharing.
 //
 // In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link, some text or files,
 // ACTION_SEND_MULTIPLE of files, iOS's share extension's as the app next comes to the front, @ui.shared_in;
@@ -16,7 +16,7 @@
 // person is back where they were; gone into a chat, the app opens at it (@ui.over_done). Signed out, it says to sign in
 // in the app first, with 打开 still.fail.
 //
-// Out: a file of a drive handed to another app (DriveScreen.kt openElsewhere with share): read whole through the core
+// Out: a file of a drive handed to another app: read whole through the core
 // (`drive.read`), then the system's share sheet (@hostapi.share: Android's chooser, a file of the app's own provider;
 // macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it.
 
@@ -98,7 +98,7 @@ let share_window : @ui.Style = @ui.css("w=Full h=Full px=S5 pt=S6 bg=Bg")
 let share_closing : Ref[Bool] = Ref(false)
 
 ///|
-/// 打开 still.fail, as a link's words (ShareSheet.kt SignInFirst: 15, semibold, the link's ink).
+/// 打开 still.fail, as a link's words (semibold, the link's ink).
 // kept across runs: a value (no field of it changes)
 let open_app_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Link)
 
@@ -123,7 +123,7 @@ fn over_view(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The sheet over another app (ShareSheet.kt ShareSheetContent): the chats once the core says them, the workspace the
+/// The sheet over another app: the chats once the core says them, the workspace the
 /// app was last in (else the first); reading meanwhile; signed out, to sign in first (SignInFirst).
 fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
   let accounts = (src.topic)("accounts", {})
@@ -281,8 +281,8 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// How the body is laid out: a phone's sheet (the web's mobile/ShareIn.tsx, its PickRows) or the wide frame's panel
-/// (the web's ShareIn.tsx, ⌘K's: Switcher.css.ts, ShareIn.css.ts).
+/// How the body is laid out: a phone's sheet (its PickRows) or the wide frame's panel
+/// .
 priv struct ShareLook {
   wide : Bool
   /// how far its words stand in from the body's sides
@@ -414,7 +414,7 @@ let share_wide_look : ShareLook = {
 }
 
 ///|
-/// The sheet (mobile/ShareIn.tsx Sheet), or with a wide window the panel (ShareIn.tsx ShareInPanel): what is shared, 发到
+/// The sheet, or with a wide window the panel: what is shared, 发到
 /// the chats, 新 chat.
 fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   share_body(c, src, w, if sheet_small(c) { share_narrow } else { share_wide_look })
@@ -495,7 +495,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
   }
   let opening = share_in.opening.get()
   let searching = share_in.searching.get() && query.trim() != ""
-  // the rows, as closures: in the wide panel a list of its own that scrolls (ShareIn.css.ts list), in a sheet one under
+  // the rows, as closures: in the wide panel a list of its own that scrolls, in a sheet one under
   // the other
   let lines : Array[() -> Unit] = []
   match v {
@@ -606,7 +606,7 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
 }
 
 ///|
-/// What is shared (ShareIn.tsx What): a mark of what it is (a link, some text), its title (the app's subject, else the
+/// What is shared: a mark of what it is (a link, some text), its title (the app's subject, else the
 /// link's site) over what it is, two lines of it cut short (three, in the text's ink, when it is all there is).
 fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -> Unit {
   let t = @sf.theme()
@@ -914,7 +914,7 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
 
 
 ///|
-/// What another app shares, with a wide window (ShareIn.tsx ShareInPanel, ⌘K's: Switcher.css.ts, sfdesk's switcher.mbt):
+/// What another app shares, with a wide window (sfdesk's switcher.mbt):
 /// a panel over a scrim, 14% down the window, 520 wide at most (32 short of the window), 600 high at most (78% of it),
 /// 12 in, its corner from a row's; its rows scroll. Esc, back or a press outside let it go.
 fn share_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
@@ -970,7 +970,7 @@ let share_panel_in : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, oy=0.0,
 let share_panel_gone : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.Snap(0.0))
 
 ///|
-/// The panel (ShareIn.css.ts panel, ⌘K's switcher): 12 in, its corner from a row's (a pill 38 high 12 in), a small
+/// The panel (⌘K's switcher): 12 in, its corner from a row's (a pill 38 high 12 in), a small
 /// panel's ground and line, 520 wide at most.
 // kept across runs: a value (no field of it changes)
 let share_panel_style : @ui.Style = share_panel_surface

@@ -563,7 +563,7 @@ test "a PDF's pages, drawn by the host" {
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
   let v = viewer.get().unwrap()
   assert_eq(v.pdf.unwrap().pages, 3)
-  // kept on the device with its chat, by its size, as Android keeps a PDF it opens (FilePreview.kt OnDisk)
+  // kept on the device with its chat, by its size, as Android keeps a PDF it opens
   let asked = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "设计说明.pdf" })
   assert_true(asked.length() > 0)
   assert_true(flag(Some(asked[0].1), "keep"))

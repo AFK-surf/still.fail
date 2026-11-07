@@ -1,4 +1,4 @@
-// Slack through the pages (admin/slack.rs): Slack apps made and edited with a person's configuration token, their
+// Slack through the pages: Slack apps made and edited with a person's configuration token, their
 // installs, new connects from tokens, the token check, the people of the connected Slack workspaces, a viewer saying a
 // Slack user is them, and a Slack connect's part of its config entry (`slackEntry`). Editing, deleting and reconnecting
 // a connect are every connect's (routes/connects.ts). Config edits go through config.json (ConfigFile.update); what

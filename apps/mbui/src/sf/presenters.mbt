@@ -319,7 +319,7 @@ pub fn menu(
 
 ///|
 /// A link's menu (`href`), opened by `from`: open it (a web address's), copy it, each going on with `open` or `copy`.
-/// Its words the screen's: touch's the phone's (Links.kt), keyboard and mouse's its context menu's.
+/// Its words the screen's: touch's the phone's, keyboard and mouse's its context menu's.
 pub fn link_menu(href : String, from~ : Beside, open : () -> Unit, copy : () -> Unit) -> Unit {
   let touch = native_input() is Finger
   let items : Array[MenuItem?] = []
@@ -1082,7 +1082,7 @@ pub fn presented_drawn_of(serial : Int) -> Bool {
 }
 
 ///|
-/// Asks before `action` (parts.tsx Confirm; PageParts.kt confirm): `title`, what it does (`words`), the cancel and
+/// Asks before `action` (parts.tsx Confirm): `title`, what it does (`words`), the cancel and
 /// `action` (in red when `danger`: what cannot be undone). A `warning`, if given, is shown in red. Said, it closes and
 /// `run` goes on.
 pub fn confirm(
@@ -1098,7 +1098,7 @@ pub fn confirm(
 }
 
 ///|
-/// Asks for a line (PageParts.kt ask): `title`, a field (`value` in it at first, `placeholder` while it is empty,
+/// Asks for a line: `title`, a field (`value` in it at first, `placeholder` while it is empty,
 /// `hint` under it, as dots when `secret`), the cancel and `action`, which can be pressed once the line has words that
 /// differ from `value` (Enter too); `empty`: an empty line too, where that says something (`hint` says what: a name
 /// cleared to be given again). Said, it closes and `run` goes on with the line, trimmed.
@@ -1125,7 +1125,7 @@ fn ask_can(words : String, value : String, empty : Bool) -> Bool {
 ///|
 /// Words asked of a thing that can take them where it is (a row's title renamed): with touch asked over the
 /// page as `ask` does (the keyboard rising over the list would cover the row), with keyboard and mouse where it is: `here` makes
-/// the thing its own field (Rename.tsx TitleInput), which says the words itself.
+/// the thing its own field, which says the words itself.
 pub fn ask_here(
   title : String,
   action : String,
@@ -2148,7 +2148,7 @@ let pick_value : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 let panel_empty : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
 
 // ---------------------------------------------------------------------------
-// The phone's: a sheet from the window's foot (Sheet.kt SheetHost, mbui's @kit.sheet)
+// The phone's: a sheet from the window's foot (mbui's @kit.sheet)
 
 ///|
 /// How much of the window a sheet takes at most: nearly all of it, up to just under the status bar (Sheet.kt's
@@ -2267,7 +2267,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
 }
 
 ///|
-/// Where a long list's sheet settles as it is dragged (Sheet.kt SheetHost: half, and nearly all of the window).
+/// Where a long list's sheet settles as it is dragged (and nearly all of the window).
 // kept across runs: a table, never written
 let sheet_grows_to : Array[Double] = [0.55, sheet_most]
 
@@ -2665,7 +2665,7 @@ fn step_head(
         |> ignore
       None => ()
     }
-    // (which of its flow's steps beside its title: Connect.css.ts dialogStep)
+    // 
     c.box(style=dialog_title_line, fn() {
       c.text(title, style=words) |> ignore
       if count != "" {
@@ -2696,13 +2696,13 @@ fn wh_of(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// A sheet's title (Sheet.kt SheetHead): 17 bold, on its words' line (sheet_panel_sides in), 4 over and 10 under.
+/// A sheet's title: 17 bold, on its words' line (sheet_panel_sides in), 4 over and 10 under.
 fn sheet_title(c : @ui.Ctx, title : String) -> Unit {
   c.box(style=sheet_title_row, fn() { c.text(title, style=sheet_title_words) |> ignore }) |> ignore
 }
 
 ///|
-/// A row of a sheet (NewChat.kt pickStation's, Sheet.kt's menu rows): its icon, its words (15), the note under them
+/// A row of a sheet: its icon, its words (15), the note under them
 /// (12, muted), a check in the accent on the one chosen (`on`); in red when `danger`, quiet when `disabled`; the
 /// ripple under the finger. Whether it was tapped.
 fn sheet_row(
@@ -2858,7 +2858,7 @@ let sheet_held_sides : @ui.Style = @ui.style(w=Full, px=room(sheet_row_sides))
 let sheet_panel_sides : Double = panel_words
 
 ///|
-/// A confirm's and a question's words (PageParts.kt confirm, ask): 20 in, 10 apart.
+/// A confirm's and a question's words (ask): 20 in, 10 apart.
 // kept across runs: a value (no field of it changes)
 let sheet_words_at : @ui.Style = @ui.style(w=Full, px=room(sheet_panel_sides), gap=S2_5)
 

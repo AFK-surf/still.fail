@@ -1,7 +1,7 @@
-// A station's page, past its machine and what runs on it (Stations.kt StationScreen): its screens (StationScreens),
-// what macOS lets a Mac station's helper do (StationPermissions.kt), the variables its agents run with
+// A station's page, past its machine and what runs on it: its screens (StationScreens),
+// what macOS lets a Mac station's helper do, the variables its agents run with
 // (StationAgentEnv, edited in a sheet), what its search finds (StationSearchSection), the workspaces it is in
-// (StationWorkspaces), its versions (Versions.kt); and this device's adb lent to its agents (AdbShare.kt's page).
+// (StationWorkspaces), its versions; and this device's adb lent to its agents.
 
 ///|
 /// A count of the variables' sheets opened: each its own draft (`form`).
@@ -115,12 +115,12 @@ fn adb_phone(c : @ui.Ctx) -> Json? {
 }
 
 ///|
-/// What the phone lacks for it, at a row's end (AdbShare.kt Need: 14sp, C.red).
+/// What the phone lacks for it, at a row's end (C.red).
 // kept across runs: a value (no field of it changes)
 let adb_lacks : @ui.TextStyle = @sf.value.then(@sf.bad)
 
 ///|
-/// Where a row goes to turn something on, at its end (AdbShare.kt: 14sp, C.link).
+/// Where a row goes to turn something on, at its end (C.link).
 // kept across runs: a value (no field of it changes)
 let adb_go : @ui.TextStyle = @sf.value.then(@sf.link)
 
@@ -600,8 +600,8 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
 }
 
 ///|
-/// How the lending stands, in a line (AdbShare.kt state): lent, the minutes left of it as the time of day `now` has
-/// them, said again as they change (AdbShare.kt: its `now` every 20 s).
+/// How the lending stands, in a line: lent, the minutes left of it as the time of day `now` has
+/// them, said again as they change.
 fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
   let adb = text(view, "adb")
   if text(view, "phase") != "offered" {

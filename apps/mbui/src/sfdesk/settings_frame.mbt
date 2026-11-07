@@ -1,4 +1,4 @@
-// The settings as the desktop has them (still.fail web/src/cloud/settings.tsx SettingsPage, SettingsNav): the sidebar of
+// The settings as the desktop has them (SettingsNav): the sidebar of
 // their pages by where they act, and the page picked beside it: the desktop's own ported from the web's (account.mbt,
 // notifications.mbt, …, in settings_page.mbt's frame), the others the settings' package's (src/sfapp/settings) in the
 // wide frame's scale until they are ported. What both read and call (the core's calls, the models) is that

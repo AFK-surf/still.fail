@@ -118,7 +118,7 @@ fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
 }
 
 ///|
-/// A station file switched to go as a file (StationFiles.kt sendUp): staged on the chat's own station from its drive
+/// A station file switched to go as a file: staged on the chat's own station from its drive
 /// (a folder zipped there: `drive.stage`), else read from the station that has it and put up to the chat's. Once up it
 /// is kept, switched back or not.
 fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : DraftRef) -> Unit {
@@ -221,7 +221,7 @@ priv struct StationFilesUi {
 let sfs : StationFilesUi = { ref: None, ref_closing: false }
 
 ///|
-/// A station file in the draft (StationFiles.kt RefCard), in the files' row (draft_files_row): its name and where it is (named by its path:
+/// A station file in the draft, in the files' row (draft_files_row): its name and where it is (named by its path:
 /// outlined, as it stays where it is), or how it goes up (the bubble's grey: a spinner, how far, why it failed, its
 /// size); × takes it out; tapped, its sheet (ref_sheet).
 fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
@@ -293,7 +293,7 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
 }
 
 ///|
-/// A station file's card tapped (StationFiles.kt openRefSheet): its name, where it is, how it goes (发送方式: 路径, or
+/// A station file's card tapped: its name, where it is, how it goes (发送方式: 路径, or
 /// 文件 / zip: a folder only of the chat's own station), and whether this chat takes such files as files.
 fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit {
   let (k, r) = match sfs.ref {
@@ -403,7 +403,7 @@ fn station_name_by(src : Source, station : String) -> String {
 }
 
 ///|
-/// Whether any of the workspace's stations lends its files (ChatSide.tsx useStationDrive): then a chat has its 文件 tab.
+/// Whether any of the workspace's stations lends its files: then a chat has its 文件 tab.
 fn drive_in(src : Source, ws : String) -> Bool {
   let (list, _) = dv_stations(src, ws)
   list.unwrap_or([]).iter().any(fn(s) { s.drive })

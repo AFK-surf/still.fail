@@ -6,7 +6,7 @@
 // canvas at its sides; a file not shown is told of in the middle. Under 640 the web's phone sizes.
 
 ///|
-/// The width under which a viewer is laid out as a phone's (FilePreview.css.ts `max-width: 640px`).
+/// The width under which a viewer is laid out as a phone's.
 pub let viewer_small_w : Double = 640.0
 
 ///|
@@ -266,7 +266,7 @@ let vfr_act_band : @ui.Style = @ui.css("w=Full pt=S3 px=S4 radius=InnerOr(Sharp)
 let vfr_act_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
-/// Frosted glass over a page of the theme's colours (FilePreview.css.ts pageGlass): the surface at 72% (dark, the
+/// Frosted glass over a page of the theme's colours: the surface at 72% (dark, the
 /// raised one's) over a 20 blur, over the viewer's canvas.
 pub fn viewer_page_glass() -> @ui.Glass {
   let th = theme()

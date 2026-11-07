@@ -9,11 +9,11 @@
 pub let close_gap : @motion.Spec = @motion.move()
 
 ///|
-/// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
+/// How long the archive buttons take to come and go, 忽略 too.
 pub let archive_ms : Double = 280.0
 
 ///|
-/// ArchiveEase (Chat.kt): a quick start, a soft landing.
+/// ArchiveEase: a quick start, a soft landing.
 // kept across runs: a curve, never written
 pub let archive_ease : @ui.Ease = Out
 
@@ -22,7 +22,7 @@ pub let archive_ease : @ui.Ease = Out
 pub let archive_scale : Double = 0.85
 
 ///|
-/// The archive buttons' curve and time (Chat.kt ArchiveEase, `archive_ms`): a quick start, a soft landing.
+/// The archive buttons' curve and time (`archive_ms`): a quick start, a soft landing.
 // kept across runs: a curve, never written
 pub let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ease)
 
@@ -123,7 +123,7 @@ fn on_row_way(c : @ui.Ctx, a : @motion.Anim, to : Double, way : (Double, Double)
 // ── the cards in a chat ─────────────────────────────────────────────────
 
 ///|
-/// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
+/// Options answered fade out in this long; how it went fades in after them as long.
 pub let options_out_ms : Double = 200.0
 
 ///|

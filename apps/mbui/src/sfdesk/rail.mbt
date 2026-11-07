@@ -1,4 +1,4 @@
-// The rail at the wide frame's left (still.fail web/src/Rail.tsx, Rail.css.ts), in one block with the sidebar (frame.mbt
+// The rail at the wide frame's left, in one block with the sidebar (frame.mbt
 // dock): its top row (in a window with its buttons in the app's top row, their row, dragging the window), the places
 // the person chose on this device as the core has them (prefs `railView`: which, their words and kinds, their order;
 // the rail only draws them), at its foot every workspace to switch to (each with what waits in it; a ＋ over them for
@@ -59,7 +59,7 @@ fn rail_label(src : Source, place : String) -> String {
 }
 
 ///|
-/// Whether the place has no sidebar: its page is the pane's whole (连接, 用量: Rail.tsx `own`).
+/// Whether the place has no sidebar: its page is the pane's whole (连接).
 pub fn place_bare(place : String) -> Bool {
   place == "connects" || place == "usage"
 }
@@ -103,7 +103,7 @@ fn rail_shown(src : Source, w : Workspace) -> Array[String] {
 }
 
 ///|
-/// Whether `place` is lit in the rail now (Rail.tsx `on`): the lit place's; a list's while its list is the one shown
+/// Whether `place` is lit in the rail now: the lit place's; a list's while its list is the one shown
 /// (我参与的, 监控中 by the filter when they are in the rail, else 对话; 已归档 while the archive is open: shownList).
 fn rail_lit(src : Source, w : Workspace, place : String) -> Bool {
   let lit = lit_place()
@@ -134,7 +134,7 @@ pub fn side_place() -> String {
 }
 
 ///|
-/// Which of the lists is shown (the sidebar's mode, station.tsx useSidebarMode): 全部 0, 我参与的 1, 监控中 2 (the
+/// Which of the lists is shown (the sidebar's mode): 全部 0, 我参与的 1, 监控中 2 (the
 /// filter), 已归档 3.
 pub fn list_mode(src : Source, w : Workspace) -> Int {
   match side_place() {
@@ -257,7 +257,7 @@ fn rail(
     // settings
     let gear = c.id("rail/settings")
     if c.clicked(gear) {
-      // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
+      // lit (in the settings): back out of them, to the chat last open (in them); their
       // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
       if lit == "settings" && wide.crowded {
         wide.peeking.set(!wide.peeking.get())
@@ -306,7 +306,7 @@ fn rail_top_h(bar : Bool) -> Double {
 let rail_closed_pad : Double = 2.0
 
 ///|
-/// The rail open and in the closed bar (Rail.css.ts rail): its places 8 in and 8 under the last (@sf.rail_in: where they
+/// The rail open and in the closed bar: its places 8 in and 8 under the last (@sf.rail_in: where they
 /// stand in the closed bar), 6 apart (open, as wide as the rail less the 8 the sidebar reaches over); as narrow as the
 /// bar, 2 from its every edge.
 // kept across runs: a value (no field of it changes)
@@ -416,7 +416,7 @@ let rail_top_web : Double = 5.0
 let rail_icon_size : Double = 20.0
 
 ///|
-/// A place's 38 to press, its ground (hovered, lit) 30 square under the icon (Rail.css.ts item).
+/// A place's 38 to press, its ground (hovered, lit) 30 square under the icon.
 fn rail_ground(
   c : @ui.Ctx,
   id : Int,
@@ -427,7 +427,7 @@ fn rail_ground(
 ) -> Unit {
   let t = @sf.theme()
   let hover = c.lit(id)
-  // its ground and its icon's colour moved over 140 ms (Rail.css.ts item: transition background, color)
+  // its ground and its icon's colour moved over 140 ms (color)
   let key = "rail/ground/" + id.to_string()
   let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
   let b = c.box(style=rail_item, id~, fn() {
@@ -437,7 +437,7 @@ fn rail_ground(
     rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
-  // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
+  // named for a screen reader, and on hover beside it (its Tip, side right)
   if label != "" {
     c.semantics(b, Button, id~, label~)
     if tipped {
@@ -454,7 +454,7 @@ let rail_item : @ui.Style = @ui.style(w=Fixed(rail_item_side), h=Fixed(rail_item
 let rail_item_side : Double = 38.0
 
 ///|
-/// A ground of the rail (Rail.css.ts item's ground, workspaceItem, workspaceAdd): 30 round, on `ground`; `id` to press
+/// A ground of the rail (workspaceItem, workspaceAdd): 30 round, on `ground`; `id` to press
 /// it; its node.
 fn rail_square(c : @ui.Ctx, ground : Int64, body : () -> Unit, id? : Int) -> Int {
   c.box(style=rail_sq.then(@ui.style(bg=Data(ground), radius=rail_round.val)), id?, body)
@@ -504,8 +504,8 @@ fn rail_hung(c : @ui.Ctx, mark : () -> Unit, shown? : Double = 1.0) -> Unit {
 }
 
 ///|
-/// What waits in a list of chats or another workspace (Rail.css.ts listMark, mark), hung on its ground's corner
-/// (rail_hung): its rows' mark (ChatMark.css.ts chatMarkInline), or an invitation's dot.
+/// What waits in a list of chats or another workspace (mark), hung on its ground's corner
+/// (rail_hung): its rows' mark, or an invitation's dot.
 fn rail_tone_mark(c : @ui.Ctx, tone : String, shown? : Double = 1.0) -> Unit {
   rail_hung(c, shown~, fn() {
     if tone == "invite" {
@@ -566,7 +566,7 @@ pub fn closed_ground() -> Int64 {
 }
 
 ///|
-/// What waits on a place: a red dot 8 across hung on its ground's corner (Rail.css.ts count: rail_hung).
+/// What waits on a place: a red dot 8 across hung on its ground's corner.
 // kept across runs: a value (no field of it changes)
 let rail_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
 
@@ -608,7 +608,7 @@ fn rail_place(
         }
         dy.abs() > rail_slop
       }
-    // (only while the rail is changed, or pressed with ⌘ held: Rail.tsx drag)
+    // (only while the rail is changed)
     None if c.pressed(id) && (wide.editing.get() || (c.press().mods & @ui.mod_cmd) != 0) => {
       wide.rail_drag.set(Some((place, py(), 0.0)))
       false
@@ -632,7 +632,7 @@ fn rail_place(
     }
     let on = rail_lit(src, w, place)
     // the lit place pressed again (not 待处理, a panel): its sidebar folded or opened, not gone to; folded so with the
-    // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture); on the tape, the page brought over
+    // pointer on the rail, it is shown a while; on the tape, the page brought over
     if on && place != "attention" && !place_bare(lit_place()) {
       // (folded for the page's room: shown over it, or folded again)
       if wide.crowded {
@@ -669,7 +669,7 @@ fn rail_place(
   rail_edit_frame(c, src, w, place, moved, fn() {
     rail_ground(c, id, on || (place == "attention" && wide.attention_open.get()), fn(color) {
       if place == "stations" {
-        // the stations at a glance (Sidebar.tsx RailStations: StationGlyph, 20)
+        // the stations at a glance (20)
         @sf.station_glyph(c, stations_at_glance(src, w.id).0, rail_icon_size, color, t.p.red) |> ignore
       } else {
         @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
@@ -710,7 +710,7 @@ fn desk_home() -> Unit {
 }
 
 ///|
-/// A place gone to, from the rail or its menu (Rail.tsx `drawn`'s presses and `go`): 待处理 its panel; a list of chats
+/// A place gone to, from the rail or its menu: 待处理 its panel; a list of chats
 /// its list in the sidebar, the chat last open beside it; 已归档 the archive; the others their page.
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   rail_go_told(src, w, place, fn(key, f) { c.tell(key, f) })
@@ -725,7 +725,7 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
       attention_set(!wide.attention_open.get())
     }
     "chats" | "mine" | "watching" | "hidden" => {
-      // its list in the sidebar (Rail.tsx toList): 对话 all of them, the others theirs
+      // its list in the sidebar: 对话 all of them, the others theirs
       let f = if place == "chats" { "all" } else { place }
       if filter_of(src, w.id) != f {
         app.filters[w.id] = f
@@ -763,7 +763,7 @@ fn rail_keep(src : Source, ws : String, items : Array[String]) -> Unit {
 
 ///|
 /// The place in view that is left out of the rail, if one is: a list shown (我参与的, 监控中, the archive; the chats'
-/// when 对话 is out), the files, a place picked from the rail's menu (Rail.tsx inView, setExtra); "" none.
+/// when 对话 is out), the files, a place picked from the rail's menu (setExtra); "" none.
 fn rail_in_view(src : Source, w : Workspace) -> String {
   let lit = lit_place()
   let in_view = if lit == "chats" {
@@ -795,7 +795,7 @@ pub fn open_rail_menu(place : String) -> Unit {
 }
 
 ///|
-/// The rail's menu (Rail.tsx's DropdownMenu, from a right click on it), beside the place right clicked (else its
+/// The rail's menu (from a right click on it), beside the place right clicked (else its
 /// first), 8 past it, clear of the window's buttons' row: the places not in it (pressed, their page; their ＋, shown on
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
 /// 自定义侧边条, 侧边条恢复默认 when it was changed.
@@ -882,13 +882,13 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A place's ＋ at the end of its row in the rail's menu (Rail.css.ts menuAdd): 24 round, shown on the row pointed at,
+/// A place's ＋ at the end of its row in the rail's menu: 24 round, shown on the row pointed at,
 /// in the pointer's ground pointed at itself; true on the frame after it was pressed.
 fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id("rail-menu/add/" + place)
   let over = c.lit(id)
-  // in on its row pointed at (Rail.css.ts menuAdd: transition opacity 140 ms); always to a finger, which hovers over
+  // in on its row pointed at; always to a finger, which hovers over
   // nothing
   let shown = @kit.animate(
     c,
@@ -919,7 +919,7 @@ let rail_menu_plus_on : @ui.Style = rail_menu_plus.then(@ui.css("bg=Hover"))
 let rail_menu_plus_icon : Double = 14.0
 
 ///|
-/// The rail's menu 8 past its place, and no higher than the window's buttons' row (Rail.tsx: collisionPadding top 52).
+/// The rail's menu 8 past its place, and no higher than the window's buttons' row.
 let rail_menu_off : Double = 8.0
 
 ///|
@@ -934,7 +934,7 @@ pub let rail_pitch : Double = 44.0
 let rail_slop : Double = 4.0
 
 ///|
-/// A place's icon in the rail (Rail.tsx RAIL_ICONS; the stations' is their glyph, rail_place).
+/// A place's icon in the rail (the stations' is their glyph, rail_place).
 fn rail_icon(place : String) -> String {
   match place {
     "attention" => "bell"
@@ -978,7 +978,7 @@ pub fn settings_beside(route : @settings.Route) -> Unit {
 
 ///|
 /// A place of the rail as it is drawn, `moved` with its drag; while the rail is changed (自定义侧边条), outlined, its
-/// − at its top left corner (Rail.css.ts editing, remove).
+/// − at its top left corner (remove).
 fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, moved : Double, body : () -> Unit) -> Unit {
   if !wide.editing.get() {
     c.box(ty=moved, body) |> ignore
@@ -992,7 +992,7 @@ fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, mov
   }
   c.box(ty=moved, fn() {
     c.box(style=rail_editing, body) |> ignore
-    // its outline dashed, 1.5 wide, a pixel in from its edge (Rail.css.ts editing: outline-offset -1)
+    // its outline dashed, 1.5 wide, a pixel in from its edge
     c.layer(fn() {
       c.box(tx=rail_dash_at, ty=rail_dash_at, fn() {
         @sf.dashed_frame(c, rail_dash_side, rail_dash_side, rail_dash_r, rail_dash_line, t.p.line_strong) |> ignore
@@ -1015,12 +1015,12 @@ fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, mov
 }
 
 ///|
-/// Beside the rail while it is changed (Rail.tsx's Popover): what can be added, by kind, each pressed into the rail;
+/// Beside the rail while it is changed: what can be added, by kind, each pressed into the rail;
 /// pressing anywhere but the rail (or Esc) ends the change.
 fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let kept = rail_items(src, w.id)
   // beside the rail (its 56: the sidebar reaches over its last 8), 8 past it, clear of the window's buttons' row
-  // (Rail.tsx: Popover.Anchor the rail, collisionPadding top 52)
+  // (collisionPadding top 52)
   // (ended as it is dismissed, at that moment: Esc, back, a press outside it and the rail, its anchor: one in the rail
   // dismisses nothing, its places moved and taken out there)
   c.with_dismissed(
@@ -1084,14 +1084,14 @@ fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
 }
 
 ///|
-/// The adder's panel: 248 wide, 8 past the rail (Rail.css.ts adder).
+/// The adder's panel: 248 wide, 8 past the rail.
 let rail_adder_w : Double = 248.0
 
 ///|
 let rail_adder_off : Double = 8.0
 
 ///|
-/// The − 5 out past the place's top left corner, its icon 12 (Rail.css.ts remove).
+/// The − 5 out past the place's top left corner, its icon 12.
 let rail_remove_out : Double = -5.0
 
 ///|
@@ -1112,7 +1112,7 @@ let rail_dash_r : Double = 11.75
 let rail_dash_at : Double = -0.5
 
 ///|
-/// A place while the rail is changed: outlined, its corner the editing frame's (Rail.css.ts editing: 12).
+/// A place while the rail is changed: outlined, its corner the editing frame's.
 // kept across runs: a value (no field of it changes)
 let rail_editing : @ui.Style = @ui.css("radius=Xl")
 
@@ -1121,17 +1121,17 @@ let rail_editing : @ui.Style = @ui.css("radius=Xl")
 let rail_remove_at : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// The −: 18 round in the words' colour, the rail's ground round it (Rail.css.ts remove).
+/// The −: 18 round in the words' colour, the rail's ground round it.
 // kept across runs: a value (no field of it changes)
 let rail_remove : @ui.Style = @ui.css("w=S4_5 h=S4_5 align=ACenter justify=JCenter bg=Fg radius=Full")
 
 ///|
-/// The adder's head and its kinds 8 apart (Rail.css.ts adder: a grid, gap 8).
+/// The adder's head and its kinds 8 apart (gap 8).
 // kept across runs: a value (no field of it changes)
 let adder_body : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
-/// The rail in the closed bar (Rail.css.ts rail, closed): as narrow as the bar, its places 2 from its every edge.
+/// The rail in the closed bar (closed): as narrow as the bar, its places 2 from its every edge.
 pub let rail_closed_w : Double = 42.0
 
 ///|

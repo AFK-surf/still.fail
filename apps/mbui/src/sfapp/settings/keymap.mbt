@@ -1,6 +1,6 @@
 // The wide frame's shortcuts, as the core says them (the prefs' `keymap`, client/core-ts/src/keymap.ts): each action,
 // where it works, its keys here and as a key cap shows them, changed with `keys.set`. What is the app's own here is a
-// key press turned into a binding (Mod+Shift+H) and a binding into a key press; and the 快捷键 page (Shortcuts.tsx),
+// key press turned into a binding (Mod+Shift+H) and a binding into a key press; and the 快捷键 page,
 // where they are changed by pressing new ones.
 
 ///|

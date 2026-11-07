@@ -1,4 +1,4 @@
-// The bar across the top of a file opened over a wide window (viewer_bar's, ViewerBar.tsx) as nodes of the window's
+// The bar across the top of a file opened over a wide window (viewer_bar's) as nodes of the window's
 // tree (the way there 4): what it says bound to what says it as that changes (the way back's words,
 // the name, the line about it, where the file is, the window's width, the ink), its tools nodes of their own
 // (tool_node), its way back and each tool done at the press's moment. Gone up out of the way (hidden: a picture left
@@ -68,7 +68,7 @@ pub fn viewer_bar_node(
         .gap(Is(@ui.Space::px(S4)))
         .padding(By(fn() { (bar_start_in(), 0.0, bar_end_in(width()), hairline_h) }))
         |> ignore
-        // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
+        // clear of the window's buttons at its left, the system's (not in full screen)
         row.show(@ui.window_keys_left_now, fn(k) { k.width(Is(Some(viewer_buttons_w))) |> ignore })
         // the way back, at its start; short of room, its words give way, the chevron stays
         row.box(fn(start) {
@@ -194,7 +194,7 @@ fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.Wor
 }
 
 ///|
-/// The way back (viewer_bar's: ViewerBar.css.ts back) in `parent`: 32 high, 4 before the chevron and 10 after the words,
+/// The way back in `parent`: 32 high, 4 before the chevron and 10 after the words,
 /// at the window's corner following it (bar_back_corner); the chevron and `words` in the ink's own, its hover ground
 /// where the hand is on it (or the keyboard's focus shows); `went` as it is pressed, at the press's moment. Read out a
 /// button, by its words.
@@ -256,7 +256,7 @@ fn back_shapes() -> Array[@ui.Shape] {
 
 ///|
 /// How much of a file opened has come, in the bar across the top beside its tools, as nodes
-/// (FilePreview.tsx FileComing inBar): "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
+/// : "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
 /// size so far in bold in its own, then a progress bar 120 wide (progress_node); before the core has said how much and
 /// with no size it was sent with, 正在打开 over a bar that sweeps. `got`: what has come and its whole size; `size`: the
 /// size it was sent with. Each as it changes. The row's node.

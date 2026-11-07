@@ -30,7 +30,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 
 /**
- * The app keeping itself current (@hostapi.update_fetch, update_apply; still.fail's Updates.kt and Install.kt): a newer
+ * The app keeping itself current (@hostapi.update_fetch, update_apply): a newer
  * build the core found (`app.update`) downloaded by itself into the app's files (`fetch`), picking up where a cut
  * connection left off (the bytes so far kept in `<name>.part`, the rest asked for as a range, a few times over with a
  * growing pause while each try gets further), checked against its sha256 and kept: ready. On a metered network it waits
@@ -490,9 +490,9 @@ final class Updates {
     }
 
     /**
-     * A package the app has (an APK of a chat: @hostapi.install_package, still.fail's FilePreview.kt install) handed to the
+     * A package the app has (an APK of a chat: @hostapi.install_package) handed to the
      * system's installer, which asks the person to confirm, its bytes written and committed on a thread of their own.
-     * When the app may not install apps yet, the system's page for that leave opens instead (as Install.kt mayInstall).
+     * When the app may not install apps yet, the system's page for that leave opens instead.
      * What comes of it, when it is not installed, comes to the app on its system channel ({"install": {"name", "allow"}}
      * or {"install": {"name", "error"}}: src/hostapi/system.mbt), so a run's tape has it.
      */

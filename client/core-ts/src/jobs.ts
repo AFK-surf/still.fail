@@ -1,4 +1,4 @@
-// Background jobs and web services as the clients show them (jobs.rs): each job's dot, its state in a word and the
+// Background jobs and web services as the clients show them: each job's dot, its state in a word and the
 // line under its name (`shown`), a chat's all together (`chatJobs`), those left up a long while (`longJobs`). Times in
 // words here count in seconds, so what shows them is computed again when the next of them changes (`nextChange`).
 import * as format from "./format.ts";

@@ -665,7 +665,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
-  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as it comes, its room
+  //  told end:false as it comes, its room
   // opening, end:true once it is open; at its end as it rests
   assert_true(ends.contains(false))
   assert_eq(ends[ends.length() - 1], true)

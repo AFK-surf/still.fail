@@ -60,7 +60,7 @@ pub fn breathe(
 
 ///|
 /// A placeholder bar (a title's, a line's, a picture's): in the line's grey, as what is drawn with nothing in it is
-/// (contrast.mbt), round; `breathing`, on the placeholders' breath by itself (Stations.kt Bar).
+/// (contrast.mbt), round; `breathing`, on the placeholders' breath by itself.
 pub fn bar(
   c : @ui.Ctx,
   w : @ui.Size,
@@ -100,7 +100,7 @@ pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 }
 
 ///|
-/// WaitLine's words: 13/18 on every width (Waiting.kt: fontSize 13.sp, lineHeight 18.sp).
+/// WaitLine's words: 13/18 on every width (lineHeight 18.sp).
 // kept across runs: a value (no field of it changes)
 let wait_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5)
 
@@ -151,7 +151,7 @@ let spin_stroke : Double = 2.0
 pub let spinner_turn_ms : Double = 800.0
 
 ///|
-/// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
+/// The spinner (styles/spinner.css.ts): a ring of line_strong, a quarter of it in the accent,
 /// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
 /// chat's mark at work: three quarters, 1.2s). Its lines drawn once (mbui's Ctx::lines), turned by the clock as each
 /// frame is drawn (Ctx::cycle_look): nothing built anew for it, nothing to make, nothing to wait for. `stroke` its

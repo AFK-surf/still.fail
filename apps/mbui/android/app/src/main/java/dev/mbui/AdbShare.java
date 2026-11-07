@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This phone's adb, lent to a station's agents (still.fail's Android app's AdbShare.kt, as it is):
+ * This phone's adb, lent to a station's agents (as it is):
  * Wireless debugging's ports found on the phone (DNS-SD: AdbPorts) and given to the core (`adb.share`), which offers
  * them to the station and carries what its agents' adb sends. A foreground service (AdbShareService) holds the app up
  * meanwhile and says so, with 停止. While the pairing dialog is open its code is read off it (AdbCodeReader, where the

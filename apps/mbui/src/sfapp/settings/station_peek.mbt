@@ -1,4 +1,4 @@
-// A station's card, from a chat's agent (still.fail apps/android settings/screens/Stations.kt openStationPeek): whether it
+// A station's card, from a chat's agent: whether it
 // is up and what its agents do, its machine and network at a glance, and where to go on: its files where it lends some,
 // its page.
 
@@ -112,7 +112,7 @@ pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
 }
 
 ///|
-/// Its head as an agent card's (AgentCard.css.ts head): its mark's square and its name, 10 apart, in their middle.
+/// Its head as an agent card's: its mark's square and its name, 10 apart, in their middle.
 // kept across runs: a value (no field of it changes)
 let peek_part_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
@@ -143,7 +143,7 @@ let peek_part_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
 let peek_part_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max_lines=3)
 
 ///|
-/// The hover card's: its words 10 in from its padding, 8 apart (Hover.css.ts card), its rows at its padding.
+/// The hover card's: its words 10 in from its padding, 8 apart, its rows at its padding.
 // kept across runs: a value (no field of it changes)
 let peek_card : @ui.Style = @ui.css("w=Full")
 
@@ -152,7 +152,7 @@ let peek_card : @ui.Style = @ui.css("w=Full")
 let peek_card_words : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
 
 ///|
-/// Its dot, its mark and its name in a line, 8 apart (StationCards.css.ts peekHead).
+/// Its dot, its mark and its name in a line, 8 apart.
 // kept across runs: a value (no field of it changes)
 let peek_card_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
@@ -344,7 +344,7 @@ let peek_net : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// The machine in brief: what is left of it in the allowance's boxes (in their bones until it is read), its network
-/// under them (Stations.kt StationFigures, `peek`).
+/// under them (`peek`).
 fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let host = field(s, "host")
   let net = station_net(core, s)
@@ -378,7 +378,7 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 }
 
 ///|
-/// How this device reaches a station of the workspace's `stations` (StationLink.tsx useStationLink): `direct`,
+/// How this device reaches a station of the workspace's `stations`: `direct`,
 /// `relay`, `waiting` (coming back, or a way still being chosen), `offline`, or "" while there is no reading of it.
 /// One answer wherever a station's dot says it: its tile in a chat's bar, its card.
 pub fn station_via(s : Json?) -> String {

@@ -56,7 +56,7 @@ APP_EXTRA= APP_LINK= APP_ENTITLEMENTS=
 # wasmtime's C API for the app's Wasm shell (Apache-2.0): no release of it is built for iOS, so its source release
 # (fetched once by its checksum) built here by cargo, for the simulator (Cranelift's code, run as it is made) or a
 # device (Pulley's: iOS lets no app run code it made, so wasmtime's interpreter), kept in out/ by version and target;
-# its headers the macOS release's (conf.h made by its CMake: the same version, the same features). WT_LIB, WT_INCLUDE.
+# its headers the macOS release's (the same features). WT_LIB, WT_INCLUDE.
 # The toolchain is rustup's WT_RUST (wasmtime 50 asks for Rust 1.97 or later), installed beside the others when missing.
 WT_VERSION=50.0.1
 WT_SRC_SHA=04c3c71b2fa160236aa8bddf907896dad1e018756366b564fe611643913ed0a5

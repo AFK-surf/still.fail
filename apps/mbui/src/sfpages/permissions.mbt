@@ -112,8 +112,8 @@ fn permission_row(
 }
 
 // ---------------------------------------------------------------------------
-// 归档, one page in every frame (the web's pages/Archiving.tsx and mobile/Archiving.tsx), laid out by its width
-// (page_look.mbt). How each station archives and what choosing each way saves, its review and what the hint 按模型判断
+// 归档, one page in every frame, laid out by its width
+// . How each station archives and what choosing each way saves, its review and what the hint 按模型判断
 // means for the stations' reviews, are the core's (present.ts archiving, the `settings` view).
 
 ///|
@@ -389,7 +389,7 @@ pub let link_size : Double = 12.0
 
 
 ///|
-/// A permission's mark (Permissions.css.ts icon: as tall as a button, round, on the canvas, its glyph 18), its state
+/// A permission's mark (round, on the canvas, its glyph 18), its state
 /// at its first row's end (the meta's 12 in 500: given in green with a check 14, refused in red).
 let permission_glyph : Double = 18.0
 

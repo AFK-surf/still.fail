@@ -18,7 +18,7 @@
 // Tester's until the test says what became of it: Tester::stream_shows, stream_drops). A stream open between frames
 // is at rest: nothing of it moves by the clock.
 //
-// The rules of Android's decoder (Decoders.kt), kept here where the host would only repeat them: until a key frame
+// The rules of Android's decoder, kept here where the host would only repeat them: until a key frame
 // after a config or a broken decoder, frames are let go unseen; where nothing decodes H.264 (@hostapi.h264_here false,
 // or no config yet) they are let go too. Those it lets go itself are said at the next frame's start, as a host's are.
 //

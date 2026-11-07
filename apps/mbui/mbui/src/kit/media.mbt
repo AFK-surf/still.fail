@@ -159,7 +159,7 @@ pub struct Media {
 }
 
 ///|
-/// How long a player's controls stay left alone while it plays (Player.kt's 2.5 s), a note a double tap said is said
+/// How long a player's controls stay left alone while it plays, a note a double tap said is said
 /// (0.8 s), its controls take to come as they are woken (0.12 s) and to fade as they rest (0.32 s, both on the
 /// ease-out: still.fail's, viewer/media.css.ts): Media::new's, unless said otherwise.
 pub let media_rest_ms : Double = 2500.0

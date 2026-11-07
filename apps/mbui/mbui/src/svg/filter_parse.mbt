@@ -1,4 +1,4 @@
-// usvg's filters (tree/filter.rs, parser/filter.rs): `filter` elements and CSS filter functions as primitives.
+// usvg's filters: `filter` elements and CSS filter functions as primitives.
 
 ///|
 priv struct Filter {

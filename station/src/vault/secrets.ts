@@ -804,7 +804,7 @@ export class Secrets {
             { label: "拒绝", detail: "通知 agent 已拒绝" },
           ],
           ...(owner ? { assignee: owner.toLowerCase() } : {}),
-          // The request as the app draws it (VaultAsk.tsx); its outcome added once decided (#settle).
+          // The request as the app draws it; its outcome added once decided (#settle).
           vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: hosted(r.mode) ? (r.hosts ?? l.hosts) : [], ...(r.runOn ? { station: r.runOn.name } : {}), ...(r.timeout ? { timeout: r.timeout } : {}) },
         }
       : null;
@@ -1043,7 +1043,7 @@ export class Secrets {
           type: "options",
           options: [{ ...SAVE_WORDS.save, recommended: true }, SAVE_WORDS.deny],
           assignee: r.owner,
-          // The request as the app draws it (VaultAsk.tsx): `save` says it is one to keep; its outcome added once decided.
+          // The request as the app draws it: `save` says it is one to keep; its outcome added once decided.
           vault: {
             request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: hosted(s.modes[0]!) ? s.hosts : [],
             ...(r.runOn ? { station: r.runOn.name } : {}),

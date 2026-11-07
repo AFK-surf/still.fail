@@ -1,4 +1,4 @@
-// A row of a list (still.fail web/src/Sidebar.tsx ChatRow; SidebarList.tsx NavItem, "laid out as a chat's"): a chat's, a
+// A row of a list ("laid out as a chat's"): a chat's, a
 // station's, a folder's, a profile's are one row: its mark beside its first line, its first line (its title and what
 // stands at that line's end), then the lines under it; its sizes the theme's chats' list's, how far in and whether its
 // ground is rounded where its list stands (ListAt).
@@ -180,7 +180,7 @@ let row_key_side : Double = 24.0
 let row_keys_gap : Double = 2.0
 
 ///|
-/// A line under a row's first line (SidebarList.css.ts line): as high as a chat's second line, its parts beside each
+/// A line under a row's first line: as high as a chat's second line, its parts beside each
 /// other.
 pub fn list_row_line(c : @ui.Ctx, body : () -> Unit) -> Unit {
   lines_drawn.val += 1
@@ -193,7 +193,7 @@ pub fn list_row_line(c : @ui.Ctx, body : () -> Unit) -> Unit {
 let lines_drawn : Ref[Int] = Ref(0)
 
 ///|
-/// A row's mark's column (SidebarList.css.ts mark: 16 wide, as high as the first line, its mark in its middle).
+/// A row's mark's column (as high as the first line, its mark in its middle).
 // kept across runs: a value (no field of it changes)
 let list_row_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 

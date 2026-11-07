@@ -1,4 +1,4 @@
-// A station's footprint page (footprint.rs, shapes `FootprintView`), from what `GET /footprint` answers: how much of
+// A station's footprint page (shapes `FootprintView`), from what `GET /footprint` answers: how much of
 // the disk the station takes and for what, its chats' directories, its agents' memory, and the clean-ups the viewer
 // may do (each a choice: the questions to ask in turn, then the call).
 import * as brand from "./brand.ts";

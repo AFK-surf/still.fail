@@ -35,11 +35,11 @@ pub(all) struct Core {
   open_folder : (String, String) -> Unit
   /// signing another account in (登录其他账号)
   sign_in : () -> Unit
-  /// a toast (Sheet.kt ToastHost)
+  /// a toast
   say : (String) -> Unit
   /// a person's picture by its URL: an image's key once it is here, "" until then
   picture : (String, Int) -> String
-  /// notifications turned on here: the system asked to allow them (Notices.kt rememberNotificationAsk)
+  /// notifications turned on here: the system asked to allow them
   notify_ask : () -> Unit
   /// this device's push registration as the core now wants it (Push.sync): what `notify.set` answered (`push`), or
   /// None for what the core's `notify` says
@@ -67,7 +67,7 @@ pub(all) struct Core {
   /// the system's photo picker asked for a picture (false: this host has none); its bytes given as it answers (None:
   /// called off, nothing read)
   pick_picture : ((Bytes?) -> Unit) -> Bool
-  /// this device's bottom bars in the workspace in view, and the one shown (Places.kt's)
+  /// this device's bottom bars in the workspace in view, and the one shown
   bars : () -> (Array[Array[String]], Int)
   /// the bars changed (kept as the workspace's), the one shown
   set_bars : (Array[Array[String]], Int) -> Unit
@@ -99,19 +99,19 @@ pub(all) struct Core {
 }
 
 ///|
-/// A page of the settings (AppState.kt's Screen, the ones of these slices).
+/// A page of the settings (the ones of these slices).
 pub(all) enum Route {
-  /// settings itself, from the gear (SettingsHome.kt)
+  /// settings itself, from the gear
   Home
   Me
   Appearance
-  /// 外观 › 字体 (Fonts.kt FontsScreen)
+  /// 外观 › 字体
   Fonts
-  /// the workspace: its name, its people, its invitations (Settings.kt WorkspaceScreen)
+  /// the workspace: its name, its people, its invitations
   Workspace
-  /// security mode (Security.kt)
+  /// security mode
   Security
-  /// 安全 › 开启安全模式: what turning it on would sign (Security.tsx SecurityOpen)
+  /// 安全 › 开启安全模式: what turning it on would sign
   SecurityOpen
   Vault
   Stations
@@ -134,7 +134,7 @@ pub(all) enum Route {
   Usage
   /// the archived chats (the list's filter menu, settings)
   Archive
-  /// this device's adb lent to a station's agents (AdbShare.kt), by the station's address
+  /// this device's adb lent to a station's agents, by the station's address
   AdbShare(String)
   /// the person's own lock, from 安全
   PersonalLock
@@ -157,7 +157,7 @@ pub(all) enum Route {
   KeptChat(String, Int)
   /// what changed in still.fail (ChangelogScreen)
   Changelog
-  /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
+  /// about this app, from settings' 关于: this build, the changelog, the terms
   About
   /// the web desktop's page, one for every frame (src/sfpages shortcuts.mbt): 快捷键, each action's keys changed here
   Shortcuts
@@ -441,7 +441,7 @@ fn manager_of(core : Core, here : Here) -> Bool? {
 }
 
 ///|
-/// A role in words (Accounts.kt ROLE_LABEL).
+/// A role in words.
 pub fn role_label(role : String) -> String {
   match role {
     "owner" => "Owner"
@@ -452,7 +452,7 @@ pub fn role_label(role : String) -> String {
 }
 
 ///|
-/// A station's name from its address (ChatInk.kt stationName): what is after the workspace.
+/// A station's name from its address: what is after the workspace.
 pub fn station_name(address : String) -> String {
   match address.find("/") {
     Some(i) => address.unsafe_substring(start=i + 1, end=address.length())

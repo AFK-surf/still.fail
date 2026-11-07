@@ -394,7 +394,7 @@ export class Drive {
     });
   }
 
-  /// A file for what opens it by its path itself (the image codecs, a video's poster; modules/media.ts): where it is as
+  /// A file for what opens it by its path itself (the image codecs, a video's poster): where it is as
   /// the file system has it (`found`, what it is known by), its name, size and time. `copy` is there when it is reached
   /// through still.fail Helper, which the station does not open itself: the file copied to `to` (a new file of the
   /// station's own) to be read there instead.

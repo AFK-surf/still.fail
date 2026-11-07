@@ -1,5 +1,5 @@
 // 48-share (e2e/traces/share.trace: a local still.fail, 82 messages): sharing in and out
-// (ShareActivity.kt, ShareSheet.kt; a drive's file's 分享). A link shared in from another app's share sheet opens the
+// (a drive's file's 分享). A link shared in from another app's share sheet opens the
 // sheet of chats (发到, shareIn.open); the test chat tapped: the link a card in its composer, sent as its words (its
 // title, then the link). Then a file of the drive right clicked, 分享: read through the core (drive.read) and handed to the
 // system's share sheet (@ui.share).

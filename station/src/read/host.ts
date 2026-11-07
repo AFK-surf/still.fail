@@ -11,7 +11,7 @@ import { platform } from "../platform/index.ts";
 import { cpuShare, type Ticks } from "../platform/cpu-share.ts";
 
 export type { Ticks };
-/// The ticks last seen, and when (host.rs TICKS).
+/// The ticks last seen, and when.
 export type Seen = { at: number; ticks: Ticks } | null;
 
 /// hostname, without a `.local`.

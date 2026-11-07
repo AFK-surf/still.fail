@@ -1,5 +1,5 @@
 // 连接, one page in every frame (web/src/pages/Connects.tsx ConnectList, Connects.css.ts; the narrow app's
-// mobile/Connects.tsx), laid out by its width (page_look.mbt): at its head its title with what a connect is and 添加连接;
+// mobile/Connects.tsx), laid out by its width: at its head its title with what a connect is and 添加连接;
 // under it the filter (全部 or 我的); the Slack apps made and not connected yet, each to go on with; then the connects,
 // each its bot's picture, its name and its Slack workspace, how it runs, its station, who added it, how it is and its
 // dot (wide: one list, each with its station's tag; narrow: a card a station, under its name). With none at all yet,
@@ -257,7 +257,7 @@ fn cn_gutter(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// Adding one (Connects.tsx add): on the one station online at once, else on one picked from a menu under it (which
+/// Adding one: on the one station online at once, else on one picked from a menu under it (which
 /// station?), in the new connect's dialog. `primary`: the first one's (a solid button); `round`: the narrow title's ＋.
 fn cn_add(
   c : @ui.Ctx,
@@ -388,7 +388,7 @@ fn cn_station_tag(c : @ui.Ctx, name : String, s : Json?) -> Unit {
 }
 
 ///|
-/// Who added it (components.tsx OwnerLabel): their picture 16 and name (theirs said as the viewer's), 6 apart, the
+/// Who added it: their picture 16 and name (theirs said as the viewer's), 6 apart, the
 /// meta's 12, who they are by their id over it while it is pointed at (but this machine's own); none said, so in the
 /// subtle ink. `key`: the connect's.
 fn cn_owner(c : @ui.Ctx, core : Core, key : String, by : Json?) -> Unit {

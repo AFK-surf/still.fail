@@ -56,7 +56,7 @@ fn steps_reset() -> Unit {
 }
 
 ///|
-/// Whether a history shows only what came in and went out (History.tsx onlyIo: what the core calls `work` left out).
+/// Whether a history shows only what came in and went out.
 pub fn history_only_io() -> Bool {
   steps_own.only_io.get()
 }
@@ -1130,7 +1130,7 @@ fn tool_body(c : @ui.Ctx, src : Source, rk : String, step : Json?) -> Unit {
 }
 
 ///|
-/// A list of things to do (ToolStep.tsx PlanList), each `{text, status}`: done ✓ struck and muted, under way › in 600,
+/// A list of things to do, each `{text, status}`: done ✓ struck and muted, under way › in 600,
 /// the rest ·. A plan call's in the history, and an agent's checklist in its card and its history's details
 /// (agent_work).
 pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
@@ -1154,7 +1154,7 @@ pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
 }
 
 ///|
-/// One part of a call or of what came back (ToolStep.tsx Part, ToolStep.css.ts).
+/// One part of a call or of what came back.
 fn tool_part(c : @ui.Ctx, key : String, part : Json?) -> Unit {
   match text(part, "kind") {
     "code" => @sf.code_block(c, text(part, "text"), text(part, "lang"))
@@ -1330,7 +1330,7 @@ pub fn history_marked() -> (String, String) {
 }
 
 ///|
-/// How long an item gone to stays marked (History.tsx: 1.6 s).
+/// How long an item gone to stays marked.
 pub let steps_marked_ms : Double = 1600.0
 
 ///|
@@ -1634,7 +1634,7 @@ let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false
 let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// A call opened (ToolStep.css.ts body): 4 by 6 in, 10 under, the call and what came back 8 apart; each a section, its
+/// A call opened: 4 by 6 in, 10 under, the call and what came back 8 apart; each a section, its
 /// parts 6 apart (what came back 4).
 // kept across runs: a value (no field of it changes)
 let tool_body_box : @ui.Style = @ui.css("w=Full pt=S1 px=S1_5 pb=S2_5 gap=S2")

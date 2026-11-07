@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * The device beyond the window (src/hostapi/device.mbt; android_device.h calls these): a key catcher's keyboard (the
  * focus with no text of its own: MBView asks catchKey while `catching`), the soft keyboard's height, the clipboard
- * read (its words, its picture made a PNG, as still.fail's ScreenClips.kt: readyImage, asPng, encodePng) and written
+ * read (its words, its picture made a PNG, asPng, encodePng) and written
  * (words with a label; a PNG kept as a file of the cache's screen-clips, the newest KEEP, that the clip points at
  * through Shares.Files), the screen kept on, haptics.
  */

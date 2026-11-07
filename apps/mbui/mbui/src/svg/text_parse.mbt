@@ -1,4 +1,4 @@
-// usvg's text elements (parser/text.rs): `text`, `tspan`, `tref` and `textPath` as chunks of characters (a chunk
+// usvg's text elements: `text`, `tspan`, `tref` and `textPath` as chunks of characters (a chunk
 // starts where a character has an absolute position or a text path starts or ends) made of spans of one style each.
 // Offsets into a chunk's text are UTF-8 bytes, as in Rust.
 

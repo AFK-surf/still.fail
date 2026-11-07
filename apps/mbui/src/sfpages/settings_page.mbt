@@ -135,7 +135,7 @@ pub fn open_dialog(
   @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone=on_gone, steps~, back?)
 }
 
-// ── who a profile or a key is, at the head of its page (the web's Accounts.css.ts identity), and a card's foot ──
+// ── who a profile or a key is, at the head of its page, and a card's foot ──
 
 ///|
 /// A card's buttons at its foot (cardFoot).

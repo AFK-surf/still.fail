@@ -1,4 +1,4 @@
-// A sidebar's rows (still.fail web/src/Sidebar.css.ts navRow, navNew, navScroll; SidebarList.tsx NavItem, NavAction): a
+// A sidebar's rows (still.fail web/src/Sidebar.css.ts navRow, navNew, navScroll; NavAction): a
 // row of one line, a row laid out as a chat's (list_row), the band's action over a list, the list under the band; a
 // row's ground as the web moves it. The sidebar's frame (its top row, its width, its fold)
 // is the shell's.
@@ -230,11 +230,11 @@ pub fn side_scroll(c : @ui.Ctx, key : String, top? : Double = 0.0, rows : () -> 
 let side_scroll_est : Double = 600.0
 
 ///|
-/// A row's mark's side (SidebarList.css.ts mark, the action's icon: ICON's 16).
+/// A row's mark's side (the action's icon: ICON's 16).
 pub let nav_mark_side : Double = 16.0
 
 ///|
-/// A row of a list in a sidebar, a station's, a profile's, a folder's (SidebarList.tsx NavItem): the library's list
+/// A row of a list in a sidebar, a station's, a profile's, a folder's: the library's list
 /// row, laid out as a chat's (list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (list_row_line each; `keep_lines` of
 /// them always, empty where it says none: list_row `lines`); the pointer's
@@ -286,7 +286,7 @@ pub fn nav_item(
 }
 
 ///|
-/// A row's title (SidebarList.css.ts title: the theme's chats' list's, a chat's title's), as long as there is room;
+/// A row's title (a chat's title's), as long as there is room;
 /// `away`, what it is not there now: faint.
 pub fn nav_title(c : @ui.Ctx, words : String, away? : Bool = false) -> Unit {
   let look = theme().chat_list.title.then(nav_title_grow)
@@ -306,7 +306,7 @@ let nav_title_grow : @ui.TextStyle = @ui.text_style(w=grow)
 let nav_title_away : @ui.TextStyle = @ui.text_style(color=Muted)
 
 ///|
-/// What a row says in a line under its title or at its end (SidebarList.css.ts line, end): a chat's second line's
+/// What a row says in a line under its title or at its end (end): a chat's second line's
 /// words (the theme's chats' list's), as long as they are.
 pub fn nav_meta() -> @ui.TextStyle {
   theme().chat_list.last.then(nav_meta_hug)

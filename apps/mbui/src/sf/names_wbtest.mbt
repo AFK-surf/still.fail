@@ -1,4 +1,4 @@
-// A folder's names as the viewer reads them (names.mbt: Playlist.kt's tests, PlaylistTest and SideSubtitlesTest), and
+// A folder's names as the viewer reads them (PlaylistTest and SideSubtitlesTest), and
 // how the player says times and speeds (player.mbt).
 
 ///|

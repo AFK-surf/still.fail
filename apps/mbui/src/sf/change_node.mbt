@@ -1,4 +1,4 @@
-// A page's dated record made once (the changelog's parts: mobile/Changelog.css.ts narrow, Changelog.css.ts wide), laid
+// A page's dated record made once, laid
 // out by the width the page's frame gives it (look_node): a day's label over its rows, one change's lines each led by
 // its kind, and what a page says in place of what it lists. The page keeps what they say and who each is (its topic,
 // its days and changes by their keys); these only how they are laid out.
@@ -53,7 +53,7 @@ pub fn day_group_node(parent : @view.View, label : () -> String, rows : (@view.V
 }
 
 ///|
-/// One change of a day (Changelog.tsx's change_narrow, change_item), `lines`, `version` and `note` (what is not out yet; in the
+/// One change of a day (change_item), `lines`, `version` and `note` (what is not out yet; in the
 /// accent where an update would bring it: `coming`) as they are now, each line by where it is in it. Narrow: each line
 /// led by its kind on a small tinted label in its words, one paragraph of pieces wrapping under it; then its version
 /// and the note, 10 apart; 16 by 10 in, its lines 2 apart. Wide: each line with its kind before it in a room of 52 (a

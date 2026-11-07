@@ -1,4 +1,4 @@
-// A station's page in its three parts (station_page.mbt, resources.mbt; the web's StationPage.tsx Body) alone over the
+// A station's page in its three parts (station_page.mbt, resources.mbt) alone over the
 // settings' fixture: Willow (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
 // part.
 

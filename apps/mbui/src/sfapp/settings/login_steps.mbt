@@ -1,6 +1,6 @@
-// What the person does in the browser for a profile's sign-in under way (Profiles.kt LoginSteps): open the page and
+// What the person does in the browser for a profile's sign-in under way: open the page and
 // paste the code back (Claude, Devin, the Antigravity CLI's Google), copy the code and open the page (Codex, Grok), or only open the page and confirm
-// there (Cursor). Each step's button solid until it is pressed (LoginCards.kt StepButton), the code's field with 完成 in
+// there (Cursor). Each step's button solid until it is pressed, the code's field with 完成 in
 // its end once a code is in (CodeField); the last of them in the card's foot corners, so all of them capsules a
 // settings button high, reaching past the card's words to its foot's inset (parts.mbt Foot's Capsule: foot_across),
 // 完成 a capsule concentric in the field's end. Where the station has a browser of its own, the same page opened there
@@ -127,7 +127,7 @@ let device_code_size : Double = 22.0
 let device_code_line : Double = 28.0
 
 ///|
-/// What the person does in the browser for a sign-in under way (Profiles.kt LoginSteps), `k` the profile's key: its
+/// What the person does in the browser for a sign-in under way, `k` the profile's key: its
 /// states' waiting lines, and while it waits on the person, its steps. The page is handed to `open_link`: the system's
 /// browser; or, where its job says the station has one (`browser`), to the station's own (`in_station`: the station's
 /// name, and what opens it there, given what it is called).

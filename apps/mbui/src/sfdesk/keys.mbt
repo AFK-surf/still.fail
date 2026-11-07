@@ -33,7 +33,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if pressed("shortcuts") {
     wide.keys_open.set(!wide.keys_open.get())
   }
-  // ⌘[ / ⌘] back and forward (Switcher.tsx history.back, history.forward): back as the system's back is, whose it is
+  // ⌘[ / ⌘] back and forward (history.forward): back as the system's back is, whose it is
   // deciding (Ctx::back; the hosts' own Alt+← and a mouse's back button come so); forward what back took off put back
   // (sfbase's app history: go_forward), also from a mouse's forward button and Alt+→ (the hosts' key_forward)
   if pressed("nav.back") {
@@ -83,7 +83,7 @@ fn frame_escape(c : @ui.Ctx) -> Bool {
 }
 
 ///|
-/// The chat before (-1) or after (1) the one open, in the list as it shows (Sidebar.tsx goToNeighbour). A list can
+/// The chat before (-1) or after (1) the one open, in the list as it shows. A list can
 /// hold its rows in place while its core view changes, so use the order last drawn, not the core's current order.
 pub fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
   let open = match app.nav.top() {

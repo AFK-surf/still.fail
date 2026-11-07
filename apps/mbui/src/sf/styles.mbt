@@ -3,11 +3,11 @@
 // it lacks is added here, for every page, not named after one.
 
 ///|
-/// A page's title (22/30.8, bold: Security.kt:473, NewChat.kt:183, Usage.kt:130, Workspaces.kt:191).
+/// A page's title (22/30.8).
 pub let title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold, color=Fg)
 
 ///|
-/// What is said under a title, before the rest (15/22, quieter: Security.kt:105, 106, 474).
+/// What is said under a title, before the rest (15/22, 106, 474).
 pub let lead : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, color=Subtle)
 
 ///|
@@ -43,7 +43,7 @@ pub let value : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=fals
 pub let row_caption : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false)
 
 ///|
-/// A note: small words in lines that say how things stand (12/18, quiet: Security.kt:110, 485).
+/// A note: small words in lines that say how things stand (12/18, 485).
 pub let note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
 
 ///|
@@ -59,19 +59,19 @@ pub let meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted
 pub let code : @ui.TextStyle = @ui.text_style(size=Ui, leading=Font, color=Fg)
 
 ///|
-/// A paragraph of the body's words, in lines a little apart (15/22: Security.kt:105 Para).
+/// A paragraph of the body's words, in lines a little apart.
 pub let paragraph : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, color=Fg)
 
 ///|
-/// Back in a bar: where it goes back to, in a link's ink (17/23.8: Parts.kt:491 NavBack, C.link).
+/// Back in a bar: where it goes back to, in a link's ink (C.link).
 pub let back : @ui.TextStyle = @ui.text_style(size=Title, color=Link, wrap=false)
 
 ///|
-/// A compact bar's title, on one line (16/22.4, semibold: Parts.kt:527 NavBar).
+/// A compact bar's title, on one line (16/22.4).
 pub let bar_title : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-/// A page's large title, on one line, its letters 0.6 closer (32/44.8, bold: Parts.kt:559 LargeTitle).
+/// A page's large title, on one line, its letters 0.6 closer (32/44.8).
 pub let large_title : @ui.TextStyle = @ui.text_style(
   size=Display,
   weight=Bold,
@@ -102,7 +102,7 @@ pub let one_line : @ui.TextStyle = @ui.text_style(wrap=false)
 pub let accent : @ui.TextStyle = @ui.text_style(color=AccentText)
 
 ///|
-/// A link's words (Theme.kt C.link: the accent's darker ink on paper, the accent in the dark: ui_theme's `link`).
+/// A link's words (the accent in the dark: ui_theme's `link`).
 pub let link : @ui.TextStyle = @ui.text_style(color=Link)
 
 ///|

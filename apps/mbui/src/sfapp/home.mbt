@@ -1,4 +1,4 @@
-// Home (still.fail apps/android chat/screens/Home.kt, web/src/mobile/Home.tsx): the workspace's chats' lists (sfpages'
+// Home: the workspace's chats' lists (sfpages'
 // sidebar.mbt, every tier's) under a top bar (the filter · the workspace's switcher and settings).
 
 ///|
@@ -100,7 +100,7 @@ fn top_bar(
 }
 
 ///|
-/// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
+/// The name in a top bar: 24 bold, its letters 0.4 closer, on one line.
 fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_title_look, cut? : Bool = false) -> Int {
   // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
   guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
@@ -116,7 +116,7 @@ fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_
 let nav_key_side : Double = 34.0
 
 ///|
-/// A round button in a bar (Parts.kt NavButton): 34 across, the icon alone, no disc behind it (a ground while
+/// A round button in a bar: 34 across, the icon alone, no disc behind it (a ground while
 /// pressed). True on the frame after it was pressed.
 fn nav_button(
   c : @ui.Ctx,
@@ -150,7 +150,7 @@ fn nav_button(
 }
 
 ///|
-/// A day's heading (Parts.kt SectionHeader).
+/// A day's heading.
 fn section_header(c : @ui.Ctx, label : String) -> Int {
   let t = @sf.theme()
   c.box(pl=20.0, pr=20.0, pt=14.0, pb=6.0, fn() {
@@ -160,7 +160,7 @@ fn section_header(c : @ui.Ctx, label : String) -> Int {
 }
 
 ///|
-/// The marks' colours (SettingParts.kt MarkBlue, MarkRed; Home.kt MarkYellow).
+/// The marks' colours (MarkRed).
 let mark_blue : Int64 = 0x3B82F6FFL
 
 ///|
@@ -175,7 +175,7 @@ let mark_yellow : Int64 = 0xF2B01EFFL
 let others_mark : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// The filter's menu chosen on Home (mobile/Home.tsx FilterButton): a filter its list, 已归档 its page.
+/// The filter's menu chosen on Home: a filter its list, 已归档 its page.
 fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
   match f {
     "archive" => open_page(Archived)
@@ -189,5 +189,5 @@ fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
 let home_sheet_at_start : Ref[Bool] = Ref(false)
 
 ///|
-/// The workspace's mark before its name in Home's bar (Home.tsx WorkspaceBadge: 20).
+/// The workspace's mark before its name in Home's bar.
 let home_ws_mark : Double = 20.0

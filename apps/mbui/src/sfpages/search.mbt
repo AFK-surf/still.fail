@@ -100,12 +100,12 @@ fn search_reset() -> Unit {
 }
 
 ///|
-/// How far the list goes up as the field comes up (Home.kt, Search.kt); the field's way up and back a Move as long as
+/// How far the list goes up as the field comes up; the field's way up and back a Move as long as
 /// it is far (from where it stood in the list to the top: search_way).
 pub let search_list_rise : Double = 56.0
 
 ///|
-/// The search's way up: 0 its field in the list, 1 at the top (Search.kt `up`, Home.kt `away`: the same times). Let go
+/// The search's way up: 0 its field in the list, 1 at the top. Let go
 /// while not drawn (a chat opened from it over Home a while), it is where the search rests: up while open.
 fn search_up(c : @ui.Ctx) -> @motion.Anim {
   search_read() |> ignore
@@ -124,7 +124,7 @@ pub fn search_away(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// The bottom bar out of the search's way while it is open (Home.kt app.barAway): from the tap until it starts back.
+/// The bottom bar out of the search's way while it is open: from the tap until it starts back.
 pub fn search_bar_away() -> Bool {
   search_read() |> ignore
   search.open && !search.leaving && !search.over
@@ -223,7 +223,7 @@ pub fn search_summon(c : @ui.Ctx, offered : Array[Offered], over : Bool) -> Unit
 }
 
 ///|
-/// 取消, back or Esc: the keyboard goes and the field goes back to the list (Search.kt close); opened by the keys, there
+/// 取消, back or Esc: the keyboard goes and the field goes back to the list; opened by the keys, there
 /// is no field in the list to go back to: gone at once, the page under it as it was.
 fn search_close(c : @ui.Ctx) -> Unit {
   if !search.open || search.leaving {
@@ -290,7 +290,7 @@ let search_bar_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2 pb=S2 gap
 let search_slot : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
-/// The field's ground (Search.kt SearchField, SearchPage's): a capsule of the ink at 6%.
+/// The field's ground (SearchPage's): a capsule of the ink at 6%.
 // kept across runs: a value (no field of it changes)
 let search_field_ground : @ui.Style = @ui.style(w=Full, radius=Full, bg=@sf.search_ground)
 
@@ -348,7 +348,7 @@ fn search_field_shorter() -> Array[String] {
 }
 
 ///|
-/// The search at the list's top (Search.kt SearchField): a quiet field; tapped, the search opens from it. Not seen
+/// The search at the list's top: a quiet field; tapped, the search opens from it. Not seen
 /// while the search's field is it (one field at a time, flying from and back to here). It stands on the list's line
 /// (`at`: where the list stands, @sf.list_line).
 fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
@@ -429,7 +429,7 @@ fn search_field_node(line : @view.View, at : @sf.ListAt) -> @view.View {
 // ── the page ───────────────────────────────────────────────────────────
 
 ///|
-/// The search over Home (Search.kt SearchPage), while it is open, over lists that stand `at` (its lines stand so).
+/// The search over Home, while it is open, over lists that stand `at` (its lines stand so).
 fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
   search_read() |> ignore
   if !search.open {
@@ -511,7 +511,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
                   font_size=size,
                   line~,
                   max_lines=1,
-                  // the keyboard's search key (Search.kt: ImeAction.Search), giving the words up as a keyboard's
+                  // the keyboard's search key, giving the words up as a keyboard's
                   // Enter does: the line chosen opened where one is shown chosen (finder_enter)
                   ime_action=@hostapi.ime_action_search,
                   plain=true,
@@ -590,7 +590,7 @@ pub fn search_leaving() -> Bool {
 // ── the page made once ─────────────────────────────────────────────────
 
 ///|
-/// The search over lists made once (search_page's, Search.kt SearchPage) in node `v`, while it is open: under `inset`
+/// The search over lists made once (search_page's) in node `v`, while it is open: under `inset`
 /// (what is over the lists' box), its bar (the field come up from where it stood in the list to the top, 取消 coming in
 /// beside it), what the words find under it (the finder's list, its old view, hosted), its lines standing as the lists'
 /// do (`at`). Back and Esc go from one kind to every kind first, then the search away; 取消 the same.

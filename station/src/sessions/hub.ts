@@ -1,4 +1,4 @@
-// Routes chat messages to session actors and creates sessions (the Rust station's hub.rs). Several connects share one hub;
+// Routes chat messages to session actors and creates sessions. Several connects share one hub;
 // each has its own chat connection and its own sessions.
 //
 // A connect's mode decides the sessions: multi-session gives each thread its own session (started by an @mention);
@@ -84,7 +84,7 @@ export type Hold = "drain" | "unbound" | "starting";
 /// A chat of another workspace shared with this one, as chat_list lists it (xshare/index.ts `Borrowed`).
 export type OutsideChat = { workspace: string; workspaceName: string; station: string; chat: string; title: string; link: string; write: boolean };
 
-/// Cold storage of archived sessions' files (archive.rs, footprint.rs): an archived, idle session's workspace and
+/// Cold storage of archived sessions' files (archive.rs): an archived, idle session's workspace and
 /// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
 /// cold.ts; the default keeps nothing cold.
 export interface ColdStorage {
@@ -691,7 +691,7 @@ export class Hub {
     return { text: [text, ...missing].filter((t) => t !== "").join("\n\n"), attachments };
   }
 
-  /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`), compacts its
+  /// Gives sessions a message they have not had: each runs it, or stops for `-stop`, compacts its
   /// context for `-compact`, clears it for `-clear` (saying in the thread why not, when it cannot now).
   /// A session archived by hand hears nothing until shown again.
   deliver(thread: number, n: number, sessions: string[], text: string) {

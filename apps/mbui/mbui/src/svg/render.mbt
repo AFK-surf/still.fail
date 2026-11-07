@@ -1,4 +1,4 @@
-// resvg (render.rs, path.rs, clip.rs, mask.rs): a render tree drawn into a pixmap with the skia port.
+// resvg: a render tree drawn into a pixmap with the skia port.
 
 ///|
 priv struct RContext {
@@ -207,7 +207,7 @@ fn fit_to_rect(r : @skia.IntRect, bounds : @skia.IntRect) -> @skia.IntRect? {
   @skia.IntRect::from_ltrb(left, top, right, bottom)
 }
 
-// ── paths (path.rs) ───────────────────────────────────────────────────
+// ── paths ───────────────────────────────────────────────────
 
 ///|
 fn render_path(path : SPath, blend : @skia.BlendMode, ctx : RContext, transform : @skia.Transform, pixmap : @skia.Pixmap) -> Unit {
@@ -313,7 +313,7 @@ fn render_pattern_pixmap(p : SPattern, ctx : RContext, transform : @skia.Transfo
   Some((pixmap, ts))
 }
 
-// ── clip paths (clip.rs) ──────────────────────────────────────────────
+// ── clip paths ──────────────────────────────────────────────
 
 ///|
 fn apply_clip(clip : ClipPath, transform : @skia.Transform, pixmap : @skia.Pixmap) -> Unit {
@@ -363,7 +363,7 @@ fn clip_group(children : Group, clip : ClipPath, transform : @skia.Transform, pi
   pixmap.draw_pixmap(0, 0, clip_pixmap, paint, @skia.Transform::identity(), None)
 }
 
-// ── masks (mask.rs) ───────────────────────────────────────────────────
+// ── masks ───────────────────────────────────────────────────
 
 ///|
 fn apply_mask(mask : Mask, ctx : RContext, transform : @skia.Transform, pixmap : @skia.Pixmap) -> Unit {

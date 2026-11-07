@@ -1,5 +1,5 @@
-// The files' page on a wide screen (still.fail web/src/pages/Files.tsx FilesShell, Files.css.ts), as Finder's window: a row
-// of tabs, each a folder of a station of the workspace (tabs.mbt: the core keeps them), the one shown below; a tab split
+// The files' page on a wide screen (Files.css.ts), as Finder's window: a row
+// of tabs, each a folder of a station of the workspace, the one shown below; a tab split
 // in two shows two folders side by side, of one station or two, to drag from one to the other. The side in front (its
 // top lined in the accent) is what the page's address says and what the keys work on; a press in the other one puts it
 // in front. Each side is a folder's page (its head, then FolderView) under its own station.
@@ -211,7 +211,7 @@ pub fn files_shell(
 }
 
 ///|
-/// The tabs (Files.tsx): one groove, each tab an equal share of it, the one shown raised; its folder first, its station
+/// The tabs: one groove, each tab an equal share of it, the one shown raised; its folder first, its station
 /// after it, small, a dot of its station's colour before; its close at its left while pointed at. `show`: a tab shown
 /// or closed.
 fn tab_row(

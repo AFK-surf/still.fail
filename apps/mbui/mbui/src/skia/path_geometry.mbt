@@ -1,4 +1,4 @@
-// tiny-skia's curve geometry (path/src/path_geometry.rs, after Skia's SkGeometry.cpp): evaluation, chopping, roots,
+// tiny-skia's curve geometry (after Skia's SkGeometry.cpp): evaluation, chopping, roots,
 // extrema, curvature, cusps and conics. A t that Rust keeps as NormalizedF32 (0..=1) or NormalizedF32Exclusive
 // (0<..<1) is a Float here, made only where those types are.
 

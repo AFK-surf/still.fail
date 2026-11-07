@@ -213,7 +213,7 @@ pub fn drive_pane(
 }
 
 ///|
-/// What the file is, shown as it can be here (DrivePane.tsx Body): its picture, its text's start, else its kind's mark
+/// What the file is, shown as it can be here: its picture, its text's start, else its kind's mark
 /// and how to open it (pressed, it opens).
 fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ : Double, fixed? : Bool = false) -> Unit {
   let t = @sf.theme()
@@ -294,7 +294,7 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
 }
 
 ///|
-/// The pane (DrivePane.css.ts pane: 300 wide, 12 in, 12 between what it shows and what the file is), the room inside.
+/// The pane (12 in, 12 between what it shows and what the file is), the room inside.
 let fpane_w : Double = 300.0
 
 ///|

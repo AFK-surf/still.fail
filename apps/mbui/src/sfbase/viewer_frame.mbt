@@ -48,7 +48,7 @@ pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
 }
 
 ///|
-/// A kind's name, as the bar says it after the size (FilePreview.tsx KIND_LABEL: PDF and Markdown their own names).
+/// A kind's name, as the bar says it after the size.
 pub fn vf_kind_label(kind : PKind?) -> String {
   match kind {
     Some(KImage) => @sf.t("web-main.preview.kind.image")
@@ -65,7 +65,7 @@ pub fn vf_kind_label(kind : PKind?) -> String {
 }
 
 ///|
-/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; an image's size in pixels
+/// The line under the name: which of how many, its size, its kind; an image's size in pixels
 /// after them, as its message says it (the station read it from its header), else as its whole picture was decoded.
 /// (A film's and a song's are their player's bar's: player.mbt.)
 pub fn vf_meta(vw : Viewer, src : Source) -> String {
@@ -186,7 +186,7 @@ fn vf_native_download(v : Viewer, c : @ui.Ctx, src : Source, there : Bool) -> Un
 }
 
 ///|
-/// 预览 / 源码 in the bar (FilePreview.css.ts: the Segmented 120 wide, less its 2 in).
+/// 预览 / 源码 in the bar (less its 2 in).
 let vf_tabs_item : Double = 58.0
 
 ///|
@@ -206,7 +206,7 @@ pub fn vf_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
 }
 
 ///|
-/// Whether a preview reads as a text on a desktop (FilePreview.tsx: a text and Markdown open in the reader).
+/// Whether a preview reads as a text on a desktop.
 pub fn vf_reads(vw : Viewer) -> Bool {
   vw.bytes.get() is Some(_) &&
   (vw.shown_kind() == Some(KMarkdown) || vw.shown_kind() == Some(KText)) &&

@@ -8,7 +8,7 @@
 #
 #   scripts/e2e-local.sh install    what `up` installs first, alone: still.fail's packages, the station built, the natives
 #                                   (fetched or built): ios-smoke.sh's, while the app builds
-#   scripts/e2e-local.sh up         the cloud, relay, station, the chat (prints what the app needs: e2e-env.sh)
+#  scripts/e2e-local.sh up the cloud, relay, station, the chat
 #   scripts/e2e-local.sh mac        the mac flows (e2e/flows/*.drive) against what `up` started, pass/fail per flow
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
 #   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded

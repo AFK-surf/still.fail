@@ -71,5 +71,5 @@ pub fn local_folder_label() -> String {
 }
 
 ///|
-/// How often the page reads the station again while shown (LocalStation.tsx: 3 s).
+/// How often the page reads the station again while shown.
 pub let local_read_ms : Double = 3000.0

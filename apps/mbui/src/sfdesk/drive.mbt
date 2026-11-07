@@ -1328,7 +1328,7 @@ fn drop_over(c : @ui.Ctx, lit : String, name : String) -> Unit {
 }
 
 ///|
-/// The preview's width beside the list (DrivePane.css.ts pane).
+/// The preview's width beside the list.
 pub let pane_w : Double = 300.0
 
 ///|

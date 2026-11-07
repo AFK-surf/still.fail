@@ -1,4 +1,4 @@
-// 自动决策 (web/src/AutomaticDecisions.tsx; the narrow app's mobile/AutomaticDecisions.tsx), one page in every frame:
+// 自动决策, one page in every frame:
 // the decision points, each a row to its page; the completion rule's page, a station a section, its rule a group of
 // rows (启用, its model, a check now, its archive policy), 保存修改 under them once changed; a station's archive policy,
 // its words on a card, its options in their two groups a row each with how many chats each got, 添加 under each, edited
@@ -137,7 +137,7 @@ pub fn completion_node(
                 }
               }, bad=fn() { true })
             } else {
-              // (read the first time: rows' shapes where the stations' will be, AutomaticDecisions.tsx's Waiting, 2)
+              // (read the first time: rows' shapes where the stations' will be, 2)
               @sf.waiting_node(
                 p,
                 fn(s) {

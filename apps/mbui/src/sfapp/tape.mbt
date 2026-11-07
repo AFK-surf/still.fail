@@ -2,7 +2,7 @@
 // each recording's tape.json) and this app given the same: the core's values as they stood at each of the tape's
 // moments, its calls answered as Android's were, the same taps at the same moments; each frame's words then compared
 // with where Android drew them (tape_differences; the tapes kept as e2e/tapes/NAME.trace, replayed by src/sfreplay/flows/tapes_test.mbt). A tape's moments are the recording's ms, from 0 as it began, its
-// pages settled first (Harness.kt settle: tape_settle_ms).
+// pages settled first.
 //   { "launched": ["Home", {"chat": station, "thread": N} | {"chat": station, "session": KEY}], "dark": false,
 //     "window": {"w": dp, "h": dp}, "bars": {"top": dp, "bottom": dp}, "wall": ms,
 //     "topics": [{"topic": {"topic": NAME, …params}, "value": …}],

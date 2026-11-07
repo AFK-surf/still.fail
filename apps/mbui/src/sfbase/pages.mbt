@@ -22,7 +22,7 @@ pub(all) enum Page {
   DrivePlay(DriveAt)
   /// a web service an agent started, its page (service.mbt): its station, its job
   Service(String, String)
-  /// a visualization as a page of its own (Preview.kt PreviewFileScreen): its station, the session that keeps it, its
+  /// a visualization as a page of its own: its station, the session that keeps it, its
   /// path and its name
   PreviewFile(String, String, String, String)
   /// an agent's execution history (history.mbt): its chat, its session, the transcript entry it opens at (a link's
@@ -356,7 +356,7 @@ pub fn reset() -> Unit {
 let felt_holds : Map[String, Int] = {}
 
 ///|
-/// Felt as the hold `what` takes the press it is (MessagePick.kt, Links.kt, Preview.kt: HapticFeedbackType.LongPress),
+/// Felt as the hold `what` takes the press it is,
 /// once.
 pub fn feel_hold(c : @ui.Ctx, what : String) -> Unit {
   let at = c.press().frame
