@@ -55,7 +55,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         required: ["site"],
         additionalProperties: false,
       },
-      run: (key: string, args: Record<string, unknown>) =>
+      run: (key: string, args: Record<string, unknown>, signal?: AbortSignal) =>
         signIns.ask(key, {
           site: text(args, "site"),
           ...(text(args, "reason") ? { reason: text(args, "reason") } : {}),
@@ -64,7 +64,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           ...(args.reask === true ? { reask: true } : {}),
           ...(args.done === true ? { done: true } : {}),
           ...(typeof args.stuck === "string" ? { stuck: args.stuck } : {}),
-        }),
+        }, signal),
     } satisfies Tool]),
     {
       name: "secret_list",
@@ -162,7 +162,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         required: ["request"],
         additionalProperties: false,
       },
-      run: (key, args) => secrets.reask(key, text(args, "request")),
+      run: (key, args, signal) => secrets.reask(key, text(args, "request"), signal),
     },
     {
       name: "secret_run",

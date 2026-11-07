@@ -461,6 +461,9 @@ type Arg = SQLInputValue;
 const flag = (b: boolean): number => (b ? 1 : 0);
 const optFlag = (b: boolean | null | undefined): number | null => (b === null || b === undefined ? null : flag(b));
 
+/// A guarded message could not start its transaction because another connection is writing. Nothing was written.
+export class MessageWriteBusy extends Error {}
+
 export class Store {
   readonly db: DatabaseSync;
   readonly backfillPriority: SharedArrayBuffer;
@@ -691,12 +694,28 @@ export class Store {
   }
 
   /// A transaction that writes, committed when `run` returns, rolled back when it throws: it takes the database's writing
-  /// from its start, waiting its turn as long as busy_timeout says. Begun deferred (rusqlite's transaction()), it read
+  /// from its start, waiting its turn as long as busy_timeout says, unless tryWrite asks to retry elsewhere. Begun
+  /// deferred (rusqlite's transaction()), it read
   /// first and took the writing at its first write: where the station's other writers (the usage worker's backfills, a
   /// reader's checkpoint) had written meanwhile, SQLite refused it at once, no wait ("database is locked": a person's
   /// message not sent, on a station 2026-11-03, while the usage worker filled its statistics).
-  #tx<T>(run: () => T): T {
-    this.db.exec("BEGIN IMMEDIATE");
+  #tx<T>(run: () => T, tryWrite = false): T {
+    if (tryWrite) {
+      const timeout = Number(this.db.prepare("PRAGMA busy_timeout").get()!.timeout);
+      this.db.exec("PRAGMA busy_timeout=0");
+      let begun = false;
+      try {
+        try { this.db.exec("BEGIN IMMEDIATE"); begun = true; }
+        catch (error) {
+          const code = (error as { errcode?: number }).errcode;
+          if (code !== undefined && [5, 6].includes(code & 255)) throw new MessageWriteBusy();
+          throw error;
+        }
+      } finally {
+        try { this.db.exec(`PRAGMA busy_timeout=${timeout}`); }
+        catch (error) { if (begun) { try { this.db.exec("ROLLBACK"); } catch {} } throw error; }
+      }
+    } else this.db.exec("BEGIN IMMEDIATE");
     let result: T;
     try {
       result = run();
@@ -1721,8 +1740,10 @@ export class Store {
   // ── entries ──
 
   /// Records something said. A message already recorded in that thread (Slack delivers to every connect in the channel,
-  /// and redelivers) is the same message: its n comes back with `fresh` false and nothing changes.
-  insertMessage(m: NewMessage): [number, boolean] {
+  /// and redelivers) is the same message: its n comes back with `fresh` false and nothing changes. For a new message,
+  /// `before` runs under the write lock and may throw to roll back. It must only do bounded, synchronous work; if the
+  /// lock is held by another writer, MessageWriteBusy says nothing was written and the caller may retry later.
+  insertMessage(m: NewMessage, before?: () => void): [number, boolean] {
     return this.#with((changes) => {
       const existing = this.messageNumberAt(m.thread, m.ts);
       if (existing !== null) return [existing, false];
@@ -1741,6 +1762,7 @@ export class Store {
           ...(m.change !== undefined ? { change: m.change } : {}),
         },
         changes,
+        before,
       );
       return [entry.n, true];
     });
@@ -3249,16 +3271,17 @@ export class Store {
   }
 
   /// Appends an entry as the thread's next.
-  #append(entry: EntryRow, changes: Changes): EntryRow {
+  #append(entry: EntryRow, changes: Changes, before?: () => void): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
       const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
     }
     this.#tx(() => {
+      before?.();
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
-    });
+    }, before !== undefined);
     // As a read of it gives it: what is told of it is made from this (api/events.ts), not read back.
     changes.push({ type: "thread", id: entry.thread, entries: [stored(entry)] });
     this.#bringBack(entry, changes);
