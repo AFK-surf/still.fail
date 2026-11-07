@@ -630,11 +630,6 @@ pub fn card_foot_words(body : () -> Unit, on? : Bool = true) -> Unit {
 let card_foot_words_now : Ref[Bool] = Ref(false)
 
 ///|
-pub fn foot_start(height : Double, words_in : Double) -> @ui.Style {
-  @ui.style(ml=room(card_foot_in(height) - card_pad), pl=room(words_in + card_pad - card_foot_in(height)))
-}
-
-///|
 /// A card's foot with a capsule `height` high in its corners: as far in as makes it concentric (card_foot_in).
 pub fn foot_pad(height : Double) -> @ui.Style {
   @ui.style(pb=room(card_foot_in(height)))

@@ -760,7 +760,7 @@ let page_note_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
 ///|
 /// What stands in a card's foot corners (the ladder's: @sf.pane_corner), so how far in its foot is: a
 /// capsule (a settings button or field, or a library button of its own height), concentric with the card's corner,
-/// reaching past its words to there (`foot_across`, `foot_start`); a block (a command's box), the ladder's inset, reaching past them to it
+/// reaching past its words to there (`foot_across`); a block (a command's box), the ladder's inset, reaching past them to it
 /// (`block_across`), round by the ladder's next step there; or nothing with a ground, its words card_pad in.
 priv enum Foot {
   Words

@@ -627,8 +627,6 @@ pub fn foot_pad(Double) -> @ui.Style
 
 pub fn foot_reach(Double, start? : Double, words_first? : Bool) -> @ui.Style
 
-pub fn foot_start(Double, Double) -> @ui.Style
-
 pub fn found_head_in(ListAt) -> @ui.Style
 
 pub fn found_line(@ui.Ctx, String, String, Array[(Int32, Int32)], @ui.TextStyle, Int64) -> Unit
