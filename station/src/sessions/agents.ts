@@ -538,6 +538,7 @@ export const AgentsLive = (control: Control) =>
       hub.openedChatSaid = async (thread, author, agentOnly) => JSON.parse(await readers.read("openedChatSaid", { thread, author, agentOnly }, "zh"));
       hub.historyMessages = async (thread, before, limit) => JSON.parse(await readers.read("chatHistoryMessages", { thread, before, limit }, "zh"));
       hub.historyPendingCard = async (thread) => JSON.parse(await readers.read("historyPendingCard", { thread }, "zh"));
+      hub.prepareCardPosts = (threads, signal) => readers.prepareCardPosts(threads, signal);
       hub.stateQuestion = async (key, threads, ts) => JSON.parse(await readers.read("stateQuestion", { key, threads, ts }, "zh"));
       hub.statePendingCard = async (threads) => JSON.parse(await readers.read("statePendingCard", { threads }, "zh"));
       hub.deliveryCardState = async (thread, n, signal) => JSON.parse(await readers.read("deliveryCardState", { thread, n }, "zh", { signal }));
