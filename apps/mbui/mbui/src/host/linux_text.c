@@ -318,54 +318,7 @@ void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *ou
 
 // ---- the clusters' keys ----
 
-static uint32_t hash(const uint16_t *s, int len, double size, int weight, int style) {
-  uint32_t h = 2166136261u;
-  for (int i = 0; i < len; i++) h = (h ^ s[i]) * 16777619u;
-  h = (h ^ (uint32_t)(size * 64)) * 16777619u;
-  h = (h ^ (uint32_t)style) * 16777619u;
-  return (h ^ (uint32_t)weight) * 16777619u;
-}
-
-static int same(const glyph_entry *e, const uint16_t *s, int len, double size, int weight, int style) {
-  return e->len == len && e->size == size && e->weight == weight && e->style == style &&
-         memcmp(pool + e->off, s, (size_t)len * sizeof(uint16_t)) == 0;
-}
-
-static void table_put(int id) {
-  glyph_entry *e = &entries[id];
-  size_t i = hash(pool + e->off, e->len, e->size, e->weight, e->style) & (table_cap - 1);
-  while (table[i]) i = (i + 1) & (table_cap - 1);
-  table[i] = id + 1;
-}
-
-static int intern(const uint16_t *s, int len, double size, int weight, int style) {
-  if (table_cap) {
-    size_t i = hash(s, len, size, weight, style) & (table_cap - 1);
-    for (; table[i]; i = (i + 1) & (table_cap - 1))
-      if (same(&entries[table[i] - 1], s, len, size, weight, style)) return table[i] - 1;
-  }
-  if (n_entries == cap_entries) {
-    cap_entries = cap_entries ? cap_entries * 2 : 1024;
-    entries = realloc(entries, sizeof(glyph_entry) * (size_t)cap_entries);
-  }
-  if (pool_len + (size_t)len > pool_cap) {
-    pool_cap = (pool_len + len) * 2 + 4096;
-    pool = realloc(pool, pool_cap * sizeof(uint16_t));
-  }
-  memcpy(pool + pool_len, s, (size_t)len * sizeof(uint16_t));
-  int id = n_entries++;
-  entries[id] = (glyph_entry){(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0};
-  pool_len += len;
-  if ((size_t)n_entries * 2 > table_cap) {
-    free(table);
-    table_cap = table_cap ? table_cap * 2 : 4096;
-    table = calloc(table_cap, sizeof(int));
-    for (int j = 0; j < n_entries; j++) table_put(j);
-  } else {
-    table_put(id);
-  }
-  return id;
-}
+#include "glyph_cache.h"
 
 // ---- shaping: the layout's clusters in the text's order, each its bytes and its advance ----
 

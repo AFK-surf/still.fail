@@ -437,54 +437,7 @@ extern "C" void mb_host_font_metrics(double size, int32_t weight, int32_t style,
   out[5] = 0;  // lines as asked, not on whole pixels
 }
 
-static uint32_t hash(const WCHAR *s, int len, double size, int weight, int style) {
-  uint32_t h = 2166136261u;
-  for (int i = 0; i < len; i++) h = (h ^ s[i]) * 16777619u;
-  h = (h ^ (uint32_t)(size * 64)) * 16777619u;
-  h = (h ^ (uint32_t)style) * 16777619u;
-  return (h ^ (uint32_t)weight) * 16777619u;
-}
-
-static int same(const glyph_entry *e, const WCHAR *s, int len, double size, int weight, int style) {
-  return e->len == len && e->size == size && e->weight == weight && e->style == style &&
-         memcmp(pool + e->off, s, (size_t)len * sizeof(WCHAR)) == 0;
-}
-
-static void table_put(int id) {
-  glyph_entry *e = &entries[id];
-  size_t i = hash(pool + e->off, e->len, e->size, e->weight, e->style) & (table_cap - 1);
-  while (table[i]) i = (i + 1) & (table_cap - 1);
-  table[i] = id + 1;
-}
-
-static int intern(const WCHAR *s, int len, double size, int weight, int style) {
-  if (table_cap) {
-    size_t i = hash(s, len, size, weight, style) & (table_cap - 1);
-    for (; table[i]; i = (i + 1) & (table_cap - 1))
-      if (same(&entries[table[i] - 1], s, len, size, weight, style)) return table[i] - 1;
-  }
-  if (n_entries == cap_entries) {
-    cap_entries = cap_entries ? cap_entries * 2 : 1024;
-    entries = (glyph_entry *)realloc(entries, sizeof(glyph_entry) * cap_entries);
-  }
-  if (pool_len + len > pool_cap) {
-    pool_cap = (pool_len + len) * 2 + 4096;
-    pool = (WCHAR *)realloc(pool, pool_cap * sizeof(WCHAR));
-  }
-  memcpy(pool + pool_len, s, (size_t)len * sizeof(WCHAR));
-  int id = n_entries++;
-  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0, 0, 0, false};
-  pool_len += len;
-  if ((size_t)n_entries * 2 > table_cap) {
-    free(table);
-    table_cap = table_cap ? table_cap * 2 : 4096;
-    table = (int *)calloc(table_cap, sizeof(int));
-    for (int j = 0; j < n_entries; j++) table_put(j);
-  } else {
-    table_put(id);
-  }
-  return id;
-}
+#include "glyph_cache.h"
 
 // CJK punctuation two in a row set solid, as Core Text sets it on the Apple hosts (and DirectWrite would, for a font
 // with chws: Microsoft YaHei, the fallback Han is drawn in, has neither chws nor halt, so "），" stood a whole empty

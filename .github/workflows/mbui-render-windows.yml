@@ -8,6 +8,7 @@ name: mbui-render-windows
 on:
   pull_request:
     paths: &paths
+      - "apps/mbui/mbui/src/host/glyph_cache.h"
       - "apps/mbui/mbui/src/host/win_render.cpp"
       - "apps/mbui/mbui/src/host/win_text.cpp"
       - "apps/mbui/mbui/src/host/win_image.cpp"

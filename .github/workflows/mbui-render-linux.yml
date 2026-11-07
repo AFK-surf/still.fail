@@ -8,6 +8,7 @@ name: mbui-render-linux
 on:
   pull_request:
     paths: &paths
+      - "apps/mbui/mbui/src/host/glyph_cache.h"
       - "apps/mbui/mbui/src/host/linux_render.c"
       - "apps/mbui/mbui/src/host/linux_text.c"
       - "apps/mbui/mbui/src/host/linux_image.c"
