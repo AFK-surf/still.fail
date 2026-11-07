@@ -4564,7 +4564,14 @@ fn Tree::tracked(
   up? : Bool = false,
 ) -> (Double, Double) {
   let (tx, ty) = match self.held_tracks.get(finger) {
-    Some(p) if !down => p
+    Some(p) if !down => {
+      // (its events since the last told it, before this one: moves told it at once)
+      for e in track {
+        p.0.add(e.0, e.1)
+        p.1.add(e.0, e.2)
+      }
+      p
+    }
     _ => {
       let p = (Tracker::new(), Tracker::new())
       self.held_tracks[finger] = p

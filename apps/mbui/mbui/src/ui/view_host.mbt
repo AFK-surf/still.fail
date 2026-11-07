@@ -119,6 +119,27 @@ priv enum ViewHeld {
 let view_held : Ref[ViewHeld?] = Ref(None)
 
 ///|
+/// The moves of the first finger a node of the tree's holds (each its moment and where, in the window) not told it yet:
+/// told it at once as the next frame begins or anything else comes (view_moves_told). A phone gives a few a frame
+/// (MotionEvent's history), and each told by itself brought the tree to it, laid it out and built the rows a list
+/// shows from it, all of that between frames.
+// kept across runs: put back as a run begins (view_forget)
+let view_moves : Array[(Double, Double, Double)] = []
+
+///|
+/// The moves kept (view_moves) told what holds them as one, at the last one's moment and place, the others before it
+/// for how fast it goes (Tree::drag_at's `track`); the hold called off meanwhile, nobody's.
+fn view_moves_told(tree : Tree) -> Unit {
+  guard view_moves.pop() is Some((at, x, y)) else { return }
+  let before = view_moves.copy()
+  view_moves.clear()
+  guard view_held.val is Some(Dragging(id)) else { return }
+  if !tree.drag_at(id, Moved, x, y, at, finger=view_fingers[0], track=before) {
+    view_held.val = Some(Nowhere)
+  }
+}
+
+///|
 /// Where the press held by nothing went down, on nothing of the tree's (view_pointer): a tap where it is let go near it.
 // kept across runs: put back as a run begins (view_forget)
 let view_nothing_down : Ref[(Double, Double)?] = Ref(None)
@@ -404,6 +425,7 @@ fn view_forget() -> Unit {
     tree_inset_said.set(None)
   })
   view_held.val = None
+  view_moves.clear()
   view_nothing_down.val = None
   view_down.val = None
   tree_finger_off()
@@ -600,6 +622,8 @@ fn view_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
       return
     }
   }
+  // (the finger's moves since the last frame, told what holds them before anything of this one)
+  view_moves_told(tree)
   // (drawn as at `t`, when the frame is to be shown; its logic advanced only to what the host has come to: no step
   // or ending taken ahead of an input still to come before `t`)
   @signals.untracked(fn() { tree.at(t) })
@@ -2070,6 +2094,22 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return false
+  }
+  // (a move of the first finger a node of the tree's holds as its own: kept for the frame, told it once with the
+  // others since (view_moves_told); anything else told what came before it first)
+  match (kind, view_held.val) {
+    (1, Some(Dragging(id))) if !tree.yields(id) => {
+      match view_nothing_down.val {
+        Some((x0, y0)) if (x - x0).abs() > touch_slop() || (y - y0).abs() > touch_slop() =>
+          view_nothing_down.val = None
+        _ => ()
+      }
+      tree_finger_off()
+      view_moves.push((view_moment(), x, y))
+      h_frame_owed()
+      return true
+    }
+    _ => view_moves_told(tree)
   }
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
