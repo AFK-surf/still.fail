@@ -1180,6 +1180,13 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
     Some(ids) => {
       for id in ids {
         self.lists.remove(id)
+        match self.list_positions.get(id) {
+          Some(position) => {
+            self.list_positions.remove(id)
+            self.tell("list-position-gone/\{id}", fn() { position.set(None) })
+          }
+          None => ()
+        }
         self.editors.remove(id)
         self.springs.remove(id)
         pagers.remove(id)

@@ -59,6 +59,9 @@ pub(all) struct Reading {
   /// the first message when the page before was asked for (once per page)
   asked : @signals.Signal[Double]
   asked_newer : @signals.Signal[Double]
+  /// The paging reaction is owned by this visit; a failed request asks the next build to try again.
+  priv mut paging : ChatPaging?
+  priv paging_retry : @signals.Signal[Int]
   /// the chat's latest page asked for in place of a window short of its end (chat_latest): the list goes to its end
   /// as it comes
   mut latest_asked : Bool
@@ -223,6 +226,8 @@ pub fn reading_of(key : String) -> Reading {
         lined: false,
         asked: @signals.signal(-1.0),
         asked_newer: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+        paging: None,
+        paging_retry: @signals.signal(0),
         latest_asked: false,
         end_asked: false,
         told: "",
@@ -1806,6 +1811,207 @@ pub(all) struct ListFrame {
 }
 
 ///|
+/// The chat data paging needs. It is independent of how the list is drawn.
+pub(all) struct ChatPagingInput {
+  thread : Double?
+  placed : Bool
+  more : Bool
+  newer : Bool
+  first_entry : Double?
+  /// The first message in the presented rows, used when the core did not give a first-entry cursor.
+  first_message : Double?
+  last_entry : Double
+  /// A retry requested by the owner after an unsuccessful call.
+  retry : Int
+} derive(Eq)
+
+///|
+/// The rows in the list's completed layout, and how many rows that layout contains.
+pub(all) struct ChatPagingWindow {
+  first : Int
+  last : Int
+  count : Int
+} derive(Eq)
+
+///|
+/// The same business inputs from the chat's current view, for either kind of list. `first_message` is the first
+/// message in the rows actually presented, after rows waiting or leaving have been accounted for.
+pub fn chat_paging_input(
+  v : ChatView,
+  placed : Bool,
+  first_message : Double?,
+  retry : Int,
+) -> ChatPagingInput {
+  {
+    thread: v.thread,
+    placed,
+    more: v.more,
+    newer: v.newer,
+    first_entry: v.first_entry,
+    first_message,
+    last_entry: match v.last_entry {
+      Some(last) => last
+      None =>
+        match v.messages.last() {
+          Some(m) => m.seq
+          None => -1.0
+        }
+    },
+    retry,
+  }
+}
+
+///|
+/// A failed paging request changes this signal. An owner can schedule a retry with its next committed list window;
+/// reading it alone does not retry recursively inside the failed request's callback.
+pub fn Reading::paging_retry_version(self : Reading) -> Int {
+  self.paging_retry.get()
+}
+
+///|
+priv struct ChatPaging {
+  reader : @ui.ListReader
+  source : Source
+  context : @signals.Signal[ChatPagingInput]
+  stop : () -> Unit
+}
+
+///|
+/// The requests owned by one follower, so a late answer cannot change another request or a departed owner.
+priv struct ChatPagingRequests {
+  mut active : Bool
+  mut older : Int
+  mut newer : Int
+}
+
+///|
+/// The paging operation, shared by any presentation that supplies its completed visible range.
+fn chat_paging_run(
+  src : Source,
+  r : ChatRef,
+  rd : Reading,
+  context : ChatPagingInput,
+  visible : ChatPagingWindow?,
+  requests : ChatPagingRequests,
+) -> Unit {
+  guard (context.thread, visible) is (Some(thread), Some({ first: first_row, last: last_row, count })) else { return }
+  if !context.placed {
+    return
+  }
+  if context.more && first_row >= 0 && first_row <= 3 {
+    let first = context.first_entry.unwrap_or(context.first_message.unwrap_or(-1.0))
+    if rd.asked.get() != first {
+      rd.asked.set(first)
+      requests.older += 1
+      let request = requests.older
+      (src.call)(
+        "chat.older",
+        { "station": Json::string(r.station), "thread": Json::number(thread) },
+        fn(res) {
+          if res is Err(e) && requests.active && requests.older == request &&
+            @signals.untracked(fn() { rd.asked.get() }) == first {
+            rd.asked.set(-1.0)
+            rd.paging_retry.set(@signals.untracked(fn() { rd.paging_retry.get() }) + 1)
+            @hostapi.log("chat.older failed: " + text(Some(e), "message"))
+          }
+        },
+      )
+    }
+  }
+  if context.newer && last_row >= count - 4 && rd.asked_newer.get() != context.last_entry {
+    let last = context.last_entry
+    rd.asked_newer.set(last)
+    requests.newer += 1
+    let request = requests.newer
+    (src.call)(
+      "chat.newer",
+      { "station": Json::string(r.station), "thread": Json::number(thread) },
+      fn(res) {
+        if res is Err(_) && requests.active && requests.newer == request &&
+          @signals.untracked(fn() { rd.asked_newer.get() }) == last {
+          rd.asked_newer.set(-1.0)
+          rd.paging_retry.set(@signals.untracked(fn() { rd.paging_retry.get() }) + 1)
+        }
+      },
+    )
+  }
+}
+
+///|
+/// Follow a chat's paging inputs and completed list window. The caller batches data and window updates that belong to
+/// the same layout, stops the returned reaction with its owner, and owns `window`'s computed. A failed request is
+/// retried when the owner next changes `retry`, not recursively from the request's callback.
+pub fn chat_paging_follow(
+  src : Source,
+  r : ChatRef,
+  rd : Reading,
+  data : @signals.Computed[ChatPagingInput],
+  window : @signals.Computed[ChatPagingWindow?],
+) -> () -> Unit {
+  let requests = { active: true, older: 0, newer: 0 }
+  let stop = @signals.effect(fn() {
+    let input = data.get()
+    let visible = window.get()
+    @signals.untracked(fn() { chat_paging_run(src, r, rd, input, visible, requests) })
+  })
+  fn() {
+    requests.active = false
+    stop()
+  }
+}
+
+///|
+/// Stop following a chat's list when that visit goes away.
+pub fn Reading::stop_paging(self : Reading) -> Unit {
+  match self.paging {
+    Some(paging) => {
+      self.paging = None
+      (paging.stop)()
+    }
+    None => ()
+  }
+}
+
+///|
+/// Give the reaction the final business data and position together, after the old page's build and layout.
+fn chat_paging_sync(
+  src : Source,
+  r : ChatRef,
+  rd : Reading,
+  reader : @ui.ListReader,
+  next : ChatPagingInput,
+) -> Unit {
+  match rd.paging {
+    Some(paging) if paging.reader.same(reader) && physical_equal(paging.source, src) => {
+      @signals.start_batch()
+      paging.context.set(next)
+      reader.sync_snapshot()
+      @signals.end_batch()
+      return
+    }
+    Some(_) => rd.stop_paging()
+    None => ()
+  }
+  reader.sync_snapshot()
+  let context = @signals.signal(next, same=fn(a, b) { a == b })
+  let data : @signals.Computed[ChatPagingInput] = @signals.computed(
+    fn(_) { context.get() },
+    same=fn(a, b) { a == b },
+  )
+  let visible : @signals.Computed[ChatPagingWindow?] = @signals.computed(
+    fn(_) {
+      match reader.snapshot() {
+        Some(snapshot) => Some({ first: snapshot.info.first, last: snapshot.info.last, count: snapshot.info.count })
+        None => None
+      }
+    },
+    same=fn(a, b) { a == b },
+  )
+  let stop = chat_paging_follow(src, r, rd, data, visible)
+  rd.paging = Some({ reader, source: src, context, stop: fn() { stop(); data.dispose(); visible.dispose() } })
+}
+
+///|
 /// What a chat's list does once drawn this frame, as both frames do it (sfapp's messages, sfdesk's chat_list): put in
 /// place once (at the unread line `lead` under its `top`, where it was left here, else where the core opened it); a
 /// message gone to (a notification's, a search's: `on_found` told of one with its words; ⌘F's, `finding`: the window
@@ -1989,44 +2195,35 @@ pub fn list_after(
     }
     // (read back by what the page builds from it: not at every step of a scroll, which changes none of that)
     let ask_rows = ask_rows_of(v, list)
-    let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows) })
-    // near the top: the page before comes in, once per page
-    match (info, v.thread) {
-      (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
-        // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
-        let first = match v.first_entry {
-          Some(f) => f
-          None =>
-            match list.iter().find_first(fn(e) { e is Said(_) }) {
-              Some(Said(m)) => m.seq
-              _ => -1.0
-            }
+    let info = c.list_info_as(key, fn(i) {
+      let shown = list_made(i, n, ask_rows)
+      // Near either edge only changes paging. Its reaction follows the position directly; it need not rebuild the page.
+      (shown.laid, shown.at_end, shown.away, shown.asks_seen)
+    })
+    // The old page supplies its data after the final build. Paging itself follows the list's position, independently
+    // of the page building; a retained page can give the same reaction its own position source.
+    let lr = c.list_reader(key)
+    let paging_data = chat_paging_input(
+      v,
+      rd.placed,
+      if v.first_entry is None {
+        match list.iter().find_first(fn(e) { e is Said(_) }) {
+          Some(Said(m)) => Some(m.seq)
+          _ => None
         }
-        // (asked once the frame's builds are over, from where the last laid the list out)
-        if rd.asked.get() != first {
-          c.after_build("older", fn() {
-            if rd.asked.get() == first {
-              return
-            }
-            rd.asked.set(first)
-            (src.call)(
-              "chat.older",
-              { "station": Json::string(r.station), "thread": Json::number(thread) },
-              fn(res) {
-                match res {
-                  Err(e) => {
-                    rd.asked.set(-1.0)
-                    @hostapi.log("chat.older failed: " + text(Some(e), "message"))
-                  }
-                  _ => ()
-                }
-              },
-            )
-          })
-        }
-      }
-      _ => ()
-    }
+      } else {
+        None
+      },
+      rd.paging_retry_version(),
+    )
+    c.after_build("paging", fn() {
+      // The reaction belongs to the chat visit, not to the frame watch whose build made it.
+      @signals.untracked(fn() {
+        let owner = @signals.set_owner(None)
+        chat_paging_sync(src, r, rd, lr, paging_data)
+        @signals.set_owner(owner) |> ignore
+      })
+    })
     // its end asked for from one of its rows: gone to, gliding
     if rd.end_asked {
       rd.end_asked = false
@@ -2036,33 +2233,6 @@ pub fn list_after(
     if rd.latest_asked && !v.newer {
       rd.latest_asked = false
       c.list_to_end(key, glide=false)
-    }
-    // near the end of a window short of the chat's: the page after
-    match (info, v.thread) {
-      (Some(i), Some(thread)) if v.newer && rd.placed && i.last >= n - 4 => {
-        let last = match v.last_entry {
-          Some(l) => l
-          None =>
-            match v.messages.last() {
-              Some(m) => m.seq
-              None => -1.0
-            }
-        }
-        if rd.asked_newer.get() != last {
-          c.after_build("newer", fn() {
-            if rd.asked_newer.get() == last {
-              return
-            }
-            rd.asked_newer.set(last)
-            (src.call)(
-              "chat.newer",
-              { "station": Json::string(r.station), "thread": Json::number(thread) },
-              fn(res) { if res is Err(_) { rd.asked_newer.set(-1.0) } },
-            )
-          })
-        }
-      }
-      _ => ()
     }
     // the core told the chat shows, and whether its end does (what is read follows): not on a read-only run
     // (its end in view: not while it glides to rows that came, as Android's Chat.kt has it (endInView, lastLaidOut):
@@ -2076,7 +2246,6 @@ pub fn list_after(
     rd.at_end = seen
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
-    let lr = c.list_reader(key)
     let frame = c.frame_number()
     // (still: what goes out of sight goes only then, never shifting rows on their way: Reading::sees)
     let tu = turns_of(r.station + "\u{1}" + r.session)

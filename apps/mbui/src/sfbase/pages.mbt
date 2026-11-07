@@ -330,6 +330,9 @@ pub fn reset() -> Unit {
   send_flight.set(None)
   landing_shares.clear()
   // the chats' lists as kept while they show and where they were left (chat_list.mbt)
+  for _, reading in readings {
+    reading.stop_paging()
+  }
   readings.clear()
   kept_places.clear()
   flash_held.val = false

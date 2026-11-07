@@ -326,6 +326,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       }
     }
     let kept0 = nodes_run.kept
+    c.list_positions_due.clear()
     layout_coming.val = true
     c.read_back_moved = false
     c.read_back_whole = false
@@ -434,6 +435,11 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   looks_told(tell_ids, c.told.map(fn(t) { t.0 }))
   for f in tells {
     f()
+  }
+  // List followers are told after the final layout and the build's tells. A tell that supplies a follower with new
+  // business data can first publish that data and the list's position together in one signal batch.
+  if !looks_rebuilt.val {
+    @signals.untracked(fn() { c.list_positions_tell() })
   }
   // what any of its builds said to tell, once each (Ctx::tell)
   let told = c.told.copy()
