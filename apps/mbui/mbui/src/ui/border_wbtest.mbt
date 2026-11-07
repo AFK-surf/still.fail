@@ -66,6 +66,28 @@ test "a clipping box with a border cuts what it holds at its edge, under the bor
 }
 
 ///|
+test "a node of the window's tree that clips, with an edge, cuts what it holds at its edge, its corners its own: as an old view's box with a border does" {
+  // (View::edge takes no room either: what is laid out to its edge is not cut there, the edge drawn over it; the
+  // window's tree's clip (view_paint's push_box_clip) and an old view's (push_round_clip) the same)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.offset(Is((100.0, 100.0))).width(Is(Some(100.0))).height(Is(Some(40.0))).radius(Is(8.0)).ground(Is(0xFFFFFFFFL)).edge(Is((1.0, 0xD2D2D73FL))).clips(Is(true))
+      |> ignore
+      n.box(fn(k) { k.width(Is(Some(100.0))).height(Is(Some(40.0))).ground(Is(0x2233AAFFL)) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let c = g()
+  let k = (0).until(c.ninst).iter().find_first(fn(k) { c.inst[k * inst_size + 5] == 0.0 && c.inst[k * inst_size + 9] == 51.0 / 255.0 })
+  guard k is Some(k) else { fail("what the node holds not drawn") }
+  let at = k * inst_size
+  assert_eq([c.inst[at + 16], c.inst[at + 17], c.inst[at + 18], c.inst[at + 19]], [100.0, 100.0, 200.0, 140.0])
+  assert_eq([c.inst[at + 24], c.inst[at + 25], c.inst[at + 26], c.inst[at + 27]], [8.0, 8.0, 8.0, 8.0])
+}
+
+///|
 test "a box holding nothing draws its border with its ground, once" {
   let t = Tester::new(
     fn(c) {
