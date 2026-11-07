@@ -405,3 +405,20 @@ test "bar: a bar chosen landing, a finger put down on it before it has landed an
 ///|
 /// A moment between two frames (one each 16⅔ ms): what is told there is so from then, not from a frame.
 let between_frames_ms : Double = 10.0
+
+///|
+test "bar: a ride set out days before what it rides on rests (a change caught up late): worked out over its last seconds only, landing the same" {
+  bar_reset()
+  let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0)
+  t.draw()
+  let swap : Swap = { i: 0, n: 0, from: 1.0, key: None, sets: [[]], cur: 0, alpha: 1.0, drop: 0.0, lit: {}, ends: 0.0 }
+  let from : RideFrom = { swap, j: 0, w: 346.0, row_top: 0.0, o_to: 0.0, o_end: 0.0, k_to: 0.0, k_end: 0.0, up_to: 0.0, up_end: 0.0 }
+  // (the iPhone's frames' clock four days after it started; the ride told at its first moment)
+  let still = 4.0 * 86400000.0
+  let anchor = fn(t : Double) { if t < still - 300.0 { 40.0 } else { 100.0 } }
+  let r = Ride::new(0.0, 0.0, 0.0, 300.0, ball_damping(300.0), ball_rest_within, anchor, still, from)
+  assert_true(r.legs.length() < 1000, msg="\{r.legs.length()} legs")
+  assert_eq(r.to, 100.0)
+  assert_true((r.at(r.end).0 - 100.0).abs() < 0.000001)
+  assert_true((r.at(still - 400.0).0 - 40.0).abs() < 0.01, msg="\{r.at(still - 400.0)}")
+}
