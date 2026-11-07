@@ -9,7 +9,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { wall } from "../ops/fibers.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
-import { LegacyEditsUnavailable, makeStore as makeReadStore, stateQuestion as readStateQuestion } from "../read/store.ts";
+import { LegacyEditsUnavailable, makeStore as makeReadStore, statePendingCard as readStatePendingCard, stateQuestion as readStateQuestion } from "../read/store.ts";
 import { iso } from "../read/transcript.ts";
 import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { type Attachment, type MessageRow, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
@@ -84,13 +84,9 @@ const needsQuestionPreparation = (error: unknown) => error instanceof LegacyEdit
 
 /// A reader's snapshot may have become stale before it answers. If so, confirm it with the bounded lookup in the
 /// current snapshot; when an old lookup is not prepared yet, let the reader prepare it and try again.
-async function questionForAbout(hub: Hub, key: string, threadsOf: () => number[], ts: string): Promise<[number, number, string] | null> {
+async function stateRead<T>(hub: Hub, key: string, threadsOf: () => number[], read: (threads: number[]) => Promise<T>,
+  confirm: (threads: number[]) => T, canConfirm: () => boolean = () => true): Promise<T> {
   const version = () => Number(hub.store.db.prepare("PRAGMA main.data_version").get()!.data_version);
-  // If a native edit index was removed after this station opened, its old merged view can scan the whole chat. That
-  // view is still safe on the reader; do not use it for this synchronous confirmation until the index returns.
-  const bounded = () => hub.store.db.prepare(`SELECT 1 WHERE
-    EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits') OR
-    EXISTS (SELECT 1 FROM sqlite_master WHERE type='view' AND name='merged' AND instr(sql, 'legacy_edit_meta') > 0)`).get() !== undefined;
   for (;;) {
     const before = version();
     const threads = threadsOf();
@@ -100,20 +96,20 @@ async function questionForAbout(hub: Hub, key: string, threadsOf: () => number[]
       if ((change.type === "thread" || change.type === "threadRemoved") && included.has(change.id)) changed = true;
       if (change.type === "sessionRemoved" && change.key === key) changed = true;
     });
-    let found: Awaited<ReturnType<NonNullable<Hub["stateQuestion"]>>>;
-    try { found = await hub.stateQuestion!(key, threads, ts); }
+    let found: T;
+    try { found = await read(threads); }
     finally { stop(); }
     const current = threadsOf();
     const after = version();
     if (changed || before !== after || current.length !== threads.length || current.some((id, i) => id !== threads[i])) {
-      if (!bounded()) continue;
-      try { found = readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, current, ts); }
+      if (!canConfirm()) continue;
+      try { found = confirm(current); }
       catch (error) {
         if (needsQuestionPreparation(error)) continue;
         throw error;
       }
     }
-    return questionResult(found);
+    return found;
   }
 }
 
@@ -163,6 +159,21 @@ async function recordQuestionForTurn(hub: Hub, key: string, actor: SessionActor,
       throw error;
     }
   }
+}
+
+async function questionForAbout(hub: Hub, key: string, threadsOf: () => number[], ts: string): Promise<[number, number, string] | null> {
+  // An old native view can scan the chat after its index is removed. Do not use it on the station thread.
+  const bounded = () => hub.store.db.prepare(`SELECT 1 WHERE
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits') OR
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='view' AND name='merged' AND instr(sql, 'legacy_edit_meta') > 0)`).get() !== undefined;
+  const found = await stateRead(hub, key, threadsOf, (threads) => hub.stateQuestion!(key, threads, ts),
+    (threads) => readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, threads, ts), bounded);
+  return questionResult(found);
+}
+
+async function pendingForState(hub: Hub, key: string, threadsOf: () => number[]): Promise<[number, number, string] | null> {
+  return stateRead(hub, key, threadsOf, (threads) => hub.statePendingCard!(threads),
+    (threads) => readStatePendingCard(makeReadStore(hub.store.db, hub.config().dataDir), threads));
 }
 
 /// A thread of this session the agent named with to=, and how the session posts there.
@@ -447,8 +458,14 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     // What the state is about: as said, else for need_help the card still pending in this chat (this post's, when it
     // carries one).
     if (about === null && kind.kind === "need_help") {
-      const pending = store.pendingCard(thread.thread.id);
-      if (pending) about = [pending[0].thread, pending[0].n, pending[0].ts];
+      if (hub.statePendingCard) about = await pendingForState(hub, key, () => {
+        const current = store.sessionThreadById(key, thread.thread.id);
+        return current !== null && current.connect === thread.connect ? [thread.thread.id] : [];
+      });
+      else {
+        const pending = store.pendingCard(thread.thread.id);
+        if (pending) about = [pending[0].thread, pending[0].n, pending[0].ts];
+      }
     }
     if (checkingQuestion) {
       if (actor && questionTurn !== null && ts !== null && questionThreads !== null && about !== null) {
@@ -557,6 +574,8 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   if (checkingQuestion) {
     about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
     if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
+  } else if (kind.kind === "need_help" && ts === null && hub.statePendingCard) {
+    about = await pendingForState(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id));
   } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
     throw new Error(

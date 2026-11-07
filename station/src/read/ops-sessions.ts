@@ -1,7 +1,7 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, pendingDeliveries, stateQuestion, threadSessions } from "./store.ts";
+import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, pendingDeliveries, statePendingCard, stateQuestion, threadSessions } from "./store.ts";
 import { searchChats } from "../store/chat-list.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
@@ -50,6 +50,8 @@ export const sessionOps: Record<string, ReadOp> = {
   historyPendingCard: (s, a) => pendingCardNumber(s, a.thread),
   /// The visible question a state names, and whether it is still pending.
   stateQuestion: (s, a) => stateQuestion(s, a.key, a.threads, a.ts),
+  /// The pending card a state uses when it does not name a message.
+  statePendingCard: (s, a) => statePendingCard(s, a.threads),
   /// Card state accompanying a person's delivered message.
   deliveryCardState: (s, a) => deliveryCardState(s, a.thread, a.n),
   /// A session's pending delivery may contain many messages: it shares the bulk reader line.

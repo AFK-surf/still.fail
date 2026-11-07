@@ -1008,6 +1008,23 @@ export function pendingCardNumber(s: Store, thread: number): number | null {
   } finally { s.db.exec("RELEASE pending_card_number_read"); }
 }
 
+/// The latest pending card a need can point to. Its original timestamp and time never depend on edits.
+export function statePendingCard(s: Store, threads: number[]): [number, number, string] | null {
+  s.db.exec("SAVEPOINT state_pending_card_read");
+  try {
+    const cards: { thread: number; n: number; ts: string; at: number }[] = [];
+    for (const thread of threads) {
+      const n = pendingCardNumber(s, thread);
+      if (n === null) continue;
+      const row = one(s, "SELECT ts, at FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+      if (row) cards.push({ thread, n, ts: row.ts ?? "", at: row.at });
+    }
+    cards.sort((a, b) => a.at - b.at);
+    const last = cards.at(-1);
+    return last ? [last.thread, last.n, last.ts] : null;
+  } finally { s.db.exec("RELEASE state_pending_card_read"); }
+}
+
 /// The visible question a need names, checked together with whether it is still answerable.
 export type StateQuestion =
   | { kind: "missing" }
