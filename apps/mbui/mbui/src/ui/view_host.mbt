@@ -695,6 +695,23 @@ fn old_place(tree : @view.Tree) -> Unit {
 }
 
 ///|
+/// The window's tree told as the frame was built (what a build set that the tree follows): brought now, and where it
+/// places an old view otherwise than this pass built it for, the frame built again for that before it is drawn (drawn
+/// so, an old view built for the room it had would be drawn in the room it has now, till the next frame).
+fn view_told_as_built(c : Ctx) -> Unit {
+  match view_app.val {
+    Some(tree) if tree.told_since() => {
+      let was = view_island_said()
+      view_brought(tree)
+      if view_island_said() != was {
+        c.read_changed("the window's tree placed an old view otherwise as the frame was built")
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
 /// Where the old views are laid out, said as the frame's settings are (frame_watch.mbt looks_env): one laid out
 /// elsewhere or resized, the old frame is built again; one only moved or faded (what moves it, or what holds it, by its
 /// offset, a page slid by its width) builds nothing: it is moved where it is drawn and drawn as opaque as it is as the

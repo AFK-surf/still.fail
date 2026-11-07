@@ -40,15 +40,86 @@ pub fn notice_cancel(tag : String) -> Unit {
 }
 
 ///|
-/// What the notification tapped opens, once ("" none since the last ask: @hostapi.notice_opened).
-pub fn notice_opened() -> String {
-  match fake.val {
+/// What the system said of its notifications since a frame last read it (notices_arrive), each a signal with how
+/// many have come: the notification tapped (what it opens), the answer to the last ask. What reads them (the app's
+/// poll, told once its frame is built: Ctx::after_build) is built again in the frame they come in, whether or not
+/// anything else of it is: the host keeps them and only asks for a frame, telling nothing of what changed.
+priv struct NoticesSaid {
+  opened : @signals.Signal[(Int, String)]
+  answer : @signals.Signal[(Int, Bool)]
+  mut opened_taken : Int
+  mut answer_taken : Int
+}
+
+///|
+// kept across runs: put back by each Tester (notices_reset)
+let notices_said : NoticesSaid = {
+  opened: @signals.signal((0, "")),
+  answer: @signals.signal((0, false)),
+  opened_taken: 0,
+  answer_taken: 0,
+}
+
+///|
+/// As at the start: nothing said, nothing taken.
+fn notices_reset() -> Unit {
+  notices_said.opened.set((0, ""))
+  notices_said.answer.set((0, false))
+  notices_said.opened_taken = 0
+  notices_said.answer_taken = 0
+}
+
+///|
+/// What the system said of its notifications since the last frame, read of it as a frame begins (frame_drawn, as the
+/// streams and the native views are: `frame_begins`) or as the app asks between frames: each its signal set, once.
+fn notices_arrive(frame_begins? : Bool = false) -> Unit {
+  let opened = match fake.val {
     Some(f) => {
       let o = f.notice_opened
       f.notice_opened = ""
       o
     }
     None => @hostapi.notice_opened()
+  }
+  if opened != "" {
+    let (n, _) = @signals.untracked(fn() { notices_said.opened.get() })
+    notices_said.opened.set((n + 1, opened))
+  }
+  let answer = match fake.val {
+    Some(f) =>
+      match f.notice_due {
+        // (a Tester's person answers as the frame after the ask begins: never before it, between frames)
+        Some((yes, _)) if frame_begins => {
+          f.notice_due = None
+          f.notice_perm = if yes { "granted" } else { "denied" }
+          Some(yes)
+        }
+        _ => None
+      }
+    None => @hostapi.notice_answer()
+  }
+  match answer {
+    Some(yes) => {
+      let (n, _) = @signals.untracked(fn() { notices_said.answer.get() })
+      notices_said.answer.set((n + 1, yes))
+    }
+    None => ()
+  }
+}
+
+///|
+/// What the notification tapped opens, once ("" none since the last ask: @hostapi.notice_opened): read as a signal,
+/// what reads it built again as one is tapped.
+pub fn notice_opened() -> String {
+  if !frame_running.val {
+    notices_arrive()
+  }
+  let (n, opens) = notices_said.opened.get()
+  if n > notices_said.opened_taken {
+    notices_said.opened_taken = n
+    opens
+  } else {
+    ""
   }
 }
 
@@ -86,19 +157,17 @@ pub fn notice_ask() -> Bool {
 
 ///|
 /// The system's answer to the last `notice_ask`, once (@hostapi.notice_answer): Some(true) allowed, Some(false) refused,
-/// None not yet.
+/// None not yet. Read as a signal: what reads it built again as the answer comes.
 pub fn notice_answer() -> Bool? {
-  match fake.val {
-    Some(f) =>
-      match f.notice_due {
-        Some((yes, asked)) if g().frame_no > asked => {
-          f.notice_due = None
-          f.notice_perm = if yes { "granted" } else { "denied" }
-          Some(yes)
-        }
-        _ => None
-      }
-    None => @hostapi.notice_answer()
+  if !frame_running.val {
+    notices_arrive()
+  }
+  let (n, yes) = notices_said.answer.get()
+  if n > notices_said.answer_taken {
+    notices_said.answer_taken = n
+    Some(yes)
+  } else {
+    None
   }
 }
 

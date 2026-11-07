@@ -286,11 +286,11 @@ test "on one line with its breaks kept (code shown as written): a line each, as 
 test "the same words in runs whose ranges moved (as many runs): drawn in the runs as they are now" {
   let red = 0xFF0000FFL
   let ink = 0x000000FFL
-  let runs = Ref([@ui.span("ab", color=red), @ui.plain("cd")])
+  let runs = @signals.signal([@ui.span("ab", color=red), @ui.plain("cd")])
   let t = @ui.Tester::new(
     fn(c) {
       // in a box of its own size, laid out as before: only the paragraph's runs change
-      c.box(w=Px(200.0), h=Px(40.0), fn() { c.rich(runs.val, size=10.0, color=ink) |> ignore }) |> ignore
+      c.box(w=Px(200.0), h=Px(40.0), fn() { c.rich(runs.get(), size=10.0, color=ink) |> ignore }) |> ignore
     },
     w=300.0,
     h=100.0,
@@ -303,11 +303,11 @@ test "the same words in runs whose ranges moved (as many runs): drawn in the run
   }
   assert_eq(colors(), [red, red, ink, ink])
   // the red one word on: still two runs, the same words
-  runs.val = [@ui.span("abc", color=red), @ui.plain("d")]
+  runs.set([@ui.span("abc", color=red), @ui.plain("d")])
   t.frame()
   assert_eq(colors(), [red, red, red, ink])
   // and back, shorter
-  runs.val = [@ui.span("a", color=red), @ui.plain("bcd")]
+  runs.set([@ui.span("a", color=red), @ui.plain("bcd")])
   t.frame()
   assert_eq(colors(), [red, ink, ink, ink])
 }

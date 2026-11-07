@@ -357,12 +357,12 @@ test "a pending card's long question gives way to its lead on a narrow row" {
   ] {
     for platform in [0, 2] {
       new_run()
-      let width = Ref(240.0)
+      let width = @signals.signal(240.0)
       let t = @ui.Tester::new(
         fn(c) {
           @sf.begin(c) |> ignore
           c.with_theme(@sf.ui_theme(), fn() {
-            c.box(w=Px(width.val), fn() {
+            c.box(w=Px(width.get()), fn() {
               @sfpages.state_line(c, "card", c.id("card"), lead + rest, lead="decision", lead_text=lead, rest~)
             })
             |> ignore
@@ -377,7 +377,7 @@ test "a pending card's long question gives way to its lead on a narrow row" {
       let narrow = t.lines_of(rest)
       assert_true(narrow.length() == 1 && narrow[0].has_suffix("…"), msg="\{lead}: \{narrow}")
       assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
-      width.val = 800.0
+      width.set(800.0)
       t.frame()
       assert_eq(t.lines_of(lead), [lead])
       assert_eq(t.lines_of(rest), [rest])

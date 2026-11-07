@@ -29,6 +29,55 @@ test "the runtime's clock is the frames' clock: a sleep wakes in the frame its t
 }
 
 ///|
+/// How long before a timer is set between frames, and how long the display's frames are drawn after: past every timer
+/// set then.
+let between_timer_ms : Double = 200.0
+
+///|
+/// The frames drawn from now for `ms` as a host draws them: when each was, whether it was asked for, whether it drew
+/// something else than the one before, and the words it shows.
+fn host_frames_for(t : @ui.Tester, ms : Double) -> Array[(Double, Bool, Bool)] {
+  t.record_host()
+  t.run_as_host(ms)
+  t.host_frames().map(fn(f) { (f.at, f.asked, f.changed) })
+}
+
+///|
+test "a timer set between frames (a host's callback, a test's): the host woken for it, what it changes first shown in the frame at its moment" {
+  let said = @signals.signal("before")
+  let t = @ui.Tester::new(fn(c) { c.text(said.get()) |> ignore })
+  t.run_for(between_timer_ms)
+  // set outside any frame, nothing else asking for one
+  let due = @ui.runtime().now().to_double() + 50.0
+  @ui.runtime().after(50, fn() { said.set("after") })
+  let frames = host_frames_for(t, between_timer_ms)
+  // (none drawn before its moment asked for or other; the display's frame its moment falls in asked, and the first to
+  // show it; none after it asked)
+  let at = t.display_frame(due)
+  let asked = frames.filter(fn(f) { f.1 })
+  let changed = frames.filter(fn(f) { f.2 })
+  assert_eq(asked.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{frames}")
+  assert_eq(changed.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{frames}")
+  assert_true(t.find("after") is Some(_))
+  assert_eq(t.find("before"), None)
+}
+
+///|
+test "a timer set between frames before one set already: the host woken for the earlier first, then the later" {
+  let said = @signals.signal("before")
+  let t = @ui.Tester::new(fn(c) { c.text(said.get()) |> ignore })
+  t.run_for(between_timer_ms)
+  let now = @ui.runtime().now().to_double()
+  @ui.runtime().after(80, fn() { said.set("later") })
+  @ui.runtime().after(30, fn() { said.set("earlier") })
+  let frames = host_frames_for(t, between_timer_ms)
+  let (early, late) = (t.display_frame(now + 30.0), t.display_frame(now + 80.0))
+  assert_eq(frames.filter(fn(f) { f.1 }).map(fn(f) { f.0 }), [early, late], msg="\{frames}")
+  assert_eq(frames.filter(fn(f) { f.2 }).map(fn(f) { f.0 }), [early, late], msg="\{frames}")
+  assert_true(t.find("later") is Some(_))
+}
+
+///|
 test "a frame's handler forks; the fiber first runs at the start of the next frame, at the tap's moment, before the view" {
   let log : Array[String] = []
   let shown = Ref("idle")

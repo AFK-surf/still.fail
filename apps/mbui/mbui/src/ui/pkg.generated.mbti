@@ -61,6 +61,7 @@ pub fn clipboard_set(String, label? : String) -> Unit
 
 pub fn clipboard_set_png(Bytes, label? : String) -> Unit
 
+
 pub fn code(String) -> @text.Run
 
 pub fn concentric(Double, Double) -> Double
@@ -1619,6 +1620,15 @@ pub(all) enum Haptic {
   KeyboardTap
 } derive(Eq, Show, @debug.Debug)
 
+pub(all) struct HostFrame {
+  at : Double
+  asked : Bool
+  changed : Bool
+  why : String
+  damage : Array[(Double, Double, Double, Double)]
+  damage_share : Double
+} derive(Show)
+
 type HostRec
 
 pub(all) enum ImagePixels {
@@ -2502,7 +2512,7 @@ pub fn Tester::finish_all(Self) -> Unit
 pub fn Tester::finished_order(Self) -> Array[(Int32, Int32)]
 pub fn Tester::focused(Self) -> SemNode?
 pub fn Tester::frame(Self, ms? : Double) -> Unit
-pub fn Tester::frame_at(Self, Double) -> Unit
+
 pub fn Tester::frame_hash(Self) -> Int64
 pub fn Tester::frame_late(Self, Double) -> Unit
 pub fn Tester::frame_perf(Self) -> FramePerf
@@ -2530,6 +2540,7 @@ pub fn Tester::hole_corners(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::hole_parts(Self) -> Array[(Int32, Double, Double, Double, Double)]
 pub fn Tester::hole_radii(Self) -> Array[Double]
 pub fn Tester::holes(Self) -> Array[(Double, Double, Double, Double)]
+pub fn Tester::host_frames(Self) -> Array[HostFrame]
 pub fn Tester::host_says_finger(Self, Bool?) -> Unit
 pub fn Tester::hover_only_faults(Self) -> Array[String]
 pub fn Tester::image_loads(Self) -> Array[(String, Int32)]
@@ -2602,6 +2613,7 @@ pub fn Tester::press_at(Self, Double, Double) -> Unit
 pub fn Tester::query(Self, @view.Role, label? : String) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]
 pub fn Tester::rect_of(Self, String) -> (Double, Double, Double, Double)?
+pub fn Tester::record_host(Self) -> Unit
 pub fn Tester::refuse_native(Self, Int32, String) -> Unit
 pub fn Tester::release(Self, Double, Double) -> Unit
 pub fn Tester::replay_frames(Self, String) -> Array[(Int32, String, String)]
@@ -2617,6 +2629,7 @@ pub fn Tester::rows(Self) -> Array[(Int32, Double, Double)]
 pub fn Tester::rows_as_nodes(Self) -> (Int32, Int32)
 pub fn Tester::rows_kept(Self) -> Int32
 pub fn Tester::rows_read_built(Self) -> Int32
+pub fn Tester::run_as_host(Self, Double, skip_unasked? : Bool) -> Unit
 pub fn Tester::run_for(Self, Double) -> Unit
 pub fn Tester::run_for_exact(Self, Double) -> Unit
 pub fn Tester::run_rects(Self, String) -> Array[(Double, Double, Double, Double)]
@@ -2669,6 +2682,8 @@ pub fn Tester::site_too_slow(Self, Int32, Int32) -> Unit
 pub fn Tester::size(Self) -> (Double, Double)
 pub fn Tester::squeeze_faults(Self) -> Array[String]
 pub fn Tester::start_tape(Self) -> Unit
+pub fn Tester::stepped(Self) -> Unit
+
 pub fn Tester::stream_broken(Self, Int32) -> Unit
 pub fn Tester::stream_codec_said(Self, Int32, String) -> Unit
 pub fn Tester::stream_drops(Self, Int32, Double) -> Unit

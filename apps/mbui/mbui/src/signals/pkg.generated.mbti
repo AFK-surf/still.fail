@@ -67,8 +67,11 @@ pub fn[T] Computed::watched(Self[T]) -> Bool
 pub struct Keyed[K] {
   // private fields
 }
+pub fn[K : Hash + Eq] Keyed::add(Self[K], K) -> Unit
+pub fn[K : Hash + Eq] Keyed::count(Self[K]) -> Int32
 pub fn[K : Hash + Eq] Keyed::has(Self[K], K) -> Bool
 pub fn[K : Hash + Eq] Keyed::peek(Self[K], K) -> Bool
+pub fn[K : Hash + Eq] Keyed::remove(Self[K], K) -> Unit
 pub fn[K : Hash + Eq] Keyed::set(Self[K], Array[K]) -> Unit
 
 type Link

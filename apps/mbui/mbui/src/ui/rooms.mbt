@@ -50,6 +50,8 @@ pub fn Tester::hover_only_faults(self : Tester) -> Array[String] {
     rest.add(c.nodes[i].id)
   }
   c.lit_all = true
+  // (how it is drawn changed by the test, no signal: built whole, as the frame after it is, frame_watch.mbt)
+  test_stepped()
   self.frame()
   let out : Array[String] = []
   // (where each that asked stands: what a hold there opens is its menu, whatever node draws what lies over it, a row's
@@ -73,6 +75,7 @@ pub fn Tester::hover_only_faults(self : Tester) -> Array[String] {
     }
   }
   c.lit_all = false
+  test_stepped()
   self.frame()
   out
 }

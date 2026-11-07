@@ -9,15 +9,26 @@ priv struct FakeSystem {
   cancelled : Array[String]
   mut permission : String
   mut asks : Int
-  mut answer : Bool?
-  mut opened : String
+  // (what the system says and the app polls, kept as mbui keeps a host's (@ui.notice_answer, notice_opened): a
+  // signal, what reads it built again as it comes)
+  answer : @signals.Signal[Bool?]
+  opened : @signals.Signal[String]
   mut token : String
   mut service : String
 }
 
 ///|
 fn fake_system() -> FakeSystem {
-  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "", service: "fcm" }
+  {
+    shown: [],
+    cancelled: [],
+    permission: "granted",
+    asks: 0,
+    answer: @signals.signal(None),
+    opened: @signals.signal(""),
+    token: "",
+    service: "fcm",
+  }
 }
 
 ///|
@@ -31,13 +42,17 @@ fn use_system(s : FakeSystem) -> Unit {
       true
     },
     answer: fn() {
-      let a = s.answer
-      s.answer = None
+      let a = s.answer.get()
+      if a is Some(_) {
+        s.answer.set(None)
+      }
       a
     },
     opened: fn() {
-      let o = s.opened
-      s.opened = ""
+      let o = s.opened.get()
+      if o != "" {
+        s.opened.set("")
+      }
       o
     },
     token: fn() { s.token },
@@ -128,7 +143,7 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys, show=[a_notice])
-  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   t.frame()
   // its chat slid in
   t.run_for(@ui.move_most_ms)
@@ -161,14 +176,14 @@ test "共享调试's notification tapped (AdbShare.java): settings' 共享调试
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys)
-  sys.opened = "settings:adb:"
+  sys.opened.set("settings:adb:")
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "link.parse").length(), 0)
   assert_eq(app.nav.depth(), 2)
   assert_true(app.nav.top() == Setting(@settings.Route::AdbShare("")))
   // tapped again on that page: nothing more opens
-  sys.opened = "settings:adb:"
+  sys.opened.set("settings:adb:")
   t.frame()
   assert_eq(app.nav.depth(), 2)
 }
@@ -194,7 +209,7 @@ test "tapped while a file is open over the window, the file is put down and the 
   open_preview("ws1/st1", "s-c1", a)
   t.frame()
   assert_true(@sfbase.preview_open())
-  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_false(@sfbase.preview_open())
@@ -232,7 +247,7 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys)
-  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   // the chat pushed and put in place, then gone to: its flash in, held (the middle of its hold), then gone
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -254,7 +269,7 @@ test "a message gone to is lit whole as a band: across the list from edge to edg
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys)
-  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   t.draw()
   t.run_for(@ui.move_most_ms)
   let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
@@ -274,7 +289,7 @@ test "with motion reduced, a message gone to is lit whole for its flash's time, 
   let calls : Array[Made] = []
   let sys = fake_system()
   let t = notify_core(calls, sys, env=[("MBUI_REDUCE_MOTION", "1")])
-  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  sys.opened.set("/o/ws1/st1/s-c2?message=2\n2")
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfpages.flashing_now.val, ("ts2", 1.0))
@@ -296,7 +311,7 @@ test "the system told what it allows; asked once when it never was, with notific
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"asked\":true"))
   // allowed: told so
-  sys.answer = Some(true)
+  sys.answer.set(Some(true))
   t.frame()
   let after = named(calls, "notify.permission")
   assert_eq(after.length(), 2)
@@ -388,7 +403,7 @@ test "settings: notifications switched off on 通知's page, the core keeps it; 
   // refused by the system: a toast says where to allow them
   (on[on.length() - 1].done)(Err({ "code": "x", "message": "坏了" }))
   assert_eq(app.toast.get().words, "无法开启通知：坏了")
-  sys.answer = Some(false)
+  sys.answer.set(Some(false))
   t.frame()
   assert_eq(app.toast.get().words, "在系统设置里允许 still.fail 发通知")
   let told = named(calls, "notify.permission")

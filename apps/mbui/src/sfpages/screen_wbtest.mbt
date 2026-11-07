@@ -701,7 +701,7 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   r.t.resize(844.0, 390.0)
   r.t.draw()
   let u = r.ui()
-  assert_true(u.full)
+  assert_true(u.full.get())
   // edge to edge: the stage is the whole window
   assert_eq((u.box_w, u.box_h), (844.0, 390.0))
   assert_true(r.labelled("工具") is Some(_))
@@ -712,7 +712,7 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   r.tap_label("退出全屏")
   r.t.resize(390.0, 844.0)
   r.t.draw()
-  assert_true(!r.ui().full)
+  assert_true(!r.ui().full.get())
   assert_true(r.labelled("控制中心") is Some(_))
   screen_done(r.t)
 }
@@ -1385,7 +1385,7 @@ test "全屏 and sideways, driving: 左键 and 右键 in a capsule of their own 
   r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   r.t.resize(844.0, 390.0)
   r.t.draw()
-  assert_true(r.ui().full)
+  assert_true(r.ui().full.get())
   assert_true(r.labelled("退出全屏") is None)
   r.tap_label(tr("android-misc.screen.key.mouseLeft"))
   let left = r.inputs()[2:].to_array()

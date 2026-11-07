@@ -325,8 +325,13 @@ fn run_sample() -> Json {
 // The machine's own sessions (web/src/MachineSessions.tsx)
 
 ///|
-/// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page.
-let machine_sessions : Map[String, Array[Json]] = Map([])
+/// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page. What
+/// shows them follows the answer (it comes from outside, as the core answers).
+let machine_sessions : @sf.LiveMap[String, Array[Json]] = @sf.LiveMap::new()
+
+///|
+/// The stations whose machine's sessions were asked (machine_sessions): asked once.
+let machine_sessions_asked : Map[String, Bool] = Map([])
 
 ///|
 /// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessions.css.ts offer):
@@ -334,13 +339,13 @@ let machine_sessions : Map[String, Array[Json]] = Map([])
 /// before going on with it are sheets. Drawn by a new chat's page (sfpages), which says where it hangs.
 pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name : String) -> Unit {
   let t = @sf.theme()
-  if !machine_sessions.contains(station) {
-    machine_sessions[station] = []
+  if !machine_sessions_asked.contains(station) {
+    machine_sessions_asked[station] = true
     // (asked once the frame's builds are over: the build that first comes to it alone)
     c.tell("machineSessions.list/" + station, fn() {
       (core.call)("machineSessions.list", obj([("station", str(station))]), fn(r) {
         match r {
-          Ok(v) => machine_sessions[station] = items(Some(v), "sessions")
+          Ok(v) => machine_sessions.set(station, items(Some(v), "sessions"))
           Err(_) => ()
         }
       })

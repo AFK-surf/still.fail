@@ -87,14 +87,14 @@ test "a table's cell of only the message's images: them side by side, 160 wide a
 
 ///|
 test "a paragraph of only the message's images: side by side as one row's height, onto the next row when they don't fit" {
-  let text = Ref("")
+  let text = @signals.signal("")
   let drawn : Array[(String, Double)] = []
   let t = @ui.Tester::new(
     fn(c) {
       @sf.begin(c) |> ignore
       drawn.clear()
       c.column(w=Fill(1.0), pad=16.0, fn() {
-        @sf.markdown(c, text.val, files=fn(name) {
+        @sf.markdown(c, text.get(), files=fn(name) {
           // a.png and b.png a little taller than wide, the wide ones twice as wide as high
           let r = if name.has_prefix("wide") { 2.0 } else { 0.64 }
           Some({
@@ -117,7 +117,7 @@ test "a paragraph of only the message's images: side by side as one row's height
     w=390.0,
     h=844.0,
   )
-  text.val = "左边是新做法，右边是现在的：\n\n![](a.png) ![](b.png)\n"
+  text.set("左边是新做法，右边是现在的：\n\n![](a.png) ![](b.png)\n")
   t.draw()
   t.draw()
   // both on one row, 200 high (the most a row is): as wide as that makes them, 8 apart
@@ -127,7 +127,7 @@ test "a paragraph of only the message's images: side by side as one row's height
   assert_eq(by, ay)
   assert_eq(bx, ax + 128.0 + 8.0)
   // two wide ones (240 each at 120 high) don't fit the message's 358 side by side: each a row of its own, as wide as it
-  text.val = "![](wide1.png) ![](wide2.png)"
+  text.set("![](wide1.png) ![](wide2.png)")
   t.frame()
   t.frame()
   assert_eq(drawn, [("wide1.png", 358.0), ("wide2.png", 358.0)])

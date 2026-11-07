@@ -181,6 +181,24 @@ let frame_built : Ref[Bool] = Ref(false)
 let frame_running : Ref[Bool] = Ref(false)
 
 ///|
+/// The moment of the frame being drawn (on_frame's, frame_offscreen's `t`, from its start to its end, before even what
+/// came from outside is handed on), else -1: the runtime's clock in a frame (fx_runtime).
+// kept across runs: set and let go within a frame
+let frame_moment : Ref[Double] = Ref(-1.0)
+
+///|
+/// The frames drawn so far, on the display or offscreen (on_frame's, frame_offscreen's): which host's event a fiber
+/// forked in one came in (fx_runtime).
+// kept across runs: only ever counts up
+let frame_serial : Ref[Int] = Ref(0)
+
+///|
+/// Whether an offscreen frame is being drawn (frame_offscreen): it asks the host for nothing, no frame and no wake.
+fn offscreen_frame() -> Bool {
+  frame_moment.val >= 0.0 && !frame_running.val
+}
+
+///|
 /// The run's watch: as what its last read read changes, a frame is owed (in a frame, by its end; between frames, the
 /// host asked now).
 fn frame_watch_of() -> @signals.Watch {
@@ -857,6 +875,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
+  // (what the system said of its notifications, read of it so: what reads it built again as it came, notify.mbt)
+  notices_arrive(frame_begins=true)
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()

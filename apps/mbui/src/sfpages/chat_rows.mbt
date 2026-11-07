@@ -802,7 +802,7 @@ let steadies : Map[String, Steady] = {}
 /// What the rows keep of their own, let go (the package's reset).
 fn rows_reset() -> Unit {
   steadies.clear()
-  dismissed.clear()
+  dismissed.set([])
 }
 
 ///|

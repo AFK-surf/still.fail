@@ -69,10 +69,10 @@ test "an image with a free height takes its proportions once known" {
 
 ///|
 test "a bigger box loads a sharper decode, showing the small one meanwhile" {
-  let big = [false]
+  let big = @signals.signal(false)
   let t = @ui.Tester::new(
     fn(c) {
-      let s = if big[0] { 300.0 } else { 60.0 }
+      let s = if big.get() { 300.0 } else { 60.0 }
       c.image("p.png", w=Px(s), h=Px(s)) |> ignore
     },
     w=400.0,
@@ -81,7 +81,7 @@ test "a bigger box loads a sharper decode, showing the small one meanwhile" {
   )
   t.draw()
   t.run_for(@ui.image_fade_ms)
-  big[0] = true
+  big.set(true)
   t.frame()
   assert_eq(t.image_loads(), [("p.png", 128), ("p.png", 1024)])
   // the small decode stands in this frame
@@ -95,12 +95,12 @@ test "a bigger box loads a sharper decode, showing the small one meanwhile" {
 
 ///|
 test "a small box beside a big one of the same picture loads its own decode, the big one standing in meanwhile" {
-  let small = [false]
+  let small = @signals.signal(false)
   let t = @ui.Tester::new(
     fn(c) {
       c.column(fn() {
         c.image("p.png", w=Px(300.0), h=Px(300.0)) |> ignore
-        if small[0] {
+        if small.get() {
           c.image("p.png", w=Px(30.0), h=Px(30.0)) |> ignore
         }
       })
@@ -112,7 +112,7 @@ test "a small box beside a big one of the same picture loads its own decode, the
   )
   t.draw()
   t.run_for(@ui.image_fade_ms)
-  small[0] = true
+  small.set(true)
   t.frame()
   // the 1024 decode shrunk to 60 pixels is a bilinear sample of a texture without mipmaps: jagged
   assert_eq(t.image_loads(), [("p.png", 1024), ("p.png", 64)])

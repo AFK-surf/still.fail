@@ -205,7 +205,7 @@ test "全屏 in 控制中心 fills the screen with the window, the bar kept; clo
   r.t.tap_text("全屏")
   r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   assert_true(@ui.full_screen())
-  assert_true(!r.ui().full)
+  assert_true(!r.ui().full.get())
   assert_true(r.labelled(tr("common.back")) is Some(_))
   r.tap_label(tr("common.back"))
   nav_rested(r.t)

@@ -227,12 +227,29 @@ pub fn font_scale() -> Double {
 }
 
 ///|
-/// Whether the window's buttons are in the app's top row now (@hostapi.window_inset; a Tester's `window_inset`).
+/// Whether the window's buttons are in the app's top row now (@hostapi.window_inset; a Tester's `window_inset`), as
+/// the frame has it: read of the host as each frame begins (inset_arrive), a signal, so that what read it is built
+/// again as it changes (a Mac's window going full screen and back), a list's row or a part kept as its nodes too.
 pub fn window_inset() -> Bool {
-  match fake.val {
+  if !frame_running.val {
+    inset_arrive()
+  }
+  inset_said.get()
+}
+
+///|
+/// Whether the window's buttons are in the app's top row, as the host said it last (window_inset).
+// kept across runs: put back by each Tester (inset_arrive as its first frame begins)
+let inset_said : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// Whether the window's buttons are in the app's top row, read of the host (frame_drawn, as a frame begins; or as it
+/// is asked between frames): its signal set where it changed.
+fn inset_arrive() -> Unit {
+  inset_said.set(match fake.val {
     Some(f) => f.inset
     None => @hostapi.window_inset()
-  }
+  })
 }
 
 ///|

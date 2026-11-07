@@ -397,6 +397,16 @@ fn h_wall_ms() -> Double {
 }
 
 ///|
+/// The frames' clock's moment the time of day is `ms`: a Tester's day at its clock's 0 taken from it, as it is (both
+/// whole ms where the test says them); a host's, how far its time of day is ahead of its clock now.
+fn h_clock_at_wall(ms : Double) -> Double {
+  match fake.val {
+    Some(f) => ms - f.wall
+    None => ms - (@hostapi.wall_ms() - @hostapi.now())
+  }
+}
+
+///|
 /// How far local time is ahead of UTC at `at_ms`, in minutes: a Tester's is UTC's (0).
 fn h_utc_offset_min(at_ms : Double) -> Int {
   match fake.val {
@@ -839,7 +849,11 @@ fn atlas_now() -> Int {
 ///|
 fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   match fake.val {
-    Some(f) => f.instances = count
+    Some(f) => {
+      f.instances = count
+      // (what a host that keeps its picture is handed, kept for a test that records it: tester_host.mbt)
+      host_presented_now(buf, count)
+    }
     None => {
       let c = g()
       let (r, gg, b) = c.clear

@@ -247,11 +247,11 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
     }
   }
   let still : Array[(@ui.Pick, DriveAt)] = []
-  for d in fdrag.dropped {
+  for i, d in fdrag.dropped {
     let (pick, into) = d
     match pick.files() {
-      // (up once the frame's builds are over)
-      Some(files) => c.after_build("files-put-up", fn() { fdrag_put_up(src, into, files) })
+      // (up once the frame's builds are over: a drop taken is this build's alone, Ctx::tell; each its own)
+      Some(files) => c.tell("fdrag/files-put-up/\{i}", fn() { fdrag_put_up(src, into, files) })
       None => still.push(d)
     }
   }
@@ -495,6 +495,8 @@ fn fdrag_transfer(
 /// while something is asked: its title and what it is about as the name asked about now says them.
 fn clash_dialog(c : @ui.Ctx) -> Unit {
   ignore(c)
+  // (read as told: what builds it, a part kept as its nodes too, built again as something is asked or all answered)
+  clash_told.get() |> ignore
   match fdrag.asking {
     Some(_) if fclash_shown.val == 0 => {
       @sf.panel(

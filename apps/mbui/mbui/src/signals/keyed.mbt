@@ -81,3 +81,35 @@ pub fn[K : Hash + Eq] Keyed::set(self : Keyed[K], ks : Array[K]) -> Unit {
     }
   }
 }
+
+///|
+/// `k` comes in: what read it is told (nothing, where it was in).
+pub fn[K : Hash + Eq] Keyed::add(self : Keyed[K], k : K) -> Unit {
+  if self.members.contains(k) {
+    return
+  }
+  self.members[k] = true
+  match self.said.get(k) {
+    Some(s) => s.set(true)
+    None => ()
+  }
+}
+
+///|
+/// `k` leaves: what read it is told (nothing, where it was not in).
+pub fn[K : Hash + Eq] Keyed::remove(self : Keyed[K], k : K) -> Unit {
+  if !self.members.contains(k) {
+    return
+  }
+  self.members.remove(k)
+  match self.said.get(k) {
+    Some(s) => s.set(false)
+    None => ()
+  }
+}
+
+///|
+/// How many are in it, read by nothing.
+pub fn[K : Hash + Eq] Keyed::count(self : Keyed[K]) -> Int {
+  self.members.length()
+}
