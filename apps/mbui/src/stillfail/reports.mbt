@@ -1,8 +1,10 @@
 // still.fail's crash reports and timings, as its own Android app sends them (docs/telemetry.md → 安卓: Crashes.kt,
 // BarTiming.kt): the host's (android/app/src/main/java/dev/mbui: Crashes.java, BarTiming.java), told here what only
 // the app knows: the account signed in (the crashes kept since the last report go as it), the core failing and started
-// again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. Where
-// no host takes them (macOS, iOS, Windows, the web: host_tell answers 0) only UiFault is set, as the core's span.
+// again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. iOS's
+// host takes them too (src/host/apple_reports.m: MetricKit's crash and hang reports; the bar's timing not). Where
+// no host takes them (macOS, Windows, the web, an iOS build without PostHog's key: host_tell answers 0) only UiFault
+// is set, as the core's span.
 
 ///|
 /// Whether the account signed in was told (once a process, as Android's MainActivity does).
@@ -82,8 +84,8 @@ fn reports_start() -> Unit {
 }
 
 ///|
-/// The account signed in told to the host once the accounts are read (Android: Crashes.report, as the first account's
-/// `sub`): what crashed before this start goes as it, and so do the reports after.
+/// The account signed in told to the host once the accounts are read (Android: Crashes.report, iOS: apple_reports.m,
+/// as the first account's `sub`): what crashed before this start goes as it, and so do the reports after.
 fn report_signed_in(c : @ui.Ctx, accounts : @core.Sub) -> Unit {
   if reported.val {
     return

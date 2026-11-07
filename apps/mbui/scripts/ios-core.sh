@@ -3,7 +3,10 @@
 # src/host/apple_core.mm as out/core/<target>/libmbui_core.a), built for the simulator (scripts/core.sh apple
 # aarch64-apple-ios-sim, a device's aarch64-apple-ios: Hermes's xcframework, the engine, the shell's .a, core.hbc),
 # and carried by the app: Frameworks/hermes.framework (React Native 0.81.4's, the simulator's or the device's slice)
-# and core.hbc.
+# and core.hbc. MetricKit for the app's crash reports (src/host/apple_reports.m), and PostHog's project they go to in
+# its Info.plist (StillfailPosthogHost, StillfailPosthogKey) from the file STILLFAIL_POSTHOG names ({host, key}:
+# docs/telemetry.md), as Android's apk.json strings: the TestFlight build's (scripts/testflight.sh, POSTHOG_JSON); a
+# build without it sends nothing.
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # (a device's app, mbui's MBUI_IOS_SDK=iphoneos: the device's target and Hermes's device slice)
 if [ "${IOS_SDK:-iphonesimulator}" = iphoneos ]; then
@@ -19,7 +22,7 @@ APP_EXTRA="--extra=src/core/core_native.c --extra=src/pinyin/read_file.c --extra
 # the engine, the shell (and what it needs of the system: scripts/core.sh shell's native-static-libs for iOS), Hermes
 APP_LINK="out/core/$CORE_TARGET/libmbui_core.a out/core/$CORE_TARGET/libstillfail_shell.a -F$HERMES_SLICE -framework hermes \
   -Wl,-rpath,@executable_path/Frameworks -lc++ -framework AuthenticationServices -framework Security -framework LocalAuthentication \
-  -framework SystemConfiguration -framework Network -framework CoreFoundation -liconv -Wl,-dead_strip"
+  -framework SystemConfiguration -framework Network -framework CoreFoundation -framework MetricKit -liconv -Wl,-dead_strip"
 
 app_libs() {
   bash "$H/core.sh" apple $CORE_TARGET
@@ -30,5 +33,13 @@ app_bundle() {
   mkdir -p $APPDIR/Frameworks
   rm -rf $APPDIR/Frameworks/hermes.framework
   cp -R $HERMES_SLICE/hermes.framework $APPDIR/Frameworks/
+  if [ -n "${STILLFAIL_POSTHOG:-}" ]; then
+    local host key
+    host=$(plutil -extract host raw -o - "$STILLFAIL_POSTHOG") && key=$(plutil -extract key raw -o - "$STILLFAIL_POSTHOG") \
+      && [ -n "$key" ] || { echo "ios-core: no PostHog key in $STILLFAIL_POSTHOG" >&2; return 1; }
+    plutil -replace StillfailPosthogHost -string "$host" $APPDIR/Info.plist
+    plutil -replace StillfailPosthogKey -string "$key" $APPDIR/Info.plist
+    echo "PostHog's key: in the Info.plist (crash reports go)"
+  fi
   echo "the core: core.hbc $(wc -c < $APPDIR/core.hbc | tr -d ' ') bytes, hermes.framework $(du -sh $APPDIR/Frameworks/hermes.framework | cut -f1)"
 }

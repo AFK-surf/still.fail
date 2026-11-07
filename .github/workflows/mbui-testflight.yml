@@ -119,6 +119,8 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+          # (PostHog's key its crash reports go with: none, and the build sends nothing; testflight.sh warns)
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           GH_TOKEN: ${{ github.token }}
         run: |
           bash apps/mbui/scripts/testflight.sh
