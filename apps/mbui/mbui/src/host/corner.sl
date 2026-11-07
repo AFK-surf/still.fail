@@ -287,4 +287,21 @@ float mb_dither(float2 px) {
   int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);
   return float(m) / 64.0 - 63.0 / 128.0;
 }
+// Distance to a rounded rectangle, its notch, and a smooth union of two shapes.
+float sd_rr(float2 p, float4 r, float4 rad) {
+  float2 hs = r.zw * 0.5;
+  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);
+}
+float notch_cut(float d, float2 p, float4 r, float4 pad) {
+  if (pad.z <= 0.0) return d;
+  float b = pad.z - length(p - float2(r.x + r.z * 0.5, r.y + pad.y));
+  float f = max(pad.w, 0.0);
+  float2 u = max(float2(f + d, f + b), 0.0);
+  return min(-f, max(d, b)) + length(u);
+}
+float smin_k(float a, float b, float k) {
+  if (k <= 0.0) return min(a, b);
+  float h = max(k - abs(a - b), 0.0) / k;
+  return min(a, b) - h * h * k * 0.25;
+}
 #endif

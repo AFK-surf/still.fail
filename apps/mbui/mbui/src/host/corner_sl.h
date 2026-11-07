@@ -290,5 +290,22 @@
   "  int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);\n" \
   "  return float(m) / 64.0 - 63.0 / 128.0;\n" \
   "}\n" \
+  "// Distance to a rounded rectangle, its notch, and a smooth union of two shapes.\n" \
+  "float sd_rr(float2 p, float4 r, float4 rad) {\n" \
+  "  float2 hs = r.zw * 0.5;\n" \
+  "  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n" \
+  "}\n" \
+  "float notch_cut(float d, float2 p, float4 r, float4 pad) {\n" \
+  "  if (pad.z <= 0.0) return d;\n" \
+  "  float b = pad.z - length(p - float2(r.x + r.z * 0.5, r.y + pad.y));\n" \
+  "  float f = max(pad.w, 0.0);\n" \
+  "  float2 u = max(float2(f + d, f + b), 0.0);\n" \
+  "  return min(-f, max(d, b)) + length(u);\n" \
+  "}\n" \
+  "float smin_k(float a, float b, float k) {\n" \
+  "  if (k <= 0.0) return min(a, b);\n" \
+  "  float h = max(k - abs(a - b), 0.0) / k;\n" \
+  "  return min(a, b) - h * h * k * 0.25;\n" \
+  "}\n" \
   "#endif\n" \
   ""
