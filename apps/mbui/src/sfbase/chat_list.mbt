@@ -431,6 +431,7 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
 ///|
 /// The topic and its derived messages are shared by reads of a chat until the topic changes. A different source gets
 /// its own reading. The fresh view is still read by each caller above: its full ChatRef can differ for the same topic.
+// kept across runs: the Kept is registered on first use and its stored inputs are cleared by kept_reset (derived.mbt)
 let chat_inputs : Kept[ChatInput] = Kept::new()
 
 ///|
