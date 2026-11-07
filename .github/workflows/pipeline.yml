@@ -390,7 +390,7 @@ jobs:
   # 2026-10-22): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
-    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-mbui, check-browser, bundle, mac-build, mbui-web, static, desktop]
+    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-mbui, check-browser, bundle, mac-build, mbui-web, static, desktop-build, desktop]
     if: always() && github.ref != 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -699,12 +699,10 @@ jobs:
           export MBUI_MAC_FROM
           sh .github/release-desktop.sh --product monoid
 
-  desktop:
+  desktop-build:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true') || needs.plan.outputs.release_smoke == 'true') }}
     runs-on: macos-26
-    outputs:
-      hand: ${{ steps.hand.outputs.key }}
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 5
     env:
@@ -717,14 +715,20 @@ jobs:
         with: { fetch-depth: 0, filter: "blob:none" } # its build is the commits in the history
       # (mbc's units and the core's bytecode, and moon's own build below: main's newest, saved by this job on main by what
       # they hold, as preview.yml's jobs keep theirs; stable.yml's Mac app restores them too)
+      # mbc still validates the full compiler and every dependency; the prefix just keeps each launcher’s store.
+      - name: The Mac C compiler launcher
+        id: mac-cc
+        run: echo "key=$(shasum -a 256 /usr/bin/cc | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
         id: store
         with:
           path: |
             .ci/mbc-store
             .ci/hbc
-          key: mbui-mac-${{ github.sha }}
-          restore-keys: mbui-mac-
+          key: mbui-mac-cc-${{ steps.mac-cc.outputs.key }}-${{ github.sha }}
+          restore-keys: |
+            mbui-mac-cc-${{ steps.mac-cc.outputs.key }}-
+            mbui-mac-
       # A branch based on arch/next needs its compiled units too. GitHub makes the branch's own and main's caches
       # available, but not arch/next's; next-mac-cache.yml keeps that branch's on main's ref for this job.
       - id: arch-base
@@ -813,7 +817,83 @@ jobs:
           key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
       - name: Finish the Mac app build
         run: bash .github/mac-release-prebuild.sh wait
-      - name: Build, sign and notarize the beta Mac app
+      # Hand over the same build to the signing job; mac-app.sh checks its build and beta face when taking it back.
+      - name: Bundle the beta Mac app for signing
+        env:
+          POSTHOG_JSON: ${{ github.ref == 'refs/heads/main' && secrets.POSTHOG_JSON || '' }}
+        run: |
+          set -eu
+          if [ -n "${POSTHOG_JSON:-}" ]; then
+            (umask 077 && printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json")
+            export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"
+          fi
+          unset POSTHOG_JSON
+          trap 'rm -f "$RUNNER_TEMP/posthog.json"' EXIT
+          MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
+          mkdir -p "$RUNNER_TEMP/mac-unsigned"
+          ditto -c -k --sequesterRsrc --keepParent apps/mbui/out/mac/youdid.wtf.app "$RUNNER_TEMP/mac-unsigned/bundle.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/mac-unsigned/bundle.zip
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      # (main's, when it built the shell here)
+      - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+      - name: The cache's key, by what it holds
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          echo "STORE_KEY=mbui-mac-cc-${{ steps.mac-cc.outputs.key }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+      - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: ${{ env.STORE_KEY }}
+      - if: github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-mac-moon-${{ github.sha }}
+  # The expensive build is already handed over; keep signing, notarization and release checks in their own budget.
+  desktop:
+    needs: [plan, natives, desktop-build]
+    if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true') || needs.plan.outputs.release_smoke == 'true') }}
+    runs-on: macos-26
+    outputs:
+      hand: ${{ steps.hand.outputs.key }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+    timeout-minutes: 5
+    env:
+      MBUI_FRESH: 1
+      MBUI_CACHE: ${{ github.workspace }}/.ci/release
+      MBUI_MAC_FROM: ${{ github.workspace }}/.ci/mac-unsigned/youdid.wtf.app
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" }
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-unsigned-${{ github.sha }}
+          path: .ci/mac-unsigned
+      - name: Check the app handed over for signing
+        run: |
+          set -eu
+          ditto -x -k .ci/mac-unsigned/bundle.zip .ci/mac-unsigned
+          plist="$MBUI_MAC_FROM/Contents/Info.plist"
+          test "$(plutil -extract CFBundleIdentifier raw "$plist")" = fail.still.desktop.beta
+          test "$(plutil -extract CFBundleExecutable raw "$plist")" = youdid.wtf
+          test "$(plutil -extract CFBundleVersion raw "$plist")" = "$(git rev-list --count HEAD)"
+      - name: Sign and notarize the beta Mac app
         if: github.ref == 'refs/heads/main'
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
@@ -829,7 +909,7 @@ jobs:
           sh .github/release-desktop.sh --out "$RUNNER_TEMP/release" || status=$?
           wait "$deps" || { cat "$RUNNER_TEMP/mac-put-deps.log"; status=1; }
           exit "$status"
-      - name: Build and verify the beta Mac app without publishing
+      - name: Sign and verify the beta Mac app without publishing
         if: github.ref != 'refs/heads/main'
         env:
           MAC_SIGN_IDENTITY: "-"
@@ -867,32 +947,6 @@ jobs:
           set -o pipefail
           sh scripts/release-put.sh --hand "$RUNNER_TEMP/release" | tee "$RUNNER_TEMP/hand.out"
           echo "key=$(tail -1 "$RUNNER_TEMP/hand.out")" >> "$GITHUB_OUTPUT"
-      # (main's, when it built the shell here)
-      - if: github.ref == 'refs/heads/main' && steps.shell.outputs.cache-hit != 'true' && hashFiles('apps/mbui/out/core-target*/native/shell-apple/**/libstillfail_shell.a') != ''
-        uses: actions/cache/save@v4
-        with:
-          path: apps/mbui/out/core-target*/native/shell-apple
-          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
-      - name: The cache's key, by what it holds
-        if: github.ref == 'refs/heads/main'
-        run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-mac-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: ${{ env.STORE_KEY }}
-      - if: github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            apps/mbui/_build
-            !apps/mbui/_build/**/*.mbc
-          key: mbui-mac-moon-${{ github.sha }}
-
   # The beta Windows app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place, as the Mac one), on
   # win/beta/latest.json and desktop/stillfail-beta.yml (which moves an installed Electron beta over): built on GitHub's
   # Windows runner as preview.yml's windows job builds still.fail mbui, from main's build as that job left it in the Actions
@@ -1020,8 +1074,8 @@ jobs:
   # What was built put in the bucket, once the check passed and the API and the web are out; nothing when a build
   # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
-    needs: [plan, check, check-linux, check-browser, api, static, station, modules, android, desktop, desktop-win]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
+    needs: [plan, check, check-linux, check-browser, api, static, station, modules, android, desktop-build, desktop, desktop-win]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -1091,8 +1145,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, api, static, monoid-api, monoid-static, station, modules, android, desktop, desktop-win, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
+    needs: [plan, natives, check, check-linux, check-browser, api, static, monoid-api, monoid-static, station, modules, android, desktop-build, desktop, desktop-win, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-api.result) && contains(fromJSON('["success","skipped"]'), needs.monoid-static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 5
     permissions:
@@ -1117,7 +1171,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-browser, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, modules, android, desktop, desktop-win, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-browser, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, modules, android, desktop-build, desktop, desktop-win, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
