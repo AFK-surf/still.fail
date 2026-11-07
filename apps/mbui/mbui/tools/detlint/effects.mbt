@@ -1,6 +1,6 @@
 // build-effect: what a view tells outside while it builds (rule_words): the effects (a field call (x.call)(…), a
 // package's effect, a native view's own: its reload, its seek) and the app's functions that do one (found to a fixed
-// point), called in a function given the Ctx, other than in Ctx::after_build, a callback (fn(…) { … }) or under an
+// point), called in a function given the Ctx, other than in Ctx::after_build (or after_build_or_scroll), a callback (fn(…) { … }) or under an
 // input the frame takes.
 
 ///|
@@ -302,7 +302,9 @@ fn Eff::exempt(self : Eff, f : MbtFile, k : Int) -> Bool {
     if t.text == "(" &&
       o > 0 &&
       toks[o - 1].kind == "ident" &&
-      (toks[o - 1].text == "after_build" || toks[o - 1].text == "tell") {
+      (toks[o - 1].text == "after_build" ||
+      toks[o - 1].text == "after_build_or_scroll" ||
+      toks[o - 1].text == "tell") {
       return true
     }
     if t.text == "{" {
@@ -538,7 +540,10 @@ fn lint_build_effects(files : Array[MbtFile], cfg : Config, out : Array[Finding]
   // what an input took told by after_build: the last build's alone, and a build after the one that took it sees it not
   for f in app {
     for c in f.calls {
-      if c.kind == "method" && c.name == "after_build" && !c.is_def && eff.under_input(f, c.at) {
+      if c.kind == "method" &&
+        (c.name == "after_build" || c.name == "after_build_or_scroll") &&
+        !c.is_def &&
+        eff.under_input(f, c.at) {
         out.push(finding("after-build-input", f.rel, f.toks[c.at].line, f.line_text(c.at)))
       }
     }

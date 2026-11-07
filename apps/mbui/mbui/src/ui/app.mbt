@@ -114,6 +114,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   frame_moment.val = t
   frame_serial.val += 1
   paint_phase.val = 0
+  scroll_paint_uncompared.val = false
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()
@@ -439,6 +440,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.said_built_logged()
   // what the last build said to tell outside, told now, once by its key: the last said of it, where the first was
   // (Ctx::after_build)
+  // (those that follow where lists stand, kept: told again as a list moves with nothing built, list_scroll_fast.mbt)
+  list_fast_tells.clear()
+  list_fast_tells.append(tells_once(c.tells.filter(fn(t) { tells_follow_lists.contains(t.0) })))
   let tell_ids = c.tells.map(fn(t) { t.0 })
   let tells = tells_once(c.tells)
   c.tells.clear()
@@ -632,6 +636,16 @@ pub fn Ctx::after_build(self : Ctx, key : String, f : () -> Unit) -> Unit {
     return
   }
   self.tells.push((self.id("\u{2}after-build/" + key), f))
+}
+
+///|
+/// As Ctx::after_build, and told again after each frame in which a list moved with nothing built for it (a scroll
+/// whose rows stay: list_scroll_fast.mbt): `f` reads where the lists stand as it is told (a ListReader), not as built.
+pub fn Ctx::after_build_or_scroll(self : Ctx, key : String, f : () -> Unit) -> Unit {
+  if building.val {
+    tells_follow_lists[self.id("\u{2}after-build/" + key)] = true
+  }
+  self.after_build(key, f)
 }
 
 ///|
@@ -1472,6 +1486,7 @@ fn Ctx::list_drag(self : Ctx, id : Int, d : Double) -> Unit {
       st.held = true
       self.feed(st, d, 1)
       st.hand_moved()
+      list_hand_dirty[id] = true
     }
     None => ()
   }
@@ -1841,7 +1856,9 @@ fn old_wheel(
       // (where it stands its signal's: what lays it out lays it out again, nothing taken by what is built; where parts
       // are kept as drawn, kept_part.mbt, an event from outside for the part or the row it turns in)
       st.hand_moved()
-      h_request_frame()
+      list_hand_dirty[target] = true
+      // The list's hand signal already says what changed; do not mark unrelated, non-signal input as changed.
+      h_frame_owed()
     }
     None => wheel_taken()
   }

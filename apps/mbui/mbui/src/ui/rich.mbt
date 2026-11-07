@@ -1304,7 +1304,13 @@ fn Ctx::emit_rich_glyphs(
           let l = lay.line_of[c]
           let x = ox + lay.xs[c]
           let y = oy + lay.line_y[l] + lay.line_base[l] - d.baseline
-          if y > cy1 || y + d.height < cy0 { continue }
+          if y > cy1 || y + d.height < cy0 {
+            left_out()
+            continue
+          }
+          if rec_whole.val {
+            rec_line(self.ninst, y, d.height)
+          }
           let color = colors[lay.run_of[c]]
           for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
           for word in d.words {
@@ -1328,13 +1334,21 @@ fn Ctx::emit_rich_glyphs(
       _ => ()
     }
     if top > cy1 || top + lay.line_h[l] < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      rec_line(self.ninst, top, lay.line_h[l])
     }
     // (made at the host's pixels a point; in a shot drawn at more, made that much larger and drawn that much smaller:
     // emit_text)
     let (key, z) = match zoomed {
       Some(big) if big[c] >= 0 => (big[c], zoom)
       _ => (key, 1.0)
+    }
+    if rec_glyph_early(key, sc / zoom, ox + lay.xs[c], top, ox + lay.xs[c] + lay.adv[c], top + lay.line_h[l]) {
+      paint_culled.val += 1
+      continue
     }
     let g = glyph(key, sc / zoom)
     if g.gw <= 0.0 {
@@ -1380,5 +1394,8 @@ fn Ctx::emit_rich_glyphs(
       let (x0, x1) = lay.span_x(c, c + 1)
       inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
     }
+  }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
   }
 }

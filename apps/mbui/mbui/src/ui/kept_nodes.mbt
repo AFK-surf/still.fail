@@ -25,6 +25,10 @@ priv struct RowNodes {
   /// what its build read, followed: owned where it is built (an old view's scope, …), made anew there where what owned
   /// it went (row_nodes_owned)
   mut watch : @signals.Watch
+  /// A keyed row's retained drawing, when its contents can be replayed safely.
+  mut drawing : RowDrawing?
+  /// The key supplied by ListRows at the position this row was built at.
+  mut row_key : String?
   /// the pass of a frame's build it was last laid in (NodesRun's `pass`)
   laid_pass : Ref[Int]
   /// its nodes, out of the frame's from as each frame is built till they are put back (`in_pool`: in the frame's, from
@@ -377,6 +381,7 @@ fn rows_nodes_end(c : Ctx) -> Unit {
     match kept_nodes.get(key) {
       Some(rn) => {
         rn.watch.stop()
+        row_drawing_forget(rn)
         // (its nodes not in the frame's: its own, at the end of the frame's now, each found there by who it is as what
         // it was is built again (a page covered a while, back: Ctx::node_known), so far as there is room, else spares;
         // in it, the frame's, and what it holds of the frame's)
@@ -401,6 +406,7 @@ fn rows_nodes_end(c : Ctx) -> Unit {
 fn nodes_forget() -> Unit {
   for _, rn in kept_nodes {
     rn.watch.stop()
+    row_drawing_forget(rn)
   }
   kept_nodes.clear()
   spare_nodes.clear()
@@ -549,6 +555,8 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     list,
     item,
     watch,
+    drawing: None,
+    row_key: None,
     laid_pass,
     store: [],
     n: 0,
@@ -666,6 +674,10 @@ fn Ctx::row_laid(
     return (r, self.row_slot(r, self.layout(r, ix, y, iw, nan)))
   }
   let key = (self.nodes[li].id, k)
+  let row_key = match st.causes {
+    Some(c) if k < c.keys.length() => Some(c.keys[k])
+    _ => None
+  }
   let rn = match kept_nodes.get(key) {
     Some(rn) => row_nodes_owned(rn)
     None => {
@@ -678,6 +690,7 @@ fn Ctx::row_laid(
   rn.laid_pass.val = nodes_run.pass
   if self.nodes_keep_in(st) &&
     rn.ok &&
+    rn.row_key == row_key &&
     !rn.in_pool &&
     rn.n > 0 &&
     !rn.watch.is_stale() &&
@@ -704,6 +717,8 @@ fn Ctx::row_laid(
   }
   // built: in the nodes it was built in before, where its build makes them (what lays them out keeps what it worked
   // out of them where they are the same); what it says of the frame from where each list stands
+  row_drawing_forget(rn)
+  rn.row_key = row_key
   self.row_nodes_lent(rn)
   let b = self.nodes_begin(rn)
   nodes_run.building = Some(rn)

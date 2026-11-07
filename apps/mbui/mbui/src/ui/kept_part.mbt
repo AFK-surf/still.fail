@@ -75,6 +75,7 @@ fn parts_frame_start(c : Ctx) -> Unit {
 /// did read are waited for.
 fn parts_frame_end(c : Ctx) -> Unit {
   rows_nodes_end(c)
+  c.list_hand_end()
   clock_frame_end(c)
 }
 

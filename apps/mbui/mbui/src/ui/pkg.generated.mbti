@@ -1083,6 +1083,7 @@ pub struct Ctx {
 pub fn Ctx::a11y_lines(Self) -> String
 pub fn Ctx::action_asked(Self, Int32, @view.Action) -> Bool
 pub fn Ctx::after_build(Self, String, () -> Unit) -> Unit
+pub fn Ctx::after_build_or_scroll(Self, String, () -> Unit) -> Unit
 pub fn Ctx::any_right_click(Self) -> Bool
 pub fn Ctx::ask_action(Self, Int32, @view.Action) -> Unit
 pub fn Ctx::back(Self) -> Bool

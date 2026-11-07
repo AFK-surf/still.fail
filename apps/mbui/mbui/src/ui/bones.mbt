@@ -117,7 +117,11 @@ fn Ctx::emit_bone_text(
   for l in 0..<tl.line_start.length() {
     let top = oy + l.to_double() * tl.line_h
     if top > cy1 || top + tl.line_h < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      rec_line(self.ninst, top, tl.line_h)
     }
     let mut first = -1
     let mut last = -1
@@ -142,6 +146,9 @@ fn Ctx::emit_bone_text(
       color,
       alpha,
     )
+  }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
   }
 }
 
@@ -169,7 +176,11 @@ fn Ctx::emit_bone_rich(
   for l in 0..<lay.line_start.length() {
     let top = oy + lay.line_y[l]
     if top > cy1 || top + lay.line_h[l] < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      rec_line(self.ninst, top, lay.line_h[l])
     }
     let mut first = -1
     let mut last = -1
@@ -188,6 +199,9 @@ fn Ctx::emit_bone_rich(
     let run = lay.run_of[first]
     let size = if run >= 0 && run < lay.run_size.length() { lay.run_size[run] } else { size }
     self.emit_bone_line(ox + x0 + lay.pre[first], ox + x1, top, lay.line_h[l], size, color, alpha)
+  }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
   }
 }
 

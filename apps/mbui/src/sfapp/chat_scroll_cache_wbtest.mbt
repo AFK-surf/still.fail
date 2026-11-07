@@ -1,0 +1,64 @@
+///|
+test "a chat scroll within its visible messages keeps their layout and reports the new place" {
+  let t = chat_tester("chat")
+  t.check_looks(false)
+  t.keep_parts(true)
+  t.scroll_to(8)
+  t.frame()
+  let start = t.time()
+  // First put the list between row boundaries. The measured input moves it only a little farther.
+  t.wheel_told(195.0, 400.0, 0.0, 20.0, 0, start + 1.0)
+  t.frame_at(start + 16.0)
+  t.frame_at(start + 16.0)
+  let visible = t.visible()
+  let row = t.row(visible.0).unwrap()
+  let reading = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  let place = reading.top_off
+  t.wheel_told(195.0, 400.0, 0.0, 5.0, 0, start + 17.0)
+  t.frame_at(start + 32.0)
+  let next_visible = t.visible()
+  let next_row = t.row(visible.0).unwrap()
+  let next_place = reading.top_off
+  let perf = t.frame_perf()
+  let detail = "visible \{visible} -> \{next_visible}, row \{row} -> \{next_row}, reported \{place} -> \{next_place}, perf \{perf}, build \{t.built_why()}, paint \{t.painted_why()}"
+  assert_eq(next_visible, visible, msg="the measured scroll must keep the same visible rows: \{detail}")
+  assert_true(next_row.1 < row.1, msg="the visible message must move: \{detail}")
+  assert_true(next_place < place, msg="the chat must report its new reading place: \{detail}")
+  assert_eq(perf.laid, 0, msg="existing chat rows should not be laid out for this scroll: \{detail}")
+  assert_eq(t.painted_why(), "a list scrolled without changing its rows", msg="the chat must take the scroll-only path: \{detail}")
+}
+
+///|
+fn chat_scrolled_reference(keep : Bool) -> (Double, Double, String) raise {
+  let t = chat_tester("chat")
+  t.check_looks(false)
+  t.keep_parts(true)
+  t.drawn_again(keep)
+  t.draw()
+  let title = "首页的列表改成按天分组"
+  scroll_run_clear(t, title) |> ignore
+  let before = t.run_rects(title)[0]
+  let visible = t.visible()
+  let at = t.time()
+  t.wheel_told(195.0, 400.0, 0.0, 5.0, 0, at + 1.0)
+  t.frame_at(at + 16.0)
+  let after = t.run_rects(title)[0]
+  assert_eq(t.visible(), visible, msg="the short scroll must keep the same chat rows")
+  assert_true(after.1 < before.1, msg="the reference must move with its message: \{before} -> \{after}")
+  t.tap_run(title)
+  let opened = match app.nav.top() {
+    Chat(r) => r.session
+    _ => ""
+  }
+  t.drawn_again(true)
+  (before.1, after.1, opened)
+}
+
+///|
+test "a scrolled chat reference opens the same chat with or without kept rows" {
+  let ordinary = chat_scrolled_reference(false)
+  let kept = chat_scrolled_reference(true)
+  println("CHAT_SCROLL_REFERENCE ordinary=\{ordinary} retained=\{kept}")
+  assert_eq(ordinary.2, "s-c2", msg="the reference must open its chat after the scroll")
+  assert_eq(kept, ordinary, msg="retained rows must move and respond as the ordinary path")
+}

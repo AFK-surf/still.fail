@@ -289,6 +289,12 @@ let paint_clock_who : Ref[Mover?] = Ref(None)
 let part_clock_at : Ref[String] = Ref("")
 
 ///|
+/// How many times the clock was read followed, counted on (row_drawing.mbt: a row whose paint read it is not kept as
+/// drawn).
+// kept across runs: only counts on
+let clock_reads : Ref[Int] = Ref(0)
+
+///|
 // kept across runs: as part_clock_at
 let part_clock_who : Ref[Mover?] = Ref(None)
 
@@ -297,6 +303,7 @@ let part_clock_who : Ref[Mover?] = Ref(None)
 /// frame's build, of its layout or of its paint (and of the parts it built). Only a place and a mover kept: the words
 /// are worked out as the frame's why is (clock_said).
 fn clock_read_by(at : String, who : Mover?) -> Unit {
+  clock_reads.val += 1
   if paint_phase.val == 1 {
     if paint_clock_at.val == "" {
       paint_clock_at.val = at
@@ -439,6 +446,12 @@ let looks_base : LooksBase = {
 }
 
 ///|
+/// A list's anchor moved in this frame. Its new drawing must not be treated as the one whose fingerprint was kept;
+/// whether it happens to be identical need not be worked out while it is moving.
+// kept across runs: cleared as each frame begins
+let scroll_paint_uncompared : Ref[Bool] = Ref(false)
+
+///|
 /// What the last build laid out, as one number (tree_sig), whether there was one before it and whether it laid out the
 /// same (`laid_same`: what a build leaves for the next to read, a size it measured, a place it was drawn at, has
 /// settled, built again it lays out the same); the root of its tree; the soonest moment its paint asked to be drawn at
@@ -498,9 +511,13 @@ let looks_frames : Ref[Int] = Ref(0)
 let paints_alone : Ref[Int] = Ref(0)
 
 ///|
+let laid_otherwise = "the one before it laid out otherwise"
+
+///|
 /// Put back as a run begins (reset_globals): the run's watches let go, the first frame built whole.
 fn looks_reset() -> Unit {
   nodes_forget()
+  list_hand_forget()
   layout_said.val = ""
   frame_told_at.val = ""
   layout_clock_at.val = ""
@@ -690,11 +707,18 @@ fn looks_keep(c : Ctx) -> Unit {
   // (what it drew said as one number, read once: not kept whole and compared with the paint before, two more passes
   // over every instance; kept whole only where a frame of the looks alone draws it again)
   let len = c.ninst * inst_size
-  let said = insts_said(c.inst, c.ninst)
-  looks_base.settled = looks_base.built && c.ninst == looks_base.n && said == looks_base.said
-  looks_base.built = true
+  if scroll_paint_uncompared.val {
+    // The old fingerprint says nothing about this drawing. Be conservative even when the movement happens not to
+    // change a visible pixel: a later still paint establishes a new fingerprint before using the looks-only path.
+    looks_base.settled = false
+    looks_base.built = false
+  } else {
+    let said = insts_said(c.inst, c.ninst)
+    looks_base.settled = looks_base.built && c.ninst == looks_base.n && said == looks_base.said
+    looks_base.built = true
+    looks_base.said = said
+  }
   looks_base.n = c.ninst
-  looks_base.said = said
   looks_base.looks = !cycle_frame.is_empty()
   if looks_base.looks {
     if looks_base.inst.length() < len {
@@ -930,7 +954,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   }
   // (else laid out again, built as it was built, its lists' rows kept where nothing they show changed: what its layout
   // read changed, what a row read, or the one before it laid out otherwise, what built may read)
-  let laid_why = if why != "" {
+  let mut laid_why = if why != "" {
     ""
   } else if layout_said.val != "" {
     layout_said.val
@@ -950,9 +974,30 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     }) +
     (if part_at != "" { ", the clock read in it at \{said_clock(part_at, part_who)}" } else { "" })
   } else if !paint_base.laid_same {
-    "the one before it laid out otherwise"
+    laid_otherwise
   } else {
     ""
+  }
+  // (a list the hand moved, its rows staying: moved as they are, nothing built or laid out for it, what follows where
+  // it stands told again; what was built reads where it stands only as list_hand_move asks it. The build before having
+  // laid out otherwise is no reason to build: what it read back of that layout is asked there too)
+  let mut list_scrolled = false
+  if why == "" && (laid_why == "" || laid_why == laid_otherwise) && !list_hand_dirty.is_empty() {
+    let stopped = c.list_hand_move(t)
+    if stopped == "" {
+      list_scrolled = true
+      laid_why = ""
+      // (what follows where a list stands told, as a build's are once it is laid out, before it is painted: what they
+      // change of what is built shows from the next frame. Where the frame is built whole after to be compared, that
+      // build tells them, what it builds as the frame's own did, from what came before them)
+      if !looks_check.val {
+        for f in list_fast_tells {
+          f()
+        }
+      }
+    } else {
+      laid_why = "a list moved (" + stopped + ")"
+    }
   }
   built_why.val = if why != "" { why } else { laid_why }
   frame_told_at.val = ""
@@ -973,7 +1018,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     nodes_run.whole = bench_whole.val && bench_measuring.val
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
   }
-  let paint_why = if paint_told != "" {
+  let paint_why = if list_scrolled {
+    "a list scrolled without changing its rows"
+  } else if paint_told != "" {
     paint_told
   } else if paint.is_stale() {
     if paint_clock_at.val != "" {
@@ -1000,6 +1047,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   let cycling = looks_own.cycling
   let then = looks_nodes.copy()
   let painted = painted_alone.val
+  // (a list moved with nothing built: what it is found and read out by, and its words, compared too)
+  let scrolled = if list_scrolled { Some(scroll_said(c)) } else { None }
   // (built whole as a frame begins: what the paint alone read, read anew by its paint; no row kept)
   paint_phase.val = 0
   nodes_run.fresh = true
@@ -1010,7 +1059,50 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   looks_drawn.val = false
   painted_alone.val = false
   looks_compare(c, alone, n, wake, cycling, t, then, painted~)
+  match scrolled {
+    Some(was) => {
+      let now = scroll_said(c)
+      if was != now {
+        let mut k = 0
+        while k < was.length() && k < now.length() && was[k] == now[k] {
+          k = k + 1
+        }
+        looks_fail(
+          "the frame at \{t.to_int()} ms, a list moved with nothing built (\{list_fast_said.val}), parts from it built whole: \{was.get(k).unwrap_or("none")}, built whole \{now.get(k).unwrap_or("none")}; built whole because \{built_why.val}",
+        )
+      }
+    }
+    None => ()
+  }
   t0
+}
+
+///|
+/// What the frame is found, pressed and read out by, and the words it keeps, as lines (looks_check: a frame where a
+/// list moved with nothing built against it built whole).
+fn scroll_said(c : Ctx) -> Array[String] {
+  let out : Array[String] = []
+  for k in 0..<c.hit_ids.length() {
+    let r = c.hit_rects
+    let q = c.hit_clips
+    out.push(
+      "target \{c.hit_ids[k]} at \{r[k * 4]},\{r[k * 4 + 1]} \{r[k * 4 + 2]}×\{r[k * 4 + 3]} cut \{q[k * clip_n]},\{q[k * clip_n + 1]},\{q[k * clip_n + 2]},\{q[k * clip_n + 3]}",
+    )
+  }
+  for sm in c.sems {
+    let nd = c.nodes[sm.node]
+    out.push("read out \{sm.id} \{sm.label} at \{nd.x},\{nd.y} \{nd.fw}×\{nd.fh}")
+  }
+  let keys : Array[String] = []
+  words_kept.each(fn(k, _) { keys.push(k) })
+  keys.sort()
+  for k in keys {
+    let w = words_kept[k]
+    for p in w.pieces {
+      out.push("words \{k} at \{p.x},\{p.y} \{p.w}×\{p.h} from \{p.start}")
+    }
+  }
+  out
 }
 
 ///|
