@@ -755,7 +755,7 @@ let stacks_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Back as a back gesture asks: kind 0 started at x (in a view `w` wide), 1
-/// moved to x, 2 let go there (back if past a third or flung), 3 called
+/// moved to x, 2 let go there (back if past a third, or back_far, or flung), 3 called
 /// off, 4 back (the system decided: from where a gesture had it, or a back
 /// with none); `t` the time; `progress` the system's (-1 none: mbui's own
 /// edge). Never past its floor (Ctx::nav's `floor`; `floor`, where what tells it the steps says where that is now: the
@@ -818,7 +818,7 @@ fn[P] Nav::gesture(
         self.track.up(t, x)
         self.vel = self.track.velocity_at(t)
         let flung = dx > 40.0 && self.vel > 0.6
-        if self.p > 1.0 / 3.0 || flung {
+        if self.p > 1.0 / 3.0 || dx > back_far || flung {
           self.let_go(dmax(self.vel, 0.0) / w)
         } else {
           // back to rest, as fast as the finger let it go (its widths per ms)
@@ -837,6 +837,12 @@ fn[P] Nav::gesture(
       }
   }
 }
+
+///|
+/// How far a finger takes a page back, however wide it is: a third of a phone's (360 across), so a wide one (a fold
+/// open, a tablet, a phone on its side; a chat's detail over its list) goes back as a phone's does, not only once a
+/// third of its width is crossed (the user, 2026-11-07: 如果屏幕非常宽，手指要移动的距离特别长).
+let back_far : Double = 120.0
 
 ///|
 /// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
