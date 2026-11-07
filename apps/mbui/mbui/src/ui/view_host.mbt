@@ -2104,7 +2104,11 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           view_nothing_down.val = None
         _ => ()
       }
-      tree_finger_off()
+      // (a finger held on words to pick them called off only as it moves past the slop, as below)
+      match view_down.val {
+        Some((x0, y0, _, _)) if (x - x0).abs() <= touch_slop() && (y - y0).abs() <= touch_slop() => ()
+        _ => tree_finger_off()
+      }
       view_moves.push((view_moment(), x, y))
       h_frame_owed()
       return true
