@@ -227,10 +227,12 @@ export class Hub {
   readonly titles = new Map<number, string>();
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
-  readonly openings = new Map<number, { session: string; ts: string }>();
+  readonly openings = new Map<number, { session: string; ts: string; claimed?: boolean }>();
   /// One incoming message or edit at a time per thread: Slack also sends a mention twice (app_mention and message).
   readonly gates = new Map<string, { tail: Promise<{ error: unknown } | null>; waiting: number }>();
   private readonly incoming = new AbortController();
+  /// Work waiting to start an external write must stop when this hub is handed over or shut down.
+  get stoppingSignal(): AbortSignal { return this.incoming.signal; }
   /// The station's background jobs (made after the hub, which tells their agents).
   jobs: Jobs | null = null;
   /// Each workspace's presets, in its agent home (presets.ts).
