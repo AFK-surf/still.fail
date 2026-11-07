@@ -67,6 +67,15 @@ profile() {
 }
 profile app fail.still.iphone
 profile share fail.still.iphone.share
+# PostHog's key the app reports its crashes with (src/host/apple_reports.m, scripts/ios-core.sh: its Info.plist), as
+# the Android release has it (beta.sh build): the file STILLFAIL_POSTHOG names, from POSTHOG_JSON, removed with $T.
+# Without it (the environment has none) the build sends nothing.
+if [ -n "${POSTHOG_JSON:-}" ]; then
+  printf '%s' "$POSTHOG_JSON" > "$T/posthog.json"
+  export STILLFAIL_POSTHOG=$T/posthog.json
+else
+  echo '::warning::no POSTHOG_JSON in the ios-testflight environment: this build sends no crash reports'
+fi
 export APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.iphone
 export MBUI_IOS_BUILD=$RELEASE_BUILD MBUI_IOS_VERSION=$RELEASE_VERSION SF_SRC=$PWD
 bash "$D/ios.sh" build
