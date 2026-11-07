@@ -644,6 +644,29 @@ test "a field of the tree's: what its look reads changed, its words and node not
 }
 
 ///|
+test "a field of the tree's: what its look reads changed, its size not: the host handed its words' place to draw again, the frame asked for" {
+  let ink = @signals.signal(0xFF0000FFL, same=fn(a, b) { a == b })
+  let f = Field::new(text="abc")
+  let t = field_in(true, f, 200.0, [], look=fn(d) { (d, [(0, d.length(), ink.get())]) })
+  t.record_host()
+  ink.set(0x00FF00FFL)
+  t.run_as_host(1000.0 / 60.0)
+  let frames = t.host_frames()
+  guard frames is [fr, ..] else { fail("no frame") }
+  // (what a host that keeps what it drew shows: the parts it is handed drawn anew, the rest as it was)
+  let handed = fn(x : Double, y : Double) {
+    fr.damage.any(fn(d) { d.2 < 0.0 || (x >= d.0 && x < d.0 + d.2 && y >= d.1 && y < d.1 + d.3) })
+  }
+  let glyphs = t.drawn_glyphs()
+  assert_eq(glyphs.length(), 3)
+  assert_true(fr.asked && fr.changed, msg="\{fr}")
+  for gl in glyphs {
+    assert_true(handed(gl.0 + 1.0, gl.1 + 1.0), msg="\{gl} not in \{fr.damage}")
+    assert_eq(gl.2, 0x00FF00FFL)
+  }
+}
+
+///|
 test "a field of the tree's as an old view's: a secret's words laid out as what it shows (its dots), not as they are: as tall in a narrow field" {
   // (each word as wide as its size, its dots half that: as the Tester's host measures them, laid out on more lines than
   // its dots)

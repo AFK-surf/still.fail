@@ -79,11 +79,13 @@ fn reset_globals() -> Unit {
   the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
+  notices_reset()
   hand_reset()
   corners_hold.val = true
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
+  host_record_forget()
   inst_owners_clear()
   text_runs.runs.clear()
   desk_reset()
@@ -635,10 +637,20 @@ pub let first_frame_ms : Double = 1000.0 / 60.0
 ///|
 /// Draws one frame, at the display's first frame `ms` or more on (by default, and at the least, the next one): frames
 /// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host.
-/// What the test changed before it shows in it: a step of the test's, as an event from outside is (frame_watch.mbt).
+/// A frame as a host's: what the clock and what was said (an input, a signal set, a host's or the core's word) bring,
+/// drawn as the host draws it (parts kept, the scene's layers copied), nothing else taken as changed. A test that
+/// changed what is no signal (a made-up core's state, a page opened by hand) says so first (Tester::stepped).
 pub fn Tester::frame(self : Tester, ms? : Double = 0.0) -> Unit {
-  test_stepped()
   self.clock_frame(ms~)
+}
+
+///|
+/// What the test changed of what is no signal (a made-up core's state, a page opened by hand), said: taken at the next
+/// frame as an event from outside is, built whole (frame_watch.mbt). Said by the step that changed it, not by every
+/// frame: a frame by itself is a host's (Tester::frame).
+pub fn Tester::stepped(self : Tester) -> Unit {
+  ignore(self)
+  test_stepped()
 }
 
 ///|
@@ -787,6 +799,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
+  // (as its host got it, where a test records it: tester_host.mbt)
+  host_frame_drawn(at)
 }
 
 ///|
@@ -1283,10 +1297,26 @@ fn Tester::words_marked(self : Tester) -> Array[((String, Double, Double, Double
   ignore(self)
   let c = g()
   let out = []
+  // (in the box of an old view let go since the old frame was built: not drawn, though its nodes are there till the old
+  // frame is built again (a frame drawn by the window's tree alone, or painted alone, builds none))
+  let let_go = fn(i : Int) {
+    let mut p = i
+    let mut gone = false
+    while p >= 0 && !gone {
+      if old_box_owners.get(p) is Some((_, id)) {
+        gone = !old_islands.iter().any(fn(o) { o.id == id })
+      }
+      p = c.nodes[p].parent
+    }
+    gone
+  }
   for i in 0..<c.count {
     let n = c.nodes[i]
     // (a field's placeholder too, as Android's hint is words of their own)
-    if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) && n.text != "" {
+    if n.bones == 0L &&
+      (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
+      n.text != "" &&
+      !let_go(i) {
       let (x, y) = c.drawn_at(i)
       let mut alpha = 1.0
       let mut p = i
@@ -1431,11 +1461,14 @@ pub fn Tester::ctx(self : Tester) -> Ctx {
 /// next frame on.
 pub fn Tester::scroll_to(self : Tester, item : Int) -> Unit {
   self.list_state().scroll_to(item)
+  // (the list put there by the test, no hand on it: taken at the next frame as a step of the test's, built whole)
+  test_stepped()
 }
 
 ///|
 pub fn Tester::scroll_to_end(self : Tester) -> Unit {
   self.list_state().scroll_to_end()
+  test_stepped()
 }
 
 ///|

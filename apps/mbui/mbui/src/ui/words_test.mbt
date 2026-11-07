@@ -2,14 +2,14 @@
 
 ///|
 /// Two paragraphs in a box marked as words (`key` "w"), the passage `a` until `b` selected.
-fn words_view(sel : Ref[(Int, Int)]) -> @ui.Tester {
+fn words_view(sel : @signals.Signal[(Int, Int)]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
       let b = c.column(w=Px(200.0), fn() {
         c.rich([@ui.plain("hello world")], size=10.0) |> ignore
         c.rich([@ui.plain("你好世界")], size=10.0) |> ignore
       })
-      c.words(b, "w", a=sel.val.0, b=sel.val.1, color=0x11223344L)
+      c.words(b, "w", a=sel.get().0, b=sel.get().1, color=0x11223344L)
     },
     w=300.0,
     h=300.0,
@@ -18,7 +18,7 @@ fn words_view(sel : Ref[(Int, Int)]) -> @ui.Tester {
 
 ///|
 test "words: the paragraphs in a box as one text, a paragraph to a line" {
-  let sel = Ref::new((0, 0))
+  let sel = @signals.signal((0, 0))
   let t = words_view(sel)
   t.frame()
   let w = t.ctx().words_of("w").unwrap()
@@ -29,7 +29,7 @@ test "words: the paragraphs in a box as one text, a paragraph to a line" {
 
 ///|
 test "words: offsets from a point, past a paragraph's end the next one's start, past all their end" {
-  let sel = Ref::new((0, 0))
+  let sel = @signals.signal((0, 0))
   let t = words_view(sel)
   t.frame()
   let w = t.ctx().words_of("w").unwrap()
@@ -46,7 +46,7 @@ test "words: offsets from a point, past a paragraph's end the next one's start, 
 
 ///|
 test "words: a range's rects cross paragraphs, a line each" {
-  let sel = Ref::new((0, 0))
+  let sel = @signals.signal((0, 0))
   let t = words_view(sel)
   t.frame()
   let w = t.ctx().words_of("w").unwrap()
@@ -60,12 +60,12 @@ test "words: a range's rects cross paragraphs, a line each" {
 
 ///|
 test "words: the selection is drawn behind each paragraph it covers" {
-  let sel = Ref::new((6, 14))
+  let sel = @signals.signal((6, 14))
   let t = words_view(sel)
   t.frame()
   let grounds = t.drawn_rects().filter(fn(r) { r.4 == 0x11223344L })
   assert_eq(grounds.length(), 2)
-  sel.val = (0, 0)
+  sel.set((0, 0))
   t.frame()
   assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x11223344L }).length(), 0)
 }
@@ -81,10 +81,10 @@ test "words: a word as a phone picks one (the host's own boundaries where it has
 
 ///|
 test "words: a box not built this frame is forgotten" {
-  let on = Ref::new(true)
+  let on = @signals.signal(true)
   let t = @ui.Tester::new(
     fn(c) {
-      if on.val {
+      if on.get() {
         let b = c.column(fn() { c.rich([@ui.plain("abc")], size=10.0) |> ignore })
         c.words(b, "gone")
       }
@@ -94,14 +94,14 @@ test "words: a box not built this frame is forgotten" {
   )
   t.frame()
   assert_true(t.ctx().words_of("gone") is Some(_))
-  on.val = false
+  on.set(false)
   t.frame()
   assert_true(t.ctx().words_of("gone") is None)
 }
 
 ///|
 test "words: moved (a page sliding in to its place): the frame built again, what was placed from them placed where they are" {
-  let dx = Ref::new(0.0)
+  let dx = @signals.signal(0.0)
   let placed = Ref::new(-1.0)
   let t = @ui.Tester::new(
     fn(c) {
@@ -109,7 +109,7 @@ test "words: moved (a page sliding in to its place): the frame built again, what
         Some(w) => placed.val = w.pieces[0].x
         None => ()
       }
-      let b = c.box(tx=dx.val, fn() { c.rich([@ui.plain("abc")], size=10.0) |> ignore })
+      let b = c.box(tx=dx.get(), fn() { c.rich([@ui.plain("abc")], size=10.0) |> ignore })
       c.words(b, "m")
     },
     w=300.0,
@@ -117,7 +117,7 @@ test "words: moved (a page sliding in to its place): the frame built again, what
   )
   t.draw()
   let x0 = t.ctx().words_of("m").unwrap().pieces[0].x
-  dx.val = 10.5
+  dx.set(10.5)
   // one frame: built from where they were, laid out further on, built again in it from where they are now (no frame
   // drawn with them as they were)
   t.frame(ms=0.0)

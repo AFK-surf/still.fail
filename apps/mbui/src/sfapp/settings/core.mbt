@@ -574,6 +574,7 @@ pub fn reset() -> Unit {
   login_state.seen.clear()
   profile_forms.val = 0
   machine_sessions.clear()
+  machine_sessions_asked.clear()
   adding.existing.set(false)
   adding.made.set(None)
   adding.error.set("")

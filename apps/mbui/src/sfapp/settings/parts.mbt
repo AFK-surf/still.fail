@@ -90,6 +90,21 @@ fn scroll_page(
   // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
   let l = @sf.look()
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
+  // (at a place's top on the narrow page's list, neither a panel's nor the wide frame's: the room under the app's top
+  // bar its first row, keyed among the blocks, so that a block coming or changing has its own row's height go, not the
+  // row before it)
+  let is_wide = wide.val
+  let top = if @sf.in_panel() || is_wide { 0.0 } else { top_room() }
+  let top_keyed = top > 0.0 && keys is Some(ks) && ks.length() == blocks.length()
+  let (blocks, keys, versions) = if top_keyed {
+    (
+      [fn() { gap(c, top) }] + blocks,
+      keys.map(fn(ks) { ["page/top"] + ks }),
+      versions.map(fn(vs) { if vs.length() == blocks.length() { [""] + vs } else { vs } }),
+    )
+  } else {
+    (blocks, keys, versions)
+  }
   // (by their keys: those going still among them while they close, each keyed as it was)
   let (blocks, keys, rows) = match keys {
     Some(ks) if ks.length() == blocks.length() && !(@sf.in_panel() && @sf.panel_whole()) => {
@@ -145,7 +160,7 @@ fn scroll_page(
   }
   // (its rows built as the list lays them out, in the panel the page is: @sf.with_pane)
   let pane = @sf.pane_round.val
-  if wide.val {
+  if is_wide {
     let side = wide_side(c)
     c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) { @sf.with_pane(pane, fn() {
       if i == blocks.length() {
@@ -165,8 +180,7 @@ fn scroll_page(
   let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
   // (in a panel of its own, its last card as far from the panel's foot as from its sides: its card's 10 under it and this)
   let foot = if @sf.in_pane() { dmax(foot, @sf.panel_card_in - 10.0) } else { foot }
-  let top = top_room()
-  let head = if top > 0.0 { 1 } else { 0 }
+  let head = if top > 0.0 && !top_keyed { 1 } else { 0 }
   let n = head + blocks.length() + (if foot > 0.0 { 1 } else { 0 })
   c.list("settings/" + key, n, 80.0, fn(i) { @sf.with_pane(pane, fn() {
     if i < head {

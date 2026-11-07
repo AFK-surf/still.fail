@@ -36,11 +36,37 @@ let ftab : FChatTab = {
 }
 
 ///|
+/// Told as where the tab is by workspace changes (ftab_put): what reads it (ftab_place_of) built again then, a part
+/// kept as its nodes too, whether it was a press in the tab, the composer's way to a folder or anything else.
+// kept across runs: only counts on
+let ftab_places_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+fn ftab_places_told() -> Unit {
+  ftab_places_said.set(@signals.untracked(fn() { ftab_places_said.get() }) + 1)
+}
+
+///|
+/// The tab of `ws` put at `at` (None: the places).
+fn ftab_put(ws : String, at : DriveAt?) -> Unit {
+  ftab.places[ws] = at
+  ftab_places_told()
+}
+
+///|
+/// Where the tab of `ws` is (None: none kept), read as a signal.
+fn ftab_place_of(ws : String) -> DriveAt?? {
+  ignore(ftab_places_said.get())
+  ftab.places.get(ws)
+}
+
+///|
 fn tab_reset() -> Unit {
   panel_screens.clear()
   panel_screen_pages.clear()
   ftab.building = false
   ftab.places.clear()
+  ftab_places_told()
   ftab.scope = ""
   ftab.let_go = None
   ftab.chat = ""
@@ -84,7 +110,7 @@ fn ftab_add(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// The tab into a folder of a station (its root, the path under it).
 fn ftab_go(station : String, root : String, path : String) -> Unit {
-  ftab.places[ftab.scope] = Some({ station, root: Some(root), path })
+  ftab_put(ftab.scope, Some({ station, root: Some(root), path }))
 }
 
 ///|
@@ -96,14 +122,14 @@ pub fn tab_building() -> Bool {
 ///|
 /// The tab of the workspace `ws` at `at` (None: the places), as going there in it does.
 pub fn tab_place_set(ws : String, at : DriveAt?) -> Unit {
-  ftab.places[ws] = at
+  ftab_put(ws, at)
 }
 
 ///|
 /// Where the tab of `ws` is: None while nothing was chosen there (it starts where the chat's station does), Some(None)
 /// at the places.
 pub fn tab_place(ws : String) -> DriveAt?? {
-  ftab.places.get(ws)
+  ftab_place_of(ws)
 }
 
 ///|
@@ -153,7 +179,7 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     Some(s) if s.roots.length() == 1 => Some({ station, root: Some(s.roots[0].path), path: "" })
     _ => None
   }
-  let place = match ftab.places.get(scope) {
+  let place = match ftab_place_of(scope) {
     Some(p) => p
     None => start
   }
@@ -285,7 +311,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     c.box(style=ftab_trail_box, fn() {
       let sid = c.id("files-tab/places")
       if c.clicked(sid) {
-        ftab.places[ftab.scope] = None
+        ftab_put(ftab.scope, None)
       }
       let sb = c.box(style=ftab_step, id=sid, fn() { c.text(st.name, style=ftab_step_words) |> ignore })
       c.semantics(sb, Button, id=sid, label=st.name)

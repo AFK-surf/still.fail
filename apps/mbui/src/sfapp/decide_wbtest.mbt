@@ -98,7 +98,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
-  assert_eq(@sfpages.dismissed.length(), 1)
+  assert_eq(@sfpages.dismissed.count(), 1)
   // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
 }
 

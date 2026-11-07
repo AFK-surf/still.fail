@@ -401,7 +401,7 @@ test "a scripted run's answered line takes an answer come before the step that a
 ///|
 test "a scripted run taps words only where a finger reaches them: not under what lies over them" {
   // a row's words under a bar over the page's foot (a composer): tapped only once the bar has gone from over them
-  let covered = Ref::new(true)
+  let covered = @signals.signal(true)
   let tapped = Ref::new(0)
   let t = @ui.Tester::new(
     fn(c) {
@@ -412,7 +412,7 @@ test "a scripted run taps words only where a finger reaches them: not under what
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         c.box(h=Px(80.0), fn() {  }) |> ignore
         c.box(id=row, h=Px(20.0), fn() { c.text("忽略", wrap=false) |> ignore }) |> ignore
-        if covered.val {
+        if covered.get() {
           c.layer(fn() {
             c.box(h=Px(60.0), fn() {  }) |> ignore
             c.box(id=c.id("bar"), w=Fill(1.0), h=Px(60.0), bg=0xFFFFFFFFL, fn() {  }) |> ignore
@@ -428,7 +428,7 @@ test "a scripted run taps words only where a finger reaches them: not under what
   let log = t.drive("timeout 300\ntap =忽略\nexit")
   assert_eq(tapped.val, 0)
   assert_true(log.iter().any(fn(l) { l.contains("under something else to press") }), msg=log.join("\n"))
-  covered.val = false
+  covered.set(false)
   let log2 = t.drive("timeout 300\ntap =忽略\nexit")
   assert_eq(tapped.val, 1, msg=log2.join("\n"))
 }
@@ -548,6 +548,35 @@ test "the system's say on notifications is the test's: refused, the app's ask an
   assert_eq(t.notice_asks(), 2)
   assert_eq(answers, [false])
   assert_true(t.find("unknown") is Some(_))
+}
+
+///|
+test "the system's answer polled once its frame is built (Ctx::after_build): taken in the frame it comes in, nothing else changed" {
+  let asking = @signals.signal(false)
+  let said = @signals.signal("none")
+  let t = @ui.Tester::new(fn(c) {
+    let ask = asking.get()
+    // (as an app polls the system: once its frame is built, whatever it built)
+    c.after_build("notices", fn() {
+      if ask && @ui.notice_permission() == "ask" {
+        ignore(@ui.notice_ask())
+      }
+      match @ui.notice_answer() {
+        Some(yes) => said.set(if yes { "allowed" } else { "refused" })
+        None => ()
+      }
+    })
+    c.text("answer: \{said.get()}", wrap=false) |> ignore
+  })
+  t.draw()
+  t.set_notice_permission("ask")
+  t.set_notice_reply(Some(false))
+  asking.set(true)
+  t.run_for(host_answer_ms)
+  assert_eq(t.notice_asks(), 1)
+  // (the host keeps its answer and asks for a frame, telling nothing else: that frame takes it)
+  assert_true(t.find("answer: refused") is Some(_))
+  t.assert_idle()
 }
 
 ///|
@@ -671,3 +700,24 @@ test "a host saying what its pointer's events come from: the hand of the moment 
   assert_true(t.tape().contains("\"a\":[0,10,10,0,0,1]"))
   assert_true(t.tape().contains("\"a\":[1,20,20,0,0,0]"))
 }
+
+///|
+test "the window's buttons coming into the app's top row (a Mac's window back from full screen): a part kept as its nodes that reads it built again" {
+  let t = @ui.Tester::new(fn(c) {
+    // (made once, kept whatever else the frame builds anew: an old view's island)
+    c.kept_part(c.id("band"), "", own=true, fn() {
+      c.text("band " + (if @ui.window_inset() { "under the buttons" } else { "plain" }), size=13.0) |> ignore
+    })
+  })
+  t.draw()
+  t.run_for(host_answer_ms)
+  assert_true(t.find("band plain") is Some(_))
+  t.set_window_inset(true)
+  t.frame()
+  assert_true(t.find("band under the buttons") is Some(_))
+  t.assert_idle()
+}
+
+///|
+/// How long a test lets the host's answer and the frame it asks for come (a few of the display's frames).
+let host_answer_ms : Double = 100.0

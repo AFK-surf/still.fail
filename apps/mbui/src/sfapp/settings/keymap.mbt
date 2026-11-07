@@ -12,7 +12,7 @@ pub let keys_recording : @signals.Signal[String] = @signals.signal("", same=fn(a
 ///|
 fn keymap_reset() -> Unit {
   keys_recording.set("")
-  action_asked.val = ""
+  action_asked.set("")
 }
 
 ///|
@@ -154,7 +154,7 @@ pub fn binding_of(code : Int, mods : Int) -> String? {
 /// the 快捷键 page records new ones.
 pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : Bool = false) -> Bool {
   // chosen from the Mac's menu bar since the last frame: as if one of its keys was
-  if action_asked.val == action {
+  if action_asked.get() == action {
     return true
   }
   // (no key came: none of its keys did, its bindings not looked up and read)
@@ -171,19 +171,20 @@ pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : B
 
 ///|
 /// The action chosen from the Mac's menu bar since the last frame ("" none: the app's menu_bar.mbt), read by
-/// `action_pressed` as one of its keys.
-let action_asked : Ref[String] = Ref("")
+/// `action_pressed` as one of its keys: a signal, so that what reads it is built again as one is chosen, a part kept
+/// whatever else the frame builds anew too (a key pressed is the hand's, which builds those anew; a menu's item is not).
+let action_asked : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// One of the menu bar's items chosen: `action` done by the frame after, as if one of its keys was pressed.
 pub fn ask_action(action : String) -> Unit {
-  action_asked.val = action
+  action_asked.set(action)
 }
 
 ///|
 /// The frame that read it built: asked no more.
 pub fn action_asked_done() -> Unit {
-  action_asked.val = ""
+  action_asked.set("")
 }
 
 ///|

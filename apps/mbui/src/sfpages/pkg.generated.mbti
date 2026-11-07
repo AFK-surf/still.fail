@@ -114,7 +114,7 @@ pub fn composer_foot_in(Double) -> Double
 
 pub fn composer_foot_room(@ui.Ctx, String, Double, let_go~ : Bool) -> Double
 
-pub fn composer_open_room(Double) -> Double
+pub fn composer_open_room(Double, corner? : Double) -> Double
 
 pub fn composer_place(Double) -> ComposerPlace
 
@@ -148,7 +148,7 @@ pub let desk_note : @ui.TextStyle
 
 pub let desk_said_line : @ui.Style
 
-pub let dismissed : Map[String, Bool]
+pub let dismissed : @signals.Keyed[String]
 
 pub fn dmax(Double, Double) -> Double
 

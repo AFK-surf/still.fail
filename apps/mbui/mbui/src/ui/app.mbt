@@ -111,10 +111,14 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   inputs_taken.val = false
   in_frame.val = true
   frame_running.val = true
+  frame_moment.val = t
+  frame_serial.val += 1
   paint_phase.val = 0
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()
+  // (where the window's buttons are, read of the host so: what reads it built again as it changes, hostread.mbt)
+  inset_arrive()
   env_at_frame()
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
@@ -190,6 +194,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
   frame_running.val = false
+  frame_moment.val = -1.0
   frame_built.val = false
 }
 
@@ -208,7 +213,10 @@ pub fn frame_offscreen(
   g_view.val = view
   // Offscreen frames bypass frame_drawn, so they read the host generation here.
   atlas_said.val = Some(h_atlas_generation())
+  frame_moment.val = t
+  frame_serial.val += 1
   frame_body(g(), w, h, scale, t) |> ignore
+  frame_moment.val = -1.0
   g()
 }
 
@@ -391,6 +399,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // (and into the first of what a layer of the window's tree holds that takes it, as this pass built it: view_host.mbt)
     view_layers_first(c)
     hand_focus_said(c)
+    // (the window's tree told as this pass was built: where it places an old view otherwise now, built again for that)
+    view_told_as_built(c)
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
     c.clicked.clear()

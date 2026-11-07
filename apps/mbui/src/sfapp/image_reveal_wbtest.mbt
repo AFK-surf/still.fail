@@ -30,11 +30,11 @@ test "a message's image as the web's: what it waits on until decoded; then brush
 ///|
 test "a message's image already decoded as it is first shown comes as it is" {
   new_run()
-  let shown = Ref(false)
+  let shown = @signals.signal(false)
   let t = @ui.Tester::new(
     fn(c) {
       // (decoded first, drawn once it is)
-      if shown.val {
+      if shown.get() {
         @sfpages.image_reveal(c, "pic", 300.0, 200.0, FitCover, "")
       } else {
         c.image("pic", w=Px(300.0), h=Px(200.0), fade=false) |> ignore
@@ -47,7 +47,7 @@ test "a message's image already decoded as it is first shown comes as it is" {
   )
   t.frame()
   t.frame()
-  shown.val = true
+  shown.set(true)
   t.frame()
   assert_eq(t.drawn_glass().length(), 0)
   t.run_for(reveal_ms / 2.0)

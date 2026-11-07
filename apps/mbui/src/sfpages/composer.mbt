@@ -87,6 +87,9 @@ priv struct Composing {
   pictures : Map[String, MediaPicture]
   /// what its box last changed shape for and how, in which build (composer_shape)
   mut shaped : (Int, String, @motion.Spec)?
+  /// each draft's composer's corner as it was last built, where it stands (its place's): what its chat's list keeps clear
+  /// for it is worked out from (composer_least), not from another composer's built last (a chat beside another's)
+  corners : @sf.LiveMap[String, Double]
 }
 
 ///|
@@ -125,6 +128,7 @@ let composing : Composing = {
   grounds: {},
   pictures: {},
   shaped: None,
+  corners: @sf.LiveMap::new(),
 }
 
 ///|
@@ -156,6 +160,7 @@ fn composing_reset() -> Unit {
   composing.wanted = false
   composing.hint_shown.set("")
   composing.taking.set(false)
+  composing.corners.clear()
 }
 
 ///|
@@ -186,6 +191,9 @@ pub fn composer(
   let no_files = spec.locked || spec.offline
   // (its corner where it stands, what waits in it and its ＋ and send following it)
   @sf.composer_round.val = place.corner
+  if @signals.untracked(fn() { composing.corners.get(spec.draft) }) != Some(place.corner) {
+    composing.corners.set(spec.draft, place.corner)
+  }
   // what the system's picker answered, taken in before the box is laid out (the host's word that it answered brings
   // this frame); the files pasted into the field; what 文件's 添加到消息 put in for this draft
   take_in(c, src, spec, w, no_files)
@@ -2026,12 +2034,13 @@ fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Un
 
 ///|
 /// The least room a chat's composer takes at its page's foot: as tall as it takes opened with one line where it is
-/// (its box that tall, what is round it as it is).
-fn composer_least(c : @ui.Ctx) -> Double {
+/// (its box that tall, what is round it as it is), draft `draft`'s with its own corner (a card's till it is first built).
+fn composer_least(c : @ui.Ctx, draft : String) -> Double {
+  let corner = composing.corners.get(draft).unwrap_or(@sf.card_corner)
   let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
   match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box()
-    None => composer_open_room(c.width)
+    Some(box) => foot - box + composer_open_box(corner~)
+    None => composer_open_room(c.width, corner~)
   }
 }
 
@@ -2092,7 +2101,7 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held?
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
-  let least = composer_least(c)
+  let least = composer_least(c, draft)
   // (`settled`: as it comes to stand, not where its shape is on its way: a new chat become its chat, the composer
   // coming down from the middle of the pane to its foot, the chat's rows standing over its foot from the first, not over
   // the middle of the pane where the new chat's scene still is)
@@ -2657,8 +2666,8 @@ fn capsule_room(pane : Double) -> Double {
 /// The room a chat's composer takes opened with one line at the foot of a pane `pane` wide (its box, composer_open_box;
 /// 12 over it and its foot's room under it, composer_foot_in): what a list that keeps its words in place as the
 /// composer closes keeps clear at least (ChatHost.kt roomForList).
-pub fn composer_open_room(pane : Double) -> Double {
-  composer_open_box() + 12.0 + composer_foot_in(pane)
+pub fn composer_open_room(pane : Double, corner? : Double = @sf.composer_corner()) -> Double {
+  composer_open_box(corner~) + 12.0 + composer_foot_in(pane)
 }
 
 ///|
@@ -2682,9 +2691,9 @@ let composer_foot_wide : Double = 16.0
 /// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
 /// out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons' row as far from its foot as
 /// makes them concentric with its corners (tools_row).
-fn composer_open_box() -> Double {
+fn composer_open_box(corner? : Double = @sf.composer_corner()) -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + @sf.composer_round_in()
+  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + @sf.capsule_in(corner, t.round.side)
 }
 
 ///|

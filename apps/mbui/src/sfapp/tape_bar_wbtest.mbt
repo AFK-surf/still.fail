@@ -104,6 +104,9 @@ test "on the tape a settings page's bar is the tree's: its title the same node a
   // (the old view's none: one bar)
   assert_eq(bar_words_old(t, "外观").length(), 0)
   lang.val = "en"
+  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
+  // signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let en = bar_words_drawn(t, "Appearance")
   assert_eq(en.length(), 1, msg="Appearance in the bar: \{en.length()}")
@@ -512,6 +515,9 @@ test "on the tape a station's own archiving made once under the tape's bar: its 
   let backs = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "归档" && !s.hidden })
   assert_eq(backs.length(), 1, msg="back to 归档")
   lang.val = "en"
+  // (the core's prefs saying another language, as its prefs topic told anew would: the test's made-up core, no
+  // signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let en = bar_words_drawn(t, "Automatic archiving · Willow")
   assert_eq(en.length(), 1, msg="the bar's title in English")

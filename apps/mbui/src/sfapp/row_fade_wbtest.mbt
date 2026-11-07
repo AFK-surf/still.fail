@@ -78,7 +78,8 @@ test "a real chat row's selected ground fades without rebuilding or laying out i
   let p = t.frame_perf()
   t.check_looks(true)
   assert_true(first != initial && middle != first && middle != 0L, msg="\{initial} -> \{first} -> \{middle}")
-  assert_eq(builds.val - before, 1, msg="only the test's first frame builds; got \{builds.val - before}")
+  // (a fade's frames are the clock's alone, as a host draws them: none builds the row again)
+  assert_eq(builds.val - before, 0, msg="no frame of the fade builds; got \{builds.val - before}")
   assert_eq((p.passes, p.laid), (0, 0), msg="the last fade frame only paints")
 }
 

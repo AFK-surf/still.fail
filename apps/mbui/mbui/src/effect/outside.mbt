@@ -85,8 +85,8 @@ pub async fn[X] outside(what : String, start : ((X) -> Unit) -> Unit) -> X {
 /// timers what is shown waits for (when, and the fiber that set it if named).
 pub fn Runtime::unsettled(self : Runtime) -> String {
   let why : Array[String] = []
-  if !self.ready.is_empty() {
-    why.push("\{self.ready.length()} fibers ready")
+  if !self.idle() {
+    why.push("\{self.ready.length() + self.later.length()} fibers ready")
   }
   if !self.frame_waiters.is_empty() {
     why.push("\{self.frame_waiters.tasks.length()} fibers waiting for a frame")

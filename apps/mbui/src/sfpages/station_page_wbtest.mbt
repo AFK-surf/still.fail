@@ -658,6 +658,8 @@ fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
     @sfbase.machine_here.val = Some("ws1/st2")
   })
   t.set_local_station(local)
+  // (this machine's station as the system says it, changed outside the app: the host's, no signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -704,6 +706,8 @@ test "this machine's station being installed: its page says so, its 启动 busy;
     #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Willow","removed":false}}
     ,
   )
+  // (this machine's station as the system says it, changed outside the app: the host's, no signal, said)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="重试") is Some(_))
   assert_true(t.query(Button, label="启动") is None)

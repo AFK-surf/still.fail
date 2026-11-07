@@ -489,17 +489,17 @@ fn ask_dismiss(
   let (mine, own_at) = match here.list {
     Some(l) if !at_end => {
       let seen = seen_in(c, here, if state { None } else { Some(seq) })
-      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms, seen~), l.turns.start("dismiss/" + k))
+      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.has(k), dismiss_turn_ms, seen~), l.turns.start("dismiss/" + k))
     }
-    _ => (!dismissed.contains(k), None)
+    _ => (!dismissed.has(k), None)
   }
   // (its room while it has one; pressed while it is asked, not let go nor answered)
   let shown = asking && mine
-  let live = shown && !resolved && !dismissed.contains(k)
+  let live = shown && !resolved && !dismissed.has(k)
   let at = if !asking { asked_at } else { own_at }
   let id = c.id("ask-dismiss/" + k)
   if live && c.clicked(id) {
-    dismissed[k] = true
+    dismissed.add(k)
     c.tell("ask-dismiss/" + k, fn() {
       // let go, felt as an answer picked is
       @ui.haptic(Confirm)
@@ -509,7 +509,7 @@ fn ask_dismiss(
         "",
         "decision.dismiss",
         { "station": Json::string(here.station), "thread": Json::number(thread), "seq": Json::number(seq) },
-        failed=fn() { dismissed.remove(k) |> ignore },
+        failed=fn() { dismissed.remove(k) },
       )
     })
   }
@@ -553,8 +553,10 @@ fn need_dismiss(c : @ui.Ctx, key : String, live : Bool) -> Unit {
 }
 
 ///|
-/// What was let go here (by its post: seq_key), gone at once: back if letting it go failed.
-pub let dismissed : Map[String, Bool] = {}
+/// What was let go here (by its post: seq_key), gone at once: back if letting it go failed. Read by member, so that
+/// a chat's row kept as its nodes is built again as its 忽略 is pressed, and only that row.
+// kept across runs: put back by rows_reset
+pub let dismissed : @signals.Keyed[String] = @signals.keyed()
 
 ///|
 /// What is under a post (decision): 8 under its words, at the column's start.

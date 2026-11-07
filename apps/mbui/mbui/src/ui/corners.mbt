@@ -210,6 +210,8 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
     Some(tree) => tree.lit_all(true)
     None => ()
   }
+  // (how it is drawn changed by the test, no signal: built whole, as the frame after it is, frame_watch.mbt)
+  test_stepped()
   self.frame()
   let faults = c.with_tree_nodes(fn() { c.corner_faults() })
   c.lit_all = false
@@ -217,6 +219,7 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
     Some(tree) => tree.lit_all(false)
     None => ()
   }
+  test_stepped()
   self.frame()
   faults
 }
@@ -354,6 +357,7 @@ pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String
   let c = g()
   if lit {
     c.lit_all = true
+    test_stepped()
     self.frame()
   }
   let out : Array[String] = []
@@ -384,6 +388,7 @@ pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String
   }
   if lit {
     c.lit_all = false
+    test_stepped()
     self.frame()
   }
   out
