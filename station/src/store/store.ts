@@ -2857,7 +2857,9 @@ export class Store {
   }
 
   /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep. A stale
-  /// click cannot close a newer question or overwrite a newer turn's state. `lang` is lang.rs `spoken()`: the request's.
+  /// click cannot close a newer question or overwrite a newer turn's state. Its agent may still be in the turn that
+  /// asked (it goes on after posting, or a notice woke it): the card closes all the same, the choice is kept on that
+  /// turn as its need, and the turn ends final when it ends (endTurn). `lang` is lang.rs `spoken()`: the request's.
   closeCard(viewer: string, thread: number, n: number, option: string, lang: Lang = stationLang()): boolean {
     return this.#with((changes) => {
       // Told only when it got as far as closing it (one already closed says true and tells nothing, as the Rust).
@@ -2874,16 +2876,21 @@ export class Store {
         // The offered row exists and has a card. Only a later person, card or legacy options can end its wait;
         // reuse the same indexed checks as closedCard instead of walking the intervening ordinary messages.
         if (this.#cardEndedAfter(thread, n)) return false;
-        // Do not race the agent still composing its question / recording its ending.
-        const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", offered.author);
-        if (composing !== undefined && composing.c !== 0) return false;
         this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, this.now());
+        const chosen = tr(lang, "station.card.chosen", { option });
         const changed = this.#run(
           `UPDATE turns SET declared = 'final', need = ?5, wait_seconds = NULL
            WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
              AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
              AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))`,
-          offered.author, thread, n, offered.at, tr(lang, "station.card.chosen", { option }),
+          offered.author, thread, n, offered.at, chosen,
+        );
+        // Still in the turn that asked: the choice is its need once it ends (endTurn makes it final then).
+        this.#run(
+          `UPDATE turns SET need = ?4
+           WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
+             AND ended_at IS NULL AND about_thread = ?2 AND about_n = ?3`,
+          offered.author, thread, n, chosen,
         );
         closed = { agent: offered.author, changed: changed > 0 };
         return true;
@@ -2971,10 +2978,17 @@ export class Store {
     this.#run("UPDATE turns SET declared = ?, wait_seconds = ? WHERE id = ? AND ended_at IS NULL", declared, waitSeconds, id);
   }
 
-  /// Ends a turn; `waitSeconds` is how long a turn ending as waiting waits at most.
+  /// Ends a turn; `waitSeconds` is how long a turn ending as waiting waits at most. One that ends needing a person about
+  /// a card closed while it ran (closeCard) needs nothing more: it ends final.
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, waitSeconds: number | null): void {
     this.#with((changes) => {
       this.#run("UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ?, wait_seconds = ? WHERE id = ?", this.now(), outcome, detail, declared, waitSeconds, id);
+      this.#run(
+        `UPDATE turns SET declared = 'final', wait_seconds = NULL
+         WHERE id = ? AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND about_n IS NOT NULL
+           AND EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = turns.about_thread AND c.n = turns.about_n)`,
+        id,
+      );
       const r = this.#one("SELECT session_key FROM turns WHERE id = ?", id);
       if (r !== undefined) changes.push({ type: "session", key: r.session_key });
     });

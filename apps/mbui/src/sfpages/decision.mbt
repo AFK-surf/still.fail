@@ -424,8 +424,6 @@ pub fn decision_options(
   } else {
     None
   }
-  // (its agent in a turn: the station refuses closing the card meanwhile, an answer in the chat it takes)
-  let locked = !resolved && m.decision is Some({ locked: true, .. })
   // as wide as what it says, as wide as where it is at most
   c.box(style=options_room, fn() {
     match
@@ -437,8 +435,6 @@ pub fn decision_options(
         if resolved { None } else { busy },
         chosen~,
         wide=true,
-        waits=options.map(fn(o) { locked && o.closes }),
-        waits_why=@sf.t("web-main.decisions.locked"),
       ) {
       Some(i) if !resolved => {
         let label = options[i].label
