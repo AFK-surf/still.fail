@@ -226,6 +226,8 @@ pub let flashing_now : @ref.Ref[(String, Double)]
 
 pub fn fonts_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
+pub let found_draw_ms : Double
+
 pub let fx_policy_up : @ref.Ref[String]
 
 pub let fx_vault_add_up : @ref.Ref[Bool]

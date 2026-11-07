@@ -75,7 +75,19 @@ pub fn picking(
       let link = if turn >= 0.0 { @sfbase.message_link(here.station, here.session, turn) } else { "" }
       // gone to by a quote of it: the passage quoted lit as it flashes (chat_list.mbt passage_lit)
       let lit = if ts != "" { passage_lit(c, here, ts) } else { None }
-      @sfbase.pickable(c, if key == "" { ts } else { key }, author, role, words, fill, @sfbase.mouse_picks(), body, keep=ts != "" && passage_wanted(here, ts), share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })
+      let marked = marked_of(here, ts)
+      let at = if key == "" { ts } else { key }
+      let marks = fn(id) {
+        if !marked.is_empty() {
+          let rd = reading_of(here.list.unwrap().rk)
+          let (x, y) = match c.laid_rect(id) {
+            Some((x, y, _, _)) => (x, y)
+            None => (0.0, 0.0)
+          }
+          found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=rd.found_at != ts)
+        }
+      }
+      @sfbase.pickable(c, at, author, role, words, fill, @sfbase.mouse_picks(), body, keep=!marked.is_empty() || (ts != "" && passage_wanted(here, ts)), marks~, share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })
     }
     None => body()
   }

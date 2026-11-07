@@ -1,64 +1,39 @@
-// A search's words marked in the message it opened a chat at (still.fail apps/android chat/screens/ChatMotion.kt markWords,
-// drawFound; Chat.kt rememberJump's FOUND; shared/ui/TextMark.kt passageMark with words): the chat opens with the
-// message's top under the bar, its first word put in the list's middle when it lies low (past 80% of the page); each
-// of the words in it is bold with a hand-drawn stroke under it, drawn in one after another, kept for as long as the
-// chat shows. Nothing flashes.
-
-///|
-/// In the chat drawn now: the message the search opened it at (its ts, "" none), the words, how far their strokes are
-/// drawn in (ms).
-let found_marking : Ref[(String, Array[String], Double)] = Ref(("", [], 0.0))
+// A search's words marked in the message it opened a chat at: the chat opens with the message's top under the bar, its
+// first word put in the list's middle when it lies low (past 80% of the page); each of the words in it is bold with a
+// hand-drawn stroke under it, drawn in one after another, kept for as long as the chat shows. Nothing flashes.
 
 ///|
 /// How long the strokes are drawn in for.
-let found_draw_ms : Double = @sf.strokes_ms(12)
+pub let found_draw_ms : Double = @sf.strokes_ms(12)
 
 ///|
 /// The strokes start being drawn in (the message gone to).
-fn found_start(rd : Reading) -> Unit {
+fn found_start(rd : @sfbase.Reading) -> Unit {
   rd.found_centre = true
   rd.found_drawn.snap(0.0)
   rd.found_drawn.animate(found_draw_ms, @motion.tween(found_draw_ms, ease=Linear))
 }
 
 ///|
-/// In the chat drawn now, while ⌘F's bar is open in it: what it found, marked in every message drawn.
-let find_marking : Ref[Array[String]] = Ref([])
-
-///|
-/// The words to mark in message `ts` in the chat drawn now (none for any other): the search's, or ⌘F's in all.
-fn found_words_of(ts : String) -> Array[String] {
-  let (at, words, _) = found_marking.val
-  if at != "" && at == ts {
-    words
-  } else {
-    find_marking.val
-  }
-}
-
-///|
-/// Once the message gone to is laid out: its first word low in it (past 80% of the page) is what comes to the
-/// middle, once.
-fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
+/// Once the message gone to is laid out: its first word low in it (past 80% of the list's height, the list's box
+/// measured as `pane`) comes to the list's middle, once.
+fn found_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : String) -> Unit {
   if !rd.found_centre || rd.found_at == "" {
     return
   }
-  match c.words_of("pick/" + rd.found_at) {
-    Some(w) => {
+  match (c.words_of("pick/" + rd.found_at), @motion.measured_rect(c, pane)) {
+    (Some(w), Some((_, py, _, ph))) => {
       rd.found_centre = false
       let ranges = @sf.find_words(w.text, rd.found_words)
       // (⌘F's: the time the reader is at in it)
-      let k = if @sfpages.find_chat() != "" { @sfpages.find_k() } else { 0 }
+      let k = if find_chat() != "" { find_k() } else { 0 }
       match ranges.get(if k < ranges.length() { k } else { 0 }) {
         Some((a, b)) =>
           match w.rects(a, b).get(0) {
             Some((_, y, _, h)) => {
-              let mid = y + h / 2.0
-              if mid > c.height * 0.8 {
-                match c.list_info_as(list, fn(i) { i.map(fn(i) { i.first >= 0 }) }) {
-                  Some(i) if i.first >= 0 => c.list_scroll_by(list, mid - c.height / 2.0)
-                  _ => ()
-                }
+              let mid = y + h / 2.0 - py
+              if mid > ph * 0.8 {
+                c.list_scroll_by(list, mid - ph / 2.0)
               }
             }
             None => ()
@@ -66,7 +41,7 @@ fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
         None => ()
       }
     }
-    None => ()
+    _ => ()
   }
 }
 
@@ -112,7 +87,7 @@ fn found_strokes(
           let right = p.x - bx + rx + rw + 2.0
           let y = p.y - by + lay.line_y[line] + lay.line_base[line] + 4.0
           c.box(tx=left - cx, ty=y - cy, fn() {
-            let ink = if faint { @sf.alpha(t.p.accent, @sfpages.find_faint) } else { t.p.accent }
+            let ink = if faint { @sf.alpha(t.p.accent, find_faint) } else { t.p.accent }
             @sf.hand_stroke(c, @sf.message_stroke, right - left, part, ink) |> ignore
           })
           |> ignore

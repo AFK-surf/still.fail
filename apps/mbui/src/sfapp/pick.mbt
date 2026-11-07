@@ -31,40 +31,6 @@ fn pick_back(c : @ui.Ctx) -> Unit {
 let long_press_ms : Double = @ui.long_press_ms
 
 ///|
-/// A message's words that a finger held still on picks from (sfbase's pickable): a search's strokes behind them
-/// (search_marks.mbt); a press a link's menu or an image quoted took picks nothing.
-fn pickable(
-  c : @ui.Ctx,
-  ts : String,
-  author : String,
-  role : String,
-  words : String,
-  fill_w : Bool,
-  body : () -> Unit,
-) -> Unit {
-  let key = "pick/" + ts
-  let press = c.press()
-  // (a link held in it is told as it is built: then its menu's, not a pick)
-  let body = fn() {
-    body()
-    if link_menu.at == press.frame || image_quoted_at.val == press.frame {
-      pk.taken_at = press.frame
-    }
-  }
-  // a search's words in it (search_marks.mbt): their strokes behind its words
-  let found = found_words_of(ts)
-  @sfbase.pickable(c, ts, author, role, words, fill_w, desk_picks(), body, keep=!found.is_empty(), marks=fn(id) {
-    if !found.is_empty() {
-      let (x, y) = match c.laid_rect(id) {
-        Some((x, y, _, _)) => (x, y)
-        None => (0.0, 0.0)
-      }
-      found_strokes(c, key, found, found_marking.val.2, x, y, faint=found_marking.val.0 != ts)
-    }
-  })
-}
-
-///|
 /// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's: by the
 /// hand (@sfbase.mouse_picks).
 fn desk_picks() -> Bool {
