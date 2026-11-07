@@ -716,6 +716,8 @@ pub fn usage_prices_node(@view.View, @settings.Core, () -> @settings.Here, Int32
 
 pub fn usage_tiles(@ui.Ctx, @json.Json?, entry? : ContextEntry) -> Unit
 
+pub fn usage_tiles_node(@view.View, () -> @json.Json?, () -> Bool, () -> Bool, () -> Bool, (@view.View) -> Unit, tips? : @sf.TipLayer) -> Unit
+
 pub fn vault_add(@settings.Core, @settings.Here, from~ : @sf.Beside) -> Unit
 
 pub fn vault_editor_dialog(@settings.Core, String, String, (@json.Json, @json.Json)?, kind? : String, plain? : Bool, kinds? : Bool) -> Unit
