@@ -310,6 +310,43 @@ test "the workspace: its people, those added, the invitations out" {
 }
 
 ///|
+test "the workspace left: asked first, then another workspace's Home at once while still.fail cloud is asked" {
+  new_run()
+  let base = fixture("settings")
+  let asked : Array[(String, Json, (Result[Json, Json]) -> Unit)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match name {
+        "workspace.removeMember" => asked.push((name, params, done))
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0)
+  open_setting("workspace")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("退出此 workspace")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("退出「星火工作室」？") is Some(_), msg=t.drawn_text())
+  let (x, y) = words_node(t, "退出").unwrap()
+  t.tap(x, y)
+  t.frame()
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].1), "workspace"), "ws1")
+  // before the cloud answers: Home, on 个人
+  assert_eq(app.picked.get(), "ws2")
+  nav_rested(t)
+  assert_eq(app.nav.depth(), 1)
+  assert_eq(@sfbase.toast_words(), "")
+  (asked[0].2)(Ok(Json::null()))
+  t.frame()
+  assert_eq(@sfbase.toast_words(), "已退出 workspace")
+}
+
+///|
 test "memory: a station's global memory, its projects, a skill's page" {
   let t = settings_tester("memory:ws1/st1")
   assert_true(t.find("全局记忆") is Some(_))
