@@ -173,7 +173,10 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         const l = locked(r);
         if (isAnswer(l)) return l;
         // Only those of devices still in the lock.
-        return json(200, JSON.stringify({ boxes: vaults.boxes(l.ws).filter((c) => certOk(l, c) === null) }));
+        // A small lock can address its devices by the existing primary key, leaving removed devices' certificates
+        // unread. For a larger lock the certificate table may be smaller than the device list, so scan it as before.
+        const boxes = l.devices.size <= 32 ? vaults.boxesFor(l.ws, [...l.devices.keys()]) : vaults.boxes(l.ws);
+        return json(200, JSON.stringify({ boxes: boxes.filter((c) => certOk(l, c) === null) }));
       },
     },
     {
