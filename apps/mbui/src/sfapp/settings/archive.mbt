@@ -47,7 +47,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     params["q"] = str(archive_state.q)
   }
   params["limit"] = Json::number(archive_state.limit.to_double())
-  let topic = (core.topic)("archive", params)
+  let topic = (core.topic)("archive", params).get()
   match topic.value {
     Some(_) => archive_state.last = topic.value
     None => ()

@@ -66,15 +66,15 @@ test "a person's image held: quoted (whose, the file named), its file once in th
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // into the chat's draft as the core keeps it (sfpages' composer took it: quote_file_into)
   let d = chat_draft()
-  assert_eq(d.quotes.length(), 1)
-  let q = Some(d.quotes[0])
+  assert_eq(d.quotes.get().length(), 1)
+  let q = Some(d.quotes.get()[0])
   assert_eq(text(q, "author"), "Ana")
   assert_eq(text(q, "role"), "person")
   assert_eq(text(field(q, "own"), "name"), "插画参考.png")
-  assert_eq(d.files.length(), 0)
+  assert_eq(d.files.get().length(), 0)
   // held again: another quote
   hold_quote(t, x, y)
-  assert_eq(chat_draft().quotes.length(), 2)
+  assert_eq(chat_draft().quotes.get().length(), 2)
 }
 
 ///|
@@ -276,9 +276,9 @@ test "the pictures before and after a quote can be separate occurrences of the s
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name != "imageNear" {
-        return (base.topic)(name, params)
+        return base.topic(name, params).get().snapshot()
       }
       let at = text(Some(Json::object(params)), "at")
       let value : Json = match at {
@@ -641,9 +641,9 @@ test "an agent's video and file card right clicked: 引用 quotes each, its file
   }
   assert_true(viewer.get() is None)
   let d = chat_draft()
-  assert_eq(d.quotes.map(fn(q) { text(field(Some(q), "own"), "name") }), ["演示录屏.mp4", "发布包.zip"])
-  assert_eq(text(Some(d.quotes[0]), "role"), "agent")
-  assert_eq(d.files.length(), 0)
+  assert_eq(d.quotes.get().map(fn(q) { text(field(Some(q), "own"), "name") }), ["演示录屏.mp4", "发布包.zip"])
+  assert_eq(text(Some(d.quotes.get()[0]), "role"), "agent")
+  assert_eq(d.files.get().length(), 0)
 }
 
 ///|
@@ -652,9 +652,9 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
   hold_quote(t, x, y)
   assert_eq(pk.ts, "")
   let d = chat_draft()
-  assert_eq(d.quotes.length(), 1)
-  assert_eq(text(Some(d.quotes[0]), "role"), "agent")
-  assert_eq(text(field(Some(d.quotes[0]), "own"), "name"), "compare.png")
+  assert_eq(d.quotes.get().length(), 1)
+  assert_eq(text(Some(d.quotes.get()[0]), "role"), "agent")
+  assert_eq(text(field(Some(d.quotes.get()[0]), "own"), "name"), "compare.png")
 }
 
 ///|

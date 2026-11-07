@@ -443,8 +443,8 @@ test "归档 made once: its own nodes; its choice chosen, what the one chosen me
 fn archiving_as(base : Source, f : @signals.Signal[(Json) -> Json], busy : @signals.Signal[Bool]) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let r = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let r = base.topic(name, params).get().snapshot()
       match name {
         "stations" => {
           let g = f.get()
@@ -684,8 +684,8 @@ fn prices_tester(
 fn prices_said(base : Source, state : @signals.Signal[String]) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       if name != "usage" {
         return t
       }
@@ -978,8 +978,8 @@ test "用量 made once: its days chosen by a finger: a day tapped seen alone, ta
 fn usage_as(base : Source, f : (Json) -> Json) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let r = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let r = base.topic(name, params).get().snapshot()
       if name == "usage" {
         { ..r, value: r.value.map(f) }
       } else {
@@ -1199,7 +1199,7 @@ test "一台 station 的记忆 made once, a skill shared and no longer and again
 fn topic_asked(base : Source, name : String, key : String, asked : Array[String]) -> Source {
   {
     ..base,
-    topic: fn(n, params) {
+    topic_read: fn(n, params) {
       if n == name {
         asked.push(
           match params.get(key) {
@@ -1209,7 +1209,7 @@ fn topic_asked(base : Source, name : String, key : String, asked : Array[String]
           },
         )
       }
-      (base.topic)(n, params)
+      base.topic(n, params).get().snapshot()
     },
   }
 }

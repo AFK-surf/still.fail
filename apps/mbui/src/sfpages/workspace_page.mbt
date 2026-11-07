@@ -194,7 +194,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
   // how its members' devices reach its stations: one row, how many ways are turned off at its end; pressed, its relays
   // and the ways in a panel (ws_ways_panel)
   // (the core's `workspaceWays`, from what `/v1/me` said: there at once, the workspace not read again for it)
-  let ways = (core.topic)("workspaceWays", { "workspace": str(ws) }).value
+  let ways = (core.topic)("workspaceWays", { "workspace": str(ws) }).get().value
   let off = number(ways, "off")
   if manager || relays.length() > 0 || off > 0.0 {
     blocks.push(fn() {
@@ -394,7 +394,7 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     let role = text(v, "role")
     let manager = role == "owner" || role == "admin"
     let ws = text(v, "id")
-    let ways = items((core.topic)("workspaceWays", { "workspace": str(ws) }).value, "ways")
+    let ways = items((core.topic)("workspaceWays", { "workspace": str(ws) }).get().value, "ways")
     let relays = ways.filter(fn(w) { flag(Some(w), "own") }).map(fn(w) { text(Some(w), "id") })
     let busy = is_doing(core, ["workspace.setWay"], [("workspace", ws)])
     let turn = fn(w : Json, title : String, note : String) {

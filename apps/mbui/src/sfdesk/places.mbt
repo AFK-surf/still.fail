@@ -64,7 +64,7 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
       }
     // (the first that needs a look, else the first: what its settings' row counts is what shows)
     "profiles" => {
-      let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
+      let list = items(src.topic("profiles", { "scope": Json::string(w.id) }).get().value, "items")
       list.get(list.search_by(fn(e) { flag(Some(e), "look") }).or(0)).map(fn(e) { profile_route(Some(e)) })
     }
     _ => None
@@ -74,7 +74,7 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
 ///|
 /// The workspace's stations, as the core lists them.
 fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
-  match (src.topic)("stations", { "scope": Json::string(w.id) }).value {
+  match src.topic("stations", { "scope": Json::string(w.id) }).get().value {
     Some(Array(a)) => a
     _ => []
   }
@@ -166,7 +166,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "profiles")
-  let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
+  let list = items(src.topic("profiles", { "scope": Json::string(w.id) }).get().value, "items")
   c.box(style=place_side, fn() {
     side_top(c)
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band())
@@ -341,7 +341,7 @@ let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
 fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let read = (src.topic)("stations", { "scope": Json::string(w.id) }).value is Some(_)
+  let read = src.topic("stations", { "scope": Json::string(w.id) }).get().value is Some(_)
   // (while they are read: a station's page, the one picked once they are, in its bones)
   if !read {
     @sfpages.station_waiting(c, core, here, @sf.no_frame, "Station", @sf.t("common.readingStations"))

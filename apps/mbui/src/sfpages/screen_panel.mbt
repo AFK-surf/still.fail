@@ -53,7 +53,7 @@ fn screen_os(src : Source, station : String) -> String {
     Some(i) => station.view(end_offset=i).to_owned()
     None => station
   }
-  match (src.topic)("stations", { "scope": Json::string(scope) }).value {
+  match src.topic("stations", { "scope": Json::string(scope) }).get().value {
     Some(Array(list)) =>
       for s in list {
         if text(Some(s), "station") == station {
@@ -73,7 +73,7 @@ fn screen_net(s : ScreenSess) -> Json? {
   if s.phase() != "live" {
     return None
   }
-  match (s.src.topic)("stationNet", { "station": Json::string(s.station) }).value {
+  match s.src.topic("stationNet", { "station": Json::string(s.station) }).get().value {
     Some(Object(_)) as v => v
     _ => None
   }

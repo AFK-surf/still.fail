@@ -42,8 +42,8 @@ fn activity_card_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   let base = fixture("chat-working")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       if name == "agentCard" && text(Some(Json::object(params)), "key") != "s-c1" {
         { ..got, value: None }
       } else {

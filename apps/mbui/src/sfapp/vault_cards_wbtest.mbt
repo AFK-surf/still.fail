@@ -16,7 +16,7 @@ fn vault_src(
   let base = fixture("settings")
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "vaults" {
         {
           value: Some(
@@ -42,7 +42,7 @@ fn vault_src(
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -191,9 +191,9 @@ test "a request's card is whole with its post: its answer the core's with it, no
   let base = vault_src([], true, [])
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       asked.push(name)
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)

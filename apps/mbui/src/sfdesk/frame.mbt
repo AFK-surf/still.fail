@@ -1013,7 +1013,7 @@ fn land(src : Source, w : Workspace) -> Unit {
     app.nav.push(NewChat)
     return
   }
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
   guard marks.value is Some(_) else { return }
   wide.landed.set(w.id)
   let chat = field(field(field(marks.value, "workspaces"), w.id), "chat")
@@ -1107,7 +1107,7 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   if side_take(src, ws) {
     return
   }
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   if prefs is None {
     return
   }
@@ -1137,7 +1137,7 @@ fn side_follow(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 /// shown: its width, whether it is folded; true then. As the place or the workspace changes (at that cause, on the
 /// tape: tape_view.mbt), or as the frame is built.
 fn side_take(src : Source, ws : String) -> Bool {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   // (not read yet: as it is until it is)
   if prefs is None {
     return false

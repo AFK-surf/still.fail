@@ -24,6 +24,10 @@ pub fn batch_depth() -> Int32
 
 pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
 
+pub fn[T] computed_following((T?) -> T, Computed[Unit], same? : (T, T) -> Bool) -> Computed[T]
+
+pub fn[T] computed_scoped((T?) -> T, same? : (T, T) -> Bool, untracked_read? : (() -> T?)?) -> Computed[T]
+
 pub fn effect(() -> Unit) -> () -> Unit
 
 pub fn effect_cleanup(() -> () -> Unit) -> () -> Unit
@@ -84,6 +88,7 @@ pub struct ReactiveNode {
 
 type Signal[T]
 pub fn[T] Signal::get(Self[T]) -> T
+pub fn[T] Signal::on_unwatched(Self[T], () -> Unit) -> Unit
 #callsite(autofill(loc))
 pub fn[T] Signal::set(Self[T], T, loc~ : SourceLoc) -> Unit
 pub fn[T] Signal::watched(Self[T]) -> Bool

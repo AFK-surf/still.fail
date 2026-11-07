@@ -31,7 +31,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if rail_items(src, w.id).contains("attention") {
     return
   }
-  let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
+  let chats = src.topic("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).get().value
   let trouble = field(chats, "trouble")
   let jobs = long_jobs(src, w)
   if trouble is None && jobs == 0 {
@@ -151,7 +151,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if archive_side.q != "" {
     params["q"] = Json::string(archive_side.q)
   }
-  let topic = (src.topic)("archive", params)
+  let topic = src.topic("archive", params).get().snapshot()
   match topic.value {
     Some(_) => archive_side.last = topic.value
     None => ()
@@ -457,7 +457,7 @@ fn archive_restore(src : Source, it : Json) -> Unit {
 ///|
 /// Whether an archived chat's putting back or deleting is under way (the core's `doing`).
 fn archive_doing(src : Source, station : String, session : String) -> Bool {
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let call = text(Some(d), "call")
     let p = field(Some(d), "params")
     if text(Some(d), "stage") == "failed" || text(p, "station") != station {

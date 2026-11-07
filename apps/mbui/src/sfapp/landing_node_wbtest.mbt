@@ -29,7 +29,7 @@ fn landing_case(
   new_run()
   let src = fixture(mode)
   @sfpages.landing_reset()
-  let ws = fn() { (src.topic)("workspaces", {}).value }
+  let ws = fn() { src.topic("workspaces", {}).get().value }
   let t = @ui.Tester::new(
     fn(c) {
       if !node {
@@ -105,7 +105,7 @@ test "no workspace yet as nodes, asked for a code: a code typed in its field, åˆ
   @sfpages.landing_asked()
   let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0, platform=2)
   @ui.set_view_app(fn(root) {
-    @sfpages.no_workspace_node(root, src, fn() { (src.topic)("workspaces", {}).value }, fn() {  }) |> ignore
+    @sfpages.no_workspace_node(root, src, fn() { src.topic("workspaces", {}).get().value }, fn() {  }) |> ignore
   })
   t.draw()
   let create = @sf.t("android-misc.workspace.create")
@@ -157,7 +157,7 @@ test "no workspace yet as nodes, asked for a code: a code the input method commi
   @sfpages.landing_asked()
   let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0, platform=2)
   @ui.set_view_app(fn(root) {
-    @sfpages.no_workspace_node(root, src, fn() { (src.topic)("workspaces", {}).value }, fn() {  }) |> ignore
+    @sfpages.no_workspace_node(root, src, fn() { src.topic("workspaces", {}).get().value }, fn() {  }) |> ignore
   })
   t.draw()
   // (its field taken: what the input method commits goes there)

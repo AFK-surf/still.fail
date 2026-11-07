@@ -283,8 +283,8 @@ test "pick, long, 大屏 keyboard and mouse: words typed in its search, the lang
   let lang = Ref("")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       if name != "prefs" || lang.val == "" {
         return got
       }

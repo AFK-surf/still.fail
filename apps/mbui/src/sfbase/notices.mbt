@@ -119,7 +119,7 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
   let push = match wanted {
     Some(b) => Some(b)
     None =>
-      match field((src.topic)("notify", Map::new()).value, "push") {
+      match field(src.topic("notify", Map::new()).get().value, "push") {
         Some(True) => Some(true)
         Some(False) => Some(false)
         _ => None
@@ -170,7 +170,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   notice_state.src = Some(src)
   let h = notice_host.val
   let shown = @ui.app_visible()
-  let notify = (src.topic)("notify", Map::new()).value
+  let notify = src.topic("notify", Map::new()).get().value
   match notify {
     Some(_) => {
       // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)
@@ -262,7 +262,7 @@ fn follow_notices(src : Source, workspace : String) -> Unit {
     leave_notices(src)
     notice_state.following = workspace
   }
-  let v = (src.topic)("notify", notify_params(workspace)).value
+  let v = src.topic("notify", notify_params(workspace)).get().value
   for n in items(v, "show") {
     let id = text(Some(n), "id")
     if id == "" || notice_state.taken.contains(id) {

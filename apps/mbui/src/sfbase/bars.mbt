@@ -61,7 +61,7 @@ pub fn bars_in(src : Source, ws : String) -> (Array[Array[String]], Int) {
   match bars_picked.get() {
     Some(b) => b
     None => {
-      let prefs = (src.topic)("prefs", {}).value
+      let prefs = src.topic("prefs", {}).get().value
       match field(field(prefs, "barsBy"), ws) {
         Some(Object(_)) as b => bars_of(b)
         _ =>

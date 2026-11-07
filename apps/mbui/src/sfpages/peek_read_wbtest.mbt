@@ -11,13 +11,17 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
   let made = @sfbase.made_source()
   let src : Source = {
     ..made,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "linkPreview" && read.last() != Some(name) {
         read.push(name)
       }
-      (made.topic)(name, params)
+      made.topic(name, params).get().snapshot()
     },
     leave: fn(name, _) {
+      left.push(name)
+      read.push("left")
+    },
+    release: fn(name, _) {
       left.push(name)
       read.push("left")
     },
@@ -27,6 +31,7 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
     fn(c) {
       build.val += 1
       @sfbase.held_build(build.val)
+      c.after_build("held/end", fn() { @sfbase.held_end() })
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
         c.column(pad=40.0, fn() {
@@ -69,14 +74,14 @@ fn chat_card_tester(href : String, linked : LinkedChat?, said : (Map[String, Jso
   let made = @sffixture.fixture("rich-chat")
   let src : Source = {
     ..made,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "messagePeek" {
         match said(params) {
           Some(v) => { value: Some(v), error: None, version: 1 }
           None => { value: None, error: None, version: 0 }
         }
       } else {
-        (made.topic)(name, params)
+        made.topic(name, params).get().snapshot()
       }
     },
   }
@@ -84,6 +89,7 @@ fn chat_card_tester(href : String, linked : LinkedChat?, said : (Map[String, Jso
     fn(c) {
       build.val += 1
       @sfbase.held_build(build.val)
+      c.after_build("held/end", fn() { @sfbase.held_end() })
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() { c.column(pad=40.0, fn() { chat_card(c, src, "card", "ws1/st1", href, linked) }) |> ignore })
     },
@@ -147,20 +153,23 @@ test "a file is read on every entry, including while its card is still open" {
   let made = @sfbase.made_source()
   let src : Source = {
     ..made,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "filePeek" && !active.val {
         active.val = true
         reads.val += 1
       }
-      (made.topic)(name, params)
+      made.topic(name, params).get().snapshot()
     },
     leave: fn(name, _) { if name == "filePeek" { active.val = false } },
+    release: fn(name, _) { if name == "filePeek" { active.val = false } },
+    refresh: fn(name, _) { if name == "filePeek" && active.val { reads.val += 1 } },
   }
   let build = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       build.val += 1
       @sfbase.held_build(build.val)
+      c.after_build("held/end", fn() { @sfbase.held_end() })
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
         c.column(pad=40.0, fn() {
@@ -199,4 +208,76 @@ test "a file is read on every entry, including while its card is still open" {
   assert_eq(reads.val, 2)
   @sf.kept_call.val = kept
   assert_eq(inked.val, 0, msg="code coloured in its bones")
+}
+
+///|
+test "a file card refreshes its real subscription on re-entry and keeps showing the old value until the answer" {
+  @sfbase.reset()
+  hovered_file.val = None
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let made = @sfbase.made_source()
+  let src : Source = {
+    ..made,
+    topic_read: fn(name, params) {
+      let sub = client.follow_topic(name, params~)
+      { value: sub.value, error: sub.error, version: sub.version }
+    },
+    waits: fn(name, params) { client.follow_topic(name, params~).waiting },
+    leave: fn(name, params) { client.leave_topic(name, params~) },
+    release: fn(name, params) { client.release_topic(name, params~) },
+    refresh: fn(name, params) { client.refresh_topic(name, params~) },
+  }
+  let build = Ref(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      build.val += 1
+      @sfbase.held_build(build.val)
+      c.after_build("held/end", fn() { @sfbase.held_end() })
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        c.column(pad=40.0, fn() {
+          let link = @kit.button(c, "src/a.ts", key="file", variant=Ghost)
+          file_peek(c, src, "ws/st", "session", "src/a.ts", Some(12), link.id)
+        }) |> ignore
+      })
+    },
+    w=800.0,
+    h=800.0,
+    native=Mouse,
+    pointing=Mouse,
+  )
+  t.draw()
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="src/a.ts").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(hover_open_ms * 2.0)
+  assert_eq(sent.length(), 1)
+  assert_true(sent[0].contains("\"topic\":\"filePeek\""))
+  assert_true(sent[0].contains("\"station\":\"ws/st\""))
+  assert_true(sent[0].contains("\"key\":\"session\""))
+  assert_true(sent[0].contains("\"path\":\"src/a.ts\""))
+  assert_true(sent[0].contains("\"line\":12"))
+  client.receive_json({ "id": 1, "value": { "kind": "dir", "name": "a.ts", "path": "src/a.ts", "entries": ["before-entry"] } })
+  t.frame()
+  assert_true(t.find("before-entry") is Some(_))
+  t.move(700.0, 700.0)
+  t.frame()
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_eq(sent.length(), 3)
+  assert_true(sent[1].contains("\"id\":1") && sent[1].contains("\"unsubscribe\":true"))
+  assert_true(sent[2].contains("\"id\":2") && sent[2].contains("\"subscribe\""))
+  assert_true(t.find("before-entry") is Some(_), msg="the card stays open with its old value while refreshing")
+  client.receive_json({ "id": 1, "value": { "kind": "dir", "name": "a.ts", "path": "src/a.ts", "entries": ["late-entry"] } })
+  t.frame()
+  assert_true(t.find("before-entry") is Some(_))
+  assert_true(t.find("late-entry") is None)
+  client.receive_json({ "id": 2, "value": { "kind": "dir", "name": "a.ts", "path": "src/a.ts", "entries": ["after-entry"] } })
+  t.frame()
+  assert_true(t.find("after-entry") is Some(_))
+  t.move(700.0, 700.0)
+  t.run_for((hover_close_ms + hover_out_ms) * 2.0)
+  assert_eq(sent.length(), 4)
+  assert_true(sent[3].contains("\"id\":2") && sent[3].contains("\"unsubscribe\":true"))
+  assert_true(client.peek_topic("filePeek", params=file_peek_params("ws/st", "session", "src/a.ts", Some(12))) is None)
 }

@@ -5,7 +5,7 @@
 /// ⌘/ (Shortcuts.tsx ShortcutsDialog): every shortcut, by where it works (the core's keymap, then those of one place,
 /// not changed here), quiet words beside each; the way to change them at its foot (the desktop app's).
 pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let change = Ref(false)
   let footer : (() -> Unit)? = if @settings.keys_changeable(prefs) {
     Some(fn() {

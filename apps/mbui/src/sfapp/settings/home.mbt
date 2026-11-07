@@ -80,7 +80,7 @@ let chosen : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
 pub fn pref(core : Core, name : String) -> String {
-  pref_from((core.topic)("prefs", Map::new()).value, name)
+  pref_from((core.topic)("prefs", Map::new()).get().value, name)
 }
 
 ///|

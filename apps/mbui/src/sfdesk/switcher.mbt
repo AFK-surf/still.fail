@@ -234,7 +234,7 @@ fn action_offered(id : String, icon : String, version? : String = "", station? :
 /// actions and finds what was typed among them (sfdesk/switcher.mbt).
 fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.Offered] {
   // an action's first keys as shown (as kept on this device: settings' 快捷键)
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let keys = fn(action : String) { @settings.key_label(prefs, action) }
   let all : Array[@sfpages.Offered] = []
   let offer = fn(o : @sfpages.Offered) { all.push({ ..o, keys: keys(o.id) }) }
@@ -252,7 +252,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
           if v.screens.length() > 0 {
             offer(action_offered("chat.screen", "monitor", fn() { chat_screen_first(r, v.screens) }))
           }
-          let chat = (src.topic)("chat", chat_params(r)).value
+          let chat = src.topic("chat", chat_params(r)).get().value
           let open = !v.archived && !v.offline
           if open {
             offer(action_offered("chat.archive", "archive", fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) }) }))

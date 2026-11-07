@@ -22,7 +22,7 @@ fn landing_now(src : Source) -> Bool {
     return false
   }
   let (current, all, answered, _) = workspace_in_view(src)
-  current is None && (src.topic)("workspaces", {}).value is Some(_) && answered && all.is_empty()
+  current is None && src.topic("workspaces", {}).get().value is Some(_) && answered && all.is_empty()
 }
 
 ///|
@@ -58,7 +58,7 @@ fn landing_tree(v : @view.View, src : Source) -> Unit {
   entry_tree(
     v,
     fn(body) {
-      @sfpages.no_workspace_node(body, src, fn() { (src.topic)("workspaces", {}).value }, open_invite_link) |> ignore
+      @sfpages.no_workspace_node(body, src, fn() { src.topic("workspaces", {}).get().value }, open_invite_link) |> ignore
     },
     fn(c) {
       sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })

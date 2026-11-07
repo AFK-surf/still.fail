@@ -16,7 +16,7 @@ fn news_reset() -> Unit {
 ///|
 /// The news as the core has it, unless let go here.
 pub fn news_of(src : Source) -> Json? {
-  match field((src.topic)("changelog", Map::new()).value, "news") {
+  match field(src.topic("changelog", Map::new()).get().value, "news") {
     Some(Object(_)) as n if news_gone.val != n => n
     _ => None
   }

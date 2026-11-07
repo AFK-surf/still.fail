@@ -193,7 +193,7 @@ fn job_last(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit {
     "station": Json::string(station),
     "job": Json::string(text(job, "id")),
     "lines": Json::number(1.0),
-  }).value
+  }).get().value
   let read = log is Some(Object(_))
   let said = if read { text(log, "said") } else { text(job, "outputSaid") }
   if said == "" {

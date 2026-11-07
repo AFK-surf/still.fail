@@ -331,7 +331,7 @@ pub fn Replay::client(self : Replay) -> Client {
 ///|
 /// The app's core (`client`, `wall_ms`) is this conversation from now on, until `detach`: its client started anew.
 pub fn Replay::attach(self : Replay) -> Unit {
-  client.reset()
+  // A reader still following a subscription can ask for it again during reset: its ask belongs to this replay.
   transport.val = fn(s, _) { self.out(s) }
   wall_override.val = Some(fn() { self.wall })
   // what `deliver` handed to the app's queue is received at a frame's start (`receive`): the wall clock is its own then
@@ -344,6 +344,7 @@ pub fn Replay::attach(self : Replay) -> Unit {
     }
   })
   self.client = Some(client)
+  client.reset()
 }
 
 ///|

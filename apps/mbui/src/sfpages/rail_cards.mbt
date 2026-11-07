@@ -8,7 +8,7 @@
 ///|
 /// Place `place`'s card of workspace `w` (chats, usage), as its core says it.
 pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  let card = (src.topic)("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).value
+  let card = src.topic("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).get().value
   c.box(style=rc_box, fn() {
     c.text(text(card, "head"), style=rc_head) |> ignore
     let stats = items(card, "stats")

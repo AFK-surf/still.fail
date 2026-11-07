@@ -358,7 +358,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   let live = @sfbase.hold(src, @sfbase.chat_scope(here.station, here.session), "live", {
     "station": Json::string(here.station),
     "key": Json::string(a.key),
-  })
+  }).get().snapshot()
   let said = match a.wait {
     Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") }, false, true)
     None => {

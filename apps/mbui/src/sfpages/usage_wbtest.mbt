@@ -298,8 +298,8 @@ test "用量: selecting a model keeps every legend and the chart in place while 
     let (w, platform) = case
     let pending = @signals.signal(true, same=fn(a, b) { a == b })
     let t = setting_tester(Usage, w, platform~, h=2400.0, over=fn(base) {
-      { ..base, topic: fn(name, params) {
-        let answer = (base.topic)(name, params)
+      { ..base, topic_read: fn(name, params) {
+        let answer = base.topic(name, params).get().snapshot()
         if name != "usage" || params.get("only") is None {
           answer
         } else if pending.get() {

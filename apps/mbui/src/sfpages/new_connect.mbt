@@ -66,7 +66,7 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     words: {},
   }
   let opened = Ref(false)
-  let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).value }
+  let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).get().value }
   // (back on any step the wizard's: told to the core, which goes back or says it is closed; the dialog's steps follow)
   let shut = fn() { @sf.close_presented() }
   let back = fn() { nc_go(core, f, "back", fn() { nc_close(core, f, shut) }) }

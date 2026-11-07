@@ -17,7 +17,7 @@
 pub fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
-  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).get().value
   let body = match vault_first(c, core, ws, fn(core, v) { vault_library(c, core, look, ws, v) }) {
     Some(first) => first
     None => vault_library(c, core, look, ws, v)
@@ -30,7 +30,7 @@ pub fn vault_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
 pub fn vault_items_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let ws = here.workspace
-  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).get().value
   let (body, usable) = match vault_first(c, core, ws, fn(core, v) { vault_all(c, core, ws, v) }) {
     Some(first) => (first, false)
     None => (vault_all(c, core, ws, v), true)
@@ -60,7 +60,7 @@ fn vault_first(
   ws : String,
   shown : (Core, Json?) -> Array[() -> Unit],
 ) -> Array[() -> Unit]? {
-  let topic = (core.topic)("vaults", { "workspace": str(ws) })
+  let topic = (core.topic)("vaults", { "workspace": str(ws) }).get()
   let v = topic.value
   // (the words as they are now: read, so that this is built again as they come or go)
   recovery_words_turned.get() |> ignore
@@ -305,7 +305,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
   let accounts : Array[() -> Unit] = []
   let account_names : Array[String] = []
   let mut kept_accounts = 0
-  for g in profile_groups(items((core.topic)("profiles", { "scope": str(ws) }).value, "items")) {
+  for g in profile_groups(items((core.topic)("profiles", { "scope": str(ws) }).get().value, "items")) {
     for e in g.1 {
       let ev = Some(e)
       let p = field(ev, "profile")
@@ -334,7 +334,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
   let unnamed : Array[(String, () -> Unit)] = []
   for row in vaults {
     let rv = Some(row)
-    let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
+    let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) }).get()
     if topic.value is None {
       reading = true
       continue
@@ -625,7 +625,7 @@ fn vault_no_key(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
 /// for it under it, a green dot at its end where agents are told of it.
 fn vault_named(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Unit {
   let rv = Some(row)
-  let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
+  let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) }).get()
   let list = items(topic.value, "items")
   @sf.section(c, text(rv, "name"), fn() {
     if list.length() == 0 {

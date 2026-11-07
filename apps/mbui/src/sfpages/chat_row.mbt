@@ -143,7 +143,7 @@ pub fn chat_row(
   if finger && down && row_held.val.0 != id {
     row_held.val = (id, false)
     if !src.read_only {
-      (src.topic)("chat", chat_params(r)) |> ignore
+      (src.topic_read)("chat", chat_params(r)) |> ignore
     }
   }
   // (one under way still has it: Sidebar.tsx; what it asks again waits on the station)

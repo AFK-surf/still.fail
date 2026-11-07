@@ -228,6 +228,23 @@ test "an error clears the value until the next one" {
 }
 
 ///|
+test "a retained value belongs to the new core only after its reply" {
+  let (c, sent) = recorder()
+  assert_eq(c.topic_generation("composer"), (0, true))
+  assert_eq(sent.length(), 0, msg="checking freshness must not create a subscription")
+  let s = c.subscribe("composer")
+  c.receive_json({ "id": 1, "value": { "text": "before" } })
+  c.restarted()
+  assert_eq(c.topic_generation("composer"), (1, false))
+  assert_eq(s.value.unwrap().stringify(), "{\"text\":\"before\"}")
+  c.receive_json({ "id": 1, "value": { "text": "after" } })
+  assert_eq(c.topic_generation("composer"), (1, true))
+  c.unsubscribe(s)
+  assert_eq(sent.length(), 3, msg="the freshness check must not keep the subscription open")
+  assert_eq(c.topic_generation("composer"), (1, true))
+}
+
+///|
 test "a fatal fails the calls in flight; restarted asks every subscription again" {
   let (c, sent) = recorder()
   let s = c.subscribe("accounts")
@@ -405,14 +422,14 @@ test "a core started anew is told again where the app's attention is (client.foc
 }
 
 ///|
-test "a subscription's changes are pushed: what read it in a computed follows each message for it, and its end" {
-  let (c, _) = recorder()
+test "a computed keeps a subscription after a direct reader leaves, and its last reader ends it" {
+  let (c, sent) = recorder()
   let s = c.subscribe("accounts")
   let worked = Ref(0)
   let seen = @signals.computed(fn(_) {
     worked.val += 1
-    // (as an app's source reads a topic: core_topic)
-    let read = c.subscribe("accounts").followed()
+    // (as an app's source reads a topic_read: core_topic)
+    let read = c.follow_topic("accounts")
     match read.value {
       Some(Array(a)) => a.length()
       _ => -1
@@ -430,12 +447,66 @@ test "a subscription's changes are pushed: what read it in a computed follows ea
   assert_true(c.receive("{\"id\":1,\"delta\":[{\"path\":[],\"append\":[1]}]}"))
   assert_eq(seen.get(), 1)
   assert_eq(worked.val, 3)
-  // let go: what read it reads it anew, from the subscription asked again
+  // The direct reader leaves; the computed still has the same subscription and value.
   c.unsubscribe(s)
-  assert_eq(seen.get(), -1)
-  assert_eq(worked.val, 4)
-  assert_true(c.receive("{\"id\":2,\"value\":[7,8]}"))
+  assert_eq(sent.length(), 1)
+  assert_eq(seen.get(), 1)
+  assert_eq(worked.val, 3)
+  assert_true(c.receive("{\"id\":1,\"value\":[7,8]}"))
   assert_eq(seen.get(), 2)
+  seen.dispose()
+  assert_eq(sent.length(), 2)
+  assert_eq(s.changes.get(), -1)
+}
+
+///|
+test "a direct hold reacquired while a graph reader leaves keeps its subscription" {
+  let (c, sent) = recorder()
+  let first = c.subscribe("accounts")
+  let seen = @signals.computed(fn(_) { c.follow_topic("accounts").version })
+  seen.get() |> ignore
+  c.unsubscribe(first)
+  let again = c.subscribe("accounts")
+  seen.dispose()
+  assert_eq(sent.length(), 1)
+  assert_true(physical_equal(again, c.peek_topic("accounts").unwrap()))
+  c.unsubscribe(again)
+  assert_eq(sent.length(), 2)
+  assert_true(c.peek_topic("accounts") is None)
+}
+
+///|
+test "a refreshed subscription still ends when its last graph reader leaves" {
+  let (c, sent) = recorder()
+  let direct = c.subscribe("accounts")
+  let seen = @signals.computed(fn(_) { c.follow_topic("accounts").version })
+  seen.get() |> ignore
+  c.unsubscribe(direct)
+  c.refresh_topic("accounts")
+  assert_eq(sent.length(), 3)
+  assert_eq(c.peek_topic("accounts").unwrap().id, 2)
+  seen.dispose()
+  assert_eq(sent.length(), 4)
+  assert_eq(sent[3].stringify(), ({ "id": 2, "unsubscribe": true } : Json).stringify())
+  assert_true(c.peek_topic("accounts") is None)
+}
+
+///|
+test "a deferred retirement cannot end a subscription made after reset" {
+  let (c, sent) = recorder()
+  let direct = c.subscribe("accounts")
+  let seen = @signals.computed(fn(_) { c.follow_topic("accounts").version })
+  seen.get() |> ignore
+  @signals.start_batch()
+  c.unsubscribe(direct)
+  seen.dispose()
+  c.reset()
+  let fresh = c.subscribe("accounts")
+  @signals.end_batch()
+  assert_eq(sent.length(), 2)
+  assert_true(physical_equal(fresh, c.peek_topic("accounts").unwrap()))
+  c.unsubscribe(fresh)
+  assert_eq(sent.length(), 3)
 }
 
 ///|

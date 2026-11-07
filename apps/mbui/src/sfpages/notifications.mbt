@@ -40,7 +40,7 @@ fn badge_kind(core : Core, here : Here, kind : String) -> Bool {
   match badge_chosen.get(kind) {
     Some(v) => v
     None =>
-      flag(field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value, "badgeKinds"), kind)
+      flag(field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).get().value, "badgeKinds"), kind)
   }
 }
 
@@ -127,9 +127,9 @@ pub fn notify_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let notify = fn() { (core.topic)("notify", Map::new()).value }
+  let notify = fn() { (core.topic)("notify", Map::new()).get().value }
   let kept_badge = fn() {
-    field((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).value, "badgeKinds")
+    field((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badgeKinds")
   }
   // what was chosen, once the core says it: the core's word from then on
   for k in notify_kinds {
@@ -369,7 +369,7 @@ fn notify_preview_node(
   }
   let latest = fn() {
     let k = kind()
-    items((core.topic)("notices", { "workspace": str(here().workspace) }).value, "items")
+    items((core.topic)("notices", { "workspace": str(here().workspace) }).get().value, "items")
     .rev()
     .iter()
     .find_first(fn(n) {
@@ -398,7 +398,7 @@ fn notify_preview_node(
   let look = notice_look()
   let mark = fn() -> @sf.IconMark {
     if @ui.badge_shown() {
-      let n = count((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).value, "badge")
+      let n = count((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badge")
       if badge_kind(core, here(), "on") && n > 0 {
         Count(n)
       } else {
