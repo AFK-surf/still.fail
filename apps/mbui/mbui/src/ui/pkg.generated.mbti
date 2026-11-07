@@ -2911,8 +2911,10 @@ pub struct Velocity {
 }
 pub fn Velocity::add(Self, Double, Double, Double) -> Unit
 pub fn Velocity::get(Self) -> (Double, Double)
+pub fn Velocity::get_at(Self, Double) -> (Double, Double)
 pub fn Velocity::new() -> Self
 pub fn Velocity::reset(Self) -> Unit
+pub fn Velocity::up(Self, Double, Double, Double) -> Unit
 
 pub(all) struct ViewPaintWork {
   mut made : Int32

@@ -181,6 +181,47 @@ test "viewer on the tree: zoomed, a quick move then held still before it is let 
 }
 
 ///|
+/// The image zoomed in, then a host's finger from `t0`: down at 10, three moves 10 apart each (`dx`, `dy`) on (a quick
+/// one across or aslant), then `rests` moves 8 apart saying where it got to again (resting there), let go there `lag`
+/// after the last move. Where the picture is as it is let go and at 1200, and whether a fling ends after the let go.
+fn let_go_rested(dx : Double, dy : Double, rests : Int, lag : Double) -> ((Double, Double), (Double, Double), Bool) raise {
+  let t = preview_tester("image")
+  let z = zoom_in_middle(t)
+  let t0 = t.time()
+  let said = [(0, 0, 250.0, 422.0, 10.0)]
+  for i in 1..=3 {
+    said.push((1, 0, 250.0 + dx * i.to_double(), 422.0 + dy * i.to_double(), 10.0 + 10.0 * i.to_double()))
+  }
+  let (x, y) = (250.0 + dx * 3.0, 422.0 + dy * 3.0)
+  for i in 1..=rests {
+    said.push((1, 0, x, y, 40.0 + 8.0 * i.to_double()))
+  }
+  let up = 40.0 + 8.0 * rests.to_double() + lag
+  said.push((2, 0, x, y, up))
+  told_by(t, t0, said, At([]))
+  t.frame_at(t0 + 1200.0)
+  let place = fn(at : Double) {
+    let (rx, ry, _, _) = z.rect_at(t0 + at).unwrap()
+    (rx, ry)
+  }
+  (place(up), place(1200.0), z.fling_ends() > t0 + up)
+}
+
+///|
+test "viewer on the tree: zoomed, a quick move across or aslant, let go 8 after its last move: flung as far as let go at its moment; resting there 16 or 48 first, its moves saying its place again: no fling, the picture where it was let go, never back" {
+  for d in [(-20.0, 0.0), (-20.0, -15.0)] {
+    let (dx, dy) = d
+    let at_once = let_go_rested(dx, dy, 0, 0.0)
+    assert_true(at_once.2, msg="\{d} \{at_once}")
+    assert_eq(let_go_rested(dx, dy, 0, 8.0).1, at_once.1, msg="\{d}")
+    for rests in [2, 6] {
+      let (left, rest, flung) = let_go_rested(dx, dy, rests, 1.0)
+      assert_eq((rest, flung), (left, false), msg="\{d} resting \{rests * 8}")
+    }
+  }
+}
+
+///|
 /// The image zoomed in, then a host's finger down at 10 from `t0` and let go 100 left of it at 40, no move between:
 /// where the picture is at 40 and at 1200, and whether the bars changed.
 fn down_then_far(frames : Frames) -> (Double, Double, Bool) raise {
