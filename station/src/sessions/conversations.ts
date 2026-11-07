@@ -456,13 +456,20 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given !== null && given !== 0 ? (Number.isNaN(given) ? 0 : Math.trunc(Math.min(200, Math.max(1, given)))) : 30;
   const before = typeof args.before === "string" && args.before !== "" ? args.before : null;
-  let from: number | null = null;
-  if (before !== null) {
-    const m = hub.store.messageAt(thread.id, before);
-    if (!m) throw new Error(`no message ${before} in ${named}`);
-    from = m.n;
+  let messages: MessageRow[] | null;
+  if (hub.historyMessages) {
+    messages = await hub.historyMessages(thread.id, before, limit);
+  } else {
+    // Hubs without readers (such as tests) keep the original store path.
+    let from: number | null = null;
+    if (before !== null) {
+      const m = hub.store.messageAt(thread.id, before);
+      if (!m) throw new Error(`no message ${before} in ${named}`);
+      from = m.n;
+    }
+    messages = hub.store.messagesBefore(thread.id, from, limit);
   }
-  const messages = hub.store.messagesBefore(thread.id, from, limit);
+  if (messages === null) throw new Error(`no message ${before} in ${named}`);
   if (messages.length === 0) return "No earlier messages.";
   seen?.push(...messages.flatMap((m) => m.attachments));
   const chat = hub.chatOf(connect);

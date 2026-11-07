@@ -740,7 +740,7 @@ function boundedMessagePageKeys(s: Store, thread: number, before: number | bigin
 }
 
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
-export function messagesBefore(s: Store, thread: number, n: number | null, limit: number): MessageRow[] {
+export function messagesBefore(s: Store, thread: number, n: number | bigint | null, limit: number): MessageRow[] {
   const before = n ?? I64_MAX;
   s.db.exec("SAVEPOINT messages_before_read");
   try {
@@ -783,6 +783,19 @@ export function messagesBefore(s: Store, thread: number, n: number | null, limit
       return message === null ? [] : [message];
     }).reverse();
   } finally { s.db.exec("RELEASE messages_before_read"); }
+}
+
+// The boundary identifies a message, so resolving it does not need the merged view's edit lookup.
+export const CHAT_HISTORY_BOUNDARY = "SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'";
+
+/// A chat_history page and its before-message lookup in one snapshot. Null means the requested boundary was not found.
+export function chatHistoryMessages(s: Store, thread: number, before: string | null, limit: number): MessageRow[] | null {
+  s.db.exec("SAVEPOINT chat_history_messages_read");
+  try {
+    const boundary = before === null ? null : one(s, CHAT_HISTORY_BOUNDARY, thread, before);
+    if (before !== null && !boundary) return null;
+    return messagesBefore(s, thread, boundary ? BigInt(boundary.n) : null, limit);
+  } finally { s.db.exec("RELEASE chat_history_messages_read"); }
 }
 
 // ── the archive review ──
