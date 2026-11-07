@@ -237,11 +237,15 @@ export function rowWatch(agents: J[]): J {
 
 /// What a finger's swipe asks before archiving a chat (only the swipe: its menu's and its key's 归档 ask only for a watch):
 /// its watch's words while one of its agents keeps watch, else while one is at work or waits on work it started (an
-/// archived one finishes its turn and waits on nothing after); null otherwise.
-export function swipeAsk(agents: J[]): string | null {
+/// archived one finishes its turn and waits on nothing after); and while someone else started it (`starter`: their
+/// name; archiving takes it off the whole workspace's lists, not the viewer's alone; `hides`: the viewer can hide it
+/// from their own list instead), said first, before what it is doing; null otherwise.
+export function swipeAsk(agents: J[], starter: string | null = null, hides = false): string | null {
   const watch = rowWatch(agents);
-  if (watch !== null) return watch.ask;
-  return agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+  const state = watch !== null ? (watch.ask as string) : agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+  if (starter === null) return state;
+  const others = t(hides ? "core-views.present.others_ask_hide" : "core-views.present.others_ask", { name: starter });
+  return state === null ? others : t("core-views.present.asks_both", { first: others, then: state });
 }
 
 /// Waiting on its watch: one runs and the agent said its wait is that (`waitWatch`; said before it, taken so). Waiting on

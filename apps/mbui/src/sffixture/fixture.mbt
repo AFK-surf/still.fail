@@ -227,17 +227,33 @@ pub fn row(
   // The core lets any made chat on an online station be swiped to archive, regardless of its state.
   if !more.contains("offline") && more.get("pending") != Some(Json::boolean(true)) {
     r["swipeArchive"] = Json::boolean(true)
-    // its swipe asks first (the core's swipeAsk): keeping watch, in its watch's words; at work, that it is
-    match more.get("watch") {
+    // its swipe asks first (the core's swipeAsk): started by someone else, that it goes off everyone's list; keeping
+    // watch, in its watch's words; at work, that it is
+    let state = match more.get("watch") {
       Some(Object(w)) =>
         match w.get("ask") {
-          Some(ask) => r["swipeAsk"] = ask
-          None => ()
+          Some(String(ask)) => ask
+          _ => ""
         }
       _ =>
         if more.get("state") == Some(Json::string("run")) {
-          r["swipeAsk"] = "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。"
+          "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。"
+        } else {
+          ""
         }
+    }
+    let others = match more.get("creator") {
+      Some(Object(c)) if c.get("id") != Some(Json::string("lin@example.com")) => {
+        let name = match c.get("name") {
+          Some(String(n)) => n
+          _ => ""
+        }
+        "这是\{name}发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。"
+      }
+      _ => ""
+    }
+    if others + state != "" {
+      r["swipeAsk"] = Json::string(others + state)
     }
   }
   Json::object(r)

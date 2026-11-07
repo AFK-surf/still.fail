@@ -543,6 +543,21 @@ test "a row flicked left a little, quickly, archives nothing; flicked from past 
 }
 
 ///|
+test "a row swiped right, however far or fast, archives nothing" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  list_down(t, 12)
+  t.draw()
+  let (_, y) = t.find("把旧的截图都换成新的").unwrap()
+  t.drag(60.0, y, 340.0, y)
+  t.run_for(@ui.move_most_ms)
+  t.drag(100.0, y, 250.0, y, steps=2)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  assert_eq(t.haptics(), [])
+}
+
+///|
 test "a finger scrolling the list that sets off a little to the left scrolls it, archiving nothing" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
@@ -754,6 +769,29 @@ test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我�
   t.tap_text("已归档")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Archived)
+}
+
+///|
+test "a finger swiping a chat someone else started asks first, archiving it being for the whole workspace; one's own does not" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (x, y) = t.find("和 Ana 一起看新版的引导页").unwrap()
+  t.drag(x + 190.0, y, x + 10.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  assert_true(t.find("归档「和 Ana 一起看新版的引导页」？") is Some(_))
+  assert_true(t.find("这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。") is Some(_))
+  // 取消: nothing archived, the row where it rests
+  t.tap_text("取消")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  assert_true(t.find("和 Ana 一起看新版的引导页") is Some(_))
+  // one the viewer started, swiped as far: archived at once
+  let (x, y) = t.find("首页的列表改成按天分组").unwrap()
+  t.drag(x + 190.0, y, x + 10.0, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  assert_true(t.find("归档「首页的列表改成按天分组」？") is None)
 }
 
 ///|
