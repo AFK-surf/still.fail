@@ -281,6 +281,51 @@ fn Css::bool(self : Css) -> Bool {
 }
 
 ///|
+/// Spacing names shared by lengths and padding, gaps and margins.
+fn css_spacing(n : StringView) -> Len? {
+  match n {
+    "S0" => Some(S0)
+    "SPx" => Some(SPx)
+    "S0_5" => Some(S0_5)
+    "S1" => Some(S1)
+    "S1_25" => Some(S1_25)
+    "S1_5" => Some(S1_5)
+    "S2" => Some(S2)
+    "S2_5" => Some(S2_5)
+    "S3" => Some(S3)
+    "S3_5" => Some(S3_5)
+    "S4" => Some(S4)
+    "S4_5" => Some(S4_5)
+    "S5" => Some(S5)
+    "S6" => Some(S6)
+    "S7" => Some(S7)
+    "S8" => Some(S8)
+    "S9" => Some(S9)
+    "S10" => Some(S10)
+    "S11" => Some(S11)
+    "S12" => Some(S12)
+    "S14" => Some(S14)
+    "S16" => Some(S16)
+    "S20" => Some(S20)
+    "S24" => Some(S24)
+    "S28" => Some(S28)
+    "S32" => Some(S32)
+    "S36" => Some(S36)
+    "S40" => Some(S40)
+    "S44" => Some(S44)
+    "S48" => Some(S48)
+    "S52" => Some(S52)
+    "S56" => Some(S56)
+    "S60" => Some(S60)
+    "S64" => Some(S64)
+    "S72" => Some(S72)
+    "S80" => Some(S80)
+    "S96" => Some(S96)
+    _ => None
+  }
+}
+
+///|
 fn Css::len(self : Css) -> Len {
   let n = self.name()
   match n {
@@ -291,44 +336,10 @@ fn Css::len(self : Css) -> Len {
     "Fixed" => Fixed(self.arg())
     "Pct" => Pct(self.arg())
     "Within" => Within(self.arg())
-    "S0" => S0
-    "SPx" => SPx
-    "S0_5" => S0_5
-    "S1" => S1
-    "S1_25" => S1_25
-    "S1_5" => S1_5
-    "S2" => S2
-    "S2_5" => S2_5
-    "S3" => S3
-    "S3_5" => S3_5
-    "S4" => S4
-    "S4_5" => S4_5
-    "S5" => S5
-    "S6" => S6
-    "S7" => S7
-    "S8" => S8
-    "S9" => S9
-    "S10" => S10
-    "S11" => S11
-    "S12" => S12
-    "S14" => S14
-    "S16" => S16
-    "S20" => S20
-    "S24" => S24
-    "S28" => S28
-    "S32" => S32
-    "S36" => S36
-    "S40" => S40
-    "S44" => S44
-    "S48" => S48
-    "S52" => S52
-    "S56" => S56
-    "S60" => S60
-    "S64" => S64
-    "S72" => S72
-    "S80" => S80
-    "S96" => S96
-    _ => self.fail("no Len \{n}")
+    _ => match css_spacing(n) {
+      Some(v) => v
+      None => self.fail("no Len \{n}")
+    }
   }
 }
 
@@ -336,46 +347,12 @@ fn Css::len(self : Css) -> Len {
 fn Css::space_token(self : Css) -> Space {
   let n = self.name()
   match n {
-    "S0" => S0
-    "SPx" => SPx
-    "S0_5" => S0_5
-    "S1" => S1
-    "S1_25" => S1_25
-    "S1_5" => S1_5
-    "S2" => S2
-    "S2_5" => S2_5
-    "S3" => S3
-    "S3_5" => S3_5
-    "S4" => S4
-    "S4_5" => S4_5
-    "S5" => S5
-    "S6" => S6
-    "S7" => S7
-    "S8" => S8
-    "S9" => S9
-    "S10" => S10
-    "S11" => S11
-    "S12" => S12
-    "S14" => S14
-    "S16" => S16
-    "S20" => S20
-    "S24" => S24
-    "S28" => S28
-    "S32" => S32
-    "S36" => S36
-    "S40" => S40
-    "S44" => S44
-    "S48" => S48
-    "S52" => S52
-    "S56" => S56
-    "S60" => S60
-    "S64" => S64
-    "S72" => S72
-    "S80" => S80
-    "S96" => S96
     // det-ok(style-exact, style-literal): what a style's text says, counted at the text (detlint's css)
     "Exact" => Exact(self.arg())
-    _ => self.fail("no Space \{n}")
+    _ => match css_spacing(n) {
+      Some(v) => v.space().unwrap()
+      None => self.fail("no Space \{n}")
+    }
   }
 }
 

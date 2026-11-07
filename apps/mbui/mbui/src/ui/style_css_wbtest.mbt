@@ -162,3 +162,49 @@ test "panic css: items not apart" {
 test "panic css: a number not read exactly" {
   css("w=Fixed(0.12345678901234567)") |> ignore
 }
+
+///|
+test "css: all spacing names retain their length and space values" {
+  let tokens : Array[(String, Len, Space)] = [
+    ("S0", S0, S0),
+    ("SPx", SPx, SPx),
+    ("S0_5", S0_5, S0_5),
+    ("S1", S1, S1),
+    ("S1_25", S1_25, S1_25),
+    ("S1_5", S1_5, S1_5),
+    ("S2", S2, S2),
+    ("S2_5", S2_5, S2_5),
+    ("S3", S3, S3),
+    ("S3_5", S3_5, S3_5),
+    ("S4", S4, S4),
+    ("S4_5", S4_5, S4_5),
+    ("S5", S5, S5),
+    ("S6", S6, S6),
+    ("S7", S7, S7),
+    ("S8", S8, S8),
+    ("S9", S9, S9),
+    ("S10", S10, S10),
+    ("S11", S11, S11),
+    ("S12", S12, S12),
+    ("S14", S14, S14),
+    ("S16", S16, S16),
+    ("S20", S20, S20),
+    ("S24", S24, S24),
+    ("S28", S28, S28),
+    ("S32", S32, S32),
+    ("S36", S36, S36),
+    ("S40", S40, S40),
+    ("S44", S44, S44),
+    ("S48", S48, S48),
+    ("S52", S52, S52),
+    ("S56", S56, S56),
+    ("S60", S60, S60),
+    ("S64", S64, S64),
+    ("S72", S72, S72),
+    ("S80", S80, S80),
+    ("S96", S96, S96),
+  ]
+  for token in tokens {
+    css_same("w=" + token.0 + " p=" + token.0, style(w=token.1, p=token.2))
+  }
+}
