@@ -307,14 +307,15 @@ static GLuint image_tex(int id) {
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
 }
 
-// a new context has none of the old textures: forget them and decode again
+// a new context has none of the old textures: forget them and decode again; each told the app again as it is uploaded
+// anew (Native.imageDone), so what draws it is drawn again then, not left as the frames drawn without it had it
 static void images_lost(JNIEnv *env) {
   static int first = 1;
   if (first) {
     first = 0;
     return;
   }
-  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
+  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0, imgs[i].told = 0;
   white_tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
   streams_lost(env);
@@ -927,9 +928,9 @@ int32_t mb_host_reduce_motion(void) {
 // video's first frame shown, a sound that can play) or failed (state -1), or (a view, state 0: NView.askApp) waiting on
 // the app now, a player's read or a site's request: the host's work for it stops until the app answers. Told on the
 // GL thread, MoonBit's, between frames (each comes as a queued event, which GLSurfaceView runs before the next
-// onDrawFrame); ready or failed once per item. Also (Native.tell) what the pickers gave, the gallery read, marks
-// drawn, a video's frame grabbed, an update's progress: the kinds named as src/ui/hostcall.mbt's outside_* and
-// Native.java's OUTSIDE_*.
+// onDrawFrame); ready or failed once per item, a ready one told again as a new context has it uploaded anew. Also
+// (Native.tell) what the pickers gave, the gallery read, marks drawn, a video's frame grabbed, an update's progress: the
+// kinds named as src/ui/hostcall.mbt's outside_* and Native.java's OUTSIDE_*.
 enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_POSTED = 11, MB_OUTSIDE_STREAMED = 12 };
 static void (*outside_cb)(int32_t, int32_t, int32_t);
 int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {
