@@ -1,7 +1,11 @@
-# monoid · official site (new)
+# The official site
 
-A new version of the official site, beside the current one (`site/` and `web/src/site/`, which are unchanged). It is a
-static page: HTML, one stylesheet (split by section) and one script, with no framework and no dependencies.
+The official site of still.fail and of monoid, each with its test channel's: still.fail, youdid.wtf, monoid.build,
+monoid.zone (`build.mjs` SITES; `cloud/deploy.py` deploys `site` and `site-beta` from it). It is a static page: HTML,
+one stylesheet (split by section) and one script, with no framework and no dependencies. The template is monoid.build's;
+each other site is the same page with its name, its web app and its cloud's downloads (the beta apps on a test
+channel's), its share cards and Android code (`assets/og/<site>/`, `assets/android-qr-<site>.svg`), and the beta apps' icon
+on a test channel's. The site before it (`site/`, `web/src/site/`) is no longer deployed.
 
 ```
 website/
@@ -12,12 +16,16 @@ website/
   main.js        the language menu, the nav menu, tabs and swipers, reveal on scroll, the hero's field, the teams
                  pictures, the devices scene, FAQ, copy button, downloads for this device
   en/            the old English address: /en/ → /
-  assets/        the mark, icons, the Android QR code (app.monoid.build), Suisse Intl (Latin subsets),
+  assets/        the mark, icons, Suisse Intl (Latin subsets),
                  Inter (OFL: the product pictures' face, as in the app)
                  vendor/: GSAP and ScrollTrigger (loaded on demand)
-                 og/: the share card per language (screenshots of the built hero at 1200 × 630, the bar and buttons
-                 hidden, the wordmark top left; take them again when the hero changes)
-  build.mjs      one page per language into dist/website, everything inlined and trimmed; checks the translations
+                 android-qr.svg, android-qr-<site>.svg: the Android download's QR code (its cloud's
+                 /releases/latest/android, -beta on a test channel's site)
+                 og/: the share card per language, another site's in og/<site>/ (screenshots of the built hero at
+                 1200 × 630, the bar and buttons hidden, the wordmark top left: og.mjs; take them again when the hero
+                 changes)
+  build.mjs      one page per language into dist/website (--site, --out: another site, elsewhere), everything inlined
+                 and trimmed, with the legal pages of web/public; checks the translations
 ```
 
 ## Run and build
@@ -25,6 +33,8 @@ website/
 ```sh
 python3 -m http.server -d website 4173      # or any static server: the folder works unbuilt, in English
 node website/build.mjs                      # → dist/website: a page per language + assets + sitemap.xml, robots.txt, _headers
+node website/build.mjs --site still.fail --out dist/site   # still.fail's (pnpm build:site; youdid.wtf: build:site-beta)
+node website/og.mjs [site…]                 # the share cards again (Chrome, playwright-core)
 node website/build.mjs --check              # translations: missing, extra, stale, markup, glyphs (exit 1 on any)
 ```
 
@@ -42,7 +52,7 @@ served from `web/public`); the build, the head script and the language menu are 
 the page they asked for). The language menu in the footer stores the choice (`localStorage` `monoid.site.locale`) and
 opens that page at the same place (hash kept); from then on the head script, before the first paint, sends the reader
 from any other language's page to the same path under their language. The old site's `?lang=zh|en` and `#zh|#en`
-count as a choice (stored, then dropped from the address), and its stored `monoid.site.lang` becomes
+count as a choice (stored, then dropped from the address), and its stored `stillfail.site.lang` becomes
 `monoid.site.locale`. `/en/` redirects to `/`. Unbuilt, the folder is English only and never redirects.
 
 **The menu** (`.footer-prefs` in the footer's bottom row): a pill button (globe, the language's own name, chevron)

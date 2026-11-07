@@ -14,7 +14,7 @@
 // taken from the English, so editing the English makes the key stale and its translations drop out until the English
 // is translated again (see README.md, "Languages"). The folder itself also works unbuilt on any static host, in English.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, statSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -33,6 +33,35 @@ export function loadDict(code) {
   return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
 }
 export const pageUrl = (cfg, loc) => cfg.origin + loc.prefix;
+
+// ---------- Sites ----------
+
+/** The sites the page is built for (cloud/deploy.py: `site` and `site-beta` of still.fail's cloud and of monoid's):
+ *  each its name, the web app it opens, and the cloud its apps download from (the beta apps on a test channel's site).
+ *  The template is monoid.build's; --site names another. */
+export const SITES = {
+  "monoid.build": { name: "monoid", app: "https://app.monoid.build", cloud: "https://app.monoid.build", beta: false },
+  "monoid.zone": { name: "monoid.zone", app: "https://app.monoid.zone", cloud: "https://app.monoid.build", beta: true },
+  "still.fail": { name: "still.fail", app: "https://app.still.fail", cloud: "https://app.still.fail", beta: false },
+  "youdid.wtf": { name: "youdid.wtf", app: "https://app.youdid.wtf", cloud: "https://app.still.fail", beta: true },
+};
+export const TEMPLATE_SITE = "monoid.build";
+
+/** A page of the template's site as `site` has it: the downloads its cloud's (-beta on a test channel), the web app
+ *  its own, its share cards and Android code (assets/og/<site>/, assets/android-qr-<site>.svg), every other
+ *  monoid.build its host, and monoid standing alone its name (not a part of a host, a path or a stored key:
+ *  monoid.site.locale stays). */
+export function rebrand(html, site) {
+  if (site === TEMPLATE_SITE) return html;
+  const { name, app, cloud, beta } = SITES[site];
+  return html
+    .replace(/https:\/\/app\.monoid\.build(\/releases\/latest\/(?:mac|win|android)\b|\/(?:<wbr>)?install\.sh)?/g,
+      (_, path) => (!path ? app : path.startsWith("/releases") ? `${cloud}${path}${beta ? "-beta" : ""}` : cloud + path))
+    .replaceAll("/assets/og/", `/assets/og/${site}/`)
+    .replaceAll("/assets/android-qr.svg", `/assets/android-qr-${site}.svg`)
+    .replace(/(?<![\w.-])monoid\.build(?![\w-])/g, site)
+    .replace(/(?<![\w./-])monoid(?![\w-]|\.\w)/g, name);
+}
 
 // ---------- Keys ----------
 
@@ -166,7 +195,8 @@ export function glyphProblems(dict) {
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
-/** The share card: assets/og/<code>.png (1200x630, the page's hero), else the default locale's. */
+/** The share card: assets/og/<code>.png (1200x630, the page's hero), else the default locale's (another site's under
+ *  og/<site>/: rebrand). */
 const ogImage = (cfg, loc) => `${cfg.origin}/assets/og/${existsSync(here(`assets/og/${loc.code}.png`)) ? loc.code : cfg.default}.png`;
 
 /** <head> tags naming the page and its translations. */
@@ -187,7 +217,7 @@ export function headTags(cfg, loc) {
 
 /** Before the first paint (ES5): only a choice the reader made moves them. A stored locale other than this page's
  *  sends them to the same path under its prefix (search and hash kept); the old site's ?lang=zh|en and #zh|#en count
- *  as a choice (stored, then dropped from the URL); the old site's stored monoid.site.lang (zh|en) becomes
+ *  as a choice (stored, then dropped from the URL); the old site's stored stillfail.site.lang (zh|en) becomes
  *  monoid.site.locale. First visits and crawlers stay where they asked to be. */
 export function redirectScript(cfg) {
   const P = Object.fromEntries(cfg.locales.map((l) => [l.htmlLang, l.prefix]));
@@ -196,7 +226,7 @@ export function redirectScript(cfg) {
     + `function g(k){try{return localStorage.getItem(k)}catch(e){return null}}function s(k,v){try{localStorage.setItem(k,v)}catch(e){}}`
     + `m=/[?&]lang=(zh|en)(?=&|$)/i.exec(q);o=h==="#zh"||h==="#en";`
     + `if(m||o){w=(m?m[1]:h.slice(1)).toLowerCase()==="zh"?"zh-CN":"en";s(K,w);if(m)q=q.replace(/([?&])lang=[^&]*&?/i,"$1").replace(/[?&]$/,"");if(o)h=""}`
-    + `else{w=g(K);if(!w){o=g("monoid.site.lang");if(o==="zh"||o==="en"){w=o==="zh"?"zh-CN":"en";s(K,w)}}}`
+    + `else{w=g(K);if(!w){o=g("stillfail.site.lang");if(o==="zh"||o==="en"){w=o==="zh"?"zh-CN":"en";s(K,w)}}}`
     + `w=C.hasOwnProperty(w)?C[w]:d.lang;`
     + `if(w!==d.lang&&P.hasOwnProperty(d.lang)){c=P[d.lang];r=l.pathname;r=r.indexOf(c)===0?r.slice(c.length):"";l.replace(P[w]+r+q+h)}`
     + `else if(q!==l.search||h!==l.hash){try{history.replaceState(history.state,"",l.pathname+q+h)}catch(e){}}})()`;
@@ -406,7 +436,13 @@ function main(argv) {
   }
   if (fail) throw new Error("a translation changes the markup (see above; node website/build.mjs --check)");
 
-  const out = here("../dist/website/");
+  // Which site (SITES) and where to: by default monoid.build's, in dist/website.
+  const opt = (f) => (argv.includes(f) ? argv[argv.indexOf(f) + 1] : undefined);
+  const site = opt("--site") ?? TEMPLATE_SITE;
+  if (!(site in SITES)) throw new Error(`--site: no such site ${site} (of ${Object.keys(SITES).join(", ")})`);
+  cfg.origin = `https://${site}`;
+  const outDir = opt("--out") ?? "dist/website";
+  const out = resolve(here(".."), outDir) + "/";
   const { css, js } = sheetAndScript();
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
@@ -420,12 +456,33 @@ function main(argv) {
     }
     const dir = out + loc.prefix.slice(1);
     mkdirSync(dir, { recursive: true });
-    const page = finish(html, css, js, cfg);
+    const page = rebrand(finish(html, css, js, cfg), site);
     writeFileSync(dir + "index.html", page);
-    console.log(`dist/website${loc.prefix}index.html`.padEnd(36) + `${kb(bytes(page))}  (gzip ${kb(gzipSync(page).length)})`);
+    console.log(`${outDir}${loc.prefix}index.html`.padEnd(36) + `${kb(bytes(page))}  (gzip ${kb(gzipSync(page).length)})`);
   }
-  cpSync(here("assets"), out + "assets", { recursive: true });
-  cpSync(here("en"), out + "en", { recursive: true });
+  // The assets, of the share cards and Android codes only this site's (the template's: og/*.png, android-qr.svg).
+  const notMine = (rel) => {
+    const of = /^\/og\/([^/]+)$/.exec(rel)?.[1] ?? /^\/android-qr-(.+)\.svg$/.exec(rel)?.[1];
+    if (of && of in SITES) return of !== site;
+    return site !== TEMPLATE_SITE && (/^\/og\/[^/]+\.png$/.test(rel) || rel === "/android-qr.svg");
+  };
+  cpSync(here("assets"), out + "assets", { recursive: true, filter: (f) => !notMine(f.slice(here("assets").length)) });
+  // A test channel's site has the beta apps' icon (still.fail's web/public, as the web app has it).
+  if (SITES[site].beta) {
+    for (const [from, to] of [["favicon-beta.svg", "favicon.svg"], ["favicon-beta-32.png", "favicon-32.png"], ["apple-touch-icon-beta.png", "apple-touch-icon.png"]]) {
+      cpSync(here(`../web/public/${from}`), out + `assets/${to}`);
+    }
+  }
+  // Terms, privacy and trademark, the pages the footer links (still.fail's web/public: in Chinese at /terms…, in
+  // English at /en/terms…), with the sheet and icon they ask for at the root.
+  for (const f of ["terms", "privacy", "trademark"]) {
+    cpSync(here(`../web/public/${f}.html`), out + `${f}.html`);
+    cpSync(here(`../web/public/en/${f}.html`), out + `en/${f}.html`);
+  }
+  cpSync(here("../web/public/legal.css"), out + "legal.css");
+  cpSync(out + "assets/favicon.svg", out + "favicon.svg");
+  // The old English address, sending to /.
+  writeFileSync(out + "en/index.html", rebrand(readFileSync(here("en/index.html"), "utf8"), site));
   writeFileSync(out + "sitemap.xml", sitemap(cfg));
   writeFileSync(out + "robots.txt", existsSync(here("robots.txt")) ? readFileSync(here("robots.txt"), "utf8")
     : `User-agent: *\nAllow: /\n\nSitemap: ${cfg.origin}/sitemap.xml\n`);

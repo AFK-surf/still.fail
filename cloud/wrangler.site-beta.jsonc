@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // The test channel's official site, youdid.wtf (the dual of still.fail): the same page (`pnpm run build:site-beta` →
-  // dist/site-beta), named youdid.wtf, its downloads the beta apps' (web/src/site/Site.tsx). Static files only, like
+  // The test channel's official site, youdid.wtf (the dual of still.fail): the same page (website/build.mjs --site
+  // youdid.wtf → dist/site-beta), named youdid.wtf, its downloads the beta apps'. Static files only, like
   // still-fail-site (wrangler.site.jsonc).
   "name": "youdid-wtf-site",
   "compatibility_date": "2026-09-08",
