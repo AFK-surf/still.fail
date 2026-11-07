@@ -100,6 +100,7 @@ jobs:
         run: python3 scripts/ci_paths.py
       - name: The simulator free (no other run's app on it)
         run: scripts/host_contract.sh ios free
+      - uses: dtolnay/rust-toolchain@stable
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo for the simulator
         run: scripts/host_contract.sh ios build

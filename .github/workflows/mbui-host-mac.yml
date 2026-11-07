@@ -99,6 +99,7 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/mbui-host-mac.yml"
         run: python3 scripts/ci_paths.py
+      - uses: dtolnay/rust-toolchain@stable
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh mac build
