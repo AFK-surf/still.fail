@@ -28,6 +28,21 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  # Cold replay compilation and tests can use most of the five-minute budget. Run the
+  # static checks independently so their coverage does not depend on a warm replay build.
+  check:
+    name: app static and native type check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The mbui app's check (detlint, then native type-checked)
+        run: moon version && bash apps/mbui/scripts/check.sh
+
   # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh: still.fail's design system and pages over the
   # fixtures, the screens, the media screens, the core client, and the end-to-end flows seen again over their recorded
   # cores, src/sfreplay), on native, as the apps are built (2026-10-22, as asked: "我们只用原生"; js is no longer
@@ -159,11 +174,6 @@ jobs:
       - if: env.GROUP == 'build'
         uses: actions/upload-artifact@v4
         with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test", retention-days: 1, compression-level: 1 }
-      - name: The mbui app's check (detlint, then native type-checked)
-        if: env.PART == 'replay'
-        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
-        # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
-        run: moon version && bash apps/mbui/scripts/check.sh
       - name: Where the build's time went (mbc)
         if: always()
         run: |
