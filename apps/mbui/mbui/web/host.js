@@ -376,7 +376,7 @@
     return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
   }
   // A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r
-  // from the tip, k the share of the room it needs along the edge the box has; an octic from the circle's height and
+  // from the tip, k the share of the room the curve takes along the edge the box has; an octic from the circle's height and
   // first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends
   // never jumps or turns at once.
   float mb_capsule_ease(float u, float k) {
@@ -410,7 +410,7 @@
   // positive); as far as the corner has no room across, moved along the round corner's normal
   // (smooth.mbt capsule_tail).
   float mb_capsule_tail(float along, float across, float ha, float hc, float rr) {
-    float k = min((ha - rr) / rr, 1.0);
+    float k = min((ha - rr) / (0.4 * rr), 1.0);
     float tight = 1.0 - mb_smoothness(rr, hc);
     if (k <= 0.0 || tight <= 0.0) return 0.0;
     float e = mb_capsule_ease((ha - along) / rr, k);

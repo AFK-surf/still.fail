@@ -144,10 +144,10 @@ fn corner_shape(
 /// into the long edge further along than a circle meets it. How much it bends goes with no jump and no kink (the user,
 /// 2026-11-01: 要的是平滑): from none on the edge it rises once to at most 1.15 the circle's and comes back to the
 /// circle's, never stepping and never turning at once. As how much further in than the circle it lies, in r, at `u` r
-/// from the tip, `k` the share of the room it needs along the edge (r more) the box has: from u0 = 1 - 0.675 k (the
+/// from the tip, `k` the share of the room the curve takes along the edge (0.4 r past the circle's) the box has: from u0 = 1 - 0.675 k (the
 /// circle's height and its first three rates of change there) to u1 = 1 + 0.4 k (the edge's, all four none) an octic,
 /// the four of each end's weights and k^2.5 t^4 (1 - t)^4, t from 0 to 1 between them (fitted to a capsule the user
-/// measured, 2026-11-01, within 0.008 r; with less room the ease is shorter and less, a circle not at all).
+/// measured, 2026-11-01, within 0.008 r). A capsule's ends are that one curve however long it is (the user, 2026-11-07: 这跟长度有个屁的关系); only a box too short to hold it has it shorter and less, a circle not at all.
 fn capsule_ease(u : Double, k : Double) -> Double {
   let u0 = 1.0 - 0.675 * k
   let u1 = 1.0 + 0.4 * k
@@ -185,7 +185,7 @@ fn capsule_ease(u : Double, k : Double) -> Double {
 /// the ease as far as the corner has no room across (its own smoothness that way), moved along the round corner's normal
 /// there (to first order: the ease is under 1% of r).
 fn capsule_tail(along : Double, across : Double, ha : Double, hc : Double, rr : Double) -> Double {
-  let k = dmin((ha - rr) / rr, 1.0)
+  let k = dmin((ha - rr) / (0.4 * rr), 1.0)
   let tight = 1.0 - smoothness(rr, hc)
   if k <= 0.0 || tight <= 0.0 {
     return 0.0

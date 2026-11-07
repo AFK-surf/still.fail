@@ -1431,7 +1431,7 @@ static double capsule_ease(double u, double k) {
 // How far a corner of R (given r, s smooth) eases into the edge along a side of half `ha`, the other `hc` (mbui's
 // capsule_tail's weight; its share k of the room it needs in *k): as far as it has no room across.
 static double ease_weight(double r, double R, double s, double ha, double hc, double *k) {
-  *k = R > 0 ? fmin((ha - R) / R, 1) : 0;
+  *k = R > 0 ? fmin((ha - R) / (0.4 * R), 1) : 0;
   double tight = 1 - (R <= 0 ? 0 : fmin(1, fmax(0, (hc - R) / (0.25 * R))));
   return s >= 1 || *k <= 0 || tight <= 0 ? 0 : (1 - s) * tight;
 }
