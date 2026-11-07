@@ -71,6 +71,7 @@ import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
 import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
 import { legacyEditLatest, legacyMergedEditMode, legacyMergedNeedsRepair, legacyMergedReadReady } from "./legacy-edits-build.ts";
 import { boundedEditKey, LAST_MESSAGE_WITH_EDIT } from "./legacy-edits-read.ts";
+import { ensureRestateGuard, restateGuardSchema } from "./restate-guard.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
@@ -2577,43 +2578,90 @@ export class Store {
   /// it, said on the post itself (a vault request's outcome). Whether the post was found.
   restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json): boolean {
     return this.#with((changes) => {
-      // The view and its old index can change while this Store is open. Read the message, lookup choice and card in
-      // one snapshot, rather than keeping the old index choice from the time the Store opened.
-      this.db.exec("SAVEPOINT restate_card_read");
-      let current: { message: MessageRow; card: Json } | null = null;
-      let broken = false;
-      try {
+      // A missing or foreign post needs neither a guard nor edit-index preparation.
+      if (this.#one("SELECT 1 FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", thread, ts, agent) === undefined)
+        return false;
+      type Current = { message: MessageRow; card: Json; broken: boolean };
+      const read = (): Current | null => {
         const r = this.#one("SELECT CAST(n AS TEXT) AS n,card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
-        if (r === undefined) return false;
+        if (r === undefined) return null;
         const mode = legacyMergedEditMode(this.db);
-        broken = mode === "repair";
+        const broken = mode === "repair";
         const latest = broken ? this.#one("SELECT CAST(MAX(n) AS TEXT) AS n FROM entries WHERE thread=?1 AND target=CAST(?2 AS INTEGER)", thread, r.n)?.n ?? null : null;
         const row = broken ? this.#one(LAST_MESSAGE_WITH_EDIT, thread, r.n, latest) : undefined;
         const message = broken ? (row === undefined ? null : toMessage(row)) : this.#messageAt(thread, ts);
-        if (message === null) return false;
+        if (message === null) return null;
         const last = mode === "legacy" || mode === "legacy-old-index"
           ? this.#one(`SELECT x.card FROM entries x WHERE x.thread=?1 AND x.n=(${legacyEditLatest("?1","?2","x.kind='edit' AND x.card IS NOT NULL",mode === "legacy-old-index")})`, thread, r.n)
           : this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, r.n);
-        current = { message, card: parsed(last?.card ?? r.card) };
-      } finally { this.db.exec("RELEASE restate_card_read"); }
-      if (current === null) return false;
-      if (broken || widgetSourceBeforeAddNeedsRepair(this.db)) repairMergedEditLookup(this.db);
-      const { message } = current;
-      const entry: EntryRow = {
-        agentIdentity: undefined, thread, n: 0, kind: "edit", target: message.n, ts: null,
-        authorKind: message.authorKind, author: message.author, text: message.text, attachments: message.attachments, quotes: message.quotes,
-        declared: null, client: null, profile: null, runtime: null, options: undefined, card: card(current.card), at: this.now(),
+        return { message, card: parsed(last?.card ?? r.card), broken };
       };
-      try { this.#append(entry, changes); }
-      catch (error) {
-        // An index can disappear after the read snapshot. The failed insert was rolled back; repair and retry that
-        // same entry without applying the caller's card transformation a second time.
-        if (!(error instanceof Error) || !error.message.includes("no such index: entries_target") ||
-          (!legacyMergedNeedsRepair(this.db) && !widgetSourceBeforeAddNeedsRepair(this.db))) throw error;
-        repairMergedEditLookup(this.db);
-        this.#append(entry, changes);
+      const retry = Symbol("restate changed"), repair = Symbol("restate repair"), missing = Symbol("restate missing");
+      const token = randomBytes(16).toString("hex");
+      let retries = 0, registered = false;
+      try {
+        for (;;) {
+          const checkedSchema = ensureRestateGuard(this.db);
+          try {
+            this.#run(`INSERT INTO restate_guard(thread,token,dirty) VALUES(?,?,0)
+              ON CONFLICT(thread) DO UPDATE SET token=excluded.token,dirty=0`, thread, token);
+          } catch (error) {
+            if (restateGuardSchema(this.db) !== checkedSchema) { retries++; continue; }
+            throw error;
+          }
+          registered = true;
+          // A guard follows this thread while the message and card are read in one snapshot. The potentially long
+          // old lookup stays outside the write transaction; a write elsewhere does not invalidate it.
+          this.db.exec("SAVEPOINT restate_card_read");
+          let current: Current | null, schema: number;
+          try { schema = restateGuardSchema(this.db); current = read(); }
+          finally { this.db.exec("RELEASE restate_card_read"); }
+          if (current === null) return false;
+          if (schema !== checkedSchema) { retries++; continue; }
+          if (current.broken || widgetSourceBeforeAddNeedsRepair(this.db)) repairMergedEditLookup(this.db);
+          const entry: EntryRow = {
+            agentIdentity: undefined, thread, n: 0, kind: "edit", target: current.message.n, ts: null,
+            authorKind: current.message.authorKind, author: current.message.author, text: current.message.text,
+            attachments: current.message.attachments, quotes: current.message.quotes,
+            declared: null, client: null, profile: null, runtime: null, options: undefined, card: undefined, at: this.now(),
+          };
+          try {
+            this.#append(entry, changes, () => {
+              if (restateGuardSchema(this.db) !== schema) throw retry;
+              if (legacyMergedNeedsRepair(this.db) || widgetSourceBeforeAddNeedsRepair(this.db)) throw repair;
+              const guard = this.#one("SELECT token,dirty FROM restate_guard WHERE thread=?", thread);
+              if (guard?.token !== token || guard.dirty !== 0) {
+                // Retry outside the lock first; after repeated changes to this thread, reread under the lock so two
+                // writers or two restatements cannot keep one another waiting indefinitely.
+                if (retries < 1) throw retry;
+                current = read();
+                if (current === null) throw missing;
+                if (current.broken) throw repair;
+                entry.target = current.message.n;
+                entry.authorKind = current.message.authorKind;
+                entry.author = current.message.author;
+                entry.text = current.message.text;
+                entry.attachments = current.message.attachments;
+                entry.quotes = current.message.quotes;
+              }
+              this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token);
+              entry.card = card(current!.card);
+            }, false);
+            registered = false;
+            return true;
+          } catch (error) {
+            if (error === missing) return false;
+            if (error === retry) { retries++; continue; }
+            if (error === repair) { repairMergedEditLookup(this.db); retries++; continue; }
+            throw error;
+          }
+        }
+      } finally {
+        if (registered) {
+          try { this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token); }
+          catch (error) { log.warn("store", "a card restatement guard could not be released", { error: (error as Error).message }); }
+        }
       }
-      return true;
     });
   }
 
@@ -3326,7 +3374,7 @@ export class Store {
   }
 
   /// Appends an entry as the thread's next.
-  #append(entry: EntryRow, changes: Changes, before?: () => void): EntryRow {
+  #append(entry: EntryRow, changes: Changes, before?: () => void, tryWrite = before !== undefined): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
       const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
@@ -3336,7 +3384,7 @@ export class Store {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
-    }, before !== undefined);
+    }, tryWrite);
     // As a read of it gives it: what is told of it is made from this (api/events.ts), not read back.
     changes.push({ type: "thread", id: entry.thread, entries: [stored(entry)] });
     this.#bringBack(entry, changes);
