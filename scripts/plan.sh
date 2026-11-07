@@ -25,7 +25,8 @@ decide() {
   if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
   # The share host's page is the web's Markdown and visualizations, its words, the iroh it binds (client/), and its headers.
   if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(src/share\.ts|share-hosts\.ts|build-static\.ts|wrangler\.share\.jsonc|wrangler\.jsonc|deploy\.py)$)'; then static+=(share); fi
-  if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
+  # (the official site, website/, with the legal pages it serves from web/public)
+  if has '^(website/|web/public/((en/)?(terms|privacy|trademark)\.html|legal\.css|favicon-beta\.svg|favicon-beta-32\.png|apple-touch-icon-beta\.png)$|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
   if has '^cloud/(status/|wrangler\.status\.jsonc$)'; then static+=(status); fi
   api=false
   if has_but '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' '^cloud/src/(relay|relay-worker|preview|share)\.ts$'; then api=true; fi

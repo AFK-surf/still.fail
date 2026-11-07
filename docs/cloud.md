@@ -174,7 +174,7 @@ still.fail cloud 由以下 Worker 组成（`cloud/wrangler*.jsonc`）：
 | `stillfail-web` | 网页版，纯静态 | `app.still.fail`（Custom Domain） |
 | `stillfail-admin` | 管理后台，纯静态 | `admin.still.fail`（Custom Domain） |
 | `stillfail-preview` | 预览页，纯静态 | `preview.still.fail`（Custom Domain） |
-| `still-fail-site` | 官网，纯静态（`pnpm build:site`，`python3 cloud/deploy.py site`） | `still.fail`（Custom Domain） |
+| `still-fail-site` | 官网，纯静态（`website/`：`pnpm build:site`，`python3 cloud/deploy.py site`） | `still.fail`（Custom Domain） |
 
 同一个域名上，路由优先于 Custom Domain，所以 API 和 relay 的路径到各自的 Worker，其余都是静态站点。域名没变，客户端不用改。
 

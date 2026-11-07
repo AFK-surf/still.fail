@@ -506,12 +506,11 @@ def main() -> None:
             print("note: no moon; building without the app (no web app deployed)", flush=True)
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
         rebrand_static()
-    # (another product's cloud: its site, web/vite.demo.config.ts STILLFAIL_PRODUCT)
-    site_env = {**os.environ, "STILLFAIL_PRODUCT": CLOUD} if CLOUD else None
-    if not args.skip_build and "site" in parts:
-        subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, env=site_env, check=True)
-    if not args.skip_build and "site-beta" in parts:
-        subprocess.run(["pnpm", "run", "build:site-beta"], cwd=REPO, env=site_env, check=True)
+    # The official sites (website/build.mjs SITES): this cloud's (still.fail, monoid.build) into dist/site, its test
+    # channel's (youdid.wtf, monoid.zone) into dist/site-beta.
+    for part, site in (("site", rehost("still.fail")), ("site-beta", beta_zone())):
+        if not args.skip_build and part in parts:
+            subprocess.run(["node", "website/build.mjs", "--site", site, "--out", f"dist/{part}"], cwd=REPO, check=True)
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {

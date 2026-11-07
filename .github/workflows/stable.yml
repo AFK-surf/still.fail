@@ -319,7 +319,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh .github/deploy.sh site
-      # monoid's, monoid.build (deploy.py CLOUDS: the same page named monoid, its links its cloud's): not a reason to hold
+      # monoid's, monoid.build (website/build.mjs SITES: the template's own, its links its cloud's): not a reason to hold
       # still.fail's release back
       - name: Deploy monoid.build
         continue-on-error: true
