@@ -257,6 +257,19 @@ export class Secrets {
           d.db.prepare("INSERT INTO vault_grants (ws, id, session, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET body = excluded.body")
             .run(h.request.ws, h.request.id, h.request.session, JSON.stringify({ request: h.request, grant, uses: h.uses, ...(h.until === undefined ? {} : { until: h.until }) }));
         },
+        // Claim a persisted one-use grant with one conditional write: the previous station may still be running.
+        spendOnce: (h) => {
+          if (h.request.vault !== PLAIN) return null;
+          const row = d.db.prepare("SELECT body FROM vault_grants WHERE ws = ? AND id = ?").get(h.request.ws, h.request.id) as { body: string } | undefined;
+          if (row === undefined) return false;
+          const stored = JSON.parse(row.body) as { request: Request; grant: Omit<Grant, "secret">; uses: number; until?: number };
+          const { secret: _, ...grant } = h.grant;
+          if (stored.uses !== 0 || (stored.until ?? stored.grant.exp) <= Math.floor(d.now() / 1000)
+            || JSON.stringify(stored.request) !== JSON.stringify(h.request) || JSON.stringify(stored.grant) !== JSON.stringify(grant)) return false;
+          const body = JSON.stringify({ ...stored, uses: 1 });
+          return d.db.prepare("UPDATE vault_grants SET body = ? WHERE ws = ? AND id = ? AND body = ?")
+            .run(body, h.request.ws, h.request.id, row.body).changes !== 0;
+        },
         forget: (h) => {
           if (h.request.vault === PLAIN) d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(h.request.ws, h.request.id);
         },
@@ -1295,7 +1308,16 @@ export class Secrets {
     const held = this.keeper.usable(r.session, r.id);
     const cookies = typeof held === "string" ? null : valueOf(held.secret);
     if (typeof held === "string" || cookies === null || this.#d.browsers === undefined) return;
-    this.keeper.spend(r.id);
+    if (held.request.vault === PLAIN && held.grant.scope === "once" && !this.#previousExited) {
+      // An older process may still use its in-memory copy without the conditional claim. Wait for its real exit.
+      void this.#d.backfill!.previousGone!.then(() => this.#signIn(r)).catch((error) =>
+        log.warn("vault", "a sign-in could not wait for the previous station", { request: r.id, error: (error as Error).message }));
+      return;
+    }
+    if (!this.keeper.spend(r.id)) {
+      log.warn("vault", "a one-use sign-in grant was already used or changed", { request: r.id });
+      return;
+    }
     this.#audit(r, "use", `browser ${held.grant.hosts.join(" ")}`);
     void this.#d.browsers.signIn(r.session, { request: r.id, workspace: r.ws, sites: held.grant.hosts, cookies, until: held.grant.exp }).catch((e) =>
       log.warn("vault", "a sign-in could not be put into its chat's browser", { request: r.id, error: (e as Error).message }));
@@ -1306,6 +1328,10 @@ export class Secrets {
     for (const h of this.keeper.held(session)) {
       const cookies = h.grant.mode === "browser" ? valueOf(h.secret) : null;
       if (cookies === null || this.#d.browsers === undefined) continue;
+      if (h.request.vault === PLAIN && h.grant.scope === "once") {
+        this.#signIn(h.request);
+        continue;
+      }
       void this.#d.browsers.signIn(session, { request: h.request.id, workspace: h.request.ws, sites: h.grant.hosts, cookies, until: h.until ?? h.grant.exp }).catch((e) =>
         log.warn("vault", "a sign-in could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
     }
@@ -1326,6 +1352,10 @@ export class Secrets {
     for (const h of this.keeper.held(session)) {
       const cookies = h.grant.mode === "browser" ? valueOf(h.secret) : null;
       if (cookies === null || this.#d.browsers?.passkeysIn === undefined) continue;
+      if (h.request.vault === PLAIN && h.grant.scope === "once") {
+        this.#signIn(h.request);
+        continue;
+      }
       void this.#d.browsers.passkeysIn(session, { sites: h.grant.hosts, cookies }).catch((e) =>
         log.warn("vault", "a sign-in's passkeys could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
     }
@@ -1476,8 +1506,14 @@ export class Secrets {
   /// secret_run: `command` with grant `id`, in the session's workspace (or `cwd` under it).
   /// `under`: `cwd` as given, under the session's directory (the one used on another station).
   async run(session: string, a: { grant: string; command: string; env?: string; cwd: string; under?: string; timeoutMs?: number; station?: string }): Promise<string> {
-    const held = this.keeper.usable(session, a.grant);
+    let held = this.keeper.usable(session, a.grant);
     if (typeof held === "string") throw new Refused(held);
+    if (held.request.vault === PLAIN && held.grant.scope === "once" && !this.#previousExited) {
+      // The previous binary may still spend an in-memory copy without a conditional database claim.
+      await this.#d.backfill!.previousGone;
+      held = this.keeper.usable(session, a.grant);
+      if (typeof held === "string") throw new Refused(held);
+    }
     if (held.grant.mode === "browser") throw new Refused("A sign-in is not run with: it is in this chat's browser (the `browser` tool) while its grant lasts.");
     if (a.env !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(a.env)) throw new Refused("env must be a variable name");
     // Where it was granted for, and nowhere else.
@@ -1489,7 +1525,7 @@ export class Secrets {
       }
     }
     const listing = this.#listingOf(held.request);
-    this.keeper.spend(held.request.id);
+    if (!this.keeper.spend(held.request.id)) throw new Refused("this grant was already used or changed: ask again");
     const env = a.env ?? listing?.env;
     const timeoutMs = Math.min(a.timeoutMs ?? RUN_MS, 3600_000);
     if (on !== null) {
