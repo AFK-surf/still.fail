@@ -334,6 +334,24 @@ test("a pending card: an option chosen by an old client is refused; an answer qu
   }
 });
 
+test("a person can send without looking up a card when no quote names a message", async () => {
+  const r = rig();
+  try {
+    for (const [i, quotes] of [undefined, [], [{ text: "earlier" }], "not an array"].entries()) {
+      const id = r.store.openThread("ember", "CHAT", `without-card-quote-${i}`, null, null).id;
+      r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"), card: { type: "text" } });
+      const pending = r.store.pendingCard;
+      try {
+        r.store.pendingCard = () => { throw new Error("unneeded pending card lookup"); };
+        const [status, sent] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes });
+        assert.equal(status, 200, JSON.stringify(sent));
+        assert.equal(r.store.messagesBefore(id, null, 1)[0]?.n, sent.n);
+      } finally { r.store.pendingCard = pending; }
+      assert.equal(r.store.pendingCard(id), null, "the person's message still ends the card's wait");
+    }
+  } finally { await r.close(); }
+});
+
 test("archiving a session and a chat, and deleting a session", async () => {
   const r = rig();
   try {
