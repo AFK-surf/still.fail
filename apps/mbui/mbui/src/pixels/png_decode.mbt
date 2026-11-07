@@ -67,8 +67,23 @@ pub fn decode_png(b : Bytes) -> (Int, Int, FixedArray[Byte])? {
   if idat.length() < 2 {
     return None
   }
+  // (x0, y0, dx, dy) of each pass; one pass when not interlaced
+  let passes = if interlace == 1 {
+    [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
+  } else {
+    [(0, 0, 1, 1)]
+  }
+  let mut expected = 0L
+  for (x0, y0, dx, dy) in passes {
+    let pw = if width > x0 { (width - x0 + dx - 1) / dx } else { 0 }
+    let ph = if height > y0 { (height - y0 + dy - 1) / dy } else { 0 }
+    if pw > 0 && ph > 0 {
+      expected += ((pw.to_int64() * channels.to_int64() * depth.to_int64() + 7L) / 8L + 1L) * ph.to_int64()
+    }
+  }
+  let size = if expected > 0L && expected <= 2147483647L { expected.to_int() } else { 0 }
   // (zlib: a 2-byte head, then raw deflate)
-  let raw = match @zip.inflate(Bytes::from_array(idat), start=2) {
+  let raw = match @zip.inflate(Bytes::from_array(idat), start=2, size~) {
     Some(r) => r
     None => return None
   }
@@ -76,12 +91,6 @@ pub fn decode_png(b : Bytes) -> (Int, Int, FixedArray[Byte])? {
   let bpp_bits = channels * depth
   let bpp = if bpp_bits < 8 { 1 } else { bpp_bits / 8 }
   let mut p = 0
-  // (x0, y0, dx, dy) of each pass; one pass when not interlaced
-  let passes = if interlace == 1 {
-    [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
-  } else {
-    [(0, 0, 1, 1)]
-  }
   for pass in passes {
     let (x0, y0, dx, dy) = pass
     let pw = if width > x0 { (width - x0 + dx - 1) / dx } else { 0 }

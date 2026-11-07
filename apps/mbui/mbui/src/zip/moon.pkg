@@ -1,1 +1,3 @@
+import { "moonbitlang/core/compress/flate" }
 import { "mbui/codec" } for "test"
+options("allow-experimental-packages": ["moonbitlang/core/compress/flate"])

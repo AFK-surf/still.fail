@@ -108,3 +108,28 @@ test "sha256: the standard's examples" {
     "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
   )
 }
+
+///|
+test "raw deflate starts at its container offset and leaves following bytes alone" {
+  let gz = @codec.from_base64("H4sIAAAAAAAC/8tIzcnJ11HIQKKsFAz8FQxzPAFXvYeJGwAAAA==")
+  assert_eq(@zip.inflate(gz, start=10, size=1), Some(b"hello, hello, hello: 0O 1lI"))
+  assert_eq(@zip.inflate(gz, start=10, size=27), Some(b"hello, hello, hello: 0O 1lI"))
+  assert_eq(@zip.inflate(gz, start=10, size=128), Some(b"hello, hello, hello: 0O 1lI"))
+  assert_eq(@zip.inflate(gz, start=10, size=2147483647), Some(b"hello, hello, hello: 0O 1lI"))
+  assert_eq(@zip.inflate(gz, start=-1), None)
+  assert_eq(@zip.inflate(gz, start=gz.length()), None)
+  assert_eq(@zip.inflate(b"\x07"), None)
+  assert_eq(@zip.inflate(b"\x03"), None)
+}
+
+///|
+test "gzip preserves its first member and validates that member's trailer" {
+  let first = @codec.from_base64("H4sIAAAAAAAC/8tIzcnJ11HIQKKsFAz8FQxzPAFXvYeJGwAAAA==")
+  let empty = @codec.from_base64("H4sIAAAAAAAC/wMAAAAAAAAAAAA=")
+  assert_eq(@zip.gunzip(first + empty), Some(b"hello, hello, hello: 0O 1lI"))
+  assert_eq(@zip.gunzip(empty + first), Some(b""))
+  let bad = first.to_fixedarray()
+  bad[bad.length() - 8] = b'\x00'
+  assert_eq(@zip.gunzip(Bytes::from_fixedarray(bad) + empty), None)
+  assert_eq(@zip.gunzip(first[:first.length() - 1].to_owned()), None)
+}
