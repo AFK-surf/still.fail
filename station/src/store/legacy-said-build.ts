@@ -52,6 +52,9 @@ type HeadProbe = { n: number | null; author_kind: string | null; author: string 
 
 export const LEGACY_SAID_NEEDS_DRAIN = `SELECT 1 FROM legacy_said_meta m WHERE m.id=1 AND m.scanned=1 AND EXISTS (
     SELECT 1 FROM legacy_said_dirty WHERE thread=?1 LIMIT 1 OFFSET 64)`;
+export const LEGACY_SAID_PAGE_STATE = `SELECT m.version,m.scanned,CASE WHEN m.scanned=1 THEN EXISTS (
+    SELECT 1 FROM legacy_said_dirty WHERE thread=?1 LIMIT 1 OFFSET 64) ELSE 0 END AS needs_drain
+  FROM legacy_said_meta m WHERE m.id=1`;
 export const LEGACY_SAID_HEAD_FIRST = `SELECT CASE WHEN e.kind='message' AND e.letter IS NULL THEN e.n END AS n,
     CASE WHEN e.kind='message' AND e.letter IS NULL THEN e.author_kind END AS author_kind,
     CASE WHEN e.kind='message' AND e.letter IS NULL THEN e.author END AS author
@@ -74,6 +77,22 @@ export const LEGACY_SAID_DRAIN_THREAD = "SELECT CAST(d.thread AS TEXT) thread,CA
 /// A completed lookup can merge at most 64 changed keys without walking an unbounded changed tail.
 export function legacySaidThreadNeedsDrain(db: DatabaseSync, thread: number): boolean {
   return db.prepare(LEGACY_SAID_NEEDS_DRAIN).get(thread) !== undefined;
+}
+
+/// A page needs the completed lookup, or a bounded raw tail while it is being prepared or reconciled.
+export function legacySaidPageState(db: DatabaseSync, thread: number): { preparing: boolean; needsDrain: boolean } {
+  const row = db.prepare(LEGACY_SAID_PAGE_STATE).get(thread) as { version: number; scanned: number; needs_drain: number } | undefined;
+  if (!row || row.version !== VERSION || (row.scanned !== 0 && row.scanned !== 1))
+    throw new Error("legacy said lookup metadata is missing or invalid");
+  return { preparing: row.scanned === 0, needsDrain: row.needs_drain !== 0 };
+}
+
+/// The global source scan is published in one transaction; dirty keys can then be reconciled per chat.
+export function legacySaidScanReady(db: DatabaseSync): boolean {
+  const row = db.prepare("SELECT version,scanned FROM legacy_said_meta WHERE id=1").get() as { version: number; scanned: number } | undefined;
+  if (!row || row.version !== VERSION || (row.scanned !== 0 && row.scanned !== 1))
+    throw new Error("legacy said lookup metadata is missing or invalid");
+  return row.scanned === 1;
 }
 
 /// Return an exact latest message when the source tail or a small changed set proves it. A larger changed set is

@@ -25,7 +25,7 @@ import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
-import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
+import { hasLegacySaid, legacySaidPageState, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
 import { hasLegacyAgent, LEGACY_ASKED_DURING } from "../store/legacy-agent-build.ts";
 import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
@@ -556,6 +556,10 @@ export class SaidUnavailable extends Refused {
   readonly threads: number[];
   constructor(threads: number[]) { super(503, SAID_PENDING + JSON.stringify(threads)); this.threads = threads; }
 }
+export const LEGACY_SAID_PENDING = "legacy said lookup pending";
+export class LegacySaidUnavailable extends Refused {
+  constructor() { super(503, LEGACY_SAID_PENDING); }
+}
 
 export function saidOf(s: Store, thread: number): { n: number; authorKind: string; author: string; other: number | null } | null {
   // On old stores the bounded head probe, dirty-key check and boundary read must see the same snapshot.
@@ -673,7 +677,7 @@ export function entriesBetween(s: Store, thread: number, from: bigint, to: bigin
   return (limit === undefined ? all(s, sql, thread, from, to) : all(s, `${sql} LIMIT ?`, thread, from, to, limit)).map(toEntry);
 }
 
-// While an old chat has a large changed-key backlog, the raw tail can still prove a page without walking that backlog.
+// During old lookup preparation or a large changed-key backlog, the raw tail can still prove a page.
 // Keep keys as text until the keyed reads: an unrelated entry may have a number beyond JavaScript's exact range.
 export const LEGACY_SAID_PAGE_TAIL = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM entries e
   WHERE e.thread=?1 AND e.n<?2 ORDER BY e.n DESC LIMIT ?3`;
@@ -685,13 +689,15 @@ export function messagesBefore(s: Store, thread: number, n: number | null, limit
   const before = n ?? I64_MAX;
   s.db.exec("SAVEPOINT messages_before_read");
   try {
-    if (s.legacySaid && legacySaidThreadNeedsDrain(s.db, thread)) {
-      if (!Number.isSafeInteger(limit) || limit < 0 || limit > Number.MAX_SAFE_INTEGER - 64) throw new SaidUnavailable([thread]);
+    const old = s.legacySaid ? legacySaidPageState(s.db, thread) : null;
+    if (old && (old.preparing || old.needsDrain)) {
+      const pending = () => { throw old.preparing ? new LegacySaidUnavailable() : new SaidUnavailable([thread]); };
+      if (!Number.isSafeInteger(limit) || limit < 0 || limit > Number.MAX_SAFE_INTEGER - 64) return pending();
       if (limit === 0) return [];
       const cap = limit + 64;
       const tail = all(s, LEGACY_SAID_PAGE_TAIL, thread, before, cap);
       const keys = tail.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
-      if (keys.length < limit && tail.length === cap) throw new SaidUnavailable([thread]);
+      if (keys.length < limit && tail.length === cap) return pending();
       if (keys.length === 0) return [];
       if (legacyMergedReadReady(s.db))
         return all(s, MESSAGES_FROM_KEYS, thread, JSON.stringify(keys)).map(toMessage).reverse();

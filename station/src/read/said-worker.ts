@@ -6,6 +6,7 @@ import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/
 import { SAID_BATCH_SIZE, saidScanStep, type SaidScan } from "../store/said-state.ts";
 import { archiveLastStep } from "../store/archive-last.ts";
 import { legacyEditsMaintenanceStep, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
+import { hasLegacySaid, legacySaidScanReady, legacySaidStep } from "../store/legacy-said-build.ts";
 import { TURN_COUNT_BATCH, turnCountStep, type TurnCountScan } from "../store/turn-state.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 250 });
@@ -14,10 +15,10 @@ const scans = new Map<number, SaidScan>();
 const counts = new Map<string, TurnCountScan>();
 db.exec("PRAGMA synchronous = NORMAL");
 
-parentPort!.on("message", async (message: { thread: number; cancel?: boolean; archiveLast?: boolean; legacyEdits?: boolean } | { session: string; cancel?: boolean }) => {
+parentPort!.on("message", async (message: { thread: number; cancel?: boolean; archiveLast?: boolean; legacyEdits?: boolean; legacySaid?: boolean } | { session: string; cancel?: boolean }) => {
   if (message.cancel) {
     if ("thread" in message) {
-      if (message.archiveLast || message.legacyEdits) return;
+      if (message.archiveLast || message.legacyEdits || message.legacySaid) return;
       const scan = scans.get(message.thread);
       scans.delete(message.thread);
       if (scan && takeBackfill(priority, threadId)) {
@@ -40,7 +41,13 @@ parentPort!.on("message", async (message: { thread: number; cancel?: boolean; ar
   let owns = false;
   try {
     if ("thread" in message) {
-      if (message.legacyEdits) {
+      if (message.legacySaid) {
+        owns = takeBackfill(priority, threadId);
+        if (owns) {
+          if (hasLegacySaid(db) && !legacySaidScanReady(db)) legacySaidStep(db);
+          result = { done: !hasLegacySaid(db) || legacySaidScanReady(db) };
+        }
+      } else if (message.legacyEdits) {
         owns = takeBackfill(priority, threadId);
         if (owns) {
           if (!legacyMergedReadReady(db)) legacyEditsMaintenanceStep(db);
