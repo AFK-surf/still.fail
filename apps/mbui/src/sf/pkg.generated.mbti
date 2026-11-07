@@ -2696,6 +2696,8 @@ pub(all) struct Dial {
   level : String
   label : String
   note : String
+  label_short : String
+  note_short : String
 }
 
 type DrawnShapes

@@ -1078,7 +1078,9 @@ export const SHAPES: Record<string, Shape> = {
     ["big", "String", { doc: "What is left, large on the machine's own page: 22.8, 89." }],
     ["unit", "String", { doc: "Beside `big`, small: GB, %." }],
     ["title", "String", { doc: "Under `big`: 可用内存, CPU 空闲率." }],
-    ["total", "String", { doc: "Under `title`, quiet: 共 64 GB, 负载 1.4." }],
+    ["titleShort", opt("String"), { doc: "`title` where its line has not the room: CPU 空闲." }],
+    ["total", "String", { doc: "Under `title`, quiet: 总内存 64 GB, 负载 1.4." }],
+    ["totalShort", opt("String"), { doc: "`total` where its line has not the room: 总 64 GB." }],
     ["note", opt("String")],
   ], { doc: "CPU, memory or disk: how full (and how bad: ok | amber | red), in words." }),
   HostDetail: struct([
@@ -1091,6 +1093,7 @@ export const SHAPES: Record<string, Shape> = {
     ["left", "i64", { client: "I54" }],
     ["level", "Level"],
     ["title", "String"],
+    ["titleShort", opt("String"), { doc: "`title` where its line has not the room: GPU 1 空闲." }],
     ["total", "String"],
     ["model", "String", { said: true }],
   ], { doc: "One GPU's resource dial and model on the station's overview." }),

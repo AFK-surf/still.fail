@@ -629,8 +629,10 @@ fn stamp_of(ago : String, until? : String = "") -> Json {
 }
 
 ///|
-fn meter(short : String, left : Int, level : String, remaining : String, big : String, unit : String, title : String, total : String) -> Json {
+fn meter(short : String, left : Int, level : String, remaining : String, big : String, unit : String, title : String, total : String, title_short? : String = "", total_short? : String = "") -> Json {
   obj([
+    ("titleShort", str(title_short)),
+    ("totalShort", str(total_short)),
     ("label", str(short)),
     ("short", str(short)),
     ("percent", Json::number((100 - left).to_double())),
@@ -1235,12 +1237,12 @@ fn fx_station(address : String) -> Json {
           (
             "meters",
             [
-              meter("CPU", if fx.low_meters { 8 } else { 72 }, if fx.low_meters { "red" } else { "ok" }, if fx.low_meters { "空闲 8%" } else { "空闲 72%" }, if fx.low_meters { "8" } else { "72" }, "%", "CPU 空闲率", "负载 1.4"),
-              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "可用内存", "总内存 32 GB"),
+              meter("CPU", if fx.low_meters { 8 } else { 72 }, if fx.low_meters { "red" } else { "ok" }, if fx.low_meters { "空闲 8%" } else { "空闲 72%" }, if fx.low_meters { "8" } else { "72" }, "%", "CPU 空闲率", "负载 1.4", title_short="CPU 空闲"),
+              meter("内存", 18, "amber", "剩 5.8 G", "5.8", "GB", "可用内存", "总内存 32 GB", total_short="总 32 GB"),
               if fx.low_meters {
-                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "可用磁盘", "总磁盘 1 TB")
+                meter("磁盘", 9, "amber", "剩 19.4 G", "19.4", "GB", "可用磁盘", "总磁盘 1 TB", total_short="总 1 TB")
               } else {
-                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "可用磁盘", "总磁盘 1 TB")
+                meter("磁盘", 42, "ok", "剩 420 G", "420", "GB", "可用磁盘", "总磁盘 1 TB", total_short="总 1 TB")
               },
             ],
           ),
