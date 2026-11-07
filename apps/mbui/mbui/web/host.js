@@ -1887,7 +1887,7 @@
   H.streamOpen = () => {
     const id = ++nextStream;
     streams.set(id, { id, events: [], decoded: [], inside: [], gen: 0, needKey: true, decoder: null, config: null,
-      tex: null, closed: false, jpegs: Promise.resolve() });
+      tex: null, shown: null, closed: false, jpegs: Promise.resolve() });
     return id;
   };
   H.streamH264 = (id, avcc, w, h) => {
@@ -1936,6 +1936,21 @@
     const s = streams.get(id);
     return s && s.events.length ? s.events.shift() : '';
   };
+  // The last shown frame stays until replaced or closed, so a lost GL texture can be made again even if the sender
+  // has stopped sending frames. This is one ImageBitmap or VideoFrame per open stream.
+  function uploadStream(s) {
+    if (!s.shown || gl.isContextLost()) return;
+    if (!s.tex) {
+      s.tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, s.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, s.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s.shown);
+  }
   H.streamShow = (id, ts) => {
     const s = streams.get(id);
     if (!s) return;
@@ -1948,17 +1963,9 @@
       if (g !== f) g.frame.close();
       return false;
     });
-    if (!s.tex) {
-      s.tex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, s.tex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    }
-    gl.bindTexture(gl.TEXTURE_2D, s.tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, f.frame);
-    f.frame.close();
+    if (s.shown) s.shown.close();
+    s.shown = f.frame;
+    uploadStream(s);
   };
   H.streamClose = (id) => {
     const s = streams.get(id);
@@ -1967,6 +1974,7 @@
     s.closed = true;
     for (const f of s.decoded) f.frame.close();
     s.decoded = [];
+    if (s.shown) s.shown.close();
     if (s.tex) gl.deleteTexture(s.tex);
     streams.delete(id);
   };
@@ -2547,7 +2555,7 @@
     segsTex = null; segsRows = 0; segsHad = null; segsHadRows = 0;
     uploadedFor = -1;
     textChanged();
-    for (const s of streams.values()) s.tex = null;
+    for (const s of streams.values()) { s.tex = null; uploadStream(s); }
     for (const [id, im] of images) {
       if (im.state !== 1) continue;
       Object.assign(im, { state: 0, tex: null });
@@ -2564,6 +2572,7 @@
     if (kind !== 10) return false;
     contextLoser = gl.getExtension('WEBGL_lose_context');
     if (!contextLoser) return false;
+    contextAnew = false;
     contextLoser.loseContext();
     return true;
   };
