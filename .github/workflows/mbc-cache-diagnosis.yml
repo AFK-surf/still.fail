@@ -5,50 +5,137 @@ on:
 permissions:
   contents: read
 jobs:
-  compiler:
-    strategy:
-      fail-fast: false
-      matrix:
-        sample: [1, 2, 3]
+  cold-build:
     runs-on: macos-26
     timeout-minutes: 5
+    env:
+      MBUI_FRESH: 1
+      MBUI_CACHE: ${{ github.workspace }}/.ci/release
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
-      - name: Compare the launcher and the selected compiler
-        shell: bash
+      - uses: actions/checkout@v5
+        with: { ref: '9140074f72da582de141b2dfc9efa0727872739a', fetch-depth: 0, filter: 'blob:none' }
+      - name: Restore the existing app caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-mac-${{ github.sha }}
+          restore-keys: mbui-mac-
+      - name: Simulate the first build on a new compiler image
         run: |
           set -eu
-          sw_vers
-          actual=$(xcrun --find clang)
-          echo "Selected compiler: $actual"
-          shasum -a 256 /usr/bin/cc "$actual"
-          /usr/bin/cc --version
-          "$actual" --version
-          xcrun --sdk macosx --show-sdk-path
-          xcode-select -p
-          env | LC_ALL=C sort | grep -E '^(DEVELOPER_DIR|SDKROOT|MACOSX_DEPLOYMENT_TARGET)=' || true
-          export MACOSX_DEPLOYMENT_TARGET=12.0
-          mkdir -p "$RUNNER_TEMP/cc-compare"
-          cd "$RUNNER_TEMP/cc-compare"
-          printf '#include <stdio.h>\n#include <stdint.h>\n#include <math.h>\ndouble demo(uint64_t x) { return sin((double)x); }\n' > probe.c
-          flags=(-fwrapv -fno-strict-aliasing -ffp-contract=off -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC -MD -MT probe.o -c probe.c)
-          /usr/bin/cc -### "${flags[@]}" -MF probe.d -o probe.o 2>launcher.driver
-          "$actual" -### "${flags[@]}" -MF probe.d -o probe.o 2>compiler.driver
-          echo 'Launcher driver command:'
-          cat launcher.driver
-          echo 'Direct compiler driver command:'
-          cat compiler.driver
-          cmp launcher.driver compiler.driver || true
-          /usr/bin/cc "${flags[@]}" -MF launcher.d -o launcher.o
-          if ! "$actual" "${flags[@]}" -MF compiler.d -o compiler.o; then
-            echo 'direct compiler could not build the probe'
-            exit 0
-          fi
-          /usr/bin/cc -E -dM -x c probe.c > launcher.macros
-          if ! "$actual" -E -dM -x c probe.c > compiler.macros; then
-            echo 'direct compiler could not preprocess the probe'
-            exit 0
-          fi
-          shasum -a 256 launcher.o compiler.o launcher.d compiler.d launcher.macros compiler.macros
-          for suffix in o d macros; do
-            if cmp "launcher.$suffix" "compiler.$suffix"; then echo "$suffix match"; else echo "$suffix differs"; fi
-          done
+          [ -d .ci/mbc-store ] || { echo 'No prior C-unit store restored' >&2; exit 1; }
+          [ -d .ci/hbc ] || { echo 'No Hermes bytecode cache restored' >&2; exit 1; }
+          echo "Prior unit store: $(du -sh .ci/mbc-store | cut -f1)"
+          rm -rf .ci/mbc-store
+          mkdir -p .ci/mbc-store
+          echo "New-image compiler SHA-256: $(shasum -a 256 /usr/bin/cc | cut -d' ' -f1)"
+      - id: hermes
+        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/stillfail-build
+            apps/mbui/out/core/hermesc
+          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
+      - uses: ./.github/actions/setup
+        with: { pnpm: 'false' }
+      - uses: ./.github/actions/natives
+      - id: native-keys
+        run: echo "key=natives-shell-apple-darwin-arm64-$(node scripts/native.ts key shell-apple darwin-arm64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: shell
+        with:
+          path: ~/Library/Caches/stillfail-native/shell-apple
+          key: ${{ steps.native-keys.outputs.key }}
+      - if: steps.shell.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/mbui/out/core-target*/native/shell-apple
+          key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
+            shell-apple-target-darwin-arm64-
+      - name: Start the Mac app build
+        run: bash .github/mac-release-prebuild.sh start
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/cache/restore@v4
+        id: moon
+        with:
+          path: |
+            apps/mbui/_build
+            !apps/mbui/_build/**/*.mbc
+          key: mbui-mac-moon-${{ github.sha }}
+          restore-keys: mbui-mac-moon-
+      - name: Force the link and start the cold compile
+        run: |
+          set -eu
+          [ -n '${{ steps.moon.outputs.cache-matched-key }}' ] || { echo 'No previous Moon build restored' >&2; exit 1; }
+          test "$(cat apps/mbui/_build/.macos-min)" = 12.0
+          bash apps/mbui/scripts/moon-mtimes.sh
+          rm -f apps/mbui/_build/native/release/build/stillfail/stillfail/stillfail.exe
+          bash .github/mac-release-prebuild.sh ready
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@v4
+        with:
+          path: apps/mbui/out/mac/AppIcon-*
+          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
+      - name: Finish the cold build and create its unsigned beta bundle
+        run: |
+          set -eu
+          bash .github/mac-release-prebuild.sh wait
+          grep -E 'mbc: .* of [0-9]+ compiled' apps/mbui/out/mbc.log
+          MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
+          bundle='apps/mbui/out/mac/youdid.wtf.app'
+          mkdir -p "$RUNNER_TEMP/handoff"
+          for name in MacOS/youdid.wtf Resources/core.hbc Resources/AppIcon.icns Resources/Assets.car; do
+            printf '%s %s\n' "$(shasum -a 256 "$bundle/Contents/$name" | cut -d' ' -f1)" "$name"
+          done > "$RUNNER_TEMP/handoff/hashes.txt"
+          ditto -c -k --sequesterRsrc --keepParent "$bundle" "$RUNNER_TEMP/handoff/unsigned.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cold-mac-bundle-${{ github.sha }}
+          path: ${{ runner.temp }}/handoff
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+  handoff:
+    needs: [cold-build]
+    runs-on: macos-26
+    timeout-minutes: 5
+    env:
+      MBUI_FRESH: 1
+      MBUI_CACHE: ${{ github.workspace }}/.ci/release
+      MAC_SIGN_IDENTITY: '-'
+      UNSIGNED: 1
+      RELEASE_DIR: ${{ runner.temp }}/release
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '9140074f72da582de141b2dfc9efa0727872739a', fetch-depth: 0, filter: 'blob:none' }
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: cold-mac-bundle-${{ github.sha }}
+          path: ${{ runner.temp }}/handoff
+      - name: Check the unsigned app before and after handoff
+        run: |
+          set -eu
+          export MBUI_MAC_FROM="$RUNNER_TEMP/handoff/unsigned.zip"
+          MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
+          bundle='apps/mbui/out/mac/youdid.wtf.app'
+          for name in MacOS/youdid.wtf Resources/core.hbc Resources/AppIcon.icns Resources/Assets.car; do
+            printf '%s %s\n' "$(shasum -a 256 "$bundle/Contents/$name" | cut -d' ' -f1)" "$name"
+          done > "$RUNNER_TEMP/handoff/after.txt"
+          diff -u "$RUNNER_TEMP/handoff/hashes.txt" "$RUNNER_TEMP/handoff/after.txt"
+      - name: Exercise the existing beta signing and release checks
+        run: |
+          set -eu
+          export MBUI_MAC_FROM="$RUNNER_TEMP/handoff/unsigned.zip"
+          sh scripts/release.sh --beta desktop
+          build=$(git rev-list --count HEAD)
+          test -s "$RELEASE_DIR/desktop/stillfail-beta-0.1.$build-arm64-mac.zip"
+          test -s "$RELEASE_DIR/mac/beta/latest.json"
+          test -s "$RELEASE_DIR/desktop/stillfail-beta-mac.yml"
