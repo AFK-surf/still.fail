@@ -75,9 +75,12 @@ jobs:
           touch "$RUNNER_TEMP/start"
       # (its own 3 minutes inside the job's 5, as the preview's: stopped, what it compiled is kept below and the next run
       # goes on from it)
+      # (stopped at its 3 minutes or failed, the job is not: it keeps caches and gates nothing; arch/next's own preview
+      # run says whether it builds. Its first run of a kind compiles cold and is stopped, its next goes on from it.)
       - name: Build (APP=stillfail)
         id: build
         timeout-minutes: 3
+        continue-on-error: true
         run: bash apps/mbui/scripts/linux.sh build
       - name: The caches' keys, by what they hold
         if: always() && steps.build.outcome != 'skipped'
@@ -159,6 +162,7 @@ jobs:
       - name: Build (APP=stillfail)
         id: build
         timeout-minutes: 3
+        continue-on-error: true
         run: MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build
       - name: The caches' keys, by what they hold
         if: always() && steps.build.outcome != 'skipped'
