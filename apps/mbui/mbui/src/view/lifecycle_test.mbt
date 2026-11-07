@@ -183,3 +183,28 @@ test "leaving followed: a reaction on it, of what leaves and of one it holds, to
   t.frame(390.0, 844.0, now=40.0) |> ignore
   assert_eq((own, held, clock), ([false, true, false], [false, true, false], false))
 }
+
+///|
+test "the tree let go of from inside a walk of its scene: the walk ends there, and one after it walks nothing" {
+  let t = @view.Tree::new(fn(root) {
+    for w in ["甲", "乙", "丙"] {
+      root.box(fn(b) { b.words(Is(w)) |> ignore }) |> ignore
+    }
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let mut before = 0
+  t.each_drawn(fn(_, _, _, _) { before += 1 })
+  assert_true(before >= 3, msg="the scene's three words walked: \{before}")
+  let mut seen = 0
+  t.each_drawn(fn(_, _, _, _) {
+    seen += 1
+    if seen == 1 {
+      t.dispose()
+    }
+  })
+  assert_eq(seen, 1, msg="nothing walked of it once it is let go of")
+  let mut after = 0
+  t.each_drawn(fn(_, _, _, _) { after += 1 })
+  assert_eq(after, 0)
+  assert_eq(t.drawn().length(), 0)
+}

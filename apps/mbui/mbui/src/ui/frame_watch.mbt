@@ -740,14 +740,21 @@ fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
   let mut h2 = h0
   let mut h3 = h0
   let end = n * inst_size
+  // (each number read unchecked, its slot counted along, not divided out: all of them looked at each frame drawn; slot
+  // 20, the only one of four a lane's first, read as inst_bits does, the others' NaNs alone)
+  guard end <= a.length() else { abort("insts_said: \{n} instances, room for fewer") }
   let mut k = 0
+  let mut j = 0
   while k < end {
-    let j = k % inst_size
-    h0 = (h0 ^ inst_bits(a[k], j)) * 1099511628211L
-    h1 = (h1 ^ inst_bits(a[k + 1], j + 1)) * 1099511628211L
-    h2 = (h2 ^ inst_bits(a[k + 2], j + 2)) * 1099511628211L
-    h3 = (h3 ^ inst_bits(a[k + 3], j + 3)) * 1099511628211L
+    h0 = (h0 ^ inst_bits(a.unsafe_get(k), j)) * 1099511628211L
+    let x1 = a.unsafe_get(k + 1)
+    let x2 = a.unsafe_get(k + 2)
+    let x3 = a.unsafe_get(k + 3)
+    h1 = (h1 ^ (if x1 != x1 { -2L } else { x1.reinterpret_as_int64() })) * 1099511628211L
+    h2 = (h2 ^ (if x2 != x2 { -2L } else { x2.reinterpret_as_int64() })) * 1099511628211L
+    h3 = (h3 ^ (if x3 != x3 { -2L } else { x3.reinterpret_as_int64() })) * 1099511628211L
     k = k + 4
+    j = if j + 4 == inst_size { 0 } else { j + 4 }
   }
   (((h0 * 31L) ^ h1) * 31L ^ h2) * 31L ^ h3
 }

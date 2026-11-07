@@ -170,7 +170,7 @@ let view_due : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// Each node's instances as last made (where it is its own), by node: composed into each frame painted.
 // kept across runs: put back as a run begins (view_forget)
-let view_blocks : Map[@view.NodeId, ViewBlock] = Map([])
+let view_blocks : ByNode[ViewBlock] = ByNode::new()
 
 ///|
 /// A node's instances as made (`inst`, where it is its own) and, made where who drew what is kept (inst_owners_kept:
@@ -914,16 +914,16 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (the frame's instance the node being drawn composed its edge as: taken out once it is done)
   let ring_k = Ref(-1)
   // (what was open and holds not `next` (none: the end) closed, the innermost first: a clip popped, an edge drawn)
-  let close_to = fn(next : @view.NodeId?) {
-    let open = fn(id : @view.NodeId) {
-      match next {
-        Some(n) => tree.holds(id, n)
-        None => false
-      }
+  let open = fn(id : @view.NodeId, next : @view.NodeId?) {
+    match next {
+      Some(n) => tree.holds(id, n)
+      None => false
     }
+  }
+  let close_to = fn(next : @view.NodeId?) {
     while true {
-      let clip_out = clipping.length() > 0 && !open(clipping[clipping.length() - 1])
-      let ring_out = rings.length() > 0 && !open(rings[rings.length() - 1].0)
+      let clip_out = clipping.length() > 0 && !open(clipping[clipping.length() - 1], next)
+      let ring_out = rings.length() > 0 && !open(rings[rings.length() - 1].0, next)
       if !clip_out && !ring_out {
         break
       }
@@ -996,28 +996,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     if c.id.at == 0 {
       return
     }
-    // (its picture not seen yet asked for all the same, for the pixels it is laid out at, as an old view's is as it
-    // is built whatever is seen of it: decoded by the time it shows, View::image)
-    // (for the room it is judged ready for where it is said: View::image_for)
-    let unseen = fn() {
-      match c.image {
-        // (none in its bones: nothing it would show asked for, View::bones)
-        Some((src, _, most)) if c.bones == 0L => {
-          let (fw, fh) = c.image_for
-          let room = if fw > 0.0 || fh > 0.0 { dmax(fw, fh) * s } else { dmax(c.w * s, c.h * s) }
-          self.image_ready(src, dmin(room * self.scale, most.to_double())) |> ignore
-        }
-        _ => ()
-      }
-    }
     if a <= 0.002 {
-      unseen()
+      self.view_unseen(c, s)
       return
     }
     // (in a node drawn whole in its bones: nothing of it drawn, View::bone_whole)
     if c.bones != 0L && c.bone_as == 2 {
       return
     }
+    // (its turn and its ground drawn in a box of its own, read once for all that asks them below)
+    let (turn, turn_about_drawn) = tree.turn_of(c.id)
+    let ground_drawn = tree.ground_drawn_of(c.id)
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none
     // of its, out of the way by now; the old layers under it first)
     let stack = tree.stack_of(c.id)
@@ -1140,10 +1129,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     let k = clip_top()
     if (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) &&
       stretching.length() == 0 &&
-      tree.turn_of(c.id).0 == 0.0 &&
-      tree.ground_drawn_of(c.id) == (0.0, 0.0, 0.0, 0.0) &&
+      turn == 0.0 &&
+      ground_drawn.0 == 0.0 &&
+      ground_drawn.1 == 0.0 &&
+      ground_drawn.2 == 0.0 &&
+      ground_drawn.3 == 0.0 &&
       (c.shadow.2 & 0xFFL) == 0L {
-      unseen()
+      self.view_unseen(c, s)
       return
     }
     // (its edge after what it holds, where it holds something drawn: border_over's, a clear one too: its ground inside
@@ -1168,7 +1160,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (drawn bigger or smaller than laid out, what holds it with it: about where it is drawn, as a look's scale is; its
     // glyphs set on the pixels where they would be were nothing grown or shrunk, as an old view's are painted where they
     // are laid out and then its looks)
-    self.view_blit(c.id, block, x, y, a, laid=(ux, uy), ground=tree.ground_drawn_of(c.id))
+    self.view_blit(c.id, block, x, y, a, laid=(ux, uy), ground=ground_drawn)
     if s != 1.0 {
       let (outer, outer_r, outer_s) = clip_at(clip_top())
       self.transform_insts(i0, self.ninst, x, y, s, s, 0.0, 0.0, outer, outer_r, outer_s)
@@ -1233,7 +1225,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     // (what it draws itself turned where it is drawn, as a look's turn is: about its middle, or the middle of what it
     // draws, as its block was made, its picture all of it: View::turn)
-    let (r, about_drawn) = tree.turn_of(c.id)
+    let r = turn
+    let about_drawn = turn_about_drawn
     if r != 0.0 {
       let (outer, _, _) = clip_at(clip_top())
       // (where it turns about, in the window: its middle, the middle of what its block draws, or, with a picture, of
@@ -1731,42 +1724,45 @@ fn Ctx::view_blit(
   block.blit_to(self.inst, len=block.length(), dst_offset=at)
   let s = self.inst
   let k = clip_top()
+  // (each instance's numbers written unchecked, every one composed each frame: the room for them grown above, the
+  // clip's level whole)
+  guard k >= 0 else { abort("view_blit: no clip pushed") }
   for i in 0..<n {
     let b = at + i * inst_size
-    s[b] = s[b] + x
-    s[b + 1] = s[b + 1] + y
-    let kind = s[b + 5]
+    s.unsafe_set(b, s.unsafe_get(b) + x)
+    s.unsafe_set(b + 1, s.unsafe_get(b + 1) + y)
+    let kind = s.unsafe_get(b + 5)
     // (its colour's opacity faded with it; a glass's 11 is its tint's own, faded by its opacity (15) as glass_inst
     // fades it, not twice)
     if kind != 5.0 && kind != 6.0 {
-      s[b + 11] = s[b + 11] * a
+      s.unsafe_set(b + 11, s.unsafe_get(b + 11) * a)
     }
     if kind == 11.0 {
-      s[b + 12] = s[b + 12] + seg_base
+      s.unsafe_set(b + 12, s.unsafe_get(b + 12) + seg_base)
     }
     // (a box's, a shadow's, frosted glass's border colour, liquid glass's opacity: faded with it; a glyph's 12-15 are
     // where it is in the atlas)
     if kind == 0.0 || kind == 2.0 || kind == 5.0 || kind == 6.0 {
-      s[b + 15] = s[b + 15] * a
+      s.unsafe_set(b + 15, s.unsafe_get(b + 15) * a)
     }
-    if s[b + 32] != 0.0 {
-      s[b + 33] = s[b + 33] + x
-      s[b + 34] = s[b + 34] + y
+    if s.unsafe_get(b + 32) != 0.0 {
+      s.unsafe_set(b + 33, s.unsafe_get(b + 33) + x)
+      s.unsafe_set(b + 34, s.unsafe_get(b + 34) + y)
     }
     for j in 0..<4 {
-      s[b + 16 + j] = clip_stack[k + j]
+      s.unsafe_set(b + 16 + j, clip_stack.unsafe_get(k + j))
     }
     if i >= made.cut.0 && i < made.cut.1 {
-      s[b + 16] = dmax(s[b + 16], x)
-      s[b + 17] = dmax(s[b + 17], y)
-      s[b + 18] = dmin(s[b + 18], x + made.w)
-      s[b + 19] = dmin(s[b + 19], y + made.h)
+      s.unsafe_set(b + 16, dmax(s.unsafe_get(b + 16), x))
+      s.unsafe_set(b + 17, dmax(s.unsafe_get(b + 17), y))
+      s.unsafe_set(b + 18, dmin(s.unsafe_get(b + 18), x + made.w))
+      s.unsafe_set(b + 19, dmin(s.unsafe_get(b + 19), y + made.h))
     }
     for j in 0..<8 {
-      s[b + 24 + j] = clip_stack[k + 4 + j]
+      s.unsafe_set(b + 24 + j, clip_stack.unsafe_get(k + 4 + j))
     }
     for j in 0..<12 {
-      s[b + 40 + j] = clip_stack[k + 12 + j]
+      s.unsafe_set(b + 40 + j, clip_stack.unsafe_get(k + 12 + j))
     }
   }
   // (its glyphs set on the pixels where they are composed, as emit_text sets an old view's where it paints them: x on
@@ -1778,8 +1774,8 @@ fn Ctx::view_blit(
   for gl in made.glyphs {
     let (i, gx, base, goy) = gl
     let b = at + i * inst_size
-    s[b] = if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx }
-    s[b + 1] = if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly }
+    s.unsafe_set(b, if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx })
+    s.unsafe_set(b + 1, if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly })
   }
   // (its own ground drawn off where it is laid out and bigger, as it says (View::ground_drawn): before its glass's
   // capture is told where it is)
@@ -4985,3 +4981,19 @@ impl Moving for TreeGlide with rest_at(self, _now, _frame) {
 /// is its own; let go with it.
 // kept across runs: put back as each column is let go
 let tree_glide_movers : Map[Int, Mover] = {}
+
+///|
+/// Content `c`'s picture not seen yet (drawn `s` times as big) asked for all the same, for the pixels it is laid out at,
+/// as an old view's is as it is built whatever is seen of it: decoded by the time it shows, View::image; for the room
+/// it is judged ready for where it is said, View::image_for (Ctx::view_paint's, for one faded out or out of its clip).
+fn Ctx::view_unseen(self : Ctx, c : @view.Content, s : Double) -> Unit {
+  match c.image {
+    // (none in its bones: nothing it would show asked for, View::bones)
+    Some((src, _, most)) if c.bones == 0L => {
+      let (fw, fh) = c.image_for
+      let room = if fw > 0.0 || fh > 0.0 { dmax(fw, fh) * s } else { dmax(c.w * s, c.h * s) }
+      self.image_ready(src, dmin(room * self.scale, most.to_double())) |> ignore
+    }
+    _ => ()
+  }
+}

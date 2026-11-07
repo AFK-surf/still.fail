@@ -600,6 +600,14 @@ pub struct Tree {
   /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
   order_holder : Array[Int]
+  /// where in the order what each holds ends (the next not in it): a node left out passed over whole
+  order_end : Array[Int]
+  /// by each node's index, the node of the root's it is in as the order was last worked out (Tree::top_of's; -2: not
+  /// known then): read while the order is not due again
+  tops : Array[Int]
+  /// what each walk of the scene keeps as it goes, kept for the next (Tree::each_drawn_in_order), and how many walk now
+  priv mut walks : Array[Walk]
+  priv mut walking : Int
   /// the node hosting the old view, if any (View::hosted)
   mut hosting : Int
   /// where in the window's stack of layers the topmost modal layer of what hosts it is (an old frame's: Tree::hold_under;
@@ -834,6 +842,10 @@ pub fn Tree::new(
     last_h: -1.0,
     order: [],
     order_holder: [],
+    order_end: [],
+    tops: [],
+    walks: [],
+    walking: 0,
     hosting: -1,
     held_under: -2,
     held_under_of: None,
@@ -1336,14 +1348,26 @@ pub fn Tree::resident_read(self : Tree) -> Bool {
   for at in gone {
     self.resident_readers.remove(at)
   }
+  if self.resident_readers.is_empty() {
+    return false
+  }
   let mut seen = false
+  // (what of the way up from each is known to hold no reader, by index: each looked at once, not for every node under it)
+  let clear : Array[Bool] = Array::make(self.nodes.length(), false)
   self.each_drawn_scaled(fn(c, _, _, _, _) {
     let mut i = c.id.at
-    while !seen && i >= 0 {
+    while !seen && i >= 0 && !clear[i] {
       if self.resident_readers.contains(i) {
         seen = true
       }
       i = self.nodes[i].parent
+    }
+    if !seen {
+      let mut j = c.id.at
+      while j >= 0 && j != i {
+        clear[j] = true
+        j = self.nodes[j].parent
+      }
     }
   })
   seen
@@ -1448,6 +1472,10 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.timeline.clear()
   self.order.clear()
   self.order_holder.clear()
+  self.order_end.clear()
+  self.tops.clear()
+  // (a walk going on keeps what it walks with till it ends; none kept for the next, its room given back with it)
+  self.walks = []
   self.changed.clear()
   self.composed.clear()
   self.hosting = -1
@@ -3101,6 +3129,10 @@ fn Tree::over_all_at(self : Tree, at : Int) -> Bool {
 /// (The node of the root's that node `at` is, or is in: the outermost that is a node of its own, what holds it up to
 /// the root slots alone (show, pick, each); -1 where it is held by no such one.)
 fn Tree::top_of(self : Tree, at : Int) -> Int {
+  // (as the order was last worked out, while it is not due again: Tree::ordered)
+  if !self.order_due && at >= 0 && at < self.tops.length() && self.tops[at] != -2 {
+    return self.tops[at]
+  }
   let mut i = at
   let mut top = -1
   while i > 0 {
@@ -6039,7 +6071,12 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.order_due = false
     self.order.clear()
     self.order_holder.clear()
-    self.ordered(0, -1)
+    self.order_end.clear()
+    self.tops.clear()
+    for _ in 0..<self.nodes.length() {
+      self.tops.push(-2)
+    }
+    self.ordered(0, -1, -1)
     self.work.orders = self.work.orders + 1
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
@@ -6538,21 +6575,27 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
 ///|
 /// The order the nodes are drawn in from node `at` down (no slot: what it holds in its place), what holds it at
 /// `holder` in it.
-fn Tree::ordered(self : Tree, at : Int, holder : Int) -> Unit {
+fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
   let n = self.nodes[at]
   if n.slot {
+    self.tops[at] = top
     for k in n.kids {
-      self.ordered(k, holder)
+      self.ordered(k, holder, top)
     }
     return
   }
   self.order.push(at)
   self.order_holder.push(holder)
+  self.order_end.push(-1)
   let me = self.order.length() - 1
+  // (the node of the root's it is in: itself where the root holds it, through its slots alone; Tree::top_of)
+  let top = if at == 0 { -1 } else if top < 0 { at } else { top }
+  self.tops[at] = top
   // (what the root holds, each by its place in the window's stack of layers: Tree::kids_in_order)
   for k in self.kids_in_order(at) {
-    self.ordered(k, me)
+    self.ordered(k, me, top)
   }
+  self.order_end[me] = self.order.length()
 }
 
 ///|
@@ -6687,49 +6730,104 @@ fn Tree::each_drawn_in_order(
   self : Tree,
   f : (Int, Content, Double, Double, Double, Double, Double, Double) -> Unit,
 ) -> Unit {
-  let wx : Array[Double] = Array::make(self.order.length(), 0.0)
-  let wy : Array[Double] = Array::make(self.order.length(), 0.0)
-  let wa : Array[Double] = Array::make(self.order.length(), 1.0)
-  let ws : Array[Double] = Array::make(self.order.length(), 1.0)
-  // (left out of its row, or held by what is: nothing of it in the scene)
-  let gone : Array[Bool] = Array::make(self.order.length(), false)
-  let ux : Array[Double] = Array::make(self.order.length(), 0.0)
-  let uy : Array[Double] = Array::make(self.order.length(), 0.0)
-  for i, at in self.order {
-    let n = self.nodes[at]
+  // (where each in the order is drawn, how opaque, how big, and where it would be were nothing grown, shrunk or drawn
+  // off: kept for the next walk, one for each walk inside another's `f`; each place written
+  // before what it holds reads it)
+  let len = self.order.length()
+  // (none kept past what the tree let go of: Tree::dispose, even from inside a walk)
+  while self.walks.length() <= self.walking {
+    self.walks.push(Walk::new())
+  }
+  let w = self.walks[self.walking]
+  w.fit(len)
+  self.walking = self.walking + 1
+  let wx = w.x
+  let wy = w.y
+  let wa = w.a
+  let ws = w.s
+  let ux = w.ux
+  let uy = w.uy
+  let g = self.pixel_grid
+  let mut i = 0
+  while i < len {
+    // (the tree let go of from inside `f`: nothing more of it walked, as it went before)
+    if i >= self.order.length() {
+      break
+    }
+    let n = self.nodes[self.order[i]]
     let h = self.order_holder[i]
-    if n.out || (h >= 0 && gone[h]) {
-      gone[i] = true
+    // (left out: it and all it holds, the order's run of them passed over at once)
+    if n.out {
+      i = self.order_end[i]
       continue
     }
-    let (bx, by, ba, bs) = if h < 0 { (0.0, 0.0, 1.0, 1.0) } else { (wx[h], wy[h], wa[h], ws[h]) }
-    let (hx, hy) = if h < 0 { (0.0, 0.0) } else { (ux[h], uy[h]) }
     // (where it is in what holds it, drawn as big as that is; its own scale about its point: its origin drawn in as far
     // as that leaves it)
     // (drawn off where it is laid out, drawn only, by whole pixels where the host says how many a point: View::drawn_off)
-    let (ox, oy) = n.look.drawn_off
-    let g = self.pixel_grid
+    let mut ox = n.look.drawn_off.0
+    let mut oy = n.look.drawn_off.1
     // (whole pixels of the host's, in its own terms, as an old view's look's dx is before what holds it is drawn
     // bigger or smaller: draw.mbt's on_pixels(look.dx, scale))
-    let (ox, oy) = if g > 0.0 && (ox != 0.0 || oy != 0.0) {
-      ((ox * g).round() / g, (oy * g).round() / g)
-    } else {
-      (ox, oy)
+    if g > 0.0 && (ox != 0.0 || oy != 0.0) {
+      ox = (ox * g).round() / g
+      oy = (oy * g).round() / g
     }
-    wx[i] = bx + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx)
-    wy[i] = by + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy)
-    wa[i] = ba * n.la
-    ws[i] = bs * n.ls
-    // (and were nothing grown or shrunk)
-    // (and were nothing grown or shrunk nor drawn off: its words set on the pixels there, then drawn off by whole pixels,
-    // as an old view's are painted where they are laid out and then moved by its look)
-    ux[i] = hx + n.lx
-    uy[i] = hy + n.ly
+    if h < 0 {
+      wx[i] = n.lx + ox + (1.0 - n.ls) * n.lpx
+      wy[i] = n.ly + oy + (1.0 - n.ls) * n.lpy
+      wa[i] = n.la
+      ws[i] = n.ls
+      // (and were nothing grown or shrunk nor drawn off: its words set on the pixels there, then drawn off by whole
+      // pixels, as an old view's are painted where they are laid out and then moved by its look)
+      ux[i] = n.lx
+      uy[i] = n.ly
+    } else {
+      let bs = ws[h]
+      wx[i] = wx[h] + bs * (n.lx + ox + (1.0 - n.ls) * n.lpx)
+      wy[i] = wy[h] + bs * (n.ly + oy + (1.0 - n.ls) * n.lpy)
+      wa[i] = wa[h] * n.la
+      ws[i] = bs * n.ls
+      ux[i] = ux[h] + n.lx
+      uy[i] = uy[h] + n.ly
+    }
     match n.content {
       Some(c) => f(i, c, wx[i], wy[i], wa[i], ws[i], ux[i], uy[i])
       None => ()
     }
+    i = i + 1
   }
+  self.walking = self.walking - 1
+}
+
+///|
+/// What a walk of the scene keeps of each in the order as it goes (Tree::each_drawn_in_order), kept for the next.
+priv struct Walk {
+  mut x : FixedArray[Double]
+  mut y : FixedArray[Double]
+  mut a : FixedArray[Double]
+  mut s : FixedArray[Double]
+  mut ux : FixedArray[Double]
+  mut uy : FixedArray[Double]
+}
+
+///|
+fn Walk::new() -> Walk {
+  { x: [], y: [], a: [], s: [], ux: [], uy: [] }
+}
+
+///|
+/// Room for `len` in the order, at least (grown by half again past it: the order grows a little at a time).
+fn Walk::fit(self : Walk, len : Int) -> Unit {
+  if self.x.length() >= len {
+    return
+  }
+  let room = len + len / 2 + 16
+  self.x = FixedArray::make(room, 0.0)
+  self.y = FixedArray::make(room, 0.0)
+  self.a = FixedArray::make(room, 1.0)
+  self.s = FixedArray::make(room, 1.0)
+  self.ux = FixedArray::make(room, 0.0)
+  self.uy = FixedArray::make(room, 0.0)
 }
 
 ///|
