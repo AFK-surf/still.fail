@@ -371,19 +371,95 @@ test("checking a quoted card for an old client does not merge its message", asyn
   } finally { await r.close(); }
 });
 
+test("a quoted old card is checked after its card-post index is prepared", async () => {
+  const r = rig(), db = r.store.db;
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-old-card", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = (threads: number[]) => r.readers.prepareCardPosts(threads);
+    Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/SELECT n FROM entries WHERE thread = \? AND kind = 'message' AND (card|options) IS NOT NULL/i.test(sql))
+          throw new Error("the station scanned an unprepared card index");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
+  } finally { await r.close(); }
+});
+
+test("a quoted card answered during old index preparation no longer blocks the person's message", async () => {
+  const r = rig(), release = Promise.withResolvers<void>(), started = Promise.withResolvers<void>();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-old-card-answered", null, null).id;
+    r.store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    r.store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = async (threads: number[]) => {
+      started.resolve();
+      await release.promise;
+      await r.readers.prepareCardPosts(threads);
+    };
+    const send = r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] });
+    const waiting = await Promise.race([started.promise.then(() => true), send.then(() => false)]);
+    assert.equal(waiting, true, "the request waits for old card preparation");
+    r.store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES(?,2,'message','2.2','person','p','answer',2)").run(id);
+    release.resolve();
+    const [status] = await send;
+    assert.equal(status, 200);
+  } finally { release.resolve(); await r.close(); }
+});
+
+for (const index of ["entries_cards", "entries_options"]) {
+  test(`a quoted old card is prepared when ${index} was removed`, async () => {
+    const r = rig(), db = r.store.db;
+    try {
+      const id = r.store.openThread("ember", "CHAT", `quoted-card-${index}`, null, null).id;
+      db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,options,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+        .run(id, JSON.stringify([{ label: "no", action: "close" }]));
+      db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+      db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+      db.exec(`DROP INDEX ${index}`);
+      (r.hub as any).prepareCardPosts = (threads: number[]) => r.readers.prepareCardPosts(threads);
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { await r.close(); }
+  });
+}
+
+test("an old thread with no cards does not wait for card-post preparation", async () => {
+  const r = rig();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "old-without-cards", null, null).id;
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = async () => { throw new Error("unneeded card preparation"); };
+    const [status] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes: [{ ts: "1.1", text: "earlier" }] });
+    assert.equal(status, 200);
+  } finally { await r.close(); }
+});
+
 test("a person can send without looking up a card when no quote names a message", async () => {
   const r = rig();
   try {
     for (const [i, quotes] of [undefined, [], [{ text: "earlier" }], "not an array"].entries()) {
       const id = r.store.openThread("ember", "CHAT", `without-card-quote-${i}`, null, null).id;
       r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"), card: { type: "text" } });
-      const pending = r.store.pendingCardHeader;
+      const pending = r.store.pendingCardHeaderIfReady;
       try {
-        r.store.pendingCardHeader = () => { throw new Error("unneeded pending card lookup"); };
+        r.store.pendingCardHeaderIfReady = () => { throw new Error("unneeded pending card lookup"); };
         const [status, sent] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes });
         assert.equal(status, 200, JSON.stringify(sent));
         assert.equal(r.store.messagesBefore(id, null, 1)[0]?.n, sent.n);
-      } finally { r.store.pendingCardHeader = pending; }
+      } finally { r.store.pendingCardHeaderIfReady = pending; }
       assert.equal(r.store.pendingCard(id), null, "the person's message still ends the card's wait");
     }
   } finally { await r.close(); }
