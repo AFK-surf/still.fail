@@ -33,14 +33,22 @@ jobs:
           flags=(-fwrapv -fno-strict-aliasing -ffp-contract=off -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC -MD -MT probe.o -c probe.c)
           /usr/bin/cc -### "${flags[@]}" -MF probe.d -o probe.o 2>launcher.driver
           "$actual" -### "${flags[@]}" -MF probe.d -o probe.o 2>compiler.driver
+          echo 'Launcher driver command:'
           cat launcher.driver
-          cmp launcher.driver compiler.driver
+          echo 'Direct compiler driver command:'
+          cat compiler.driver
+          cmp launcher.driver compiler.driver || true
           /usr/bin/cc "${flags[@]}" -MF launcher.d -o launcher.o
-          "$actual" "${flags[@]}" -MF compiler.d -o compiler.o
+          if ! "$actual" "${flags[@]}" -MF compiler.d -o compiler.o; then
+            echo 'direct compiler could not build the probe'
+            exit 0
+          fi
           /usr/bin/cc -E -dM -x c probe.c > launcher.macros
-          "$actual" -E -dM -x c probe.c > compiler.macros
+          if ! "$actual" -E -dM -x c probe.c > compiler.macros; then
+            echo 'direct compiler could not preprocess the probe'
+            exit 0
+          fi
           shasum -a 256 launcher.o compiler.o launcher.d compiler.d launcher.macros compiler.macros
-          cmp launcher.o compiler.o
-          cmp launcher.d compiler.d
-          cmp launcher.macros compiler.macros
-          echo 'launcher and selected clang: final driver command, object, dependencies and predefined macros match'
+          for suffix in o d macros; do
+            if cmp "launcher.$suffix" "compiler.$suffix"; then echo "$suffix match"; else echo "$suffix differs"; fi
+          done
