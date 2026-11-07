@@ -321,8 +321,16 @@ let viewer_step_blur : Double = 12.0
 let viewer_step_share : Double = 0.8
 
 ///|
-/// A file told of: its mark (44), an extension said up to 12 letters.
+/// A file told of: its mark (44) where it has no extension, an extension said up to 12 letters.
 pub let viewer_facts_icon : Double = 44.0
+
+///|
+/// A file told of's card, its extension in its middle: as wide, as high, and its corner.
+pub let viewer_facts_card : (Double, Double, Double) = (64.0, 80.0, 14.0)
+
+///|
+/// How wide a file told of's buttons are, one over the other.
+pub let viewer_facts_actions : Double = 240.0
 
 ///|
 let viewer_ext_most : Int = 12
@@ -378,9 +386,9 @@ let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, c
 let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// A file told of's size and extension (up to 12 letters, as capitals), as a file told of says them under its name (the viewer's facts' node).
-pub fn facts_size(name : String, size : Double) -> String {
-  let ext = match lower(name).rev_find(".") {
+/// A file's extension, up to 12 letters, as capitals; "" for none (or a longer one).
+pub fn file_ext(name : String) -> String {
+  match lower(name).rev_find(".") {
     Some(i) if i > 0 && name.length() - i - 1 <= viewer_ext_most => {
       let b = StringBuilder::new()
       for ch in name.view(start_offset=i + 1) {
@@ -390,6 +398,12 @@ pub fn facts_size(name : String, size : Double) -> String {
     }
     _ => ""
   }
+}
+
+///|
+/// A file told of's size and extension (file_ext), as a file told of says them under its name (the viewer's facts' node).
+pub fn facts_size(name : String, size : Double) -> String {
+  let ext = file_ext(name)
   if ext == "" {
     file_size(size)
   } else {

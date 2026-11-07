@@ -156,7 +156,8 @@ test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alo
 test "desk: a file told of says so, 下载 the page's button; the bar's own download too" {
   let t = desk_tester("chat-preview-none")
   assert_true(t.find("此文件类型不支持预览") is Some(_))
-  assert_true(t.find("4 KB · BIN") is Some(_))
+  // (its kind on its card, its size under its name)
+  assert_true(t.find("BIN") is Some(_) && t.find("4 KB") is Some(_))
   t.tap_text("下载")
   t.frame()
   // downloaded by the core: how far, in the button's place

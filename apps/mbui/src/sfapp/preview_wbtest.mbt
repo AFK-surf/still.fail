@@ -586,7 +586,8 @@ test "HTML in a page of its own; its source in the code face" {
 test "a file of no kind it can show: told of, with the download" {
   let t = preview_tester("none")
   assert_true(t.find("此文件类型不支持预览") is Some(_))
-  assert_true(t.find("4 KB · BIN") is Some(_))
+  // (its kind on its card, its size under its name)
+  assert_true(t.find("BIN") is Some(_) && t.find("4 KB") is Some(_))
   assert_true(t.find("下载") is Some(_))
 }
 
