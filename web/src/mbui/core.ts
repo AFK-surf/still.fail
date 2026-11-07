@@ -169,11 +169,12 @@ const fetchCarried = (name: string, url = `/mbui/assets/${name}?b=${BUILT_AT}`) 
     .then((b) => { if (b) assets[name] = new Uint8Array(b); });
 const starting = fetchCarried("inter.woff2", interLatin);
 const svgUrl = `/mbui/svg.mjs?b=${BUILT_AT}`;
-const svgStarting = Promise.all([
+const startSvg = () => Promise.all([
   import(/* @vite-ignore */ svgUrl),
   WebAssembly.compileStreaming(fetch(`/mbui/svg.wasm?b=${BUILT_AT}`)),
 ]).then(async ([{ loadSvg }, module]) => {
   (globalThis as { mbuiSvg?: unknown }).mbuiSvg = await loadSvg(module);
+  host()?.post("mbui.svg", "ready");
 });
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
@@ -185,9 +186,13 @@ takeShare((channel, json) => host()?.post(channel, json), (open) => {
   const h = host() as { openUrl?(url: string): boolean } | undefined;
   if (h) h.openUrl = open;
 });
-await Promise.all([starting, svgStarting]);
+await starting;
 await handOver;
 await load(appUrl);
+void startSvg().catch((error: unknown) => {
+  console.error("SVG renderer:", error);
+  host()?.post("mbui.svg", "failed");
+});
 appPreload.remove();
 for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])
   void fetchCarried(name).then(() => (host() as { requestFrame?(): void } | undefined)?.requestFrame?.());

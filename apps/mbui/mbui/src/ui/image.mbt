@@ -172,32 +172,51 @@ pub fn add_vector_image(
 let vector_pictures : Array[(Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = []
 
 ///|
+// kept across runs: set with the app's renderer; changes arrive as host messages.
+let vector_ready : Ref[Bool?] = Ref(Some(true))
+
+///|
+/// None while the renderer loads; Some(false) if it failed, Some(true) when available.
+/// The host reports this once its load finishes, before images are drawn again.
+pub fn set_vector_pictures_ready(ready : Bool?) -> Unit {
+  vector_ready.val = ready
+  redraw_vector_pictures()
+}
+
+///|
 /// Sets what draws vector pictures (SVG) handed over as bytes (`add_image`, `Ctx::image_bytes`).
 pub fn set_vector_pictures(draw : (Bytes, Int) -> (Int, Int, FixedArray[Byte])?) -> Unit {
+  vector_ready.val = Some(true)
   vector_pictures.clear()
   vector_pictures.push(draw)
 }
 
 ///|
 /// An encoded picture as the host decodes it: a vector one drawn here at `px` on its longer side, as a PNG.
-fn host_bytes(src : String, data : Bytes, px : Int) -> Bytes {
+fn host_bytes(src : String, data : Bytes, px : Int) -> Bytes? {
   if looks_like_svg(data) {
     match image_vector_drawers.get(src) {
       Some(draw) =>
         match draw(data, px) {
-          Some((w, h, rgba)) => return png_of(w, h, rgba)
+          Some((w, h, rgba)) => return Some(png_of(w, h, rgba))
           None => ()
         }
       None => ()
     }
     if vector_pictures.length() > 0 {
+      match vector_ready.val {
+        None => return None
+        // Ask the host for a failed decode, so its normal image failure reporting applies.
+        Some(false) => return Some(b"")
+        Some(true) => ()
+      }
       match vector_pictures[0](data, px) {
-        Some((w, h, rgba)) => return png_of(w, h, rgba)
+        Some((w, h, rgba)) => return Some(png_of(w, h, rgba))
         None => ()
       }
     }
   }
-  data
+  Some(data)
 }
 
 ///|
@@ -324,7 +343,16 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   let fallback = if bigger is Some(_) { bigger } else { smaller }
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
-      Some(d) => h_image_load_bytes(host_bytes(src, d, want), want, src)
+      Some(d) => {
+        guard host_bytes(src, d, want) is Some(bytes) else {
+          if fallback is Some(e) {
+            e.used = self.frame_no
+            built_used(fn() { e.used = g().frame_no })
+          }
+          return fallback
+        }
+        h_image_load_bytes(bytes, want, src)
+      }
       None =>
         if src.has_prefix("pdf:") {
           pdf_page_load(src, want)
@@ -376,6 +404,8 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
 /// large not ready yet and not failed): a shot waits for it (shot.mbt).
 fn image_awaited(src : String, px : Double) -> Bool {
   image_decodes_read(src)
+  let renderer_waiting = vector_ready.val is None && vector_pictures.length() > 0 &&
+    image_data.get(src) is Some(data) && looks_like_svg(data)
   if src.has_prefix("mem:") && !image_data.contains(src) {
     return true
   }
@@ -391,9 +421,9 @@ fn image_awaited(src : String, px : Double) -> Bool {
           coming = true
         }
       }
-      coming
+      coming || (list.is_empty() && renderer_waiting)
     }
-    None => false
+    None => renderer_waiting
   }
 }
 

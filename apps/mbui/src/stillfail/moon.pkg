@@ -18,7 +18,7 @@ import {
 
 options(
   "is-main": true,
-  targets: { "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ], "link_wasm.mbt": [ "wasm" ], "wasm_shell.mbt": [ "wasm" ], "reports_js_wbtest.mbt": [ "js" ] },
+  targets: { "svg_js.mbt": [ "js" ], "svg_linked.mbt": [ "native", "wasm", "wasm-gc" ], "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ], "link_wasm.mbt": [ "wasm" ], "wasm_shell.mbt": [ "wasm" ], "reports_js_wbtest.mbt": [ "js" ] },
   "native-stub": [ "core_engine.m" ],
   link: {
     "js": { "format": "iife" },
