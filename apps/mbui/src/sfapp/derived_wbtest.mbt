@@ -482,3 +482,60 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   t.run_for(@sf.enter_ms)
   assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=rd.motion_keys.to_string())
 }
+
+///|
+test "a chat keeps its rows when scrolled and renamed, then shows a new message at the end" {
+  new_run()
+  let base = fixture("chat")
+  let messages = Array::makei(30, fn(i) { said(i + 1, "第 \{i + 1} 句") })
+  let title = Ref("整理发布清单")
+  let changes = @signals.signal(1)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "chat" && params.get("session") == Some(Json::string("s-c1")) {
+        let version = changes.get()
+        let chat : Json = {
+          "title": Json::string(title.val),
+          "thread": { "id": 1 },
+          "messages": Json::array(messages),
+          "agents": [],
+          "people": [],
+        }
+        { value: Some(chat), error: None, version }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  let rd = @sfbase.reading_of("ws1/st1\u{1}s-c1")
+  let rows = rd.motion_keys
+  assert_true(t.at_end())
+  t.scroll_to(4)
+  t.frame()
+  assert_false(t.at_end())
+  let (first, _) = t.visible()
+  assert_true(first >= 0 && first < 15, msg="first visible row \{first}")
+  assert_true(physical_equal(rd.motion_keys, rows))
+  title.val = "发布清单"
+  changes.set(2)
+  t.frame()
+  assert_true(t.find("发布清单") is Some(_))
+  assert_false(t.at_end())
+  assert_eq(t.visible().0, first)
+  assert_true(physical_equal(rd.motion_keys, rows))
+  messages.push(said(31, "新的一句"))
+  changes.set(3)
+  t.frame()
+  t.run_for(@sf.enter_ms)
+  assert_false(t.at_end())
+  assert_eq(t.visible().0, first)
+  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }))
+  t.scroll_to_end()
+  t.frame()
+  assert_true(t.at_end())
+  assert_true(t.find("新的一句") is Some(_))
+}

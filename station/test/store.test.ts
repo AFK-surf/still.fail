@@ -18,6 +18,8 @@ import { LEGACY_LAST_DECISION_REPAIR, installDecisionSessionIndex } from "../src
 import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
 import { installLegacySaid, LEGACY_SAID_BOUNDARY_TAIL, LEGACY_SAID_DRAIN, LEGACY_SAID_DRAIN_THREAD,
   LEGACY_SAID_HEAD_FIRST, LEGACY_SAID_HEAD_TAIL, LEGACY_SAID_NEEDS_DRAIN } from "../src/store/legacy-said-build.ts";
+import { ARCHIVE_LAST_FIRST, ARCHIVE_LAST_GUARD, ARCHIVE_LAST_SLICE_BEFORE, ARCHIVE_LAST_SLICE_FIRST,
+  ARCHIVE_LAST_TAIL } from "../src/store/archive-last.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
 import { CARD_POST_AFTER, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE } from "../src/store/card-post-index.ts";
@@ -1669,6 +1671,21 @@ test("what the station asks again and again is planned by an index, never a scan
       assert.ok(plan.some((line) => line.includes("SEARCH d USING PRIMARY KEY (thread=?)")), plan.join(" | "));
   }
   const store = memory();
+  for (const [sql,args] of [
+    [ARCHIVE_LAST_FIRST,[1]], [ARCHIVE_LAST_TAIL,[1]], [ARCHIVE_LAST_SLICE_FIRST,[1,64]],
+    [ARCHIVE_LAST_SLICE_BEFORE,[1,"100",64]],
+  ] as [string,(number | string)[]][]) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH e ") && line.includes("thread=?")), plan.join(" | "));
+    assert.ok(!plan.some((line) => /^SCAN e\b/.test(line)), plan.join(" | "));
+    if (sql === ARCHIVE_LAST_SLICE_FIRST || sql === ARCHIVE_LAST_SLICE_BEFORE)
+      assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join(" | "));
+    if (sql === ARCHIVE_LAST_SLICE_BEFORE)
+      assert.ok(plan.some((line) => line.startsWith("SEARCH e ") && line.includes("n<?")), plan.join(" | "));
+  }
+  const archiveLastGuard = (store.db.prepare(`EXPLAIN QUERY PLAN ${ARCHIVE_LAST_GUARD}`).all(1) as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(archiveLastGuard.some((line) => line.includes("SEARCH g USING PRIMARY KEY (thread=?)")), archiveLastGuard.join(" | "));
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);
     assert.ok(plan.some((s) => s.includes(`SEARCH ${table} USING PRIMARY KEY (${key}=?)`)), plan.join(" | "));
