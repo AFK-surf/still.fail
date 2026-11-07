@@ -59,8 +59,22 @@ export class VaultStore {
   /// A vault's new version, in place of the one before (checked to follow it). Deleted, its items go with it: sealed
   /// under a key no one holds any more.
   putVault(v: Vault): void {
-    this.#db.prepare("INSERT INTO vaults (ws, id, seq, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET seq = excluded.seq, body = excluded.body").run(v.ws, v.id, v.seq, JSON.stringify(v));
-    if (v.deleted) this.#db.prepare("DELETE FROM vault_items WHERE ws = ? AND vault = ?").run(v.ws, v.id);
+    const save = this.#db.prepare("INSERT INTO vaults (ws, id, seq, body) VALUES (?, ?, ?, ?) ON CONFLICT (ws, id) DO UPDATE SET seq = excluded.seq, body = excluded.body");
+    if (!v.deleted) {
+      save.run(v.ws, v.id, v.seq, JSON.stringify(v));
+      return;
+    }
+    // A failure or interruption while deleting the items must not leave the deleted version beside its old items.
+    // A savepoint also works when the caller is already in a transaction.
+    this.#db.exec("SAVEPOINT vault_delete");
+    try {
+      save.run(v.ws, v.id, v.seq, JSON.stringify(v));
+      this.#db.prepare("DELETE FROM vault_items WHERE ws = ? AND vault = ?").run(v.ws, v.id);
+      this.#db.exec("RELEASE vault_delete");
+    } catch (error) {
+      try { this.#db.exec("ROLLBACK TO vault_delete; RELEASE vault_delete"); } catch { /* SQLite may already have rolled back. */ }
+      throw error;
+    }
   }
 
   /// A vault's items, latest versions (deleted ones too: a version saying so).
