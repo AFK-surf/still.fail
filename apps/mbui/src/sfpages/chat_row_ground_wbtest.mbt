@@ -99,3 +99,45 @@ test "a finger's chat row keeps its ground a while after its chat only where the
     }
   }
 }
+
+///|
+test "a finger's row pressed beside the chat goes from its press's ground to the selected one's, never through none" {
+  @sfbase.reset()
+  @sf.set_words(@sfbase.fill)
+  let open = @signals.signal(0)
+  let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=320.0, h=400.0, platform=2)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(@sf.ui_theme_now)
+    let popup = root.box(fn(v) { v.over(Is(true)) |> ignore })
+    let tips = @sf.TipLayer::new(fn() { Some(popup) })
+    for i in 0..<2 {
+      let item = { ..sample_chat(i), title: "Chat \{i}" }
+      chat_row_node(root, @sfbase.sample_source, tips, fn() { item }, "agents", fn() { open.get() == i }, Side, fn() {
+        0
+      })
+      |> ignore
+    }
+  })
+  t.draw()
+  let (x, y, w, h) = t.get(Link, label="Chat 1").rect
+  // (its ground's ink: none drawn, 0)
+  let ground = fn() {
+    match t.drawn_rects().filter(fn(r) { r.2 > 100.0 && r.3 > 30.0 && r.1 >= y - 1.0 && r.1 + r.3 <= y + h + 1.0 }) {
+      [r, ..] => r.4 & 0xFFL
+      [] => 0L
+    }
+  }
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.tap_indication_ms)
+  assert_true(ground() > 0L, msg="pressed")
+  // let go, its chat not yet in view: its press's ground going
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_true(ground() > 0L, msg="let go")
+  // its chat in view: the selected one's ground coming, there over dur_ms
+  open.set(1)
+  t.frame()
+  assert_true(ground() > 0L, msg="its chat in view")
+  t.run_for(@sf.dur_ms)
+  assert_eq(ground(), 0xFFL)
+}

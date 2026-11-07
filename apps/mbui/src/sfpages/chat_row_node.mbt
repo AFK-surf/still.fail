@@ -135,8 +135,11 @@ pub fn chat_row_node(
     // pointer's eased in and out, the selected one's while its chat is in view (nav_ground's)
     // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
     // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view; in a side column,
-    // beside the chat, it fades as a mouse's does (dur_ms)
+    // beside the chat, it fades as a mouse's does (dur_ms), and the row pressed goes from its press's ground to the
+    // selected one's over dur_ms, never through none (the user, 2026-11-07: active 那个状态好像切换的时候颜色会稍微有些闪)
     let left = @sf.EdgeWay::new(0.0)
+    // (a finger's press's ground, beside the chat: on at once, off over dur_ms)
+    let pressed = @sf.EdgeWay::new(0.0)
     // (a finger's swiped left in its slot, by so many points: swipe_node's)
     let off = @sf.EdgeWay::new(0.0)
     let hand = @sf.EdgeWay::new(0.0)
@@ -147,8 +150,11 @@ pub fn chat_row_node(
         // (lifted, its card is its ground: the row's own drawn by the card round it, not square inside it)
         if lifted() > 0.0 {
           0L
-        } else if held.get() || menu_on() || press_lit.get() {
+        } else if held.get() || menu_on() || (at == Whole && press_lit.get()) {
           @sf.alpha(p.text, 0.05)
+        } else if at != Whole && (pressed.shown(row) > 0.0 || chosen.shown(row) > 0.0 || left.shown(row) > 0.0) {
+          let o = dmax(chosen.shown(row), left.shown(row))
+          @sf.over(@sf.alpha(p.text, 0.05 * pressed.shown(row) * (1.0 - o)), @sf.alpha(p.selected, o))
         } else if on() {
           p.selected
         } else {
@@ -365,6 +371,15 @@ pub fn chat_row_node(
     row.reacts(fn() { @sf.lit_in_node(row) }, fn(h) { hand.go(row, if h { 1.0 } else { 0.0 }, @sf.dur_ms) })
     row.reacts(on, fn(o) { chosen.go(row, if o { 1.0 } else { 0.0 }, @sf.dur_ms) })
     if finger {
+      if at != Whole {
+        row.reacts(fn() { press_lit.get() }, fn(lit) {
+          if lit {
+            pressed.go_from(row, 1.0, 1.0, @motion.Snap(0.0))
+          } else {
+            pressed.go(row, 0.0, @sf.dur_ms)
+          }
+        })
+      }
       let was_on = Ref(@signals.untracked(on))
       row.reacts(on, fn(o) {
         if was_on.val && !o {
