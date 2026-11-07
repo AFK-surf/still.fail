@@ -40,7 +40,7 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 }
 
 ///|
-/// A picture coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part): its name, and what the core says of
+/// A file coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part, -apk-reading): its name, and what the core says of
 /// how much has come of it, once, as it is asked for (None: nothing); none coming (None): every file whole at once.
 pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
 
@@ -62,7 +62,7 @@ pub fn fixture_preview(mode : String) -> Unit {
     "chat-preview-md" => "说明.md"
     "chat-preview-csv" => "数据.csv"
     "chat-preview-none" => "备份.bin"
-    "chat-preview-apk" => "测试版.apk"
+    "chat-preview-apk" | "chat-preview-apk-reading" => "测试版.apk"
     // (a picture whose name is far longer than a phone's bar has room for: the name cut short, the tools whole)
     "chat-preview-long" => "首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png"
     _ => return
@@ -73,6 +73,8 @@ pub fn fixture_preview(mode : String) -> Unit {
       preview_coming.val = match mode {
         "chat-preview-coming" => Some((which, None))
         "chat-preview-coming-part" => Some((which, Some({ "loaded": 6000.0, "total": 18000.0 })))
+        // (an APK asked to 安装, read as far as 25.7 MB of 40.9 MB)
+        "chat-preview-apk-reading" => Some((which, Some({ "loaded": 26948403.0, "total": 42886758.0 })))
         _ => None
       }
       // (its bytes read whole, no picture in them: the host says it cannot decode them)

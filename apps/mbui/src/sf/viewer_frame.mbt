@@ -321,8 +321,15 @@ let viewer_step_blur : Double = 12.0
 let viewer_step_share : Double = 0.8
 
 ///|
-/// A file told of: its mark (44), an extension said up to 12 letters.
-pub let viewer_facts_icon : Double = 44.0
+/// A file told of: its mark (32, on its tile), an extension said up to 12 letters.
+pub let viewer_facts_icon : Double = 32.0
+
+///|
+/// The tile a file told of has its mark on, square, and its corner.
+pub let viewer_facts_tile : Double = 72.0
+
+///|
+pub let viewer_facts_tile_corner : Double = 20.0
 
 ///|
 let viewer_ext_most : Int = 12
