@@ -160,8 +160,8 @@ export function legacyAgentDrain(db: DatabaseSync, limit = BATCH): number {
     if (m.version !== VERSION) throw new Error(`legacy agent version ${m.version} is incompatible with ${VERSION}`);
     // Before the scan has passed a key, folding it could make the scanner stage an older time for the same key.
     if (!m.scanned) { db.exec("COMMIT"); return 0; }
-    const first = db.prepare(`SELECT CAST(thread AS TEXT) thread,CAST(n AS TEXT) n,CAST(old_at AS TEXT) old_at
-      FROM legacy_agent_dirty ORDER BY thread,n LIMIT 1`);
+    const first = db.prepare(`SELECT CAST(d.thread AS TEXT) thread,CAST(d.n AS TEXT) n,CAST(d.old_at AS TEXT) old_at
+      FROM legacy_agent_dirty d ORDER BY d.thread,d.n LIMIT 1`);
     const current = db.prepare(`SELECT CAST(at AS TEXT) at FROM entries WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)
       AND kind='message' AND author_kind='agent'`);
     const extras = db.prepare(`SELECT CAST(at AS TEXT) at FROM legacy_agent_times INDEXED BY legacy_agent_times_by_key
