@@ -4,7 +4,7 @@
 // up by a next driver (with a snapshot, and after a crash) with the turn's end told once and no live event twice.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import fs from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
@@ -18,6 +18,7 @@ import { allLeft, existingRunners, type RunnerInfo } from "../src/agents/runner.
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 import { transcriptPaths } from "../src/read/transcript.ts";
+import { tempDir } from "./temp-dir.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
@@ -25,7 +26,7 @@ process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 process.env.OPENAI_API_KEY = "leaked";
 process.env.CODEX_HOME = "/nowhere";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
+const data = tempDir(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
 const skills = join(data, "skills");
 mkdirSync(join(skills, "mine"), { recursive: true });
 writeFileSync(join(skills, "mine", "SKILL.md"), "");
