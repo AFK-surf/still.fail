@@ -1,7 +1,7 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, threadSessions } from "./store.ts";
+import { chatHistoryMessages, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, threadSessions } from "./store.ts";
 import { searchChats } from "../store/chat-list.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
@@ -42,6 +42,8 @@ export const sessionOps: Record<string, ReadOp> = {
   },
   /// A thread's latest `limit` messages, oldest first: the archive review's (sessions/review.ts).
   latestMessages: (s, a) => messagesBefore(s, a.thread, null, a.limit),
+  /// A history page and its optional message boundary, read together.
+  chatHistoryMessages: (s, a) => chatHistoryMessages(s, a.thread, a.before ?? null, a.limit),
   /// One session as lists and events have it (views.rs `summary`).
   summary: (s, a) => summary(s, a.key),
   sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang, a.viewer ?? null),
