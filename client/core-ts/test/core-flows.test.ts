@@ -21,7 +21,7 @@ import { base, entry, overview, session, started, stationHost, stationLater, sta
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
-import { tokensOf } from "../src/forms.ts";
+import { ConnectFlows, pickOf, tokensOf } from "../src/forms.ts";
 import * as present from "../src/present.ts";
 import { PUSH_KEY } from "../src/attention.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
@@ -2364,6 +2364,8 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:feishu" });
   flow.go(topic, ui, "feishuWay");
   await ask(host, core, ui, 4, "connect.flow.register", form);
+  const registrationRequest = stationPosted(host, "/feishu/registrations")[0];
+  assert.deepEqual([registrationRequest.bind.runtime, registrationRequest.bind.model, registrationRequest.mode], ["codex", "gpt-6-astra", "multi-session"], "the station has the chosen settings before the scan");
   view = flow.value(topic);
   assert.equal(view.step, "feishuScan");
   assert.equal(view.feishu.registration.id, "r1");
@@ -2443,7 +2445,77 @@ test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_ma
   assert.equal(flow.value(connectTopic("gone")).feishu.registration.state, "waiting", "as it was started, before the overview says");
   await ask(host, core, ui, 17, "connect.flow.drop", other);
   await host.settle();
-  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), ["/feishu/registrations/r2"]);
+  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), [], "closing the form does not cancel an already opened scan");
+  core.close();
+});
+
+test("connect_wizard_rechecks_a_scan_done_before_the_register_request_finishes", async () => {
+  const { host, core } = await choosing();
+  const done = { id: "quick", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_quick", domain: "feishu" };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/feishu/registrations") return { id: done.id, url: done.url, expiresAt: done.expiresAt, overview: { ...(structuredClone(core.inner.store.get({ topic: "overview", station: "ws/st" })) as J), feishuRegistrations: [done] } };
+    if (path === "/feishu/connects") return { id: "quick-bot" };
+    return undefined;
+  });
+  withFeishu(core, []);
+  const ui = core.connect();
+  const form = { station: "ws/st", form: "quick" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  await ask(host, core, ui, 2, "connect.flow.go", { ...form, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect-new:quick", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect-new:quick" });
+  await ask(host, core, ui, 5, "connect.flow.go", { ...form, input: { to: "feishuWay" } });
+  await ask(host, core, ui, 6, "connect.flow.register", form);
+  await host.settle();
+  assert.equal(stationPosted(host, "/feishu/connects").length, 1);
+  assert.equal(core.inner.forms.connects.value(connectTopic("quick")).feishu.connect, "quick-bot");
+  core.close();
+});
+
+test("connect_wizard_rechecks_a_finished_scan_when_the_model_becomes_available", async () => {
+  const { core } = await choosing();
+  withFeishu(core, []);
+  const ui = core.connect();
+  const topic = connectTopic("late-model");
+  const selected = { valueOption: { model: "gpt-6-astra" }, value: { runtime: "codex", model: "gpt-6-astra" } };
+  let picked: { valueOption: { model: string } | null; value: { runtime: string; model: string } } = selected;
+  let ready = 0;
+  const flow = new ConnectFlows(core.inner.store, () => ({ ok: picked }), () => {}, { ready: (t) => { if (flow.ready(t)) ready++; } });
+  flow.open(topic, ui, {});
+  flow.go(topic, ui, "feishuBind");
+  flow.go(topic, ui, "feishuWay");
+  const [generation] = flow.begin(topic, ui, "register", {}, false);
+  flow.finish(topic, generation, "register", { ok: { id: "late", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000 } });
+  picked = { ...selected, valueOption: null };
+  withFeishu(core, [{ id: "late", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_late", domain: "feishu" }]);
+  assert.equal(ready, 0, "the scan finished before the model was available");
+  picked = selected;
+  core.inner.store.set(pickOf("ws/st", "late-model"), { ok: selected });
+  assert.equal(ready, 1, "the picker change causes another readiness check");
+  flow.drop(topic, ui);
+  core.close();
+});
+
+test("connect_wizard_shows_a_station_saved_scan_even_if_the_model_is_no_longer_available", async () => {
+  const { core } = await choosing();
+  withFeishu(core, []);
+  const ui = core.connect();
+  const topic = connectTopic("saved-scan");
+  const selected = { valueOption: { model: "gpt-6-astra" }, value: { runtime: "codex", model: "gpt-6-astra" } };
+  let picked: { valueOption: { model: string } | null; value: { runtime: string; model: string } } = selected;
+  let createRequests = 0;
+  const flow = new ConnectFlows(core.inner.store, () => ({ ok: picked }), () => {}, { ready: (t) => { if (flow.ready(t)) createRequests++; } });
+  flow.open(topic, ui, {});
+  flow.go(topic, ui, "feishuBind");
+  flow.go(topic, ui, "feishuWay");
+  const [generation] = flow.begin(topic, ui, "register", {}, false);
+  flow.finish(topic, generation, "register", { ok: { id: "saved", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000 } });
+  picked = { ...selected, valueOption: null };
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), feishuRegistrations: [{ id: "saved", url: "", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_saved", domain: "feishu" }], connects: [{ id: "bot", kind: "feishu", feishu: { appId: "cli_saved" } }] });
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).feishu.connect, createRequests], ["done", "bot", 0]);
+  flow.drop(topic, ui);
   core.close();
 });
 

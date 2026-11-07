@@ -120,7 +120,7 @@ export const PARAMS: Record<string, string> = {
   "connect.reconnect": "id:string",
   "connect.bindSession": "connect:string session?:string title?:string",
   "connect.putSlackApp": "connect:string input?:json from?:json",
-  "feishu.register": "domain?:string name?:string",
+  "feishu.register": "domain?:string name?:string bind?:json mode?:string requireMention?:boolean threads?:boolean",
   "feishu.cancelRegistration": "id:string",
   "feishu.verify": "appId:string appSecret:string domain?:string",
   "feishu.createConnect": "feishu:json bind?:json mode?:string requireMention?:boolean owner?:json",
@@ -505,7 +505,7 @@ function stationOp(name: string, params: unknown): Request | null {
     // Feishu (and Lark) bots: made by scanning (the station follows it, the overview's
     // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
     case "feishu.register":
-      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name"]), OVERVIEW);
+      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name", "bind", "mode", "requireMention", "threads"]), OVERVIEW);
     case "feishu.cancelRegistration":
       return op("DELETE", () => `/feishu/registrations/${p.at("id")}`, null, OVERVIEW);
     case "feishu.verify":

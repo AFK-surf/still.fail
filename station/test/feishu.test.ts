@@ -2,7 +2,7 @@
 // and its surface against Feishu's stand-in (test/feishu-fake.ts), through a hub with scripted runtimes.
 import assert from "node:assert/strict";
 import { gunzipSync } from "node:zlib";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -108,14 +108,47 @@ test("registration: the link carries what the app is to get; asked until its id 
     await t.adjust(5000);
     await settle();
     assert.equal(reg.get(r.id)!.state, "done");
-    assert.equal(reg.take(r.id, "b@x.test"), null, "only its maker's");
-    assert.deepEqual(reg.take(r.id, "a@x.test")!.app, { appId: "cli_new", appSecret: "sec", openId: "ou_me" });
+    assert.equal(await reg.complete(r.id, "b@x.test", "", async () => "wrong"), null, "only its maker's");
+    assert.equal(await reg.complete(r.id, "a@x.test", "", async (made) => {
+      assert.deepEqual(made.app, { appId: "cli_new", appSecret: "sec", openId: "ou_me" });
+      return "saved";
+    }), "saved");
     const again = await reg.begin("a@x.test", "feishu", null);
     answer = { error: "access_denied" };
     await t.adjust(5000);
     await settle();
     assert.equal(reg.get(again.id)!.state, "denied");
     assert.equal(polls.length, 3);
+  } finally {
+    await reg.close();
+    await t.close();
+  }
+});
+
+test("registration: a temporary save failure is retried with the same app while the station stays up", async () => {
+  const t = testClock();
+  let attempts = 0;
+  const reg = new Registrations({ clock: t.clock, post: async (_domain, form) =>
+    form.action === "init" ? { supported_auth_methods: ["client_secret"] }
+      : form.action === "begin" ? { device_code: "dc", verification_uri_complete: "https://accounts.feishu.cn/x", interval: 5 }
+      : { client_id: "cli_new", client_secret: "sec" },
+  });
+  reg.start(async (r) => {
+    assert.equal(r.app?.appId, "cli_new");
+    if (++attempts === 1) throw new Error("temporary failure");
+    return "my-connect";
+  });
+  try {
+    const viewer = { sub: "s", email: "a@x.test", name: "A", role: "owner", workspace: "w", device: "d" };
+    const r = await reg.begin(viewer.email, "feishu", null, { viewer, lang: "zh", input: { bind: { runtime: "claude" } } }, viewer.workspace);
+    await t.adjust(5000);
+    await settle();
+    assert.equal(attempts, 1);
+    assert.equal(reg.get(r.id)?.app?.appSecret, "sec");
+    await t.adjust(5000);
+    await settle();
+    assert.equal(attempts, 2);
+    assert.deepEqual([reg.get(r.id)?.connectId, reg.get(r.id)?.app], ["my-connect", null]);
   } finally {
     await reg.close();
     await t.close();
@@ -511,7 +544,8 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
   const store = Store.open(":memory:", null);
   const feishu = makeFeishu({ data, store, config, receive: async () => {}, bound: () => true });
   const viewer = { sub: "s", email: "owner@example.com", name: "Owner", role: "owner", workspace: "ws", device: "d" } as Json;
-  const table = feishuRoutes({ feishu, config, data, hub: () => undefined, overview: () => ({ connects: config.raw().connects }) });
+  let failOverview = false;
+  const table = feishuRoutes({ feishu, config, data, hub: () => undefined, overview: () => { if (failOverview) throw new Error("overview unavailable"); return { connects: config.raw().connects }; } });
   const ask = async (method: string, path: string, body?: unknown): Promise<[number, Json]> => {
     for (const route of table) {
       const found = route.method === method ? route.pattern.exec(path) : null;
@@ -543,15 +577,104 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
     const [begun, reg] = await ask("POST", "/feishu/registrations", { name: "Codex 机器人" });
     assert.equal(begun, 200);
     await fake.until("registered", () => feishu.registrations.get(reg.id)?.state === "done");
+    const [refused] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "not-a-runtime" } });
+    assert.equal(refused, 400);
+    assert.equal(feishu.registrations.get(reg.id)?.state, "done", "a failed save keeps the app for another attempt");
     const [scanned, second] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } });
     assert.equal(scanned, 200, JSON.stringify(second));
     assert.equal(second.id, "codex-2");
     assert.equal(config.raw().connects[1].feishu.appId, "cli_scan");
-    assert.equal(feishu.registrations.get(reg.id), undefined, "taken");
+    assert.equal(feishu.registrations.get(reg.id)?.connectId, second.id, "the saved result makes a repeated request idempotent");
+    const [again, repeated] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } });
+    assert.deepEqual([again, repeated.id, config.raw().connects.length], [200, second.id, 2]);
+    const [, reg2] = await ask("POST", "/feishu/registrations");
+    await fake.until("registered again", () => feishu.registrations.get(reg2.id)?.state === "done");
+    failOverview = true;
+    const [answerLost] = await ask("POST", "/feishu/connects", { feishu: { registration: reg2.id }, bind: { runtime: "claude" } });
+    assert.equal(answerLost, 500, "the overview failed after the connection was written");
+    assert.equal(config.raw().connects.length, 3);
+    failOverview = false;
+    const [retry, afterLost] = await ask("POST", "/feishu/connects", { feishu: { registration: reg2.id }, bind: { runtime: "claude" } });
+    assert.deepEqual([retry, afterLost.id, config.raw().connects.length], [200, config.raw().connects[2].id, 3], "retry finds the committed connection");
   } finally {
     if (was === undefined) delete process.env.STILLFAIL_FEISHU_API;
     else process.env.STILLFAIL_FEISHU_API = was;
     await feishu.close();
+    store.close();
+    await fake.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("scan: the station resumes a waiting scan and retries a failed save after restarts, without a client or another app", async () => {
+  const fake = await FakeFeishu.start();
+  let confirmed = false;
+  fake.answer("POST /oauth/v1/app/registration", (s: Json) =>
+    s.body.action === "init" ? { supported_auth_methods: ["client_secret"] }
+      : s.body.action === "begin" ? { device_code: "dc", verification_uri_complete: `${fake.base}/verify?code=1`, interval: 5, expires_in: 600 }
+      : confirmed ? { client_id: "cli_scan", client_secret: "scan-secret" } : { error: "authorization_pending" },
+  );
+  const was = process.env.STILLFAIL_FEISHU_API;
+  process.env.STILLFAIL_FEISHU_API = fake.base;
+  const data = mkdtempSync(join(tmpdir(), "fr-restart-"));
+  const t = testClock();
+  delete process.env.STILLFAIL_CONFIG;
+  writeFileSync(join(data, "config.json"), JSON.stringify({ connects: [] }));
+  const { ConfigFile } = await import("../src/ops/config.ts");
+  const { Store } = await import("../src/store/store.ts");
+  const { makeFeishu } = await import("../src/feishu/index.ts");
+  const { feishuRoutes } = await import("../src/api/routes/feishu.ts");
+  const config = new ConfigFile(data);
+  const store = Store.open(":memory:", null);
+  const viewer = { sub: "s", email: "owner@example.com", name: "Owner", role: "owner", workspace: "joined", device: "d" } as Json;
+  let failures = 0;
+  let failSave = true;
+  config.check = () => { if (failSave) { failures++; throw new Error("injected config write failure"); } };
+  let feishu = makeFeishu({ data, store, config, clock: t.clock, receive: async () => {}, bound: () => false });
+  const routes = () => feishuRoutes({ feishu, config, data, hub: () => undefined, overview: () => ({ connects: config.raw().connects }), place: () => ({ origin: "x", station: "st", workspace: "home" }) });
+  let table = routes();
+  const ask = async (method: string, path: string, body?: unknown): Promise<[number, Json]> => {
+    const route = table.find((route) => route.method === method && route.pattern.test(path))!;
+    const a = await route.handle({ method, path, query: [], headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer, lang: "zh" }, route.pattern.exec(path)!.slice(1));
+    return [a.status, JSON.parse(String(a.body))];
+  };
+  try {
+    const [status, reg] = await ask("POST", "/feishu/registrations", { bind: { runtime: "claude", model: "chosen-model" }, mode: "multi-session", requireMention: false, threads: true });
+    assert.equal(status, 200);
+    const journal = join(data, "feishu-registrations.json");
+    assert.equal(statSync(journal).mode & 0o777, 0o600);
+    await feishu.close();
+    confirmed = true;
+    feishu = makeFeishu({ data, store, config, clock: t.clock, receive: async () => {}, bound: () => false });
+    table = routes();
+    await t.adjust(5000);
+    await fake.until("save failed", () => failures > 0);
+    assert.equal(config.raw().connects.length, 0);
+    assert.equal(feishu.registrations.get(reg.id)?.app?.appSecret, "scan-secret", "the app survives a rejected config write");
+    assert.match(readFileSync(journal, "utf8"), /scan-secret/);
+    const polls = fake.calls("POST", "/oauth/v1/app/registration").filter((c) => c.body.action === "poll").length;
+    await feishu.close();
+    failSave = false;
+    feishu = makeFeishu({ data, store, config, clock: t.clock, receive: async () => {}, bound: () => false });
+    table = routes();
+    await fake.until("saved after restart", () => typeof feishu.registrations.get(reg.id)?.connectId === "string");
+    const kept = config.raw().connects;
+    assert.equal(kept.length, 1);
+    assert.deepEqual([kept[0].feishu.appId, kept[0].feishu.appSecret, kept[0].bind, kept[0].workspace, kept[0].requireMention, kept[0].feishu.threads], ["cli_scan", "scan-secret", { runtime: "claude", model: "chosen-model" }, "joined", false, true]);
+    assert.doesNotMatch(readFileSync(journal, "utf8"), /scan-secret|device_code|verify\?code/);
+    const [one, two] = await Promise.all([ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } }), ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } })]);
+    assert.deepEqual([one[0], two[0], one[1].id, two[1].id, config.raw().connects.length], [200, 200, kept[0].id, kept[0].id, 1]);
+    viewer.workspace = "other";
+    const [wrongWorkspace] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } });
+    assert.equal(wrongWorkspace, 400, "a registration belongs to its creator and workspace");
+    viewer.workspace = "joined";
+    assert.equal(fake.calls("POST", "/oauth/v1/app/registration").filter((c) => c.body.action === "begin").length, 1);
+    assert.equal(fake.calls("POST", "/oauth/v1/app/registration").filter((c) => c.body.action === "poll").length, polls, "saving the app never starts another scan");
+  } finally {
+    if (was === undefined) delete process.env.STILLFAIL_FEISHU_API;
+    else process.env.STILLFAIL_FEISHU_API = was;
+    await feishu.close();
+    await t.close();
     store.close();
     await fake.close();
     rmSync(data, { recursive: true, force: true });
