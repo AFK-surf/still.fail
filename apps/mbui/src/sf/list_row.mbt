@@ -62,7 +62,7 @@ pub fn list_row(
   // foot as far in as a capsule of its height is from the corner, with the line's own space around it counted.
   let item = match (at, foot_capsule) {
     (Side, Some(h)) => {
-      let bottom = capsule_in(row_corner, h) - (l.meta_h - h) / 2.0
+      let bottom = @ui.capsule_in(row_corner, h) - (l.meta_h - h) / 2.0
       l.item.then(@ui.style(pb=room(bottom)))
     }
     _ => l.item
@@ -164,8 +164,8 @@ pub fn row_keys_room(n : Int) -> Double {
 let row_keys_at : @ui.Style = @ui.style(
   w=Full,
   align=AEnd,
-  pt=room(capsule_in(row_corner, row_key_side)),
-  pr=room(capsule_in(row_corner, row_key_side)),
+  pt=room(@ui.capsule_in(row_corner, row_key_side)),
+  pr=room(@ui.capsule_in(row_corner, row_key_side)),
 )
 
 ///|

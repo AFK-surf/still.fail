@@ -128,15 +128,10 @@ test "concentric: a corner moved in is as much smaller, whole numbers kept whole
 test "a circle in a corner stands its corner's whole radius in, as in a round one: the smoothing is the drawing's alone" {
   // (the user, 2026-11-03: 平滑圆角没道理影响这个; 平滑圆角只是在原有圆角的描述上做平滑: what lies in a corner is laid out by
   // the corner said, no smooth scale in the arithmetic)
-  assert_eq(round_like(28.0), 28.0)
+  assert_eq(capsule_in(28.0, 20.0), 18.0)
   // a capsule's end is itself; in a box short of the corner, its half
-  assert_eq(round_like(20.0, room=20.0), 20.0)
-  assert_eq(round_like(28.0, room=20.0), 20.0)
-  // and back
-  for c in [(28.0, 1.0e30), (20.0, 20.0), (34.0, 1.0e30)] {
-    let (r, room) = c
-    assert_true((round_like_out(round_like(r, room~), room~) - r).abs() < 1.0e-9)
-  }
+  assert_eq(capsule_in(20.0, 20.0, room=20.0), 10.0)
+  assert_eq(capsule_in(28.0, 20.0, room=20.0), 10.0)
 }
 
 ///|

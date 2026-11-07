@@ -536,7 +536,7 @@ let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent")
 /// A row key concentric with the side row's rounded end, without increasing the row's height.
 fn favorite_remove_key() -> @ui.Style {
   let corner = @sf.row_least() / 2.0
-  let inset = @sf.capsule_in(corner, @sf.row_keys_room(1), room=corner)
+  let inset = @ui.capsule_in(corner, @sf.row_keys_room(1), room=corner)
   @sf.row_key_box.then(@ui.style(mr=@sf.room_of(inset - @sf.theme().chat_list.band_pad)))
 }
 

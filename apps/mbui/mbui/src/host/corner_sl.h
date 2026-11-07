@@ -1,9 +1,10 @@
 // src/host/corner.sl as a C string (scripts/chk corner-sl makes it: edit corner.sl, then run it). The shaders
 // write float2; GLSL's take it with `#define float2 vec2` and `#define float4 vec4` before it.
 #define MB_CORNER_SL \
-  "// mbui's corners (src/ui/smooth.mbt: these are its smoothness, sd_corner and sd_box, number for number), the one copy\n" \
-  "// every renderer draws by: Metal's, Direct3D's and both GLs' shaders take it in as it is (corner_sl.h; web/host.js\n" \
-  "// between its \"corner.sl\" lines), written in what the four have in common (float2: GLSL's vec2, defined so before it).\n" \
+  "// How mbui draws a corner, for every renderer: src/paint/smooth.mbt says what and why, and these are its functions, number\n" \
+  "// for number (scripts/chk corner-sl holds their numbers alike). Metal's, Direct3D's and both GLs' shaders take this in as it\n" \
+  "// is (corner_sl.h; web/host.js between its \"corner.sl\" lines), written in what the four have in common (float2: GLSL's\n" \
+  "// vec2, defined so before it). Its scalar part is C too: apple_views.m's masks take that with MB_CORNER_SCALARS.\n" \
   "// Made into those by scripts/chk corner-sl, which CI runs with --check.\n" \
   "//\n" \
   "// How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1\n" \
@@ -11,6 +12,41 @@
   "float mb_smoothness(float r, float room) {\n" \
   "  return r <= 0.0 ? 0.0 : clamp((room - r) / (0.25 * r), 0.0, 1.0);\n" \
   "}\n" \
+  "// How much of its curve a capsule's end has room for along a side of half ha.\n" \
+  "float mb_capsule_room(float ha, float rr) {\n" \
+  "  return min((ha - rr) / (0.4 * rr), 1.0);\n" \
+  "}\n" \
+  "// A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r\n" \
+  "// from the tip, k the share of the room the curve takes along the edge the box has (mb_capsule_room); an octic from the circle's height and\n" \
+  "// first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends\n" \
+  "// never jumps or turns at once.\n" \
+  "float mb_capsule_ease(float u, float k) {\n" \
+  "  float u0 = 1.0 - 0.675 * k;\n" \
+  "  float u1 = 1.0 + 0.4 * k;\n" \
+  "  if (k <= 0.0 || u <= u0 || u >= u1) return 0.0;\n" \
+  "  float h = u1 - u0;\n" \
+  "  float t = (u - u0) / h;\n" \
+  "  float t2 = t * t;\n" \
+  "  float t3 = t2 * t;\n" \
+  "  float t4 = t3 * t;\n" \
+  "  float m = 1.0 - t;\n" \
+  "  float m2 = m * m;\n" \
+  "  float s = sqrt(u0 * (2.0 - u0));\n" \
+  "  float v = 1.0 - u0;\n" \
+  "  float s3 = s * s * s;\n" \
+  "  float c0 = 1.0 - s;\n" \
+  "  float c1 = -v / s * h;\n" \
+  "  float c2 = h * h / s3;\n" \
+  "  float c3 = -3.0 * v * h * h * h / (s3 * s * s);\n" \
+  "  float w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3);\n" \
+  "  float w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3);\n" \
+  "  float w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) / 2.0;\n" \
+  "  float w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0;\n" \
+  "  float eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;\n" \
+  "  float circ = u < 1.0 ? 1.0 - sqrt(u * (2.0 - u)) : 0.0;\n" \
+  "  return eased - circ;\n" \
+  "}\n" \
+  "#ifndef MB_CORNER_SCALARS\n" \
   "// The signed distance of p (from a box's middle) from that box, hs its half sides, its corners r (at most the shorter\n" \
   "// half) s smooth: |x|^n + |y|^n = R^n about each corner's centre, n from 2 to 2^1.5 and R from r to 1.25 r as s goes\n" \
   "// from 0 to 1. 0 on the curve; off it, the curve's value over how fast it grows there (along its normal, to first\n" \
@@ -39,42 +75,12 @@
   "  float u = pow(1.0 + tn, 1.0 / n);\n" \
   "  return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));\n" \
   "}\n" \
-  "// A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r\n" \
-  "// from the tip, k the share of the room the curve takes along the edge the box has; an octic from the circle's height and\n" \
-  "// first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends\n" \
-  "// never jumps or turns at once.\n" \
-  "float mb_capsule_ease(float u, float k) {\n" \
-  "  float u0 = 1.0 - 0.675 * k;\n" \
-  "  float u1 = 1.0 + 0.4 * k;\n" \
-  "  if (k <= 0.0 || u <= u0 || u >= u1) return 0.0;\n" \
-  "  float h = u1 - u0;\n" \
-  "  float t = (u - u0) / h;\n" \
-  "  float t2 = t * t;\n" \
-  "  float t3 = t2 * t;\n" \
-  "  float t4 = t3 * t;\n" \
-  "  float m = 1.0 - t;\n" \
-  "  float m2 = m * m;\n" \
-  "  float s = sqrt(u0 * (2.0 - u0));\n" \
-  "  float v = 1.0 - u0;\n" \
-  "  float s3 = s * s * s;\n" \
-  "  float c0 = 1.0 - s;\n" \
-  "  float c1 = -v / s * h;\n" \
-  "  float c2 = h * h / s3;\n" \
-  "  float c3 = -3.0 * v * h * h * h / (s3 * s * s);\n" \
-  "  float w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3);\n" \
-  "  float w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3);\n" \
-  "  float w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) * 0.5;\n" \
-  "  float w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0;\n" \
-  "  float eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;\n" \
-  "  float circ = u < 1.0 ? 1.0 - sqrt(u * (2.0 - u)) : 0.0;\n" \
-  "  return eased - circ;\n" \
-  "}\n" \
   "// How much further out than the round corner's (rr) a point is once the corner eases into one of its box's edges:\n" \
   "// along the point's coordinate that way and ha that half side, across and hc the other's (from the box's middle,\n" \
   "// positive); as far as the corner has no room across, moved along the round corner's normal\n" \
   "// (smooth.mbt capsule_tail).\n" \
   "float mb_capsule_tail(float along, float across, float ha, float hc, float rr) {\n" \
-  "  float k = min((ha - rr) / (0.4 * rr), 1.0);\n" \
+  "  float k = mb_capsule_room(ha, rr);\n" \
   "  float tight = 1.0 - mb_smoothness(rr, hc);\n" \
   "  if (k <= 0.0 || tight <= 0.0) return 0.0;\n" \
   "  float e = mb_capsule_ease((ha - along) / rr, k);\n" \
@@ -284,4 +290,5 @@
   "  int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);\n" \
   "  return float(m) / 64.0 - 63.0 / 128.0;\n" \
   "}\n" \
+  "#endif\n" \
   ""

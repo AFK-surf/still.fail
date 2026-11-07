@@ -119,7 +119,7 @@ fn seg(
       // Seg's first placement jumps)
       thumb=fn(c, w, h) {
         // det-ok(box-loose, style-literal): the thumb's size the group works out, its corner concentric in the track's
-        c.box(w=Px(w), h=Px(h), radius=inner_corner(radius, inset), bg=thumb, border=0.5, border_color=t.p.line, fn() {  })
+        c.box(w=Px(w), h=Px(h), radius=@ui.concentric(radius, inset), bg=thumb, border=0.5, border_color=t.p.line, fn() {  })
         |> ignore
       },
       // a finger on an option: the thumb there as a lens of liquid glass over them (iOS 26's), a capsule

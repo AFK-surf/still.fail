@@ -212,7 +212,7 @@ let video_capsule_foot : @ui.Style = @ui.style(
   h=Full,
   justify=JEnd,
   align=AStart,
-  p=room_of(capsule_in(message_file_corner, video_capsule_h)),
+  p=room_of(@ui.capsule_in(message_file_corner, video_capsule_h)),
 )
 
 ///|

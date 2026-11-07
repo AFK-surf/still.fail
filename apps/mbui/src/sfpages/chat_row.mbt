@@ -930,7 +930,7 @@ fn stop_rename() -> Unit {
 /// others (the user, 2026-10-26). Its words its half in from its end, as a capsule field's are (@sf.input's), not 6 in
 /// where the title's were (the user, 2026-10-26: 离首字太近).
 fn rename_box() -> @ui.Style {
-  let d = @sf.capsule_in(@sf.row_corner, rename_h)
+  let d = @ui.capsule_in(@sf.row_corner, rename_h)
   let side = @sf.theme().chat_list.band_pad - d
   let over = @sf.row_top_in_y - d
   rename_look.then(

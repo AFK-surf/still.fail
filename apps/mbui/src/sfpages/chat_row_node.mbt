@@ -430,7 +430,7 @@ pub fn chat_row_node(
       o
       .over(Is(true))
       .lines_up(Is(Some(End)))
-      .padding(Is((0.0, @sf.capsule_in(@sf.row_corner, row_key_side), @sf.capsule_in(@sf.row_corner, row_key_side), 0.0)))
+      .padding(Is((0.0, @ui.capsule_in(@sf.row_corner, row_key_side), @ui.capsule_in(@sf.row_corner, row_key_side), 0.0)))
       |> ignore
       o.box(fn(k) {
         k

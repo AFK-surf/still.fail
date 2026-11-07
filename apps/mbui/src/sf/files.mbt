@@ -916,10 +916,10 @@ let quote_source_composer : @ui.Style = @ui.style(
 ///|
 /// How far from a quote's top and start its pin (a capsule quote_pin_h high) stands, concentric with its corner
 /// (capsule_in); in the composer, with a row's.
-let quote_pin_in : Double = capsule_in(quote_corner, quote_pin_h)
+let quote_pin_in : Double = @ui.capsule_in(quote_corner, quote_pin_h)
 
 ///|
-let quote_pin_in_composer : Double = capsule_in(row_corner, quote_pin_h)
+let quote_pin_in_composer : Double = @ui.capsule_in(row_corner, quote_pin_h)
 
 ///|
 let quote_pin_h : Double = 16.0

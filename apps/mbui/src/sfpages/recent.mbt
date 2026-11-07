@@ -384,7 +384,7 @@ let recent_mark_side : Double = 22.0
 ///|
 /// How far in a mark stands from the sides of a tile `corner` round: concentric with its corner (18 round: 7).
 fn recent_mark_in(corner : Double) -> Double {
-  @sf.capsule_in(corner, recent_mark_side)
+  @ui.capsule_in(corner, recent_mark_side)
 }
 
 ///|

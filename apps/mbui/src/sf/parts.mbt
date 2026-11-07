@@ -295,7 +295,8 @@ let foot_fills : Ref[Bool] = { val: false }
 let on_night : Ref[Bool] = { val: false }
 
 ///|
-/// A button's height: 34 on every screen with either native input, as keyboard and mouse's rows are (the user,
+/// A button's height: what can be pressed is one height (menu_row_min; the user, 2026-10-30: 「搞这么多标准干啥」), on every
+/// screen with either native input (the user,
 /// 2026-10-31: a finger's 44 「太大了」「我们现在发送按钮也没那么大」「按钮既然缩，那就跟大屏一致呗」「我们本就大屏小屏都支持
 /// 触控」: drawn 44, one in a card's foot corners stood 4 from its edges); its press reaching the 44 every press has.
 pub fn button_height() -> Double {
@@ -2487,7 +2488,7 @@ let dialog_head_end : Double = 2.0
 /// An untitled dialog's close button (dialog): in its top right corner as far in as makes it concentric with it
 /// (capsule_in), from its outer edges (a layer is laid over the whole of the box, its padding too).
 fn dialog_close_corner() -> @ui.Style {
-  let d = capsule_in(dialog_r, dialog_close)
+  let d = @ui.capsule_in(dialog_r, dialog_close)
   @ui.style(mt=room(d), mr=room(d))
 }
 
@@ -2499,7 +2500,7 @@ let dialog_close_row : @ui.Style = @ui.css("row w=Full justify=JEnd")
 ///|
 /// How far from its padding's end the first row of an untitled dialog keeps clear of its close button (and 8 more).
 fn dialog_close_clear() -> Double {
-  capsule_in(dialog_r, dialog_close) - dialog_pad + dialog_close + 8.0
+  @ui.capsule_in(dialog_r, dialog_close) - dialog_pad + dialog_close + 8.0
 }
 
 ///|
@@ -2518,7 +2519,7 @@ pub fn untitled_clear() -> @ui.Style {
 /// the button in its corner, pressed where it is drawn (the user, 2026-11-04: 内容让开关闭按钮; the button 26 in to be
 /// concentric with the dialog's 42 stood over what a column 24 in holds).
 fn dialog_untitled_top() -> @ui.Style {
-  @ui.style(pt=room(capsule_in(dialog_r, dialog_close) + dialog_close - dialog_pad))
+  @ui.style(pt=room(@ui.capsule_in(dialog_r, dialog_close) + dialog_close - dialog_pad))
 }
 
 ///|
@@ -2528,7 +2529,7 @@ fn dialog_untitled_top() -> @ui.Style {
 /// title's; the user, 2026-10-25: 25 in, by the corner and not with it).
 fn dialog_close_at() -> @ui.Style {
   let side = dialog_close
-  let d = capsule_in(dialog_r, side)
+  let d = @ui.capsule_in(dialog_r, side)
   let up = d - (dialog_pad + dialog_head_over)
   @ui.style(mt=room(up), mr=room(d - (dialog_pad + dialog_head_end)), mb=room(dialog_close - side - up))
 }
@@ -2575,7 +2576,7 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
     return (no_style, no_style)
   }
   // (from its column: its padding, and the room a panel's dialog stands what it holds in from that, column_in_now)
-  let out = capsule_in(dialog_r, row_h) - dialog_pad
+  let out = @ui.capsule_in(dialog_r, row_h) - dialog_pad
   let side = out - column_in_now.val
   (@ui.style(mx=room(side), mb=room(out)), @ui.style(radius=Full, px=room(-side)))
 }
@@ -2818,7 +2819,7 @@ let field_solid_hot : @ui.Style = @ui.css("bg=Bg")
 
 ///|
 /// `small`: a small panel's (its search), as high as its rows (menu_row_min), so a capsule its padding in from its
-/// corner, concentric with it (capsule_in(r_menu, 34) = panel_pad), as its rows are; its words' line (the body's 22, not
+/// corner, concentric with it (@ui.capsule_in(r_menu, 34) = panel_pad), as its rows are; its words' line (the body's 22, not
 /// a row's 20: menu_row_over would make it 36) in its middle.
 // kept across runs: a value (no field of it changes)
 let input_box_small : @ui.Style = input_box.then(@ui.style(h=Fixed(menu_row_min)))
@@ -3519,7 +3520,7 @@ let panel_icon_box : @ui.Style = @ui.css(
 pub let panel_icon_corner : @ui.Style = @ui.style(mt=room(panel_icon_in), mr=room(panel_icon_in))
 
 ///|
-let panel_icon_in : Double = capsule_in(r_menu, panel_icon_side) - panel_pad
+let panel_icon_in : Double = @ui.capsule_in(r_menu, panel_icon_side) - panel_pad
 
 ///|
 /// Its side (panel_icon_box's S6).
@@ -4015,7 +4016,7 @@ fn option_type() -> OptionType {
   let disc = t.items.mark
   {
     disc,
-    pad_in: capsule_in(option_row_corner, disc),
+    pad_in: @ui.capsule_in(option_row_corner, disc),
     label: t.t.ui,
     label_line: t.t.ui_line,
     detail: t.t.meta,
@@ -4109,7 +4110,7 @@ pub fn ask_line_button(
 ) -> Bool {
   let h = button_height()
   let pad = option_type().pad_in
-  let inset = capsule_in(option_row_corner, h)
+  let inset = @ui.capsule_in(option_row_corner, h)
   let out = pad - inset
   let id = c.id(key)
   let live = !disabled

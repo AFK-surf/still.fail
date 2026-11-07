@@ -122,7 +122,7 @@ pub let mouse_chat_list : ChatList = {
   more: @ui.css("w=Full pb=S0_5"),
   // (as far from the row's foot as from its end: its last face concentric with the row's foot corner when its ground
   // shows)
-  aside_end: capsule_in(row_corner, mouse_face_d),
+  aside_end: @ui.capsule_in(row_corner, mouse_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L5, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L5, wrap=false, w=Full),
@@ -178,7 +178,7 @@ pub let touch_chat_list : ChatList = {
   title_unread: @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   more: full_width,
-  aside_end: capsule_in(row_corner, touch_face_d),
+  aside_end: @ui.capsule_in(row_corner, touch_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L6, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L6, wrap=false, w=Full),

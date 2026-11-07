@@ -917,7 +917,7 @@ let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").the
 )
 
 ///|
-let agent_card_chips_in : Double = @sf.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
+let agent_card_chips_in : Double = @ui.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
 
 ///|
 /// Words that lead somewhere: their whole line.

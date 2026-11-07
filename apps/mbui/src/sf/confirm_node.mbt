@@ -219,7 +219,7 @@ fn confirm_panel(
     // (its foot: its buttons at its end, 8 apart, 8 over them; as far from its foot and sides as its corner has them:
     // dialog_corner_foot)
     d.box(fn(f) {
-      let at = capsule_in(dialog_r, button_height())
+      let at = @ui.capsule_in(dialog_r, button_height())
       f
       .row(Is(true))
       .lines_up(Is(Some(Middle)))

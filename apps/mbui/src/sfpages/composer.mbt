@@ -2693,7 +2693,7 @@ let composer_foot_wide : Double = 16.0
 /// makes them concentric with its corners (tools_row).
 fn composer_open_box(corner? : Double = @sf.composer_corner()) -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + @sf.capsule_in(corner, t.round.side)
+  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
 }
 
 ///|

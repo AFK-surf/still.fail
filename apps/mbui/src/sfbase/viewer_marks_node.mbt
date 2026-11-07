@@ -323,7 +323,7 @@ fn marks_note_shown() -> (Int, Int, String, Int64)? {
 /// their row's foot. Coming in from nothing and 97% of its size about its middle (note_pop_ms, ease out) as a note is
 /// asked for, from that moment, and again as another is. 删除 and 完成 done as their press is let go on them.
 fn note_box_node(w : @view.View) -> Unit {
-  let keys_in = @sf.capsule_in(note_box_corner, 36.0)
+  let keys_in = @ui.capsule_in(note_box_corner, 36.0)
   let pop = NotePop::new()
   w.padding(Is((12.0, 0.0, 12.0, 8.0))) |> ignore
   w.box(fn(b) {
@@ -650,7 +650,7 @@ fn note_tray_card_node(
   label~ : () -> String,
   press~ : () -> Unit,
 ) -> Unit {
-  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
+  let pin_in = @ui.capsule_in(note_card_corner, note_pin)
   card
   .width(Is(Some(w)))
   .padding(Is((pin_in, pin_in - (note_first_line - note_pin) / 2.0, note_card_end, note_card_foot)))

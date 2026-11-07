@@ -43,7 +43,7 @@ fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> 
     tx~,
     ty~,
     pad=menu_pad,
-    radius=@sf.surface_corner(menu_pad, menu_row),
+    radius=@ui.concentric_out(menu_row, menu_pad),
     bg=t.p.card,
     shadow=@sf.menu_raised.sigma,
     shadow_y=@sf.menu_raised.dy,

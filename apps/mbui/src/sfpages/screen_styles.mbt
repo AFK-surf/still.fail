@@ -424,7 +424,7 @@ let drop_row_box : @ui.Style = @ui.style(
 
 ///|
 /// How far in a row's round key stands from the panel's top and end (the ladder's card corner less its half).
-let drop_key_in : Double = @sf.capsule_in(@sf.card_corner, drop_key_side)
+let drop_key_in : Double = @ui.capsule_in(@sf.card_corner, drop_key_side)
 
 ///|
 /// A row's least height: its key at its top, and under it as far as the panel's foot corner is round.

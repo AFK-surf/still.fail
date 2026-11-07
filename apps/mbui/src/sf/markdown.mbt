@@ -1190,7 +1190,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   // the code's first line to a mouse: a long first line ran under its words). Whole: quiet at 55% until pointed at, its
   // words were 2.2 to 1 (docs/ui-panels.md 对比度)
   let block_radius = row_corner
-  let key_inset = capsule_in(block_radius, code_key_h)
+  let key_inset = @ui.capsule_in(block_radius, code_key_h)
   let over = native_input() is Mouse
   let bar = fn() {
     c.box(

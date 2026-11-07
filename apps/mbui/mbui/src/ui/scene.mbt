@@ -152,8 +152,8 @@ fn clip_top() -> Int {
 
 ///|
 /// The corner of the clip `k` (in `clip_stack`) at its corner `corner` (0 top left, then clockwise) where (`x`, `y`) is
-/// that corner (as laid out: within a millionth, what the same place worked out two ways may differ by, a capsule's
-/// place in a smooth corner being no whole number, smooth.mbt round_like): its radius and how smooth it is, else
+/// that corner (as laid out: within a millionth, what the same place worked out two ways may differ by, a fractional
+/// layout's place): its radius and how smooth it is, else
 /// square (0, 0).
 fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Double) {
   let s = clip_stack

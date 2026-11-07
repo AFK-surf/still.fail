@@ -1,4 +1,4 @@
-// The corner rule (mbui's Tester::corner_faults; still.fail's docs/ui-panels.md「所有带圆角的东西」「圆角阶梯」: what
+// The corner rule (mbui's Tester::corner_faults; mbui's ui/corners.mbt: what
 // lies in a rounded container's corner as far from both its edges and concentric with it, the corners of both the
 // ladder's) on every screen sffix opens, in the narrowest window of each layout and a wide desktop's, in both of the
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps

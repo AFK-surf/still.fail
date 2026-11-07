@@ -20,9 +20,9 @@ pub fn page_bar(c : @ui.Ctx, body : () -> Unit, corners? : (Double, Double)? = N
         @ui.style(
           // (its corners as round as the tape's at least, as its line is: a square one along a hinge too)
           // (under the panel's edge: its line over it a point, as the frame draws its panes, page_apart)
-          pt=room_of(capsule_in(tape_corner, key) - pane_edge),
-          pl=room_of(capsule_in(dmax(left, tape_corner), key)),
-          pr=room_of(capsule_in(dmax(right, tape_corner), key)),
+          pt=room_of(@ui.capsule_in(tape_corner, key) - pane_edge),
+          pl=room_of(@ui.capsule_in(dmax(left, tape_corner), key)),
+          pr=room_of(@ui.capsule_in(dmax(right, tape_corner), key)),
         ),
       )
     }

@@ -182,8 +182,9 @@ pub(all) struct Items {
 // (a small panel's padding, its words' room and its pills: align.mbt panel_pad, text_in, panel_pill)
 
 ///|
-/// The corner ladder (docs/ui-panels.md「圆角阶梯」): the few corners nested things are round by, outermost first, each
-/// the one before it concentric in it (the user, 2026-11-03): a panel (the tape's panels laid out Medium, a dialog, a
+/// The corner ladder, all there is of a corner's numbers: the few corners nested things are round by, outermost first,
+/// each the one before it concentric in it, so to change them is to change this and the insets, and all follows (the
+/// rule: mbui's ui/corners.mbt; the user, 2026-11-03): a panel (the tape's panels laid out Medium, a dialog, a
 /// sheet: what holds cards) 42, a card in it `panel_card_in` (16) in 26, a row or a block on a card `corner_inset` (8)
 /// in 18, a small block on a row 10. What has a ground and lies in a card's or a row's corner stands `corner_inset` in from both
 /// its edges and is round by the next step (mbui works its corner out: corners.mbt), or is a capsule or a circle `its
@@ -224,8 +225,7 @@ pub let lit_apart : Double = 2.0
 pub let lit_reach : Double = panel_pad
 
 ///|
-/// What the corner rule may make of what lies in a container's corner to be concentric with it (docs/ui-panels.md 圆角
-/// 阶梯, 适应范围; the theme's Theme::corner_fit): a corner 6 at least (squarer reads as square) and the ladder's
+/// What the corner rule may make of what lies in a container's corner to be concentric with it (the theme's Theme::corner_fit): a corner 6 at least (squarer reads as square) and the ladder's
 /// outermost at most, standing 4 to 16 from the container's edges. The outermost container is the window, its corner
 /// the system's (@ui.window_corner: a Mac's 16, Windows 11's 8, square filling the screen): what none of these makes
 /// concentric with what it lies in stands as it would alone, the ladder's own.
@@ -248,7 +248,7 @@ pub let tape_corner : Double = pane_corner
 /// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
 /// bar and the sidebar's first row each where it stood alone, not on one line). The tape's own place for its own
 /// corner (corner_fit, for what follows a corner it does not choose: a window's).
-pub let tape_line : Double = capsule_in(tape_corner, 32.0)
+pub let tape_line : Double = @ui.capsule_in(tape_corner, 32.0)
 
 ///|
 /// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
@@ -331,7 +331,7 @@ pub fn tape_side_corners() -> FixedArray[@ui.CornerOf] {
 /// Where a capsule `height` high stands in a corner `corner` round: as far in as makes it concentric (capsule_in) where
 /// corner_fit lets it stand there, else `alone`, where it stands with no corner to follow (a panel too square for it).
 pub fn capsule_fit(corner : Double, height : Double, alone : Double) -> Double {
-  let d = capsule_in(corner, height)
+  let d = @ui.capsule_in(corner, height)
   if place_fits(d) {
     d
   } else {
@@ -343,7 +343,7 @@ pub fn capsule_fit(corner : Double, height : Double, alone : Double) -> Double {
 /// Whether a capsule `height` high may stand concentric in a corner `corner` round (capsule_fit: corner_fit lets it
 /// stand as far in as that takes).
 pub fn capsule_fits(corner : Double, height : Double) -> Bool {
-  place_fits(capsule_in(corner, height))
+  place_fits(@ui.capsule_in(corner, height))
 }
 
 ///|
@@ -423,12 +423,12 @@ pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, D
     // (beside the system's action at the column's foot, as high as it: on its line, in the foot left corner made for
     // it (native_foot_corner) however far in that is, its other end as far from what it stands in)
     Some(k) if native_capsule_h() is Some(h) && (h - height).abs() < 0.5 && native_foot_corner_now(k[3]) => {
-      let d = capsule_in(k[3], height)
+      let d = @ui.capsule_in(k[3], height)
       (d, d, d)
     }
     Some(k) => {
-      let at_l = capsule_in(k[3], height)
-      let at_r = capsule_in(k[2], height)
+      let at_l = @ui.capsule_in(k[3], height)
+      let at_r = @ui.capsule_in(k[2], height)
       let fits_l = place_fits(at_l)
       let fits_r = place_fits(at_r) && (!fits_l || (at_r - at_l).abs() <= 0.5)
       let b = if fits_l {
@@ -563,7 +563,7 @@ pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
   }
   match pane_radii() {
     Some(k) => {
-      let r = @ui.round_like(dmax(k[2], k[3]))
+      let r = (dmax(k[2], k[3]))
       let most = 2.0 * (r - corner_fit.near)
       let least = holds + 2.0 * corner_fit.near
       if own > most + 0.5 && most >= least - 0.5 {
@@ -581,7 +581,7 @@ pub fn foot_capsule_h(own : Double, holds : Double) -> Double {
 /// circle following a corner stands, corner_fit near); the theme's least where it holds none.
 pub fn holds_least(holds : Double) -> Double {
   if holds > 0.0 {
-    @ui.round_like_out(holds / 2.0 + corner_fit.near)
+    (holds / 2.0 + corner_fit.near)
   } else {
     corner_fit.least
   }
@@ -601,19 +601,11 @@ pub fn pane_foot_card() -> @ui.Style {
 }
 
 ///|
-/// How far in from a corner of the ladder's `corner` a capsule or a circle `height` high stands, concentric with it
-/// (ui-panels.md: 外圆角 = 距离 + 半高, the corner as a circle reads it: @ui.round_like, wholly smooth; a capsule's end,
-/// `room` its half, as round as it is).
-pub fn capsule_in(corner : Double, height : Double, room? : Double = 1.0e30) -> Double {
-  @ui.round_like(corner, room~) - height / 2.0
-}
-
-///|
 /// How far in a capsule `height` high stands from a card's sides and foot where it is in the card's foot corners (a
 /// button, a field there: concentric with the card's corner), and its ground reaching past the card's words (card_pad
 /// in) to there: across the card, or at its start with its words where they were (`words_in`: its own padding).
 pub fn card_foot_in(height : Double) -> Double {
-  capsule_in(card_corner, height)
+  @ui.capsule_in(card_corner, height)
 }
 
 ///|
@@ -747,14 +739,14 @@ pub let corner_clear_room : @ui.Space = room(card_corner - card_pad)
 /// How far in from a corner of `corner` a capsule `height` high stands concentric with it (capsule_in), as a style's
 /// room; `less`, less what already stands between (a row's own inset, a line over it).
 pub fn capsule_room(corner : Double, height : Double, less? : Double = 0.0) -> @ui.Space {
-  room(capsule_in(corner, height) - less)
+  room(@ui.capsule_in(corner, height) - less)
 }
 
 ///|
 /// How far in from a capsule's ends (`outer` high) one `height` high stands in it, concentric with them (a dot, a
 /// button in a capsule's end), as a style's room.
 pub fn capsule_end_room(outer : Double, height : Double) -> @ui.Space {
-  room(capsule_in(outer / 2.0, height, room=outer / 2.0))
+  room(@ui.capsule_in(outer / 2.0, height, room=outer / 2.0))
 }
 
 ///|
@@ -860,7 +852,7 @@ pub let command_box_corner : Double = row_corner
 
 ///|
 /// A button's height with keyboard and mouse (34, as everything pressed is: a row, a field; button_height): a capsule,
-/// capsule_in(card_corner, 34) in from a card's corner where it stands in one.
+/// @ui.capsule_in(card_corner, 34) in from a card's corner where it stands in one.
 pub let button_h : Double = menu_row_min
 
 ///|
@@ -928,7 +920,7 @@ pub let r_dialog : Double = 32.0
 /// ladder's row corner, 18, concentric with it, 18 + 6 = 24: the ladder's small panels (corner_ladder). What
 /// stands further in in it is round by the ladder's next steps as a card's is: what has a ground on its words' line 10.
 /// Its rows 36 high are capsules, their half 18 as well: on its padding, concentric with it.)
-pub let r_menu : Double = surface_corner(panel_pad, row_corner)
+pub let r_menu : Double = @ui.concentric_out(row_corner, panel_pad)
 
 ///|
 /// How far a small panel's row `height` high reaches past its padding: a capsule (as high as twice the corner it would
@@ -936,7 +928,7 @@ pub let r_menu : Double = surface_corner(panel_pad, row_corner)
 /// its padding), as every capsule in a corner stands; a taller row, rounded, none.
 pub fn menu_row_reach(height : Double) -> Double {
   if height / 2.0 <= small_panel_inner(r_menu) + 0.5 {
-    dmax(0.0, panel_pad - capsule_in(r_menu, height))
+    dmax(0.0, panel_pad - @ui.capsule_in(r_menu, height))
   } else {
     0.0
   }
@@ -1877,9 +1869,9 @@ pub let message_line : @ui.Leading = Exact(24.75)
 
 ///|
 /// A list card's corner: concentric round its rows (row_corner, list_pad in: 22.8, the ladder's small panels' step, a
-/// column of rows as a small panel is; docs/ui-panels.md 圆角阶梯), as Android works it out (Parts.kt:640
+/// column of rows as a small panel is), as Android works it out (Parts.kt:640
 /// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER, LIST_PAD)); its rows take theirs from it (radius=Inner).
-pub let list_card_corner : Double = surface_corner(list_pad, row_corner)
+pub let list_card_corner : Double = @ui.concentric_out(row_corner, list_pad)
 
 ///|
 pub let list_card_radius : @ui.Radius = rounded(list_card_corner)
@@ -1890,7 +1882,7 @@ pub let list_card_radius : @ui.Radius = rounded(list_card_corner)
 pub let group_corner : Double = list_card_corner
 
 ///|
-pub let group_row_end_radius : @ui.Radius = rounded(inner_corner(group_corner, list_pad))
+pub let group_row_end_radius : @ui.Radius = rounded(@ui.concentric(group_corner, list_pad))
 
 ///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
@@ -2659,7 +2651,7 @@ pub fn tape_bar_start_of(
 /// middle on the line); in one that follows the window (too square for a button there) clear of it.
 pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_side) -> Double {
   if (corner - tape_corner).abs() <= 0.5 || capsule_fits(corner, side) {
-    capsule_in(corner, side)
+    @ui.capsule_in(corner, side)
   } else {
     dmax(alone, corner)
   }
@@ -2892,7 +2884,7 @@ pub let chooser_chevron : Double = 12.0
 
 ///|
 /// A menu's item at least with keyboard and mouse, 36 high (the user, 2026-11-03: 「改 36 吧」, what can be pressed one
-/// height: 34 before), a capsule its panel's padding in from its corner, concentric with it (capsule_in(r_menu, 36) =
+/// height: 34 before), a capsule its panel's padding in from its corner, concentric with it (@ui.capsule_in(r_menu, 36) =
 /// panel_pad: 24 = 6 + 18). With touch a
 /// finger's 44 (Theme::rows pick), its words in its middle, round as a row taller than the capsule is (panel_in: the
 /// ladder's 18).
@@ -2944,7 +2936,7 @@ pub let menu_row_over : Double = 7.0
 /// capsule end, concentric with it, past the row's padding to there, the row no taller for it (a row of words is as
 /// high, its ＋ or × in it or not).
 pub let menu_row_end : @ui.Style = @ui.style(
-  mr=room(capsule_in(menu_row_min / 2.0, panel_pill, room=menu_row_min / 2.0) - text_in - menu_row_reach(menu_row_min)),
+  mr=room(@ui.capsule_in(menu_row_min / 2.0, panel_pill, room=menu_row_min / 2.0) - text_in - menu_row_reach(menu_row_min)),
   my=room((menu_row_min - 2.0 * menu_row_over - panel_pill) / 2.0),
 )
 
@@ -3005,7 +2997,7 @@ pub let toast_px : Double = 18.0
 pub let toast_action_h : Double = 28.0
 
 ///|
-pub let toast_action_in : Double = capsule_in(toast_r, toast_action_h, room=toast_r)
+pub let toast_action_in : Double = @ui.capsule_in(toast_r, toast_action_h, room=toast_r)
 
 ///|
 pub let toast_max : Double = 560.0
@@ -3078,7 +3070,7 @@ pub let rail_in : @ui.Space = room(8.0)
 pub fn rail_in_tape() -> Double {
   let ground_in = (38.0 - rail_ground_side) / 2.0
   let corner = tape_side_corners()[3].radius(@ui.corner_roots())
-  let d = capsule_in(corner, rail_ground_side)
+  let d = @ui.capsule_in(corner, rail_ground_side)
   if place_fits(d) {
     d - ground_in
   } else {
@@ -3115,7 +3107,7 @@ pub fn pane_composer_corner() -> Double {
 /// How far in from the composer's box its round controls stand in its foot corners (concentric with its corner as round
 /// ones are: capsule_in; below its padding where they are larger than it leaves room for: a phone's 36).
 pub fn composer_round_in() -> Double {
-  capsule_in(composer_corner(), theme().round.side)
+  @ui.capsule_in(composer_corner(), theme().round.side)
 }
 
 ///|
@@ -3127,7 +3119,7 @@ pub let composer_pad_room : @ui.Space = room(composer_pad)
 /// as makes the last, and what stands at the foot's start (a 删除), concentric with its corners (dialog_r), the row
 /// reaching past its sides' room `pad` to there at both ends.
 pub fn dialog_corner_foot(pad : Double) -> @ui.Style {
-  let at = capsule_in(dialog_r, button_height())
+  let at = @ui.capsule_in(dialog_r, button_height())
   @ui.style(pb=room(at), ml=room(at - pad), mr=room(at - pad))
 }
 
@@ -3136,7 +3128,7 @@ pub fn dialog_corner_foot(pad : Double) -> @ui.Style {
 /// sides as makes the last, and what stands at the foot's start (the model panel's account), concentric with its corner
 /// (r_menu), the row reaching past its padding (panel_pad) to there at both ends.
 pub fn panel_corner_foot() -> @ui.Style {
-  let at = room(capsule_in(r_menu, button_height()) - panel_pad)
+  let at = room(@ui.capsule_in(r_menu, button_height()) - panel_pad)
   @ui.style(ml=at, mr=at, mb=at)
 }
 

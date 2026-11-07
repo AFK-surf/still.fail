@@ -2770,7 +2770,7 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   if faults.is_empty() {
     return
   }
-  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
   println(said)
   abort(said)

@@ -64,6 +64,8 @@ pub fn clipboard_set_png(Bytes, label? : String) -> Unit
 
 pub fn code(String) -> @text.Run
 
+pub fn capsule_in(Double, Double, room? : Double) -> Double
+
 pub fn concentric(Double, Double) -> Double
 
 pub fn concentric_out(Double, Double) -> Double
@@ -469,10 +471,6 @@ pub let reveal_ms : Double
 pub fn reveal_spreading() -> Bool
 
 pub fn room_least() -> Double
-
-pub fn round_like(Double, room? : Double) -> Double
-
-pub fn round_like_out(Double, room? : Double) -> Double
 
 pub let row_gone_at : Double
 

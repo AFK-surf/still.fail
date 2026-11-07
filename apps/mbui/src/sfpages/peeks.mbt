@@ -1026,7 +1026,7 @@ let peek_change_meta : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").th
 ///|
 /// How far a capsule 20 high in a card's corner (a state's pill, a fact's, a face) stands from where its words start,
 /// out past them: concentric with the card's corner.
-let peek_capsule_in : Double = @sf.capsule_in(@sf.r_menu, peek_capsule_h) - @sf.panel_pad - hover_words_in
+let peek_capsule_in : Double = @ui.capsule_in(@sf.r_menu, peek_capsule_h) - @sf.panel_pad - hover_words_in
 
 ///|
 /// A capsule's height: a state's, a fact's, a face.
@@ -1214,5 +1214,5 @@ let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then
 )
 
 ///|
-let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in
+let peek_button_in : Double = @ui.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in
 

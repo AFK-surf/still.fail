@@ -44,7 +44,7 @@ fn alignment_guide(c : @ui.Ctx, text_aligned : Bool) -> Unit {
 fn alignment_panel(c : @ui.Ctx, x : Double, text_aligned : Bool) -> Unit {
   let w = 418.0
   let card_width = w - 2.0 * @sf.corner_inset
-  let dot = @sf.capsule_in(@sf.pane_corner, 10.0)
+  let dot = @ui.capsule_in(@sf.pane_corner, 10.0)
   let mark = if text_aligned { blue } else { red }
   @figure.panel(c, x, 128.0, w, 282.0, white, @sf.pane_corner, fn() {
     @figure.panel(c, dot, dot, 10.0, 10.0, mark, 5.0, fn() { })

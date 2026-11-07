@@ -13,7 +13,7 @@ pub let media_bar_in : Double = 16.0
 
 ///|
 /// (its round buttons, 32, in its foot corners concentric with it: capsule_in, 8.87 in a card's 26)
-pub let media_bar_pad : Double = capsule_in(card_corner, media_key_d)
+pub let media_bar_pad : Double = @ui.capsule_in(card_corner, media_key_d)
 
 ///|
 /// Over its timeline, in the bar; its buttons' size (vvBtn: 32 across); so the bar is this tall, its timeline and a row
