@@ -82,6 +82,11 @@ sync_app() {
 
 case "${1:-build}" in
   build)
+    if [ "$PKG" != stillfail ] && [ "$PKG" != coredemo ]; then
+      ROOT=$PWD
+      . "$ROOT/native/svg/host-lib.sh"
+      image_host_library "$(rustc -vV | sed -n 's/^host: //p')" "$PWD/out/svg/libmbui_svg.a"
+    fi
     sync
     # moon's build, with the C that moonc generates split and compiled in parallel (scripts/mbc: a `cc` first on PATH
     # that moon uses for every C step, all but that one passed through; MBC_SPLIT=0 compiles it whole)

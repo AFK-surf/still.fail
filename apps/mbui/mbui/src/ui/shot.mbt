@@ -6,7 +6,7 @@
 // sharp on any screen, its words' glyphs made that much larger, its pictures decoded so: text.mbt words_zoom); once the
 // frame is presented, those are drawn by the host's renderer as frames are, shot_band_most rows of it at a time into a
 // picture of their own, each time moved up by the rows already taken (whole device pixels: its words as crisp), and
-// read back (@hostapi.drawn_pixels_of) into its PNG (@pixels.PngRows), then told: all in that one frame, so what is
+// read back (@hostapi.drawn_pixels_of) into its PNG (@hostapi.PngWriter), then told: all in that one frame, so what is
 // taken is what the view built in it, however many frames come. While a picture in it is still coming (its bytes, its
 // decode), it is built and painted again at each frame till none is (shot_wait_most at most). Never more of its pixels
 // held than its PNG so far and a band's.
@@ -249,6 +249,8 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
       }
       continue
     }
+    // A loaded encoder announces readiness through the host; keep this shot until that frame.
+    if fake.val is None && @hostapi.png_ready() is None { continue }
     let n = self.nodes[node]
     match fake.val {
       Some(f) => {
@@ -289,7 +291,10 @@ fn Ctx::shot_png(self : Ctx, s : Shot, n : Node) -> Bytes? {
   if rows <= 0 || cols <= 0 {
     return None
   }
-  let png = @pixels.PngRows::new(cols, rows)
+  let png = match @hostapi.png_writer(cols, rows) {
+    Some(writer) => writer
+    None => return None
+  }
   let a = s.inst
   // the pieces of its shapes after everything drawn (kind 12): kept as they are, at the end, in every band
   let mut pieces = s.ninst
@@ -324,12 +329,16 @@ fn Ctx::shot_png(self : Ctx, s : Shot, n : Node) -> Bytes? {
     }
     let out = FixedArray::make(cols * band * 4, b'\x00')
     if !h_drawn_pixels_of(band_inst, k + np, sc, cols, band, out) {
+      (png.close)()
       return None
     }
-    png.add(out, band)
+    if !(png.add)(Bytes::from_array(out), band) {
+      (png.close)()
+      return None
+    }
     taken = taken + band
   }
-  Some(png.end())
+  (png.finish)()
 }
 
 ///|

@@ -151,6 +151,12 @@ app_pid() {
 [ $IOS_SDK = iphonesimulator ] || [ "${1:-build}" = build ] || { echo "ios.sh: $1 is the simulator's (MBUI_IOS_SDK=$IOS_SDK)" >&2; exit 1; }
 case "${1:-build}" in
   build)
+    if [ "$PKG" != stillfail ] && [ "$PKG" != coredemo ]; then
+      . "$ROOT/native/svg/host-lib.sh"
+      if [ "$IOS_SDK" = iphoneos ]; then png_target=aarch64-apple-ios; else png_target=aarch64-apple-ios-sim; fi
+      image_host_library "$png_target" "$PWD/$OUT/libmbui_svg.a"
+      APP_LINK="$APP_LINK $MBC_LINK_ARCHIVE"
+    fi
     T0=$(python3 -c 'import time;print(time.time())')
     # the C that moonc generates (scripts/mbc gen: moon's own compile of it for macOS left out), compiled split
     # into units with the runtime and the Objective-C host, all at once (scripts/mbc compile)

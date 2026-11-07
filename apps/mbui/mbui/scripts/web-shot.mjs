@@ -10,7 +10,7 @@ const root = path.resolve('out/web');
 const server = http.createServer((req, res) => {
   const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');
-  const type = f.endsWith('.js') ? 'text/javascript' : f.endsWith('.jpg') ? 'image/jpeg' : 'text/html';
+  const type = f.endsWith('.wasm') ? 'application/wasm' : /\.m?js$/.test(f) ? 'text/javascript' : f.endsWith('.jpg') ? 'image/jpeg' : 'text/html';
   res.writeHead(200, { 'content-type': type });
   fs.createReadStream(f).pipe(res);
 });

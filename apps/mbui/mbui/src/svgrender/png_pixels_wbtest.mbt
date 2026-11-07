@@ -61,7 +61,7 @@ fn png_rgb(png : Bytes) -> (Int, Int, Array[Int]) {
 ///|
 /// A picture `w` × `h` of `pixel(x, y)`'s colour (0xRRGGBB), written `step` rows at a time.
 fn written(w : Int, h : Int, step : Int, pixel : (Int, Int) -> Int) -> (Bytes, Array[Int]) {
-  let p = PngRows::new(w, h)
+  let p = PngEncoder::new(w, h).unwrap()
   let want : Array[Int] = []
   let mut y = 0
   while y < h {
@@ -78,10 +78,10 @@ fn written(w : Int, h : Int, step : Int, pixel : (Int, Int) -> Int) -> (Bytes, A
         want.push(c & 0xFF)
       }
     }
-    p.add(band, k)
+    if !p.add(Bytes::from_array(band), k) { abort("PNG add failed") }
     y = y + k
   }
-  (p.end(), want)
+  (p.finish().unwrap(), want)
 }
 
 ///|
@@ -119,30 +119,23 @@ test "a PNG of what a screen shows (its ground, a few lines of marks on it) is a
 test "a PNG of one colour, one row, and of rows given past its height" {
   let (one, want) = written(5, 1, 1, fn(_, _) { 0x112233 })
   assert_true(png_rgb(one).2 == want)
-  let p = PngRows::new(2, 2)
-  p.add(FixedArray::make(2 * 3 * 4, b'\x40'), 3)
-  assert_eq(p.rows(), 2)
-  assert_true(png_rgb(p.end()).2 == Array::make(12, 0x40))
+  let p = PngEncoder::new(2, 2).unwrap()
+  assert_true(p.add(Bytes::make(2 * 3 * 4, b'\x40'), 3))
+  assert_true(png_rgb(p.finish().unwrap()).2 == Array::make(12, 0x40))
 }
 
+
 ///|
-test "Huffman lengths: none longer than said, the code whole (Kraft's sum one)" {
-  // counts doubling: a tree 24 deep unless held to 15, and to 7
-  let f = FixedArray::make(30, 0)
-  for i in 0..<24 {
-    f[i] = 1 << i
-  }
-  for most in [15, 7] {
-    let l = huff_lengths(f, most)
-    let mut kraft = 0
-    for i in 0..<30 {
-      if f[i] > 0 {
-        assert_true(l[i] >= 1 && l[i] <= most)
-        kraft = kraft + (1 << (most - l[i]))
-      } else {
-        assert_eq(l[i], 0)
-      }
-    }
-    assert_eq(kraft, 1 << most)
+fn paeth(a : Int, b : Int, c : Int) -> Int {
+  let p = a + b - c
+  let pa = if p > a { p - a } else { a - p }
+  let pb = if p > b { p - b } else { b - p }
+  let pc = if p > c { p - c } else { c - p }
+  if pa <= pb && pa <= pc {
+    a
+  } else if pb <= pc {
+    b
+  } else {
+    c
   }
 }

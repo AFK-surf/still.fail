@@ -122,6 +122,14 @@ secs() { python3 -c "print(f'{$2-$1:.1f}')"; }
 
 case "${1:-build}" in
   build)
+    if [ "$PKG" != stillfail ] && [ "$PKG" != coredemo ]; then
+      . "$ROOT/native/svg/host-lib.sh"
+      if [ "$ABI" = arm64-v8a ]; then png_target=aarch64-linux-android; else png_target=x86_64-linux-android; fi
+      export CC_aarch64_linux_android="$TC/aarch64-linux-android30-clang"
+      export CC_x86_64_linux_android="$TC/x86_64-linux-android30-clang"
+      image_host_library "$png_target" "$PWD/$OUT/libmbui_svg.a"
+      APP_LINK="$APP_LINK $MBC_LINK_ARCHIVE"
+    fi
     # The C that moonc generates, without moon's compile of it for this machine (scripts/mbc gen: 2 s where moon's
     # own build took a minute), compiled split into units, all at once, with the runtime, the host and the core's C
     # (scripts/mbc compile: an object whose inputs did not change is kept); the core's parts alongside; then Gradle

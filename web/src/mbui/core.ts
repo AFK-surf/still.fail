@@ -191,6 +191,7 @@ await handOver;
 await load(appUrl);
 void startSvg().catch((error: unknown) => {
   console.error("SVG renderer:", error);
+  (globalThis as { mbuiSvgFailed?: boolean }).mbuiSvgFailed = true;
   host()?.post("mbui.svg", "failed");
 });
 appPreload.remove();

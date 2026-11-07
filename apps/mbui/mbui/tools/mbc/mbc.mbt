@@ -1844,6 +1844,13 @@ fn cmd_wrap(args : Array[String]) -> Unit {
   let links = !wargs.iter().any(fn(x) {
     x == b"-c" || x == b"/c" || x == b"-E" || x == b"/E" || x == b"-dumpmachine"
   })
+  // A host's image archive is a real link input, included in the content key.
+  if links {
+    match getenv("MBC_LINK_ARCHIVE") {
+      Some(path) if path != b"" => wargs.push(path)
+      _ => ()
+    }
+  }
   let cs = []
   for i, x in wargs {
     if ends(x, b".c") && is_file(x) {

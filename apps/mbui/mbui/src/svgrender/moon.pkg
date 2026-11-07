@@ -2,3 +2,5 @@ options(
   targets: { "native.mbt": ["native"], "wasm.mbt": ["wasm", "wasm-gc"], "js.mbt": ["js"] },
   "native-stub": ["stub.c"],
 )
+
+import { "mbui/zip" } for "wbtest"

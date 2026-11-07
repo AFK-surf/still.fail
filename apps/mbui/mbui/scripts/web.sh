@@ -20,7 +20,10 @@ case "${1:-build}" in
       mkdir -p $OUT/photos
       cp -p out/pictures/*.jpg $OUT/photos/
     fi
-    cp $ROOT/web/index.html $ROOT/web/host.js $OUT/
+    cp $ROOT/web/host.js $OUT/
+    bash "$ROOT/native/svg/build.sh" wasm "$PWD/$OUT/svg.wasm"
+    cp "$ROOT/native/svg/loader.mjs" "$OUT/svg.mjs"
+    sed 's|<script src="demo.js"></script>|<script type="module">import { loadSvg } from "./svg.mjs"; globalThis.mbuiSvg = await loadSvg(await WebAssembly.compileStreaming(fetch("./svg.wasm"))); await import("./demo.js");</script>|' "$ROOT/web/index.html" > "$OUT/index.html"
     T1=$(python3 -c 'import time;print(time.time())')
     echo "built in $(python3 -c "print(round($T1-$T0,2))") s"
     ls -la $OUT

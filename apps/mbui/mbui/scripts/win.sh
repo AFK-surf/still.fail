@@ -105,6 +105,12 @@ shot_dir() {
 
 case "${1:-build}" in
   build)
+    if [ "$PKG" != stillfail ] && [ "$PKG" != coredemo ]; then
+      ROOT=$PWD
+      . "$ROOT/native/svg/host-lib.sh"
+      image_host_library "$(rustc -vV | sed -n 's/^host: //p')" "$PWD/out/svg/mbui_svg.lib"
+      export MBC_LINK_ARCHIVE=$(cygpath -w "$MBC_LINK_ARCHIVE")
+    fi
     webview2_sdk
     export LIB="$(cygpath -w "$PWD/$WV2/build/native/x64");$LIB"
     sync

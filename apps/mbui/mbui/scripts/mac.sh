@@ -22,6 +22,10 @@ case "${1:-build}" in
     # app took 35-75 s with no unit compiled, the rest not told apart, 2026-11-01)
     # (and the packages it compiled again, by their .core made: a release's 51 tasks where one page had changed, main
     # 85827dca, 2026-11-02, the rest not told apart)
+    if [ "$PKG" != stillfail ] && [ "$PKG" != coredemo ]; then
+      . "$ROOT/native/svg/host-lib.sh"
+      image_host_library "$(rustc -vV | sed -n 's/^host: //p')" "$PWD/out/svg/libmbui_svg.a"
+    fi
     mkdir -p out && rm -f out/mbc.log && touch out/moon.start
     t0=$SECONDS
     PATH="$("$D/mbc" shim "$PWD/out/mbc/bin"):$PATH" MBC_LOG=$PWD/out/mbc.log \

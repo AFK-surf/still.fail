@@ -751,6 +751,8 @@ pub(all) enum SystemSaid {
 
 // Traits
 pub(open) trait Host {
+  fn png_ready(Self) -> Bool? = _
+  fn png_writer(Self, Int32, Int32) -> PngWriter? = _
   fn set_window_zoom(Self, Double) -> Unit = _
   fn set_window_key(Self, FuncRef[(Int32, Int32) -> Int32]) -> Unit = _
   fn wheel_kept(Self, Bool) -> Unit = _
@@ -978,3 +980,12 @@ pub(open) trait Host {
   fn ncall_result(Self, Int32) -> String = _
   fn ncall_end(Self, Int32) -> Unit = _
 }
+
+
+pub(all) struct PngWriter {
+  add : (Bytes, Int32) -> Bool
+  finish : () -> Bytes?
+  close : () -> Unit
+}
+pub fn png_ready() -> Bool?
+pub fn png_writer(Int32, Int32) -> PngWriter?

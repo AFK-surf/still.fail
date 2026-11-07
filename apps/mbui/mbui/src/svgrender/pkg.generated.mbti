@@ -9,6 +9,16 @@ pub fn rasterize(Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?
 // Types and methods
 type Db
 
+type PngDb
+
+pub struct PngEncoder {
+  mut writer : PngDb?
+}
+pub fn PngEncoder::add(Self, Bytes, Int32) -> Bool
+pub fn PngEncoder::close(Self) -> Unit
+pub fn PngEncoder::finish(Self) -> Bytes?
+pub fn PngEncoder::new(Int32, Int32) -> Self?
+
 pub struct Renderer {
   mut database : Db?
   mut fonts : Array[Bytes]

@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib", "staticlib"]
 
 [dependencies]
+png = "=0.18.1"
 resvg = { git = "https://github.com/linebender/resvg", rev = "847abd69841493b011d07f9202f9f1fa616a82c6", default-features = false, features = ["text", "raster-images", "svgz"] }
 
 [profile.release]

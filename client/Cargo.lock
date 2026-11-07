@@ -4100,6 +4100,7 @@ dependencies = [
  "libcrux-ed25519",
  "n0-mainline",
  "noq-proto",
+ "png",
  "reqwest",
  "resvg",
  "rusqlite",

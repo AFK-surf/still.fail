@@ -47,11 +47,6 @@ pub fn Canvas::fill(Self, Int64) -> Unit
 pub fn Canvas::new(Int32, Int32) -> Self
 pub fn Canvas::pixels(Self) -> FixedArray[Byte]
 
-type PngRows
-pub fn PngRows::add(Self, FixedArray[Byte], Int32) -> Unit
-pub fn PngRows::end(Self) -> Bytes
-pub fn PngRows::new(Int32, Int32) -> Self
-pub fn PngRows::rows(Self) -> Int32
 
 pub(all) struct Vector {
   w : Double

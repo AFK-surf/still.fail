@@ -1,0 +1,21 @@
+///|
+test "streaming PNG ownership rejects bad input and releases completed or cancelled streams" {
+  assert_true(PngEncoder::new(0, 2) is None)
+  let p = PngEncoder::new(2, 2).unwrap()
+  assert_false(p.add(b"short", 1))
+  assert_false(p.add(b"", -1))
+  assert_true(p.add(b"\x40\x40\x40\x00\x40\x40\x40\xFF", 1))
+  let bytes = p.finish().unwrap()
+  assert_eq(bytes[0], b'\x89')
+  assert_eq(bytes[1], b'P')
+  assert_eq(bytes[2], b'N')
+  assert_eq(bytes[3], b'G')
+  assert_true(p.finish() is None)
+  assert_false(p.add(b"", 0))
+  p.close()
+  let cancelled = PngEncoder::new(2, 100000).unwrap()
+  assert_true(cancelled.add(b"\x40\x40\x40\x00\x40\x40\x40\xFF", 1))
+  cancelled.close()
+  cancelled.close()
+  assert_true(cancelled.finish() is None)
+}

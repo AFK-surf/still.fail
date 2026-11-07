@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
     res.end();
     return;
   }
-  res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : 'text/html' });
+  res.writeHead(200, { 'content-type': p.endsWith('.wasm') ? 'application/wasm' : /\.m?js$/.test(p) ? 'text/javascript' : 'text/html' });
   fs.createReadStream(p).pipe(res);
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));

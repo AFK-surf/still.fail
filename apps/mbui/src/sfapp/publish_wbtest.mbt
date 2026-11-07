@@ -401,9 +401,9 @@ fn publish_viz_drawn_up(t : @ui.Tester) -> Int raise {
 ///|
 /// A PNG `w` by `h`, all of one colour.
 fn publish_blank_png(w : Int, h : Int) -> Bytes {
-  let png = @pixels.PngRows::new(w, h)
-  png.add(FixedArray::make(w * h * 4, b'\x80'), h)
-  png.end()
+  let rgba = FixedArray::make(w * h * 4, b'\x80')
+  for i in 0..<(w * h) { rgba[i * 4 + 3] = b'\xFF' }
+  @pixels.png(w, h, rgba)
 }
 
 ///|

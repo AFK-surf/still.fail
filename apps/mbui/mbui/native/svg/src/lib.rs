@@ -155,3 +155,5 @@ pub unsafe extern "C" fn mbsvg_raster_length(p: *const u8) -> usize {
             * u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize
     }
 }
+
+mod png_rows;

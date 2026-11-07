@@ -730,3 +730,32 @@ impl @hostapi.Host for FakeHost with wa_out(_, id) {
 impl @hostapi.Host for FakeHost with wa_end(_, _) {
   ()
 }
+
+///|
+// The test host records pixels; its PNG uses the small uncompressed writer, without native code.
+impl @hostapi.Host for FakeHost with png_ready(_) { Some(true) }
+
+///|
+impl @hostapi.Host for FakeHost with png_writer(_, w, h) {
+  if w <= 0 || h <= 0 { return None }
+  let rgba = FixedArray::make(w * h * 4, b'\x00')
+  let row = Ref::new(0)
+  let closed = Ref::new(false)
+  Some(@hostapi.PngWriter::{
+    add: fn(bytes, count) {
+      if closed.val || count < 0 { return false }
+      let n = @math.minimum(count, h - row.val)
+      if bytes.length() < n * w * 4 { return false }
+      for i in 0..<(n * w * 4) { rgba[row.val * w * 4 + i] = bytes[i] }
+      row.val += n
+      true
+    },
+    finish: fn() {
+      if closed.val { return None }
+      closed.val = true
+      for i in 0..<(w * h) { rgba[i * 4 + 3] = b'\xFF' }
+      Some(@pixels.png(w, h, rgba))
+    },
+    close: fn() { closed.val = true },
+  })
+}

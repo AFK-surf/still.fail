@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(path.resolve('out/node/node_modules/playwright'));
 
 const root = path.resolve('out/web');
-const types = { '.html': 'text/html', '.js': 'text/javascript' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm' };
 const server = http.createServer((req, res) => {
   const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   const f = fs.existsSync(p) && fs.statSync(p).isFile() ? p : path.join(root, 'index.html');

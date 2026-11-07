@@ -11,6 +11,8 @@
 
 ///|
 pub(open) trait Host {
+  png_ready(Self) -> Bool? = _
+  png_writer(Self, Int, Int) -> PngWriter? = _
   set_window_zoom(Self, Double) -> Unit = _
   set_window_key(Self, FuncRef[(Int, Int) -> Int]) -> Unit = _
   wheel_kept(Self, Bool) -> Unit = _
