@@ -31,8 +31,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
-import { ModulesLive } from "./modules/live.ts";
+import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
 import { BrowserLive } from "./browser/module.ts";
@@ -170,18 +169,14 @@ function run() {
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(Previous.layer), Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive, CheckpointsLive).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
     Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, OutflowLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, ModelsLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
-    // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.
+    // The drive, the admin API's: the platform's, before the agents.
     Layer.provideMerge(StationDrive.layer),
     Layer.provideMerge(HelperFolders.layer),
-    // The modules beside the station, started by ModulesLive.
-    Layer.provideMerge(Modules.layer),
-    // The packages of those the station installs itself (modules/packages.ts), read with its updates.
-    Layer.provideMerge(ModulePackages.layer),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
     // The station's browser, its tabs screens.

@@ -2048,7 +2048,7 @@ export class Store {
     return this.#messageAt(thread, ts);
   }
 
-  /// A message's number without reading its text or edits (for duplicate detection).
+  /// A message's number without reading its text or edits.
   messageNumberAt(thread: number, ts: string): number | null {
     return this.#one("SELECT n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts)?.n ?? null;
   }

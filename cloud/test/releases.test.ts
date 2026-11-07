@@ -84,38 +84,6 @@ test("a release is served whole or by ranges, the versioned builds cached for go
   }
 });
 
-test("a module's package: its feeds as they change, its archive (named by its version) cached for good", async () => {
-  const h = await harness();
-  try {
-    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array | string): Promise<unknown> };
-    const archive = new Uint8Array(70_000).map((_, i) => (i * 13) & 255);
-    await bucket.put("modules/media/media-0.1.3600.tar.gz", archive);
-    await bucket.put("modules/media/media.json", '{"version":"0.1.3590"}');
-    await bucket.put("modules/media/media-beta.json", '{"version":"0.1.3600"}');
-
-    const whole = await h.fetch("/releases/modules/media/media-0.1.3600.tar.gz");
-    assert.equal(whole.status, 200);
-    assert.equal(whole.headers.get("content-type"), "application/gzip");
-    assert.equal(whole.headers.get("cache-control"), "public, max-age=31536000, immutable");
-    assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), archive);
-    for (const [feed, version] of [["media.json", "0.1.3590"], ["media-beta.json", "0.1.3600"]]) {
-      const got = await h.fetch(`/releases/modules/media/${feed}`);
-      assert.equal(got.headers.get("content-type"), "application/json");
-      assert.equal(got.headers.get("cache-control"), "no-store");
-      assert.equal(((await got.json()) as { version: string }).version, version);
-    }
-    // Another module's feed is not this one's; nothing else under modules/ is served.
-    for (const path of ["modules/media/books.json", "modules/media/media-0.1.3600.zip", "modules/Media/Media.json", "modules/media/../station.json", "modules/media.json"]) {
-      const got = await h.fetch(`/releases/${path}`);
-      assert.equal(got.status, 404, path);
-      await got.arrayBuffer();
-    }
-    assert.equal((await h.fetch("/releases/modules/media/media-0.1.3599.tar.gz")).status, 404, "not put");
-  } finally {
-    await h.close();
-  }
-});
-
 test("a face's files: a page's stylesheet and slices, the Android app's file, cached for good and fetched from any origin", async () => {
   const h = await harness();
   try {
@@ -194,7 +162,7 @@ test("a cloud of its own reads the station's releases from still.fail's when its
   });
   try {
     const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
-    await bucket.put("modules/mesh/mesh.json", '{"own":true}');
+    await bucket.put("fonts/noto-sans-sc/2.004/font.css", "/* own */");
 
     const feed = await h.fetch("/releases/station.json");
     assert.equal(feed.status, 200);
@@ -204,7 +172,7 @@ test("a cloud of its own reads the station's releases from still.fail's when its
     assert.equal(part.headers.get("content-range"), "bytes 3-6/10");
     assert.equal(await part.text(), "tion");
     // its own bucket's first
-    assert.equal(await (await h.fetch("/releases/modules/mesh/mesh.json")).text(), '{"own":true}');
+    assert.equal(await (await h.fetch("/releases/fonts/noto-sans-sc/2.004/font.css")).text(), "/* own */");
     // none there either: none
     assert.equal((await h.fetch("/releases/station-beta.json")).status, 404);
     // an app's feed is its own alone, even when it has none

@@ -6,10 +6,6 @@
 //       Node binary in its Node (scripts/node-dist.sh's: bin/node in the tarball, node.exe in nodejs.org's zip)
 //   release-sign.ts file FILE --kind stillfail-desktop-win --build N
 //       FILE.sig: the signed words naming FILE (the Windows desktop app's installer)
-//   release-sign.ts module FEED --id ID --build N --needs-station M PLATFORM=ARCHIVE …
-//       the feed of a module's package (scripts/module-bundle.ts): its version, the oldest
-//       station it runs beside (M, that station's build) and the signed words naming each archive (PLATFORM `any`:
-//       one for every machine)
 //   release-sign.ts keygen PRIVATE_FILE
 //       a new key: the private one written to PRIVATE_FILE (PEM), the public one (for RELEASE_KEYS) said
 // Without a key: in CI (CI set) an error; elsewhere, with --unsigned-ok, a warning and the feed unsigned (a release for
@@ -31,7 +27,7 @@ const fail = (why: string): never => {
   process.exit(1);
 };
 const usage = (): never => {
-  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | module FEED --id ID --build N --needs-station M PLATFORM=ARCHIVE… | keygen PRIVATE_FILE");
+  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | keygen PRIVATE_FILE");
   process.exit(2);
 };
 
@@ -131,26 +127,6 @@ switch (positional[0]) {
     const { sha256, size } = await hashFile(file);
     writeFileSync(`${file}.sig`, `${JSON.stringify(signed({ kind, version: `0.1.${n}`, build: n, file: basename(file), sha256, size }, k))}\n`);
     console.error(`release-sign: ${file}.sig: signed by ${keyId(k.raw)}`);
-    break;
-  }
-  case "module": {
-    const out = positional[1] ?? usage();
-    const id = flag("--id") ?? usage();
-    if (!/^[a-z][a-z0-9]{0,31}$/.test(id)) usage();
-    const n = build();
-    const needsStation = Number(flag("--needs-station"));
-    if (!Number.isSafeInteger(needsStation) || needsStation <= 0) usage();
-    const version = `0.1.${n}`;
-    const builds: Record<string, { sha256: string; size: number }> = {};
-    for (const given of positional.slice(2)) {
-      const [, platform, archive] = /^([a-z0-9-]+)=(.+)$/.exec(given) ?? usage();
-      builds[platform!] = await hashFile(archive!);
-    }
-    if (Object.keys(builds).length === 0) usage();
-    const k = keyOrNone();
-    const feed = { id, version, build: n, needsStation, ...(k ? signed({ kind: "stillfail-module-release", id, version, build: n, needsStation, builds }, k) : {}) };
-    writeFileSync(out, `${JSON.stringify(feed)}\n`);
-    console.error(`release-sign: ${out}: module ${id} ${version} for stations from 0.1.${needsStation}${k ? `, signed by ${keyId(k.raw)}` : ", NOT signed"} (${Object.keys(builds).join(", ")})`);
     break;
   }
   case "keygen": {

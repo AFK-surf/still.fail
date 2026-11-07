@@ -40,8 +40,6 @@ export type OverviewDeps = {
   /// A pinned root as the drive shows it (drive.ts `rootViewThrough`: one in a folder macOS protects by what still.fail
   /// Helper's grant is known to be, never listed by the station); default `rootView`.
   rootView?: (path: string) => RootView;
-  /// The modules beside the station (modules/modules.ts), each named and whether it runs now.
-  modules?: () => { id: string; running: boolean }[];
 };
 
 /// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
@@ -187,8 +185,6 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     search: { files: platform.hasSpotlight ? "spotlight" : "walk", personal: raw?.search?.personal === true },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
-    // The modules beside it, for clients to show theirs: said only where there is one.
-    ...withModules(d),
   };
 }
 
@@ -211,11 +207,6 @@ export function modelWindows(profiles: { models?: unknown }[]): Record<string, n
     if (window !== undefined && window > 0) out[m as string] = window;
   }
   return out;
-}
-
-function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {
-  const modules = d.modules?.() ?? [];
-  return modules.length === 0 ? {} : { modules };
 }
 
 /// How its chats go to the archive on their own (sessions/lifecycle.ts autoArchive): after so many days idle (0: never),

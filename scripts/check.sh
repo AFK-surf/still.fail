@@ -246,7 +246,7 @@ if part ts; then
     step icons bash apps/mbui/scripts/icons . --check
   fi
   # Every file cloud's api, the station and the beta apps' core are built from deploys them (scripts/plan.sh).
-  if touches '^(cloud/src/|station/src/|client/|apps/mbui/core/|rules/|media/core/|scripts/plan)'; then
+  if touches '^(cloud/src/|station/src/|client/|apps/mbui/core/|rules/|scripts/plan)'; then
     prep station deps station
     step "what is deployed for each file" after station node scripts/plan-covers.ts
   fi
@@ -297,12 +297,12 @@ if part ts; then
     # (motion.ts restingLoop), the phone's bar on its own springs and the official site's pointer play are all that ask.
     step "reduced motion as one clock" sh -c '! git grep -nE "reducedMotion\(\)|\.animate\(" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/src/mobile/Bar.tsx" ":!web/src/site/motion.ts"'
     # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
-    # surface/inner, sf/align.mbt); circles, capsules and marks of 4 or less may say theirs, as may a line that says
+    # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
     # why with "own corner:".
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
       | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
     step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
-    # One light for the pointer in what a change adds (mbui ui/hand_moves.mbt): a hover lays the ink, `vars.hover` (lit.ts
+    # One light for the pointer in what a change adds (docs/ui-panels.md 悬停): a hover lays the ink, `vars.hover` (lit.ts
     # `litOver` over a ground of its own), or takes a solid ground a step towards the page (`vars.primaryHover`, a colour
     # 85% mixed with the canvas); never a colour, a tint or a filter of its own. One that must says why with "own hover:".
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E ':hover[^{]*\{[^}]*(background(Color)?|filter): *' \
@@ -311,7 +311,7 @@ if part ts; then
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'
-    # A small panel stands on controls.css.ts popover (sf/align.mbt): surface() only for it and the three that are not
+    # A small panel stands on controls.css.ts popover (docs/ui-panels.md): surface() only for it and the three that are not
     # popovers (a notice, ⌘K, the composer's list of chats).
     step "small panels on one ground" sh -c '! git grep -n "\.\.\.surface(" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/ui/src/styles/controls.css.ts" ":!web/src/SystemBubbles.css.ts" ":!web/src/Switcher.css.ts" ":!web/src/ChatRef.css.ts"'
   fi
@@ -345,13 +345,6 @@ if part ts; then
   if touches "$ts_core|^apps/mbui/src/sfkept/kept\\.mbt$"; then prep core deps client/core-ts; step "kept core answers" after core node client/core-ts/scripts/kept-answers.ts --check; fi
   # What makes the views writes only on what it made, never on what it was given (「谁能改什么」).
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
-  # The media app's service and its module of the core (media/).
-  if touches '^media/'; then
-    prep root deps .
-    prep core deps client/core-ts
-    prep media-core deps media/core
-    step "typecheck: media" after root after core after media-core sh -c 'pnpm exec tsgo -p media/service/tsconfig.json && cd media/core && ../../node_modules/.bin/tsgo -p tsconfig.json'
-  fi
 
 fi
 
@@ -385,15 +378,6 @@ if [ $full = 1 ]; then
     prep station deps station
     prep core deps client/core-ts
     step "tests: station and core usage stream" after station after core sh -c 'cd station && pnpm exec tsgo -p integration/tsconfig.json && node --disable-warning=ExperimentalWarning --import ./test/setup-env.mjs --test --test-timeout=30000 integration/usage-client-stream.test.ts'
-  fi
-  # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
-  # layer (media/test): whenever it, the core or the station changed.
-  if part station && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then
-    prep station deps station
-    prep core deps client/core-ts
-    prep media-core deps media/core
-    prep media-test deps media/test
-    remembered "tests: media" "media client/core-ts station/src scripts/native.ts" after station after core after media-core after media-test sh -c 'cd media/service && node --test --test-timeout=120000 test/*.test.ts && cd ../core && pnpm test && cd ../test && pnpm test'
   fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh screen; do

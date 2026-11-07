@@ -94,10 +94,6 @@ const APP_FILES: [RegExp, string][] = [
   // feed and the archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
   [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
-  // The packages of the modules stations install themselves (scripts/module-bundle.ts): each
-  // module's signed feeds, stable and beta, and the archives they name (one for every machine, or a platform's).
-  [/^modules\/([a-z][a-z0-9]{0,31})\/\1(-beta)?\.json$/, "application/json"],
-  [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
   // monoid's (release.sh --product monoid), in its own bucket: monoid(-beta)-<n>.apk.
   [/^android\/(stillfail|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
@@ -117,7 +113,7 @@ const APP_FILES: [RegExp, string][] = [
   // each machine's builds a feed of their own (x64's linux/mbui, arm64's linux-arm64/mbui)
   [/^linux(-arm64)?\/mbui\/latest\.json$/, "application/json"],
   [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz$/, "application/gzip"],
-  // The faces the apps offer beside the system's (scripts/fonts.py, sf/faces.mbt): a page's stylesheet and its woff2
+  // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
   // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9-]+\.woff2$/, "font/woff2"],
@@ -137,12 +133,12 @@ const APP_FILES: [RegExp, string][] = [
 
 /**
  * The files every cloud made of this code serves alike, its stations' and not its apps': the station's releases and
- * feeds, their Node, the modules, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
+ * feeds, their Node, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
  * own apps' builds alone (monoid's: RELEASES_UPSTREAM) reads these from still.fail's when it has none (releases.ts
  * upstreamRelease); never an app's feed or build, which would update its apps to another product's.
  */
 export function sharedRelease(file: string): boolean {
-  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(modules|fonts|natives|relay)\//.test(file);
+  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(fonts|natives|relay)\//.test(file);
 }
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */

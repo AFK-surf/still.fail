@@ -57,6 +57,18 @@ function checkQuestion(hub: Hub, key: string, m: MessageRow): void {
   }
 }
 
+/// The message a state is about. A question must still be visible and actionable; other states only need its key.
+function messageForAbout(hub: Hub, key: string, thread: number, ts: string, question: boolean): [number, number, string] | null {
+  if (!question) {
+    const n = hub.store.messageNumberAt(thread, ts);
+    return n === null ? null : [thread, n, ts];
+  }
+  const message = hub.store.messageAt(thread, ts);
+  if (message === null) return null;
+  checkQuestion(hub, key, message);
+  return [message.thread, message.n, message.ts];
+}
+
 /// A thread of this session the agent named with to=, and how the session posts there.
 export function target(hub: Hub, key: string, to: Json): SessionThread {
   if (hub.store.getSession(key) === null) throw new Error("unknown session");
@@ -270,13 +282,9 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   let about: [number, number, string] | null = null;
   const ts = aboutTs(args);
   if (ts !== null) {
-    const m = store.messageAt(thread.thread.id, ts);
-    if (!m) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
-    if (kind?.kind === "need_help") {
-      checkQuestion(hub, key, m);
-      if (card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
-    }
-    about = [m.thread, m.n, m.ts];
+    about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
+    if (about === null) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+    if (kind?.kind === "need_help" && card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
   }
   // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
   // them in still.fail instead.
@@ -371,10 +379,8 @@ function stateAbout(hub: Hub, key: string, kind: DeclaredState, args: Args): [nu
   const ts = aboutTs(args);
   if (ts !== null) {
     for (const t of threads) {
-      const m = hub.store.messageAt(t.thread.id, ts);
-      if (!m) continue;
-      if (kind.kind === "need_help") checkQuestion(hub, key, m);
-      return [m.thread, m.n, m.ts];
+      const message = messageForAbout(hub, key, t.thread.id, ts, kind.kind === "need_help");
+      if (message !== null) return message;
     }
     throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
   }

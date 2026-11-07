@@ -13,8 +13,7 @@ pull request, checked by one run. `moon.work` names it a member beside this modu
 What knows still.fail is the rest of this directory: its component library (`src/sf`, sf/styles.mbt), its pages and
 frames (`src/sfpages`, `src/sfdesk`, `src/sfapp`, over the model in `src/sfbase`), the core client and its engine
 hosts (`src/core`, `src/sfcore`, `src/host/*_core.*`), the apps (`src/stillfail`; `src/sffix` over made-up data,
-`src/sfkit`, `src/coredemo`), the media screens (`src/gallery`, `src/shelf`, `src/videos`, with `src/photos` and
-`src/books` over made-up data), the system keyboard (`src/keyboard`, `src/pinyin`), the core's bundling (`core/`, from
+`src/sfkit`, `src/coredemo`), the media screens (`src/gallery`), the core's bundling (`core/`, from
 this repository's `client/core-ts`), the end-to-end flows against a local still.fail (`e2e/`, e2e/README.md), and
 the platforms' projects (`android/`, `ios/`, `windows/`, `linux/`).
 

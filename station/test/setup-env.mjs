@@ -21,7 +21,7 @@ if (!process.env.STILLFAIL_TEST_TMP) {
 // that file started with its output (a far side in a sandbox, a fake's helper, a `tail -f`) holds it while it lives:
 // the whole run waits on it, past CI's time, every test passed. Each such process carries the file's mark in its
 // environment; one still running as the file's process ends is ended, and named, and the file fails: what leaves it
-// running is to be fixed (esbuild's service, left by the modules' packing: scripts/module-bundle.ts).
+// running is to be fixed (esbuild's service, say).
 if (process.env.NODE_TEST_CONTEXT === "child-v8" && process.platform !== "win32") {
   const mark = `${process.pid}-${Date.now()}`;
   process.env.STILLFAIL_TEST_FILE = mark;

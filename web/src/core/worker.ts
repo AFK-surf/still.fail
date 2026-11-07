@@ -328,7 +328,7 @@ async function lead(): Promise<void> {
   ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, (reason, error) => {
     if (!dead) fault(error);
     fatal(reason);
-  }, loadSqlite, [], fault);
+  }, loadSqlite, fault);
   ready.catch((error: unknown) => fatal(`核心启动失败：${String(error)}`));
   const running = await ready;
   core = running;

@@ -52,7 +52,6 @@ import { request as httpsRequest } from "node:https";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import * as ffmpeg from "./ffmpeg.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /// The Rust every part is built with (rustup installs it on first use): part of each key, so a newer one is a rebuild.
@@ -438,18 +437,6 @@ const PARTS: Record<string, Part> = {
       }
       run("codesign", ["--force", "--sign", "-", "--identifier", "fail.still.helper", app]);
     },
-  },
-  // ffmpeg and ffprobe for the media service, LGPL only, from FFmpeg's source (scripts/ffmpeg.ts: its key is that file
-  // alone, and the media service's package carries it: scripts/module-bundle.ts).
-  ffmpeg: {
-    files: (t) => ffmpeg.files(t as ffmpeg.FfmpegTarget),
-    targets: ffmpeg.TARGETS,
-    env: "MEDIA_FFMPEG",
-    inputs: ["scripts/ffmpeg.ts"],
-    rust: false,
-    zig: ffmpeg.ZIG,
-    recipe: (t) => ffmpeg.recipe(t as ffmpeg.FfmpegTarget),
-    build: (t, out) => ffmpeg.build(t as ffmpeg.FfmpegTarget, out),
   },
   // agent-desktop (vercel-labs/agent-desktop, Apache-2.0): the apps' accessibility trees, read and acted on by ref
   // ("Agents on a screen"). Its release's own build, checked against the SHA-256 its
@@ -1393,8 +1380,7 @@ function ours(): [string, Target][] {
   return all;
 }
 
-/// What a part is made of, as paths in the repository (scripts/module-bundle.ts: a package carrying the part is a new
-/// version when they change): for every target.
+/// What a part is made of, as paths in the repository: for every target.
 export const inputsOf = (part: string): string[] => [...new Set(P(part).targets.flatMap((t) => inputsFor(P(part), t)))];
 /// The targets a part is built for.
 export const targetsOf = (part: string): string[] => P(part).targets;

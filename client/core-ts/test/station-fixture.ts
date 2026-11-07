@@ -3,7 +3,6 @@
 import { Effect, Queue } from "effect";
 import { zstdCompressSync } from "node:zlib";
 import { Core } from "../src/core.ts";
-import type { CoreModule } from "../src/module.ts";
 import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { HostWire, type StationWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
@@ -38,7 +37,7 @@ export function stationReplies(host: FakeHost, reply: (req: HttpRequest) => unkn
   replies.set(host, reply);
 }
 
-/// Station answers that take a while (a real station behind it end-to-end test): asked first;
+/// Station answers that take a while (a real station behind it): asked first;
 /// `undefined`, the others'.
 const later = new WeakMap<FakeHost, (req: HttpRequest) => Promise<HttpResponse> | undefined>();
 export function stationLater(host: FakeHost, reply: (req: HttpRequest) => Promise<HttpResponse> | undefined): void {
@@ -224,10 +223,10 @@ export function base(): Answers {
   };
 }
 
-export async function started(answers = base(), sample = 0, wire?: (host: FakeHost) => StationWire, before?: (s: ReturnType<typeof stationHost>) => void, modules?: readonly CoreModule[]) {
+export async function started(answers = base(), sample = 0, wire?: (host: FakeHost) => StationWire, before?: (s: ReturnType<typeof stationHost>) => void) {
   const s = stationHost(answers);
   before?.(s);
-  const core = await Core.create(s.host, { clock: s.host.time.clock, sample, wire: () => (wire ? wire(s.host) : new HostWire(s.host)), modules });
+  const core = await Core.create(s.host, { clock: s.host.time.clock, sample, wire: () => (wire ? wire(s.host) : new HostWire(s.host)) });
   await s.host.time.pass(500);
   return { ...s, core };
 }

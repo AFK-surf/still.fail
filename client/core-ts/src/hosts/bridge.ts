@@ -56,7 +56,6 @@ import type { Recorder } from "../record.ts";
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
-import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
 import { accessOf } from "../iroh-bindings.ts";
@@ -506,9 +505,8 @@ export function bridgeIroh(bridge: Bridge): Iroh {
 }
 
 /// A core on a shell: the API the Rust core's Node addon had (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a
-/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another). `modules`:
-/// what the app adds to the core (module.ts).
-export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void, extra: { modules?: readonly CoreModule[] } = {}) {
+/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another).
+export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void) {
   service.name = "stillfail-native";
   service.os = os;
   const bridge = new Bridge(native);
@@ -519,7 +517,7 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
     dead = true;
     onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }));
   };
-  const ready = Core.create(host, { iroh: bridgeIroh(bridge), modules: extra.modules }).then((core) => {
+  const ready = Core.create(host, { iroh: bridgeIroh(bridge) }).then((core) => {
     // A database found damaged on the way is marked first: the core that follows makes it again (data.ts).
     core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => fatal(error));
     core.keepTime();

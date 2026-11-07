@@ -74,7 +74,6 @@ import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
 import * as fill from "./fill.ts";
 import { get, isObject } from "./util.ts";
-import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -99,8 +98,6 @@ export type Options = {
   /// Who the accounts are with (account-provider.ts): still.fail cloud unless the embedding app gives another
   /// (`commaAccountProvider`, comma.ts).
   account?: AccountProviderFactory;
-  /// What the app adds besides the platform (module.ts): installed once the rest is.
-  modules?: readonly CoreModule[];
 };
 
 /// What the core holds: every module.
@@ -144,9 +141,6 @@ export class Inner {
   /// What was opened and let go, brought whole after everything else (fill.ts).
   fill!: fill.Fill;
   router!: Router;
-  /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
-  moduleCalls = new Map<string, ModuleCall<any>>();
-  moduleNames: string[] = [];
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
@@ -366,8 +360,6 @@ export class Core {
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
       inner.router.owners.push(new AdminRelays(inner));
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
-      inner.moduleCalls = installModules(inner, options.modules ?? []);
-      inner.moduleNames = (options.modules ?? []).map((m) => m.name);
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -444,7 +436,7 @@ export class Core {
 
   /// A message from a UI as an object; `bytes`, those a native host handed over beside it.
   receiveRaw(client: ClientId, raw: unknown, bytes?: Uint8Array): void {
-    const message = parseClientMessage(raw, bytes, (name) => this.inner.moduleNames.some((m) => name.startsWith(`${m}.`)));
+    const message = parseClientMessage(raw, bytes);
     if ("invalid" in message) {
       const id = isObject(raw) && typeof raw.id === "number" && Number.isInteger(raw.id) && raw.id >= 0 ? raw.id : null;
       if (id !== null) this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });
@@ -480,7 +472,7 @@ export class Core {
     const asked = heavy(name) ? null : params;
     let call: Call;
     try {
-      call = parseCall(name, params, bytes, inner.moduleCalls);
+      call = parseCall(name, params, bytes);
     } catch (e) {
       inner.host.emit(client, answer(id, { err: asCoreError(e) }));
       return;

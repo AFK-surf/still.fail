@@ -21,7 +21,7 @@ cd "$A"
 H=mbui/src/host
 # The files whose `extern "C"` calls the shell answers: mbui's host, the core's engine, the app's own.
 decls="$H/host_native.mbt $H/device_native.mbt $H/stream_native.mbt $H/textref_native.mbt $H/native_native.mbt
-  src/core/native.mbt src/stillfail/link_native.mbt src/pinyin/load_native.mbt src/sfreplay/emit_native.mbt
+  src/core/native.mbt src/stillfail/link_native.mbt src/sfreplay/emit_native.mbt
   src/sfreplay/trace_native.mbt"
 O=$A/out/wasm-app
 mkdir -p "$O"
@@ -137,7 +137,7 @@ if [ "${PLATFORM:-mac}" = windows ]; then
   objs=()
   pids=()
   for f in $H/win_*.c $H/win_*.cpp $H/wasm_shell.c "$O/thunks.c" src/stillfail/win_engine.c src/core/core_native.c \
-      src/pinyin/read_file.c src/sfreplay/trace_files.c "$moon_root/lib/runtime/runtime.c"; do
+      src/sfreplay/trace_files.c "$moon_root/lib/runtime/runtime.c"; do
     o=$W/obj/$(echo "${f#"$A"/}" | tr '/\\:' '___').obj
     mkdir -p "$W/obj"
     objs+=("$o")
@@ -200,7 +200,7 @@ fi
 bash "$D/core.sh" apple-native aarch64-apple-darwin > "$O/core.log" 2>&1 || { cat "$O/core.log"; exit 1; }
 moon_root=${MOON_HOME:-$(dirname "$(dirname "$(command -v moon)")")}
 host_c=$(ls $H/apple_*.m $H/mac_app.m)
-stubs="src/core/core_native.c src/pinyin/read_file.c src/sfreplay/trace_files.c src/stillfail/core_engine.m"
+stubs="src/core/core_native.c src/sfreplay/trace_files.c src/stillfail/core_engine.m"
 shell_src=$(cat $host_c $H/*.h $H/wasm_shell.c "$O/thunks.c" $stubs "$moon_root/lib/runtime/runtime.c" "$moon_root/include/moonbit.h" \
   out/core/aarch64-apple-darwin/*.a "$WT/lib/libwasmtime.dylib" "$0" | cksum)
 if [ ! -x "$O/shell" ] || [ "$(cat "$O/shell.src" 2>/dev/null)" != "$shell_src" ]; then

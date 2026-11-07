@@ -234,7 +234,7 @@ export type DriveDeps = {
   home?: string;
 };
 
-/// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
+/// The station's drive, one for the admin API's routes: config.json's
 /// roots, the station's own never reached (its data directory, config, and `more`: what its parts add, ops/own.ts), the
 /// folders macOS protects through still.fail Helper (`files`, where there is one).
 export const stationDrive = (config: ConfigFile, more: () => string[], files: Protected | null) =>

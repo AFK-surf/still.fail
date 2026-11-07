@@ -27,7 +27,7 @@ import { lentFile, placeIn, sandboxConfig, sandboxed } from "../agents/sandbox.t
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up, AgentsSide, MeshSide } from "../services.ts";
+import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up, AgentsSide, MeshSide } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Net, measure } from "../jobs/load.ts";
@@ -153,7 +153,6 @@ export const AgentsLive = (control: Control) =>
       const screens = yield* ScreenRegistry;
       const grants = yield* Grants;
       const host = yield* AdminHost;
-      const modules = yield* Modules;
       const own = yield* Own;
       const up = yield* Up;
       const parts = yield* Parts;
@@ -469,8 +468,6 @@ export const AgentsLive = (control: Control) =>
         running: () => hub.running(),
       });
       codexIncomplete = () => { void updates.check().catch((error) => log.warn("updates", "Codex installation not checked", { error: String(error) })); };
-      // The packages of the modules the station installs itself, read and updated with the rest (a line each).
-      updates.add(yield* ModulePackages);
       updates.start();
       // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).
       control.on("hup", () => updates.answerChannelAsk());
@@ -517,7 +514,7 @@ export const AgentsLive = (control: Control) =>
       remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();
       xshare.start();
-      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
