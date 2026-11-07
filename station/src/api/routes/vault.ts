@@ -131,7 +131,8 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         if (isAnswer(l)) return l;
         // One vault's (`vault=`), or those of every vault the member is in.
         const of = param(r, "vault");
-        const seen = vaults.vaults(l.ws).filter((v) => sees(v, r.viewer) && (of === undefined || v.id === of));
+        const candidates = of === undefined ? vaults.vaults(l.ws) : [vaults.vault(l.ws, of)].filter((v): v is Vault => v !== null);
+        const seen = candidates.filter((v) => sees(v, r.viewer) && (of === undefined || v.id === of));
         if (of !== undefined && seen.length === 0) return refuse(404, "vault_unknown", "no such vault here, or not one of yours");
         return json(200, JSON.stringify({ items: seen.flatMap((v) => vaults.items(l.ws, v.id)) }));
       },
