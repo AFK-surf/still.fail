@@ -557,6 +557,39 @@ test("a_hidden_chat_that_needs_the_viewer_remains_in_attention", async () => {
   assert.deepEqual(marks.value.workspaces.ws.items.map((item: J) => [item.kind, item.session]), [["wait", "hidden"]]);
 });
 
+test("待处理_lists_the_unread_the_badge_counts_last_of_all_with_how_far_to_read_them", async () => {
+  const t = setup();
+  const marks = ui();
+  t.subscribe(1, { topic: "workspaceMarks" });
+  await t.readAll([[marks, 1]]);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const unread = (id: string, at: number, authorKind: string) => {
+    const r = row(id, at);
+    r.mine = true;
+    r.unread = true;
+    r.thread = 20;
+    r.last = { seq: 30, authorKind };
+    return r;
+  };
+  const other = unread("other", now - 500, "person");
+  other.mine = false;
+  const waits = deciding("k1", 7, 5, now - 3000, false);
+  waits.unread = true;
+  t.set(rows("ws/st"), [unread("agent", now - 2000, "agent"), unread("person", now - 1000, "person"), other, waits]);
+  await t.readAll([[marks, 1]]);
+  const listed = () => marks.value.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq]);
+  assert.deepEqual(listed(), [["wait", "k1", 5], ["done", "person", 30], ["done", "agent", 30]]);
+  assert.equal(marks.value.badge, listed().length, "every number on the badge can be found in it");
+  // a kind the badge does not count is not listed
+  t.set(prefs(), { badgeKinds: { on: true, wait: true, failed: true, done: false, message: true, services: true } });
+  await t.readAll([[marks, 1]]);
+  assert.deepEqual([listed(), marks.value.badge], [[["wait", "k1", 5], ["done", "person", 30]], 2]);
+});
+
 test("待处理_is_what_went_wrong_till_let_go_or_waits_not_looked_at_since_of_what_the_badge_counts", async () => {
   const t = setup();
   const marks = ui();

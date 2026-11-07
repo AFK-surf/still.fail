@@ -202,6 +202,28 @@ fn home_top_bar_node(
           })
         })
         |> ignore
+        // 待处理: there is no rail here to hold its bell
+        end.box(fn(k) {
+          @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
+            match workspace() {
+              Some(w) =>
+                @sfdesk.open_attention_panel(src, w, {
+                  let (x, y, kw, kh) = k.placed_window_now()
+                  @sf.Anchor::At(x, y, kw, kh)
+                })
+              None => ()
+            }
+          })
+          k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
+            m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
+            m.box(fn(at) {
+              at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
+              @sfpages.chat_mark_node(at, fn() { "done" })
+            })
+            |> ignore
+          })
+        })
+        |> ignore
         @sf.round_key_node(end, "settings", fn() { tr("android-chat.home.settings") }, fn() {
           @sfbase.history_push()
           app.nav.push(Settings)
@@ -213,6 +235,10 @@ fn home_top_bar_node(
   })
   |> ignore
 }
+
+///|
+/// How far in from its corner the bell's dot is.
+let home_bell_dot_at : Double = 5.0
 
 ///|
 /// What is catching up and going up beside the filter, 10 apart.

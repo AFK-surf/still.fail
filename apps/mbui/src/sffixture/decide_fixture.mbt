@@ -631,7 +631,7 @@ pub fn fix_preview_viz() -> Json {
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.read" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" =>
       Some(Ok(Json::object({})))
     "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None
@@ -685,7 +685,7 @@ pub fn fix_with_letters(v : Json) -> Json {
 
 ///|
 /// What wants the viewer in 待处理 (home-attention: the core's `workspaceMarks`): a decision waiting in 整理发布清单,
-/// to be let go, and a failure in another chat, looked at.
+/// to be let go, a failure in another chat, looked at, and a chat unread.
 pub fn fix_attention_marks() -> Json {
   let item = fn(kind : String, title : String, what : String, station : String, name : String, thread : Double) {
     let m : Map[String, Json] = {
@@ -704,17 +704,21 @@ pub fn fix_attention_marks() -> Json {
   wait["seq"] = Json::number(12.0)
   let failed = item("alert", "夜里的备份", "备份没有跑完", "ws1/st2", "Maple", 9.0)
   failed["seen"] = Json::boolean(true)
+  let unread = item("done", "周报草稿", "写好了", "ws1/st1", "Willow", 11.0)
+  unread["session"] = Json::string("s-c3")
+  unread["seq"] = Json::number(30.0)
   {
     "workspaces": {
       "ws1": {
         "alert": 1,
         "wait": 1,
+        "unread": 1,
         "tone": "alert",
-        "items": [Json::object(wait), Json::object(failed)],
+        "items": [Json::object(wait), Json::object(failed), Json::object(unread)],
       },
     },
     "others": "done",
-    "badge": 1,
+    "badge": 2,
     "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
   }
 }
