@@ -4,7 +4,7 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const ways = style({ display: "flex", flexDirection: "column", alignItems: "stretch", gap: "12px", width: "300px", maxWidth: "100%", marginTop: "8px" });
 export const or = style({ color: vars.subtle, fontSize: vars.textMeta, textAlign: "center", lineHeight: "16px" });
-export const ghost = style({ borderColor: "transparent", background: "transparent", justifyContent: "center" });
+export const ghost = style({ borderColor: "transparent", background: "transparent", justifyContent: "center", gap: "6px" });
 export const form = style({ display: "flex", flexDirection: "column", gap: "12px" });
 /** Email and password as one block: a grey ground, a hairline gap between, no outlines. */
 export const fields = style({ display: "flex", flexDirection: "column", gap: "1px", borderRadius: "16px", overflow: "hidden" }); // own corner: the two fields as one block, as the console's sign-in had them

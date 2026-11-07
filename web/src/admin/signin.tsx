@@ -2,6 +2,7 @@
 // then 登录或注册 on to still.fail cloud's sign-in, or an email and a password (the accounts the cloud set up for it).
 import { useState } from "preact/hooks";
 import { t } from "@stillfail/ui/i18n.ts";
+import { Key } from "@stillfail/ui/icons.tsx";
 import { NAME } from "../channel.ts";
 import { Button, name, Page, start } from "../login/Login.tsx";
 import { password, returnTo, SignInError } from "../login/signin.ts";
@@ -17,7 +18,7 @@ export function AdminSignIn() {
       <div className={own.ways}>
         <Button primary={!withPassword} onClick={() => { setError(null); start(to).catch((e: unknown) => setError(t("web-login.unreachable", { name: NAME, error: String(e) }))); }}>{t("web-login.start")}</Button>
         <span className={own.or}>{t("web-login.or")}</span>
-        {withPassword ? <PasswordSignIn to={to} /> : <button type="button" className={`${css.button} ${own.ghost}`} onClick={() => setWithPassword(true)}>{t("web-login.password")}</button>}
+        {withPassword ? <PasswordSignIn to={to} /> : <button type="button" className={`${css.button} ${own.ghost}`} onClick={() => setWithPassword(true)}><Key size={16} />{t("web-login.password")}</button>}
       </div>
     </Page>
   );
