@@ -124,15 +124,26 @@ else
   # scripts/mac.sh makes (the bytecode beside the app's compile). (Not `core.sh shell` first when the .a was missing, as
   # before: that built the shell with cargo, past its prebuilt part, on every CI run whose Actions cache of out/core
   # missed: 253 s of 427, 2026-10-24, 40069429045.)
-  APP=stillfail MODE=release bash "$D/mac.sh" build > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
-  if grep -q 'built for newer macOS version' "$OUT/build.log"; then
-    grep 'built for newer macOS version' "$OUT/build.log" | head -5 >&2
-    echo "mac-app.sh: something was built for a newer macOS than $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1
+  HERMES_FRAMEWORK=out/core/hermes/Library/Frameworks/macosx/hermes.framework
+  if [ -n "${MBUI_MAC_COMPILED:-}" ]; then
+    # CI hands the same commit's compiled program and runtime to this separate bundling job.
+    [ "$(cat "$MBUI_MAC_COMPILED/revision")" = "$(git -C "$SF_SRC" rev-parse HEAD)" ] || { echo 'mac-app.sh: compiled app is from another commit' >&2; exit 1; }
+    BIN=$MBUI_MAC_COMPILED/stillfail.exe
+    [ -x "$BIN" ] && [ -s "$MBUI_MAC_COMPILED/core.hbc" ] || { echo 'mac-app.sh: incomplete compiled app' >&2; exit 1; }
+    HERMES_FRAMEWORK=$MBUI_MAC_COMPILED/hermes.framework
+    mkdir -p out/core
+    cp "$MBUI_MAC_COMPILED/core.hbc" out/core/core.hbc
+  else
+    APP=stillfail MODE=release bash "$D/mac.sh" build > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
+    if grep -q 'built for newer macOS version' "$OUT/build.log"; then
+      grep 'built for newer macOS version' "$OUT/build.log" | head -5 >&2
+      echo "mac-app.sh: something was built for a newer macOS than $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1
+    fi
+    # (where the build's time went, said: mbc's account of the app's units and its link, the core's parts; the log
+    # itself kept only for a failure, and the app's 73 s of a release's 185 s Mac job could not be told apart, 2026-10-31)
+    grep -E '^mbc: |^mac\.sh: |^core\.sh|hermes|^real|took|in [0-9.]+ s' "$OUT/build.log" | cut -c1-220 | head -20 || true
+    BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
   fi
-  # (where the build's time went, said: mbc's account of the app's units and its link, the core's parts; the log
-  # itself kept only for a failure, and the app's 73 s of a release's 185 s Mac job could not be told apart, 2026-10-31)
-  grep -E '^mbc: |^mac\.sh: |^core\.sh|hermes|^real|took|in [0-9.]+ s' "$OUT/build.log" | cut -c1-220 | head -20 || true
-  BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
   t2=$(now)
 
   # the icon, the app's own (still.fail's face; youdid.wtf's under its tape; still.fail preview's still.fail's), made once
@@ -165,7 +176,7 @@ else
   strip -S -x "$APPDIR/Contents/MacOS/$EXE"
   # Hermes from the app's Frameworks (@executable_path/../Frameworks), not from the build's tree (the other rpath, gone)
   install_name_tool -delete_rpath @executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx "$APPDIR/Contents/MacOS/$EXE"
-  ditto out/core/hermes/Library/Frameworks/macosx/hermes.framework "$APPDIR/Contents/Frameworks/hermes.framework"
+  ditto "$HERMES_FRAMEWORK" "$APPDIR/Contents/Frameworks/hermes.framework"
   # The app is arm64 only; the upstream framework also carries x86_64. Keep its versioned layout and exported symbols.
   HERMES=$APPDIR/Contents/Frameworks/hermes.framework/Versions/Current/hermes
   if [ "$(lipo -archs "$HERMES")" != arm64 ]; then

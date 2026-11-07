@@ -65,7 +65,8 @@ case_dir uncached
 bash "$script" start
 bash "$script" ready
 bash "$script" wait
-[ ! -e "$RUNNER_TEMP/app-built" ]
+[ -e "$RUNNER_TEMP/app-built" ]
+[ "$(cat "$GITHUB_WORKSPACE/apps/mbui/_build/.macos-min")" = 12.0 ]
 
 case_dir core_failure
 export FAIL_CORE=1
@@ -80,4 +81,26 @@ bash "$script" start
 bash "$script" ready
 if bash "$script" wait; then echo 'app failure was not reported' >&2; exit 1; fi
 unset FAIL_APP
-echo 'Mac prebuild ordering and failure handling passed'
+case_dir handoff
+exe="$GITHUB_WORKSPACE/apps/mbui/_build/native/release/build/stillfail/stillfail"
+core="$GITHUB_WORKSPACE/apps/mbui/out/core"
+framework="$core/hermes/Library/Frameworks/macosx/hermes.framework"
+mkdir -p "$exe" "$framework/Versions/A" "$RUNNER_TEMP/mac-prebuild"
+printf '#!/bin/sh\nexit 0\n' > "$exe/stillfail.exe"
+chmod +x "$exe/stillfail.exe"
+printf 'bytecode' > "$core/core.hbc"
+printf 'runtime' > "$framework/Versions/A/hermes"
+ln -s A "$framework/Versions/Current"
+ln -s Versions/Current/hermes "$framework/hermes"
+: > "$RUNNER_TEMP/mac-prebuild/log"
+GIT_DIR=$(git -C "$(dirname "$script")" rev-parse --absolute-git-dir) bash "$script" pack "$RUNNER_TEMP/compiled.tar"
+mkdir "$RUNNER_TEMP/unpacked"
+tar -xf "$RUNNER_TEMP/compiled.tar" -C "$RUNNER_TEMP/unpacked"
+test -x "$RUNNER_TEMP/unpacked/stillfail.exe"
+cmp "$core/core.hbc" "$RUNNER_TEMP/unpacked/core.hbc"
+test -L "$RUNNER_TEMP/unpacked/hermes.framework/Versions/Current"
+test "$(cat "$RUNNER_TEMP/unpacked/hermes.framework/hermes")" = runtime
+test "$(cat "$RUNNER_TEMP/unpacked/revision")" = "$(git -C "$(dirname "$script")" rev-parse HEAD)"
+printf 'built for newer macOS version' > "$RUNNER_TEMP/mac-prebuild/log"
+if bash "$script" pack "$RUNNER_TEMP/wrong.tar"; then echo 'incompatible deployment target was handed over' >&2; exit 1; fi
+echo 'Mac prebuild ordering, failure handling and artifact handoff passed'

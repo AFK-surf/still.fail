@@ -791,35 +791,18 @@ jobs:
           bash apps/mbui/scripts/moon-mtimes.sh
           bash .github/mac-release-prebuild.sh ready
       - uses: ./.github/actions/setup
-      - uses: actions/cache@v4
-        with:
-          path: apps/mbui/out/mac/AppIcon-*
-          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
       # The native app is already compiling in the background. Bytecode needs pnpm, but not that app: make it now
       # so bundling takes the content-keyed HBC cache instead of starting another serial compile at the deadline.
       - name: Build core bytecode beside the native app
         run: bash apps/mbui/scripts/core.sh hermes apple
       - name: Finish the Mac app build
         run: bash .github/mac-release-prebuild.sh wait
-      # Hand over the same build to the signing job; mac-app.sh checks its build and beta face when taking it back.
-      - name: Bundle the beta Mac app for signing
-        env:
-          POSTHOG_JSON: ${{ github.ref == 'refs/heads/main' && secrets.POSTHOG_JSON || '' }}
-        run: |
-          set -eu
-          if [ -n "${POSTHOG_JSON:-}" ]; then
-            (umask 077 && printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json")
-            export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"
-          fi
-          unset POSTHOG_JSON
-          trap 'rm -f "$RUNNER_TEMP/posthog.json"' EXIT
-          MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
-          mkdir -p "$RUNNER_TEMP/mac-unsigned"
-          ditto -c -k --zlibCompressionLevel 0 --sequesterRsrc --keepParent apps/mbui/out/mac/youdid.wtf.app "$RUNNER_TEMP/mac-unsigned/bundle.zip"
+      - name: Hand over the compiled program and runtime
+        run: bash .github/mac-release-prebuild.sh pack "$RUNNER_TEMP/mac-compiled.tar"
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-unsigned-${{ github.sha }}
-          path: ${{ runner.temp }}/mac-unsigned/bundle.zip
+          name: mac-compiled-${{ github.sha }}
+          path: ${{ runner.temp }}/mac-compiled.tar
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -848,7 +831,7 @@ jobs:
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
           key: mbui-mac-moon-${{ github.sha }}
-  # The expensive build is already handed over; keep signing, notarization and release checks in their own budget.
+  # The compiled program is handed over; bundle, sign, notarize and check the release in a separate budget.
   desktop:
     needs: [plan, natives, desktop-build]
     if: ${{ !cancelled() && !failure() && ((github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true') || needs.plan.outputs.release_smoke == 'true') }}
@@ -867,12 +850,27 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with:
-          name: mac-unsigned-${{ github.sha }}
-          path: .ci/mac-unsigned
-      - name: Check the app handed over for signing
+          name: mac-compiled-${{ github.sha }}
+          path: .ci/mac-compiled
+      - uses: actions/cache@v4
+        with:
+          path: apps/mbui/out/mac/AppIcon-*
+          key: mbui-mac-icon-beta-${{ hashFiles('apps/mbui/scripts/mac-icon.swift') }}
+      - name: Bundle and check the compiled app for signing
+        env:
+          POSTHOG_JSON: ${{ github.ref == 'refs/heads/main' && secrets.POSTHOG_JSON || '' }}
         run: |
           set -eu
-          ditto -x -k .ci/mac-unsigned/bundle.zip .ci/mac-unsigned
+          tar -xf .ci/mac-compiled/mac-compiled.tar -C .ci/mac-compiled
+          if [ -n "${POSTHOG_JSON:-}" ]; then
+            (umask 077 && printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json")
+            export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"
+          fi
+          unset POSTHOG_JSON
+          trap 'rm -f "$RUNNER_TEMP/posthog.json"' EXIT
+          MBUI_MAC_FROM= MBUI_MAC_COMPILED="$GITHUB_WORKSPACE/.ci/mac-compiled" MBUI_VARIANT=beta MBUI_SIGN_AFTER_BUILD=1 bash apps/mbui/scripts/mac-app.sh build
+          mkdir -p .ci/mac-unsigned
+          mv apps/mbui/out/mac/youdid.wtf.app "$MBUI_MAC_FROM"
           plist="$MBUI_MAC_FROM/Contents/Info.plist"
           test "$(plutil -extract CFBundleIdentifier raw "$plist")" = fail.still.desktop.beta
           test "$(plutil -extract CFBundleExecutable raw "$plist")" = youdid.wtf
