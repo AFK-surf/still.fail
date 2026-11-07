@@ -134,7 +134,8 @@ pub fn chat_row_node(
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the
     // pointer's eased in and out, the selected one's while its chat is in view (nav_ground's)
     // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
-    // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view
+    // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view; in a side column,
+    // beside the chat, it fades as a mouse's does (dur_ms)
     let left = @sf.EdgeWay::new(0.0)
     // (a finger's swiped left in its slot, by so many points: swipe_node's)
     let off = @sf.EdgeWay::new(0.0)
@@ -368,9 +369,14 @@ pub fn chat_row_node(
       row.reacts(on, fn(o) {
         if was_on.val && !o {
           row_left_said.set(key)
-          let at = row.cause_at()
+          let since = row.cause_at()
           left.go_from(row, 1.0, 1.0, @motion.Snap(0.0))
-          row.at_moment(at + left_lit_ms, fn() { left.go(row, 0.0, left_fade_ms, ease=Leave) }) |> ignore
+          if at == Whole {
+            row.at_moment(since + left_lit_ms, fn() { left.go(row, 0.0, left_fade_ms, ease=Leave) }) |> ignore
+          } else {
+            // (beside its chat, the list never covered: no page slides off it, its ground goes as a mouse's does)
+            left.go(row, 0.0, @sf.dur_ms)
+          }
         }
         was_on.val = o
       })

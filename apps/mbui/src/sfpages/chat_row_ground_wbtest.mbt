@@ -54,3 +54,48 @@ test "a mouse entering a retained chat row shows its background and time with it
   assert_true(t.find(item.ago) is None)
   t.assert_idle()
 }
+
+///|
+test "a finger's chat row keeps its ground a while after its chat only where the list was covered by it" {
+  for at in [@sf.ListAt::Side, Whole] {
+    @sfbase.reset()
+    @sf.set_words(@sfbase.fill)
+    // (which chat is in view: 0, 1, or none, -1)
+    let open = @signals.signal(0)
+    let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=320.0, h=400.0, platform=2)
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      let popup = root.box(fn(v) { v.over(Is(true)) |> ignore })
+      let tips = @sf.TipLayer::new(fn() { Some(popup) })
+      for i in 0..<2 {
+        let item = { ..sample_chat(i), title: "Chat \{i}" }
+        chat_row_node(root, @sfbase.sample_source, tips, fn() { item }, "agents", fn() { open.get() == i }, at, fn() {
+          0
+        })
+        |> ignore
+      }
+    })
+    t.draw()
+    let ink = @sf.theme().p.selected & 0xFFFFFF00L
+    let lit = fn() {
+      t.drawn_rects().filter(fn(r) { r.2 > 100.0 && r.3 > 30.0 && (r.4 & 0xFFFFFF00L) == ink && (r.4 & 0xFFL) > 0L }).length()
+    }
+    assert_eq(lit(), 1)
+    // another chat opened in its place, or gone back to the list
+    open.set(1)
+    t.run_for(@sf.dur_ms)
+    let switched = lit()
+    open.set(-1)
+    t.run_for(@sf.dur_ms)
+    let back = lit()
+    if at == Side {
+      // beside the chat: as a mouse's rows
+      assert_eq((switched, back), (1, 0), msg="beside the chat")
+    } else {
+      // across the whole screen: the row gone back from stays lit as its page slides off
+      assert_eq(back, 1, msg="across the whole screen, gone back")
+      t.run_for(left_lit_ms + left_fade_ms)
+      assert_eq(lit(), 0)
+    }
+  }
+}
