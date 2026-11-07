@@ -141,6 +141,13 @@ function load(src: string): Promise<void> {
   });
 }
 
+// Fetch the app beside its renderer and fonts; execution still waits for its dependencies below.
+const appUrl = `/mbui/app.js?b=${BUILT_AT}`;
+const appPreload = document.createElement("link");
+appPreload.rel = "preload";
+appPreload.as = "script";
+appPreload.href = appUrl;
+document.head.appendChild(appPreload);
 startWorker();
 
 /// The accounts signed in on the sign-in page since, handed to the core (its `migrate`) before the app asks who is
@@ -180,7 +187,8 @@ takeShare((channel, json) => host()?.post(channel, json), (open) => {
 });
 await Promise.all([starting, svgStarting]);
 await handOver;
-await load(`/mbui/app.js?b=${BUILT_AT}`);
+await load(appUrl);
+appPreload.remove();
 for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])
   void fetchCarried(name).then(() => (host() as { requestFrame?(): void } | undefined)?.requestFrame?.());
 
