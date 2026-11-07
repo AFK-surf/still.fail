@@ -20,6 +20,7 @@ import { ofSites } from "../browser/signins.ts";
 import { plainStore, shown } from "./plain.ts";
 import { Secrets } from "./secrets.ts";
 import { vaultStore } from "./store.ts";
+import { vaultWriteGate } from "./write-gate.ts";
 
 export const VaultLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -36,6 +37,8 @@ export const VaultLive = Layer.effectDiscard(
     // What the process before held may come until it is gone (it gives it as it begins to hand over).
     let coming = true;
     const previous = yield* Previous;
+    const writes = vaultWriteGate(previous.pid === null ? null : previous.exited);
+    yield* Effect.addFinalizer(() => Effect.sync(() => writes.close()));
     const browsers = yield* Browser;
     // The vault's secrets, asked for by agents and granted from the members' apps.
     const secrets = new Secrets({
@@ -131,7 +134,7 @@ export const VaultLive = Layer.effectDiscard(
     }
     void previous.gone.then(came, came);
     parts.routes([
-      ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, boxed: (l, cert) => secrets.boxed(l, cert) }),
+      ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, beforeWrite: () => writes.wait(), boxed: (l, cert) => secrets.boxed(l, cert) }),
       ...requestRoutes({ secrets, plain: secrets.plain, lock: (ws) => lock(ws), events }),
       ...signInRoutes(signIns),
     ]);
