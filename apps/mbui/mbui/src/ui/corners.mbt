@@ -1,29 +1,5 @@
-// The corner rule: the only place it is written, and what holds it (Tester::corner_faults, every frame a test draws under
-// a theme with a ladder: Tester::hold_corners). How a corner is drawn: paint/smooth.mbt. The numbers: the theme's ladder
-// (Theme::corner_ladder, still.fail's sf/tokens.mbt).
-//
-// What has a ground of its own (a button, a row, a field, a block, or a ground only some state shows) and lies in the corner
-// of a rounded container that shows stands as far from the corner's two edges, and is concentric with it:
-// - a box: its corner the container's less that distance (concentric), by the radius as given. Worked out here where it
-//   fills the container (corners_in_corners), its four corners still alike; else it keeps its own and a fault says so.
-//   A corner made unlike the others is only ever a design's, said (Corners, LinkedEach) and looked at by a person
-//   (the user, 2026-10-26: 「每个四边圆角不一致的都应该手动确认是否 by design」; detlint corners-each).
-// - a capsule or a circle: its shape is its height's and it keeps it. Where it stands makes it concentric: the container's
-//   corner less its half in (capsule_in). The page lays that out.
-// `Inner` follows the corner of the container it is in; `InnerOr(own)` the same, its own where following would leave its
-// corners unlike or it is in none; `Around` the other way, the container's corner round what lies in its corner.
-//
-// The window is the outermost container, its corner its system's (@hostapi.window_corner), and a phone's screen. What
-// nothing can make concentric with its container stands alone, its own corner, and is asked nothing more: Theme::corner_fit
-// says the corners a thing may have and how far in it may stand (too square a window: a card's 26 in a Mac's 16). A corner
-// fit could make concentric and does not stand so is a fault, one squarer than fit's least included (it reads as square).
-//
-// Not the rule's: what scrolls past the corner (a list; what is kept to a height and fits still counts); a picture (Role
-// `Image`: its corners are what it draws); a mark hung on a corner rather than in it (on_corner: a badge, a remove button);
-// a corner cut off unseen; a control's own parts hugging its edge, concentric only, and what is in the ladder's last step;
-// a dot smaller than the gap it would leave standing concentric (under 2/3 of the corner across: it goes with the words it
-// leads); a capsule standing in a container's middle (as far from both of its edges, the container not round across that
-// way: one in a low bar along the edge is in the corner, the user, 2026-10-25).
+// The corner rule, checked on every frame a test draws (Tester::corner_faults, hold_corners). Corners unlike each other
+// are only ever a design's (the user, 2026-10-26: 「每个四边圆角不一致的都应该手动确认是否 by design」).
 
 ///|
 /// Whether node `n` shows a ground of its own (a fill or an edge) and is drawn.
