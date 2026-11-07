@@ -199,17 +199,17 @@ test "a chat's link" {
 ///|
 test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
-  // (its last row: the lowest words read out in it)
+  // (its last row: the lowest words read out in it, over its foot)
   // (its foot the presenters' sheet's, under what it holds: sheet_panel's)
   for mode in ["chat-info", "chat-agent"] {
     let t = decide_core(calls, mode)
     sheet_rested(t, "sf-present")
     let (sx, sy, sw, sh) = t.get(@ui.Role::Dialog).rect
     let foot = @sf.sheet_panel_foot + nav_foot()
-    // (the words read out: the page's under the sheet are not)
+    // (the words read out over its foot and bar: the composer under them is the page's, behind the sheet)
     let inside = t
       .words_said()
-      .filter(fn(w) { w.0 != "" && w.5 > 0.0 && w.1 >= sx && w.1 < sx + sw && w.2 >= sy && w.2 + w.4 <= sy + sh })
+      .filter(fn(w) { w.0 != "" && w.5 > 0.0 && w.1 >= sx && w.1 < sx + sw && w.2 >= sy && w.2 + w.4 <= sy + sh - foot })
     assert_true(inside.length() > 0, msg="\{mode}: no words in the sheet")
     let mut last = inside[0]
     for w in inside {
