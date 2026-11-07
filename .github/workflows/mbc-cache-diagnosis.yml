@@ -5,86 +5,42 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect:
+  compiler:
     strategy:
       fail-fast: false
       matrix:
-        sample: [1, 2]
+        sample: [1, 2, 3]
     runs-on: macos-26
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: 6e7115675283a6ad1056180374652dde8d3330d7
-      - uses: actions/cache/restore@v4
-        id: units
-        with:
-          path: |
-            .ci/mbc-store
-            .ci/hbc
-          key: mbui-mac-d347032292716aa5
-          fail-on-cache-miss: true
-      - uses: ./.github/actions/mbui-moonbit
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            apps/mbui/_build
-            !apps/mbui/_build/**/*.mbc
-          key: mbui-mac-moon-6e7115675283a6ad1056180374652dde8d3330d7
-          fail-on-cache-miss: true
-      - name: Compare saved dependencies with this image
+      - name: Compare the launcher and the selected compiler
         shell: bash
         run: |
+          set -eu
           sw_vers
-          cc --version
-          cd apps/mbui
-          python3 - <<'PY'
-          import collections, hashlib, os, shutil, subprocess
-          from pathlib import Path
-          root = Path(os.environ['GITHUB_WORKSPACE'])
-          store = root / '.ci/mbc-store'
-          cache = {}
-          bad = collections.Counter()
-          entries = 0
-          bad_entries = 0
-          for deps in store.glob('*/*/deps'):
-              entries += 1
-              found_bad = False
-              for line in deps.read_bytes().splitlines():
-                  if b'\x1f' not in line:
-                      bad['malformed dependency'] += 1
-                      found_bad = True
-                      continue
-                  path, expected = line.split(b'\x1f', 1)
-                  if path not in cache:
-                      try:
-                          cache[path] = hashlib.sha1(Path(os.fsdecode(path)).read_bytes()).hexdigest().encode()
-                      except OSError:
-                          cache[path] = None
-                  actual = cache[path]
-                  if actual != expected:
-                      found_bad = True
-                      bad[('missing ' if actual is None else 'changed ') + os.fsdecode(path)] += 1
-              bad_entries += found_bad
-          print(f'unit entries {entries}, dependency mismatch {bad_entries}, distinct paths {len(cache)}')
-          for path, n in bad.most_common(35):
-              print(f'{n} units: {path}')
-          stamps = [p for p in Path('_build').rglob('*.mbc') if p.is_file()]
-          print(f'local object stamps restored: {len(stamps)}')
-          if stamps:
-              head = stamps[0].read_bytes().splitlines()
-              if len(head) >= 2:
-                  print('stamp command:', head[0].replace(b'\x1f', b' ').decode(errors='replace')[:800])
-                  print('stamp compiler identity:', head[1].decode(errors='replace'))
-                  command = head[0].split(b'\x1f')
-                  compiler = os.fsdecode(command[0])
-                  compiler = compiler if Path(compiler).is_file() else shutil.which(compiler)
-                  print('compiler path:', compiler)
-                  if compiler:
-                      binary = hashlib.sha1(Path(compiler).read_bytes()).hexdigest().encode()
-                      version = subprocess.check_output([compiler, '--version'], stderr=subprocess.STDOUT)
-                      identity = hashlib.sha1(binary + b'\0' + version).hexdigest()
-                      print('compiler binary SHA-1:', binary.decode())
-                      print('compiler identity now:', identity)
-                      print('compiler identity matches stamp:', identity.encode() == head[1])
-          PY
+          actual=$(xcrun --find clang)
+          echo "Selected compiler: $actual"
+          shasum -a 256 /usr/bin/cc "$actual"
+          /usr/bin/cc --version
+          "$actual" --version
+          xcrun --sdk macosx --show-sdk-path
+          xcode-select -p
+          env | LC_ALL=C sort | grep -E '^(DEVELOPER_DIR|SDKROOT|MACOSX_DEPLOYMENT_TARGET)=' || true
+          export MACOSX_DEPLOYMENT_TARGET=12.0
+          mkdir -p "$RUNNER_TEMP/cc-compare"
+          cd "$RUNNER_TEMP/cc-compare"
+          printf '#include <stdio.h>\n#include <stdint.h>\n#include <math.h>\ndouble demo(uint64_t x) { return sin((double)x); }\n' > probe.c
+          flags=(-fwrapv -fno-strict-aliasing -ffp-contract=off -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC -MD -MT probe.o -c probe.c)
+          /usr/bin/cc -### "${flags[@]}" -MF probe.d -o probe.o 2>launcher.driver
+          "$actual" -### "${flags[@]}" -MF probe.d -o probe.o 2>compiler.driver
+          cat launcher.driver
+          cmp launcher.driver compiler.driver
+          /usr/bin/cc "${flags[@]}" -MF launcher.d -o launcher.o
+          "$actual" "${flags[@]}" -MF compiler.d -o compiler.o
+          /usr/bin/cc -E -dM -x c probe.c > launcher.macros
+          "$actual" -E -dM -x c probe.c > compiler.macros
+          shasum -a 256 launcher.o compiler.o launcher.d compiler.d launcher.macros compiler.macros
+          cmp launcher.o compiler.o
+          cmp launcher.d compiler.d
+          cmp launcher.macros compiler.macros
+          echo 'launcher and selected clang: final driver command, object, dependencies and predefined macros match'
