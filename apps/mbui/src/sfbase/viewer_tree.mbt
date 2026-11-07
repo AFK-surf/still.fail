@@ -1436,15 +1436,13 @@ fn download_told(src : Source, vw : Viewer) -> Unit {
 ///|
 /// How much of a file has come (file_progress's) as nodes in `parent`: "正在读取 **4 MB** /
 /// 12 MB" (the size so far in bold, in the words' ink) over a bar, on the surface (surface2 dark), 14 round, 14 and 12
-/// in, as wide as its words and 220 at least; its size not known (neither the station's, `got`'s, nor the one it was
-/// sent with, `sent`), 正在读取 over a bar that sweeps. Each as it changes: what has come, the words' language, the theme. `bare`: on a page of its own
-/// words (a file told of), no card: the bar, then the words under it in the meta's size, centred. The card's node.
+/// in, 220 wide; its size not known (neither the station's, `got`'s, nor the one it was sent with, `sent`), 正在读取 over
+/// a bar that sweeps. Each as it changes: what has come, the words' language, the theme. The card's node.
 pub fn file_progress_node(
   parent : @view.View,
   got : () -> (Double, Double?),
   sent : () -> Double,
   said? : () -> String? = fn() { None },
-  bare? : Bool = false,
 ) -> @view.View {
   let total = fn() -> Double? {
     match got().1 {
@@ -1457,62 +1455,52 @@ pub fn file_progress_node(
     _ => 220.0
   }
   parent.box(fn(card) {
-    if bare {
-      card.width(Is(Some(wide))).gap(Is(@ui.Space::px(S2_5))).lines_up(Is(Some(Middle))) |> ignore
-    } else {
-      // (a size never broken off its unit: "40.9 / MB" on two lines)
-      card
-      .min_width(Is(Some(wide)))
-      .padding(Is((@ui.Space::px(S3_5), @ui.Space::px(S3), @ui.Space::px(S3_5), @ui.Space::px(S3))))
-      .gap(Is(@ui.Space::px(S2)))
-      .lines_up(Is(Some(Middle)))
-      .radius(Is(file_progress_corner))
-      .ground(By(fn() {
-        let t = @sf.theme()
-        if t.dark {
-          surface2_dark
-        } else {
-          t.p.card
+    card
+    // (as wide as its words, 220 at least: a size never broken off its unit)
+    .min_width(Is(Some(wide)))
+    .padding(Is((@ui.Space::px(S3_5), @ui.Space::px(S3), @ui.Space::px(S3_5), @ui.Space::px(S3))))
+    .gap(Is(@ui.Space::px(S2)))
+    .lines_up(Is(Some(Middle)))
+    .radius(Is(file_progress_corner))
+    .ground(By(fn() {
+      let t = @sf.theme()
+      if t.dark {
+        surface2_dark
+      } else {
+        t.p.card
+      }
+    }))
+    |> ignore
+    card.box(fn(w) {
+      w
+      .words_runs(By(fn() {
+        match (said(), total()) {
+          // (what is said of how far it has come in its place: a download's, the core's words)
+          (Some(words), _) => [@view.words_run(words)]
+          (None, Some(n)) => {
+            // the size so far in bold, where the sentence has it
+            let words = pv("android-chat.file.loading.size")
+            let (before, after) = match words.find("{size}") {
+              Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
+              None => (words, "")
+            }
+            [
+              @view.words_run(before),
+              @view.words_run(@sf.file_size(got().0), weight=600, ink=@sf.theme().p.text),
+              @view.words_run(" / " + @sf.file_size(n) + after),
+            ]
+          }
+          (None, None) => [@view.words_run(pv("common.reading"))]
         }
       }))
+      .words_look(By(fn() {
+        let (size, line) = @ui.tree_theme().text_size(Body)
+        { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
+      }))
+      .ink(By(fn() { @ui.tree_theme().color(Muted) }))
       |> ignore
-    }
-    let words = fn(into : @view.View) {
-      into.box(fn(w) {
-        w
-        .words_runs(By(fn() {
-          match (said(), total()) {
-            // (what is said of how far it has come in its place: a download's, the core's words)
-            (Some(words), _) => [@view.words_run(words)]
-            (None, Some(n)) => {
-              // the size so far in bold, where the sentence has it
-              let words = pv("android-chat.file.loading.size")
-              let (before, after) = match words.find("{size}") {
-                Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
-                None => (words, "")
-              }
-              [
-                @view.words_run(before),
-                @view.words_run(@sf.file_size(got().0), weight=600, ink=@sf.theme().p.text),
-                @view.words_run(" / " + @sf.file_size(n) + after),
-              ]
-            }
-            (None, None) => [@view.words_run(pv("common.reading"))]
-          }
-        }))
-        .words_centered(Is(bare))
-        .words_look(By(fn() {
-          let (size, line) = @ui.tree_theme().text_size(if bare { Meta } else { Body })
-          { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
-        }))
-        .ink(By(fn() { @ui.tree_theme().color(Muted) }))
-        |> ignore
-      })
-      |> ignore
-    }
-    if !bare {
-      words(card)
-    }
+    })
+    |> ignore
     // (as wide as the card has room)
     @sf.progress_node(
       card,
@@ -1524,13 +1512,9 @@ pub fn file_progress_node(
       },
       fn() { @ui.tree_theme().line },
       fn() { @sf.theme().p.accent },
-      h=if bare { 4.0 } else { 3.0 },
     )
     .width_share(Is(1.0))
     |> ignore
-    if bare {
-      words(card)
-    }
   })
 }
 
@@ -1888,11 +1872,11 @@ fn player_width(w : Double) -> Double {
 let stage_whole : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// What is told of a file shown no other way (FilePreview.tsx fpNote, toldOf: its mark, its name, its size and kind, why
-/// it is told of; how far it comes as it is read for 下载, how far the core downloads it and its 取消, why that failed,
-/// why its read failed; an APK's 安装 first, then 下载), in `f`, each in the stage's middle.
+/// What is told of a file shown no other way (FilePreview.tsx fpNote, toldOf: a card with its extension, its name, its
+/// size and kind, why it is told of; how far the core downloads it and its 取消, why that failed, why its read failed;
+/// an APK's 安装 first, then 下载, the one read for saying how far it has come), in `f`, each in the stage's middle.
 fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
-  f.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S4))) |> ignore
+  f.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S5))) |> ignore
   let p = fn() { @sf.theme().p }
   let words = fn(parent : @view.View, said : () -> String, size : () -> Double, weight : Int, ink : () -> Int64) {
     parent.box(fn(w) {
@@ -1909,22 +1893,47 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
     })
     |> ignore
   }
-  // (its mark on a tile of the surface, so that it reads as the file's and not as a stray glyph)
-  f.box(fn(tile) {
-    let pad = (@sf.viewer_facts_tile - @sf.viewer_facts_icon) / 2.0
-    tile
-    .padding(Is((pad, pad, pad, pad)))
-    .radius(Is(@sf.viewer_facts_tile_corner))
-    .ground(By(fn() { p().hover }))
+  // (a card standing for the file, its extension in its middle in the accent's ink; a long one or none, the file's mark)
+  let ext = @sf.file_ext(vw.file.name)
+  let ext_shown = ext != "" && ext.length() <= 5
+  let (card_w, card_h, card_corner) = @sf.viewer_facts_card
+  f.box(fn(card) {
+    card
+    .width(Is(Some(card_w)))
+    .height(Is(Some(card_h)))
+    .lines_up(Is(Some(Middle)))
+    .radius(Is(card_corner))
+    .ground(By(fn() { p().raised }))
+    .edge(By(fn() { (1.0, p().line_strong) }))
     |> ignore
-    @sf.icon_node(tile, "file", @sf.viewer_facts_icon, By(fn() { p().muted })) |> ignore
+    // (its middle: what it holds as high as its words, the room above it half of what is left)
+    card.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
+    if ext_shown {
+      card.box(fn(w) {
+        w
+        .words(Is(ext))
+        .words_look(By(fn() {
+          let s = @sf.theme().t.ui
+          { size: s, weight: 700, line: s, wrap: false, tracking: @view.letters_own, balance: false }
+        }))
+        .ink(By(fn() { p().accent_text }))
+        |> ignore
+      })
+      |> ignore
+    } else {
+      @sf.icon_node(card, "file", @sf.viewer_facts_icon / 1.5, By(fn() { p().muted })) |> ignore
+    }
+    card.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
   })
   |> ignore
-  // (its name and its size and kind, together)
+  // (its name and its size, together)
   f.box(fn(g) {
     g.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S1))) |> ignore
-    words(g, fn() { vw.file.name }, fn() { @sf.theme().t.body }, 600, fn() { p().text })
-    words(g, fn() { @sf.facts_size(vw.file.name, vw.file.size) }, fn() { @sf.theme().t.meta }, 400, fn() { p().muted })
+    words(g, fn() { vw.file.name }, fn() { @sf.theme().t.title }, 600, fn() { p().text })
+    // (its kind once: on its card where that says it)
+    words(g, fn() { if ext_shown { @sf.file_size(vw.file.size) } else { @sf.facts_size(vw.file.name, vw.file.size) } }, fn() {
+      @sf.theme().t.meta
+    }, 400, fn() { p().muted })
   })
   |> ignore
   words(
@@ -1944,21 +1953,20 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
   // (asked for, read first: how much has come of it)
   // (as it is asked for: 下载 on it, Viewer::ask_save's asked_told)
   let reading = fn() { vw.asked_now() && vw.bytes.get() is None && vw.error.get() is None }
-  f.show(reading, fn(r) { viewer_coming_node(r, vw, bare=true) })
   // downloaded by the core: how far it has come (on by itself as this closes; called off here)
   f.show(fn() { !reading() && downloading(dl()) }, fn(r) {
     r.lines_up(Is(Some(Middle))).gap(Is(14.0)) |> ignore
     file_progress_node(r, fn() { (number(dl(), "loaded"), Some(number(dl(), "size"))) }, fn() { vw.file.size }, said=fn() {
       Some(text(dl(), "statusText"))
-    }, bare=true)
+    })
     |> ignore
     @sf.button_node(r, fn() { @sf.t("web-main.file.cancelDownload") }, fn() {
       vw.cancel_download(@ui.current(), src, @signals.untracked(dl))
     }, tone=Ghost)
     |> ignore
   })
-  f.show(fn() { !reading() && !downloading(dl()) }, fn(r) {
-    r.lines_up(Is(Some(Middle))).gap(Is(14.0)) |> ignore
+  f.show(fn() { !downloading(dl()) }, fn(r) {
+    r.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).width(Is(Some(@sf.viewer_facts_actions))) |> ignore
     // (why the core's download failed; why its read failed)
     let failed = fn(said : () -> String?) {
       r.show(fn() { said() is Some(_) }, fn(e) {
@@ -1967,17 +1975,35 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
     }
     failed(fn() { if text(dl(), "state") == "failed" { Some(text(dl(), "statusText")) } else { None } })
     failed(fn() { vw.error.get().map(fn(e) { @sf.t("web-main.preview.loadFailed", args=[("error", e)]) }) })
-    // an APK: 安装 first, handed to the system's installer (strong); 下载 then the quieter
+    // an APK: 安装 first, handed to the system's installer (strong); 下载 then the quieter. As it is read for one, that
+    // one at work, saying how much has come in its words; the other not pressed meanwhile
     let apk = @sf.lower(vw.file.name).has_suffix(".apk")
+    let reading_for = fn(install : Bool) { reading() && vw.install_after == install }
+    let label = fn(install : Bool, rest : String) {
+      if !reading_for(install) {
+        return rest
+      }
+      let reading_words = @sf.t("web-main.preview.loadingLabel")
+      let total = match vw.got.get() {
+        Some((_, Some(n))) if n > 0.0 => Some(n)
+        _ => if vw.file.size > 0.0 { Some(vw.file.size) } else { None }
+      }
+      match (vw.got.get(), total) {
+        (Some((loaded, _)), Some(n)) => reading_words + " " + (dmin(1.0, loaded / n) * 100.0).floor().to_int().to_string() + "%"
+        _ => reading_words
+      }
+    }
     if apk {
-      @sf.button_node(r, fn() { pv("android-chat.file.install") }, fn() { vw.ask_install(@ui.current()) }, tone=Primary)
+      @sf.button_node(r, fn() { label(true, pv("android-chat.file.install")) }, fn() { vw.ask_install(@ui.current()) }, tone=Primary, busy=fn() {
+        reading_for(true)
+      }, disabled=fn() { reading_for(false) }, across=true)
       |> ignore
     }
-    @sf.button_node(r, fn() { @sf.t("web-main.preview.download") }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
+    @sf.button_node(r, fn() { label(false, @sf.t("web-main.preview.download")) }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
       Ghost
     } else {
       Primary
-    }, icon="download")
+    }, icon="download", busy=fn() { reading_for(false) }, disabled=fn() { reading_for(true) }, across=true)
     |> ignore
   })
 }
@@ -1985,9 +2011,9 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
 ///|
 /// What shows while it comes (WaitLine): how much has come out of its size once
 /// the core has said, else 正在打开 by a spinner, after a moment (wait_line's).
-fn viewer_coming_node(f : @view.View, vw : Viewer, bare? : Bool = false) -> Unit {
+fn viewer_coming_node(f : @view.View, vw : Viewer) -> Unit {
   f.show(fn() { vw.got.get() is Some(_) }, fn(r) {
-    file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }, bare~) |> ignore
+    file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
   })
   f.show(fn() { vw.got.get() is None }, fn(r) { @sf.wait_line_node(r, fn() { @sf.t("common.opening") }) |> ignore })
 }
