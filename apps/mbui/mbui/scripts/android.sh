@@ -127,6 +127,8 @@ case "${1:-build}" in
       if [ "$ABI" = arm64-v8a ]; then png_target=aarch64-linux-android; else png_target=x86_64-linux-android; fi
       export CC_aarch64_linux_android="$TC/aarch64-linux-android30-clang"
       export CC_x86_64_linux_android="$TC/x86_64-linux-android30-clang"
+      export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
+      export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$CC_x86_64_linux_android"
       image_host_library "$png_target" "$PWD/$OUT/libmbui_svg.a"
       APP_LINK="$APP_LINK $MBC_LINK_ARCHIVE"
     fi
