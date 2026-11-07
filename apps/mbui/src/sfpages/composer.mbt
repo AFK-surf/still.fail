@@ -1179,7 +1179,6 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         key,
         if field(ref_, "dir") is Some(True) { name + ".zip" } else { name },
         number(done, "size") + (if done is None { number(v, "size") } else { 0.0 }),
-        path=text(done, "path"),
         pending~,
         sent=match field(v, "sent") {
           Some(Number(n, ..)) => Some(n)

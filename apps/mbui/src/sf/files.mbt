@@ -225,7 +225,7 @@ pub(all) struct FileCardDone {
 /// A file as a card (FileCard; later.css.ts fileCard): its sheet, its name over its size (or how far it has gone up,
 /// `pending`, `sent` of it; or what the core's `download` says while it comes down, its share filling the sheet; or why
 /// it failed, `error`, in red), 236 wide at most, 8 by 10 in and 7 at the sheet's side, rounded as the sheet stands in
-/// (13), on the neutral ground; its path (or its name) its tip. `remove` and `retry` its own ✕ and ↻ at its end (in a
+/// (13), on the neutral ground; `path` its tip where it says what the card does not (a path named, a link's address), else its name while cut short. `remove` and `retry` its own ✕ and ↻ at its end (in a
 /// message; what waits in the composer has its ✕ on its corner: with_corner_remove), `slot`
 /// room there for a button laid over it (a message's). `open`: pressing it opens the file (a message's: fileCardOpen),
 /// the hover ground under the pointer. `key` names it. Pasted words kept as a file (Chat.tsx PendingFile's pasted

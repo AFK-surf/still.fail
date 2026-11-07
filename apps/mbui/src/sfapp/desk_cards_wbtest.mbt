@@ -104,3 +104,37 @@ test "desk: an agent's request to use a secret is its card in place of its words
   t.draw()
   assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"chat\"}"])
 }
+
+///|
+test "desk: a message's file card, pointed at, says nothing of where the station keeps it" {
+  new_run()
+  let path = "/w/uploads/2026-11-07T01-31-32-report.md"
+  let file = attachment_json(
+    { name: "report.md", path, size: 2048.0, width: 0.0, height: 0.0, thumbhash: "", owner: "s-c1", upload: "", duration: 0.0, frames: 0, held: false },
+    "s-c1",
+  )
+  let m = message_of({ "seq": 3, "ts": "3", "authorKind": "person", "author": "Mia", "text": "", "attachments": [file] })
+  let src = fixture("chat")
+  let t = @ui.Tester::new(
+    fn(c) {
+      let here : @sfpages.MessageHere = {
+        station: "ws1/st1",
+        session: "s-c1",
+        view: chat_view_made(Json::object({})),
+        go: None,
+        inline: true,
+        gutter: 0.0,
+        list: None,
+        core: None,
+      }
+      @sfpages.message_row(c, src, here, m)
+    },
+    w=760.0,
+    h=600.0,
+  )
+  t.draw()
+  let (x, y) = t.find("2 KB").unwrap()
+  t.move(x, y)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(!t.drawn_text().contains("uploads"), msg=t.drawn_text())
+}
