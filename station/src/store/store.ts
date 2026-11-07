@@ -20,11 +20,11 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { readArchive, threadFile } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
-  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
+  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type ProcessRow, type ProfileStatus,
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STATION_AUTHOR, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, MESSAGE_PAGE_ENTRIES, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, MESSAGE_PAGE_ENTRIES, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, usesLegacyEdits, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
@@ -478,9 +478,6 @@ export class Store {
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
   readonly #temp: string | null;
-  /// Where published snapshots are kept (docs/public-share.md): published/ beside the database (in an in-memory store's
-  /// archive directory).
-  readonly publishedDir: string;
   #listeners: ((change: StoreChange) => void)[] = [];
   #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
@@ -515,7 +512,8 @@ export class Store {
     this.clock = clock;
     this.#archiveDir = archiveDir;
     this.#temp = temp;
-    this.publishedDir = temp !== null ? join(temp, "published") : join(dirname(archiveDir), "published");
+    // Chats published as snapshots (gone with public sharing): what a station from before kept of them.
+    if (temp === null) rmSync(join(dirname(archiveDir), "published"), { recursive: true, force: true });
   }
 
   /// Opens the store at `path` (":memory:" for one of its own); archived threads go to `archive`, else `archive/`
@@ -1091,47 +1089,6 @@ export class Store {
     });
   }
 
-  // ── chats published as snapshots (published; publish/) ──
-
-  /// A chat's published snapshots, the latest first.
-  publishedOf(thread: number): Published[] {
-    return this.#all("SELECT * FROM published WHERE thread = ? ORDER BY created_at DESC, id", thread).map(toPublished);
-  }
-
-  /// A published snapshot by its id.
-  published(id: string): Published | null {
-    const r = this.#one("SELECT * FROM published WHERE id = ?", id);
-    return r ? toPublished(r) : null;
-  }
-
-  /// Records a snapshot written out to `publishedDir/<id>`; its chat's views change.
-  addPublished(p: Published): void {
-    this.#with((changes) => {
-      this.#run(
-        "INSERT INTO published (id, thread, key, title, created_by, by_name, created_at, upto, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        p.id, p.thread, p.key, p.title, p.by, p.byName, p.at, p.upto, p.size,
-      );
-      changes.push({ type: "thread", id: p.thread, entries: [] });
-    });
-  }
-
-  /// Takes a snapshot down: its row and its files; its chat's views change. Whether there was one.
-  removePublished(id: string): boolean {
-    const p = this.published(id);
-    if (p === null) return false;
-    this.#with((changes) => {
-      this.#run("DELETE FROM published WHERE id = ?", id);
-      changes.push({ type: "thread", id: p.thread, entries: [] });
-    });
-    this.#removeSnapshot(id);
-    return true;
-  }
-
-  #removeSnapshot(id: string): void {
-    // An id is the station's own (base64url); anything else never names a directory here.
-    if (/^[A-Za-z0-9_-]+$/.test(id)) rmSync(join(this.publishedDir, id), { recursive: true, force: true });
-  }
-
   // ── chats agents opened (opened_chats; sessions/opened.ts) ──
 
   /// Records a chat opened for a session: by its station and key, and its parent's ('' for this station).
@@ -1385,7 +1342,6 @@ export class Store {
       const ws: string | null = session?.ws ?? null;
       const kept: number[] = [];
       const removed: number[] = [];
-      const unpublished: string[] = [];
       this.#tx(() => {
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
@@ -1421,14 +1377,10 @@ export class Store {
           this.#deleteMarks(KEPT_MARKS, thread);
           this.#deleteMarks(HIDDEN_MARKS, thread);
           this.#deleteMarks(MUTED_MARKS, thread);
-          // Its published snapshots go with it.
-          for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
-          this.#run("DELETE FROM published WHERE thread = ?", thread);
           this.#run("DELETE FROM threads WHERE id = ?", thread);
         }
       });
       if (session !== undefined) this.#sessionWorkspaceChanged();
-      for (const id of unpublished) this.#removeSnapshot(id);
       changes.push({ type: "sessionRemoved", key, ws });
       // Clients drop what they keep of the threads that went with it.
       for (const id of removed) changes.push({ type: "threadRemoved", id, ws });

@@ -6,8 +6,6 @@ import { UNTRACKED_OPERATIONS } from "./operations.ts";
 import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
-import { captureException } from "../telemetry.ts";
-import { reload } from "../reloads.ts";
 import { t } from "../i18n.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core-ts/src/protocol.ts). */
@@ -169,7 +167,7 @@ export type Topic =
   | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
-export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
+interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
 
 /**
  * Where this page's attention is (`client.focus`, client/core-ts/src/attend.ts): in view, looked at, the chat it shows,
@@ -178,7 +176,7 @@ export interface ChatShown { station: string; thread: number | null; session: st
  */
 export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown; workspace?: string; newChat?: string }
 
-export interface ErrorBody {
+interface ErrorBody {
   code: string;
   message: string;
   status?: number;
@@ -236,7 +234,7 @@ interface Subscription {
 
 export { applyDelta, type DeltaOp } from "./delta.ts";
 
-export interface ClientOptions {
+interface ClientOptions {
   /** Waits before reopening a failed worker; tests pass their own. */
   schedule?: (ms: number, run: () => void) => void;
   /** Errors in the worker (it reports them; the page cannot see them) and the worker failing, for error tracking. */
@@ -522,7 +520,7 @@ export class CoreClient {
     const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; waiting?: boolean; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
-      reload("retired");
+      location.reload();
       return;
     }
     // The core this page talked to went with its tab; another tab's worker runs it now: this page asks it again.
@@ -582,7 +580,7 @@ const workerName = `stillfail-core-${BUILT_AT}${BETA ? "-test" : ""}`;
  * Opens a channel to this tab's core worker (worker.ts: one of the tabs' workers runs the core, the others relay to
  * it). The browser is asked to keep what the core stores (it is the only copy of what was sent offline).
  */
-export function workerOpener(): Opener {
+function workerOpener(): Opener {
   void navigator.storage?.persist?.().catch(() => false);
   return (onMessage, onFail) => {
     const receive = (event: MessageEvent) => {
@@ -602,7 +600,7 @@ function same(a: ChatShown, b: ChatShown): boolean {
 
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
-  const client = new CoreClient(workerOpener(), { onFault: (error) => captureException(error, { source: "core" }), endWithPage: true });
+  const client = new CoreClient(workerOpener(), { onFault: (error) => console.error("still.fail core:", error), endWithPage: true });
   addEventListener("pagehide", () => client.suspend());
   // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).
   let hidden = document.visibilityState === "hidden" ? Date.now() : null;

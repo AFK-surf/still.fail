@@ -188,12 +188,11 @@ function threadJson(t: ThreadRow): Json {
 }
 
 /// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote. Of one
-/// thread (what is told of it as it changes, for each viewer), its own shares and snapshots alone.
+/// thread (what is told of it as it changes, for each viewer), its own shares alone.
 function threadView(
   s: Store,
   t: ThreadSummary,
   shares: ReturnType<typeof store.chatShares> = store.chatShares(s, [t.thread.home ?? t.sessions[0]?.session ?? ""]),
-  published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s, [t.thread.id]),
 ): Json {
   const names = authorNames(s, t.thread.id);
   const v = threadJson(t.thread);
@@ -220,9 +219,6 @@ function threadView(
   // Which other workspaces it is shared with (docs/chat-share.md), by the session key its link names.
   const shared = shares.get(t.thread.home ?? t.sessions[0]?.session ?? "");
   v.xshare = shared === undefined ? null : shared;
-  // Its snapshots published for anyone with their links (docs/public-share.md); left out when none.
-  const snapshots = published.get(t.thread.id);
-  if (snapshots !== undefined) v.published = snapshots;
   return v;
 }
 
@@ -235,8 +231,7 @@ function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
   store.requireCcSessions(s, visible.flatMap((t) => t.thread.surface === store.STILLFAIL_SURFACE
     ? t.sessions.map((m) => m.session) : []));
   const shares = store.chatShares(s, visible.map((t) => t.thread.home ?? t.sessions[0]?.session ?? ""));
-  const published = store.publishedByThread(s, visible.map((t) => t.thread.id));
-  return visible.map((t) => threadView(s, t, shares, published));
+  return visible.map((t) => threadView(s, t, shares));
 }
 
 /// GET /threads?session= (views.rs `threads`): the threads (of one session).

@@ -394,6 +394,8 @@ export function linkTarget(url: string, origin: string): J {
   if (s.length === 1 && s[0] === "invite" && u.fragment !== "") return { opens: "invite", token: u.fragment };
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "chats") return { opens: "chat", workspace: s[1], station: s[3], chat: s[5], ...historyOf(u.query), ...messageOf(u.query) };
   if (s.length === 5 && s[0] === "w" && s[2] === "s" && s[4] === "adb") return { opens: "adbShare", workspace: s[1], station: s[3] };
+  // A station's web service on a page of its own (its "open on its own"): the service over the app.
+  if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "services" && s[5] !== "") return { opens: "service", workspace: s[1], station: s[3], service: s[5] };
   // One of a station's screens (docs/remote-screens.md), as its agents' `screen` tool links it.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "screen" && s[5] !== "") return { opens: "screen", workspace: s[1], station: s[3], screen: s[5] };
   // A login an agent started on a station (docs/remote-login.md), as its `login` tool links it: its card on the

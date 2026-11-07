@@ -65,13 +65,6 @@ decide() {
   # to mbui (apps/mbui/mbui).
   mbui=false
   if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
-  # The web in Chrome (check-browser): for a change to the web or its browser tests (scripts/check.sh's browser
-  # part says which exactly), or to the workflows (the job checks everything then). None, and its eight runners
-  # are not started: each fetched pnpm's 280 MB store and did nothing, 2.2 GB of a push's 4 GB of the Actions
-  # cache's downloads, whose account limit GitHub slows them by (mbui-only branches, login-flow-look 41162994216,
-  # 2026-10-31).
-  browser=false
-  if [ "$range" = all ] || has '^(web/|test/browser/)' || has_but '^\.github/' '^\.github/workflows/(mbui-|preview\.yml$)'; then browser=true; fi
   # Exercise the GitHub-hosted web and Mac release paths, without secrets or publishing, when their CI changes.
   release_smoke=false
   if [ "${GITHUB_REF:-}" != refs/heads/main ] && { [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ] || has '^(\.github/workflows/pipeline\.yml$|\.github/deploy\.sh$|\.github/actions/(setup|natives|mbui-moonbit)/|scripts/release\.sh$)'; }; then release_smoke=true; fi
@@ -91,7 +84,6 @@ print() {
     echo "win_beta=$win_beta"
     echo "windows_natives=$windows_natives"
     echo "mbui=$mbui"
-    echo "browser=$browser"
     echo "release_smoke=$release_smoke"
   }
 }

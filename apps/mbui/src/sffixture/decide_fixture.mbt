@@ -182,19 +182,7 @@ pub fn fix_detailed_chat(base : Json) -> Json {
         "lastMessage": { "time": { "createdAt": { "ago": "5 分钟前" } } },
       }
       o["agents"] = [fix_agent()]
-      // made public twice (apps/android PublishSheetTest's `two`): the viewer's own, which they may revoke, and Bob's
-      let link = "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq"
-      let published = fn(id : String, by : String, mine : Bool, ago : String) -> Json {
-        {
-          "id": Json::string(id),
-          "link": Json::string(link + "-" + id),
-          "createdAt": 0,
-          "byName": Json::string(by),
-          "mayRevoke": Json::boolean(mine),
-          "time": { "createdAt": { "ago": Json::string(ago), "full": "10月15日 10:00" } },
-        }
-      }
-      o["publish"] = { "may": true, "links": [published("p2", "Alice", true, "10 分钟前"), published("p1", "Bob", false, "2 天前")] }
+      o["publish"] = { "may": true }
       // shared with one of the viewer's other workspaces, read only (ChatInfo.kt ShareRow)
       o["xshare"] = {
         "session": "s-c1",
@@ -643,7 +631,7 @@ pub fn fix_preview_viz() -> Json {
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" =>
       Some(Ok(Json::object({})))
     "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None

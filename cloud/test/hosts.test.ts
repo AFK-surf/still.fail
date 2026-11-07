@@ -12,8 +12,8 @@ test("each host serves its own static site, the API and the relay on their paths
     assert.deepEqual(await text(await h.fetch("/")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/w/some-workspace/chats")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/assets/app.js")), [200, "// the web app"]);
-    // The app's page answers every page but the few the web's own React pages still have (src/web.ts WEB_PAGES).
-    for (const page of ["/auth/callback?code=x&state=y", "/slack/installed?code=x", "/w/ws1/s/st1/services/job1"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail · web</title>"], page);
+    // The app's page answers every page but the few the web's own pages have (src/web.ts WEB_PAGES).
+    for (const page of ["/login", "/login?return_to=%2F", "/auth/callback?code=x&state=y", "/slack/installed?code=x", "/w/ws1/s/st1/services/job1"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail · web</title>"], page);
     // What another app shares in is the app's too (web/src/mbui/share.ts).
     for (const page of ["/mbui", "/share?text=hi", "/o/ws1/st1/s1", "/w/ws1/s/st1/chats/c1", "/invite", "/auth/callbacks", "/w/ws1/s/st1/services"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail</title>"], page);
     // The app's pages are kept by nothing, its files as their host says (src/web.ts unkept).

@@ -1,6 +1,5 @@
-// Sharing a chat as a picture on a phone (sfpages' publish.mbt, the same as keyboard and mouse's; publish.mbt the
-// info's rows) over the fixture's chat: its sheet's 分享图片 and the public links made before, the page with the picture
-// as it would be, the attachments ticked, the picture taken and kept in the photo album, and a link revoked once asked.
+// Sharing a chat as a picture on a phone (sfpages' publish.mbt, the same as keyboard and mouse's) over the fixture's
+// chat: the page with the picture as it would be, the attachments ticked, the picture taken and kept in the photo album.
 
 ///|
 /// The source the last publish_core made.
@@ -15,8 +14,7 @@ fn open_publish_page() -> Unit {
 
 ///|
 /// The chat's sheet open over the fixture's chat (`menu`: the chat in its detail with no sheet over it, its page opened by open_publish_page as its "…"'s
-/// 分享图片 does); `chat.publishPreview` answered with fix_preview, `chat.publish` with
-/// its link, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
+/// 分享图片 does); `chat.publishPreview` answered with fix_preview, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
 /// picture decoded) done only as the test says (Tester::finish).
 fn publish_core(
   calls : Array[Made],
@@ -37,16 +35,6 @@ fn publish_core(
       calls.push({ name, params, bytes: None, done, heard: None })
       match name {
         "chat.publishPreview" => done(Ok(preview()))
-        "chat.publish" =>
-          done(
-            Ok({
-              "id": "p3",
-              "link": "https://share.still.fail/#st1key.p3.k3",
-              "createdAt": 0,
-              "byName": "林",
-              "mayRevoke": true,
-            }),
-          )
         _ => done(Ok(Json::object({})))
       }
     },
@@ -101,31 +89,6 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
 }
 
 ///|
-test "分享图片: the chat's sheet lists the public links made before (making one is its menu's); 复制 copies one" {
-  let calls : Array[Made] = []
-  let t = publish_core(calls)
-  assert_true(t.find("分享图片") is None)
-  // when, then who: their face (their initial, without a picture) before their name
-  assert_true(t.find("10 分钟前 · ") is Some(_) && t.find("Alice") is Some(_))
-  assert_true(t.find("2 天前 · ") is Some(_) && t.find("Bob") is Some(_))
-  // Bob's only copied: the viewer did not publish it (the one 撤销 is on the viewer's own row)
-  let (_, mine) = t.find("Alice").unwrap()
-  let (_, revoke) = t.find_last("撤销").unwrap()
-  assert_true((revoke - mine).abs() < 1.0)
-  // (Bob's 复制, the last, under 复制会话链接: the sheet's last row, brought up from under its foot)
-  match t.find_last("复制") {
-    Some((_, y)) if y > publish_fold => t.wheel(195.0, publish_fold, y - publish_fold)
-    _ => ()
-  }
-  tap_last(t, "复制")
-  assert_eq(t.clipboard(), "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq-p1")
-  // (said at once, read out: seen as it has come in, toast_said)
-  assert_true(toast_said(t, "已复制链接"))
-  t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("已复制链接") is Some(_))
-}
-
-///|
 test "分享图片: the page shows the picture as it would be, 取消, 复制 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out; 复制 copies it" {
   let calls : Array[Made] = []
   let t = publish_core(calls, menu=true)
@@ -162,7 +125,6 @@ test "分享图片: the page shows the picture as it would be, 取消, 复制 an
   // nothing is published
   t.click(Button, label="保存到相册")
   t.run_for(@kit.presence_in_ms)
-  assert_eq(named(calls, "chat.publish").length(), 0)
   // the picture taken: the chat's name, its messages, their times as dates, still.fail's; not the attachments left
   // out, nor the notes of what was hidden (for the one sharing it)
   let shots = t.shots()
@@ -403,31 +365,6 @@ fn picture_mine_at_end(t : @ui.Tester) -> Bool {
   match (t.rect_of("帮我把登录页部署到预发，token 是 [已隐藏]"), t.rect_of("截图、日志和构建缓存都附上了")) {
     (Some((mx, _, _, _)), Some((ox, _, _, _))) => mx > ox
     _ => false
-  }
-}
-
-///|
-test "分享图片: 撤销 asks first, then revokes that public link" {
-  let calls : Array[Made] = []
-  let t = publish_core(calls)
-  t.tap_text("撤销")
-  assert_eq(named(calls, "chat.unpublish").length(), 0)
-  assert_true(t.find("撤销此链接？") is Some(_))
-  let felt = t.haptics().length()
-  tap_last(t, "撤销")
-  let revoked = named(calls, "chat.unpublish")
-  assert_eq(revoked.length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
-  assert_eq(text(Some(revoked[0].params), "id"), "p2")
-  assert_eq(number(Some(revoked[0].params), "thread"), 7.0)
-}
-
-///|
-/// Taps the last words holding `s` (drawn last: the sheet's, over what is under it).
-fn tap_last(t : @ui.Tester, s : String) -> Unit {
-  match t.find_last(s) {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no text \"\{s}\" on screen")
   }
 }
 

@@ -7,7 +7,7 @@
 // - what has a size on its way (a file, an update): `Progress`.
 // Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
 // at once, in red.
-import { forwardRef, useContext, useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useContext, useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "preact/compat";
 import { bonesOf, type Bone } from "./bones.ts";
 import { InBones } from "./inBones.ts";
 import { Words } from "./words.tsx";
@@ -37,7 +37,7 @@ function Said({ text }: { text: string }) {
  * What is waited on (a spinner before it), or with `error` what is wrong (in red, at once): a grey capsule. `over`: over
  * a picture (a player buffering, a screen connecting), frosted, in the middle of what holds it (positioned).
  */
-export function WaitPill({ text, error = false, over = false, className, why }: { text: string; error?: boolean; over?: boolean; className?: string; /** Why, on hover (a failure's message). */ why?: string | null | undefined }) {
+function WaitPill({ text, error = false, over = false, className, why }: { text: string; error?: boolean; over?: boolean; className?: string; /** Why, on hover (a failure's message). */ why?: string | null | undefined }) {
   const cls = `${css.pill}${over ? ` ${css.pillOver}` : ""}${className ? ` ${className}` : ""}`;
   return (
     <span className={cls} data-error={error || undefined} role="status" aria-live="polite" title={why ?? undefined}>
@@ -56,7 +56,7 @@ export function WaitLine({ text = t("common.reading"), error = false, className 
 }
 
 /** What a page or list waits on, from the core's note (ListNote) or the page's own words. */
-export interface WaitNote {
+interface WaitNote {
   /** Still reading: the placeholders breathe. */
   reading?: boolean | undefined;
   /** What it waits on (正在读取会话, 正在连接 Studio). */
@@ -76,7 +76,7 @@ export const sampleWords = (n: number): string => "字".repeat(n);
  * by the parts that draw it when it comes, of made-up data (`sampleWords`), so that its outline is theirs. `fill`: it
  * takes the room left (a page's body).
  */
-export function Bones({ children, still = false, fill = false }: { children: ReactNode; still?: boolean; fill?: boolean }) {
+function Bones({ children, still = false, fill = false }: { children: ReactNode; still?: boolean; fill?: boolean }) {
   const within = useContext(InBones);
   const box = useRef<HTMLDivElement | null>(null);
   const body = useRef<HTMLDivElement | null>(null);
@@ -134,19 +134,6 @@ export function Waiting({ sample, text, error, note, fill = false, children }: {
   );
 }
 
-/**
- * A list with rows already, still waiting on some of it (a station not read yet, one that could not be): under its
- * rows one more of them in its bones (`sample`) for what is still read, and each failure in red. Nothing once it
- * waits on nothing.
- */
-export function WaitMore({ note, sample, className }: { note: WaitNote | null | undefined; sample: ReactNode; className?: string }) {
-  if (!note) return null;
-  return <>
-    {note.reading !== false && <div role="status" aria-label={note.text ?? t("common.reading")}><Bones>{sample}</Bones></div>}
-    {note.failing?.map((f, i) => <WaitLine key={i} text={f.text} error {...(className ? { className } : {})} />)}
-  </>;
-}
-
 /** How much has come of what has a size (0…1), or a bar that sweeps while that is not known (`part` null). */
 export function Progress({ part, label, className }: { part: number | null; label?: string; className?: string }) {
   return (
@@ -154,16 +141,5 @@ export function Progress({ part, label, className }: { part: number | null; labe
       aria-valuenow={part === null ? undefined : Math.round(part * 100)}>
       <span className={css.progress} style={part === null ? undefined : { width: `${Math.min(1, Math.max(0, part)) * 100}%` }} data-unknown={part === null || undefined} />
     </span>
-  );
-}
-
-/** A determinate ring in the icon family's 24-unit grid; its parent supplies the accessible label. */
-export function ProgressRing({ part, size = 20 }: { part: number; size?: number }) {
-  const share = Math.min(1, Math.max(0, part));
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" opacity="0.18" />
-      {share > 0 && <circle cx="12" cy="12" r="8.5" pathLength="100" strokeDasharray={`${share * 100} 100`} transform="rotate(-90 12 12)" />}
-    </svg>
   );
 }

@@ -25,13 +25,16 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - The released apps are this one: Android's since 2026-10-24, the Mac's and Windows' since 2026-10-26, each built in
   the place of the one before it. Nothing else of still.fail's apps is developed; the web runs this app too (2026-10-31: mbui's
   web host draws it on the web's own core, `web/mbui.html`, `scripts/web-app.sh`), so a page is made here once for
-  every screen; the React web app (`web/`) is read for why its pages are as they are, until it is gone.
+  every screen. The React web app's pages are gone (read for why a page is as it is: `git show 4577000fd7:web/src/…`);
+  what is left in `web/` is the web's host of this app and a few pages of its own (sign-in's way back, the share page,
+  the admin's console), in Preact.
 - What the app looks like and how it moves is what it does now; a change means to differ and says why. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
 - Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `still.fail … apps/android` mean the Kotlin
   Android app's (gone in #2547: `git show 5065f823b^:apps/android/…`); `apps/desktop/…` the Electron app's (gone in
-  #2182: `git show eba1e7f47^:apps/desktop/…`). They say where a way of doing a thing came from; where they name a
+  #2182: `git show eba1e7f47^:apps/desktop/…`); a `web/src/…` file that is not there any more, the React web app's
+  (`git show 4577000fd7:web/src/…`). They say where a way of doing a thing came from; where they name a
   format this app still reads (a sealed value's, a store's files, an updater's), the old file is its spec.
 
 ## The component library

@@ -1,0 +1,16 @@
+{
+  "web-login.title": "Sign in to {name}",
+  "web-login.lead": "Sign in with Google or your email",
+  "web-login.start": "Sign in or sign up",
+  "web-login.signingIn": "Signing in",
+  "web-login.failed": "Sign-in failed",
+  "web-login.again": "Sign in again",
+  "web-login.slow": "This is taking longer than usual. Try reloading",
+  "web-login.reload": "Reload",
+  "web-login.cancelled": "Sign-in cancelled",
+  "web-login.expired": "Sign-in expired. Sign in again",
+  "web-login.stateMismatch": "Sign-in state mismatch. Sign in again",
+  "web-login.unreachable": "Couldn't reach {name}: {error}",
+  "web-login.device": "{brand} Web · {browser}{more}",
+  "web-login.browser": "Browser"
+}

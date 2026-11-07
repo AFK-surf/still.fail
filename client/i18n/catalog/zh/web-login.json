@@ -1,0 +1,16 @@
+{
+  "web-login.title": "登录 {name}",
+  "web-login.lead": "用 Google 账号或邮箱登录",
+  "web-login.start": "登录或注册",
+  "web-login.signingIn": "正在登录",
+  "web-login.failed": "登录未完成",
+  "web-login.again": "重新登录",
+  "web-login.slow": "加载较慢，可尝试重新加载",
+  "web-login.reload": "重新加载",
+  "web-login.cancelled": "登录已取消",
+  "web-login.expired": "登录凭证已失效，请重新登录",
+  "web-login.stateMismatch": "登录状态不匹配，请重新登录",
+  "web-login.unreachable": "连不上 {name}：{error}",
+  "web-login.device": "{brand} 网页版 · {browser}{more}",
+  "web-login.browser": "浏览器"
+}

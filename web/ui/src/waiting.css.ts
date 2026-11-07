@@ -8,7 +8,7 @@ import { centred } from "./styles/align.ts";
 import { STILL, stillLoop } from "./styles/still.ts";
 
 /** Words about a wait come only when it takes a while: what is there in a moment (from the device) shows none. */
-export const LATER_MS = 400;
+const LATER_MS = 400;
 const later = `${appearKeyframes} 0s linear ${LATER_MS}ms both`;
 
 // 1 → 0.5 and back in 1.4s; still for reduced motion (and still, whole, when what is waited on failed: the red words

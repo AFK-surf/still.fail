@@ -7,7 +7,6 @@ rename to still.fail, as do their Durable Objects, bucket and secrets: renaming 
   web-beta  stillfail-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
   admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
   preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
-  share     stillfail-share     the share host, static (wrangler.share.jsonc): published chats, on share.still.fail
   status    still-fail-status   still.fail/status, static (wrangler.status.jsonc)
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
@@ -20,7 +19,7 @@ The web app goes to the test channel first: a deploy without parts deploys web-b
 deployed in <deploy>/builds/<commit>/cloud-web (the newest ten). Once tried there, that very build (not a new one) goes
 to app.still.fail with promote-web. `web` named deploys a new build to app.still.fail straight away.
 
-    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, share, status, site
+    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, status, site
     python3 deploy.py api web-beta      # only these (the static ones are built first)
     python3 deploy.py web               # a new build to app.still.fail, without the test channel
     python3 deploy.py promote-web <dir> # a build already made (a directory, or a commit kept in <deploy>/builds) to app.still.fail
@@ -113,7 +112,7 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "share": "wrangler.share.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
 # What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
 DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
 # The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
@@ -168,7 +167,7 @@ def rebrand_static(cloud: str = CLOUD) -> None:
     itself (its core's, client/i18n/brand.ts)."""
     if not cloud:
         return
-    for site in ("cloud-web", "cloud-admin", "cloud-share", "cloud-preview"):
+    for site in ("cloud-web", "cloud-admin", "cloud-preview"):
         for path in (REPO / "dist" / site).rglob("*"):
             if path.suffix in (".html", ".webmanifest") and path.is_file():
                 text = path.read_text()
@@ -480,18 +479,15 @@ def main() -> None:
         if not args.parts and "web-beta" in skipped:
             parts.insert(parts.index("admin"), "web")
             print("note: deploying web (app.still.fail) instead of web-beta", flush=True)
-    if not args.skip_build and {"web", "web-beta", "admin", "preview", "share"} & set(parts):
+    if not args.skip_build and {"web", "web-beta", "admin", "preview"} & set(parts):
         # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
         env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else dict(os.environ)
         if CLOUD:
             # What the builds read of still.fail's hosts themselves: the preview host the web app opens services on
-            # (web/vite.config.ts), the cloud and relays the share page asks (share-hosts.ts).
-            vars = template["vars"]
-            relays = [u.strip() for u in [vars.get("RELAY_URL") or origin, *vars.get("RELAY_URLS", "").split(",")] if u.strip()]
-            env |= {"STILLFAIL_PREVIEW_ORIGIN": rehost("https://preview.still.fail"), "STILLFAIL_SHARE_CLOUD": origin,
-                    "STILLFAIL_SHARE_RELAYS": ",".join(dict.fromkeys(relays))}
+            # (web/vite.config.ts).
+            env |= {"STILLFAIL_PREVIEW_ORIGIN": rehost("https://preview.still.fail")}
         # still.fail's app for the browser (apps/mbui/scripts/web-app.sh into web/public/mbui), the page of every one of
         # the web app's pages (web/vite.config.ts): as it is when it is there (CI's static job has it from mbui-web), else
         # built where MoonBit is (the bundle job's). Without it the web app would be a page with nothing to draw.
@@ -566,7 +562,6 @@ def main() -> None:
         "web-beta": [f"{template['vars'].get('BETA_ORIGIN', 'https://app.youdid.wtf')}/"],
         "admin": [f"{admin}/", f"{old_admin}/"],
         "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
-        "share": ["https://share.still.fail/", "https://share.still.fail/frame"],
         "status": ["https://still.fail/status"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],

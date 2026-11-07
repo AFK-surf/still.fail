@@ -120,7 +120,6 @@ test("another workspace's session, chat or job is none: 404 for each route that 
       ["POST", `/threads/${c.b.thread}/messages`, { text: "hello" }],
       ["PUT", `/threads/${c.b.thread}/read`, { n: 1 }],
       ["POST", `/threads/${c.b.thread}/archive`],
-      ["POST", `/threads/${c.b.thread}/publish/preview`, {}],
       ["GET", "/jobs/jb"],
       ["GET", "/jobs/jb/log"],
       ["POST", "/jobs/jb/stop"],

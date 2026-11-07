@@ -474,14 +474,6 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
         }
       })
     }
-    // the public links it has (making one is the menu's: 分享图片), a card of its own (publish.mbt)
-    match shown_publish(chat) {
-      Some(_) as p if items(p, "links").length() > 0 => {
-        c.box(style=info_lists_gap, fn() {  }) |> ignore
-        publish_list(c, src, r, number(thread, "id"), p, close)
-      }
-      _ => ()
-    }
     // (its last card at a dialog's foot, as far from it as from its sides)
     c.box(style=@sf.panel_card_foot(), fn() {  }) |> ignore
   })

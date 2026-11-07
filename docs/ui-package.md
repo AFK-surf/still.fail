@@ -1,6 +1,6 @@
 # 组件库 `@stillfail/ui`
 
-web 的设计系统单独成包，在 `web/ui`（`web/ui/package.json`）。app（`web/src`）、share 页、官网和 stories 都从这里拿 tokens、对齐、图标、动效、文案和共用部件。
+web 的设计系统单独成包，在 `web/ui`（`web/ui/package.json`）。web 自己剩下的几个页面（登录回调、share 页、管理后台，Preact 写的）从这里拿 tokens、对齐、图标、动效、文案和共用部件；app 本身是 `apps/mbui`。
 
 ## 边界
 
