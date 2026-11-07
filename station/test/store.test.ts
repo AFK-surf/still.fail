@@ -1700,6 +1700,18 @@ test("what the station asks again and again is planned by an index, never a scan
   const lastMessage = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_KEYED}`).all(1, "100") as { detail: string }[])
     .map((r) => r.detail);
   assert.ok(lastMessage.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), lastMessage.join(" | "));
+  const recentEdit = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_RECENT_EDIT}`).all(1, "100") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(recentEdit.some((line) => line.startsWith("SEARCH entries ") && line.includes("thread=?")), recentEdit.join(" | "));
+  assert.ok(!recentEdit.some((line) => /^SCAN entries\b/.test(line)), recentEdit.join(" | "));
+  const selectedEdit = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_WITH_EDIT}`).all(1, "100", "101") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(selectedEdit.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), selectedEdit.join(" | "));
+  assert.ok(selectedEdit.some((line) => line.startsWith("SEARCH e ") && line.includes("thread=?") && line.includes("n=?")), selectedEdit.join(" | "));
+  store.db.exec("CREATE INDEX entries_target ON entries(thread,target) WHERE target IS NOT NULL");
+  const oldEdits = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_OLD_EDITS}`).all(1, "100") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(oldEdits.some((line) => line.startsWith("SEARCH x ") && line.includes("entries_target") && line.includes("target=?")), oldEdits.join(" | "));
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);
     assert.ok(plan.some((s) => s.includes(`SEARCH ${table} USING PRIMARY KEY (${key}=?)`)), plan.join(" | "));
