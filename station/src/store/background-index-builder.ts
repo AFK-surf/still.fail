@@ -5,13 +5,13 @@ import type { Store } from "./store.ts";
 
 type Lookup = {
   scope: "memory" | "xshare";
-  name: "process job" | "share";
-  previousName: "jobs" | "shares";
-  kind: "process-jobs" | "chat-share";
+  name: "process job" | "share" | "session directory";
+  previousName: "jobs" | "shares" | "directories";
+  kind: "process-jobs" | "chat-share" | "directory";
   install: () => void;
   ready: () => boolean;
   step: () => unknown;
-  refresh: () => boolean;
+  refresh?: () => boolean;
 };
 
 /// One lifecycle for a requested whole-index build, including handover and worker ownership.
@@ -81,7 +81,7 @@ export class BackgroundIndexBuilder {
       worker.once("exit", (code) => {
         releaseStoppedBackfill(this.store.backfillPriority, owner);
         if (this.worker === worker) this.worker = null;
-        if (done) {
+        if (done && this.lookup.refresh) {
           try { done = this.lookup.refresh(); }
           catch (error) { done = false; log.warn(this.lookup.scope, `the prepared ${this.lookup.name} lookup could not be found`, { error: (error as Error).message }); }
         }
