@@ -768,15 +768,9 @@ function asI64(n: number): bigint {
   return BigInt(Math.trunc(n));
 }
 
-/// GET /threads/:id/entries: `after` (an n) gives what came since (at most `limit` if given); `before` pages back; `from` and
-/// `to` a gap (both included); none of them the latest page. `params`: the query's pairs, the first of a name counts
-/// (admin/mod.rs `query_pairs`, `Asked::param`), or a plain map of them.
-export function entries(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
-  useNames(station);
+function entryPage(params: Record<string, string> | [string, string][]) {
   const pairs = Array.isArray(params) ? params : Object.entries(params);
   const param = (name: string) => pairs.find(([k]) => k === name)?.[1];
-  const api = apiOf(station);
-  if (store.getThread(api.store, thread) === null) throw new HttpError(404, `unknown thread ${thread}`);
   const number = (name: string): bigint | null => {
     const v = param(name);
     if (v === undefined) return null;
@@ -791,6 +785,17 @@ export function entries(station: Store, _viewer: Viewer, thread: number, params:
   // f64::clamp keeps NaN, which `as usize` makes 0.
   const limit = Number.isNaN(wanted) ? 0 : Math.trunc(Math.min(Math.max(wanted, 1), 500));
   if ((from !== null) !== (to !== null)) throw new HttpError(400, tr("station.admin.fromAndTo"));
+  return { after, before, from, to, asked, limit };
+}
+
+/// GET /threads/:id/entries: `after` (an n) gives what came since (at most `limit` if given); `before` pages back; `from` and
+/// `to` a gap (both included); none of them the latest page. `params`: the query's pairs, the first of a name counts
+/// (admin/mod.rs `query_pairs`, `Asked::param`), or a plain map of them.
+export function entries(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
+  useNames(station);
+  const api = apiOf(station);
+  if (store.getThread(api.store, thread) === null) throw new HttpError(404, `unknown thread ${thread}`);
+  const { after, before, from, to, asked, limit } = entryPage(params);
   const s = api.store;
   const last = store.lastEntry(s, thread);
   const found =
@@ -803,23 +808,9 @@ export function entries(station: Store, _viewer: Viewer, thread: number, params:
 /// it are among its entries, marked so.
 export function letters(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
   useNames(station);
-  const pairs = Array.isArray(params) ? params : Object.entries(params);
-  const param = (name: string) => pairs.find(([k]) => k === name)?.[1];
   const api = apiOf(station);
   if (store.getThread(api.store, thread) === null) throw new HttpError(404, `unknown thread ${thread}`);
-  const number = (name: string): bigint | null => {
-    const v = param(name);
-    if (v === undefined) return null;
-    const n = parseF64(v);
-    if (n !== null && Number.isFinite(n) && Math.trunc(n) === n && n >= 0) return asI64(n);
-    throw new HttpError(400, tr("station.admin.notInteger", { name }));
-  };
-  const [after, before, from, to] = [number("after"), number("before"), number("from"), number("to")];
-  const asked = param("limit");
-  const parsedLimit = asked === undefined ? null : parseF64(asked);
-  const wanted = parsedLimit === null || parsedLimit === 0 ? 50 : parsedLimit;
-  const limit = Number.isNaN(wanted) ? 0 : Math.trunc(Math.min(Math.max(wanted, 1), 500));
-  if ((from !== null) !== (to !== null)) throw new HttpError(400, tr("station.admin.fromAndTo"));
+  const { after, before, from, to, asked, limit } = entryPage(params);
   const s = api.store;
   const last = store.lastLetter(s, thread);
   const found =
