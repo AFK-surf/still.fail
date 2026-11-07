@@ -176,6 +176,33 @@ async function pendingForState(hub: Hub, key: string, threadsOf: () => number[])
     (threads) => readStatePendingCard(makeReadStore(hub.store.db, hub.config().dataDir), threads));
 }
 
+const NEED_VISIBLE_QUESTION = "need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person";
+
+/// As for a named question, the latest default card must be checked in the state-writing transaction.
+async function recordPendingForTurn(hub: Hub, key: string, actor: SessionActor, turn: string, kind: DeclaredState,
+  words: string | null, about: [number, number, string] | null, watch: boolean, threadsOf: () => number[],
+  requireQuestion: boolean): Promise<boolean> {
+  let delay = 10;
+  for (;;) {
+    if (hub.actors.get(key) !== actor) return false;
+    try {
+      return await actor.stateForTurn(turn, kind, words, about, watch, (save) => stateWrite(hub, () => {
+        const current = readStatePendingCard(makeReadStore(hub.store.db, hub.config().dataDir), threadsOf());
+        if (current === null && requireQuestion) throw new Error(NEED_VISIBLE_QUESTION);
+        save(current);
+      }));
+    } catch (error) {
+      if (error instanceof StateWriteBusy) {
+        await wall.sleep(delay);
+        delay = Math.min(delay * 2, 250);
+        continue;
+      }
+      if (needsQuestionPreparation(error)) { await pendingForState(hub, key, threadsOf); continue; }
+      throw error;
+    }
+  }
+}
+
 /// A thread of this session the agent named with to=, and how the session posts there.
 export function target(hub: Hub, key: string, to: Json): SessionThread {
   if (hub.store.getSession(key) === null) throw new Error("unknown session");
@@ -389,7 +416,9 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   let about: [number, number, string] | null = null;
   const ts = aboutTs(args);
   const checkingQuestion = kind?.kind === "need_help" && ts !== null && hub.stateQuestion != null;
-  const questionActor = checkingQuestion ? actorOf(hub, key) : undefined;
+  const checkingDefault = kind?.kind === "need_help" && ts === null && hub.statePendingCard != null;
+  const guarded = checkingQuestion || checkingDefault;
+  const questionActor = guarded ? actorOf(hub, key) : undefined;
   const questionTurn = questionActor?.currentTurnId() ?? null;
   let questionThreads: (() => number[]) | null = null;
   if (ts !== null) {
@@ -422,7 +451,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     return link;
   };
   const files = await keep(paths.length === 0 ? [] : await attach(hub, key, paths), thumbsDir(hub.config().dataDir));
-  if (checkingQuestion && questionActor && questionTurn !== null &&
+  if (guarded && questionActor && questionTurn !== null &&
     (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
     throw new Error("the turn ended while checking its question; no message was posted");
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
@@ -447,31 +476,43 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   }
   const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
   hub.shared(thread.thread.id, n, key, text);
-  const actor = checkingQuestion ? questionActor : actorOf(hub, key);
-  if (checkingQuestion) {
+  const actor = guarded ? questionActor : actorOf(hub, key);
+  if (guarded) {
     if (actor && questionTurn !== null && hub.actors.get(key) === actor) await actor.postedForTurn(questionTurn);
   } else await actor?.postedNow();
-  if (!checkingQuestion && need !== null) await actor?.need(need);
+  if (!guarded && need !== null) await actor?.need(need);
   let recorded = true;
   let stateError: string | null = null;
   if (kind !== null) {
     // What the state is about: as said, else for need_help the card still pending in this chat (this post's, when it
     // carries one).
     if (about === null && kind.kind === "need_help") {
-      if (hub.statePendingCard) about = await pendingForState(hub, key, () => {
-        const current = store.sessionThreadById(key, thread.thread.id);
-        return current !== null && current.connect === thread.connect ? [thread.thread.id] : [];
-      });
-      else {
+      if (hub.statePendingCard) {
+        try {
+          about = await pendingForState(hub, key, () => {
+            const current = store.sessionThreadById(key, thread.thread.id);
+            return current !== null && current.connect === thread.connect ? [thread.thread.id] : [];
+          });
+        } catch (error) { recorded = false; stateError = (error as Error).message; }
+      } else {
         const pending = store.pendingCard(thread.thread.id);
         if (pending) about = [pending[0].thread, pending[0].n, pending[0].ts];
       }
     }
-    if (checkingQuestion) {
-      if (actor && questionTurn !== null && ts !== null && questionThreads !== null && about !== null) {
+    if (guarded) {
+      if (recorded && actor && questionTurn !== null) {
         try {
-          recorded = hub.actors.get(key) === actor && await recordQuestionForTurn(hub, key, actor, questionTurn, kind,
-            need, about, false, questionThreads, ts, `about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+          if (checkingQuestion && ts !== null && questionThreads !== null && about !== null) {
+            recorded = hub.actors.get(key) === actor && await recordQuestionForTurn(hub, key, actor, questionTurn, kind,
+              need, about, false, questionThreads, ts, `about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+          } else if (checkingDefault) {
+            const threadsOf = () => {
+              const current = store.sessionThreadById(key, thread.thread.id);
+              return current !== null && current.connect === thread.connect ? [thread.thread.id] : [];
+            };
+            recorded = await recordPendingForTurn(hub, key, actor, questionTurn, kind, need, about, false, threadsOf,
+              card !== null || about !== null);
+          }
         } catch (error) { recorded = false; stateError = (error as Error).message; }
       }
     } else {
@@ -568,25 +609,29 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   }
   const ts = aboutTs(args);
   const checkingQuestion = kind.kind === "need_help" && ts !== null && hub.stateQuestion != null;
-  const questionActor = checkingQuestion ? actorOf(hub, key) : undefined;
+  const checkingDefault = kind.kind === "need_help" && ts === null && hub.statePendingCard != null;
+  const questionActor = checkingQuestion || checkingDefault ? actorOf(hub, key) : undefined;
   const questionTurn = questionActor?.currentTurnId() ?? null;
   let about: [number, number, string] | null;
   if (checkingQuestion) {
     about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
     if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
-  } else if (kind.kind === "need_help" && ts === null && hub.statePendingCard) {
+  } else if (checkingDefault) {
     about = await pendingForState(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id));
   } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
-    throw new Error(
-      "need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person",
-    );
+    throw new Error(NEED_VISIBLE_QUESTION);
   }
   if (checkingQuestion) {
     if (questionActor && questionTurn !== null &&
       (hub.actors.get(key) !== questionActor || about === null || !await recordQuestionForTurn(hub, key, questionActor,
         questionTurn, kind, words, about, watch, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts,
         `about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`)))
+      throw new Error("the turn ended while checking its question; its state was not recorded");
+  } else if (checkingDefault) {
+    if (questionActor && questionTurn !== null &&
+      !await recordPendingForTurn(hub, key, questionActor, questionTurn, kind, words, about, watch,
+        () => hub.store.sessionThreads(key).map((t) => t.thread.id), args.kind !== "block"))
       throw new Error("the turn ended while checking its question; its state was not recorded");
   } else {
     const actor = actorOf(hub, key);

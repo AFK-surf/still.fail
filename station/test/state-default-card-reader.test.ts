@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { Readers } from "../src/read/pool.ts";
 import * as readStore from "../src/read/store.ts";
 import { newSession, say } from "../src/sessions/lifecycle.ts";
-import { CARD_POST_LATEST } from "../src/store/card-post-index.ts";
+import { CARD_POST_LATEST, CARD_POSTS_PENDING } from "../src/store/card-post-index.ts";
 import { Store } from "../src/store/store.ts";
 import { Rig, settle } from "./hub-fakes.ts";
 
@@ -184,6 +184,103 @@ test("a posted default-card read cannot declare a later turn", async () => {
   } finally { release.resolve(); await r.close(); }
 });
 
+test("a post reports if its default-card reader failed after the post was sent", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    r.hub.statePendingCard = async () => { throw new Error("card reader unavailable"); };
+    const result = await r.call(key, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "May I continue?", card, kind: "need_human", need: "permission" });
+    assert.match(result, /Posted to .*state was not recorded: card reader unavailable/);
+    assert.equal(r.said(thread.id).filter((m) => m.text === "May I continue?").length, 1);
+  } finally { await r.close(); }
+});
+
+test("a newer default card is selected when it arrives before the state is recorded", async () => {
+  const r = new Rig(), release = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    const to = `CHAT/${thread.threadTs}`;
+    await r.call(key, "chat_post", { to, text: "First question?", card });
+    const read = readStore.makeStore(r.store.db, r.dir), started = Promise.withResolvers<void>();
+    r.hub.statePendingCard = async (threads) => readStore.statePendingCard(read, threads);
+    const actor = r.hub.actors.get(key)!, record = actor.stateForTurn.bind(actor);
+    actor.stateForTurn = async (...args) => { started.resolve(); await release.promise; return record(...args); };
+    const pending = r.call(key, "chat_state", { kind: "need_human", need: "permission" });
+    void pending.catch(() => {});
+    await started.promise;
+    await r.call(key, "chat_post", { to, text: "New question?", card });
+    const latest = r.said(thread.id).at(-1)!;
+    release.resolve();
+    assert.equal(await pending, "Recorded state need_human.");
+    r.claude.last().complete();
+    await settle();
+    assert.deepEqual(r.store.lastTurn(key)!.about, { thread: thread.id, seq: latest.n, ts: latest.ts });
+  } finally { release.resolve(); await r.close(); }
+});
+
+test("a posted plain question can still end need_human without a card", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    const read = readStore.makeStore(r.store.db, r.dir);
+    r.hub.statePendingCard = async (threads) => readStore.statePendingCard(read, threads);
+    const result = await r.call(key, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "What should I do?", kind: "need_human", need: "a direction" });
+    assert.match(result, /recorded state need_human/);
+    r.claude.last().complete();
+    await settle();
+    assert.equal(r.store.lastTurn(key)!.about, null);
+  } finally { await r.close(); }
+});
+
+test("a busy external writer is waited for outside the actor queue before confirming a default card", async () => {
+  const r = new Rig();
+  await r.hub.shutdown();
+  r.store.close();
+  const path = join(r.dir, "stillfail.db");
+  r.store = Store.open(path);
+  r.hub = r.newHub({ chats: () => undefined });
+  const readers = new Readers(r.dir, 1, undefined, 1), writer = new DatabaseSync(path);
+  const original = r.store.db, blocked = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    await r.call(key, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "May I continue?", card });
+    r.hub.statePendingCard = async (threads) => JSON.parse(await readers.read("statePendingCard", { threads }, "en"));
+    const last = writer.prepare("SELECT max(n) AS n FROM entries WHERE thread=?").get(thread.id)!.n as number;
+    writer.exec("BEGIN IMMEDIATE");
+    writer.prepare(`INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at)
+      VALUES(?,?,'message','external-answer','person','ada','yes',?)`).run(thread.id, last + 1, Date.now());
+    (r.store as { db: typeof original }).db = new Proxy(original, { get(target, property) {
+      if (property === "exec") return (sql: string) => {
+        try { return target.exec(sql); }
+        catch (error) { if (sql === "BEGIN IMMEDIATE") blocked.resolve(); throw error; }
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const pending = r.call(key, "chat_state", { kind: "need_human", need: "permission" });
+    void pending.catch(() => {});
+    assert.equal(await Promise.race([blocked.promise.then(() => true), pending.then(() => false, () => false)]), true);
+    assert.equal(original.prepare("PRAGMA busy_timeout").get()?.timeout, 5000);
+    const actor = r.hub.actors.get(key)!;
+    await actor.postedForTurn(actor.currentTurnId()!);
+    writer.exec("COMMIT");
+    await assert.rejects(pending, /requires a visible question/);
+    original.exec("BEGIN IMMEDIATE; ROLLBACK");
+  } finally {
+    (r.store as { db: typeof original }).db = original;
+    try { writer.exec("ROLLBACK"); } catch { /* no transaction remains */ }
+    writer.close(); readers.close(); await r.close();
+  }
+});
+
 for (const mode of ["named", "default"] as const) {
   test(`a ${mode} question read cannot declare a later turn`, async () => {
     const r = new Rig(), release = Promise.withResolvers<void>();
@@ -282,3 +379,23 @@ test("default-card readers share old card preparation when one is cancelled", as
     assert.deepEqual(JSON.parse(await kept), [thread, 1, "ask"]);
   } finally { previous.resolve(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+for (const index of ["entries_cards", "entries_options"] as const) {
+  test(`a default card on an unprepared old thread survives a removed ${index} index`, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "default-card-no-index-"));
+    const store = Store.open(join(dir, "stillfail.db"));
+    const readers = new Readers(dir, 1, undefined, 1);
+    try {
+      const thread = store.openThread("ember", "CHAT", "old", null, null).id;
+      store.db.prepare(`INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,options,at)
+        VALUES(?,1,'message','ask','agent','worker','ask',?,?,1)`).run(thread,
+        index === "entries_cards" ? JSON.stringify(card) : null,
+        index === "entries_options" ? JSON.stringify(card.options) : null);
+      store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(thread);
+      store.db.exec(`DROP INDEX ${index}`);
+      const read = readStore.makeStore(store.db, dir);
+      assert.throws(() => readStore.statePendingCard(read, [thread]), (error: Error) => error.message.startsWith(CARD_POSTS_PENDING));
+      assert.deepEqual(JSON.parse(await readers.read("statePendingCard", { threads: [thread] }, "en")), [thread, 1, "ask"]);
+    } finally { readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+}
