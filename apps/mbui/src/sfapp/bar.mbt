@@ -1462,12 +1462,13 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   m.up.go(if m.holds || sliding { 1.0 } else { 0.0 }, ball_down, raise_damping, at~)
   if w > 0.0 {
     match m.swap_at(at) {
-      Some({ key: Some(key), .. } as s) =>
-        match s.sets[s.i].search(key) {
+      // a bar chosen landing: the ball rides the place tapped with it or as it lands (bar_finger_at's on_tab), else
+      // the place shown where the bar has it; nothing tells it again once it has landed, so where it rides it stays
+      Some(s) =>
+        match s.sets[s.i].search(s.key.unwrap_or(active_key)) {
           Some(j) => m.ride(s, j, w, row_top, at)
           None => ()
         }
-      Some(_) => ()
       None => {
         let final_cs = bar_centres(w, m.k_end(), items.length())
         let now_cs = bar_centres(w, m.k_at(at), items.length())
@@ -2138,6 +2139,12 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   let c = @ui.current()
   // another place chosen is felt, unless the finger already felt it getting there (a drag let go on it)
   let on_tab = fn(place : String) {
+    // a bar chosen landing: the ball rides this place as it lands (where it rides is where it stays: nothing tells it
+    // again once it has landed)
+    match m.swap_at(t) {
+      Some(s) if s.key != Some(place) => m.swap = Some({ ..s, key: Some(place) })
+      _ => ()
+    }
     if Some(place) != told.active {
       let at = "\{l.cur}/\{place}"
       if at != m.felt {
