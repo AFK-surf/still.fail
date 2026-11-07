@@ -1405,26 +1405,34 @@
       }
     }
   });
-  // Where a press goes: the canvas lies over every view, so a site takes presses by the canvas being cut away where it
-  // is seen (the hole the app paints shows nothing of the canvas's there anyway), but for what the app says takes a
-  // press over it (view_tell 4), in cells of a grid of those rects' edges, none overlapping (the rule is even-odd).
-  let cutSaid = '';
-  const cutSites = () => {
-    let cells = '';
-    for (const v of views.values()) {
-      if (v.kind !== 3 || !v.seen || v.touch === 'through') continue;
-      const [x0, y0, x1, y1] = v.seen;
-      const covers = v.covers;
-      const lines = (from, to, at) => [...new Set([from, to, ...covers.flatMap((c) => [c[at], c[at + 2]]).filter((k) => k > from && k < to)])].sort((a, b) => a - b);
-      const xs = lines(x0, x1, 0), ys = lines(y0, y1, 1);
-      for (let i = 0; i + 1 < xs.length; i++) for (let j = 0; j + 1 < ys.length; j++) {
-        const [a, b, c, d] = [xs[i], ys[j], xs[i + 1], ys[j + 1]];
-        if (covers.some((r) => a >= r[0] && b >= r[1] && c <= r[2] && d <= r[3])) continue;
-        cells += `M${a} ${b}H${c}V${d}H${a}Z`;
-      }
+  // Where a press goes: the canvas lies over every view, so while a site is seen it takes none: they go to what is under
+  // it (`under`, behind the views: every press where no view takes it, and every press's capture, as it stays) and,
+  // over it, to one box for each rect the app says takes a press over a site (view_tell 4). Not by the canvas cut away
+  // (clip-path) where a site is: a press goes through that, Chromium's scrolling does not (a finger or a wheel on the
+  // site moves nothing); `pointer-events` both go by.
+  let under = null;
+  const coverBoxes = [];
+  const siteTakes = (v) => v.kind === 3 && v.seen && v.touch !== 'through';
+  const placeSitePresses = () => {
+    const sites = [...views.values()].filter(siteTakes);
+    canvas.style.pointerEvents = sites.length ? 'none' : '';
+    if (sites.length && !under) {
+      under = document.createElement('div');
+      under.style.cssText = 'position:fixed;inset:0;z-index:0;touch-action:none';
+      document.body.insertBefore(under, viewLayer);
+      takePresses(under);
     }
-    const said = cells && `path(evenodd,"M0 0H99999V99999H0Z${cells}")`;
-    if (said !== cutSaid) canvas.style.clipPath = cutSaid = said;
+    const covers = sites.flatMap((v) => v.covers);
+    while (coverBoxes.length > covers.length) coverBoxes.pop().remove();
+    covers.forEach(([x0, y0, x1, y1], i) => {
+      if (!coverBoxes[i]) {
+        coverBoxes[i] = document.createElement('div');
+        coverBoxes[i].style.cssText = 'position:fixed;z-index:2;touch-action:none';
+        document.body.appendChild(coverBoxes[i]);
+        takePresses(coverBoxes[i]);
+      }
+      Object.assign(coverBoxes[i].style, { left: x0 + 'px', top: y0 + 'px', width: x1 - x0 + 'px', height: y1 - y0 + 'px' });
+    });
   };
   H.viewSiteNext = (id) => {
     const v = views.get(id);
@@ -1469,12 +1477,16 @@
     // again
     if (v && what === 5) { v.clip.style.zIndex = String(++nextZ); return; }
     if (v && v.kind === 3) {
-      if (what === 2) { v.touch = text.split(' ')[0]; cutSites(); }
+      if (what === 2) {
+        v.touch = text.split(' ')[0];
+        v.el.style.pointerEvents = v.touch === 'through' ? 'none' : 'auto';
+        placeSitePresses();
+      }
       else if (what === 4) {
         const n = text ? text.split(' ').map(Number) : [];
         v.covers = [];
         for (let i = 0; i + 3 < n.length; i += 4) v.covers.push(n.slice(i, i + 4));
-        cutSites();
+        placeSitePresses();
       } else if (what === 7) {
         // what a socket did, on to the frame (NativeView::tell_frame): [sid, what, …]
         const [sid, kind, a, b, c] = JSON.parse(text);
@@ -1601,7 +1613,7 @@
       v.el.style.transform = k === 1 ? '' : `scale(${k})`;
       v.seen = shown && cx1 > cx0 && cy1 > cy0 ? [cx0, cy0, cx1, cy1] : null;
       v.placed = [x, y, w, h, cx0, cy0, cx1, cy1, shown, r0, r1, r2, r3];
-      cutSites();
+      placeSitePresses();
     }
     // where it is now, in device pixels, as the page laid it out (scripts/host_contract.sh web views: against VIEWTOLD)
     if (shown && H.log) {
@@ -1625,7 +1637,7 @@
     if (v.kind === 1) { v.el.pause(); if (v.url) URL.revokeObjectURL(v.url); }
     if (v.kind === 3 && v.port) v.port.close();
     v.clip.remove();
-    cutSites();
+    placeSitePresses();
   };
   H.viewControl = (id, op, value) => {
     const v = views.get(id);
@@ -2278,36 +2290,42 @@
     try { cb.pointer(kind, x, y, button); } finally { evT = -1; }
   }
 
+  let takePresses = null;
   function setupInput() {
     // (a touch screen's fingers each by its pointerId, as they come: kinds 10 down, 11 moved, 12 up, 13 called off, what
     // they come to the app's to work out, touches.mbt)
     const touch = (e) => e.pointerType === 'touch';
-    canvas.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      canvas.setPointerCapture(e.pointerId);
-      if (touch(e)) ptr(10, e, e.pointerId);
-      else ptr(0, e, e.button);
-      // keep the keyboard on the textarea while an editor has focus
-      if (imeActive) ta.focus({ preventScroll: true });
-    });
-    canvas.addEventListener('pointermove', (e) => (touch(e) ? ptr(11, e, e.pointerId) : ptr(1, e, 0)));
-    canvas.addEventListener('pointerup', (e) => (touch(e) ? ptr(12, e, e.pointerId) : ptr(2, e, e.button === 2 ? 2 : 0)));
-    canvas.addEventListener('pointercancel', (e) => (touch(e) ? ptr(13, e, e.pointerId) : ptr(3, e, 0)));
-    // the pointer gone out of the page (nothing hovered); a right click is the app's (its context menus)
-    canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') cb.pointer(7, -1, -1, 0); });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    canvas.addEventListener('wheel', (e) => {
-      const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
-      const [x, y] = pos(e);
-      // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
-      // what is held with it, above the phase (ui's wheel_mod_*: a trackpad's pinch comes as ctrl and the wheel, and
-      // ctrl with a mouse's wheel is the browser's zoom too: both a pinch, no list scrolls by it)
-      const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 | 16 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
-      H.wheelKept = true;
-      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, (e.deltaMode === 1 ? 4 : 0) | (mods << 4));
-      // a pinch the app zoomed nothing by (@hostapi.wheel_kept: a picture, a remote screen) zooms the page
-      if (!e.ctrlKey || H.wheelKept) e.preventDefault();
-    }, { passive: false });
+    // (the canvas's, and what takes them in its place while a site is seen)
+    takePresses = (el) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        // (a box over a site goes as the app says, the press going on: `under` stays)
+        (under || canvas).setPointerCapture(e.pointerId);
+        if (touch(e)) ptr(10, e, e.pointerId);
+        else ptr(0, e, e.button);
+        // keep the keyboard on the textarea while an editor has focus
+        if (imeActive) ta.focus({ preventScroll: true });
+      });
+      el.addEventListener('pointermove', (e) => (touch(e) ? ptr(11, e, e.pointerId) : ptr(1, e, 0)));
+      el.addEventListener('pointerup', (e) => (touch(e) ? ptr(12, e, e.pointerId) : ptr(2, e, e.button === 2 ? 2 : 0)));
+      el.addEventListener('pointercancel', (e) => (touch(e) ? ptr(13, e, e.pointerId) : ptr(3, e, 0)));
+      // the pointer gone out of the page (nothing hovered); a right click is the app's (its context menus)
+      el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') cb.pointer(7, -1, -1, 0); });
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      el.addEventListener('wheel', (e) => {
+        const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
+        const [x, y] = pos(e);
+        // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
+        // what is held with it, above the phase (ui's wheel_mod_*: a trackpad's pinch comes as ctrl and the wheel, and
+        // ctrl with a mouse's wheel is the browser's zoom too: both a pinch, no list scrolls by it)
+        const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 | 16 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+        H.wheelKept = true;
+        cb.wheel(x, y, e.deltaX * k, e.deltaY * k, (e.deltaMode === 1 ? 4 : 0) | (mods << 4));
+        // a pinch the app zoomed nothing by (@hostapi.wheel_kept: a picture, a remote screen) zooms the page
+        if (!e.ctrlKey || H.wheelKept) e.preventDefault();
+      }, { passive: false });
+    };
+    takePresses(canvas);
     const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9, PageUp: 15, PageDown: 16, Escape: 17, Tab: 18 };
     // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit, zoom)
     const browsers = new Set(['r', 'w', 't', 'n', 'l', 'q', 'v']);
@@ -2423,7 +2441,8 @@
 
   // the pointer's shape (@hostapi.set_cursor)
   const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed'];
-  H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
+  // (the page's, which all that takes presses inherits)
+  H.setCursor = (k) => { document.body.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
   // The floating text menu over words picked by a finger (@hostapi.text_menu: a field's, or the page's words a finger
   // held, as Android's ActionMode and iOS's edit menu): a small bar of the page's own over the rectangle given (under
