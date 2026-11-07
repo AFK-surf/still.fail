@@ -85,7 +85,7 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
-  // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
+  // Its signature (scripts/release-sign.ts), which the app checks before installing it (scripts/release-sign.ts).
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
   // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
   // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.

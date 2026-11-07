@@ -545,7 +545,7 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-          # The key the release is signed with (docs/release-signing.md): none is an error.
+          # The key the release is signed with (scripts/release-sign.ts): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh station
@@ -917,7 +917,7 @@ jobs:
   # win/beta/latest.json and desktop/stillfail-beta.yml (which moves an installed Electron beta over): built on GitHub's
   # Windows runner as preview.yml's windows job builds still.fail mbui, from main's build as that job left it in the Actions
   # cache (what is the same is not compiled again: mbui's scripts/mbc), packed in its installer (windows/setup.c) and
-  # signed: its .sig (docs/release-signing.md), which the Electron app and mbui's core check; not code-signed. The stable
+  # signed: its .sig (scripts/release-sign.ts), which the Electron app and mbui's core check; not code-signed. The stable
   # one is built the same way (stable.yml).
   desktop-win:
     needs: [plan]

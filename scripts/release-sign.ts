@@ -1,4 +1,4 @@
-// Signs releases (docs/release-signing.md) with the key in $RELEASE_SIGNING_KEY (Ed25519, PKCS#8 PEM: CI's
+// Signs releases with the key in $RELEASE_SIGNING_KEY (Ed25519, PKCS#8 PEM: CI's
 // `production` environment), as the station (station/src/updates/signed.ts) and the apps' core
 // (client/core-ts/src/app-release.ts) verify them.
 //   release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST …
@@ -10,6 +10,10 @@
 //       a new key: the private one written to PRIVATE_FILE (PEM), the public one (for RELEASE_KEYS) said
 // Without a key: in CI (CI set) an error; elsewhere, with --unsigned-ok, a warning and the feed unsigned (a release for
 // a dev cloud: RELEASE_DIR), no .sig. A key the station does not take (not in RELEASE_KEYS) is refused in CI.
+// The key is in GitHub's `production` environment and backed up offline; its public half is in signed.ts's
+// RELEASE_KEYS beside a recovery key kept offline, which signs a release replacing a lost or leaked key. To change keys,
+// release one with both (signed by the old), then swap the secret. Without a key a local RELEASE_DIR release is unsigned
+// and stations will not take it; `keygen` makes a test key, which STILLFAIL_RELEASE_KEYS makes a station trust.
 import { spawn } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from "node:crypto";
 import { createReadStream, statSync, writeFileSync } from "node:fs";
@@ -85,7 +89,7 @@ function signed(words: object, k: { key: ReturnType<typeof createPrivateKey>; ra
 function keyOrNone() {
   const k = signingKey();
   if (k) return k;
-  if (process.env.CI) fail("RELEASE_SIGNING_KEY is not set: CI does not publish unsigned releases (docs/release-signing.md)");
+  if (process.env.CI) fail("RELEASE_SIGNING_KEY is not set: CI does not publish unsigned releases (scripts/release-sign.ts)");
   if (!args.includes("--unsigned-ok")) fail("RELEASE_SIGNING_KEY is not set (--unsigned-ok: an unsigned release for a dev cloud)");
   console.error("release-sign: warning: RELEASE_SIGNING_KEY is not set: the release is not signed, and no station updates to it");
   return null;

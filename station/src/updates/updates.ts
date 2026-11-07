@@ -3,7 +3,7 @@
 // - The station: its release says its version in BUILD (`0.1.<n>`); the latest is what still.fail cloud serves as
 //   releases/station.json, or on the test channel (`updateChannel: "beta"` in config.json; a release installed from the
 //   beta and not told otherwise is on it) releases/station-beta.json, only as its signature verifies (signed.ts,
-//   docs/release-signing.md: a feed that does not is no newer release). Switched back from the beta, the older stable
+//   scripts/release-sign.ts: a feed that does not is no newer release). Switched back from the beta, the older stable
 //   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does (release.ts):
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
 //   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the

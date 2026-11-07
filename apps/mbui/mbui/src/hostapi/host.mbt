@@ -2051,6 +2051,10 @@ let turnable_now : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) 
 /// 5 s while on, the host writes a line of what the process takes (its share of a CPU, by thread, the device's thermal
 /// state, …) to a file of the app's own, and the app's frames their summary (perf_line): nothing leaves the device.
 /// iOS and Windows keep one; elsewhere -1.
+/// Reading it for a warm phone: find when (thermal, then the cpu lines before it), then which thread: main is the
+/// app's frames (fps near 0 at rest; `frames why` names what drew), the core's is its JS (`core js:`, `core: in` by
+/// topic), the stream's is a screen, Apple's the system working for the app. Read it against background, a screen
+/// open, charging and low power.
 pub fn perf_state() -> Int {
   current.val.perf_state()
 }

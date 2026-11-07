@@ -165,7 +165,7 @@ export type Platform = {
   devinInstall: How;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
-  /// Starts `script` (the installer the running release carries, docs/release-signing.md) apart from the station, run
+  /// Starts `script` (the installer the running release carries, scripts/release-sign.ts) apart from the station, run
   /// from a copy in `runDir`, its exit to run/update.exit and what it said to run/update.log. Whether it was started.
   startInstaller(script: string, runDir: string, env: Record<string, string>, app: string): Promise<boolean>;
   /// How a runtime found as a package manager's of this machine's kind is updated (Windows: winget's package, Vite+'s

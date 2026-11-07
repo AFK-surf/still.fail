@@ -321,7 +321,7 @@ if part ts; then
   if [ $full = 1 ] && touches '^(test|client|web/src/core)/|^package\.json$'; then core_tests=1; fi
   if touches "$ts_root" || touches "$ts_web" || touches "$web_reads" || touches "$ts_cloud" || [ $core_tests = 1 ]; then prep root deps .; fi
   if touches "$ts_root" || touches "$ts_web" || touches "$web_reads" || [ $core_tests = 1 ]; then wasm_pkg; fi
-  # The stable channel's release notes (docs/changelog.md): each one read as CI will.
+  # The stable channel's release notes (scripts/changelog.ts): each one read as CI will.
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
   # Root tests also import the core's Markdown reader. Wait for its packages on a cold checkout, as the web does.
   if touches "$ts_root" || [ $core_tests = 1 ]; then prep core deps client/core-ts; fi

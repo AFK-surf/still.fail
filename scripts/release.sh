@@ -278,7 +278,7 @@ done
 for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put" >&2; exit 1; }; done
 # What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there: its
 # version, and the words naming each archive and its Node, signed with $RELEASE_SIGNING_KEY (scripts/release-sign.ts,
-# docs/release-signing.md). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
+# scripts/release-sign.ts). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
 if [ -n "${station:-}" ]; then
   node "$root/scripts/release-sign.ts" station "$out/station.json" --build "$build" --commit "$(git -C "$root" rev-parse HEAD)" \
     --node "$(cat "$root/.node-version")" ${RELEASE_DIR:+--unsigned-ok} $signing
