@@ -192,6 +192,17 @@ async function main() {
   await page.evaluate(() => globalThis.__mbhost.viewControl(1, 8, 1));
   await page.setViewportSize({ width: 390, height: 844 });
   await check(page, "phone");
+  // The canvas's GL context lost, as a phone's browser takes it from a page sent behind: the app drawn again over the
+  // page, which goes on as it was.
+  await page.evaluate(() => globalThis.__mbhost.drive(10));
+  await until(() => page.evaluate(() => globalThis.__mbhost.drive(11)), "the context given back");
+  await sleep(2000);
+  await page.screenshot({ path: join(SHOTS, "phone-context-back.png") });
+  const kept = page.frames().find((f) => f.parentFrame()?.url().includes("/_stillfail/frame"));
+  const pressed = await kept.locator("#go").boundingBox();
+  await page.mouse.click(pressed.x + pressed.width / 2, pressed.y + pressed.height / 2);
+  await until(async () => (await kept.locator("#post").innerText()) === "posted pressed", "a press after the context came back");
+  console.log("PASS phone: the app drawn again after its GL context was lost, its page still pressed");
   // A finger on a phone's page scrolls it; beside it, in the app's bar, it is the app's and the page stays.
   const cdp = await context.newCDPSession(page);
   await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 2 });

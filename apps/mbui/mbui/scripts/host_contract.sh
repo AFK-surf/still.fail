@@ -37,7 +37,7 @@
 #   scripts/host_contract.sh HOST pdf           test/host/pdfcheck.pdf's two pages read and drawn by the host, the
 #        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
 #        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
-#   scripts/host_contract.sh linux images       a picture shown, the canvas's GL context made anew as one lost (kitdemo's
+#   scripts/host_contract.sh linux|web images   a picture shown, the canvas's GL context made anew as one lost (kitdemo's
 #        MBUI_IMAGECHECK, src/kitdemo/gallery/imagecheck.mbt): the picture told ready again once the host has it in the
 #        new context, and drawn again there, red in the window's picture (scripts/chk images)
 #   scripts/host_contract.sh HOST play          test/host/playcheck.mp4 played by the host's player, its bytes read
@@ -807,7 +807,8 @@ INSTALL
       *"IMAGECHECK told 2"*"IMAGECHECK drawn "*) ;;
       *) echo "images contract ($H): the host said \"$have\""; tail -20 $O/images.log; exit 1 ;;
     esac
-    scripts/chk images $O/images.log ;;
+    # (the browser's host pictures no window: drive 4)
+    [ "$H" = web ] || scripts/chk images $O/images.log ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened

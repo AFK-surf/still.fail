@@ -1757,7 +1757,7 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      Object.assign(im, { state: 1, tex, w: bmp.width, h: bmp.height, ow, oh });
+      Object.assign(im, { state: 1, tex, w: bmp.width, h: bmp.height, ow, oh, blob, maxPx });
       bmp.close();
     } catch (e) {
       if (!images.has(id)) return;
@@ -2525,10 +2525,49 @@
   window.addEventListener('keydown', (e) => { if (e.altKey && e.key === 'ArrowLeft') goBack(e); });
   window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(e); });
 
+  // A context lost (the GPU's process gone; a phone's browser takes it from a page sent behind): without
+  // preventDefault the browser never gives it back, and paints the canvas white with its broken-canvas mark, over the
+  // whole app. Given back, it holds nothing: all of it made again, the glyphs drawn again by MoonBit as the generation
+  // moves on, each picture decoded again and told again as it is uploaded (what draws it drawn again then).
+  let contextLoser = null, contextAnew = false;
+  const contextLost = (e) => {
+    e.preventDefault();
+    // (one lost by H.drive gives itself back; not within this event: allowed only once preventDefault has been seen)
+    if (contextLoser) requestAnimationFrame(() => contextLoser.restoreContext());
+  };
+  const contextRestored = () => {
+    setupGL();
+    lv = null; lvW = 0; lvH = 0; bdTex = null;
+    segsTex = null; segsRows = 0; segsHad = null; segsHadRows = 0;
+    uploadedFor = -1;
+    textChanged();
+    for (const s of streams.values()) s.tex = null;
+    for (const [id, im] of images) {
+      if (im.state !== 1) continue;
+      Object.assign(im, { state: 0, tex: null });
+      told.delete(OUTSIDE_IMAGE + ':' + id);
+      decodeImage(id, im.blob, im.maxPx);
+    }
+    contextLoser = null;
+    contextAnew = true;
+    H.requestFrame();
+  };
+  // (@hostapi.drive: 10 the context lost as a browser loses it, and given back; 11 whether it has been)
+  H.drive = (kind) => {
+    if (kind === 11) return contextAnew;
+    if (kind !== 10) return false;
+    contextLoser = gl.getExtension('WEBGL_lose_context');
+    if (!contextLoser) return false;
+    contextLoser.loseContext();
+    return true;
+  };
+
   H.run = (title, frame, pointer, wheel, key, text) => {
     document.title = title;
     canvas = document.getElementById('c');
     ta = document.getElementById('ime');
+    canvas.addEventListener('webglcontextlost', contextLost);
+    canvas.addEventListener('webglcontextrestored', contextRestored);
     setupGL();
     setupInput();
     cb = { frame, pointer, wheel, key, text };
