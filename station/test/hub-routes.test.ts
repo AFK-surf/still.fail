@@ -350,19 +350,40 @@ test("an old card without a timestamp still matches an empty raw quote timestamp
   } finally { await r.close(); }
 });
 
+test("checking a quoted card for an old client does not merge its message", async () => {
+  const r = rig(), db = r.store.db;
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-card-identity", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/\bFROM\s+merged\b/i.test(sql)) throw new Error("quoted card lookup merged its message");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
+  } finally { await r.close(); }
+});
+
 test("a person can send without looking up a card when no quote names a message", async () => {
   const r = rig();
   try {
     for (const [i, quotes] of [undefined, [], [{ text: "earlier" }], "not an array"].entries()) {
       const id = r.store.openThread("ember", "CHAT", `without-card-quote-${i}`, null, null).id;
       r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"), card: { type: "text" } });
-      const pending = r.store.pendingCard;
+      const pending = r.store.pendingCardHeader;
       try {
-        r.store.pendingCard = () => { throw new Error("unneeded pending card lookup"); };
+        r.store.pendingCardHeader = () => { throw new Error("unneeded pending card lookup"); };
         const [status, sent] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes });
         assert.equal(status, 200, JSON.stringify(sent));
         assert.equal(r.store.messagesBefore(id, null, 1)[0]?.n, sent.n);
-      } finally { r.store.pendingCard = pending; }
+      } finally { r.store.pendingCardHeader = pending; }
       assert.equal(r.store.pendingCard(id), null, "the person's message still ends the card's wait");
     }
   } finally { await r.close(); }

@@ -815,7 +815,7 @@ export class Secrets {
   async #postCard(session: string, thread: SessionThread, text: string, card: Record<string, unknown> | null, requireEmpty = false): Promise<string | null> {
     const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
-    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
+    if (requireEmpty && this.#d.hub.store.pendingCardHeader(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
     const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
     this.#d.hub.shared(thread.thread.id, n, session, text);
     return card !== null ? posted : null;

@@ -52,7 +52,7 @@ for (const operation of ["ask", "save"] as const) {
           store: {
             getSession: store.getSession.bind(store), starter: () => "p@example.test",
             latestThread: store.latestThread.bind(store), latestThreadIfReady: store.latestThreadIfReady.bind(store),
-            sessionThreadById: store.sessionThreadById.bind(store), pendingCard: () => null,
+            sessionThreadById: store.sessionThreadById.bind(store), pendingCardHeader: () => null,
             insertMessage: () => [1], withdrawCard: () => true, restateCard: () => true, subscribe: () => {},
           },
           prepareLatestThreads: async (sessions: readonly string[]) => {
@@ -104,7 +104,7 @@ function waitingVault() {
       getSession: () => present ? { ws: workspace, archivedAt: null } : null,
       starter: () => owner, latestThread: () => { throw new Error("unbounded latest read"); },
       latestThreadIfReady: () => ready ? thread : undefined, subscribe: () => {},
-      sessionThreadById: () => thread, pendingCard: () => null, insertMessage: () => [1],
+      sessionThreadById: () => thread, pendingCardHeader: () => null, insertMessage: () => [1],
       withdrawCard: () => true, restateCard: () => true,
     },
     prepareLatestThreads: async () => { prepared++; await gate.promise; },

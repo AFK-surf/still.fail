@@ -45,7 +45,7 @@ function fixture(pending: number, granted: boolean) {
   const hub = {
     store: {
       subscribe: () => {}, getSession: () => ({ ws: "w", archivedAt: null }), starter: () => "p@example.test",
-      latestThread: () => thread, sessionThreadById: () => thread, pendingCard: () => null,
+      latestThread: () => thread, sessionThreadById: () => thread, pendingCardHeader: () => null,
     },
   } as any;
   const grants = new PhoneGrants({ db: traced, hub, home: () => "w", title: () => { titles++; return null; }, now: () => 1_800_000_000_000 });

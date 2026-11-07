@@ -59,3 +59,27 @@ test("a card place keeps its membership and pending-card semantics", () => {
     assert.throws(() => cardPlace(store, "s", thread, "card"), /no longer available/);
   } finally { store.close(); }
 });
+
+test("finding an operation's pending card does not merge its message", () => {
+  const store = Store.open(":memory:"), db = store.db;
+  try {
+    const thread = store.openThread("ember", "CHAT", "card-identity", null, null).id;
+    store.joinThread(thread, "s", "local");
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','s','choose',?,1)")
+      .run(thread, JSON.stringify({ type: "text" }));
+    Object.defineProperty(store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/\bFROM\s+merged\b/i.test(sql)) throw new Error("card identity merged its message");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.equal(cardPlace(store, "s", thread, "1.1")?.state, "same");
+      assert.equal(cardPlace(store, "s", thread, "other")?.state, "other");
+      db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES(?,2,'message','2.2','person','p','answer',2)").run(thread);
+      assert.equal(cardPlace(store, "s", thread, "1.1")?.state, "none");
+    } finally { Object.defineProperty(store, "db", { configurable: true, value: db }); }
+  } finally { store.close(); }
+});

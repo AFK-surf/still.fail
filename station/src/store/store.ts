@@ -2365,6 +2365,20 @@ export class Store {
   /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
   /// as no person has written in the thread since. The post as merged, and its card.
   pendingCard(thread: number): [MessageRow, Json] | null {
+    const n = this.#pendingCardNumber(thread);
+    return n === undefined ? null : this.#cardPost(thread, n);
+  }
+
+  /// The same pending card's location and original card, for callers that do not need the merged message.
+  pendingCardHeader(thread: number): [{ n: number; ts: string }, Json] | null {
+    const n = this.#pendingCardNumber(thread);
+    if (n === undefined) return null;
+    const row = this.#one("SELECT ts, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+    const card = row ? cardOf(row.card, row.options) : undefined;
+    return card === undefined ? null : [{ n, ts: row!.ts ?? "" }, card];
+  }
+
+  #pendingCardNumber(thread: number): number | undefined {
     let n: number | undefined;
     if (cardPostsReady(this.db, thread)) n = this.#one(CARD_POST_LATEST, thread)?.n;
     else {
@@ -2374,11 +2388,11 @@ export class Store {
       const a = latest("card"), b = latest("options");
       n = a && b ? Math.max(a.n, b.n) : (a ?? b)?.n;
     }
-    if (n === undefined) return null;
+    if (n === undefined) return undefined;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
-    if (answered || closed) return null;
-    return this.#cardPost(thread, n);
+    if (answered || closed) return undefined;
+    return n;
   }
 
   /// A prepared thread seeks the previous post directly. An old thread still being prepared uses the original query:

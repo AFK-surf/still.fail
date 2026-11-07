@@ -3,7 +3,7 @@ import type { SessionThread } from "../store/rows.ts";
 
 type CardStore = {
   sessionThreadById(session: string, thread: number): SessionThread | null;
-  pendingCard(thread: number): [{ ts: string }, unknown] | null;
+  pendingCardHeader(thread: number): [{ ts: string }, unknown] | null;
 };
 
 /// The original conversation and whether this exact card, another card, or no card is waiting there. Null when the
@@ -12,7 +12,7 @@ export function cardPlace(store: CardStore, session: string, thread: number | nu
   if (thread == null || ts == null) return null;
   const where = store.sessionThreadById(session, thread);
   if (where === null) throw new Error("the original conversation is no longer available to this session");
-  const current = store.pendingCard(thread);
+  const current = store.pendingCardHeader(thread);
   return { thread: where, state: current === null ? "none" : current[0].ts === ts ? "same" : "other" };
 }
 
@@ -33,7 +33,7 @@ export async function postCard(hub: CardHub, session: string, thread: SessionThr
   const identity = hub.actors?.get(session)?.messageIdentity() ?? undefined;
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   const posted = await hub.chat(thread.connect).post(here, text, []);
-  if (occupied !== null && hub.store.pendingCard(thread.thread.id) !== null) throw occupied(CARD_OCCUPIED);
+  if (occupied !== null && hub.store.pendingCardHeader(thread.thread.id) !== null) throw occupied(CARD_OCCUPIED);
   const [n] = hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card, agentIdentity: identity });
   hub.shared(thread.thread.id, n as number, session, text);
   return card !== null ? posted : null;

@@ -87,7 +87,7 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
       withdrawCard: (_session: string, _thread: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: () => true,
       insertMessage: (m: { text: string; card: unknown }) => (cards.push({ text: m.text, card: m.card }), hidden = false, [cards.length]),
-      pendingCard: () => hidden || cards.length === 0 ? null : [{ ts: String(cards.length) }, cards.at(-1)!.card],
+      pendingCardHeader: () => hidden || cards.length === 0 ? null : [{ ts: String(cards.length) }, cards.at(-1)!.card],
       subscribe: () => () => {},
     },
     chat: () => ({ post: async () => { onPost?.(); return String(cards.length + 1); } }),
