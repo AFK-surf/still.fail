@@ -404,6 +404,15 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 }
 
 ///|
+/// A visible field holds words even when it has lost focus, as for a restored draft.
+pub fn Flow::field_visible(self : Flow, words : String) -> Unit {
+  emit("field " + words.replace_all(old="\n", new="\\n"))
+  if !self.t.all(@ui.Role::TextField).iter().any(fn(field) { field.value.contains(words) }) {
+    self.fail("no visible field holds \{words.escape()}")
+  }
+}
+
+///|
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
   emit((if top { "tap1 " } else { "tap " }) + what)
