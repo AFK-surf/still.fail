@@ -65,25 +65,25 @@ fn own_picture_tester(w : Double, platform : Int, own : Bool, calls : Array[(Str
 }
 
 ///|
-test "账号's picture, at each width and with either hand: one picked from the system's photos made its face and put up; its sign-in's again only once it has one of its own" {
+test "账号's picture, at each width and with either hand: its face pressed asks the system's photos at once, one picked made its face and put up; no rows of their own for it" {
   for case in page_cases {
     let (w, platform) = case
     let at = "\{w} platform \{platform}"
     let calls : Array[(String, Json)] = []
     let t = own_picture_tester(w, platform, false, calls)
-    assert_true(t.find("更换头像") is Some(_), msg=at)
+    assert_true(t.find("更换头像") is None, msg=at)
     assert_true(t.find("恢复默认头像") is None, msg=at)
     // pressed: the system's photo picker asked; called off, nothing put up
     t.picks([])
-    let (x, y) = t.find("更换头像").unwrap()
-    t.tap(x, y)
+    t.click(Button, label="更换头像")
     t.frame()
+    assert_false(@sf.presenting(), msg=at)
     assert_eq(t.pick_asks().length(), 1, msg=at)
     assert_true(t.pick_asks()[0] == Photos, msg=at)
     assert_true(calls.iter().all(fn(c) { !c.0.has_prefix("account.") }), msg=at)
     // pressed again, a picture picked: read, made its face and put up as its own
     t.picks([("face.jpg", b"\xFF\xD8\xFF\xE0")])
-    t.tap(x, y)
+    t.click(Button, label="更换头像")
     t.frame()
     assert_eq(t.pick_asks().length(), 2, msg=at)
     let put = calls.filter(fn(c) { c.0 == "account.setPicture" })
@@ -95,12 +95,17 @@ test "账号's picture, at each width and with either hand: one picked from the 
 }
 
 ///|
-test "账号's picture of its own taken away, at each width and with either hand: its sign-in's again" {
+test "账号's picture of its own, at each width and with either hand: its face pressed offers another or its sign-in's again" {
   for case in page_cases {
     let (w, platform) = case
     let at = "\{w} platform \{platform}"
     let calls : Array[(String, Json)] = []
     let t = own_picture_tester(w, platform, true, calls)
+    assert_true(t.find("恢复默认头像") is None, msg=at)
+    t.click(Button, label="更换头像")
+    t.frame()
+    assert_true(@sf.presenting(), msg=at)
+    assert_eq(t.pick_asks().length(), 0, msg=at)
     assert_true(t.find("更换头像") is Some(_), msg=at)
     let (x, y) = t.find("恢复默认头像").unwrap()
     t.tap(x, y)

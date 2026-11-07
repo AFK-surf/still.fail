@@ -1,7 +1,7 @@
 // 账号, one page in every frame (web/src/cloud/settings.tsx AccountSettings; the narrow app's mobile/Me.tsx), the same
 // on every width (the user, 2026-10-26: 「设置感觉很乱」; it was four sections and two cards wide, one card narrow): the
 // accounts on this device on one card, the one in view first with who it is (its picture, name, email and how it
-// signs in) and signing out of it, its picture changed under it (one of its own from the system's photos, or its
+// signs in) and signing out of it, its picture changed by pressing it (one of its own from the system's photos, or its
 // sign-in's again), the others each signed out of by itself, another added; where it is signed in (each device,
 // signed out from here but this one); deleting the account, in red at the foot. Signing out and deleting asked first
 // (@sf.confirm).
@@ -79,6 +79,11 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
       },
     )
   }
+  // its picture changed by pressing it (each change once at a time, spinning in its corner while it goes)
+  let setting = own_picture.asking ||
+    own_picture.reading != "" ||
+    is_doing(core, ["account.setPicture"], [("account", here.sub)])
+  let removing = is_doing(core, ["account.removePicture"], [("account", here.sub)])
   let blocks : Array[() -> Unit] = []
   // the accounts on this device on one card (Me.tsx): the one in view with who it is, then the others, each signed out
   // of by itself, another added
@@ -91,7 +96,7 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         note=here.email + " · " + how,
         strong=true,
         goes=false,
-        lead=fn() { avatar(c, core, here.email, name, acc_picture, picture=here.picture) },
+        lead=fn() { own_face(c, core, here, name, setting, removing) },
         control=fn() {
           let words = if others.length() > 0 {
             @sf.t("android-settings.me.signOut")
@@ -104,37 +109,6 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         },
       )
       |> ignore
-      // its picture under it: one of its own from the system's photos; its sign-in's again once it has one of its own
-      // (each pressed once at a time, spinning while it goes)
-      let setting = own_picture.asking ||
-        own_picture.reading != "" ||
-        is_doing(core, ["account.setPicture"], [("account", here.sub)])
-      let removing = is_doing(core, ["account.removePicture"], [("account", here.sub)])
-      if @sf.link_row(c, "own-picture", @sf.t("android-settings.me.picture"), chevron=false, lead=fn() { @sf.row_lead_mark(c, "photo") }, tail?=if setting {
-            Some(fn() { spinner(c, inline=true) })
-          } else {
-            None
-          }) &&
-        !setting &&
-        !removing {
-        pick_own_picture(core, here.sub)
-      }
-      if own_picture_of(core, here.sub) &&
-        @sf.link_row(c, "own-picture-default", @sf.t("android-settings.me.pictureDefault"), chevron=false, lead=fn() { @sf.row_lead_mark(c, "user") }, tail?=if removing {
-            Some(fn() { spinner(c, inline=true) })
-          } else {
-            None
-          }) &&
-        !setting &&
-        !removing {
-        @settings.act(
-          core,
-          @sf.t("android-settings.me.pictureDefaultWhat"),
-          "account.removePicture",
-          obj([("account", str(here.sub))]),
-          done=@sf.t("android-settings.me.pictureDefaultSet"),
-        )
-      }
       for a in others {
         let sub = text(Some(a), "sub")
         let email = text(Some(a), "email")
@@ -168,6 +142,68 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   })
   @sf.page(c, on_back=core.pop, frame~, "me", @sf.t("android-settings.me.title"), blocks)
 }
+
+///|
+/// The face of the account in view (`name`), pressed to change it: a camera in its corner says so, spinning while a
+/// change goes (`setting`, `removing`). Pressed, the system's photos at once; once it has a picture of its own, a menu
+/// beside it to pick another or to take its sign-in's again.
+fn own_face(c : @ui.Ctx, core : Core, here : Here, name : String, setting : Bool, removing : Bool) -> Unit {
+  let t = @sf.theme()
+  let id = c.id("own-picture")
+  c.box(style=own_face_room, id~, label=@sf.t("android-settings.me.picture"), fn() {
+    avatar(c, core, here.email, name, acc_picture, picture=here.picture)
+    c.box(style=own_face_badge, right=own_face_badge_out, bottom=own_face_badge_out, fn() {
+      if setting || removing {
+        @sf.spinner(c, size=own_face_mark) |> ignore
+      } else {
+        @sf.icon(c, "camera", size=own_face_mark, color=t.p.text) |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+  if c.clicked(id) && !setting && !removing {
+    if !own_picture_of(core, here.sub) {
+      pick_own_picture(core, here.sub)
+    } else {
+      @sf.menu(
+        [
+          Some(@sf.menu_item_of(@sf.t("android-settings.me.picture"), icon="photo", fn() { pick_own_picture(core, here.sub) })),
+          Some(
+            @sf.menu_item_of(@sf.t("android-settings.me.pictureDefault"), icon="user", fn() {
+              @settings.act(
+                core,
+                @sf.t("android-settings.me.pictureDefaultWhat"),
+                "account.removePicture",
+                obj([("account", str(here.sub))]),
+                done=@sf.t("android-settings.me.pictureDefaultSet"),
+              )
+            }),
+          ),
+        ],
+        from=Of(id),
+      )
+    }
+  }
+}
+
+///|
+/// The face pressed: round, as it is.
+// kept across runs: a value (no field of it changes)
+let own_face_room : @ui.Style = @ui.css("radius=Full")
+
+///|
+/// The camera in its corner: a small disc of the card's ground, standing off the face.
+// kept across runs: a value (no field of it changes)
+let own_face_badge : @ui.Style = @ui.css("w=S6 h=S6 radius=Full bg=Card align=ACenter justify=JCenter")
+
+///|
+/// How far the camera's disc stands past the face's edge (its corner's).
+let own_face_badge_out : Double = -4.0
+
+///|
+/// The camera's (or the spinner's) size in its disc.
+let own_face_mark : Double = 14.0
 
 ///|
 /// Where the account is signed in (the `loginSessions` topic): each device's name (this one marked 当前), when it signed
