@@ -296,6 +296,55 @@ for (const alias of ["rowid","_rowid_","oid"]) test(`an old writer replacing an 
   } finally { old.close(); rig.close(); }
 });
 
+test("an old edit cleanup batch reads only a bounded number of dirty keys", () => {
+  const counts: number[] = [];
+  for (const size of [80, 800]) {
+    const rig = database(), { db } = rig;
+    try {
+      for (let n = 1; n <= size; n++) put(db, 1, n, 1);
+      installLegacyEdits(db);
+      while (!legacyEditStep(db).ready) { /* prepare */ }
+      db.exec("UPDATE entries SET target=2 WHERE thread=1");
+      let read = 0, observed = false;
+      db.function("visit_edit_dirty", () => { read++; return 1; });
+      const traced = new Proxy(db, { get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          if (sql.includes("FROM legacy_edit_dirty") && sql.includes("ORDER BY") && sql.includes("LIMIT 1")) {
+            const plan = target.prepare(`EXPLAIN QUERY PLAN ${sql}`).all().map((r) => String(r.detail)).join(" | ");
+            assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
+            const measured = sql.replace(" ORDER BY", " WHERE visit_edit_dirty() ORDER BY");
+            assert.notEqual(measured, sql);
+            observed = true;
+            return target.prepare(measured);
+          }
+          return target.prepare(sql);
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      } });
+      assert.equal(legacyEditDrain(traced, 1), 1);
+      assert.ok(observed && read > 0, "the dirty-key lookup was observed");
+      counts.push(read);
+    } finally { rig.close(); }
+  }
+  assert.ok(counts[1]! <= counts[0]! + 1 && counts[1]! <= 2,
+    `dirty keys read for 80 / 800 pending keys: ${counts.join(" / ")}`);
+});
+
+test("old edit cleanup follows numeric order, including 64-bit keys", () => {
+  const rig = database(), { db } = rig;
+  try {
+    installLegacyEdits(db);
+    assert.equal(legacyEditStep(db).ready, true);
+    const put = db.prepare("INSERT INTO legacy_edit_dirty(thread,n,old_target) VALUES(?,?,NULL)");
+    put.run(2, 2); put.run(2, 100); put.run(2, 9007199254740993n); put.run(10, 1);
+    assert.equal(legacyEditDrain(db, 1), 1);
+    assert.deepEqual(db.prepare(`SELECT CAST(d.thread AS TEXT) AS thread,CAST(d.n AS TEXT) AS n
+      FROM legacy_edit_dirty d ORDER BY d.thread,d.n`).all().map((r) => [r.thread, r.n]),
+    [["2", "100"], ["2", "9007199254740993"], ["10", "1"]]);
+  } finally { rig.close(); }
+});
+
 test("many changes to one edit target are removed in bounded batches", () => {
   const rig = database(), { db } = rig;
   try {
