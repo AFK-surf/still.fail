@@ -120,6 +120,70 @@ test("an answer while the default card is being read is checked before recording
   } finally { release.resolve(); await r.close(); }
 });
 
+for (const tool of ["chat_state", "chat_post"] as const) {
+  test(`${tool}: an answer after the default-card read is checked when the state is recorded`, async () => {
+    const r = new Rig(), release = Promise.withResolvers<void>();
+    try {
+      const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+      say(r.hub, thread.id, "ada@x.com", "please do this");
+      await settle();
+      const to = `CHAT/${thread.threadTs}`;
+      await r.call(key, "chat_post", { to, text: "May I continue?", card });
+      const read = readStore.makeStore(r.store.db, r.dir), started = Promise.withResolvers<void>();
+      r.hub.statePendingCard = async (threads) => readStore.statePendingCard(read, threads);
+      const actor = r.hub.actors.get(key)!, record = actor.stateForTurn.bind(actor);
+      actor.stateForTurn = async (...args) => { started.resolve(); await release.promise; return record(...args); };
+      const args = { kind: "need_human", need: "permission" };
+      const pending = tool === "chat_state" ? r.call(key, tool, args) : r.call(key, tool, { ...args, to, text: "Still waiting" });
+      void pending.catch(() => {});
+      const queued = await Promise.race([started.promise.then(() => true), pending.then(() => false, () => false)]);
+      assert.equal(queued, true, "the default card must be confirmed when its state is recorded");
+      say(r.hub, thread.id, "ada@x.com", "yes");
+      release.resolve();
+      if (tool === "chat_state") await assert.rejects(pending, /requires a visible question/);
+      else {
+        assert.match(await pending, /Posted to .*state was not recorded/);
+        assert.equal(r.said(thread.id).some((m) => m.text === "Still waiting"), true);
+      }
+      const turn = r.store.db.prepare("SELECT declared FROM turns WHERE session_key=? AND ended_at IS NULL").get(key);
+      assert.equal(turn?.declared, null);
+    } finally { release.resolve(); await r.close(); }
+  });
+}
+
+test("a posted default-card read cannot declare a later turn", async () => {
+  const r = new Rig(), release = Promise.withResolvers<void>();
+  try {
+    const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    say(r.hub, thread.id, "ada@x.com", "please do this");
+    await settle();
+    const to = `CHAT/${thread.threadTs}`;
+    await r.call(key, "chat_post", { to, text: "May I continue?", card });
+    const read = readStore.makeStore(r.store.db, r.dir), started = Promise.withResolvers<void>();
+    r.hub.statePendingCard = async (threads) => {
+      const found = readStore.statePendingCard(read, threads);
+      started.resolve(); await release.promise; return found;
+    };
+    const active = () => r.store.db.prepare("SELECT id,declared,need,about_n FROM turns WHERE session_key=? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1").get(key);
+    const old = active();
+    const pending = r.call(key, "chat_post", { to, text: "Still waiting", kind: "need_human", need: "permission" });
+    void pending.catch(() => {});
+    await started.promise;
+    r.claude.last().end({ kind: "aborted" });
+    await settle();
+    r.hub.notify(key, "a background job ended");
+    await settle();
+    const next = active();
+    assert.ok(next);
+    assert.notEqual(next.id, old?.id);
+    release.resolve();
+    assert.match(await pending, /Posted to .*turn ended before its state was recorded/);
+    assert.equal(r.said(thread.id).some((m) => m.text === "Still waiting"), true);
+    const after = r.store.db.prepare("SELECT declared,need,about_n FROM turns WHERE id=?").get(next.id);
+    assert.deepEqual({ declared: after?.declared, need: after?.need, about_n: after?.about_n }, { declared: null, need: null, about_n: null });
+  } finally { release.resolve(); await r.close(); }
+});
+
 for (const mode of ["named", "default"] as const) {
   test(`a ${mode} question read cannot declare a later turn`, async () => {
     const r = new Rig(), release = Promise.withResolvers<void>();
