@@ -131,9 +131,9 @@ export type SessionDeps = {
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
   /// its process has work going in the background, kept on an account nearly full).
   runOn(key: string, holding?: boolean): Profile & { spelling?(model: string): string | null };
-  /// A turn ran into the allowance of `ranOn`, the profile its process was started on (null: the session's own): the
-  /// profile left and the one moved to, when it moved.
-  spend(key: string, ranOn: string | null): [string, string] | null;
+  /// A turn ran into the allowance of `ranOn`, the profile its process was started on (null: the session's own), or
+  /// `model`'s own limit there (that model alone passed over on it): the profile left and the one moved to, when it moved.
+  spend(key: string, ranOn: string | null, model?: string | null): [string, string] | null;
   /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
   refillsAt?(key: string): number;
   /// A runtime failed to sign in on `profile`: it is checked again (the pool passes over one whose login is over).
@@ -1651,7 +1651,8 @@ export class SessionActor {
       // Left to the station, it moves to another account and goes on there; otherwise it waits for a change.
       let moved: [string, string] | null = null;
       try {
-        moved = this.deps.spend(this.key, this.profile);
+        // A model's own limit is that model's on this account alone: its others still run there (#4643).
+        moved = this.deps.spend(this.key, this.profile, modelLimitOf(outcome.message));
       } catch (error) {
         log.warn("session", "could not move off a spent profile", { session: this.key, error: (error as Error).message });
       }

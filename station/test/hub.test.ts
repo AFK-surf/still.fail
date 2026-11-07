@@ -2620,6 +2620,47 @@ test("a model's own limit is said as the model's, not the account's: the quota l
   await r.close();
 });
 
+test("a model's own limit passes over that model alone on its account: its other models still run there", async () => {
+  // #4643: Fable at its own weekly cap left the whole account passed over for an hour, its quota showing room.
+  const r = new Rig();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus", "sonnet"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  const said = "You've reached your Opus limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue.";
+  const limited = { kind: "failed" as const, reason: classifyResult(said), message: said };
+  const claude = () => r.config.profiles.filter((p) => p.runtime === "claude");
+  await r.accept(message());
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  // Left to the station, its chat goes on with the same model on another account, as when an account is spent.
+  first.end(limited);
+  await settle();
+  const second = r.claude.last();
+  assert.equal(r.claude.count(), 2);
+  assert.notEqual(second.options.profile.id, on);
+  assert.equal(r.session(key).model, "opus");
+  // The account left is not spent: its other models are picked there as before, only Opus is passed over.
+  assert.equal(r.hub.accounts.healthOf(on).spent, undefined);
+  assert.equal(r.hub.accounts.pick(claude(), "sonnet", true).id, on);
+  assert.equal(r.hub.accounts.pick(claude(), "opus", true).id, second.options.profile.id);
+  // Opus's limit on the second too: none left for Opus, so it says so and waits, as for an account.
+  second.end(limited);
+  await settle();
+  assert.equal(r.claude.count(), 2);
+  assert.equal(r.chat.lastText(), `⚠️ Opus 自身限额已用完（非账号额度），恢复后自动继续\n\n\`\`\`\n${said}\n\`\`\``);
+  // Changed to another model by hand: it goes on at once on the account it is on, whose allowance has room.
+  await configure(r.hub, key, { model: "sonnet" });
+  await settle();
+  const third = r.claude.last();
+  assert.equal(r.session(key).profile, second.options.profile.id);
+  assert.equal(third.options.profile.id, second.options.profile.id);
+  assert.ok(matches(third.prompts.at(-1)!, [GO_ON_AFTER_SPENT]), third.prompts.at(-1));
+  await r.close();
+});
+
 test("an account spent with none to move to is said once; what wakes it waits for the refill, a person is tried at once", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
