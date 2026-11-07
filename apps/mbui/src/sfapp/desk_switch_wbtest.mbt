@@ -11,10 +11,12 @@ test "desk: a chat switched to shows once its view has come, the chat before it 
   // fast, told then as the core's answer is (what reads it follows `slow`)
   let asked : Map[String, Bool] = {}
   let slow = @signals.signal(false)
+  let client = @core.Client::new(fn(_) {  })
   let key = fn(name : String, params : Map[String, Json]) { name + " " + Json::object(params).stringify() }
   let src : Source = {
     ..base,
     topic_read: fn(name, params) {
+      client.follow_topic(name, params~) |> ignore
       if slow.get() && !asked.contains(key(name, params)) {
         return { value: None, error: None, version: 0 }
       }
@@ -22,9 +24,16 @@ test "desk: a chat switched to shows once its view has come, the chat before it 
       base.topic(name, params).get().snapshot()
     },
     leave: fn(name, params, __reason) {
-      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
-      asked.remove(key(name, params)) },
-    release: fn(name, params) { asked.remove(key(name, params)) },
+      match __reason {
+        @sfbase.TopicLeave::Owned(stop) => stop()
+        @sfbase.TopicLeave::Legacy => client.leave_topic(name, params~)
+      }
+      if client.peek_topic(name, params~) is None { asked.remove(key(name, params)) }
+    },
+    release: fn(name, params) {
+      client.release_topic(name, params~)
+      if client.peek_topic(name, params~) is None { asked.remove(key(name, params)) }
+    },
   }
   let chat = fn(session : String) -> ChatRef { { station: "ws1/st1", session, title: "", station_name: "Willow" } }
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }

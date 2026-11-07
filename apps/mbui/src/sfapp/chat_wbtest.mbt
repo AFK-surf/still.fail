@@ -397,8 +397,9 @@ test "a chat left lets go of all that holds its thread at the core: its view and
       base.topic(name, params).get().snapshot()
     },
     leave: fn(name, params, __reason) {
-      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
-      left.push((name, Json::object(params).stringify())) },
+      left.push((name, Json::object(params).stringify()))
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop() }
+    },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
