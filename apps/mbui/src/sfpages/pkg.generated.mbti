@@ -86,8 +86,6 @@ pub fn chat_row(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, on? : Bool, l
 
 pub fn chat_row_node(@view.View, @sfbase.Source, @sf.TipLayer, () -> @sfbase.ChatItem, String, () -> Bool, @sf.ListAt, () -> Int32, list_ground? : () -> Int64, more? : Bool) -> @view.View
 
-pub fn chat_rows_sample(@ui.Ctx, Int32, @sf.ListAt) -> Unit
-
 pub fn chats_lists(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, ListsFrame) -> Unit
 
 pub fn chats_lists_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, ListsNodeFrame, @sf.TipLayer, () -> Int32) -> Unit
@@ -540,8 +538,6 @@ pub fn screen_value_quiet(@json.Json) -> Bool
 
 pub fn screens_perf(Double) -> String
 
-pub fn search_away(@ui.Ctx) -> Double
-
 pub fn search_bar_away() -> Bool
 
 pub fn search_leaving() -> Bool
@@ -551,8 +547,6 @@ pub let search_list_rise : Double
 pub fn search_opened() -> Bool
 
 pub fn search_over(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Double) -> Unit
-
-pub fn search_start(@ui.Ctx) -> Unit
 
 pub fn search_summon(@ui.Ctx, Array[Offered], Bool) -> Unit
 

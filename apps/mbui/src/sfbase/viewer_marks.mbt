@@ -841,68 +841,6 @@ pub fn marks_any() -> Bool {
 }
 
 ///|
-/// In the top bar while marking (ImageMarks.kt MarksActions): why it failed, 取消, 下载标注后的图片, 添加到对话 (when
-/// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
-/// `ink`: what its words and icons are drawn in (a desktop's bar is the page's, preview_desk.mbt).
-pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
-  let ready = !marking.busy && marks_any()
-  // as wide as they are: the file's name before them cut short instead
-  c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
-    if marking.error != "" {
-      c.box(padx=6.0, max_w=140.0, clip=true, fn() {
-        c.text(marking.error, size=@sf.theme().t.meta, color=0xFF7B6BFFL, wrap=false) |> ignore
-      })
-      |> ignore
-    }
-    let cancel = c.id("marks/cancel")
-    if c.clicked(cancel) {
-      marks_leave()
-    }
-    let cancel_box = c.box(h=Px(32.0), padx=10.0, radius=picture_key, justify=JCenter, id=cancel, fn() {
-      c.text(pv("common.cancel"), size=@sf.theme().t.meta, color=ink, wrap=false) |> ignore
-    })
-    c.semantics(cancel_box, Button, id=cancel, label=pv("common.cancel"))
-    if picture_button(c, "marks/download", "download", ink, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
-      go(false)
-    }
-    if can_draft {
-      let put = c.id("marks/put")
-      if ready && c.clicked(put) {
-        go(true)
-      }
-      // 4 further from the rest (ImageMarks.kt: padding(start = 4) outside its ground)
-      c.box(style=marks_put_room, fn() {
-        c.box(
-          dir=Row,
-          h=Px(32.0),
-          padx=12.0,
-          gap=5.0,
-          radius=picture_key,
-          bg=0xE5704AFFL,
-          align=ACenter,
-          opacity=if ready { 1.0 } else { 0.4 },
-          id=if ready { put } else { 0 },
-          fn() {
-            @sf.icon(c, "send", size=12.0, color=0xFFFFFFFFL) |> ignore
-            c.text(
-              pv(if marking.busy { "android-chat.marks.making" } else { "android-chat.preview.put" }),
-              size=@sf.theme().t.meta,
-              weight=600,
-              color=0xFFFFFFFFL,
-              wrap=false,
-            )
-            |> ignore
-          },
-        )
-        |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// The corner of what is on the viewer's bars (ImageMarks.kt PICTURE_KEY): round, half their 32 (in the middle of a
 /// bar's capsule ends, 6 in, concentric with them: picture_bar_corner).
 pub let picture_key : Double = 16.0

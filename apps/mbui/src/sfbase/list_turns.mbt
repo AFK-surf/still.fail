@@ -402,31 +402,3 @@ pub fn Turns::start_of(self : Turns, key : String) -> Double {
   }
   self.started_at(key)
 }
-
-///|
-/// When what is under a post whose key starts with `prefix` ("ask/": a card's options closing, "dismiss/": 忽略
-/// going) changes in its turn: the one waiting for its turn (its declared start: Turns::start_of), else the last that
-/// changed; -1 none. For a test that says the moment its motion starts from.
-pub fn under_turn(prefix : String) -> Double {
-  let mut waiting = -1.0
-  let mut last = -1.0
-  for _, tu in turns_by {
-    for a in tu.asks {
-      match a.what {
-        Change(k) if k.has_prefix(prefix) => waiting = dmax(waiting, tu.start_of(k))
-        _ => ()
-      }
-    }
-    for k, at in tu.started {
-      if k.has_prefix(prefix) {
-        last = dmax(last, at)
-      }
-    }
-  }
-  if waiting >= 0.0 {
-    waiting
-  } else {
-    last
-  }
-}
-

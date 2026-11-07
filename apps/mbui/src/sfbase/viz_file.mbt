@@ -327,15 +327,6 @@ pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, scr
 }
 
 ///|
-/// Whether a file is a visualization (an HTML file: Prose.kt HTML).
-pub fn is_viz(name : String) -> Bool {
-  let n = name.to_lower()
-  n.has_suffix(".html") || n.has_suffix(".htm")
-}
-
-// ── a visualization's file: fetched with what its widget kept ──────────
-
-///|
 /// A visualization's page and what its widget kept (VizFiles.kt Loaded), fetched once per file: a file sent never
 /// changes.
 pub(all) struct VizLoad {

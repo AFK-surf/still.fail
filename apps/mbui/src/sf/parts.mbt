@@ -1644,12 +1644,6 @@ pub fn menu_open_key() -> String {
 }
 
 ///|
-/// Whether the menu `key` is open now.
-pub fn menu_is_open(key : String) -> Bool {
-  menu_now() == key
-}
-
-///|
 /// Whether the menu `key` is drawn: open, or closed and still going out. What shows its ⋯ only under the pointer
 /// keeps it while this holds, so the menu goes out where it hung (not cut off, nor from the window's corner where
 /// the ⋯ is not drawn the frame it plays in).

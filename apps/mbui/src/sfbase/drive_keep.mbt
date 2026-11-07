@@ -222,21 +222,6 @@ pub fn download_drive_file(
 }
 
 ///|
-/// Several files downloaded, each at once and each said (DriveScreen.kt: a saveToDownloads each).
-pub fn download_drive_files(
-  c : @ui.Ctx,
-  src : Source,
-  station : String,
-  root : String,
-  dir : String,
-  files : Array[DvEntry],
-) -> Unit {
-  for e in files {
-    download_drive_file(c, src, station, root, dv_join(dir, e.name), e.name, listed=Some((e.mtime, e.size)))
-  }
-}
-
-///|
 /// A folder zipped on the station and downloaded (DriveScreen.kt saveZip): asked of the core, which has the station zip
 /// it (`drive.zip`) and fetches the zip as any file; the folder's row shows how far meanwhile (正在打包 while the
 /// station zips it).
@@ -245,5 +230,3 @@ pub fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : St
     download_start_zip(src, station, root, path, dv_name(path) + ".zip")
   })
 }
-
-

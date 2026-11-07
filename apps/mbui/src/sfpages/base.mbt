@@ -1,6 +1,5 @@
 // What the pages read of sfbase, by their own names.
-using @sfbase {
-  place_pick,
+using @sfbase {  place_pick,
   place_key,
   fresh,
   pv,
@@ -11,7 +10,7 @@ using @sfbase {
   service_fetches, service_files, service_keep_cookie, service_key, service_left, service_marked, service_page_for,
   service_pages, service_redirect, service_serve, service_unanswered, size_digits, size_kept, size_max, size_min,
   size_of, size_of_kept, stage_max_scale, stage_min_scale, stage_zoom, svc, svc_keep, svc_presets,
-  svc_viewports, open_link_in, viz_load, viz_tr, mark_numbers, marking, marks_actions, marks_leave, marks_quotes,
+  svc_viewports, open_link_in, viz_load, viz_tr, mark_numbers, marking, marks_leave, marks_quotes,
   marks_redo, marks_start, marks_undo,
   say,
   under_rest,
@@ -61,7 +60,6 @@ using @sfbase {
   type SignInAsk,
   absolute_times,
   act,
-  act_rooms,
   agent_json,
   app,
   app_in_front,
@@ -110,7 +108,6 @@ using @sfbase {
   flight_settled_of,
   flight_takes,
   flight_up,
-  floor_of,
   go_to_words,
   go_tos,
   items,

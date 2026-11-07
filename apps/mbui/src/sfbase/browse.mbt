@@ -231,12 +231,3 @@ pub fn dv_shown(src : Source, station : String, root : String, path : String, en
     None => Some(entries)
   }
 }
-
-///|
-/// How the device orders a folder's entries, as the core says (by name where it has not).
-pub fn dv_arrangement(src : Source, station : String, root : String, path : String) -> Arrangement {
-  match browse_topic(src, browse_where("page", "phone", "list", station, root, path)) {
-    Some(b) => b.arrangement
-    None => arrangement_none()
-  }
-}

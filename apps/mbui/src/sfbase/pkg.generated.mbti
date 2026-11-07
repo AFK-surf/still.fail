@@ -22,8 +22,6 @@ pub let absolute_times : @ref.Ref[Bool]
 
 pub fn act(Source, String, String, String, Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (Json) -> Unit, failed? : () -> Unit) -> Unit
 
-pub fn act_rooms(@ui.Ctx, Reading, String, Array[String]) -> Unit
-
 pub let acting : Acting
 
 pub fn acting_reset() -> Unit
@@ -266,8 +264,6 @@ pub fn download_cancel(Source, String) -> Unit
 
 pub fn download_drive_file(@ui.Ctx, Source, String, String, String, String, listed? : (Double, Double)?) -> Unit
 
-pub fn download_drive_files(@ui.Ctx, Source, String, String, String, Array[DvEntry]) -> Unit
-
 pub fn download_drive_zip(@ui.Ctx, Source, String, String, String) -> Unit
 
 pub fn download_of(Source, String, String, String) -> Json?
@@ -318,13 +314,9 @@ pub fn dv_absolute(String, String) -> String
 
 pub fn dv_arrange(Source, by? : String, down? : Bool, hidden? : Bool) -> Unit
 
-pub fn dv_arrangement(Source, String, String, String) -> Arrangement
-
 pub fn dv_beside_name(Source, String, String, String, String, Array[String], (Result[String, String]) -> Unit) -> Unit
 
 pub fn dv_check_name(Source, String, (String?) -> Unit) -> Unit
-
-pub fn dv_count(String, Int32) -> String
 
 pub fn dv_drive_stations(Source, String, here? : String) -> (Array[DvStation]?, String?)
 
@@ -600,8 +592,6 @@ pub fn flight_way_ms(Bool, Double) -> Double
 
 pub let flight_words_key : String
 
-pub fn floor_of(@ui.Ctx, Reading, String, Array[String]) -> Double
-
 pub let flow_ahead : Int32
 
 pub let flow_part : Int32
@@ -701,8 +691,6 @@ pub fn host_notices() -> NoticeHost
 pub fn host_picture(String, String) -> String
 
 pub fn install_of(Json?, String) -> Install?
-
-pub fn is_viz(String) -> Bool
 
 pub fn items(Json?, String) -> Array[Json]
 
@@ -859,8 +847,6 @@ pub fn mark_where(PageMark, String) -> String
 pub let marked_into : Map[String, Array[(String, Bytes, Array[(String, String, String)], String)]]
 
 pub let marking : Marking
-
-pub fn marks_actions(@ui.Ctx, Bool, (Bool) -> Unit, ink? : Int64) -> Unit
 
 pub fn marks_any() -> Bool
 
@@ -1074,8 +1060,6 @@ pub fn own_screen(String, String) -> Bool
 
 pub let page_bridge_js : String
 
-pub fn page_glass() -> @paint.Glass
-
 pub let page_glass_blur : Double
 
 pub let page_js : String
@@ -1188,8 +1172,6 @@ pub fn picked_sig(Json?) -> String
 
 pub let picture_bar_corner : Double
 
-pub fn picture_button(@ui.Ctx, String, String, Int64, Bool, enabled? : Bool, held? : Bool, said~ : String) -> Bool
-
 pub let picture_key : Double
 
 pub let picture_pick : @ref.Ref[(@ui.Pick, (Bytes?) -> Unit)?]
@@ -1271,8 +1253,6 @@ pub fn reader_key(DriveAt) -> String
 pub fn reader_left(DriveAt) -> Unit
 
 pub fn reading_of(String) -> Reading
-
-pub fn reading_pill(@ui.Ctx, String) -> Unit
 
 pub let reading_pill_box : @ui.Style
 
@@ -1602,8 +1582,6 @@ pub fn under_reset() -> Unit
 
 pub fn under_rest() -> Double
 
-pub fn under_turn(String) -> Double
-
 pub let unseen_at : Double
 
 pub let update : Update
@@ -1643,8 +1621,6 @@ pub fn update_wants_you() -> Bool
 pub fn upload_id(String, Int32) -> String
 
 pub fn upload_path(String) -> String
-
-pub fn upper(String) -> String
 
 pub let ups : DriveUploads
 

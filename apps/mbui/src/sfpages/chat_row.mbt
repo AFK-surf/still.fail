@@ -486,17 +486,6 @@ pub fn opened_icon(o : @sfbase.OpenedChat) -> String {
 }
 
 ///|
-/// Chats' rows to come while their list is read the first time (the library's Waiting, in its bones): under a day's
-/// heading, `count` rows as chat_row draws them where their list stands (`at`), of made-up words: each a title and the
-/// line under it, an agent's mark at its end.
-pub fn chat_rows_sample(c : @ui.Ctx, count : Int, at : @sf.ListAt) -> Unit {
-  @sf.list_heading(c, @sf.sample_words(2), at)
-  for i in 0..<count {
-    chat_row(c, @sfbase.sample_source, sample_chat(i), "agents", at~, more=i + 1 < count, found=true) |> ignore
-  }
-}
-
-///|
 /// The made-up chat of row `i` of a chats' list in its bones (chat_rows_sample): its title and line as long as a chat's
 /// are, an agent in it.
 pub fn sample_chat(i : Int) -> ChatItem {

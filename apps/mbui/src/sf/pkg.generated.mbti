@@ -1115,8 +1115,6 @@ pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @view.Al
 
 pub fn menu_held(@ui.Ctx, String) -> Bool
 
-pub fn menu_is_open(String) -> Bool
-
 pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool) -> Bool
 
 pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled? : Bool, chosen? : Bool, heading? : Bool) -> MenuItem
@@ -1336,8 +1334,6 @@ pub fn page(@ui.Ctx, String, String, Array[() -> Unit], on_back~ : () -> Unit, f
 
 pub fn page_bar(@ui.Ctx, () -> Unit, corners? : (Double, Double)?) -> Unit
 
-pub fn page_bleed() -> @ui.Style
-
 pub fn page_block(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn page_card(@ui.Ctx, () -> Unit, footed? : Bool) -> Unit
@@ -1401,8 +1397,6 @@ pub fn pane_foot_rest(holds? : Double) -> Double
 pub fn pane_radii() -> FixedArray[Double]?
 
 pub let pane_round : @ref.Ref[FixedArray[@paint.CornerOf]?]
-
-pub fn pane_top_right() -> Double?
 
 pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, fade_out_together? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, heads_itself? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double, steps? : Bool, back? : () -> Unit) -> Unit
 

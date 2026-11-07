@@ -308,12 +308,6 @@ pub fn dv_file(station : String, root : String, dir : String, e : DvEntry) -> Dr
 }
 
 ///|
-/// The words for `key` by how many (`{n}`; the Chinese catalog's one and other are the same).
-pub fn dv_count(key : String, n : Int) -> String {
-  @sf.t(key, args=[("n", "\{n}")])
-}
-
-///|
 /// The words that are not empty, `sep` between them.
 pub fn dv_words(words : Array[String], sep : String) -> String {
   let out = StringBuilder()

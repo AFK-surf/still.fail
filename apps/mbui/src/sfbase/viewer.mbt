@@ -1506,19 +1506,6 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// ASCII letters in capitals.
-pub fn upper(s : String) -> String {
-  let sb = StringBuilder()
-  for ch in s {
-    let k = ch.to_int()
-    sb.write_char(if k >= 97 && k <= 122 { (k - 32).unsafe_to_char() } else { ch })
-  }
-  sb.to_string()
-}
-
-// ── the viewer ─────────────────────────────────────────────────────────
-
-///|
 /// Viewer `v` set out at the moment `at` (its cause's: where it is a node of the window's tree, as that node is made,
 /// viewer_tree.mbt), once: growing from its thumbnail, or fading in.
 pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) -> Unit {
@@ -1846,16 +1833,6 @@ pub fn tap_stage(c : @ui.Ctx, v : Viewer, stage : Int) -> Unit {
 pub fn Viewer::note(self : Viewer, c : @ui.Ctx, body : () -> Unit) -> Unit {
   ignore(self)
   c.box(w=Fill(1.0), h=Fill(1.0), pad=24.0, gap=14.0, align=ACenter, justify=JCenter, fn() { body() })
-  |> ignore
-}
-
-///|
-/// A wait (ui/Waiting.kt WaitPill): a spinner and its words on the chip's ground, round.
-pub fn reading_pill(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=reading_pill_box, fn() {
-    @sf.spinner(c, size=reading_spinner) |> ignore
-    c.text(words, style=reading_pill_words) |> ignore
-  })
   |> ignore
 }
 
@@ -2648,56 +2625,6 @@ pub fn dark_glass() -> @ui.Glass {
   let tint = @sf.alpha(0x121214FFL, 0.62)
   @ui.Glass::frosted(blur=dark_glass_blur, tint~, solid=@sf.over(0x000000FFL, tint))
 }
-
-///|
-/// The same over a document (FilePreview.kt pageGlass): the surface at 72% (dark, surface2's) over its blur, over the
-/// viewer's canvas.
-pub fn page_glass() -> @ui.Glass {
-  @sf.viewer_page_glass()
-}
-
-///|
-/// A button on the viewer's bars (ImageMarks.kt PictureButton): 32 square, its corner 12, an 18 icon; quieter when
-/// it cannot be pressed; `held` (the tool in use) on white at 16%, its icon near white. True on the frame after it was
-/// tapped.
-pub fn picture_button(
-  c : @ui.Ctx,
-  key : String,
-  icon : String,
-  tint : Int64,
-  on : Bool,
-  enabled? : Bool = true,
-  held? : Bool = false,
-  said~ : String,
-) -> Bool {
-  let id = c.id(key)
-  let live = on && enabled
-  let b = c.box(
-    w=Px(32.0),
-    h=Px(32.0),
-    radius=picture_key,
-    align=ACenter,
-    justify=JCenter,
-    bg=if held { 0xFFFFFF29L } else { 0L },
-    opacity=if enabled { 1.0 } else { 0.35 },
-    id=if live { id } else { 0 },
-    fn() {
-      @sf.icon(c, icon, size=18.0, color=if held { dark_text } else { tint }) |> ignore
-      // PictureButton: clip(Smooth(PICTURE_KEY)).clickable (white at 16% only while held)
-      if live {
-        @motion.ripple(c, id, picture_key)
-      }
-    },
-  )
-  // named `said` (PictureButton's contentDescription), pressed while `held`; said on hover too (ImageMarks.tsx's Tips)
-  c.semantics(b, Button, id~, label=said, disabled=!enabled, pressed=held)
-  if live {
-    @sf.tip(c, key + "/tip", id, said)
-  }
-  live && c.clicked(id)
-}
-
-// ── a PDF ──────────────────────────────────────────────────────────────
 
 ///|
 /// Pages drawn by the system, each as it scrolls near, as wide as the screen allows (FilePreview.kt PdfViewer): 12

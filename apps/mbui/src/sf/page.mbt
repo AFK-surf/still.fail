@@ -2621,16 +2621,6 @@ fn pg_card_now() -> @ui.Style {
 let pg_card_pane : @ui.Style = @ui.css("w=Full bg=Card clip").then(@ui.style(p=room(corner_inset), radius=card_radius))
 
 ///|
-/// What reaches a narrow page's sides on purpose: out across the room it leaves there (pg_room); nothing on a wide one.
-pub fn page_bleed() -> @ui.Style {
-  if look() is Narrow {
-    pg_bleed
-  } else {
-    pg_no_bleed
-  }
-}
-
-///|
 // kept across runs: a value (no field of it changes)
 let pg_bleed : @ui.Style = @ui.style(mx=room(-pg_room_in))
 

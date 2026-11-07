@@ -378,15 +378,6 @@ pub fn pane_radii() -> FixedArray[Double]? {
 }
 
 ///|
-/// The top right corner of the panel of its own the view is built in (pane_round), None in a window's whole.
-pub fn pane_top_right() -> Double? {
-  match pane_radii() {
-    Some(k) => Some(k[1])
-    None => None
-  }
-}
-
-///|
 /// Whether the page being built is in a panel of its own (pane_round): what stands in its corners stands concentric
 /// with the panel's.
 pub fn in_pane() -> Bool {

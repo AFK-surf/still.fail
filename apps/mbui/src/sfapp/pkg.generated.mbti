@@ -22,8 +22,6 @@ pub let absolute_times : @ref.Ref[Bool]
 
 pub fn act(@sfbase.Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 
-pub fn act_rooms(@ui.Ctx, @sfbase.Reading, String, Array[String]) -> Unit
-
 pub let acting : @sfbase.Acting
 
 pub fn agent_json(@json.Json?, String) -> @json.Json?
@@ -166,8 +164,6 @@ pub fn download_cancel(@sfbase.Source, String) -> Unit
 
 pub fn download_drive_file(@ui.Ctx, @sfbase.Source, String, String, String, String, listed? : (Double, Double)?) -> Unit
 
-pub fn download_drive_files(@ui.Ctx, @sfbase.Source, String, String, String, Array[@sfbase.DvEntry]) -> Unit
-
 pub fn download_drive_zip(@ui.Ctx, @sfbase.Source, String, String, String) -> Unit
 
 pub fn download_of(@sfbase.Source, String, String, String) -> @json.Json?
@@ -204,13 +200,9 @@ pub fn dv_absolute(String, String) -> String
 
 pub fn dv_arrange(@sfbase.Source, by? : String, down? : Bool, hidden? : Bool) -> Unit
 
-pub fn dv_arrangement(@sfbase.Source, String, String, String) -> @sfbase.Arrangement
-
 pub fn dv_beside_name(@sfbase.Source, String, String, String, String, Array[String], (Result[String, String]) -> Unit) -> Unit
 
 pub fn dv_check_name(@sfbase.Source, String, (String?) -> Unit) -> Unit
-
-pub fn dv_count(String, Int32) -> String
 
 pub fn dv_drive_stations(@sfbase.Source, String, here? : String) -> (Array[@sfbase.DvStation]?, String?)
 
@@ -422,8 +414,6 @@ pub let flight_wait_ms : Double
 
 pub fn flight_waiting(@ui.Ctx, String) -> Unit
 
-pub fn floor_of(@ui.Ctx, @sfbase.Reading, String, Array[String]) -> Double
-
 pub fn focus_chat(@sfbase.ChatRef, @sfbase.ChatView, Bool?) -> @json.Json
 
 pub let follow_margin : Double
@@ -455,8 +445,6 @@ pub fn host_setup() -> Unit
 pub let icon_swap_ms : Double
 
 pub fn install_of(@json.Json?, String) -> @sfbase.Install?
-
-pub fn is_viz(String) -> Bool
 
 pub fn items(@json.Json?, String) -> Array[@json.Json]
 
@@ -529,8 +517,6 @@ pub fn mark_where(@sfbase.PageMark, String) -> String
 pub let marked_into : Map[String, Array[(String, Bytes, Array[(String, String, String)], String)]]
 
 pub let marking : @sfbase.Marking
-
-pub fn marks_actions(@ui.Ctx, Bool, (Bool) -> Unit, ink? : Int64) -> Unit
 
 pub fn marks_leave() -> Unit
 
@@ -636,8 +622,6 @@ pub let own_code_face : Int32
 
 pub let page_bridge_js : String
 
-pub fn page_glass() -> @paint.Glass
-
 pub let page_js : String
 
 pub let page_js_path : String
@@ -694,8 +678,6 @@ pub fn picked_sig(@json.Json?) -> String
 
 pub let picture_bar_corner : Double
 
-pub fn picture_button(@ui.Ctx, String, String, Int64, Bool, enabled? : Bool, held? : Bool, said~ : String) -> Bool
-
 pub let pk : @sfbase.ChatPick
 
 pub fn place_icon(String) -> String
@@ -743,8 +725,6 @@ pub fn reader_key(@sfbase.DriveAt) -> String
 pub fn reader_left(@sfbase.DriveAt) -> Unit
 
 pub fn reading_of(String) -> @sfbase.Reading
-
-pub fn reading_pill(@ui.Ctx, String) -> Unit
 
 pub let readings : Map[String, @sfbase.Reading]
 
@@ -950,8 +930,6 @@ pub fn turns_of(String) -> @sfbase.Turns
 
 pub fn under_rest() -> Double
 
-pub fn under_turn(String) -> Double
-
 pub let unseen_at : Double
 
 pub let update : @sfbase.Update
@@ -987,8 +965,6 @@ pub let update_version : @ref.Ref[Int32]
 pub fn update_wants_you() -> Bool
 
 pub fn upload_id(String, Int32) -> String
-
-pub fn upper(String) -> String
 
 pub let ups : @sfbase.DriveUploads
 
