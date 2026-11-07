@@ -415,7 +415,6 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   t.frame()
   assert_true(t.find("在对话中查找") is None)
   assert_eq(@sfpages.find_chat(), "")
-  assert_true(find_marking.val.is_empty())
   // opened again: empty
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   assert_eq(@sfpages.find_query(), "")

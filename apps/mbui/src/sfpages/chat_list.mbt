@@ -242,11 +242,12 @@ pub fn chat_list(
       bar~,
       room~,
       finding=find_chat() == chat_key(r),
-      on_found=fn(rd) { rd.found_centre = true },
+      on_found=found_start,
       find_around~,
     )
     // gone to by a quote: what it quoted, low in the message, to the list's middle
     passage_centre(c, rd, key, "chat-list/" + key)
+    found_centre(c, rd, key, "chat-list/" + key)
     // the way to the newest: away from its end, or short of the chat's end
     rd.jump = la.away || v.newer
     to_latest(c, src, r, v, la.away || v.newer, room)
