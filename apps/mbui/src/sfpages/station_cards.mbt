@@ -17,6 +17,8 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json], details? : Array[String] = [],
         level: text(mv, "level"),
         label: text(mv, "title"),
         note: text(mv, "total"),
+        label_short: text(mv, "titleShort"),
+        note_short: text(mv, "totalShort"),
       }
     }),
     details~,
@@ -47,7 +49,7 @@ pub fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
     windows.map(fn(w) {
       let wv = Some(w)
       let left = count(wv, "left")
-      { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills") }
+      { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills"), label_short: "", note_short: "" }
     }),
   )
 }

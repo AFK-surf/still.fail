@@ -4512,8 +4512,12 @@ export interface Meter {
 	unit: string;
 	/** Under `big`: 可用内存, CPU 空闲率. */
 	title: string;
-	/** Under `title`, quiet: 共 64 GB, 负载 1.4. */
+	/** `title` where its line has not the room: CPU 空闲. */
+	titleShort?: string;
+	/** Under `title`, quiet: 总内存 64 GB, 负载 1.4. */
 	total: string;
+	/** `total` where its line has not the room: 总 64 GB. */
+	totalShort?: string;
 	note?: string;
 }
 
@@ -4524,6 +4528,8 @@ export interface HostGpu {
 	left: number;
 	level: Level;
 	title: string;
+	/** `title` where its line has not the room: GPU 1 空闲. */
+	titleShort?: string;
 	total: string;
 	model: string;
 }

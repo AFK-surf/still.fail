@@ -945,7 +945,7 @@ export function host(h: J): J {
   const arch = str(src.arch) ?? "";
   // Each as the allowances are drawn: how much is left (`left`, its fill and cells) and that in words; on a machine's
   // own page, that large (`big` `unit`), what it is (`title`) and what it is out of (`total`).
-  const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; total: string }) => {
+  const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; titleShort?: string; total: string; totalShort?: string }) => {
     const p = format.round(Math.min(Math.max(percent, 0), 100));
     return { label, short, percent: p, left: 100 - p, level: p >= 90 ? "red" : p >= 75 ? "amber" : "ok", value, note, ...room };
   };
@@ -955,7 +955,7 @@ export function host(h: J): J {
   const cpuPercent = typeof busy === "number" ? busy * 100 : load * 100;
   const idle = format.round(100 - Math.min(Math.max(cpuPercent, 0), 100));
   const loadText = t("core-views.present.host.load", { load: format.fixed1(load * cpus) });
-  const cpuRoom = { remaining: t("core-views.present.host.idle", { percent: idle }), big: String(idle), unit: "%", title: t("core-views.present.host.cpu_idle"), total: loadText };
+  const cpuRoom = { remaining: t("core-views.present.host.idle", { percent: idle }), big: String(idle), unit: "%", title: t("core-views.present.host.cpu_idle"), titleShort: t("core-views.present.host.cpu_idle_short"), total: loadText };
   const cpu =
     typeof busy === "number"
       ? meter("CPU", "CPU", cpuPercent, `${format.round(cpuPercent)}%`, [loadText, cpuModel].filter((x) => x !== null).join(" · "), cpuRoom)
@@ -970,10 +970,10 @@ export function host(h: J): J {
   // What is left in gigabytes, large: one decimal below 100.
   const big = (bytes: number) => format.gb1(Math.max(bytes, 0)).replace(/ GB$/, "");
   const memory = meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null, {
-    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.memory_total", { size: format.gb(memTotal) }),
+    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.memory_total", { size: format.gb(memTotal) }), totalShort: t("core-views.present.host.total_short", { size: format.gb(memTotal) }),
   });
   const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
-    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.disk_total", { size: format.gb(diskTotal) }),
+    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.disk_total", { size: format.gb(diskTotal) }), totalShort: t("core-views.present.host.total_short", { size: format.gb(diskTotal) }),
   });
   // Each GPU is an ordinary resource dial: free capacity in its figure, used capacity in its cells.
   const gpus = (arr(src.gpus) ?? []).filter(isObject);
@@ -992,18 +992,19 @@ export function host(h: J): J {
       : used !== null ? t("core-views.present.host.gpu_memory_used", { used: size(used) })
       : total !== null ? t("core-views.present.host.gpu_memory_total", { total: size(total) }) : cores;
     const title = t("core-views.present.host.gpu_idle", { gpu: label });
+    const titleShort = t("core-views.present.host.gpu_idle_short", { gpu: label });
     if (busy !== null) {
-      const m = meter(label, label, busy * 100, "", null, { remaining: "", big: String(format.round(100 - busy * 100)), unit: "%", title, total: memoryNote });
-      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+      const m = meter(label, label, busy * 100, "", null, { remaining: "", big: String(format.round(100 - busy * 100)), unit: "%", title, titleShort, total: memoryNote });
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, titleShort: m.titleShort, total: m.total, model: name === "GPU" ? "" : name };
     }
     if (total !== null && used !== null) {
       const m = meter(label, label, used / total * 100, "", null, {
-        remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }),
+        remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }), titleShort: t("core-views.present.host.gpu_memory_left_short"),
         total: t("core-views.present.host.gpu_memory_all", { size: format.gb(total) }),
       });
-      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, titleShort: m.titleShort, total: m.total, model: name === "GPU" ? "" : name };
     }
-    return { big: "—", unit: "", left: 100, level: "ok", title, total: memoryNote, model: name === "GPU" ? "" : name };
+    return { big: "—", unit: "", left: 100, level: "ok", title, titleShort, total: memoryNote, model: name === "GPU" ? "" : name };
   });
   // What the machine is, the same line wherever it is named: its chip, its memory, its system.
   o.identity = [cpuModel, memTotal > 0 ? format.gb(memTotal) : null, os || null].filter((x) => x !== null).join(" · ");

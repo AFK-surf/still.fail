@@ -2181,6 +2181,9 @@ pub(all) struct Dial {
   level : String
   label : String
   note : String
+  // what `label` and `note` say where their line has not the room ("": nothing shorter)
+  label_short : String
+  note_short : String
 }
 
 ///|
@@ -2191,7 +2194,7 @@ pub(all) struct Dial {
 pub fn dials(c : @ui.Ctx, dials : Array[Dial], details? : Array[String] = [], columns? : Int = 0) -> Unit {
   let narrow = look() == Narrow
   let t = theme()
-  let draw = fn(i : Int) {
+  let draw = fn(i : Int, short : Bool) {
       let d = dials[i]
       let ink = match d.level {
         "amber" | "warn" => t.p.warn_ink
@@ -2214,8 +2217,12 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial], details? : Array[String] = [], co
           }
         })
         |> ignore
-        c.text(d.label, style=dl_label) |> ignore
-        c.text(if d.note == "" { " " } else { d.note }, style=if details.is_empty() { dl_reset } else { dl_detail }) |> ignore
+        c.text(if short && d.label_short != "" { d.label_short } else { d.label }, style=dl_label) |> ignore
+        c.text(
+          if d.note == "" { " " } else if short && d.note_short != "" { d.note_short } else { d.note },
+          style=if details.is_empty() { dl_reset } else { dl_detail },
+        )
+        |> ignore
         match details.get(i) {
           Some(detail) if detail != "" => c.text(detail, style=dl_detail) |> ignore
           _ => ()
@@ -2230,7 +2237,7 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial], details? : Array[String] = [], co
         let end = @cmp.minimum(start + columns, dials.length())
         c.box(style=dl_row_narrow, fn() {
           for i in start..<end {
-            draw(i)
+            draw(i, false)
           }
           for _ in (end - start)..<columns {
             c.box(style=dl_dial_narrow, fn() {  }) |> ignore
@@ -2241,12 +2248,24 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial], details? : Array[String] = [], co
     })
     |> ignore
   } else {
-    c.box(style=if narrow { dl_row_narrow } else { dl_row_wide }, flow=!narrow, line_gap=dl_lines, fn() {
-      for i in 0..<dials.length() {
-        draw(i)
-      }
-    })
-    |> ignore
+    let row = fn(short : Bool) {
+      c.box(style=if narrow { dl_row_narrow } else { dl_row_wide }, flow=!narrow, line_gap=dl_lines, fn() {
+        for i in 0..<dials.length() {
+          draw(i, short)
+        }
+      })
+      |> ignore
+    }
+    if narrow && dials.iter().any(fn(d) { d.label_short != "" || d.note_short != "" }) {
+      // all of them in their full words where the line has the room for all, else all in their short ones: one way for all
+      c.box(style=dl_row_ways, one_of=true, fn() {
+        row(false)
+        row(true)
+      })
+      |> ignore
+    } else {
+      row(false)
+    }
   }
 }
 
@@ -2257,6 +2276,11 @@ let dl_rows : @ui.Style = @ui.css("w=Full gap=S4")
 ///|
 // kept across runs: a value (no field of it changes)
 let dl_row_wide : @ui.Style = @ui.css("row gap=S9 align=AStart")
+
+///|
+/// The ways of a narrow row, the room of the line.
+// kept across runs: a value (no field of it changes)
+let dl_row_ways : @ui.Style = @ui.css("row w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
