@@ -173,8 +173,8 @@ test "a table too big to show, from a drive, 下载 pressed on it: its bar's 下
   let reading = bar_now()
   assert_true(reading.length() == 1 && reading[0].disabled, msg="its bar's 下载 there, held off: \{reading}")
   assert_true(
-    t.find("正在打开") is Some(_) && t.all(@ui.Role::Button, label="下载").length() == 1,
-    msg="its facts reading in 下载's place: \{t.all(@ui.Role::Button, label="下载")}",
+    t.all(@ui.Role::Button, label="正在读取").length() == 1 && t.all(@ui.Role::Button, label="下载").length() == 1,
+    msg="its facts' 下载 at work, saying 正在读取: \{t.all(@ui.Role::Button, label="下载")}",
   )
   for done in held {
     done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'a'))))
