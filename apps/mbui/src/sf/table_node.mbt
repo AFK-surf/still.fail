@@ -198,8 +198,7 @@ pub fn table_node(
 }
 
 ///|
-/// A table (`table`, as it changes) as nodes in `outer` (table_node's, whatever reads its Markdown: a table alone, or
-/// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is laid out in, `bleed` past
+/// A table (`table`, as it changes) as nodes in `outer`: its columns' widths from the room `outer` is laid out in, `bleed` past
 /// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`).
 fn md_table_body_node(
   outer : @view.View,
