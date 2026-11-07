@@ -33,7 +33,7 @@ import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
 import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
+import { LAST_MESSAGE_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -266,7 +266,7 @@ export class Readers {
     return this.covered(this.said.ready(threads, signal), signal);
   }
 
-  /// Prepare only the requested chats' last-message times in bounded slices.
+  /// Prepare only the requested chats' last messages in bounded slices for the archive and notices.
   prepareArchiveLast(threads: readonly number[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     this.archiveLast ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
@@ -349,6 +349,13 @@ export class Readers {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
         if (!(error instanceof HttpError)) throw error;
+        if (error.message.startsWith(LAST_MESSAGE_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(LAST_MESSAGE_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.prepareArchiveLast(threads, signal);
+          continue;
+        }
         if (error.message === SESSION_BINDINGS_PENDING) {
           await this.prepareSessionBindings(signal);
           continue;
