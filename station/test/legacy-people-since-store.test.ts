@@ -169,7 +169,7 @@ test("handover and cancellation keep another request through a stopped worker", 
   } finally { abort.abort(); previous.resolve(); await builder.close(); store.close(); rmSync(dir,{ recursive:true, force:true }); }
 });
 
-test("a native index removed during a direct read is prepared again", async () => {
+test("a native index removed during a direct read leaves its snapshot intact", async () => {
   const dir = mkdtempSync(join(tmpdir(),"old-people-time-race-"));
   const path = join(dir,"stillfail.db"), store = Store.open(path), other = new DatabaseSync(path);
   const builder = new PeopleSinceBuilder(path);
@@ -202,10 +202,13 @@ test("a native index removed during a direct read is prepared again", async () =
         } });
       };
     } });
-    assert.throws(() => answersSince(makeStore(traced,dir),50,[thread]),/^Error: people time pending:/);
+    const expected = referenceAnswersSince(store,50);
+    assert.deepEqual(answersSince(makeStore(traced,dir),50,[thread]),expected);
     assert.equal(dropped,true);
+    assert.equal(other.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_people_since'").get(),undefined);
+    assert.deepEqual(answersSince(makeStore(store.db,dir),50,[thread]),expected);
     await builder.ready([thread]);
-    assert.deepEqual(answersSince(makeStore(store.db,dir),50,[thread]),referenceAnswersSince(store,50));
+    assert.deepEqual(answersSince(makeStore(store.db,dir),50,[thread]),expected);
   } finally { await builder.close(); other.close(); store.close(); rmSync(dir,{ recursive:true, force:true }); }
 });
 

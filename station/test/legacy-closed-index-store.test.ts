@@ -171,7 +171,7 @@ test("the readers retry an old chat after its closed cards are prepared", async 
   } finally { readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a removed native index is prepared again instead of breaking a direct read", async () => {
+test("a removed native index leaves the current direct read on its snapshot", async () => {
   const dir = mkdtempSync(join(tmpdir(), "closed-cards-index-race-"));
   const path = join(dir, "stillfail.db"), store = Store.open(path), other = new DatabaseSync(path);
   const builder = new ClosedCardsBuilder(path);
@@ -203,9 +203,13 @@ test("a removed native index is prepared again instead of breaking a direct read
         } });
       };
     } });
-    assert.throws(() => answersSince(makeStore(traced, dir), 50, [thread]), /closed cards pending:/);
+    const expected = referenceAnswersSince(store, 50);
+    assert.deepEqual(answersSince(makeStore(traced, dir), 50, [thread]), expected);
+    assert.equal(dropped, true);
+    assert.equal(other.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='closed_cards_thread_at'").get(), undefined);
+    assert.deepEqual(answersSince(makeStore(store.db, dir), 50, [thread]), expected);
     await builder.ready([thread]);
-    assert.deepEqual(answersSince(makeStore(store.db, dir), 50, [thread]), referenceAnswersSince(store, 50));
+    assert.deepEqual(answersSince(makeStore(store.db, dir), 50, [thread]), expected);
   } finally { await builder.close(); other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
