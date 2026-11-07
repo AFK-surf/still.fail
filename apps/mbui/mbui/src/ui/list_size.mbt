@@ -787,7 +787,7 @@ pub let row_moved_mark : String = "\u{2}was"
 ///|
 /// Which of `was` (the rows' places before, in their order now) are among the most that are still in the order they
 /// had: a longest increasing run of them, not necessarily side by side. The others are the fewest that moved.
-fn in_order_most(was : Array[Int]) -> Array[Bool] {
+pub fn in_order_most(was : Array[Int]) -> Array[Bool] {
   let n = was.length()
   // ends[l]: the index into `was` that ends the run of l + 1 found with the least last place; back[i]: the one before
   // i in its run (-1 none)

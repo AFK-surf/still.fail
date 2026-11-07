@@ -612,7 +612,7 @@ fn RowsMotion::said(
         _ => ()
       }
     }
-    let kept = kept_in_order(was_at)
+    let kept = @ui.in_order_most(was_at)
     let ahead : Set[String] = Set::new()
     for n, k in at {
       if !kept[n] {
@@ -745,42 +745,6 @@ let rows_rest_at : Ref[Double] = Ref(-1.0)
 /// When the lists' rows set moving last are at rest (rows_rest_at's).
 pub fn rows_rest() -> Double {
   rows_rest_at.val
-}
-
-///|
-/// Which of `was` (the rows' places before, in their order now) are among the most still in the order they had: a
-/// longest increasing run of them (in_order_most's). The others are the fewest that moved.
-fn kept_in_order(was : Array[Int]) -> Array[Bool] {
-  let n = was.length()
-  let ends : Array[Int] = []
-  let back = Array::make(n, -1)
-  for i in 0..<n {
-    let mut lo = 0
-    let mut hi = ends.length()
-    while lo < hi {
-      let mid = (lo + hi) / 2
-      if was[ends[mid]] < was[i] {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    if lo > 0 {
-      back[i] = ends[lo - 1]
-    }
-    if lo == ends.length() {
-      ends.push(i)
-    } else {
-      ends[lo] = i
-    }
-  }
-  let kept = Array::make(n, false)
-  let mut i = if ends.is_empty() { -1 } else { ends[ends.length() - 1] }
-  while i >= 0 {
-    kept[i] = true
-    i = back[i]
-  }
-  kept
 }
 
 ///|
