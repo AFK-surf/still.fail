@@ -11,10 +11,12 @@ import { copyFile, mkdir, open, readFile, readdir, rename, rm, stat, unlink, uti
 import { homedir } from "node:os";
 import { join, posix } from "node:path";
 import { MediaError, bad } from "./errors.ts";
+import { LibraryIndex } from "./library-index.ts";
+export { WATCHES, HOURLY } from "./library-index.ts";
 import { sniff } from "./images.ts";
 import { HEAD, type Kind, type Meta, extOf, kindOf, metaOf } from "./photometa.ts";
 import type { Viewer } from "./server.ts";
-import { type DriveEntry, PART, type Picture, type StationLink, list, picture, readAll, readPart, stat as driveStat, watch } from "./station.ts";
+import { type DriveEntry, PART, type Picture, type StationLink, list, picture, readAll, readPart, stat as driveStat } from "./station.ts";
 import type { PhotoRow, Store } from "./store.ts";
 import { readBmp, thumbHash } from "./thumbhash.ts";
 
@@ -32,13 +34,9 @@ export function localDay(ms: number): string {
 
 /// The most folders a library has.
 export const MOST_FOLDERS = 64;
-/// The most folders watched at once (the station keeps 256 watches for everyone).
-export const WATCHES = 32;
 /// How deep a walk goes, and how many folders one pass lists at most.
 export const DEPTH = 32;
 export const MOST_DIRS = 100_000;
-/// How often the library is gone over whole.
-export const HOURLY = 60 * 60 * 1000;
 /// Folders a NAS or a system keeps its own things in; bundles that hold a library of their own.
 const SKIP_DIRS = new Set(["@eaDir", "@Recycle", "@Recently-Snapshot", "#recycle", "#snapshot", "$RECYCLE.BIN", "System Volume Information", "node_modules"]);
 const BUNDLES = /\.(photoslibrary|photolibrary|migratedphotolibrary|aplibrary|lrdata|app)$/i;
@@ -94,64 +92,30 @@ export function cleanPath(p: string): string {
   return parts.join("/");
 }
 
-export class Library {
+export class Library extends LibraryIndex<Dir> {
   readonly #o: LibraryOptions;
-  #closed = false;
-  /// What changes the index, one at a time: passes and folders' scans.
-  #chain: Promise<unknown> = Promise.resolve();
-  #pending = 0;
-  #passQueued = false;
-  #filling: Promise<void> | null = null;
-  #hourly: NodeJS.Timeout | null = null;
-  #dirs = new Map<string, Dir>();
-  #watching = new Map<string, AbortController>();
   #making = new Map<string, Promise<Thumb | null>>();
   #uploads = new Map<string, Promise<unknown>>();
   #writer: string | undefined;
 
   constructor(o: LibraryOptions) {
+    super(o.link, "photo", WATCH_ID);
     this.#o = o;
     this.#writer = o.store.photoSetting("writer");
-  }
-
-  /// Starts the hourly passes, and a first one now when someone is known to act as.
-  start() {
-    this.#hourly = setInterval(() => this.pass(), HOURLY);
-    this.#hourly.unref();
-    if (this.#actor()) this.pass();
-  }
-
-  async close() {
-    this.#closed = true;
-    if (this.#hourly) clearInterval(this.#hourly);
-    for (const c of this.#watching.values()) c.abort();
-    this.#watching.clear();
-    await this.settled();
-  }
-
-  /// Once nothing is being indexed or thumbnailed.
-  async settled() {
-    for (;;) {
-      const chain = this.#chain;
-      const filling = this.#filling;
-      await chain.catch(() => {});
-      await filling?.catch(() => {});
-      if (chain === this.#chain && filling === this.#filling && this.#pending === 0) return;
-    }
   }
 
   // Who the library is read as.
 
   /// The header the library is read as: the last owner's or admin's who set the folders, else the last member's who
   /// may write who asked for photos.
-  #actor(): string | null {
+  protected actor(): string | null {
     return this.#o.store.photoSetting("actor") ?? this.#writer ?? null;
   }
 
   /// A member who may write asked for photos: kept to read the library as until an owner or admin sets the folders.
   noteWriter(v: Viewer) {
     if (this.#writer === v.raw) return;
-    const first = this.#actor() === null;
+    const first = this.actor() === null;
     this.#writer = v.raw;
     this.#o.store.setPhotoSetting("writer", v.raw);
     if (first) this.pass();
@@ -200,29 +164,13 @@ export class Library {
     return { albums: this.#albums().map((a) => ({ id: a.id, title: a.title, cover: have.get(a.id)?.cover ?? null, count: have.get(a.id)?.count ?? 0 })) };
   }
 
-  // Indexing.
-
-  /// `f` after what changes the index now (one at a time).
-  #queue<T>(f: () => Promise<T>): Promise<T> {
-    this.#pending++;
-    const next = this.#chain.catch(() => {}).then(f);
-    this.#chain = next.finally(() => this.#pending--);
-    return next;
+  protected topFolders() {
+    return this.#albums();
   }
 
-  /// A whole pass, after the one running (two asked meanwhile are one).
-  pass(): Promise<void> {
-    if (this.#passQueued) return Promise.resolve();
-    this.#passQueued = true;
-    return this.#queue(async () => {
-      this.#passQueued = false;
-      await this.#pass();
-    }).catch((e) => console.error("media: photo pass failed", e));
-  }
-
-  async #pass() {
-    const actor = this.#actor();
-    if (!actor || this.#closed) return;
+  protected async runPass() {
+    const actor = this.actor();
+    if (!actor || this.closed) return;
     await mkdir(this.#o.backup, { recursive: true }).catch((e) => console.error("media: no backup folder", e));
     await this.#dropStaleUploads();
     const seen = Date.now();
@@ -231,10 +179,10 @@ export class Library {
     const budget = { dirs: MOST_DIRS };
     let changed = false;
     for (const album of albums) {
-      if (this.#closed) return;
+      if (this.closed) return;
       const failed: string[] = [];
       changed = (await this.#walk(actor, album, albums, album.path, 0, seen, dirs, failed, budget)) || changed;
-      if (this.#closed) return;
+      if (this.closed) return;
       // What was not found again (and not in a folder that could not be read) is gone.
       const gone = this.#o.store.photosOfAlbum(album.id).filter((p) => p.seen < seen && !failed.some((f) => under(f, p.dir)));
       this.#o.store.removePhotos(gone.map((p) => p.id));
@@ -247,15 +195,15 @@ export class Library {
       this.#o.store.removePhotos(this.#o.store.photosOfAlbum(a.album).map((p) => p.id));
       changed = true;
     }
-    this.#dirs = dirs;
-    this.#rewatch();
+    this.dirs = dirs;
+    this.rewatch();
     if (changed) this.#o.changed();
     this.#fill();
   }
 
   /// Lists `dir` of the album and what is under it, indexing what is new or changed; answers whether anything was.
   async #walk(actor: string, album: Album, albums: Album[], dir: string, depth: number, seen: number, dirs: Map<string, Dir>, failed: string[], budget: { dirs: number }, mtime = Number.MAX_SAFE_INTEGER): Promise<boolean> {
-    if (this.#closed || budget.dirs-- <= 0) {
+    if (this.closed || budget.dirs-- <= 0) {
       failed.push(dir);
       return false;
     }
@@ -270,7 +218,7 @@ export class Library {
     dirs.set(dirKey(album.root, dir), { root: album.root, dir, album: album.id, mtime });
     let changed = false;
     for (const e of listing.entries) {
-      if (this.#closed) return changed;
+      if (this.closed) return changed;
       const p = join2(dir, e.name);
       if (e.dir) {
         if (skipDir(e.name) || depth >= DEPTH || this.#another(album, albums, p)) continue;
@@ -351,11 +299,11 @@ export class Library {
   }
 
   /// A folder the station said changed: its files again, its new folders walked, the ones gone dropped.
-  #scan(d: Dir): Promise<void> {
-    return this.#queue(async () => {
-      const actor = this.#actor();
+  protected scan(d: Dir): Promise<void> {
+    return this.queue(async () => {
+      const actor = this.actor();
       const album = this.#albums().find((a) => a.id === d.album && a.root === d.root);
-      if (!actor || !album || this.#closed) return;
+      if (!actor || !album || this.closed) return;
       const store = this.#o.store;
       const seen = Date.now();
       let listing: { entries: DriveEntry[] };
@@ -366,8 +314,8 @@ export class Library {
         // The folder is gone: what was in it too.
         const gone = store.photosUnder(d.root, d.dir);
         store.removePhotos(gone.map((p) => p.id));
-        for (const [k, x] of this.#dirs) if (x.root === d.root && under(d.dir, x.dir)) this.#dirs.delete(k);
-        this.#rewatch();
+        for (const [k, x] of this.dirs) if (x.root === d.root && under(d.dir, x.dir)) this.dirs.delete(k);
+        this.rewatch();
         if (gone.length > 0) this.#o.changed();
         return;
       }
@@ -390,17 +338,17 @@ export class Library {
         .filter((p) => p.album === album.id && ((p.dir === d.dir && !files.has(p.path)) || (p.dir !== d.dir && !folders.has(this.#childOf(d.dir, p.dir)))));
       store.removePhotos(gone.map((p) => p.id));
       changed = changed || gone.length > 0;
-      for (const [k, x] of this.#dirs) {
-        if (x.root === d.root && x.album === album.id && x.dir !== d.dir && under(d.dir, x.dir) && !folders.has(this.#childOf(d.dir, x.dir))) this.#dirs.delete(k);
+      for (const [k, x] of this.dirs) {
+        if (x.root === d.root && x.album === album.id && x.dir !== d.dir && under(d.dir, x.dir) && !folders.has(this.#childOf(d.dir, x.dir))) this.dirs.delete(k);
       }
       const failed: string[] = [];
       const budget = { dirs: MOST_DIRS };
       const depth = d.dir.split("/").length - (album.path ? album.path.split("/").length : 0);
       for (const [p, e] of folders) {
-        if (this.#dirs.has(dirKey(d.root, p))) continue;
-        changed = (await this.#walk(actor, album, albums, p, depth + 1, seen, this.#dirs, failed, budget, e.mtime)) || changed;
+        if (this.dirs.has(dirKey(d.root, p))) continue;
+        changed = (await this.#walk(actor, album, albums, p, depth + 1, seen, this.dirs, failed, budget, e.mtime)) || changed;
       }
-      this.#rewatch();
+      this.rewatch();
       if (changed) {
         this.#o.changed();
         this.#fill();
@@ -414,64 +362,24 @@ export class Library {
     return join2(dir, rest.split("/")[0]!);
   }
 
-  // Watching.
-
-  /// Watches the albums' folders, then the folders changed lately, WATCHES at most; stops the others.
-  #rewatch() {
-    if (this.#closed) return;
-    const tops = new Set(this.#albums().map((a) => dirKey(a.root, a.path)));
-    const ranked = [...this.#dirs.entries()].sort((a, b) => Number(tops.has(b[0])) - Number(tops.has(a[0])) || b[1].mtime - a[1].mtime).slice(0, WATCHES);
-    const want = new Map(ranked);
-    for (const [k, c] of this.#watching) {
-      if (!want.has(k)) {
-        c.abort();
-        this.#watching.delete(k);
-      }
-    }
-    for (const [k, d] of want) {
-      if (this.#watching.has(k)) continue;
-      const c = new AbortController();
-      this.#watching.set(k, c);
-      void this.#follow(k, d, c.signal);
-    }
-  }
-
-  async #follow(key: string, d: Dir, signal: AbortSignal) {
-    while (!signal.aborted && !this.#closed) {
-      const actor = this.#actor();
-      if (!actor) return;
-      try {
-        if (await watch(this.#o.link, actor, d.root, d.dir, WATCH_ID, signal)) await this.#scan(this.#dirs.get(key) ?? d);
-      } catch (e) {
-        if (signal.aborted) return;
-        // A folder the station does not watch (through still.fail Helper): the hourly pass reads it.
-        if (e instanceof MediaError && (e.code === "forbidden" || e.code === "not_found")) {
-          if (this.#watching.get(key)?.signal === signal) this.#watching.delete(key);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 60_000).unref());
-      }
-    }
-  }
-
   // Thumbnails.
 
   /// Makes the thumbnails (and so the ThumbHashes) not made yet, newest first, one at a time.
   #fill() {
-    if (this.#filling || this.#closed) return;
-    this.#filling = (async () => {
+    if (this.filling || this.closed) return;
+    this.filling = (async () => {
       let told = Date.now();
       let made = false;
       for (;;) {
-        const actor = this.#actor();
-        if (this.#closed || !actor) return;
+        const actor = this.actor();
+        if (this.closed || !actor) return;
         const batch = this.#o.store.unhashed(16);
         if (batch.length === 0) {
           if (made) this.#o.changed();
           return;
         }
         for (const item of batch) {
-          if (this.#closed) return;
+          if (this.closed) return;
           try {
             await this.#thumb(item, actor);
           } catch (e) {
@@ -488,7 +396,7 @@ export class Library {
           this.#o.changed();
         }
       }
-    })().finally(() => (this.#filling = null));
+    })().finally(() => (this.filling = null));
   }
 
   #cacheOf(item: PhotoRow) {
@@ -499,7 +407,7 @@ export class Library {
   async thumb(id: string): Promise<Thumb | null> {
     const item = this.#o.store.photo(id);
     if (!item) throw new MediaError("not_found", "找不到这张照片");
-    const actor = this.#actor();
+    const actor = this.actor();
     if (!actor) throw new MediaError("not_found", "找不到这张照片");
     return this.#thumb(item, actor);
   }

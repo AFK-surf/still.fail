@@ -9,12 +9,13 @@ import { execFile } from "node:child_process";
 import { randomBytes, createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, posix } from "node:path";
+import { LibraryIndex } from "./library-index.ts";
 import { MediaError, bad } from "./errors.ts";
 import { type Probe, type Tools, probe as runProbe, output, readable, runFfmpeg } from "./ffmpeg.ts";
 import { sniff } from "./images.ts";
-import { DEPTH, FILL_TOLD, HOURLY, MOST_DIRS, MOST_FOLDERS, WATCHES, cleanPath, dirKey, hidden, join2, photoId, skipDir, under } from "./photos.ts";
+import { DEPTH, FILL_TOLD, MOST_DIRS, MOST_FOLDERS, cleanPath, dirKey, hidden, join2, photoId, skipDir, under } from "./photos.ts";
 import type { Viewer } from "./server.ts";
-import { type DriveEntry, type Picture, type StationLink, list, picture, readAll, stat as driveStat, watch } from "./station.ts";
+import { type DriveEntry, type Picture, type StationLink, list, picture, readAll, stat as driveStat } from "./station.ts";
 import type { Progress, ShowRow, Store, VideoRow } from "./store.ts";
 import { type ExternalSub, subtitlesOf, toVtt } from "./subtitles.ts";
 import { readBmp, thumbHash } from "./thumbhash.ts";
@@ -78,52 +79,20 @@ export type VideosOptions = {
   changed: () => void;
 };
 
-export class Videos {
+export class Videos extends LibraryIndex<Dir> {
   readonly #o: VideosOptions;
   readonly tools: Tools;
-  #closed = false;
-  #chain: Promise<unknown> = Promise.resolve();
-  #pending = 0;
-  #passQueued = false;
-  #filling: Promise<void> | null = null;
-  #hourly: NodeJS.Timeout | null = null;
-  #dirs = new Map<string, Dir>();
-  #watching = new Map<string, AbortController>();
   #making = new Map<string, Promise<Poster | null>>();
   #subs = new Map<string, Promise<string>>();
 
   constructor(o: VideosOptions) {
+    super(o.link, "video", WATCH_ID);
     this.#o = o;
     this.tools = o.tools;
   }
 
-  start() {
-    this.#hourly = setInterval(() => this.pass(), HOURLY);
-    this.#hourly.unref();
-    if (this.#actor()) this.pass();
-  }
-
-  async close() {
-    this.#closed = true;
-    if (this.#hourly) clearInterval(this.#hourly);
-    for (const c of this.#watching.values()) c.abort();
-    this.#watching.clear();
-    await this.settled();
-  }
-
-  /// Once nothing is being indexed, probed or given its poster.
-  async settled() {
-    for (;;) {
-      const chain = this.#chain;
-      const filling = this.#filling;
-      await chain.catch(() => {});
-      await filling?.catch(() => {});
-      if (chain === this.#chain && filling === this.#filling && this.#pending === 0) return;
-    }
-  }
-
   /// The header the library is read as: the last owner's or admin's who set its folders.
-  #actor(): string | null {
+  protected actor(): string | null {
     return this.#o.store.photoSetting("videos.actor") ?? null;
   }
 
@@ -164,28 +133,13 @@ export class Videos {
     return this.view();
   }
 
-  // Indexing.
-
-  #queue<T>(f: () => Promise<T>): Promise<T> {
-    this.#pending++;
-    const next = this.#chain.catch(() => {}).then(f);
-    this.#chain = next.finally(() => this.#pending--);
-    return next;
+  protected topFolders() {
+    return this.#libFolders();
   }
 
-  /// A whole pass, after the one running (two asked meanwhile are one).
-  pass(): Promise<void> {
-    if (this.#passQueued) return Promise.resolve();
-    this.#passQueued = true;
-    return this.#queue(async () => {
-      this.#passQueued = false;
-      await this.#pass();
-    }).catch((e) => console.error("media: video pass failed", e));
-  }
-
-  async #pass() {
-    const actor = this.#actor();
-    if (!actor || this.#closed) return;
+  protected async runPass() {
+    const actor = this.actor();
+    if (!actor || this.closed) return;
     const store = this.#o.store;
     // What could not be probed (no ffprobe then, or a file the service could not read) is tried again.
     if (this.tools.ffprobe) store.reprobe();
@@ -196,10 +150,10 @@ export class Videos {
     const shows = new Map<string, ShowSeen>();
     let changed = false;
     for (const f of folders) {
-      if (this.#closed) return;
+      if (this.closed) return;
       const failed: string[] = [];
       changed = (await this.#walk(actor, f, folders, f.path, 0, seen, dirs, failed, budget, shows)) || changed;
-      if (this.#closed) return;
+      if (this.closed) return;
       const gone = store.videosUnder(f.id).filter((p) => p.seen < seen && !failed.some((d) => under(d, p.dir)));
       store.removeVideos(gone.map((p) => p.id));
       changed = changed || gone.length > 0;
@@ -212,14 +166,14 @@ export class Videos {
     }
     changed = (await this.#keepShows(actor, shows)) || changed;
     changed = store.dropEmptyShows() > 0 || changed;
-    this.#dirs = dirs;
-    this.#rewatch();
+    this.dirs = dirs;
+    this.rewatch();
     if (changed) this.#o.changed();
     this.#fill();
   }
 
   async #walk(actor: string, f: LibFolder, folders: LibFolder[], dir: string, depth: number, seen: number, dirs: Map<string, Dir>, failed: string[], budget: { dirs: number }, shows: Map<string, ShowSeen>, mtime = Number.MAX_SAFE_INTEGER): Promise<boolean> {
-    if (this.#closed || budget.dirs-- <= 0) {
+    if (this.closed || budget.dirs-- <= 0) {
       failed.push(dir);
       return false;
     }
@@ -234,7 +188,7 @@ export class Videos {
     dirs.set(dirKey(f.root, dir), { root: f.root, dir, folder: f.id, mtime });
     let { changed } = await this.#files(actor, f, dir, listing.entries, seen, shows);
     for (const e of listing.entries) {
-      if (this.#closed) return changed;
+      if (this.closed) return changed;
       if (!e.dir || this.#skip(f, folders, dir, e.name) || depth >= DEPTH) continue;
       changed = (await this.#walk(actor, f, folders, join2(dir, e.name), depth + 1, seen, dirs, failed, budget, shows, e.mtime)) || changed;
     }
@@ -287,7 +241,7 @@ export class Videos {
     let changed = false;
     const paths = new Set<string>();
     for (const e of videos) {
-      if (this.#closed) break;
+      if (this.closed) break;
       const path = join2(dir, e.name);
       paths.add(path);
       try {
@@ -418,12 +372,12 @@ export class Videos {
   }
 
   /// A folder the station said changed: its videos again, its new folders walked, what is gone dropped.
-  #scan(d: Dir): Promise<void> {
-    return this.#queue(async () => {
-      const actor = this.#actor();
+  protected scan(d: Dir): Promise<void> {
+    return this.queue(async () => {
+      const actor = this.actor();
       const folders = this.#libFolders();
       const f = folders.find((x) => x.id === d.folder && x.root === d.root);
-      if (!actor || !f || this.#closed) return;
+      if (!actor || !f || this.closed) return;
       const store = this.#o.store;
       const seen = Date.now();
       const all = d.dir === f.path && f.path === "" ? undefined : d.dir;
@@ -434,8 +388,8 @@ export class Videos {
         if (!(e instanceof MediaError && e.code === "not_found")) return;
         const gone = store.videosUnder(f.id, all);
         store.removeVideos(gone.map((p) => p.id));
-        for (const [k, x] of this.#dirs) if (x.root === d.root && under(d.dir, x.dir)) this.#dirs.delete(k);
-        this.#rewatch();
+        for (const [k, x] of this.dirs) if (x.root === d.root && under(d.dir, x.dir)) this.dirs.delete(k);
+        this.rewatch();
         if (gone.length > 0 || store.dropEmptyShows() > 0) this.#o.changed();
         return;
       }
@@ -447,62 +401,24 @@ export class Videos {
       const gone = store.videosUnder(f.id, all).filter((p) => (p.dir === d.dir ? !paths.has(p.path) : !subdirs.has(childOf(p.dir))));
       store.removeVideos(gone.map((p) => p.id));
       changed = changed || gone.length > 0;
-      for (const [k, x] of this.#dirs) {
-        if (x.root === d.root && x.folder === f.id && x.dir !== d.dir && under(d.dir, x.dir) && !subdirs.has(childOf(x.dir))) this.#dirs.delete(k);
+      for (const [k, x] of this.dirs) {
+        if (x.root === d.root && x.folder === f.id && x.dir !== d.dir && under(d.dir, x.dir) && !subdirs.has(childOf(x.dir))) this.dirs.delete(k);
       }
       const failed: string[] = [];
       const budget = { dirs: MOST_DIRS };
       const depth = d.dir === f.path ? 0 : d.dir.split("/").length - (f.path ? f.path.split("/").length : 0);
       for (const [p, e] of subdirs) {
-        if (this.#dirs.has(dirKey(d.root, p))) continue;
-        changed = (await this.#walk(actor, f, folders, p, depth + 1, seen, this.#dirs, failed, budget, shows, e.mtime)) || changed;
+        if (this.dirs.has(dirKey(d.root, p))) continue;
+        changed = (await this.#walk(actor, f, folders, p, depth + 1, seen, this.dirs, failed, budget, shows, e.mtime)) || changed;
       }
       changed = (await this.#keepShows(actor, shows)) || changed;
       changed = store.dropEmptyShows() > 0 || changed;
-      this.#rewatch();
+      this.rewatch();
       if (changed) {
         this.#o.changed();
         this.#fill();
       }
     });
-  }
-
-  // Watching (as the photo library's).
-
-  #rewatch() {
-    if (this.#closed) return;
-    const tops = new Set(this.#libFolders().map((f) => dirKey(f.root, f.path)));
-    const ranked = [...this.#dirs.entries()].sort((a, b) => Number(tops.has(b[0])) - Number(tops.has(a[0])) || b[1].mtime - a[1].mtime).slice(0, WATCHES);
-    const want = new Map(ranked);
-    for (const [k, c] of this.#watching) {
-      if (!want.has(k)) {
-        c.abort();
-        this.#watching.delete(k);
-      }
-    }
-    for (const [k, d] of want) {
-      if (this.#watching.has(k)) continue;
-      const c = new AbortController();
-      this.#watching.set(k, c);
-      void this.#follow(k, d, c.signal);
-    }
-  }
-
-  async #follow(key: string, d: Dir, signal: AbortSignal) {
-    while (!signal.aborted && !this.#closed) {
-      const actor = this.#actor();
-      if (!actor) return;
-      try {
-        if (await watch(this.#o.link, actor, d.root, d.dir, WATCH_ID, signal)) await this.#scan(this.#dirs.get(key) ?? d);
-      } catch (e) {
-        if (signal.aborted) return;
-        if (e instanceof MediaError && (e.code === "forbidden" || e.code === "not_found")) {
-          if (this.#watching.get(key)?.signal === signal) this.#watching.delete(key);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 60_000).unref());
-      }
-    }
   }
 
   // Probing and posters, in the background.
@@ -515,8 +431,8 @@ export class Videos {
   }
 
   #fill() {
-    if (this.#filling || this.#closed) return;
-    this.#filling = (async () => {
+    if (this.filling || this.closed) return;
+    this.filling = (async () => {
       const store = this.#o.store;
       let told = Date.now();
       let made = false;
@@ -529,23 +445,23 @@ export class Videos {
         }
       };
       for (;;) {
-        if (this.#closed) return;
+        if (this.closed) return;
         const batch = store.unprobed(8);
         if (batch.length === 0) break;
         for (const item of batch) {
-          if (this.#closed) return;
+          if (this.closed) return;
           await this.#probe(item);
         }
         tell();
       }
       for (;;) {
-        const actor = this.#actor();
-        if (this.#closed || !actor) return;
+        const actor = this.actor();
+        if (this.closed || !actor) return;
         const items = store.unposted(8);
         const shows = store.unpostedShows(8);
         if (items.length === 0 && shows.length === 0) break;
         for (const item of items) {
-          if (this.#closed) return;
+          if (this.closed) return;
           if (item.kind !== "movie") {
             store.setVideoThumbhash(item.id, "", item.mtime, item.size);
             continue;
@@ -558,7 +474,7 @@ export class Videos {
           }
         }
         for (const show of shows) {
-          if (this.#closed) return;
+          if (this.closed) return;
           try {
             await this.#posterOf(`s${show.id}`, () => this.#makeShowPoster(show, actor));
           } catch (e) {
@@ -569,7 +485,7 @@ export class Videos {
         tell();
       }
       if (made) this.#o.changed();
-    })().finally(() => (this.#filling = null));
+    })().finally(() => (this.filling = null));
   }
 
   async #probe(item: VideoRow) {
@@ -711,7 +627,7 @@ export class Videos {
         return { bytes: kept.subarray(4 + n), ...head, hash: hash === NO_HASH ? null : hash };
       }
     }
-    const actor = this.#actor();
+    const actor = this.actor();
     if (!actor) return null;
     return movie ? this.#posterOf(`m${id}`, () => this.#makeMoviePoster(movie, actor)) : this.#posterOf(`s${id}`, () => this.#makeShowPoster(show!, actor));
   }
@@ -897,7 +813,7 @@ export class Videos {
     const x = /^x(\d+)$/.exec(sub);
     if (x) {
       const s = this.externalSubs(v)[Number(x[1])];
-      const actor = this.#actor();
+      const actor = this.actor();
       if (!s || !actor) throw new MediaError("not_found", "没有这个字幕");
       const { bytes } = await readAll(this.#o.link, actor, v.root, join2(v.dir, s.name), SUB_MOST);
       return toVtt(bytes, s.format);
