@@ -71,10 +71,22 @@ export function turnNotices(s: Store, key: string, since: number, ended: number 
   if (turn === null || typeof at !== "number" || at < since) return { ended, notices: [] };
   if (at === ended) return { ended, notices: [] };
   const api = apiOf(s);
-  const out: Notice[] = [];
+  const missing: number[] = [];
+  const found: { thread: ReturnType<typeof store.sessionThreads>[number]; last: MessageRow | null }[] = [];
   for (const thread of store.sessionThreads(s, key)) {
     if (thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) continue;
-    const last = store.lastMessage(s, thread.id);
+    let last: MessageRow | null;
+    try { last = store.lastMessage(s, thread.id); }
+    catch (error) {
+      if (!(error instanceof store.LastMessageUnavailable)) throw error;
+      missing.push(...error.threads);
+      continue;
+    }
+    found.push({ thread, last });
+  }
+  if (missing.length) throw new store.LastMessageUnavailable([...new Set(missing)]);
+  const out: Notice[] = [];
+  for (const { thread, last } of found) {
     const fresh = turn.declared === "block" && store.blockedAsk(s, thread.id, key, turn)?.fresh === true;
     const told = turnNotice(turn, last, key, translate(lang, "station.notice.file"), fresh);
     if (told === null) continue;
@@ -113,4 +125,3 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   }
   return out;
 }
-
