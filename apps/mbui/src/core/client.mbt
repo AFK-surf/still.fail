@@ -12,7 +12,7 @@
 /// `changes` is set with each message too, and once more as it ends (unsubscribed, the client reset): what read it
 /// reads the topic again then, from the subscription asked anew.
 pub struct Sub {
-  id : Int
+  mut id : Int
   topic : Json
   mut value : Json?
   mut error : Json?
@@ -24,11 +24,20 @@ pub struct Sub {
   /// The lookup key; `key` remains the JSON text used to describe the subscription in waits.
   priv look : String
   changes : @signals.Signal[Int]
+  /// A legacy untracked read holds this topic until it explicitly leaves.
+  priv mut manual : Bool
+  /// A caller directly holds the Sub itself until it explicitly unsubscribes.
+  priv mut direct : Bool
+  /// A signal or legacy holder asked to release it when no reader remains.
+  priv mut retiring : Bool
 }
 
 ///|
 /// The subscription read: what reads it in a computed follows its changes (Sub.changes).
 pub fn Sub::followed(self : Sub) -> Sub {
+  if @signals.active_sub() is None {
+    self.manual = true
+  }
   self.changes.get() |> ignore
   self
 }
@@ -57,6 +66,8 @@ pub struct Client {
   priv unread_names : Map[String, Bool]
   priv unread_calls : Map[Int, Bool]
   priv mut next_id : Int
+  /// Distinguishes subscriptions when reset reuses an id.
+  priv mut epoch : Int
   /// the bytes beside the message being taken, if any
   priv mut beside : Bytes?
   /// Changes with every message that changed something (a sub's value or error, a call's answer).
@@ -105,6 +116,7 @@ pub fn Client::new(
     unread_names: {},
     unread_calls: {},
     next_id: 1,
+    epoch: 0,
     beside: None,
     version: 0,
     fatal: None,
@@ -240,21 +252,37 @@ fn Client::echo_of(self : Client, name : String, params : Json) -> Sub? {
 
 ///|
 /// The subscription to `topic` with `params`: made (and asked of the core) the first time, the same one after that,
-/// so a view can call this every frame.
+/// so a view can call this every frame. Repeated calls share one direct hold, not independently releasable handles;
+/// `unsubscribe` releases that direct hold, while any graph or legacy readers continue to hold the topic.
 pub fn Client::subscribe(
   self : Client,
   topic : String,
   params? : Map[String, Json] = {},
 ) -> Sub {
+  self.subscribe_as(topic, params, true)
+}
+
+///|
+/// Read a topic through the signal graph or a legacy source; unlike `subscribe`, this does not hold a raw Sub.
+pub fn Client::follow_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Sub {
+  self.subscribe_as(topic, params, false).followed()
+}
+
+///|
+fn Client::subscribe_as(self : Client, topic : String, params : Map[String, Json], direct : Bool) -> Sub {
   let look = subscribe_key(topic, params)
   match self.by_key.get(look) {
-    Some(s) => s
+    Some(s) => {
+      if direct { s.direct = true }
+      s
+    }
     None => {
       let t = topic_json(topic, params)
       let key = t.stringify()
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0) }
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false }
+      self.watch_retirement(s)
       self.subs[id] = s
       self.by_key[look] = s
       self.ask(s)
@@ -265,6 +293,28 @@ pub fn Client::subscribe(
       s
     }
   }
+}
+
+///|
+fn Client::watch_retirement(self : Client, s : Sub) -> Unit {
+  let epoch = self.epoch
+  let id = s.id
+  s.changes.on_unwatched(fn() {
+    @signals.after_flush(fn() {
+      if self.epoch == epoch {
+        match self.subs.get(id) {
+          Some(current) => self.retire_if_unused(current)
+          None => ()
+        }
+      }
+    })
+  })
+}
+
+///|
+/// Look up an existing subscription without acquiring it.
+pub fn Client::peek_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Sub? {
+  self.by_key.get(subscribe_key(topic, params))
 }
 
 ///|
@@ -282,9 +332,44 @@ fn Client::ask(self : Client, s : Sub) -> Unit {
 }
 
 ///|
-/// Ends a subscription: the core stops sending it, and `subscribe` makes a new one.
+/// Ask for a fresh value while keeping the same Sub and its readers. A new wire id discards replies to the old ask.
+pub fn Client::refresh_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      let old_id = s.id
+      self.end_sub_wait(old_id)
+      self.subs.remove(old_id)
+      let id = self.next_id
+      self.next_id += 1
+      s.id = id
+      self.subs[id] = s
+      self.watch_retirement(s)
+      let pending = self.echo_waits.to_array()
+      for p in pending {
+        let (call, (sub, answered, seen)) = p
+        if sub == old_id { self.echo_waits[call] = (id, answered, seen) }
+      }
+      (self.send)(({ "id": Json::number(old_id.to_double()), "unsubscribe": true } : Json).stringify())
+      self.ask(s)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Release a direct subscriber. Other graph or legacy readers keep the subscription until they leave too.
 pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
-  if self.subs.contains(s.id) {
+  if self.subs.get(s.id) is Some(current) && physical_equal(current, s) {
+    s.direct = false
+    s.retiring = true
+    self.retire_if_unused(s)
+  }
+}
+
+///|
+/// End a subscription once no reader holds it.
+fn Client::end_subscription(self : Client, s : Sub) -> Unit {
+  if self.subs.get(s.id) is Some(current) && physical_equal(current, s) {
     self.end_sub_wait(s.id)
     self.subs.remove(s.id)
     self.by_key.remove(s.look)
@@ -305,8 +390,49 @@ pub fn Client::unsubscribe_topic(
   params? : Map[String, Json] = {},
 ) -> Unit {
   match self.by_key.get(subscribe_key(topic, params)) {
-    Some(s) => self.unsubscribe(s)
+    Some(s) => {
+      s.manual = false
+      s.direct = false
+      s.retiring = true
+      self.retire_if_unused(s)
+    }
     None => ()
+  }
+}
+
+///|
+/// A legacy Source reader left; a direct Sub holder and other graph readers retain their interests.
+pub fn Client::leave_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      s.manual = false
+      s.retiring = true
+      self.retire_if_unused(s)
+    }
+    None => ()
+  }
+}
+
+///|
+/// A graph-owned reader went away. Preserve any legacy untracked hold, and any other graph reader of this Sub.
+pub fn Client::release_topic(
+  self : Client,
+  topic : String,
+  params? : Map[String, Json] = {},
+) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      s.retiring = true
+      self.retire_if_unused(s)
+    }
+    None => ()
+  }
+}
+
+///|
+fn Client::retire_if_unused(self : Client, s : Sub) -> Unit {
+  if s.retiring && !s.manual && !s.direct && !s.changes.watched() {
+    self.end_subscription(s)
   }
 }
 
@@ -691,23 +817,44 @@ pub fn Client::restarted(self : Client) -> Unit {
 /// Everything forgotten, as a new client: no subscription, no call waiting, ids from 1 (a Replay attached to the
 /// app's client starts it so).
 pub fn Client::reset(self : Client) -> Unit {
-  // (what read them reads anew: their ends told)
+  // Clear the old client before telling readers: a live reader may immediately subscribe again.
   let ended = self.subs.values().to_array()
+  ended.sort_by_key(fn(s) { s.id })
+  let calls = self.calls.to_array()
+  calls.sort_by_key(fn(c) { c.0 })
+  let call_waits = self.call_waits.values().to_array()
+  let sub_waits = self.sub_waits.values().to_array()
+  @signals.start_batch()
+  self.epoch += 1
   self.subs.clear()
-  for s in ended {
-    s.changed(ended=true)
-  }
   self.by_key.clear()
   self.calls.clear()
   self.progress.clear()
   self.quiet_calls.clear()
   self.unread_calls.clear()
   self.echo_waits.clear()
+  self.call_waits.clear()
+  self.sub_waits.clear()
   self.focus = None
   self.next_id = 1
   self.beside = None
   self.version = 0
   self.fatal = None
+  for ticket in call_waits {
+    (self.end_wait)(ticket)
+  }
+  for ticket in sub_waits {
+    (self.end_wait)(ticket)
+  }
+  for s in ended {
+    s.changed(ended=true)
+  }
+  // A call on the former client can never answer on the new one. Complete it so its optimistic state can settle.
+  let err : Json = { "code": "core_restarted", "message": Json::string(restarted_text.val) }
+  for c in calls {
+    (c.1)(Err(err))
+  }
+  @signals.end_batch()
 }
 
 ///|

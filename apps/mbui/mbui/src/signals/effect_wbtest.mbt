@@ -117,6 +117,40 @@ test "computed unwatched: child effect cleanups run in reverse creation (LIFO)" 
 }
 
 ///|
+test "a scoped computed releases a one-off read and keeps a tracked read until it ends" {
+  let source = signal(1)
+  let cleanups = Ref(0)
+  let c = computed_scoped(fn(_) {
+    effect_cleanup(fn() { fn() { cleanups.val += 1 } }) |> ignore
+    source.get()
+  })
+  assert_eq(c.get(), 1)
+  assert_false(source.watched())
+  assert_eq(cleanups.val, 1)
+  let stop = effect(fn() { c.get() |> ignore })
+  assert_true(source.watched())
+  stop()
+  assert_false(source.watched())
+  assert_eq(cleanups.val, 2)
+}
+
+///|
+test "a signal tells a resource each time its last reader leaves" {
+  let value = signal(0)
+  let ended = Ref(0)
+  value.on_unwatched(fn() { ended.val += 1 })
+  let first = effect(fn() { value.get() |> ignore })
+  let second = effect(fn() { value.get() |> ignore })
+  first()
+  assert_eq(ended.val, 0)
+  second()
+  assert_eq(ended.val, 1)
+  let again = effect(fn() { value.get() |> ignore })
+  again()
+  assert_eq(ended.val, 2)
+}
+
+///|
 test "effect created inside computed: old inner cleanup runs before new inner setup" {
   // When a computed re-evaluates, any effects its getter created on the previous run must be disposed (with cleanup)
   // before the getter runs again. Otherwise the old inner's cleanup ends up running after the new inner has already

@@ -460,7 +460,7 @@ fn file_peek(
       hovered_file.val = Some(visit)
       // A card can stay open as the pointer leaves its chip. Subscribe again even in that case: the file may have
       // been written or removed since the last time the pointer was here.
-      (src.leave)("filePeek", params)
+      (src.refresh)("filePeek", params)
     }
   } else if hovered_file.val is Some((key, _)) && key == hover_key {
     hovered_file.val = None
@@ -1215,4 +1215,3 @@ let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then
 
 ///|
 let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in
-

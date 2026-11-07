@@ -2628,7 +2628,7 @@ test "viewer on the tree, a wide window, a picture of a chat's marked: 添加到
   click(pv("android-chat.annotate.done"))
   t.draw()
   let put = pv("android-chat.preview.put")
-  let quoted = fn() { @sfbase.writings.get("ws1/st1:s-c1").map(fn(w) { w.quotes.length() }).unwrap_or(0) }
+  let quoted = fn() { @sfbase.writings.get("ws1/st1:s-c1").map(fn(w) { w.quotes.get().length() }).unwrap_or(0) }
   let before = quoted()
   click(put)
   assert_true(marking.busy && marking.to_draft, msg="let go: being made for the draft at once")

@@ -352,7 +352,7 @@ test "wide: where this machine is a station, files from the Finder let go on the
   let t = wide_tester(calls, mode="chat")
   @sfbase.machine_here.val = Some("ws1/st1")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
-  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([]) }
+  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([]) }
   // on a message: each by where it is on this machine's station (named by its path: the chat's default)
   let (x, y) = t.find("做完了：").unwrap()
   t.drop_files(x, y, [("报告.pdf", b"%PDF"), ("截图/", b"")], paths=["/Users/lin/报告.pdf", "/Users/lin/截图"])
@@ -1017,7 +1017,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get().map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
 }
 
 ///|
@@ -2081,8 +2081,8 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.length(), 1)
-      assert_eq(text(Some(d.files[0]), "name"), "image.png")
+      assert_eq(d.files.get().length(), 1)
+      assert_eq(text(Some(d.files.get()[0]), "name"), "image.png")
       assert_eq(d.text.get(), "")
     }
     None => fail("no draft")
@@ -2100,7 +2100,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
+      assert_eq(d.files.get().map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
       assert_eq(d.text.get(), "再看一眼签名")
     }
     None => fail("no draft")

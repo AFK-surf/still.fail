@@ -6,7 +6,7 @@ fn chat_client_source(client : @core.Client) -> Source {
     ..base,
     topic: fn(name, params) {
       if name == "chat" {
-        let s = client.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed()
+        let s = client.follow_topic(name, params=@sfbase.core_topic_params(name, params))
         { value: s.value, error: s.error, version: s.version }
       } else {
         (base.topic)(name, params)
@@ -14,9 +14,16 @@ fn chat_client_source(client : @core.Client) -> Source {
     },
     leave: fn(name, params) {
       if name == "chat" {
-        client.unsubscribe_topic(name, params=@sfbase.core_topic_params(name, params))
+        client.leave_topic(name, params=@sfbase.core_topic_params(name, params))
       } else {
         (base.leave)(name, params)
+      }
+    },
+    release: fn(name, params) {
+      if name == "chat" {
+        client.release_topic(name, params=@sfbase.core_topic_params(name, params))
+      } else {
+        (base.release)(name, params)
       }
     },
   }
@@ -41,21 +48,19 @@ test "a real client follows a chat still watched as its page leaves" {
     })
   })
   t.draw()
-  let first = client.subscribe("chat", params~)
+  let first = client.peek_topic("chat", params~).unwrap()
   client.receive_json({ "id": Json::number(first.id.to_double()), "value": { "title": "first", "messages": [] } })
   t.draw()
   assert_eq(seen.val, "first")
   sent.clear()
   chat_left(src, r)
   t.draw()
-  println("CLIENT_WATCHED_AFTER_LEAVE \{sent}")
-  assert_true(sent.any(fn(s) { s.contains("\"unsubscribe\":true") }), msg="the page left the subscription")
-  assert_true(sent.any(fn(s) { s.contains("\"subscribe\":") }), msg="the remaining watcher read it again")
-  let again = client.subscribe("chat", params~)
-  client.receive_json({ "id": Json::number(again.id.to_double()), "value": { "title": "second", "messages": [] } })
+  assert_eq(sent.length(), 0, msg="the remaining watcher keeps the same subscription")
+  client.receive_json({ "id": Json::number(first.id.to_double()), "value": { "title": "second", "messages": [] } })
   t.draw()
   assert_eq(seen.val, "second")
   watcher.stop()
+  assert_true(sent.any(fn(s) { s.contains("\"unsubscribe\":true") }), msg="the final watcher released the subscription")
 }
 
 ///|
@@ -71,7 +76,6 @@ test "a real client does not resubscribe after its last chat watcher stops" {
   watcher.stop()
   sent.clear()
   chat_left(src, r)
-  println("CLIENT_UNWATCHED_AFTER_LEAVE \{sent}")
   assert_true(sent.any(fn(s) { s.contains("\"unsubscribe\":true") }))
   assert_false(sent.any(fn(s) { s.contains("\"subscribe\":") }), msg="no reader asked for it again")
 }

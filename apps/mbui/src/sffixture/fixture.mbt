@@ -1581,6 +1581,8 @@ pub fn fixture(mode : String) -> Source {
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
+    release: fn(_, _) {  },
+    refresh: fn(_, _) {  },
     read_only: false,
   }
 }

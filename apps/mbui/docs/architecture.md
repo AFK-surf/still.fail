@@ -212,6 +212,15 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
   `RowsMade`), and its motion is told the same keys (`@motion.list_keys` goes over none while they are the same, and
   over only those between the rows alike at the start and the end as they change): a frame of a chat of 3000 messages
   goes over none of them while nothing changed (the user, 2026-10-26: 「中型屏下内容很多的 chat 性能好像比较差」).
+  `topic_signal(src, name, params)` gives a model or node a read-only computed of the subscription's value, error,
+  version and waiting state; fields and lists can be derived from it. It uses the same core subscription as `src.topic`,
+  with no second copy of the business state. Its graph follows the topic while read and releases it once the last reader
+  leaves; a one-off read does not keep a follower. Legacy `hold` / `let_go` scopes participate in the same graph, and a
+  direct core subscription stays until its own caller leaves. Repeated direct `subscribe` calls for the same topic
+  reuse one Sub and one direct hold, not independently releasable handles: `unsubscribe` releases that direct hold
+  without ending any graph or legacy reader. `refresh_topic` explicitly asks for a fresh value while keeping readers;
+  a core reset notifies live readers and lets them subscribe to the new core. The old `Derived` cache remains frame-scoped and is not a
+  retained model's lifetime; a retained model follows the topic itself.
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
   the tape itself.

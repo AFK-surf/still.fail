@@ -10,6 +10,15 @@ pub(all) struct Topic {
 }
 
 ///|
+/// A topic as a value a signal can carry, including whether its first value waits on a station.
+pub(all) struct TopicState {
+  value : Json?
+  error : Json?
+  version : Int
+  waiting : Bool
+}
+
+///|
 /// Where signing in to still.fail stands, as the sign-in page says it: nothing under way; its page being opened; out in
 /// the browser, the app waiting for it to come back; what it brought back being checked; or failed, why in the person's
 /// words ("" when there are none).
@@ -88,9 +97,66 @@ pub(all) struct Source {
   now : () -> Double
   /// a topic no page shows any more (`unsubscribe`)
   leave : (String, Map[String, Json]) -> Unit
+  /// a signal reader ended; another graph reader or a legacy untracked hold may still need the topic
+  release : (String, Map[String, Json]) -> Unit
+  /// ask an already held topic for a fresh value without dropping its readers
+  refresh : (String, Map[String, Json]) -> Unit
   /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept, nothing sent, no
   /// draft kept, no file put up
   read_only : Bool
+}
+
+///|
+/// A read-only signal of one core subscription. Readers of the same source, name and params share its subscription;
+/// the graph releases it when the last reader leaves. A one-off read does not leave a follower behind.
+pub fn topic_signal(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState] {
+  let key = params.copy()
+  @signals.computed_scoped(fn(_) {
+    followed_topic(src, name, key).get().get()
+  })
+}
+
+///|
+/// A shared topic's stable holder: it does not itself read the changing topic, so its cleanup runs only when the
+/// last reader goes, not on every value. The child effect feeds the signal it returns.
+priv struct FollowedTopic {
+  source : Source
+  key : String
+  holder : @signals.Computed[@signals.Signal[TopicState]]
+}
+
+///|
+// kept across runs: an active graph reader may outlive an app reset; its last reader removes the entry.
+let followed_topics : Array[FollowedTopic] = []
+
+///|
+fn followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[@signals.Signal[TopicState]] {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  match followed_topics.search_by(fn(t) { physical_equal(t.source, src) && t.key == key }) {
+    Some(i) => followed_topics[i].holder
+    None => {
+      let state : @signals.Signal[TopicState] = @signals.signal({ value: None, error: None, version: 0, waiting: false })
+      let holder = @signals.computed(fn(_) {
+        @signals.effect_cleanup(fn() {
+          let stop = @signals.effect(fn() {
+            let topic = (src.topic)(name, params)
+            state.set({ value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, params) })
+          })
+          fn() {
+            stop()
+            match followed_topics.search_by(fn(t) { physical_equal(t.source, src) && t.key == key }) {
+              Some(i) => followed_topics.remove(i) |> ignore
+              None => ()
+            }
+            (src.release)(name, params)
+          }
+        }) |> ignore
+        state
+      })
+      followed_topics.push({ source: src, key, holder })
+      holder
+    }
+  }
 }
 
 ///|
@@ -172,6 +238,8 @@ pub fn made_source(
     images: ChatImages::new(),
     now: fn() { 0.0 },
     leave: fn(_, _) {  },
+    release: fn(_, _) {  },
+    refresh: fn(_, _) {  },
     read_only: false,
   }
 }
