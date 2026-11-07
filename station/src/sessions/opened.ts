@@ -145,6 +145,30 @@ async function sayOpened(hub: Hub, key: string, title: string, link: string | nu
   }
 }
 
+/// The retry check needs only author metadata, not each message's edited text.
+async function openerSaid(hub: Hub, thread: number, author: string, agentOnly: boolean): Promise<boolean> {
+  if (hub.openedChatSaid) return hub.openedChatSaid(thread, author, agentOnly);
+  return hub.store.messagesBefore(thread, null, 200).some((m) => m.author === author && (!agentOnly || m.authorKind === "agent"));
+}
+
+// A retry may arrive while another call is still checking or sending the first message. Keep that whole operation in
+// order for the chat, and let a later call retry after an earlier failure.
+const firstMessageGates = new WeakMap<Hub, Map<number, { tail: Promise<void>; waiting: number }>>();
+async function firstMessageInTurn(hub: Hub, thread: number, send: () => Promise<void>): Promise<void> {
+  let gates = firstMessageGates.get(hub);
+  if (!gates) firstMessageGates.set(hub, (gates = new Map()));
+  let gate = gates.get(thread);
+  if (!gate) gates.set(thread, (gate = { tail: Promise.resolve(), waiting: 0 }));
+  gate.waiting++;
+  const turn = gate.tail.then(send);
+  gate.tail = turn.then(() => {}, () => {});
+  try { await turn; }
+  finally {
+    if (--gate.waiting === 0 && gates.get(thread) === gate) gates.delete(thread);
+    if (gates.size === 0) firstMessageGates.delete(hub);
+  }
+}
+
 /// chat_create from session `key`.
 export async function chatCreate(hub: Hub, key: string, args: Args): Promise<string> {
   const row = hub.store.getSession(key);
@@ -170,11 +194,11 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   const createdBy = starterOf(hub, key);
   const [from, fromLink] = sender(hub, key);
   // Its first message here, with its files, unless it has come already.
-  const sendHere = async (child: string, thread: SessionThread) => {
-    if (hub.store.messagesBefore(thread.thread.id, null, 200).some((m) => m.authorKind === "agent" && m.author === key)) return;
+  const sendHere = (child: string, thread: SessionThread) => firstMessageInTurn(hub, thread.thread.id, async () => {
+    if (await openerSaid(hub, thread.thread.id, key, true)) return;
     const kept = files.length > 0 ? await attach(hub, key, files.map((f) => f.path), child) : [];
     await postFrom(hub, thread, key, from, fromLink, text, [child], kept, true);
-  };
+  });
 
   const before = hub.store.openedWith("", key, k, there ?? "");
   if (before !== null) {
@@ -230,14 +254,14 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
 
 /// A chat another station's session opens here (chat_create there, from station `peer`): made once per its key, in the
 /// workspace it was asked in (`ws`); the answer says whether its first message has come yet.
-export function createForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Json {
+export async function createForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Promise<Json> {
   const parent = typeof request?.session === "string" ? request.session : "";
   if (parent === "") throw new Error("session is required");
   const k = keyOf(request);
   const before = hub.store.openedWith(peer, parent, k, "");
-  const answer = (child: string): Json => {
+  const answer = async (child: string): Promise<Json> => {
     const thread = sessionThreadOf(hub, child);
-    const said = hub.store.messagesBefore(thread.thread.id, null, 200).some((m) => m.author === `${peer}/${parent}`);
+    const said = await openerSaid(hub, thread.thread.id, `${peer}/${parent}`, false);
     return { session: child, link: hub.link(child) ?? null, thread: addressOf(thread), said };
   };
   if (before !== null && hub.store.getSession(before.child) !== null && (ws === null || hub.inWorkspace(before.child, ws))) return answer(before.child);

@@ -155,11 +155,11 @@ test("what another station asks reaches the chats of the workspace it asked in; 
   await assert.rejects(fromPeer(rig.hub, "A", message, W1), /no session/);
   await assert.rejects(fromPeer(rig.hub, "A", { ...message, to: one }, W2), /no session/);
   assert.equal((await fromPeer(rig.hub, "B", message, W2)).thread.startsWith("CHAT/"), true);
-  const made = createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
+  const made = await createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
   assert.equal(rig.store.getSession(made.session)?.ws, W2);
   assert.ok(made.link.includes(`/o/${W2}/st/`), made.link);
   // The same key asked in the other workspace is not that chat.
-  assert.throws(() => createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
+  await assert.rejects(createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
 }));
 
 test("a session runs on the profiles allowed in its workspace (all but those withheld from it); picking, pinning and changing respect it", () => withTwo(async (t) => {
