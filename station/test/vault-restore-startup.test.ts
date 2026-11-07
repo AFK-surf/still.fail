@@ -4,9 +4,166 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { Worker } from "node:worker_threads";
 import { PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
+
+function expiredGrants(db: DatabaseSync, count: number) {
+  db.exec("CREATE TABLE vault_grants(ws TEXT NOT NULL,id TEXT NOT NULL,session TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(ws,id))");
+  const insert = db.prepare("INSERT INTO vault_grants VALUES(?,?,?,?)");
+  for (let i = 0; i < count; i++) {
+    const id = `r${String(i).padStart(3, "0")}`;
+    const request = { id, ws: "w", vault: "plain", item: "i1", session: "s1", chat: "chat", owner: "p@example.com",
+      mode: "env", reason: "test", box: "", at: 1000, status: "granted" };
+    const grant = { v: 1, ws: "w", request: id, vault: "plain", item: "i1", mode: "env", hosts: [], scope: "hour", exp: 999, at: 900 };
+    insert.run("w", id, "s1", JSON.stringify({ request, grant, uses: 0 }));
+  }
+}
+
+for (const { failAt, remaining } of [{ failAt: 11, remaining: 70 }, { failAt: 41, remaining: 38 }])
+test(`an expired-grant batch failing on deletion ${failAt} rolls back and can be retried`, async () => {
+  const db = new DatabaseSync(":memory:"), plain = new PlainStore(db), vaults = new VaultStore(db);
+  const priority = new Int32Array(new SharedArrayBuffer(8));
+  let foregroundSeen = false, deletes = 0;
+  try {
+    expiredGrants(db, 70);
+    db.function("reject_expiry", () => {
+      foregroundSeen = Atomics.load(priority, 0) > 0;
+      return ++deletes === failAt ? 1 : 0;
+    });
+    db.exec(`CREATE TRIGGER reject_expiry BEFORE DELETE ON vault_grants WHEN reject_expiry()
+      BEGIN SELECT RAISE(ABORT,'test failure'); END`);
+    const deps = { db, plain, vaults, proxy: {} as never, data: ".", now: () => 1_000_000, home: () => "w", lock: () => null,
+      hub: { store: { getSession: () => ({ archivedAt: null }), subscribe: () => {} } } as never,
+      backfill: { priority: priority.buffer as SharedArrayBuffer } };
+    assert.throws(() => new Secrets(deps), /test failure/);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM vault_grants").get()?.n, remaining);
+    assert.equal(foregroundSeen, true);
+    assert.equal(Atomics.load(priority, 0), 0);
+    db.exec("DROP TRIGGER reject_expiry");
+    const secrets = new Secrets(deps);
+    try { assert.equal(db.prepare("SELECT count(*) AS n FROM vault_grants").get()?.n, 0); }
+    finally { await secrets.close(); }
+  } finally { db.close(); }
+});
+
+test("expired-grant batches stay inside an enclosing transaction", async () => {
+  const db = new DatabaseSync(":memory:"), plain = new PlainStore(db), vaults = new VaultStore(db);
+  try {
+    expiredGrants(db, 70);
+    db.exec("BEGIN");
+    const secrets = new Secrets({ db, plain, vaults, proxy: {} as never, data: ".", now: () => 1_000_000, home: () => "w", lock: () => null,
+      hub: { store: { getSession: () => ({ archivedAt: null }), subscribe: () => {} } } as never });
+    try {
+      assert.equal(db.isTransaction, true);
+      assert.equal(db.prepare("SELECT count(*) AS n FROM vault_grants").get()?.n, 0);
+      db.exec("ROLLBACK");
+      assert.equal(db.prepare("SELECT count(*) AS n FROM vault_grants").get()?.n, 70);
+    } finally { await secrets.close(); }
+  } finally { db.close(); }
+});
+
+test("restoring many expired grants keeps a grant renewed after the startup read", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-restore-many-")), path = join(dir, "stillfail.db");
+  const db = new DatabaseSync(path), other = new DatabaseSync(path), plain = new PlainStore(db), vaults = new VaultStore(db);
+  db.exec("PRAGMA journal_mode=WAL");
+  expiredGrants(db, 70);
+  plain.put({ ws: "w", id: "i1", owner: "p@example.com", version: 0, kind: "token", name: "test", fields: { value: "test-only" }, notes: "",
+    listing: { name: "test", kind: "token", modes: ["env"], hosts: [] }, at: 1000 });
+  const old = (other.prepare("SELECT body FROM vault_grants WHERE id='r019'").get() as { body: string }).body;
+  const renewed = JSON.stringify({ ...JSON.parse(old), until: 2000 });
+  let changed = false;
+  const observed = new Proxy(db, { get(target, key) {
+    if (key === "prepare") return (sql: string) => {
+      const statement = target.prepare(sql);
+      if (!sql.startsWith("DELETE FROM vault_grants")) return statement;
+      return new Proxy(statement, { get(stmt, method) {
+        const value = Reflect.get(stmt, method, stmt);
+        if (method === "run" || method === "all") return (...args: unknown[]) => {
+          if (!changed) {
+            changed = true;
+            other.prepare("UPDATE vault_grants SET body=? WHERE id='r019'").run(renewed);
+          }
+          return value.apply(stmt, args);
+        };
+        return typeof value === "function" ? value.bind(stmt) : value;
+      } });
+    };
+    const value = Reflect.get(target, key, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const prior = Promise.withResolvers<void>();
+  const secrets = new Secrets({ db: observed, plain, vaults, proxy: {} as never, data: dir, now: () => 1_000_000, home: () => "w", lock: () => null,
+    hub: { store: { getSession: () => ({ archivedAt: null }), subscribe: () => {} } } as never, backfill: { previousGone: prior.promise } });
+  try {
+    assert.equal(changed, true);
+    assert.deepEqual(secrets.held("s1").map((h) => h.request.id), ["r019"]);
+    assert.equal((db.prepare("SELECT body FROM vault_grants WHERE id='r019'").get() as { body: string }).body, renewed);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM vault_grants").get()?.n, 1);
+  } finally {
+    prior.resolve();
+    await secrets.close();
+    secrets.keeper.end("s1");
+    other.close(); db.close(); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a renewal racing an expired-grant batch is either retained or loses to the deletion", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-expiry-writer-")), path = join(dir, "stillfail.db");
+  const db = new DatabaseSync(path), plain = new PlainStore(db), vaults = new VaultStore(db);
+  const signal = new Int32Array(new SharedArrayBuffer(8)), prior = Promise.withResolvers<void>();
+  let secrets: Secrets | undefined, worker: Worker | undefined;
+  try {
+    db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000");
+    expiredGrants(db, 70);
+    plain.put({ ws: "w", id: "i1", owner: "p@example.com", version: 0, kind: "token", name: "test", fields: { value: "test-only" }, notes: "",
+      listing: { name: "test", kind: "token", modes: ["env"], hosts: [] }, at: 1000 });
+    const old = (db.prepare("SELECT body FROM vault_grants WHERE id='r050'").get() as { body: string }).body;
+    const renewed = JSON.stringify({ ...JSON.parse(old), until: 2000 });
+    worker = new Worker(`
+      const { parentPort, workerData } = require('node:worker_threads');
+      const { DatabaseSync } = require('node:sqlite');
+      const signal = new Int32Array(workerData.signal), db = new DatabaseSync(workerData.path);
+      db.exec('PRAGMA busy_timeout=5000');
+      parentPort.postMessage('ready');
+      Atomics.wait(signal, 0, 0);
+      Atomics.store(signal, 1, 1); Atomics.notify(signal, 1);
+      try { parentPort.postMessage({ changed: Number(db.prepare("UPDATE vault_grants SET body=? WHERE id='r050'").run(workerData.renewed).changes) }); }
+      catch (error) { parentPort.postMessage({ error: error.message }); }
+      finally { db.close(); }
+    `, { eval: true, workerData: { path, renewed, signal: signal.buffer } });
+    await new Promise<void>((resolve, reject) => { worker!.once("message", () => resolve()); worker!.once("error", reject); });
+    const result = new Promise<{ changed?: number; error?: string }>((resolve, reject) => {
+      worker!.once("message", resolve); worker!.once("error", reject);
+    });
+    db.function("start_writer", () => {
+      Atomics.store(signal, 0, 1); Atomics.notify(signal, 0);
+      if (Atomics.wait(signal, 1, 0, 2000) === "timed-out") throw new Error("the competing writer did not start");
+      return 0;
+    });
+    db.exec("CREATE TRIGGER start_competing_writer BEFORE DELETE ON vault_grants WHEN OLD.id='r010' BEGIN SELECT start_writer(); END");
+    secrets = new Secrets({ db, plain, vaults, proxy: {} as never, data: dir, now: () => 1_000_000, home: () => "w", lock: () => null,
+      hub: { store: { getSession: () => ({ archivedAt: null }), subscribe: () => {} } } as never, backfill: { previousGone: prior.promise } });
+    const outcome = await result;
+    assert.equal(outcome.error, undefined);
+    const row = db.prepare("SELECT body FROM vault_grants WHERE id='r050'").get() as { body: string } | undefined;
+    if (outcome.changed === 1) {
+      assert.equal(row?.body, renewed);
+      assert.deepEqual(secrets.held("s1").map((h) => h.request.id), ["r050"]);
+    } else {
+      assert.equal(outcome.changed, 0);
+      assert.equal(row, undefined);
+    }
+  } finally {
+    Atomics.store(signal, 0, 1); Atomics.notify(signal, 0);
+    await worker?.terminate();
+    prior.resolve();
+    await secrets?.close();
+    secrets?.keeper.end("s1");
+    db.close(); rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("a renewed grant from another connection survives stale startup cleanup", () => {
   const dir = mkdtempSync(join(tmpdir(), "vault-restore-race-")), path = join(dir, "stillfail.db");
