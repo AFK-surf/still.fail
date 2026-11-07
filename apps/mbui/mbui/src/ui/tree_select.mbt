@@ -269,6 +269,8 @@ fn tree_finger_down(tree : @view.Tree, x : Double, y : Double, at : Double) -> U
       if downs_made.val != down {
         return
       }
+      // (its moves since the last frame told what holds it first: Moved before any Off)
+      view_moves_told(tree)
       match view_held.val {
         // (a column it scrolls held it: called off, as a hold handed on calls its cover's off)
         Some(Dragging(id)) if tree.claims_scroll(id) =>
