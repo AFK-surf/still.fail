@@ -3,8 +3,12 @@
 // hand-drawn stroke under it, drawn in one after another, kept for as long as the chat shows. Nothing flashes.
 
 ///|
+/// The last staggered stroke; any further strokes draw in with it.
+let found_last_step : Int = 12
+
+///|
 /// How long the strokes are drawn in for.
-pub let found_draw_ms : Double = @sf.strokes_ms(12)
+pub let found_draw_ms : Double = @sf.strokes_ms(found_last_step)
 
 ///|
 /// The strokes start being drawn in (the message gone to).
@@ -15,18 +19,19 @@ fn found_start(rd : @sfbase.Reading) -> Unit {
 }
 
 ///|
-/// Once the message gone to is laid out: its first word low in it (past 80% of the list's height, the list's box
-/// measured as `pane`) comes to the list's middle, once.
-fn found_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : String) -> Unit {
+/// Once the message gone to is laid out: its first word low in it (past 80% of the list's height) comes to the list's
+/// middle, once.
+fn found_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : Int, pick : String, finding : Bool) -> Unit {
   if !rd.found_centre || rd.found_at == "" {
     return
   }
-  match (c.words_of("pick/" + rd.found_at), @motion.measured_rect(c, pane)) {
+  // det-ok(layout-read-back): the match is in window coordinates; compare it with its pane before scrolling once
+  match (c.words_of("pick/" + pick), c.laid_rect(pane)) {
     (Some(w), Some((_, py, _, ph))) => {
       rd.found_centre = false
       let ranges = @sf.find_words(w.text, rd.found_words)
       // (⌘F's: the time the reader is at in it)
-      let k = if find_chat() != "" { find_k() } else { 0 }
+      let k = if finding { find_k() } else { 0 }
       match ranges.get(if k < ranges.length() { k } else { 0 }) {
         Some((a, b)) =>
           match w.rects(a, b).get(0) {
@@ -65,35 +70,36 @@ fn found_strokes(
   }
   let t = @sf.theme()
   let (cx, cy) = @sf.stroke_corner(@sf.message_stroke)
-  c.layer(fn() {
-    for p in w.pieces {
-      let lay = p.layout
-      let mut i = 0
-      for r in @sf.find_words(lay.text, words) {
-        for rect in lay.rects(r.0, r.1) {
-          let (rx, ry, rw, _) = rect
-          let mut line = 0
-          for l in 0..<lay.line_y.length() {
-            if lay.line_y[l] <= ry {
-              line = l
-            }
+  for p in w.pieces {
+    let lay = p.layout
+    let mut i = 0
+    for r in @sf.find_words(lay.text, words) {
+      for rect in lay.rects(r.0, r.1) {
+        let (rx, ry, rw, _) = rect
+        let mut line = 0
+        for l in 0..<lay.line_y.length() {
+          if lay.line_y[l] <= ry {
+            line = l
           }
-          let part = if faint { 1.0 } else { @sf.stroke_part(drawn, i) }
-          i = i + 1
-          if part <= 0.0 {
-            continue
-          }
-          let left = p.x - bx + rx - 2.0
-          let right = p.x - bx + rx + rw + 2.0
-          let y = p.y - by + lay.line_y[line] + lay.line_base[line] + 4.0
+        }
+        let part = if faint { 1.0 } else { @sf.stroke_part(drawn, if i > found_last_step { found_last_step } else { i }) }
+        i = i + 1
+        if part <= 0.0 {
+          continue
+        }
+        let left = p.x - bx + rx - 2.0
+        let right = p.x - bx + rx + rw + 2.0
+        let y = p.y - by + lay.line_y[line] + lay.line_base[line] + 4.0
+        // Each stroke is positioned from the same box origin, rather than laid out below the one before it.
+        c.layer(fn() {
           c.box(tx=left - cx, ty=y - cy, fn() {
             let ink = if faint { @sf.alpha(t.p.accent, find_faint) } else { t.p.accent }
             @sf.hand_stroke(c, @sf.message_stroke, right - left, part, ink) |> ignore
           })
           |> ignore
-        }
+        })
+        |> ignore
       }
     }
-  })
-  |> ignore
+  }
 }

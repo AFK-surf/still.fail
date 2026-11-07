@@ -107,7 +107,8 @@ pub fn chat_list(
     " " +
     rows_said(key, v, read).to_string()
   let list_style = if held { chat_list_box.then(@ui.style(w=Fixed(list_w))) } else { chat_list_box }
-  let list_box = c.box(style=list_style, tx=(frame_w - list_w) / 2.0, fn() {
+  let list_box_id = c.id("search-pane/" + key)
+  let list_box = c.box(style=list_style, id=list_box_id, tx=(frame_w - list_w) / 2.0, fn() {
     c.sized(list_w, c.height, fn() {
     let rows = fn() {
     c.list(
@@ -231,6 +232,7 @@ pub fn chat_list(
     } else {
       rows()
     }
+    let found_now = Ref(false)
     let la = list_after(
       c,
       src,
@@ -242,12 +244,25 @@ pub fn chat_list(
       bar~,
       room~,
       finding=find_chat() == chat_key(r),
-      on_found=found_start,
+      on_found=fn(rd) {
+        found_start(rd)
+        found_now.val = true
+      },
       find_around~,
     )
     // gone to by a quote: what it quoted, low in the message, to the list's middle
     passage_centre(c, rd, key, "chat-list/" + key)
-    found_centre(c, rd, key, "chat-list/" + key)
+    // a search's first word (or the current occurrence) low in the message, to the middle
+    if rd.found_centre && !found_now.val {
+      let mut pick = rd.found_at
+      for e in list {
+        match e {
+          Said(m) if m.ts == rd.found_at && m.mine && m.outgoing != "" => pick = "o:" + m.outgoing
+          _ => ()
+        }
+      }
+      found_centre(c, rd, key, list_box_id, pick, find_chat() == rk)
+    }
     // the way to the newest: away from its end, or short of the chat's end
     rd.jump = la.away || v.newer
     to_latest(c, src, r, v, la.away || v.newer, room)
