@@ -26,7 +26,6 @@
 .tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; font-family: var(--mono); font-size: 11px; line-height: 1; font-weight: 400; letter-spacing: .04em; text-transform: uppercase;
   border: 1px solid var(--guide); color: var(--graphite); width: max-content; white-space: nowrap; }
 /* This device: an Ink outline over its cell's edges, and its tag in Ink. */
-.dl .primary { box-shadow: inset 0 0 0 1px var(--ink); }
 .dl .primary .go { color: var(--ink); }
 .dl .primary .tag.mine { border-color: var(--ink); color: var(--ink); }
 @media (hover: hover) and (pointer: fine) {
