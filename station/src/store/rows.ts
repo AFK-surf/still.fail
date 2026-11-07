@@ -680,6 +680,10 @@ export const LEGACY_MESSAGE_KEYS_BEFORE = `
 export const MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (${MESSAGE_KEYS_BEFORE}) ORDER BY n DESC`;
 export const LEGACY_MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (${LEGACY_MESSAGE_KEYS_BEFORE}) ORDER BY n DESC`;
 
+/// The entries belonging to a page of messages, without reading the other entries between them.
+export const MESSAGE_PAGE_ENTRIES = `SELECT e.* FROM json_each(?2) j
+  CROSS JOIN entries e ON e.thread=?1 AND e.n=CAST(j.value AS INTEGER) ORDER BY e.n`;
+
 /// The usage page's calls are kept added up by this much time (schema.ts USAGE_QUARTERS): a quarter of an hour, which
 /// every time zone's offset is a whole number of.
 export const QUARTER_MS = 900_000;
