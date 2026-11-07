@@ -654,10 +654,10 @@ fn station_uses(c : @ui.Ctx, address : String, uv : Json?) -> Unit {
     @settings.station_parts[address] = "processes"
   }
   let lit = c.hovered(id)
-  let b = c.box(style=rs_uses, id~, fn() {
-    c.text(@sf.t("web-pages.stations.uses", args=[("name", "still.fail")]), style=if lit { rs_uses_lit } else { rs_uses_words })
-    |> ignore
-    c.box(style=rs_uses_figures, flow=true, fn() {
+  let words = if lit { rs_uses_lit } else { rs_uses_words }
+  let name = @sf.t("web-pages.stations.uses", args=[("name", "still.fail")])
+  let figures = fn(style : @ui.Style, flow : Bool) {
+    c.box(style~, flow~, fn() {
       let figure = fn(label : String, value : String) {
         c.rich([@ui.span(label + " "), @ui.span(value, weight=500, color=t.p.text)], style=rs_uses_words) |> ignore
       }
@@ -668,9 +668,25 @@ fn station_uses(c : @ui.Ctx, address : String, uv : Json?) -> Unit {
       }
     })
     |> ignore
+  }
+  let b = c.box(style=rs_uses, id~, fn() {
+    // its name beside its figures where the line has the room for all of them, else over them, never between two lines
+    c.box(style=rs_uses_ways, one_of=true, fn() {
+      c.box(style=rs_uses_beside, fn() {
+        c.text(name, style=words) |> ignore
+        figures(rs_uses_one_line, false)
+      })
+      |> ignore
+      c.box(style=rs_uses_over, fn() {
+        c.text(name, style=words) |> ignore
+        figures(rs_uses_figures, true)
+      })
+      |> ignore
+    })
+    |> ignore
     @sf.icon(c, "chevron-right", size=rs_uses_chevron, color=if lit { t.p.text } else { t.p.muted }) |> ignore
   })
-  c.semantics(b, Link, id~, label=@sf.t("web-pages.stations.uses", args=[("name", "still.fail")]))
+  c.semantics(b, Link, id~, label=name)
 }
 
 // ── styles (Resources.css.ts; StationCards.css.ts uses) ────────────────
@@ -923,3 +939,23 @@ let rs_uses_figures : @ui.Style = @ui.style(row=true, w=@sf.grow, min_w=S0, gap=
 
 ///|
 let rs_uses_chevron : Double = 14.0
+
+///|
+/// The ways of saying them, what the line has beside the chevron.
+// kept across runs: a value (no field of it changes)
+let rs_uses_ways : @ui.Style = @ui.style(row=true, w=@sf.grow, min_w=S0)
+
+///|
+/// Its name and its figures on a line, as far apart as the figures are.
+// kept across runs: a value (no field of it changes)
+let rs_uses_beside : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
+
+///|
+/// Its figures in one line, whole.
+// kept across runs: a value (no field of it changes)
+let rs_uses_one_line : @ui.Style = @ui.css("row gap=S3_5")
+
+///|
+/// Its name over its figures.
+// kept across runs: a value (no field of it changes)
+let rs_uses_over : @ui.Style = @ui.style(w=@sf.grow, min_w=S0, gap=S1)
