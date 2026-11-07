@@ -1,4 +1,4 @@
-// The apps' accessibility trees ("Agents on a screen"): agent-desktop (vercel-labs, Apache-2.0),
+// The apps' accessibility trees (docs/remote-screens.md, "Agents on a screen"): agent-desktop (vercel-labs, Apache-2.0),
 // carried in this app beside its executable (scripts/native.ts), run with the arguments the station gives. Started by
 // this app, it is this app's: what macOS granted it (Accessibility) is what agent-desktop may do, and the command host
 // it keeps for 15 minutes (its refs' native objects) is this app's too.

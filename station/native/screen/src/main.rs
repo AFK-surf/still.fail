@@ -1,4 +1,4 @@
-// stillfail-screen: this Windows machine's display as the station's `desktop` screen, what
+// stillfail-screen: this Windows machine's display as the station's `desktop` screen (docs/remote-screens.md), what
 // still.fail Helper is on macOS. The station starts one for each view and talks to it on its standard input and
 // output, in the helper's messages (station/src/screens/desktop.ts `TO_HELPER`, native/helper's ScreenView.swift):
 //

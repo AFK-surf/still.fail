@@ -1,4 +1,4 @@
-// A view of the display (`screen.view`): ScreenCaptureKit captures it scaled into the view's
+// A view of the display (`screen.view`, docs/remote-screens.md): ScreenCaptureKit captures it scaled into the view's
 // bounds; VideoToolbox encodes H.264 on the hardware encoder (`codec: "h265"`: H.265 where this Mac encodes it, else
 // H.264; `codec: "jpeg"`: Core Image each picture as a JPEG of quality 0.8), its colours sRGB (BT.709's primaries) or,
 // `gamut: "p3"` (a client that shows a stream tagged so as it is), Display P3's, tagged so in the stream, a picture only once one is asked for and
@@ -15,7 +15,7 @@
 //        5 watch     1 byte       1: say each copy made on the Mac from now on (message 5 out), 0: stop
 //        6 reveal    UTF-8        a file's path, shown selected in Finder
 //        7 rate      4 bytes      bits a second (big-endian) to encode at from the next frame on (the link carries no
-//                                 more, "Pace")
+//                                 more: docs/remote-screens.md, "Pace")
 //        8 bounds    JSON         {maxWidth, maxHeight, region?}: the pictures from now on fitted into these (a config
 //                                 first), of `region` of the display alone ({x, y, w, h}, 0..1 of it: a client zoomed
 //                                 in) or, without it, of the whole
@@ -126,7 +126,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   var wanted = 0
   var encoding = false
   var forceKey = true
-  /// The key frame asked is of the picture last encoded (the screen at rest, sent again sharper
+  /// The key frame asked is of the picture last encoded (the screen at rest, sent again sharper: docs/remote-screens.md
   /// "Still"), and whether the session encodes finer now: its QP at most `stillQP`, at twice the bit rate, where that is
   /// `stillFrom` or more (a narrow link's would take seconds to go). The next moving picture as before.
   var still = false

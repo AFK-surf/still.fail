@@ -22,7 +22,7 @@ pub(super) mod gso {
         // stillfail: no segmentation offload on Android: a datagram a sendmsg. An Android emulator's network takes a
         // segmented burst without an error and drops all of it, so a QUIC path that carries more than a packet or
         // two at once (a picture pasted on a screen) went dark until iroh let it go 15 s later, and only then went
-        // through a relay.
+        // through a relay (docs/mesh-lan.md).
         if cfg!(target_os = "android") {
             return 1;
         }

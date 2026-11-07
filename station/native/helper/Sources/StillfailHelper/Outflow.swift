@@ -1,4 +1,4 @@
-// Data outflow: who a program at the other end of the station's outflow socket is, by the audit
+// Data outflow (docs/data-outflow.md): who a program at the other end of the station's outflow socket is, by the audit
 // token the station took of it as it connected (its code signature as macOS checks it now). The workspace's admins
 // answer its request in still.fail.
 import Foundation

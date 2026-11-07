@@ -1,4 +1,4 @@
-//! The station's iroh for the station in TypeScript ( §3): its endpoint as
+//! The station's iroh for the station in TypeScript (docs/station-ts-native.md §3): its endpoint as
 //! mesh/station/src/main.rs `serve_mesh` makes it (the station's key, its relays, found on the LAN by mDNS and by relay
 //! through the Mainline DHT, Cubic by default with a 256 KiB initial window), home on every one of its relays at once
 //! (one connection to it has a path through each, PATH_IDLE), keepers on relays added since (keep.rs), connections both

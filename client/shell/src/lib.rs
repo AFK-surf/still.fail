@@ -111,7 +111,7 @@ struct Halves {
     tap: Mutex<Option<ScreenTap>>,
 }
 
-/// A remote screen's stream read in the shell (Wire; client/core-ts screen-frames.ts): its
+/// A remote screen's stream read in the shell (docs/remote-screens.md, Wire; client/core-ts screen-frames.ts): its
 /// frames taken apart as its pieces come; a config, a video frame, the sound's config and its packets said to the app at
 /// once as the core's progress of the view's call (`{id, value}`, the bytes beside it: what screens.ts says of them),
 /// so they go through neither the core's JS nor its thread; the rest (its state, a clipboard, what is not one of them)

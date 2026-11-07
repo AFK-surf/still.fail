@@ -1,4 +1,4 @@
-// A view of an iOS Simulator (`simulator.view`): serve-sim's capture
+// A view of an iOS Simulator (`simulator.view`, docs/remote-screens.md "Simulators"): serve-sim's capture
 // (vendor/serve-sim) reads the booted device's framebuffer through CoreSimulator, each new picture scaled into the
 // view's bounds and encoded as the display's are (ScreenView.swift: its messages, its encoders, a picture only when
 // one is asked for and new); its HID injector posts the input as the device's own touches, keys and buttons. Nothing

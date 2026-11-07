@@ -1,5 +1,5 @@
 //! stillfail-runner: keeps one agent process (claude, codex app-server) for the station, so the agent outlives the
-//! station restarting or crashing (section 1).
+//! station restarting or crashing (docs/station-ts-native.md, section 1).
 //!
 //! The runner holds the agent's stdin and appends its stdout and stderr to `<id>.out` and `<id>.err` as they come. A
 //! station attaches on `<id>.sock` and is sent what it has not acknowledged yet, then whatever follows; the agent's
