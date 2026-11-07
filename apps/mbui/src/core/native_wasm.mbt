@@ -42,17 +42,12 @@ fn ffi_wall_ms() -> Double = "mbhost" "mbc_wall_ms"
 
 fn ffi_screen_ack(call : Double, ts : Double) -> Int = "mbhost" "mbc_screen_ack"
 
+/// The scheme the system's browser session comes back on: the engine's (Android: the app's package), else stillfail.
 fn mbw_mbc_auth_scheme() -> Int = "mbhost" "mbc_auth_scheme"
 
 ///|
-fn ffi_auth_scheme() -> String {
-  @wasmrt.take_string(mbw_mbc_auth_scheme())
-}
-
-///|
-/// The scheme the system's browser session comes back on: the engine's (Android: the app's package), else stillfail.
 fn auth_scheme() -> String {
-  ffi_auth_scheme()
+  @wasmrt.take_string(mbw_mbc_auth_scheme())
 }
 
 ///|

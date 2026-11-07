@@ -6,7 +6,7 @@
 let supported = true
 
 ///|
-extern "C" fn ffi_init_offscreen(w : Double, h : Double, scale : Double) -> Unit = "mb_render_init_offscreen"
+extern "C" fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit = "mb_render_init_offscreen"
 
 ///|
 extern "C" fn ffi_set_offscreen_view(w : Double, h : Double, scale : Double) -> Unit = "mb_render_set_size"
@@ -32,7 +32,7 @@ extern "C" fn ffi_close(frames : Int) -> Int = "mbf_close"
 extern "C" fn ffi_finish(publish : Int) -> Int = "mbf_finish"
 
 ///|
-extern "C" fn ffi_spin(ms : Double) -> Unit = "mbf_spin"
+extern "C" fn spin(ms : Double) -> Unit = "mbf_spin"
 
 ///|
 #borrow(name)
@@ -76,7 +76,8 @@ extern "C" fn ffi_draw_timed(
 extern "C" fn ffi_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit = "mb_host_render_dirty"
 
 ///|
-extern "C" fn ffi_now_ms() -> Double = "mbf_now_ms"
+/// The machine's clock (ms): what a bench times the work by.
+extern "C" fn now_ms() -> Double = "mbf_now_ms"
 
 ///|
 /// The instances drawn offscreen as a window's frame is, only the parts said to differ (`parts`: none, nothing; one
@@ -94,17 +95,6 @@ fn draw_timed(
     ffi_dirty(p.0, p.1, p.2, p.3)
   }
   ffi_draw_timed(inst, count, r, g, b, out)
-}
-
-///|
-/// The machine's clock (ms): what a bench times the work by.
-fn now_ms() -> Double {
-  ffi_now_ms()
-}
-
-///|
-fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
-  ffi_init_offscreen(w, h, scale)
 }
 
 ///|
@@ -152,11 +142,6 @@ fn snapshot(path : String) -> Bool {
 ///|
 fn snapshot_transparent(path : String) -> Bool {
   ffi_snapshot_transparent(path) != 0
-}
-
-///|
-fn spin(ms : Double) -> Unit {
-  ffi_spin(ms)
 }
 
 ///|

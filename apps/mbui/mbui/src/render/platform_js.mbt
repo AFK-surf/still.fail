@@ -10,22 +10,12 @@ extern "js" fn js_supported() -> Bool =
 let supported : Bool = js_supported()
 
 ///|
-extern "js" fn js_arg(name : String) -> String =
+extern "js" fn arg(name : String) -> String =
   #|(n) => globalThis.__mbrender.arg(n)
 
 ///|
-fn arg(name : String) -> String {
-  js_arg(name)
-}
-
-///|
-extern "js" fn js_init_offscreen(w : Double, h : Double, scale : Double) -> Unit =
+extern "js" fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit =
   #|(w, h, s) => globalThis.__mbhost.renderInit(w, h, s)
-
-///|
-fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
-  js_init_offscreen(w, h, scale)
-}
 
 ///|
 extern "js" fn js_draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit =
@@ -37,13 +27,8 @@ fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Doub
 }
 
 ///|
-extern "js" fn js_read_text(path : String) -> String =
+extern "js" fn read_text(path : String) -> String =
   #|(p) => globalThis.__mbrender.readText(p)
-
-///|
-fn read_text(path : String) -> String {
-  js_read_text(path)
-}
 
 ///|
 /// (an image's bytes beside the list: not given to a page; a list carries its own, `bytes N …`)
@@ -52,13 +37,8 @@ fn read_bytes(_path : String) -> Bytes {
 }
 
 ///|
-extern "js" fn js_say(s : String) -> Unit =
+extern "js" fn say(s : String) -> Unit =
   #|(s) => globalThis.__mbrender.say(s)
-
-///|
-fn say(s : String) -> Unit {
-  js_say(s)
-}
 
 ///|
 /// The browser driver has already decoded the images before this synchronous program starts.
