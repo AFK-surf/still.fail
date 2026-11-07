@@ -456,6 +456,9 @@ pub struct Ctx {
   mut handle_dy : Double
   // persistent widget state
   lists : Map[Int, ListState]
+  /// Positions followed by readers, and the lists laid out in this pass whose readers need telling.
+  list_positions : Map[Int, @signals.Signal[ListSnapshot?]]
+  list_positions_due : Array[Int]
   editors : Map[Int, EditorState]
   /// key catchers and the soft keyboard's height (device.mbt)
   dev : DeviceState
@@ -794,6 +797,8 @@ fn Ctx::new() -> Ctx {
     edit_can_told: -1,
     handle_dy: 0.0,
     lists: Map::new(),
+    list_positions: Map::new(),
+    list_positions_due: [],
     editors: Map::new(),
     dev: DeviceState::new(),
     springs: Map::new(),
@@ -997,6 +1002,12 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.press_chain.clear()
   self.press_chain.shrink_to_fit()
   self.lists.clear()
+  let positions = self.list_positions.values().to_array()
+  self.list_positions_due.clear()
+  for position in positions {
+    position.set(None)
+  }
+  self.list_positions.clear()
   self.editors.clear()
   self.springs.clear()
   self.movers.clear()

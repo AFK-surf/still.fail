@@ -180,6 +180,10 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     _ => ()
   }
   pick_clear()
+  match readings.get(k) {
+    Some(reading) => reading.stop_paging()
+    None => ()
+  }
   readings.remove(k)
   // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
   // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again

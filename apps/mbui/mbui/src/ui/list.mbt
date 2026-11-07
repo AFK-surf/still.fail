@@ -660,6 +660,10 @@ fn Ctx::place_list(
     Some(st) => st
     None => return
   }
+  match self.list_positions.get(n.id) {
+    Some(position) if position.watched() => self.list_positions_due.push(n.id)
+    _ => ()
+  }
   st.vp_h = ih
   // (shown this frame: what its rows came, went and changed for, said from the next, ListRows::rows)
   match st.causes {
@@ -1368,7 +1372,14 @@ pub(all) struct ListInfo {
   /// when its glide after what came (to its end, to a row it follows) is over, on the frames' clock: inf while its way
   /// is not known yet, -1 none. What the reader's hand does (a finger holding it, a fling, a wheel) is not in it
   glide_rest : Double
-}
+} derive(Eq, Debug)
+
+///|
+/// A list's last completed layout: the visible rows and the first row's position within the viewport.
+pub(all) struct ListSnapshot {
+  info : ListInfo
+  place : (Int, Double, Double)?
+} derive(Eq, Debug)
 
 ///|
 /// How list `key` stood after the last layout; None before its first. Read as the view builds, it is read back
@@ -1427,6 +1438,75 @@ pub fn ListReader::info(self : ListReader) -> ListInfo? {
 /// Where the list is now (Ctx::list_place's).
 pub fn ListReader::place(self : ListReader) -> (Int, Double, Double)? {
   self.ctx.list_place_of(self.id)
+}
+
+///|
+/// Follow the list's position. A signal effect that reads this runs again when its completed layout changes, including
+/// a move within the same row or a viewport resize. None is returned until the list is first laid out or its page is
+/// released.
+/// The effect belongs to its caller and must be stopped when that caller goes.
+pub fn ListReader::snapshot(self : ListReader) -> ListSnapshot? {
+  let position = match self.ctx.list_positions.get(self.id) {
+    Some(position) => position
+    None => {
+      let position : @signals.Signal[ListSnapshot?] = @signals.signal(
+        self.ctx.list_snapshot_of(self.id),
+        same=fn(a, b) { a == b },
+      )
+      self.ctx.list_positions[self.id] = position
+      position
+    }
+  }
+  if !position.watched() {
+    position.set(self.ctx.list_snapshot_of(self.id))
+  }
+  position.get()
+}
+
+///|
+/// Whether two readers follow the same list in the same context.
+pub fn ListReader::same(self : ListReader, other : ListReader) -> Bool {
+  self.id == other.id && physical_equal(self.ctx, other.ctx)
+}
+
+///|
+/// Publish the completed layout before the frame's usual position notifications. An old view can use this after its
+/// build to batch its new business data with the list position; it must not be called during a build or layout.
+pub fn ListReader::sync_snapshot(self : ListReader) -> Unit {
+  if building.val {
+    return
+  }
+  match self.ctx.list_positions.get(self.id) {
+    Some(position) => position.set(self.ctx.list_snapshot_of(self.id))
+    None => ()
+  }
+}
+
+///|
+fn Ctx::list_snapshot_of(self : Ctx, id : Int) -> ListSnapshot? {
+  match self.lists.get(id) {
+    Some(st) if st.laid >= 0 =>
+      match self.list_info_of(id) {
+        Some(info) => Some({ info, place: self.list_place_of(id) })
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Ctx::list_positions_tell(self : Ctx) -> Unit {
+  if self.list_positions_due.is_empty() {
+    return
+  }
+  let due = self.list_positions_due.copy()
+  self.list_positions_due.clear()
+  for id in due {
+    match self.list_positions.get(id) {
+      Some(position) if position.watched() => position.set(self.list_snapshot_of(id))
+      _ => ()
+    }
+  }
 }
 
 ///|

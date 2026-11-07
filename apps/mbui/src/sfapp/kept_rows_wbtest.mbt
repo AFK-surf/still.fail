@@ -17,7 +17,12 @@ fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false
   t.set_a11y(a11y)
   t.said() |> ignore
   let out = []
-  let mut kept = 0
+  let kept = Ref(0)
+  // Rows can be kept between the moments sampled below. Compare what every frame drew and said, including the drag's.
+  t.each_frame(Some(fn() {
+    kept.val = kept.val + t.rows_kept()
+    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
+  }))
   let x = w * 0.7
   let wheel = w >= 1000.0
   if wheel {
@@ -27,8 +32,6 @@ fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false
   }
   for _ in 0..<6 {
     t.run_for(kept_rows_step_ms)
-    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
-    kept = kept + t.rows_kept()
   }
   if wheel {
     t.wheel(x, h * 0.5, h * 0.3)
@@ -37,10 +40,9 @@ fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false
   }
   for _ in 0..<4 {
     t.run_for(kept_rows_step_ms)
-    out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
-    kept = kept + t.rows_kept()
   }
-  (out, kept)
+  t.each_frame(None)
+  (out, kept.val)
 }
 
 ///|
