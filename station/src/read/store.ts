@@ -944,6 +944,24 @@ export function pendingCard(s: Store, thread: number): [MessageRow, Json] | null
   return asked === undefined ? null : cardAt(s, thread, asked.n);
 }
 
+/// The pending post's number for chat history. Its merged text is not needed to mark a card as pending.
+export function pendingCardNumber(s: Store, thread: number): number | null {
+  s.db.exec("SAVEPOINT pending_card_number_read");
+  try {
+    if (!cardPostsReady(s.db, thread)) {
+      if (threadsWithCards(s, [thread]).length === 0) return null;
+      throw new Refused(503, CARD_POSTS_PENDING + JSON.stringify([thread]));
+    }
+    const asked = one(s, CARD_POST_LATEST, thread);
+    if (asked === undefined) return null;
+    const post = one(s, "SELECT card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, asked.n);
+    if (!post || cardOf(post.card, post.options) === undefined) return null;
+    if (one(s, "SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, asked.n)) return null;
+    if (one(s, "SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked.n)) return null;
+    return asked.n;
+  } finally { s.db.exec("RELEASE pending_card_number_read"); }
+}
+
 /// Prepare only threads a read will actually ask about, together so a list is not rebuilt once per old chat.
 export function requireCardPosts(s: Store, threads: readonly number[]): void {
   const missing = [...new Set(threads)].filter((thread) => !cardPostsReady(s.db, thread));

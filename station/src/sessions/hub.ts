@@ -168,6 +168,8 @@ export class Hub {
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
   /// Read a chat_history page and its optional before-message boundary off the station thread.
   historyMessages: ((thread: number, before: string | null, limit: number) => Promise<MessageRow[] | null>) | null = null;
+  /// Read a chat history's pending card post off the station thread.
+  historyPendingCard: ((thread: number) => Promise<number | null>) | null = null;
   /// Prepare an old session's up-job lookup before its archived actor stops its jobs.
   prepareSessionUpJobs: ((session: string) => Promise<void>) | null = null;
   /// The station's logins (logins/module.ts sets it): the page a Slack login card opens for one (null: no card there,
