@@ -618,6 +618,8 @@ pub struct Tree {
   /// the nodes said to be modal layers (View::modal, on), living: which is topmost asked of where each is among what
   /// holds it (Tree::modal_top)
   modals : Array[Int]
+  /// How many living nodes take back: none means finding its taker needs no walk of the tree.
+  mut backs : Int
   /// how deep in a change being committed (Tree::at_cause, an event) it is now, and whether what a modal layer said is to
   /// be told as all of it is committed (Tree::modals_told): what a change does in between (a row put after the rest,
   /// then put in its place) never seen half done
@@ -850,6 +852,7 @@ pub fn Tree::new(
     held_under: -2,
     held_under_of: None,
     modals: [],
+    backs: 0,
     committing: 0,
     afters: [],
     modals_due: false,
@@ -1480,6 +1483,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.composed.clear()
   self.hosting = -1
   self.modals.clear()
+  self.backs = 0
   // (its nodes but the root and what they keep dropped, their room given back: the tree itself may never be let go of,
   // held by what its arrays were emptied of (moonc's native backend, moonbitlang/core#4611), each Tester's left with
   // all it held; its root kept, holding nothing and let go, for what is asked of it after: it answers none)
@@ -4849,6 +4853,9 @@ fn View::let_go(self : View) -> Unit {
     k.let_go()
   }
   n.live = false
+  if n.on_back is Some(_) || n.on_back_step is Some(_) {
+    self.tree.backs = self.tree.backs - 1
+  }
   match self.tree.modals.search(self.at) {
     Some(i) => self.tree.modals.remove(i) |> ignore
     None => ()
