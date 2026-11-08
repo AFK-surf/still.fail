@@ -38,7 +38,14 @@
 // round), 11 a band of a shape (shape.mbt: 4 half its stroke's width, 0 a
 // fill; 6 1 a fill by the even-odd rule; 12 its first piece, 13 how many), 12
 // the pieces of the frame's shapes, after every instance drawn (shape.mbt:
-// six to an instance, none drawn).
+// six to an instance, none drawn), 13 a header: a group of instances the host
+// keeps (a list's row kept, view_ride.mbt's ride_head; @hostapi.group_set),
+// drawn in its place and the room after it, moved by 0, 1 (12 the group, 13
+// the first of its instances, 14 how many: the header's room and that after
+// it, unwritten; 15 how far on its shapes' pieces are among the frame's).
+// What works on the frame's instances where they are draws a header out first
+// (Ctx::flat_from), or passes over its room (inst_after); a Tester's frame is
+// drawn out as its paint ends, as a host draws it (src/host/groups.h).
 
 ///|
 let inst_size = 60

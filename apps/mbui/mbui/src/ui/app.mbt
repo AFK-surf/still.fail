@@ -523,6 +523,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
   c.moved_place()
   c.ninst = 0
+  c.spans_cut()
   match fake.val {
     Some(f) => f.frame_failed_images.clear()
     None => ()
@@ -642,6 +643,11 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()
+  // (a Tester's frame drawn out where headers stand for what a host keeps, as the host would draw it: what reads it
+  // reads the instances drawn)
+  if fake.val is Some(_) {
+    c.flat_from(0)
+  }
   match frame_hook.val {
     Some(f) if !looks_rebuilt.val => f()
     _ => ()

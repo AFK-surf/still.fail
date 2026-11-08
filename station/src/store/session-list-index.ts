@@ -4,9 +4,9 @@ import type { DatabaseSync } from "node:sqlite";
 
 const VERSION = 1;
 export const SESSION_LIST_PENDING = "session list index is still being prepared";
-export const SESSION_LIST_FIRST = `SELECT CAST(rowid AS TEXT) AS position, key FROM sessions
+export const SESSION_LIST_FIRST = `SELECT CAST(rowid AS TEXT) AS position FROM sessions
   WHERE rowid <= CAST(? AS INTEGER) ORDER BY rowid LIMIT ?`;
-export const SESSION_LIST_NEXT = `SELECT CAST(rowid AS TEXT) AS position, key FROM sessions
+export const SESSION_LIST_NEXT = `SELECT CAST(rowid AS TEXT) AS position FROM sessions
   WHERE rowid > CAST(? AS INTEGER) AND rowid <= CAST(? AS INTEGER) ORDER BY rowid LIMIT ?`;
 
 // The scope contains one workspace, and at most one more for the home workspace's pre-workspace sessions. The index
@@ -39,6 +39,8 @@ const matches = (index: string, row: string) => `${index}.kind = ${kind(row)} AN
 const see = (key: string) => `INSERT INTO session_list_rows (session, kind, ws, archived, connect)
   SELECT ${values("s")} FROM sessions s WHERE s.key = ${key}
     AND NOT EXISTS (SELECT 1 FROM session_list_rows i WHERE ${matches("i", "s")});`;
+// Keep session keys in SQLite: some Node text readers truncate them at an embedded NUL.
+export const SESSION_LIST_SEE_POSITION = see("(SELECT key FROM sessions WHERE rowid = CAST(? AS INTEGER))");
 const reconcile = `DELETE FROM session_list_rows WHERE (kind, ws, archived, connect, session) IN
     (SELECT kind, ws, archived, connect, session FROM session_list_replaced)
   AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.key = session_list_rows.session AND ${matches("session_list_rows", "s")});
@@ -105,11 +107,40 @@ export function sessionListStep(db: DatabaseSync, limit = 256): { done: boolean;
     if (meta.complete === 1) { db.exec("COMMIT"); return { done: true, visited: 0 }; }
     const rows = (meta.last_rowid === null
       ? db.prepare(SESSION_LIST_FIRST).all(meta.end_rowid, limit)
-      : db.prepare(SESSION_LIST_NEXT).all(meta.last_rowid, meta.end_rowid, limit)) as { position: string; key: string }[];
-    const put = db.prepare(see("?"));
-    for (const row of rows) put.run(row.key);
+      : db.prepare(SESSION_LIST_NEXT).all(meta.last_rowid, meta.end_rowid, limit)) as { position: string }[];
+    const put = db.prepare(SESSION_LIST_SEE_POSITION);
+    for (const row of rows) put.run(row.position);
     const done = rows.length < limit;
     db.prepare("UPDATE session_list_meta SET last_rowid = CAST(? AS INTEGER), complete = ? WHERE id = 1")
+      .run(rows.at(-1)?.position ?? meta.last_rowid, done ? 1 : 0);
+    db.exec("COMMIT");
+    return { done, visited: rows.length };
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+// Version 1 lists prepared by older stations may have missed NUL or non-UTF-8 session keys. Search may use the list
+// as an exhaustive candidate set only after those rows have been revisited. Existing triggers maintain new changes.
+export function auditSessionListStep(db: DatabaseSync, limit = 256): { done: boolean; visited: number } {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("session list audit batch must be positive");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!sessionListReady(db)) { db.exec("COMMIT"); return { done: false, visited: 0 }; }
+    db.exec(`CREATE TABLE IF NOT EXISTS search_job_session_audit (id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL,
+      last_rowid INTEGER, end_rowid INTEGER, complete INTEGER NOT NULL) WITHOUT ROWID;
+      INSERT INTO search_job_session_audit (id, version, last_rowid, end_rowid, complete)
+        SELECT 1, 1, NULL, (SELECT rowid FROM sessions ORDER BY rowid DESC LIMIT 1), NOT EXISTS (SELECT 1 FROM sessions LIMIT 1)
+        WHERE NOT EXISTS (SELECT 1 FROM search_job_session_audit WHERE id = 1)`);
+    const meta = db.prepare(`SELECT version, CAST(last_rowid AS TEXT) AS last_rowid, CAST(end_rowid AS TEXT) AS end_rowid, complete
+      FROM search_job_session_audit WHERE id = 1`).get() as { version: number; last_rowid: string | null; end_rowid: string | null; complete: number };
+    if (meta.version !== 1) throw new Error(`search job session audit version ${meta.version} is incompatible with 1`);
+    if (meta.complete === 1) { db.exec("COMMIT"); return { done: true, visited: 0 }; }
+    const rows = (meta.last_rowid === null
+      ? db.prepare(SESSION_LIST_FIRST).all(meta.end_rowid, limit)
+      : db.prepare(SESSION_LIST_NEXT).all(meta.last_rowid, meta.end_rowid, limit)) as { position: string }[];
+    const put = db.prepare(SESSION_LIST_SEE_POSITION);
+    for (const row of rows) put.run(row.position);
+    const done = rows.length < limit;
+    db.prepare("UPDATE search_job_session_audit SET last_rowid = CAST(? AS INTEGER), complete = ? WHERE id = 1")
       .run(rows.at(-1)?.position ?? meta.last_rowid, done ? 1 : 0);
     db.exec("COMMIT");
     return { done, visited: rows.length };

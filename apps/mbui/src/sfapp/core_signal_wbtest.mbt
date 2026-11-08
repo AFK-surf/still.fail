@@ -1055,6 +1055,31 @@ test "asking for more chats moves the signal reader while a direct reader keeps 
 }
 
 ///|
+test "a signal keeps the shown chat page until the next page arrives" {
+  @sfbase.chat_limits_reset()
+  let client = @core.Client::new(fn(_) {  })
+  let src = signal_client_source(client)
+  let first_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 50 }
+  let next_params : Map[String, Json] = { "scope": "ws1", "mine": false, "limit": 100 }
+  let shown = Ref("")
+  let stop = @signals.effect(fn() { shown.val = @sfbase.text(@sfbase.chats_topic(src, "ws1").value, "marker") })
+  guard client.peek_topic("chats", params=first_params) is Some(first) else { fail("the first page was not followed") }
+  client.receive_json({ "id": Json::number(first.id.to_double()), "value": { "marker": "first" } })
+  assert_eq(shown.val, "first")
+  @sfbase.chats_ask_more(src, "ws1", "all", @sfbase.chats_page)
+  guard client.peek_topic("chats", params=next_params) is Some(next) else { fail("the next page was not followed") }
+  assert_eq(shown.val, "first", msg="the first page remains visible while the next is pending")
+  assert_true(client.peek_topic("chats", params=first_params) is Some(_))
+  client.receive_json({ "id": Json::number(next.id.to_double()), "value": { "marker": "next" } })
+  assert_eq(shown.val, "next")
+  assert_true(client.peek_topic("chats", params=first_params) is None, msg="the old page leaves after the handoff")
+  assert_true(client.peek_topic("chats", params=next_params) is Some(_))
+  stop()
+  assert_true(client.peek_topic("chats", params=next_params) is None, msg="the last reader releases the new page")
+  @sfbase.chat_limits_reset()
+}
+
+///|
 test "an untracked build read shares an existing graph reader without retaining the subscription" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })

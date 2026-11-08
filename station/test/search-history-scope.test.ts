@@ -28,7 +28,7 @@ test("a history search brings out only sessions visible to its workspace", async
             sql = sql.replace("SELECT *", "SELECT *, visit_history_session() AS visited");
           } else if (sql.includes("FROM connects c CROSS JOIN workspaces w")) {
             query = sql;
-            sql = sql.replace("SELECT s.*", "SELECT s.*, visit_history_session() AS visited");
+            sql = sql.replace("SELECT s.key, s.workspace, s.cwd, s.title", "SELECT s.key, s.workspace, s.cwd, s.title, visit_history_session() AS visited");
           }
           return target.prepare(sql);
         };

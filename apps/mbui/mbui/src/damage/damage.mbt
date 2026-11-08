@@ -143,12 +143,32 @@ pub struct Damage {
   /// the first instances that changed in it, said (Damage::told), while `telling`
   priv seen : Array[String]
   priv mut telling : Bool
+  /// how far each group a host keeps reaches (Damage::group_set), wherever it is moved to: what a header of it (kind
+  /// 13, src/ui/scene.mbt) covers, moved by its 0, 1
+  priv groups : Map[Int, Rect]
+  /// a frame with headers, each instance once and each header once, its group's room after it left out (Damage::next)
+  priv mut units : FixedArray[Double]
 }
 
 ///|
 /// Nothing presented yet: the next frame is drawn whole.
 pub fn Damage::new() -> Damage {
-  { prev: FixedArray::make(0, 0.0), n: 0, w: 0.0, h: 0.0, scale: 0.0, r: 0.0, g: 0.0, b: 0.0, has: false, why: 0, seen: [], telling: false }
+  {
+    prev: FixedArray::make(0, 0.0),
+    n: 0,
+    w: 0.0,
+    h: 0.0,
+    scale: 0.0,
+    r: 0.0,
+    g: 0.0,
+    b: 0.0,
+    has: false,
+    why: 0,
+    seen: [],
+    telling: false,
+    groups: {},
+    units: FixedArray::make(0, 0.0),
+  }
 }
 
 ///|
@@ -160,7 +180,8 @@ pub fn Damage::forget(self : Damage) -> Unit {
 ///|
 /// The parts of the frame `inst` (`count` instances, a window `w` × `h` points at `scale`, its ground `r`, `g`, `b`)
 /// that differ from the frame given before it, in points: each (x, y, w, h), at most `most_parts`, apart; one with w < 0
-/// all of it; none, nothing. The frame is kept, the next compared with it.
+/// all of it; none, nothing. The frame is kept, the next compared with it. `groups`: it holds headers (kind 13), each
+/// compared as itself, a group's number never another's, the room after it its group's.
 pub fn Damage::next(
   self : Damage,
   inst : FixedArray[Double],
@@ -171,7 +192,9 @@ pub fn Damage::next(
   r : Double,
   g : Double,
   b : Double,
+  groups? : Bool = false,
 ) -> Array[(Double, Double, Double, Double)] {
+  let (inst, count) = if groups { self.units_of(inst, count) } else { (inst, count) }
   let same_frame = self.has &&
     w == self.w &&
     h == self.h &&
@@ -196,6 +219,57 @@ pub fn Damage::next(
     self.keep(inst, count, w, h, scale, r, g, b)
   }
   out
+}
+
+///|
+/// Group `id` of a host's (@hostapi.group_set: `n` instances in `inst`) kept, as far as it reaches wherever it is
+/// moved, for a header of it to be compared.
+pub fn Damage::group_set(self : Damage, id : Int, inst : FixedArray[Double], n : Int) -> Unit {
+  let r = Rect::none()
+  for k in 0..<n {
+    reach(inst, k, r, cut=false)
+  }
+  self.groups[id] = r
+}
+
+///|
+/// Group `id` let go.
+pub fn Damage::group_drop(self : Damage, id : Int) -> Unit {
+  self.groups.remove(id)
+}
+
+///|
+/// The frame `inst` (`count` instances, headers among them) as its units: each instance, each header, its group's room
+/// after it left out.
+fn Damage::units_of(self : Damage, inst : FixedArray[Double], count : Int) -> (FixedArray[Double], Int) {
+  if self.units.length() < count * inst_size {
+    self.units = FixedArray::make(count * inst_size, 0.0)
+  }
+  let u = self.units
+  let mut k = 0
+  let mut n = 0
+  while k < count {
+    inst.blit_to(u, len=inst_size, src_offset=k * inst_size, dst_offset=n * inst_size)
+    n = n + 1
+    k = if kind_at(inst, k) == 13 { k + inst[k * inst_size + 14].to_int() } else { k + 1 }
+  }
+  (u, n)
+}
+
+///|
+/// As far as any pixel of unit `k` of `a` reaches (reach), a header's its group's moved where it says.
+fn Damage::reach_of(self : Damage, a : FixedArray[Double], k : Int, into : Rect) -> Unit {
+  let o = k * inst_size
+  if kind_at(a, k) != 13 {
+    reach(a, k, into)
+    return
+  }
+  match self.groups.get(a[o + 12].to_int()) {
+    Some(g) if !g.empty() => into.add(g.x0 + a[o], g.y0 + a[o + 1], g.x1 + a[o], g.y1 + a[o + 1])
+    Some(_) => ()
+    // (one not known: all of it)
+    None => into.add(-1.0e9, -1.0e9, 1.0e9, 1.0e9)
+  }
 }
 
 ///|
@@ -484,8 +558,9 @@ fn glass_box(a : FixedArray[Double], k : Int, into : Rect) -> Unit {
 }
 
 ///|
-/// As far as any pixel of instance `k` of `a` reaches, added to `into`.
-fn reach(a : FixedArray[Double], k : Int, into : Rect) -> Unit {
+/// As far as any pixel of instance `k` of `a` reaches, added to `into`; `cut`, in its clip (not: wherever it is moved
+/// with what cuts it or not).
+fn reach(a : FixedArray[Double], k : Int, into : Rect, cut? : Bool = true) -> Unit {
   let o = k * inst_size
   let kind = kind_at(a, k)
   if kind == 12 {
@@ -521,7 +596,7 @@ fn reach(a : FixedArray[Double], k : Int, into : Rect) -> Unit {
     y1 = py + rr
   }
   // in its clip, where the clip is where it is drawn (not turned with it)
-  if !turned || a[o + 35] > 0.5 {
+  if cut && (!turned || a[o + 35] > 0.5) {
     x0 = dmax(x0, a[o + 16] - reach_pad)
     y0 = dmax(y0, a[o + 17] - reach_pad)
     x1 = dmin(x1, a[o + 18] + reach_pad)
@@ -585,11 +660,11 @@ fn Damage::changed(
     was.clear()
     now.clear()
     if k_old >= 0 {
-      reach(prev, k_old, was)
+      self.reach_of(prev, k_old, was)
       was.cut_to(window)
     }
     if k >= 0 {
-      reach(inst, k, now)
+      self.reach_of(inst, k, now)
       now.cut_to(window)
     }
     let grew = if !was.empty() && !now.empty() && was.near(now) {

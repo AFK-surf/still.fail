@@ -284,10 +284,15 @@ fn chats_pane_node(
     }
   })
   // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
-  v.reacts(fn() { (scroll.drawn(v.tree), scroll.reach(), @sfbase.chats_more(src, id, filter)) }, fn(now) {
+  // (how many more the core has, read anew only as its list changes, not each time the column is scrolled)
+  let more = @signals.computed(fn(_) { @sfbase.chats_more(src, id, filter) })
+  v.reacts(fn() { (scroll.drawn(v.tree), scroll.reach(), more.get()) }, fn(now) {
     let (at, most, more) = now
+    if more <= 0 {
+      return
+    }
     let (_, _, _, h) = v.placed_window_now()
-    if more > 0 && h > 0.0 && most - at < 1.5 * h {
+    if h > 0.0 && most - at < 1.5 * h {
       @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
     }
   })

@@ -449,6 +449,9 @@ struct Node {
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
+  /// as big as what holds it says, whatever it holds (View::lays_out_alone): what changes under it laid out again from
+  /// it alone, nothing above it
+  mut alone : Bool
   /// its boxes to be put again in order as the change being made ends (Tree::boxes_held, View::boxes_again)
   mut boxes_due : Bool
   /// a boundary's (View::boundary): told of a fault under it
@@ -595,6 +598,9 @@ pub struct Tree {
   mut outs_changed : Bool
   /// the nodes whose size is followed (View::laid_size_told), told as all of the layout is done
   sized : Array[Int]
+  /// whether a size followed may have come out otherwise since they were last told: something laid out or placed, one
+  /// asked anew (Tree::sizes_told; nothing looked at where nothing was)
+  mut sizes_due : Bool
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
@@ -752,6 +758,11 @@ pub struct Tree {
   mut measured_gen : Int
   /// the first compute laid out to be read since things were last placed (-1: none): what a later layout places by too
   mut walk_from : Int
+  /// what lays out alone (View::lays_out_alone) with something under it to be laid out again, nothing above it: laid
+  /// out from it as the rest is (Tree::alone_laid_out)
+  alone_due : Array[Int]
+  /// those laid out so and not yet placed by, each with its compute's number
+  alone_laid : Array[(Int, Int)]
   /// how many device pixels a point what hosts it draws at (0: none said): what is drawn off where it is laid out drawn
   /// off by whole pixels (View::drawn_off), as an old view's look is
   mut pixel_grid : Double
@@ -823,6 +834,7 @@ pub fn Tree::new(
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_changed: false,
+    sizes_due: false,
     sized: [],
     shows_due: [],
     outs_gone: [],
@@ -920,6 +932,8 @@ pub fn Tree::new(
     settle_at: 0.0,
     measured_gen: -1,
     walk_from: -1,
+    alone_due: [],
+    alone_laid: [],
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
@@ -1034,6 +1048,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.parent = parent
       n.allow_ellipsis = false
       n.slot = false
+      n.alone = false
       n.boxes_due = false
       n.fault_to = None
       n.hosted = false
@@ -1188,6 +1203,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         takes_ver: None,
         drag_end: None,
         slot: false,
+        alone: false,
         fault_to: None,
         hosted: false,
         said: None,
@@ -1668,8 +1684,9 @@ fn Tree::marked(self : Tree) -> Unit {
 
 ///|
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
-/// holder's layout reused, is no sign the rest are).
-fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
+/// holder's layout reused, is no sign the rest are). `within`: what it holds changed, not itself (its boxes put again),
+/// so where it lays out alone it is laid out again from itself.
+fn Tree::layout_marked_at(self : Tree, at : Int, within? : Bool = false) -> Unit {
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
   self.measured_gen = -1
@@ -1679,8 +1696,36 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   while i >= 0 {
     let n = self.nodes[i]
     n.flex.dirty = true
+    // (in what lays out alone, laid out as big as it was asked before: laid out again from it, nothing above it)
+    if (i != at || within) && n.alone && n.flex.laid_given() {
+      self.alone_due.push(i)
+      return
+    }
     i = n.parent
   }
+}
+
+///|
+/// What lays out alone with something under it marked laid out again (Tree::layout_marked_at), laid out from it as it
+/// was asked before (@flex.relayout), to be placed by as the rest is; before the layout of all of it, which keeps it as
+/// it is unless what holds it asks it otherwise now.
+fn Tree::alone_laid_out(self : Tree) -> Unit {
+  for at in self.alone_due {
+    let n = self.nodes[at]
+    if n.live && n.flex.dirty && n.flex.laid_given() {
+      self.work.computes = self.work.computes + 1
+      @flex.relayout(n.flex)
+      self.alone_laid.push((at, @flex.computes()))
+    } else if n.live && n.flex.dirty {
+      // (no longer as it was asked: laid out with what holds it, by the layout of all of it after this)
+      let mut i = n.parent
+      while i >= 0 {
+        self.nodes[i].flex.dirty = true
+        i = self.nodes[i].parent
+      }
+    }
+  }
+  self.alone_due.clear()
 }
 
 ///|
@@ -2022,6 +2067,68 @@ priv enum Prop {
 } derive(Eq, Hash)
 
 ///|
+/// Properties bound together on one node (View::binds_together): each read as its binding would be, all of them in one
+/// watch, and each set again only where it came out otherwise; one bound again alone (By or Is) is theirs no more, and
+/// the watch goes with the last of them.
+priv struct BoundTogether {
+  at : Int
+  gen : Int
+  parts : Array[BoundPart]
+  mut left : Int
+  mut stop : () -> Unit
+}
+
+///|
+priv struct BoundPart {
+  mut live : Bool
+  read : () -> Unit
+  apply : () -> Unit
+}
+
+///|
+// kept across runs: set only while View::binds_together runs what it binds, put back as it ends
+let binding_together : Ref[BoundTogether?] = Ref(None)
+
+///|
+/// What `f` binds By on this node (its properties, View::width and the like) bound together: as each would be alone
+/// (Tree::queued: run now, and in the frame after what any of them read changed, each set again only where it came out
+/// otherwise), but read in one watch, not one each: for a part that binds many of them from one look (a style). One
+/// bound again afterwards, alone, is that binding's and no more theirs. What `f` binds on another node is bound alone.
+pub fn View::binds_together(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(_) else { return self }
+  let g : BoundTogether = { at: self.at, gen: self.gen, parts: [], left: 0, stop: fn() {  } }
+  let was = binding_together.val
+  binding_together.val = Some(g)
+  f()
+  binding_together.val = was
+  if g.left == 0 {
+    return self
+  }
+  let stop = self.tree.queued(
+    fn() {
+      for p in g.parts {
+        if p.live {
+          (p.read)()
+        }
+      }
+    },
+    fn(_) {
+      for p in g.parts {
+        if p.live {
+          (p.apply)()
+        }
+      }
+    },
+  )
+  if g.left == 0 {
+    stop()
+  } else {
+    g.stop = stop
+  }
+  self
+}
+
+///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
 /// marking what its phase does again.
@@ -2056,6 +2163,45 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
+      // (said among others bound together on this node, View::binds_together: read in their one watch, set as it is)
+      match binding_together.val {
+        Some(g) if g.at == at && g.gen == gen => {
+          let now : Ref[T?] = Ref(None)
+          let part : BoundPart = {
+            live: true,
+            read: fn() { now.val = Some(f()) },
+            apply: fn() {
+              let n = tree.nodes[at]
+              if !n.live || n.gen != gen {
+                return
+              }
+              guard now.val is Some(v) else { return }
+              let work = tree.work
+              work.bound = work.bound + 1
+              if last.val == Some(v) {
+                work.same = work.same + 1
+                return
+              }
+              last.val = Some(v)
+              apply(v)
+              marked()
+            },
+          }
+          g.parts.push(part)
+          g.left = g.left + 1
+          n.props[prop] = fn() {
+            if part.live {
+              part.live = false
+              g.left = g.left - 1
+              if g.left == 0 {
+                (g.stop)()
+              }
+            }
+          }
+          return
+        }
+        _ => ()
+      }
     let stop = tree.queued(
       f,
       fn(v) {
@@ -3013,6 +3159,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
     }
     self.bindings_due.clear()
     if self.layout_due && self.measured_gen < 0 {
+      self.alone_laid_out()
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
       @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
@@ -5034,6 +5181,16 @@ fn View::let_go(self : View) -> Unit {
 }
 
 ///|
+/// It lays out alone: as big as what holds it says it is (its height said, its width what it is given), whatever it
+/// holds, so what changes under it (a row of a list made as it comes to show) is laid out again from it, nothing above
+/// it, as Flutter's relayout boundary. Only while it was last laid out given both, else with what holds it.
+pub fn View::lays_out_alone(self : View) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.alone = true
+  self
+}
+
+///|
 /// A node holding what comes and goes (show, pick, each), with no box of its own.
 fn View::slot(self : View) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
@@ -5081,7 +5238,9 @@ fn View::box_appended(self : View, child : Int) -> Unit {
   }
   // (one due to be put again in order (Tree::holding_boxes) is put whole as that ends: what is pushed now is redone)
   self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
-  self.tree.layout_marked_at(at)
+  // (what it holds changed, not what it asks of what holds it: where it lays out alone, laid out again from it, as
+  // boxes_put does)
+  self.tree.layout_marked_at(at, within=true)
   self.tree.order_marked()
   self.tree.modals_told()
 }
@@ -5119,7 +5278,7 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
   for b in all {
     n.flex.children.push(b)
   }
-  self.layout_marked_at(at)
+  self.layout_marked_at(at, within=true)
   self.order_marked()
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.modals_told()
@@ -6109,12 +6268,15 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
+    // (what is laid out may come out another size: Tree::sizes_told)
+    self.sizes_due = true
     self.layout_due = false
     // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
     // read before it and not placed by yet placed too, Tree::measured_now)
     let gen = if self.measured_gen >= 0 {
       if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
     } else {
+      self.alone_laid_out()
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
       @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
@@ -6127,6 +6289,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.measured_gen = -1
     self.walk_from = -1
     self.walk(0, gen, true)
+    // (what was laid out alone: placed by from it, what holds it laid out or not)
+    for a in self.alone_laid {
+      if self.nodes[a.0].live {
+        self.walk(a.0, a.1, true)
+      }
+    }
+    self.alone_laid.clear()
   }
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
@@ -6183,7 +6352,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
+  if self.sizes_due && self.sized.length() > 0 && self.sizes_told() && self.due {
     self.laid_out(upto)
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
@@ -6232,6 +6401,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
 ///|
 /// The sizes followed (View::laid_size_told), all of it laid out, told as one change: whether any was told otherwise.
 fn Tree::sizes_told(self : Tree) -> Bool {
+  self.sizes_due = false
   let keep = []
   let told = Ref(false)
   @signals.start_batch()
@@ -6346,6 +6516,7 @@ pub fn View::laid_size_told(self : View) -> (Double, Double)? {
       let c : @signals.Signal[(Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
       n.size_cell = Some(c)
       self.tree.sized.push(self.at)
+      self.tree.sizes_due = true
       self.tree.marked()
       c
     }
@@ -6596,6 +6767,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   if out != n.out {
     n.out = out
     self.outs_changed = true
+    self.sizes_due = true
     // (what of it is let go of told once all of the layout is done: Tree::outs_told)
     if out {
       self.outs_gone.push(at)
@@ -7304,6 +7476,18 @@ pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
   guard n.live && n.gen == id.gen && n.content is Some(c) && !self.out_at(id.at) else { return None }
   let (x, y, a, s) = self.projected(id.at)
   Some(unfolded(c, x, y, a, s))
+}
+
+///|
+/// Where node `id` is drawn in the window (Tree::drawn_of's x and y), how opaque and how big (its scale and its
+/// holders', Tree::drawn_scale), where it lives and has been placed: none of what it draws unfolded.
+pub fn Tree::drawn_place(self : Tree, id : NodeId) -> (Double, Double, Double, Double)? {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return None
+  }
+  let n = self.nodes[id.at]
+  guard n.live && n.gen == id.gen && n.content is Some(_) && !self.out_at(id.at) else { return None }
+  Some(self.projected(id.at))
 }
 
 ///|

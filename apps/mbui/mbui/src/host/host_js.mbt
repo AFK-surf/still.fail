@@ -322,6 +322,22 @@ fn present(
 }
 
 ///|
+/// (web/host.js keeps no groups: a frame's instances are all written)
+fn groups_here() -> Bool {
+  false
+}
+
+///|
+fn group_set(_id : Int, _inst : FixedArray[Double], _moves : FixedArray[Double], _n : Int) -> Unit {
+  ()
+}
+
+///|
+fn group_drop(_id : Int) -> Unit {
+  ()
+}
+
+///|
 fn set_ime(
   active : Bool,
   x : Double,

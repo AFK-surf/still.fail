@@ -170,6 +170,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
   fn refused(at : Int) -> Unit {
     state[at] = 3
     // (on no side of anything: View::went_told says none)
+    if self.nodes[at].went is Some(_) {
+      self.sizes_due = true
+    }
     self.nodes[at].went = None
     // (where it is laid out, as if it went beside nothing: never where it went last)
     let n = self.nodes[at]
@@ -212,6 +215,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     }
     guard n.beside is Some(b) && self.alive_id(b.anchor) else {
       // (beside nothing now, its anchor gone: on no side of it, where it last was beside it)
+      if n.went is Some(_) {
+        self.sizes_due = true
+      }
       n.went = None
       return stay()
     }
@@ -276,6 +282,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       padding=b.padding,
     )
     // (where it grows from, where it is drawn bigger or smaller about the side it went on: View::scale's FromBeside)
+    if n.went != Some(went) {
+      self.sizes_due = true
+    }
     n.went = Some(went)
     let (px, py) = self.pivot_of(at, n.lw, n.lh)
     let (lx, ly) = ((x - hx) / hs, (y - hy) / hs)
@@ -341,24 +350,32 @@ pub(all) enum Pivot {
 ///|
 /// Where node `self` is drawn bigger or smaller about, in points where it is its own, laid out `w` by `h`.
 fn Node::pivot_at(self : Node, w : Double, h : Double) -> (Double, Double) {
-  let (sx, sy) = match (self.look.pivot, self.beside) {
-    (At(x, y), _) => (x, y)
-    (FromBeside, Some(b)) => {
-      let across = match b.along {
-        Start => 0.0
-        Middle => 0.5
-        End => 1.0
+  // (matched one after the other, no pair made: asked of every node drawn turned or scaled, each frame)
+  match self.look.pivot {
+    At(x, y) => (x * w, y * h)
+    Drawn => (0.5 * w, 0.5 * h)
+    FromBeside =>
+      match self.beside {
+        None => (0.5 * w, 0.5 * h)
+        Some(b) => {
+          let across = match b.along {
+            Start => 0.0
+            Middle => 0.5
+            End => 1.0
+          }
+          let side = match self.went {
+            Some(s) => s
+            None => b.side
+          }
+          match side {
+            Bottom => (across * w, 0.0)
+            Top => (across * w, h)
+            Right => (0.0, across * h)
+            Left => (w, across * h)
+          }
+        }
       }
-      match self.went.unwrap_or(b.side) {
-        Bottom => (across, 0.0)
-        Top => (across, 1.0)
-        Right => (0.0, across)
-        Left => (1.0, across)
-      }
-    }
-    (FromBeside, None) | (Drawn, _) => (0.5, 0.5)
   }
-  (sx * w, sy * h)
 }
 
 ///|
@@ -538,6 +555,7 @@ pub fn View::went_told(self : View) -> Side? {
       let c : @signals.Signal[Side?] = @signals.signal(None, same=fn(a, b) { a == b })
       n.went_cell = Some(c)
       self.tree.sized.push(self.at)
+      self.tree.sizes_due = true
       self.tree.marked()
       c
     }

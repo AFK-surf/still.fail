@@ -2015,12 +2015,14 @@ static int looked_at_run(void) {
          getenv("MBUI_BENCH") || getenv("MBUI_SHOT_DIR") || getenv("MBUI_WIN") || getenv("MBUI_RECORD");
 }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // (a window nobody can see draws nothing: what drawing holds was given back as it went (mb_render_trim), and a
   // frame drawn now would take it again, the GPU drawing it for nobody, a frame for each answer the core gives; shown
   // again, tell_state asks a frame, which draws what it shows then, whole)
   if (!window_seen && !looked_at_run()) return;
-  mb_render_present(buf, count, r, g, b);
+  mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,

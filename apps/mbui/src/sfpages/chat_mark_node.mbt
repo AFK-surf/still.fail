@@ -19,7 +19,7 @@ pub fn chat_mark_node(parent : @view.View, tone : () -> String) -> Unit {
         pop.go_from(m, 0.0, 1.0, @motion.tween(mark_pop_ms, ease=Out))
       }
     })
-    m.scale(By(fn() { pop_scale(pop.shown(m)) })) |> ignore
+    m.alpha(By(fn() { @sf.seen_at(pop_scale(pop.shown(m))) })).scale(By(fn() { pop_scale(pop.shown(m)) })) |> ignore
     m.says(By(fn() {
       match tone() {
         "busy" | "done" | "alert" | "wait" => Some(@view.said(Image, label=@sf.t("web-main.chatMark." + tone())))

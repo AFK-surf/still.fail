@@ -149,6 +149,12 @@ pub fn glyphs_ahead(FixedArray[Int32], Int32) -> Unit
 
 pub fn gpu_ms() -> Double
 
+pub fn group_drop(Int32) -> Unit
+
+pub fn group_set(Int32, FixedArray[Double], FixedArray[Double], Int32) -> Unit
+
+pub fn groups_here() -> Bool
+
 pub fn h264_here() -> Bool
 
 pub fn h265_here() -> Bool
@@ -539,6 +545,7 @@ pub fn word_at(String, Int32) -> (Int32, Int32)
 pub struct Atlas {
   // private fields
 }
+pub fn Atlas::before_full(Self, () -> Unit) -> Unit
 pub fn Atlas::clear(Self) -> Unit
 pub fn Atlas::drawn(Self, Int32) -> Unit
 pub fn Atlas::holds(Self, Int32, Int32) -> Bool
@@ -802,6 +809,9 @@ pub(open) trait Host {
   fn local_font_families(Self) -> String = _
   fn atlas_generation(Self) -> Int32 = _
   fn present(Self, FixedArray[Double], Int32, Double, Double, Double) -> Unit = _
+  fn groups_here(Self) -> Bool = _
+  fn group_set(Self, Int32, FixedArray[Double], FixedArray[Double], Int32) -> Unit = _
+  fn group_drop(Self, Int32) -> Unit = _
   fn set_ime(Self, Bool, Double, Double, Double, Double, String, Int32, Int32) -> Unit = _
   fn text_menu(Self, Bool, Double, Double, Double, Double, Int32) -> Unit = _
   fn edit_can(Self, Int32) -> Unit = _

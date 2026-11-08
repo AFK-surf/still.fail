@@ -159,6 +159,20 @@ test("64-bit old session rowids do not prevent preparing a session list", () => 
   } finally { store.close(); }
 });
 
+test("old session keys are kept in SQLite while their list is prepared", () => {
+  const { store, db, add } = fixture();
+  try {
+    dropIndex(store);
+    add("nul\0suffix", "x", "mine");
+    add("temporary", "x", "mine");
+    db.exec("UPDATE sessions SET key=CAST(X'FF' AS TEXT) WHERE key='temporary'");
+    installSessionListIndex(db);
+    while (!sessionListStep(db, 1).done) {}
+    assert.ok(db.prepare("SELECT 1 FROM session_list_rows WHERE session = ?").get("nul\0suffix"));
+    assert.ok(db.prepare("SELECT 1 FROM session_list_rows WHERE session = CAST(X'FF' AS TEXT)").get());
+  } finally { store.close(); }
+});
+
 test("new sessions do not keep the old session list scan open", () => {
   const { store, db, add, exact } = fixture();
   try {

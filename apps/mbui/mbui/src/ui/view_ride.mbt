@@ -58,6 +58,9 @@ priv struct RideKept {
   /// the glyphs each of its nodes' blocks draws from (ViewBlock's `kept`): held in the atlas for it as a frame begins
   /// without its nodes gone through (view_glyphs_held)
   kept : Array[Array[(Int, Double, Double)]]
+  /// its instances as the host keeps them (@hostapi.group_set), drawn again by a header in their place (ride_head);
+  /// -1, copied each time
+  group : Int
 }
 
 ///|
@@ -84,12 +87,159 @@ priv struct Riding {
   mut y1 : Double
   mut nodes : Int
   kept : Array[Array[(Int, Double, Double)]]
+  /// an old view hosted (island_rides): drawn again only where it was
+  island : Bool
 }
 
 ///|
 /// What each row drew last, by its root (kept while it is drawn so: let go with the node, view_forget).
 // kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
 let ride_kept : ByNode[RideKept] = ByNode::new()
+
+///|
+/// The rows kept whose instances the host keeps (RideKept's `group`), by their group: what a header among the frame's
+/// stands for (Ctx::flat_from), drawn by the host itself where it keeps them.
+// kept across runs: let go with what kept them (ride_let_go), told to the host as the frame they were last in is
+// presented (ride_groups_told)
+let ride_groups : Map[Int, RideKept] = {}
+
+///|
+/// The groups made so far: a group's number is never another's, so the same header is never another's instances
+/// (frame_watch.mbt's insts_said, @damage's frames compared).
+// kept across runs: a group's number is never one a run before had
+let ride_groups_made : Ref[Int] = Ref(0)
+
+///|
+/// The groups let go since the last frame presented, told to the host after the next is (what that frame was compared
+/// with may hold them).
+// kept across runs: emptied as each frame is presented (ride_groups_told)
+let ride_groups_gone : Array[Int] = []
+
+///|
+/// Where the frame's instances hold a header (Ctx::ride_head), in order: the instance it is at, its group's after it
+/// up to its count in its room, unwritten.
+// kept across runs: emptied as a frame's instances are (Ctx::spans_cut), each drawn out where they are worked on
+let ride_spans : Array[Int] = []
+
+///|
+/// Whether the host keeps groups of instances (@hostapi.groups_here), a Tester's frames drawing them out as one would
+/// (Ctx::flat_from): asked once.
+// kept across runs: the host's, the same for the program's life
+let groups_host : Ref[Int] = Ref(-1)
+
+///|
+fn groups_on() -> Bool {
+  if fake.val is Some(_) {
+    return true
+  }
+  if groups_host.val < 0 {
+    groups_host.val = if @hostapi.groups_here() { 1 } else { 0 }
+  }
+  groups_host.val == 1
+}
+
+///|
+/// Row `id` kept as `k`, what it kept before let go.
+fn ride_keep(id : @view.NodeId, k : RideKept) -> Unit {
+  ride_let_go(id)
+  ride_kept[id] = k
+}
+
+///|
+/// What row `id` kept let go, its group with it.
+fn ride_let_go(id : @view.NodeId) -> Unit {
+  match ride_kept.get(id) {
+    Some(k) => {
+      if k.group >= 0 {
+        ride_groups.remove(k.group)
+        ride_groups_gone.push(k.group)
+      }
+      ride_kept.remove(id)
+    }
+    None => ()
+  }
+}
+
+///|
+/// All the rows kept let go (view_forget).
+fn ride_let_go_all() -> Unit {
+  for g, _ in ride_groups {
+    ride_groups_gone.push(g)
+  }
+  ride_groups.clear()
+  ride_kept.clear()
+}
+
+///|
+/// The frame presented: the groups let go before it told to the host, and to what compares frames.
+fn ride_groups_told() -> Unit {
+  if ride_groups_gone.is_empty() {
+    return
+  }
+  let real = fake.val is None
+  for g in ride_groups_gone {
+    presented.group_drop(g)
+    if real {
+      @hostapi.group_drop(g)
+    }
+  }
+  ride_groups_gone.clear()
+}
+
+///|
+/// Whether a row's instances (`n` in `inst`) can be kept by the host and drawn by a header: none worked on as the
+/// frame ends (a look's tag, slot 20 below 0; a native view's hole; a stream's picture, changing under the same
+/// numbers).
+fn ride_groupable(inst : FixedArray[Double], n : Int) -> Bool {
+  for i in 0..<n {
+    let b = i * inst_size
+    let t = inst[b + 20]
+    if t < 0.0 || inst[b + 5] == 9.0 || t >= @damage.stream_tex_base {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// The frame's instances from `i0` on drawn out where a header stands for a group's (Ctx::ride_head), as the host
+/// draws them: what works on them as they are finds them there.
+fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
+  while ride_spans.length() > 0 {
+    let at = ride_spans[ride_spans.length() - 1]
+    if at < i0 {
+      break
+    }
+    ride_spans.pop() |> ignore
+    let s = self.inst
+    let b = at * inst_size
+    let id = s[b + 12].to_int()
+    let first = s[b + 13].to_int()
+    let n = s[b + 14].to_int()
+    guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
+    ride_put(k, first, n, s, at, s[b], s[b + 1], s[b + 15])
+  }
+}
+
+///|
+/// The instance after instance `q` of `a` (one where an instance begins, as the frame's from its first): past the room
+/// a header there stands for (Ctx::ride_head).
+fn inst_after(a : FixedArray[Double], q : Int) -> Int {
+  let b = q * inst_size
+  if a[b + 5] == 13.0 {
+    q + a[b + 14].to_int()
+  } else {
+    q + 1
+  }
+}
+
+///|
+/// The headers among the frame's instances past where they end now let go (what was drawn after `ninst` dropped).
+fn Ctx::spans_cut(self : Ctx) -> Unit {
+  while ride_spans.length() > 0 && ride_spans[ride_spans.length() - 1] >= self.ninst {
+    ride_spans.pop() |> ignore
+  }
+}
 
 ///|
 /// The row being drawn now, as the tree is painted (none between paints).
@@ -175,6 +325,7 @@ fn Ctx::ride_begin(
   uy : Double,
   clips : Int,
   rings : Int,
+  island? : Bool = false,
 ) -> Unit {
   riding.val = Some({
     id: c.id,
@@ -197,6 +348,7 @@ fn Ctx::ride_begin(
     y1: y + c.h,
     nodes: 0,
     kept: [],
+    island,
   })
 }
 
@@ -210,13 +362,13 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   let side_x = ride_side(r.x0, r.x1, clip_stack[k], clip_stack[k + 2])
   let side_y = ride_side(r.y0, r.y1, clip_stack[k + 1], clip_stack[k + 3])
   let n = self.ninst - r.k0
-  if r.spoiled || (side_x != 0 && side_y != 0) {
-    ride_kept.remove(r.id)
+  if r.spoiled || (!r.island && side_x != 0 && side_y != 0) {
+    ride_let_go(r.id)
     return
   }
   let e = ride_clip_at(k)
   if !ride_clip_square(e) {
-    ride_kept.remove(r.id)
+    ride_let_go(r.id)
     return
   }
   let inst = FixedArray::make(n * inst_size, 0.0)
@@ -247,7 +399,14 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   for j in (r.seg0 * 4)..<self.segs.length() {
     segs.push(self.segs[j])
   }
-  ride_kept[r.id] = {
+  // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends)
+  let group = if groups_on() && ride_groupable(inst, n) {
+    ride_groups_made.val = ride_groups_made.val + 1
+    ride_groups_made.val
+  } else {
+    -1
+  }
+  let kept : RideKept = {
     rev: r.rev,
     x: r.x,
     y: r.y,
@@ -270,6 +429,15 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     inside_y: side_y == 0,
     nodes: r.nodes,
     kept: r.kept,
+    group,
+  }
+  ride_keep(r.id, kept)
+  if group >= 0 {
+    ride_groups[group] = kept
+    if fake.val is None {
+      presented.group_set(group, inst, n)
+      @hostapi.group_set(group, inst, FixedArray::makei(n, fn(i) { moves[i].to_double() }), n)
+    }
   }
 }
 
@@ -280,7 +448,11 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
 fn ride_node(c : @view.Content, x : Double, y : Double, s : Double, moved_not : Bool) -> Unit {
   guard riding.val is Some(r) else { return }
   r.nodes = r.nodes + 1
-  if moved_not || s != 1.0 || c.hosted || c.bones != 0L || c.glass is Some(_) {
+  if moved_not ||
+    s != 1.0 ||
+    (c.hosted && !(r.island && r.id == c.id)) ||
+    c.bones != 0L ||
+    c.glass is Some(_) {
     r.spoiled = true
   }
   r.x0 = dmin(r.x0, x)
@@ -352,6 +524,11 @@ fn Ctx::ride_kept_for(
   guard ride_kept.get(c.id) is Some(k) else { return None }
   let dx = x - k.x
   let dy = y - k.y
+  // (an old view hosted: only where it was, nothing it read as it was painted changed since, nor built anew, nothing
+  // said to move)
+  if c.hosted && !(dx == 0.0 && dy == 0.0 && island_still(c.id, self.build_no) && !self.moves_now()) {
+    return None
+  }
   let fits = s == 1.0 &&
     a == k.a &&
     ux - x == k.off_x &&
@@ -382,6 +559,7 @@ fn Ctx::ride_kept_for(
 /// so in its place among them.
 fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
   ride_drawn.val = ride_drawn.val + 1
+  ride_caps.clear()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs.append(k.segs)
   let mut from = 0
@@ -416,8 +594,15 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
 }
 
 ///|
+/// The captures the glass of the row drawn again (Ctx::ride_again) took as it was painted, each the one it takes in
+/// this frame.
+// kept across runs: emptied as each row is drawn again
+let ride_caps : Map[Int, Int] = {}
+
+///|
 /// Row kept `k`'s instances `i0` until `i1` put after the frame's, moved by (dx, dy), their shapes' pieces where they
-/// are among the frame's now (`seg_by` on).
+/// are among the frame's now (`seg_by` on): where the host keeps its group, a header in their place (Ctx::ride_head),
+/// their room after it unwritten.
 fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy : Double, seg_by : Double) -> Unit {
   let n = i1 - i0
   guard n > 0 else { return }
@@ -425,14 +610,99 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
     self.grow()
   }
   let at = self.ninst
-  k.inst.blit_to(self.inst, len=n * inst_size, src_offset=i0 * inst_size, dst_offset=at * inst_size)
+  if k.group >= 0 && dr.mode == 0 && !shooting.val {
+    self.ride_head(k.group, i0, n, at, dx, dy, seg_by)
+  } else {
+    ride_put(k, i0, n, self.inst, at, dx, dy, seg_by)
+  }
+  if k.owned {
+    for i in 0..<n {
+      let q = at + i
+      inst_owned(q)
+      let (ow, cel, tre, mar) = k.owners[i0 + i]
+      inst_owners.owner[q] = ow
+      inst_owners.cell[q] = cel
+      inst_owners.tree[q] = tre
+      inst_owners.mark[q] = mar
+    }
+  }
+  self.ninst = at + n
+}
+
+///|
+/// A header at instance `at` (kind 13, scene.mbt): group `group`'s instances from `first`, `n` of them, moved by
+/// (dx, dy), their shapes' pieces `seg_by` on, drawn in its place and the room after it, as ride_put would write them.
+fn Ctx::ride_head(
+  self : Ctx,
+  group : Int,
+  first : Int,
+  n : Int,
+  at : Int,
+  dx : Double,
+  dy : Double,
+  seg_by : Double,
+) -> Unit {
   let s = self.inst
+  let b = at * inst_size
+  ride_head_blank.blit_to(s, len=inst_size, dst_offset=b)
+  s[b] = dx
+  s[b + 1] = dy
+  s[b + 5] = 13.0
+  s[b + 12] = group.to_double()
+  s[b + 13] = first.to_double()
+  s[b + 14] = n.to_double()
+  s[b + 15] = seg_by
+  ride_spans.push(at)
+  ride_heads.val = ride_heads.val + 1
+}
+
+///|
+/// How many headers were written (Ctx::ride_head): for a test.
+// kept across runs: only counts
+let ride_heads : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: never written
+let ride_head_blank : FixedArray[Double] = FixedArray::make(inst_size, 0.0)
+
+///|
+/// Row kept `k`'s instances from `i0`, `n` of them, written into `s` from instance `at`, moved by (dx, dy), their
+/// shapes' pieces `seg_by` on: what a header of its group stands for (the host's mb_groups_draw_out, groups.h).
+fn ride_put(
+  k : RideKept,
+  i0 : Int,
+  n : Int,
+  s : FixedArray[Double],
+  at : Int,
+  dx : Double,
+  dy : Double,
+  seg_by : Double,
+) -> Unit {
+  k.inst.blit_to(s, len=n * inst_size, src_offset=i0 * inst_size, dst_offset=at * inst_size)
   for i in 0..<n {
     let b = (at + i) * inst_size
     s.unsafe_set(b, s.unsafe_get(b) + dx)
     s.unsafe_set(b + 1, s.unsafe_get(b + 1) + dy)
-    if s.unsafe_get(b + 5) == 11.0 {
+    let kind = s.unsafe_get(b + 5)
+    if kind == 11.0 {
       s.unsafe_set(b + 12, s.unsafe_get(b + 12) + seg_by)
+    } else if (kind == 5.0 || kind == 6.0) && s.unsafe_get(b + 20) < 0.0 {
+      // (glass, an old view's: a capture of this frame's, as one kept and drawn again takes, Ctx::insts_replay)
+      let was = (-s.unsafe_get(b + 20)).to_int()
+      let now = match ride_caps.get(was) {
+        Some(c) => c
+        None => {
+          glass_paint.run = glass_paint.run + 1
+          ride_caps[was] = glass_paint.run
+          glass_paint.run
+        }
+      }
+      s.unsafe_set(b + 20, -now.to_double())
+      if kind == 5.0 {
+        glass_paint.frost_run = now
+      }
+      glass_paint.run_start = -1
+      glass_paint.run_len = 0
     }
     let m = k.moves.unsafe_get(i0 + i)
     if m != 0 {
@@ -451,18 +721,6 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
       }
     }
   }
-  if k.owned {
-    for i in 0..<n {
-      let q = at + i
-      inst_owned(q)
-      let (ow, cel, tre, mar) = k.owners[i0 + i]
-      inst_owners.owner[q] = ow
-      inst_owners.cell[q] = cel
-      inst_owners.tree[q] = tre
-      inst_owners.mark[q] = mar
-    }
-  }
-  self.ninst = at + n
 }
 
 ///|
@@ -475,11 +733,17 @@ fn ride_spoil() -> Unit {
 }
 
 ///|
-/// Whether row `c` drawn at (x, y) may be kept or drawn as kept: its box wholly within the clip it is drawn in one way
-/// at least, as all it holds must be (Ctx::ride_end); one across its edges each way, or wholly past it (a row kept
-/// for what comes, drawing nothing: no more gone through than drawn again), drawn as it comes.
+/// Whether row `c` drawn at (x, y) may be kept or drawn as kept: in a square clip (ride_clip_square), its box wholly
+/// within it one way at least, as all it holds must be (Ctx::ride_end); one in a clip not square (none kept there),
+/// across its edges each way, or wholly past it (a row kept for what comes, drawing nothing: no more gone through than
+/// drawn again), drawn as it comes.
 fn ride_may(c : @view.Content, x : Double, y : Double) -> Bool {
   let k = clip_top()
+  for j in 4..<8 {
+    if clip_stack[k + j] != 0.0 || clip_stack[k + 12 + j] != 0.0 {
+      return false
+    }
+  }
   ride_side(x, x + c.w, clip_stack[k], clip_stack[k + 2]) == 0 ||
   ride_side(y, y + c.h, clip_stack[k + 1], clip_stack[k + 3]) == 0
 }
@@ -496,5 +760,127 @@ fn ride_side(a0 : Double, a1 : Double, c0 : Double, c1 : Double) -> Int {
     2
   } else {
     -1
+  }
+}
+
+///|
+/// What an old view hosted read as it was painted last (Ctx::island_painted), and the old frame's build it was painted
+/// of: drawn again as kept (Ctx::ride_again) only while none of it changed.
+priv struct IslandWatch {
+  watch : @signals.Watch
+  mut built : Int
+}
+
+///|
+/// Whether an old view's list the hand moved this frame (frame_watch.mbt's frame_drawn): no old view drawn as kept.
+// kept across runs: written as each frame begins
+let old_lists_moved : Ref[Bool] = Ref(false)
+
+///|
+/// Each old view hosted's, by its node.
+// kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
+let island_watches : ByNode[IslandWatch] = ByNode::new()
+
+///|
+/// Whether node `c`, an old view hosted, is drawn as kept where nothing of it changed: not the old frame's whole, not in
+/// its bones, laid out in a box of the old frame's; not while the hand moves an old view's list (what it draws moves
+/// each frame then: not kept to be drawn again).
+fn island_rides(c : @view.Content) -> Bool {
+  c.hosted && !old_whole.val && c.bones == 0L && !old_lists_moved.val && old_box_of.get(c.id) is Some(_)
+}
+
+///|
+/// Whether the old view hosted in `id` reads as it did when it was painted last, of build `built`.
+fn island_still(id : @view.NodeId, built : Int) -> Bool {
+  match island_watches.get(id) {
+    Some(w) => !w.watch.is_stale() && w.built == built
+    None => false
+  }
+}
+
+///|
+/// The old view hosted in `c` painted by `paint`: where it is the row being drawn (island_rides), what it reads followed
+/// (as the frame's paint follows what it reads: a frame asked for as it changes, that paint read anew), and the glyphs
+/// it draws from kept for it (held in the atlas while it is drawn again: view_glyphs_held).
+fn Ctx::island_painted(self : Ctx, c : @view.Content, paint : () -> Unit) -> Unit {
+  guard riding.val is Some(r) && r.island && r.id == c.id else { return paint() }
+  let w = match island_watches.get(c.id) {
+    Some(w) => w
+    None => {
+      let w : IslandWatch = {
+        watch: @signals.watch(fn() {
+          // (as the frame's paint watch is told: paint_watch_of)
+          paint_watch_of().touch()
+          if frame_running.val && paint_phase.val == 0 {
+            ()
+          } else if frame_running.val {
+            paint_said.val = "a value an old view's paint read changed as it was painted"
+          } else {
+            h_frame_owed()
+          }
+        }),
+        built: -1,
+      }
+      island_watches[c.id] = w
+      w
+    }
+  }
+  let kept : Array[(Int, Double, Double)] = []
+  let was = glyphs_kept.val
+  glyphs_kept.val = Some(kept)
+  // (what it asks of the frames as it is painted: a frame, a moment, a cycle, apart from what the rest of the frame asks;
+  // a look by the clock it draws, cycle_look.mbt's tag, worked out as the frame's paint ends)
+  let (wants, wake, cycling) = (self.wants_frame, self.wake_at, self.cycling)
+  let tagged = cycle_tagged.val
+  self.wants_frame = false
+  self.wake_at = -1.0
+  self.cycling = false
+  w.watch.read(paint)
+  let asked = self.wants_frame ||
+    self.wake_at >= 0.0 ||
+    self.cycling ||
+    cycle_tagged.val != tagged ||
+    self.moves_now()
+  self.wants_frame = self.wants_frame || wants
+  if wake >= 0.0 && (self.wake_at < 0.0 || wake < self.wake_at) {
+    self.wake_at = wake
+  }
+  self.cycling = self.cycling || cycling
+  glyphs_kept.val = was
+  // (what goes on by the clock as it is painted (a motion, a fling, a caret's blink, a waiting band's breath), and what
+  // is said to move while it is painted, drawn anew in the frames after, never as kept)
+  w.built = if asked { -1 } else { self.build_no }
+  r.kept.push(kept)
+}
+
+///|
+/// No old view hosted drawn again as it was kept (an old view's list the hand moves: what they draw moved, nothing they
+/// read told): each painted anew the next frame it is drawn.
+fn islands_unkept() -> Unit {
+  for id in island_watches.keys() {
+    match island_watches.get(id) {
+      Some(w) => w.built = -1
+      None => ()
+    }
+  }
+}
+
+///|
+/// What the old view hosted in `id` read let go of, with its node.
+fn island_watch_gone(id : @view.NodeId) -> Unit {
+  match island_watches.get(id) {
+    Some(w) => {
+      w.watch.stop()
+      island_watches.remove(id)
+    }
+    None => ()
+  }
+}
+
+///|
+/// All of it let go, as a run begins.
+fn island_watches_clear() -> Unit {
+  for id in island_watches.keys() {
+    island_watch_gone(id)
   }
 }

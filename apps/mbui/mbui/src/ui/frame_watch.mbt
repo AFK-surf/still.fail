@@ -719,7 +719,7 @@ fn looks_keep(c : Ctx) -> Unit {
     looks_base.settled = false
     looks_base.built = false
   } else {
-    let said = insts_said(c.inst, c.ninst)
+    let said = insts_said(c.inst, c.ninst, ride_spans)
     looks_base.settled = looks_base.built && c.ninst == looks_base.n && said == looks_base.said
     looks_base.built = true
     looks_base.said = said
@@ -727,6 +727,8 @@ fn looks_keep(c : Ctx) -> Unit {
   looks_base.n = c.ninst
   looks_base.looks = !cycle_frame.is_empty()
   if looks_base.looks {
+    // (drawn out where a header stands for a group: what the looks are applied to again is found where it is)
+    c.flat_from(0)
     if looks_base.inst.length() < len {
       looks_base.inst = FixedArray::make(len, 0.0)
     }
@@ -737,8 +739,9 @@ fn looks_keep(c : Ctx) -> Unit {
 ///|
 /// The first `n` instances of `a` as one number (64 bits of FNV-1a over their numbers' bits): the same for instances
 /// drawn the same (the tags of the looks by the clock, slot 20 below 0, all one: a tag each paint gives anew,
-/// cycle_look.mbt; every NaN one).
-fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
+/// cycle_look.mbt; every NaN one). A header (`spans`: Ctx::ride_head) is folded as itself, its group's room after it
+/// not: a group's number is never another's.
+fn insts_said(a : FixedArray[Double], n : Int, spans : Array[Int]) -> Int64 {
   // (four lanes, each folding every fourth number: one lane's multiply need not wait for the last, the lanes folded
   // into one at the end)
   let mut h0 = -3750763034362895579L
@@ -751,7 +754,17 @@ fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
   guard end <= a.length() else { abort("insts_said: \{n} instances, room for fewer") }
   let mut k = 0
   let mut j = 0
+  // (where the next header's room begins, past the header itself)
+  let mut s = 0
+  let mut room = if spans.is_empty() { end } else { (spans[0] + 1) * inst_size }
   while k < end {
+    if k == room {
+      let at = spans[s]
+      k = (at + a[at * inst_size + 14].to_int()) * inst_size
+      s = s + 1
+      room = if s < spans.length() { (spans[s] + 1) * inst_size } else { end }
+      continue
+    }
     h0 = (h0 ^ inst_bits(a.unsafe_get(k), j)) * 1099511628211L
     let x1 = a.unsafe_get(k + 1)
     let x2 = a.unsafe_get(k + 2)
@@ -995,6 +1008,12 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // it stands told again; what was built reads where it stands only as list_hand_move asks it. The build before having
   // laid out otherwise is no reason to build: what it read back of that layout is asked there too)
   let mut list_scrolled = false
+  // (an old view's list the hand moved: what is drawn in it moved with nothing it read told, no old view kept as drawn
+  // in this frame, view_ride.mbt's island_still)
+  old_lists_moved.val = !list_hand_dirty.is_empty()
+  if old_lists_moved.val {
+    islands_unkept()
+  }
   if why == "" && (laid_why == "" || laid_why == laid_otherwise) && !list_hand_dirty.is_empty() {
     let stopped = c.list_hand_move(t)
     if stopped == "" {
@@ -1053,6 +1072,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   if !looks_check.val {
     return t0
   }
+  c.flat_from(0)
   let n = c.ninst
   let alone = FixedArray::make(n * inst_size + 1, 0.0)
   c.inst.blit_to(alone, len=n * inst_size)

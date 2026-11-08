@@ -162,6 +162,17 @@ pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String, tell?
 }
 
 ///|
+/// Whether anything said to move is not at rest at the last frame's end (Ctx::moving_now's, none named).
+fn Ctx::moves_now(self : Ctx) -> Bool {
+  for e in self.movers {
+    if e.m.rest_at(self.clock, self.frame_no) > self.clock {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// What is said to move and is not at rest at the last frame's end: what it is, who told it, when it is at rest.
 fn Ctx::moving_now(self : Ctx) -> Array[String] {
   let out = []

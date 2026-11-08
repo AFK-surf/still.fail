@@ -198,7 +198,7 @@ pub fn way_in_button_node(
         ring=fn() { alpha(spun_ink(), 0.3) },
         arc=fn() { if solid { spun_ink() } else { library_theme().p.accent } },
       )
-      s.alpha(By(fn() { turning.shown(v) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
+      s.alpha(By(fn() { turning.shown(v) * seen_at(open.shown(v)) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
     })
     let words = v.box(fn(w) {
       w.words(By(label), look=way_in_words(Title, 600, Some(Font), false)).ink(By(ink)) |> ignore

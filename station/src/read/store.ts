@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { wall } from "../ops/fibers.ts";
 import { Refused } from "../api/request.ts";
 import { retiredUsage } from "../store/usage-retire.ts";
+import { findRuntimeSource, type RuntimeSource } from "../store/runtime-source.ts";
 import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailScopeBySession, usageDetailSince, USAGE_DETAIL_PENDING } from "../store/usage-detail.ts";
 import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } from "../store/usage-compact.ts";
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
@@ -162,16 +163,53 @@ export function listSessions(s: Store): SessionRow[] {
 /// Histories visible in a search. The existing index is ordered by connect, then workspace, so first seek the distinct
 /// connects and then only the rows in the viewer's workspaces. The public workspace is included once even when asked
 /// for as the viewer's own. Preserve the old whole-table ordering when activity times tie.
-export const HISTORY_SESSIONS = `WITH RECURSIVE connects(connect) AS (
+const historySessionsQuery = (columns: string) => `WITH RECURSIVE connects(connect) AS (
   VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
   UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
     FROM connects c WHERE c.connect IS NOT NULL
 ), workspaces(ws) AS (SELECT ?1 UNION SELECT '*' UNION SELECT NULL WHERE ?2)
-SELECT s.* FROM connects c CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
+SELECT ${columns} FROM connects c CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
 WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws IS w.ws
 ORDER BY s.last_active_at DESC, s.rowid ASC`;
+export const HISTORY_SESSIONS = historySessionsQuery("s.*");
 export function historySessions(s: Store, viewer: { workspace: string; home: boolean }): SessionRow[] {
   return all(s, HISTORY_SESSIONS, viewer.workspace, Number(viewer.home)).map(toSession);
+}
+
+export type HistorySession = Pick<SessionRow, "key" | "workspace" | "cwd" | "title">;
+const HISTORY_SESSION_SNAPSHOT = historySessionsQuery("s.key, s.workspace, s.cwd, s.title");
+const HISTORY_SESSION_BATCH = 128;
+let historySnapshotId = 0;
+
+/// Capture the original order and the fields a history needs, without holding a main-database snapshot during file I/O.
+/// Sorting still visits every visible session. Only one bounded page of session objects is brought into JavaScript.
+export function historySessionSnapshot(s: Store, viewer: { workspace: string; home: boolean }):
+  Iterable<HistorySession> & { length: number; close(): void } {
+  const table = `history_session_snapshot_${++historySnapshotId}`;
+  try { s.db.prepare(`CREATE TEMP TABLE ${table} AS ${HISTORY_SESSION_SNAPSHOT}`).run(viewer.workspace, Number(viewer.home)); }
+  catch (error) {
+    // A query-only connection forbids even temporary tables. Its original read remains available.
+    const code = (error as { errcode?: number }).errcode;
+    if (code === undefined || (code & 255) !== 8) throw error;
+    const rows = historySessions(s, viewer);
+    return { length: rows.length, [Symbol.iterator]: () => rows[Symbol.iterator](), close() {} };
+  }
+  try {
+    const length = (s.db.prepare(`SELECT COUNT(*) AS n FROM temp.${table}`).get() as { n: number }).n;
+    const page = s.db.prepare(`SELECT rowid AS position, key, workspace, cwd, title FROM temp.${table}
+      WHERE rowid > ? ORDER BY rowid LIMIT ${HISTORY_SESSION_BATCH}`);
+    return { length,
+      *[Symbol.iterator]() {
+        let after = 0;
+        for (;;) {
+          const rows = page.all(after) as (HistorySession & { position: number })[];
+          for (const row of rows) { after = row.position; yield row; }
+          if (rows.length < HISTORY_SESSION_BATCH) return;
+        }
+      },
+      close() { s.db.exec(`DROP TABLE temp.${table}`); },
+    };
+  } catch (error) { s.db.exec(`DROP TABLE temp.${table}`); throw error; }
 }
 
 /// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
@@ -245,14 +283,16 @@ export function runtimeSessions(s: Store, key: string): string[] {
   return current === null ? ids : [...ids.filter((id) => id !== current), current];
 }
 
+const RUNTIME_SESSION_SOURCES = `SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
+  FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`;
+
 /// The runtime and profile of each transcript, including those from before runtime changes were supported.
 export function runtimeSessionSources(s: Store, key: string): { id: string; runtime: string; profile: string | null }[] {
   const row = getSession(s, key);
   if (!row) return [];
   let sources: { id: string; runtime: string; profile: string | null }[] = [];
   try {
-    sources = all(s, `SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
-      FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
+    sources = all(s, RUNTIME_SESSION_SOURCES, key)
       .map((r) => ({ id: r.id, runtime: r.runtime, profile: r.profile ?? null }));
   } catch {
     try {
@@ -265,6 +305,67 @@ export function runtimeSessionSources(s: Store, key: string): { id: string; runt
   if (row.runtimeSessionId === null) return sources;
   const current = sources.find((x) => x.id === row.runtimeSessionId) ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
   return [...sources.filter((x) => x.id !== row.runtimeSessionId), current];
+}
+
+/// The source whose JavaScript id is `id`, as runtimeSessionSources would return it. A reader may decode distinct
+/// NUL-suffixed ids alike, so detect those by their indexed byte range and use the original reader for that case.
+export function runtimeSessionSource(s: Store, key: string, id: string): RuntimeSource | null {
+  return findRuntimeSource(key, id, (sql, ...args) => one(s, sql, ...args),
+    () => runtimeSessionSources(s, key).find((source) => source.id === id) ?? null);
+}
+
+const HISTORY_RUNTIME_BATCH = 128;
+let historyRuntimeSnapshotId = 0;
+
+/// A history's sources in conversation order. A small history stays in one read; a large one keeps its order in a
+/// connection-local snapshot so the reader can resolve its paths in batches without holding a main-database snapshot.
+/// SQLite still sorts the session's recorded sources before either read can return.
+export function historyRuntimeSources(s: Store, key: string): Iterable<RuntimeSource | null> & { close(): void } {
+  const array = (rows: RuntimeSource[]) => ({ [Symbol.iterator]: () => rows[Symbol.iterator](), close() {} });
+  const row = getSession(s, key);
+  if (!row) return array([]);
+  let first: RuntimeSource[];
+  try { first = s.db.prepare(`${RUNTIME_SESSION_SOURCES} LIMIT ${HISTORY_RUNTIME_BATCH + 1}`).all(key) as RuntimeSource[]; }
+  catch { return array(runtimeSessionSources(s, key)); } // An old database uses the original reader's fallbacks.
+  const normalize = (source: RuntimeSource): RuntimeSource => ({ id: source.id, runtime: source.runtime, profile: source.profile ?? null });
+  if (first.length <= HISTORY_RUNTIME_BATCH) {
+    const sources = first.map(normalize);
+    if (row.runtimeSessionId === null) return array(sources);
+    const current = sources.find((source) => source.id === row.runtimeSessionId)
+      ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
+    return array([...sources.filter((source) => source.id !== row.runtimeSessionId), current]);
+  }
+  const ordered = function* (sources: Iterable<RuntimeSource>): Generator<RuntimeSource | null> {
+    let current: RuntimeSource | undefined;
+    for (const raw of sources) {
+      const source = normalize(raw);
+      // Yield a marker for skipped duplicates too: older SQLite readers can decode distinct NUL-suffixed ids alike.
+      if (row.runtimeSessionId !== null && source.id === row.runtimeSessionId) { current ??= source; yield null; continue; }
+      yield source;
+    }
+    if (row.runtimeSessionId !== null)
+      yield current ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
+  };
+  const table = `history_runtime_snapshot_${++historyRuntimeSnapshotId}`;
+  try { s.db.prepare(`CREATE TEMP TABLE ${table} AS ${RUNTIME_SESSION_SOURCES}`).run(key); }
+  catch (error) {
+    const code = (error as { errcode?: number }).errcode;
+    if (code === undefined || (code & 255) !== 8) throw error;
+    return array(runtimeSessionSources(s, key)); // query_only connections cannot create even temporary tables.
+  }
+  try {
+    const page = s.db.prepare(`SELECT rowid AS position, id, runtime, profile FROM temp.${table}
+      WHERE rowid > ? ORDER BY rowid LIMIT ${HISTORY_RUNTIME_BATCH}`);
+    const rows = function* (): Generator<RuntimeSource> {
+      let after = 0;
+      for (;;) {
+        const batch = page.all(after) as (RuntimeSource & { position: number })[];
+        for (const source of batch) { after = source.position; yield source; }
+        if (batch.length < HISTORY_RUNTIME_BATCH) return;
+      }
+    };
+    return { [Symbol.iterator]: () => ordered(rows()), close() { s.db.exec(`DROP TABLE temp.${table}`); } };
+  } catch (error) { s.db.exec(`DROP TABLE temp.${table}`); throw error; }
 }
 
 /// Before per-message runtime was recorded, every message belonged to the session's first runtime.

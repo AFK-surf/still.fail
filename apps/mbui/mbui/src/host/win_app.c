@@ -993,10 +993,12 @@ void mb_host_wake_after(double ms) {
   if (wake_at < 0 || t < wake_at) wake_at = t;
 }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // (a frame built while the window is not shown: nothing of it on the screen)
   if (!presenting) return;
-  mb_render_present(buf, count, r, g, b);
+  mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,

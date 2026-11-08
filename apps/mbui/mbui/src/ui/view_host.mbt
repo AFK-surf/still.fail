@@ -72,6 +72,13 @@ let old_made : Ref[Int] = Ref(0)
 let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Double, Double, Double)] = []
 
 ///|
+/// Told as where an old view is placed changes (old_placed, old_placed_off: old_place): what moves an old view's box to
+/// where it is drawn and draws it as big reads it (old_frame), so its paint is told as that changes, not as anything of
+/// the tree's does.
+// kept across runs: only a count
+let old_placed_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// How far each old view placed (old_placed) would be drawn off where its layout alone puts it were nothing in its way
 /// grown, shrunk or drawn off (Tree::each_drawn_laid less Tree::laid_origin: what places it beside another, its offset):
 /// where its words are set on the pixels, as the tree's own are (carry_glyphs).
@@ -438,7 +445,8 @@ fn view_forget() -> Unit {
   old_around.val = false
   view_blocks.clear()
   view_shape_bands.clear()
-  ride_kept.clear()
+  ride_let_go_all()
+  island_watches_clear()
   riding.val = None
   view_pictures.clear()
   inst_owners.tree_words.clear()
@@ -674,7 +682,8 @@ fn view_changes_taken(tree : @view.Tree) -> Unit {
   // (what was let go lets go of what it drew)
   for id in tree.take_removed() {
     view_blocks.remove(id)
-    ride_kept.remove(id)
+    ride_let_go(id)
+    island_watch_gone(id)
     view_shape_bands.remove(id)
     view_pictures.remove(id)
     inst_owners.tree_words.remove(id)
@@ -690,6 +699,8 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 /// Where each old view of `tree` is placed now (as it was last laid out), and whether the one is the whole window.
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
+  let was = old_placed.copy()
+  let was_off = was.map(fn(p) { old_placed_off.get(p.0) })
   // (each placed before let go of by its index, the room kept: what was set is what was placed)
   for p in old_placed {
     old_placed_off.remove(p.0)
@@ -712,6 +723,16 @@ fn old_place(tree : @view.Tree) -> Unit {
     }) &&
     // (one as tall as what it holds measured in a box of its own, whatever it fills: old_natural_after_layout)
     !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural is Some(_) })
+  // (told where any is placed otherwise than it was)
+  let mut same = was.length() == old_placed.length()
+  for i, p in was {
+    if same && !(p == old_placed[i] && was_off[i] == old_placed_off.get(p.0)) {
+      same = false
+    }
+  }
+  if !same {
+    old_placed_said.set(@signals.untracked(fn() { old_placed_said.get() }) + 1)
+  }
 }
 
 ///|
@@ -848,12 +869,12 @@ fn old_frame(c : Ctx) -> Unit {
           },
         )
         // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
-        // clip, where it takes a finger and where its words are, with it; read again as the tree is: where the tree draws
-        // its node, on no pixel the tree does not put it on (what moves by a look of the tree's, on whole pixels already:
-        // Tree::each_drawn_in_order's pixel_grid), its words set on the pixels where it is laid out and carried with it,
-        // glyphs_carried)
+        // clip, where it takes a finger and where its words are, with it; read again as where it is placed changes
+        // (old_placed_said), not as anything else of the tree's does: where the tree draws its node, on no pixel the tree
+        // does not put it on (what moves by a look of the tree's, on whole pixels already: Tree::each_drawn_in_order's
+        // pixel_grid), its words set on the pixels where it is laid out and carried with it, glyphs_carried)
         c.moved_carries(i, fn(_, _) {
-          view_due.get() |> ignore
+          old_placed_said.get() |> ignore
           match old_placed.iter().find_first(fn(q) { q.0 == id }) {
             Some(q) => (q.1 - left, q.2 - top)
             None => (0.0, 0.0)
@@ -863,7 +884,7 @@ fn old_frame(c : Ctx) -> Unit {
         // its node, where it is told it takes a finger, its words are and it is read out projected so as each is read:
         // Ctx::island_now)
         c.look_by(i, fn() {
-          view_due.get() |> ignore
+          old_placed_said.get() |> ignore
           let s = island_scale(id)
           if s == 1.0 {
             still_look
@@ -1070,15 +1091,14 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     if riding.val is None &&
       fading.length() == 0 &&
       stretching.length() == 0 &&
-      ride_may(c, x, y) &&
-      tree.rides_scroll(c.id) {
+      ((ride_may(c, x, y) && tree.rides_scroll(c.id)) || island_rides(c)) {
       match self.ride_kept_for(tree, c, x, y, a, s, ux, uy) {
         Some(k) => {
           self.ride_again(k, x - k.x, y - k.y)
           view_paint_work.copied = view_paint_work.copied + k.nodes
           return true
         }
-        None => self.ride_begin(c, paint_rev, x, y, a, ux, uy, clipping.length(), rings.length())
+        None => self.ride_begin(c, paint_rev, x, y, a, ux, uy, clipping.length(), rings.length(), island=c.hosted)
       }
     }
     ride_node(c, x, y, s, false)
@@ -1142,9 +1162,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
                 }
                 _ => ()
               }
-              self.in_window_within(fn() { self.paint(i, a) })
+              self.island_painted(c, fn() { self.in_window_within(fn() { self.paint(i, a) }) })
             } else {
-              self.in_window(fn() { self.paint(i, a) })
+              self.island_painted(c, fn() { self.in_window(fn() { self.paint(i, a) }) })
             }
           None => ()
         }
@@ -1447,6 +1467,12 @@ fn Ctx::view_ring_take(self : Ctx, k : Int) -> (FixedArray[Double], (Int, (Doubl
   if k + 1 < n {
     self.inst.blit_to(self.inst, len=(n - k - 1) * inst_size, src_offset=(k + 1) * inst_size, dst_offset=k * inst_size)
   }
+  // (the headers after it one back with what they head)
+  for j in 0..<ride_spans.length() {
+    if ride_spans[j] > k {
+      ride_spans[j] = ride_spans[j] - 1
+    }
+  }
   if k < o.length() {
     o.remove(k) |> ignore
   }
@@ -1495,40 +1521,79 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
 }
 
 ///|
-/// As a frame's paint goes through the tree, before anything of it places a glyph: the glyphs each node's content
-/// composed in this frame (as it is drawn now: what is not drawn, gone or faded out, holds none) draws from kept in the
-/// atlas through this frame (Atlas::drawn: never emptied for another while drawn from), as glyphs an old view draws are
-/// as it draws them; content one of whose glyphs is no longer where it was (its plot emptied, the atlas made anew, or
-/// one there was no room for as it was made) made again as it is composed, never composed out of what the atlas now
-/// holds there instead.
-fn view_glyphs_held(tree : @view.Tree, sc : Double) -> Unit {
+/// As a frame's paint goes through the tree, before anything of it places a glyph: where a glyph may have gone from
+/// where it was (glyphs_lost: a plot emptied for another, all forgotten, or one there was no room for) or the words'
+/// pixels a point changed, all that is kept to be composed again (each node's content, each list's row kept) looked
+/// through, what draws one no longer where it was (or one there was no room for as it was made) made again as it is
+/// composed, never composed out of what the atlas now holds there instead; else nothing looked at. What the frame draws
+/// from is kept in the atlas through it as a plot is to be emptied (glyphs_held_drawn), not said each frame.
+fn view_glyphs_held(_tree : @view.Tree, sc : Double) -> Unit {
+  if !glyphs_lost.val && sc == glyphs_held_sc.val {
+    return
+  }
+  glyphs_lost.val = false
+  glyphs_held_sc.val = sc
   let stale : Array[@view.NodeId] = []
-  // (a row kept, nothing of it changed since (Ctx::ride_kept_for): its glyphs held as it kept them, its nodes not gone
-  // through; what holds no block of its own passed over whole)
-  tree.each_drawn_laid_or_past(
-    fn(c, _x, _y, a, _s, _ux, _uy) {
-      if c.id.at == 0 || a <= 0.002 || c.hosted {
-        return false
-      }
-      match ride_kept.get(c.id) {
-        Some(k) if tree.drawn_rev(c.id) <= k.rev && k.kept.iter().all(fn(g) { glyphs_still(g, sc) }) =>
-          return true
-        _ => ()
-      }
-      match view_blocks.get(c.id) {
-        Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
-        _ => ()
-      }
-      false
-    },
-    draws=fn(c) { view_blocks.contains(c.id) },
-  )
+  for id in view_blocks.keys() {
+    match view_blocks.get(id) {
+      Some(b) if !glyphs_there(b.kept, sc) => stale.push(id)
+      _ => ()
+    }
+  }
+  // (a row kept drawing one of them made again with it: Ctx::ride_kept_for)
   if stale.length() > 0 {
     ride_glyphs_gone.val = ride_glyphs_gone.val + 1
   }
   for id in stale {
     view_blocks.remove(id)
   }
+  let rows : Array[@view.NodeId] = []
+  for id in ride_kept.keys() {
+    match ride_kept.get(id) {
+      Some(k) if !k.kept.iter().all(fn(g) { glyphs_there(g, sc) }) => rows.push(id)
+      _ => ()
+    }
+  }
+  for id in rows {
+    ride_kept.remove(id)
+  }
+}
+
+///|
+/// The words' pixels a point what is kept to be composed was last looked through at (view_glyphs_held).
+// kept across runs: worked out again as a run begins (glyphs_lost)
+let glyphs_held_sc : Ref[Double] = Ref(0.0)
+
+///|
+/// What the window's tree draws now from the atlas said drawn from in this frame (Atlas::drawn), before a plot is
+/// emptied for what comes (Atlas::before_full): each node's content composed in it (as it is drawn now: what is not
+/// drawn, gone or faded out, holds none), each list's row kept drawn again, as glyphs an old view draws are as it
+/// draws them.
+fn glyphs_held_drawn() -> Unit {
+  guard view_app.val is Some(tree) else { return }
+  let sc = glyphs_held_sc.val
+  tree.each_drawn_laid_or_past(
+    fn(c, _x, _y, a, _s, _ux, _uy) {
+      if c.id.at == 0 || a <= 0.002 || c.hosted {
+        return false
+      }
+      match ride_kept.get(c.id) {
+        Some(k) if tree.drawn_rev(c.id) <= k.rev => {
+          for g in k.kept {
+            glyphs_still(g, sc) |> ignore
+          }
+          return true
+        }
+        _ => ()
+      }
+      match view_blocks.get(c.id) {
+        Some(b) => glyphs_still(b.kept, sc) |> ignore
+        None => ()
+      }
+      false
+    },
+    draws=fn(c) { view_blocks.contains(c.id) },
+  )
 }
 
 ///|
@@ -1822,6 +1887,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   }
   inst_owners.tree_words[c.id] = view_words_set(c.words, c.words_look)
   self.ninst = start
+  self.spans_cut()
   glyphs_kept.val = was_kept
   {
     inst,
@@ -3040,7 +3106,10 @@ fn island_clips(f : () -> Unit) -> Unit {
   clip_stack.clear()
   clip_window.clear()
   clip_apart.clear()
-  clip_stack.push_iter([-1.0e9, -1.0e9, 1.0e9, 1.0e9].iter())
+  clip_stack.push(-1.0e9)
+  clip_stack.push(-1.0e9)
+  clip_stack.push(1.0e9)
+  clip_stack.push(1.0e9)
   for _ in 4..<clip_n {
     clip_stack.push(0.0)
   }
@@ -3048,11 +3117,11 @@ fn island_clips(f : () -> Unit) -> Unit {
   clip_apart.push(false)
   f()
   clip_stack.clear()
-  clip_stack.push_iter(stack.iter())
+  clip_stack.append(stack)
   clip_window.clear()
-  clip_window.push_iter(window.iter())
+  clip_window.append(window)
   clip_apart.clear()
-  clip_apart.push_iter(apart.iter())
+  clip_apart.append(apart)
 }
 
 ///|
@@ -3065,14 +3134,15 @@ fn old_hits_framed(c : Ctx) -> Unit {
   layer_hits.clear()
   layer_hits.append(next_layer_hits)
   next_layer_hits.clear()
+  // (copied whole, not a number at a time through an iterator: every target's, every frame)
   old_hits_rects.clear()
-  old_hits_rects.push_iter(c.hit_rects.iter())
+  old_hits_rects.append(c.hit_rects)
   old_hits_clips.clear()
-  old_hits_clips.push_iter(c.hit_clips.iter())
+  old_hits_clips.append(c.hit_clips)
   old_scrolls_rects.clear()
-  old_scrolls_rects.push_iter(c.scroll_rects.iter())
+  old_scrolls_rects.append(c.scroll_rects)
   old_bars.clear()
-  old_bars.push_iter(c.bars.iter())
+  old_bars.append(c.bars)
   old_hits_place(c, view_app.val)
 }
 
@@ -3086,7 +3156,11 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
   let rects = c.hit_rects
   let clips = c.hit_clips
   for h in old_hits {
-    let (at_x, at_y, on, s) = old_hits_moved(c, h, tree)
+    let (dx, dy, on, s) = old_hits_by(h, tree)
+    // (a point of what was painted where it is drawn now: old_hits_moved's, worked out here for each number)
+    let (hx, hy) = (h.x, h.y)
+    let at_x = fn(v : Double) { hx + dx + (v - hx) * s }
+    let at_y = fn(v : Double) { hy + dy + (v - hy) * s }
     for k in h.from..<h.to {
       let r = k * 4
       if r + 3 >= rects.length() || r + 3 >= old_hits_rects.length() {
@@ -3106,12 +3180,12 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
       rects[r + 3] = at_y(old_hits_rects[r + 3])
       let b = k * clip_n
       if b + clip_n <= clips.length() && b + clip_n <= old_hits_clips.length() {
-        for o in [0, 12] {
-          clips[b + o] = at_x(old_hits_clips[b + o])
-          clips[b + o + 1] = at_y(old_hits_clips[b + o + 1])
-          clips[b + o + 2] = at_x(old_hits_clips[b + o + 2])
-          clips[b + o + 3] = at_y(old_hits_clips[b + o + 3])
-          // (its corners as round as it is drawn big)
+        // (the clip and its outer, 12 on: each moved, its corners as round as it is drawn big)
+        for o = 0; o <= 12; o = o + 12 {
+          clips[b + o] = hx + dx + (old_hits_clips[b + o] - hx) * s
+          clips[b + o + 1] = hy + dy + (old_hits_clips[b + o + 1] - hy) * s
+          clips[b + o + 2] = hx + dx + (old_hits_clips[b + o + 2] - hx) * s
+          clips[b + o + 3] = hy + dy + (old_hits_clips[b + o + 3] - hy) * s
           for q in 4..<8 {
             clips[b + o + q] = old_hits_clips[b + o + q] * s
           }
@@ -3247,22 +3321,27 @@ fn old_bar_takes(c : Ctx, id : Int) -> Bool {
 /// Where what old view `h` painted is now (`tree`: as the tree has it; none, where it was painted): a point of it from
 /// its place then to where it is drawn, as big (x, y), whether it takes presses there, how big it is drawn.
 fn old_hits_moved(c : Ctx, h : OldHits, tree : @view.Tree?) -> ((Double) -> Double, (Double) -> Double, Bool, Double) {
+  ignore(c)
+  let (dx, dy, on, s) = old_hits_by(h, tree)
+  // (a point of what was painted, from its place then (h.x, h.y) to where it is drawn now, as big)
+  (fn(v) { h.x + dx + (v - h.x) * s }, fn(v) { h.y + dy + (v - h.y) * s }, on, s)
+}
+
+///|
+/// How far old view `h`'s targets are moved from where they were painted, whether it takes presses now, and how big it
+/// is drawn (old_hits_moved).
+fn old_hits_by(h : OldHits, tree : @view.Tree?) -> (Double, Double, Bool, Double) {
   // (and as big as it is drawn now, about its top left: Tree::drawn_scale; nothing taken where it is drawn as nothing)
-  let (dx, dy, on, s) = match tree {
+  match tree {
     None => (0.0, 0.0, true, 1.0)
     Some(t) =>
-      match t.drawn_of(h.id) {
+      match t.drawn_place(h.id) {
         // (where they are, whatever a modal layer over them lets them take: that asked as the input comes,
         // Tree::target_at; what reads them for where things are, a thumbnail's place, reads them so)
-        Some(d) if t.presses_here(h.id) => {
-          let s = t.drawn_scale(h.id)
-          (d.x - h.x, d.y - h.y, s > 0.0, s)
-        }
+        Some((x, y, _, s)) if t.presses_here(h.id) => (x - h.x, y - h.y, s > 0.0, s)
         _ => (0.0, 0.0, false, 1.0)
       }
   }
-  // (a point of what was painted, from its place then (h.x, h.y) to where it is drawn now, as big)
-  (fn(v) { h.x + dx + (v - h.x) * s }, fn(v) { h.y + dy + (v - h.y) * s }, on, s)
 }
 
 ///|

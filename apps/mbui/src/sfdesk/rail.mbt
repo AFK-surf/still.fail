@@ -485,7 +485,7 @@ let rail_under : Ref[Int64] = Ref(0L)
 /// after what is on it): on the corner, not in it (sf/align.mbt, the user, 2026-10-17: @sf.on_corner), its middle
 /// on the ground's curve where it turns 45° (its corner this frame: rail_round), on a disc of what the rail stands on
 /// 2 round it (rail_under), which the ground, lit, shows cut out of it. `shown` of the way in (a list's as the sidebar
-/// folds: Rail.css.ts listMark, from clear at 40%, moved with it).
+/// folds: Rail.css.ts listMark, from 40%, moved with it; clear up to half its size).
 fn rail_hung(c : @ui.Ctx, mark : () -> Unit, shown? : Double = 1.0) -> Unit {
   let reach = @sf.on_corner(c.theme().corner(rail_round.val), rail_hung_side, room=rail_sq_side / 2.0)
   c.layer(fn() {
@@ -493,7 +493,8 @@ fn rail_hung(c : @ui.Ctx, mark : () -> Unit, shown? : Double = 1.0) -> Unit {
       c.box(style=rail_hung_room, tx=reach, ty=-reach, fn() {
         let i = c.box(style=rail_hung_ring.then(@ui.style(bg=Data(rail_under.val))), mark)
         if shown < 1.0 {
-          c.look(i, @ui.look(alpha=shown, scale=fold_at(mark_folded_from, 1.0, shown)))
+          let scale = fold_at(mark_folded_from, 1.0, shown)
+          c.look(i, @ui.look(alpha=@sf.seen_at(scale), scale~))
         }
       })
       |> ignore

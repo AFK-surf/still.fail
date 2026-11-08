@@ -39,7 +39,7 @@ let mark_busy : @ui.Style = @ui.css("w=S2_5 h=S2_5")
 
 ///|
 /// A row's mark (its row's `key`): one that comes while the chat is in view (a new message, work
-/// begun) pops in (scale 0, 1.3 at 60%, 1: 320 ms, ease-out); one there as the list is first drawn does not.
+/// begun) pops in (scale 0, 1.3 at 60%, 1: 320 ms, ease-out; clear up to half its size); one there as the list is first drawn does not.
 pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
   let pop = @motion.anim(c, "side/mark-pop/" + key, 1.0, global=true)
   match marks_seen.get(key) {
@@ -56,7 +56,7 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
   let mark = chat_mark(c, tone)
   let v = pop.get()
   if mark != 0 && v < 1.0 {
-    c.look(mark, @ui.look(scale=pop_scale(v)))
+    c.look(mark, @ui.look(alpha=@sf.seen_at(pop_scale(v)), scale=pop_scale(v)))
   }
 }
 

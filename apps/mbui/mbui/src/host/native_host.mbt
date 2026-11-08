@@ -256,6 +256,21 @@ impl @hostapi.Host for Native with present(_, buf, count, r, g, b) {
 }
 
 ///|
+impl @hostapi.Host for Native with groups_here(_) {
+  groups_here()
+}
+
+///|
+impl @hostapi.Host for Native with group_set(_, id, inst, moves, n) {
+  group_set(id, inst, moves, n)
+}
+
+///|
+impl @hostapi.Host for Native with group_drop(_, id) {
+  group_drop(id)
+}
+
+///|
 impl @hostapi.Host for Native with set_ime(_, active, x, y, w, h, text, sel_start, sel_end) {
   set_ime(active, x, y, w, h, text, sel_start, sel_end)
 }

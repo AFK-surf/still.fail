@@ -198,6 +198,7 @@ fn glyphs_short_owed() -> Bool {
 ///|
 /// Every glyph forgotten, and where it was in the atlas: drawn again as it is next asked for.
 fn glyphs_forget() -> Unit {
+  glyphs_lost.val = true
   text_cache.glyphs.clear()
   text_cache.fresh.clear()
   text_cache.atlas = None
@@ -211,12 +212,34 @@ fn glyphs_forget() -> Unit {
 let glyphs_kept : Ref[Array[(Int, Double, Double)]?] = Ref(None)
 
 ///|
+/// Whether a glyph may have gone from where something made to be kept draws it since that was last looked for: one let
+/// go of for another (its plot emptied), all forgotten, or one there was no room for. What draws from the atlas frame
+/// after frame is looked through again then (view_glyphs_held), not each frame.
+// kept across runs: set as one goes, put back as what draws them is looked through
+let glyphs_lost : Ref[Bool] = Ref(true)
+
+///|
 /// Glyph `key` drawn from where `g` is, told to what is made to be kept (glyphs_kept).
 fn glyph_kept(key : Int, g : Glyph) -> Unit {
   match glyphs_kept.val {
     Some(a) => a.push((key, g.u, g.v))
     None => ()
   }
+}
+
+///|
+/// Whether the glyphs `kept` (glyphs_kept's) are each where they were in the atlas still, at `sc` pixels a point, as
+/// glyphs_still asks, none said drawn from in this frame (what is not drawn now: Atlas::drawn keeps a plot through the
+/// frame, and one drawn from by nothing on the screen may be emptied).
+fn glyphs_there(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
+  for k in kept {
+    let (key, u, v) = k
+    match text_cache.glyphs.get(key) {
+      Some(g) if g.u == u && g.v == v && !glyph_other_scale(g, sc) => ()
+      _ => return false
+    }
+  }
+  true
 }
 
 ///|
@@ -956,6 +979,7 @@ fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
       Some(a) => a
       None => {
         let a = @hostapi.Atlas::new(h_atlas_size(true))
+        a.before_full(glyphs_held_drawn)
         text_cache.colour_atlas = Some(a)
         a
       }
@@ -968,6 +992,7 @@ fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
     Some(a) => (a, 0)
     None => {
       let a = @hostapi.Atlas::new(h_atlas_size(false))
+      a.before_full(glyphs_held_drawn)
       text_cache.atlas = Some(a)
       (a, 0)
     }
@@ -1019,7 +1044,10 @@ fn glyph(key : Int, sc : Double) -> Glyph {
         text_cache.glyphs[key] = no_glyph
         return no_glyph
       }
-      match a.place(key, w, h, fn(k) { text_cache.glyphs.remove(k) }) {
+      match a.place(key, w, h, fn(k) {
+        text_cache.glyphs.remove(k)
+        glyphs_lost.val = true
+      }) {
         Some((plot, x, y)) => {
           h_glyph_put(key, x + across, y)
           let g = {
@@ -1041,6 +1069,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
         // (no room while this frame is drawn: what is made to be kept made again once there is, glyphs_still)
         None => {
           text_cache.short = true
+          glyphs_lost.val = true
           glyph_kept(key, { ..no_glyph, u: -1.0, v: -1.0 })
           no_glyph
         }
