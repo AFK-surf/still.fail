@@ -35,23 +35,33 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 /// each frame is drawn, never built anew for it (Ctx::cycle_look); still and whole when what it waits on failed (the
 /// red words over them say so: faded, they were drawn too faint to be seen, mbui ui/contrast.mbt). `resident`: a
 /// state's for as long as it lasts (a service restarting), on the one clock's steps, not a wait's (Ctx::cycle).
-/// `share`: how much of its breath it takes (0 … 1), what stops waiting going back to whole over a while, not at once.
+/// `share`: how much of its breath it takes (0 … 1; all of it where not said), what stops waiting going back to whole
+/// over a while, not at once: read as it is drawn, as the breath is; breathing till its way to none has come to its
+/// declared end.
 pub fn breathe(
   c : @ui.Ctx,
   node : Int,
   failed? : Bool = false,
   low? : Double = 0.5,
   resident? : Bool = false,
-  share? : Double = 1.0,
+  share? : @motion.Anim,
 ) -> Unit {
-  if failed || share <= 0.0 {
+  if failed {
     return
+  }
+  match share {
+    Some(s) if s.target() <= 0.0 && s.over() => return
+    _ => ()
   }
   c.cycle_look(
     node,
     breath_ms,
     fn(f) {
       let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+      let share = match share {
+        Some(s) => dmax(0.0, s.get())
+        None => 1.0
+      }
       @ui.look(alpha=1.0 - (1.0 - low) * share * @ui.Ease::InOut.at(way))
     },
     resident~,

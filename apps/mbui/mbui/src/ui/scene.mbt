@@ -866,6 +866,11 @@ fn Ctx::push_inst(
   }
   // (what is not a glyph in words drawn a glyph at a time, a list's mark, a quote's bar, a code block's ground: with
   // the glyph after it, its line's first: Ctx::glyphs_by)
+  // (an ink worked out as what holds it is painted, for its words, lines and shapes: Ctx::ink_by)
+  let color = match ink_now.val {
+    Some(ink) if kind == 1.0 || kind == 7.0 || kind == 10.0 || kind == 11.0 => ink
+    _ => color
+  }
   let (y, alpha, c2d) = match glyph_look.val {
     Some(f) if !glyph_pushing.val => {
       let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 })
@@ -1035,6 +1040,11 @@ let glyph_look : Ref[((GlyphAt) -> GlyphLook)?] = Ref(None)
 ///|
 // kept across runs: set only while a node that says it is painted, put back as it is done
 let glyph_n : Ref[Int] = Ref(0)
+
+///|
+/// The ink what is painted now is drawn in (Ctx::ink_by): None, its own.
+// kept across runs: set only while a node that says it is painted, put back as it is done
+let ink_now : Ref[Int64?] = Ref(None)
 
 ///|
 /// The top and foot of what cuts the node whose glyphs have looks of their own (Ctx::glyphs_by), as it is painted: what
@@ -1294,6 +1304,15 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     _ => None
   }
+  // (what it holds in an ink worked out as it is painted: Ctx::ink_by)
+  let ink_was = match self.drawn_entry(i) {
+    Some({ ink_by: Some(f), .. }) if drawing => {
+      let was = ink_now.val
+      ink_now.val = Some(f())
+      Some(was)
+    }
+    _ => None
+  }
   // (its words set on the pixels where the old view it is in is laid out, carried with that to where it is drawn,
   // whenever and from wherever it is painted: glyphs_carried)
   let carried_x = glyphs_carried[0]
@@ -1320,6 +1339,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       glyph_n.val = n
       glyph_cut.val = cut
     }
+    None => ()
+  }
+  match ink_was {
+    Some(was) => ink_now.val = was
     None => ()
   }
   if passes {

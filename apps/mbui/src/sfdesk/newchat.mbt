@@ -107,7 +107,7 @@ fn new_drive_station(src : Source, w : Workspace) -> String? {
 ///|
 /// The new chat of view `v` as it is left (`up`, `fade`: sfpages new_chat_left), as wide as it was: with its 文件 tab
 /// open, beside where the panel is (the chat it became has the panel now, the chat it was left for its own).
-fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : Double, fade : Double) -> Unit {
+fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : @motion.Anim, fade : @motion.Anim) -> Unit {
   let frame = new_frame(src, w)
   let files = new_files_open(src, w.id)
   let left = fn() { @sfpages.new_chat_left(c, src, w, frame, v, up, fade) }
@@ -135,7 +135,7 @@ fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
 /// sidebar, fading over it (switch.mbt). Drawn over the chat's page, after it.
 pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if @sfbase.new_chat_leaving_of(c, r) {
-    let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c).get(), new_fade(c).get()) })
+    let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c), new_fade(c)) })
     // (drawn only, while it leaves)
     c.draw_only(l)
   }

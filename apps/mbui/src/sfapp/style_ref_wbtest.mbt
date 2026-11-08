@@ -53,10 +53,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 28261:276919d4
-    #|waiting wide 58300:3d0f259d
-    #|waiting-dark narrow 28177:273f1828
-    #|waiting-dark wide 58125:a68233b
+    #|waiting narrow 28208:9506c151
+    #|waiting wide 58247:73dd94be
+    #|waiting-dark narrow 28126:8d2e104d
+    #|waiting-dark wide 58074:ac12b632
     #|finding narrow 34240:be2ffdf1
     #|finding wide 64941:60ae07a8
     #|finding-dark narrow 34337:52a2c840
@@ -73,18 +73,18 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|checking wide 66068:41ce6ab8
     #|checking-dark narrow 35339:cf8b4c9d
     #|checking-dark wide 66069:5e63ee5
-    #|none narrow 27729:50cff18b
-    #|none wide 57776:96048427
-    #|none-dark narrow 27649:92e439f
-    #|none-dark wide 57605:4b2ab2c7
-    #|failed narrow 23488:6a0bface
-    #|failed wide 53528:cecaea53
-    #|failed-dark narrow 23488:d6aa537e
-    #|failed-dark wide 53437:e5a3c97f
-    #|nocode narrow 28261:276919d4
-    #|nocode wide 58300:3d0f259d
-    #|nocode-dark narrow 28177:273f1828
-    #|nocode-dark wide 58125:a68233b
+    #|none narrow 27676:a0ff063c
+    #|none wide 57723:14a9c1a8
+    #|none-dark narrow 27598:34020870
+    #|none-dark wide 57554:fea79d06
+    #|failed narrow 23435:473d3873
+    #|failed wide 53475:3dbc7514
+    #|failed-dark narrow 23437:6453ad5f
+    #|failed-dark wide 53386:65908bda
+    #|nocode narrow 28208:9506c151
+    #|nocode wide 58247:73dd94be
+    #|nocode-dark narrow 28126:8d2e104d
+    #|nocode-dark wide 58074:ac12b632
     #|
 
 

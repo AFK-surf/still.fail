@@ -20,7 +20,10 @@ fn main {
         made.val = true
         motion.animate(1.0, @motion.tween_to(duration=picture_transition_ms))
       }
-      @figure.canvas(c, 100.0, 100.0, if motion.get() >= 1.0 { 0x00FF00FFL } else { 0xFF0000FFL }, fn() {})
+      // (its colour by where the motion is as it is drawn, on the ground of what holds the canvas: the picture at the
+      // named time reads it then)
+      let b = c.box(fn() { @figure.canvas(c, 100.0, 100.0, 0L, fn() {  }) })
+      c.bg_by(b, fn() { if motion.get() >= 1.0 { 0x00FF00FFL } else { 0xFF0000FFL } })
     }
     if mode.has_prefix("time-exact-") {
       let motion = @motion.anim(c, "picture-test-exact", 0.0)
@@ -29,8 +32,8 @@ fn main {
         motion.animate(1.0, @motion.tween_to(duration=picture_exact_ms, ease=@motion.linear))
       }
       // The midpoint is between the two capture times and before the next 60 Hz frame.
-      let green = motion.get() >= 0.5
-      @figure.canvas(c, 100.0, 100.0, if green { 0x00FF00FFL } else { 0xFF0000FFL }, fn() {})
+      let b = c.box(fn() { @figure.canvas(c, 100.0, 100.0, 0L, fn() {  }) })
+      c.bg_by(b, fn() { if motion.get() >= 0.5 { 0x00FF00FFL } else { 0xFF0000FFL } })
     }
     if mode == "transparent" {
       @figure.canvas(c, 50.0, 50.0, 0xFF0000FFL, fn() {})

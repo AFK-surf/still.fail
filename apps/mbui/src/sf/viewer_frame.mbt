@@ -81,7 +81,8 @@ fn viewer_head(
   on_close~ : () -> Unit,
 ) -> Double {
   let small = c.width <= viewer_small_w
-  let seen = @motion.animate(c, key + "/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
+  // (there and gone as it is drawn: told as it is built, read where it is painted)
+  let seen = @motion.told(c, key + "/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
       if awake {
         wake_ms
       } else {
@@ -120,7 +121,7 @@ fn viewer_head(
     )
     |> ignore
   })
-  c.look(n, @ui.look(alpha=seen * shown))
+  c.look_by(n, fn() { @ui.look(alpha=seen.get() * shown) })
   c.laid_size(head).map(fn(s) { s.0 }).unwrap_or(0.0)
 }
 

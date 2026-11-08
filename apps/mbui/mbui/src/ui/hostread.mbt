@@ -205,16 +205,19 @@ pub fn window_keys_own() -> Bool {
 }
 
 ///|
-/// Whether the window is maximized now (@hostapi.window_zoomed; a Tester's as set_window_zoomed made it).
+/// Whether the window is maximized now (@hostapi.window_zoomed; a Tester's as set_window_zoomed made it), as the frame
+/// has it, followed (host_said.mbt): what read it is built again as it changes.
 pub fn window_zoomed() -> Bool {
-  @hostapi.window_zoomed()
+  zoomed_said.now()
 }
 
 ///|
 /// How the pointer stands on the window's maximize button the app draws, which only its host sees (0 not on it, 1 on
-/// it, 2 pressing it: @hostapi.window_snap_state; a Tester's as set_window_snap made it).
+/// it, 2 pressing it: @hostapi.window_snap_state; a Tester's as set_window_snap made it), as the frame has it, followed
+/// (host_said.mbt): what read it is built again as it changes (the button lit and held as the host says, not when
+/// something else builds it again).
 pub fn window_snap_state() -> Int {
-  @hostapi.window_snap_state()
+  snap_said.now()
 }
 
 ///|

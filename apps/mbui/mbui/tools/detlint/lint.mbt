@@ -1739,7 +1739,7 @@ let build_clock_methods : Array[String] = ["now_before", "now_of", "shows_motion
 /// What a frame's paint is given to read as it paints, a closure each (Ctx::look_by and the rest): what is read in it
 /// is read as the frame is painted, not built (build-clock)
 let paint_takers : Array[String] = [
-  "look_by", "moved_by", "bg_by", "notch_by", "cut_across_by", "glyphs_by", "cycle_look",
+  "look_by", "moved_by", "bg_by", "ink_by", "notch_by", "cut_across_by", "glyphs_by", "cycle_look",
 ]
 
 ///|

@@ -1728,7 +1728,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     step~,
     column_in=panel_words - dialog_pad,
     scrim?=scrim_of(p, false),
-    veil=p.recede.get(),
+    veil=p.recede,
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1767,7 +1767,7 @@ fn steps_centred(
     bare=true,
     on_escape=fn() { steps_escape(p) },
     scrim?=scrim_of(p, false),
-    veil=p.recede.get(),
+    veil=p.recede,
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1992,9 +1992,13 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let look = fn(c : @ui.Ctx, st : @kit.SheetState, body : () -> Unit) {
     base(c, st, fn() {
       body()
-      let veil = @ui.alpha(sheet_scrim, p.recede.get())
-      if (veil & 0xFFL) != 0L {
-        c.layer(fn() { c.box(style=sheet_veil_at.then(@ui.style(bg=Data(veil))), fn() {  }) |> ignore }) |> ignore
+      // (dimmed as it is drawn, not built again as it goes: built while it dims or comes back, till its declared end)
+      if p.recede.target() > 0.0 || !p.recede.over() {
+        c.layer(fn() {
+          let v = c.box(style=sheet_veil_at, fn() {  })
+          c.bg_by(v, fn() { @ui.alpha(sheet_scrim, dmax(0.0, p.recede.get())) })
+        })
+        |> ignore
       }
     })
   }

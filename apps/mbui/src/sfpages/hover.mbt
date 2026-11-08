@@ -463,10 +463,9 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
         c.text(text(Some(l), "text"), style=if now || c.lit(id) { agent_card_now } else { agent_card_line }) |> ignore
       })
       c.semantics(n, Button, id~, label=text(Some(l), "text"))
-      let (y, f) = (line_y(c, k).get(), line_faint(c, k).get())
-      if y != 0.0 || f != 1.0 {
-        c.look(n, @ui.look(dy=y, alpha=f))
-      }
+      // (where it is on its way and how faint, as it is drawn)
+      let (y, f) = (line_y(c, k), line_faint(c, k))
+      c.look_by(n, fn() { @ui.look(dy=y.get(), alpha=f.get()) })
       // how far apart they are as laid out: the steps of the next change
       match c.laid_size(id) {
         Some((_, h)) if h > 0.0 => ran.pitch = h + agent_card_lines_gap.px()
@@ -479,7 +478,8 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
           let n = c.box(style=agent_card_gone_box, fn() {
             c.text(g.words, style=if g.now { agent_card_now } else { agent_card_line }) |> ignore
           })
-          c.look(n, @ui.look(dy=g.top + gone_y(c, g.key).get(), alpha=gone_faint(c, g.key).get()))
+          let (y, f) = (gone_y(c, g.key), gone_faint(c, g.key))
+          c.look_by(n, fn() { @ui.look(dy=g.top + y.get(), alpha=f.get()) })
         }
       })
       |> ignore
