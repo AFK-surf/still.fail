@@ -2823,20 +2823,20 @@ fn view_event(f : () -> Unit, what? : String = "event") -> Unit {
 ///|
 /// An outside event can call another event. Only the outer event is timed, so its work is not reported twice.
 // kept across runs: zero whenever an event is not being handled
-let event_probe_depth : Ref[Int] = Ref(0)
+let event_depth : Ref[Int] = Ref(0)
 
 ///|
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") -> Unit {
-  let recording = event_probe_depth.val == 0 && @hostapi.perf_recording()
+  let recording = event_depth.val == 0 && @hostapi.perf_recording()
   let start = if recording { work_now() } else { 0.0 }
   let tree = if recording { view_app.val } else { None }
   let before = tree.map(fn(t) { t.work() })
   let alive = tree.map(fn(t) { t.alive() }).unwrap_or(0)
   let memory = if recording { h_mem_mb() } else { -1.0 }
   let in_frame = frame_running.val
-  event_probe_depth.val += 1
+  event_depth.val += 1
   match view_app.val {
     Some(t) => t.event_said(h_event_time(), said, f)
     None => {
@@ -2846,7 +2846,12 @@ fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") 
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
   turns_said(g(), h_event_time())
-  event_probe_depth.val -= 1
+  event_depth.val -= 1
+  // A resource whose readers changed between this event's separate signal flushes can be released only once all of
+  // the event has run. An event inside a frame leaves its handovers for the frame's end instead.
+  if event_depth.val == 0 && !frame_running.val {
+    frame_afters_run()
+  }
   if recording {
     let elapsed = work_now() - start
     if elapsed >= probe_slow_ms {
