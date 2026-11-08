@@ -335,6 +335,34 @@ pub fn chat_item(v : Json) -> ChatItem {
 }
 
 ///|
+/// A row as its station's state makes it (the `chats` list's `stations`: said once for a station, not on each of its
+/// rows; client/core-ts views.ts `stationOn`, which this follows): offline, it is not swiped away; gone for its update,
+/// its second line says so unless it needs the viewer. The row as it is while its station says nothing of it.
+fn station_on(item : ChatItem, station : Json?) -> ChatItem {
+  let offline = opt_text(station, "offline")
+  let reconnecting = opt_text(station, "reconnecting")
+  if offline is None && reconnecting is None {
+    return item
+  }
+  let item = match offline {
+    Some(_) => { ..item, offline, swipe_archive: false, swipe_ask: None }
+    None => item
+  }
+  let item = match reconnecting {
+    Some(_) => { ..item, reconnecting }
+    None => item
+  }
+  if !flag(station, "updating") {
+    return item
+  }
+  if item.state_lead == "need" {
+    { ..item, updating: true }
+  } else {
+    { ..item, updating: true, state_text: offline, state_lead: "", state_lead_text: "", state_rest: "", state_about: None }
+  }
+}
+
+///|
 /// The chats' list made here, not read from the core's `chats` topic (a test's). The topic is read through chats_of,
 /// worked out once for each version of it.
 pub fn chats_view_made(v : Json) -> ChatsView {
@@ -344,7 +372,20 @@ pub fn chats_view_made(v : Json) -> ChatsView {
 ///|
 /// The chats' list as the core gives it: for chats_of alone (chats_read).
 fn chats_view(v : Json) -> ChatsView {
-  chats_view_by(v, chat_item)
+  let stations = stations_said(v)
+  chats_view_by(v, fn(j) { station_on(chat_item(j), stations.get(text(Some(j), "station"))) })
+}
+
+///|
+/// The list's stations that say something of each of their rows (station_on), by address.
+fn stations_said(v : Json) -> Map[String, Json] {
+  let out : Map[String, Json] = {}
+  for s in items(Some(v), "stations") {
+    if field(Some(s), "offline") is Some(_) || field(Some(s), "reconnecting") is Some(_) {
+      out[text(Some(s), "station")] = s
+    }
+  }
+  out
 }
 
 ///|

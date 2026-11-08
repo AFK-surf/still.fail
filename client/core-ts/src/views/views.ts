@@ -120,6 +120,47 @@ export function downWords(link: J, name: string): string {
   return t("core-views.station.offline", { name });
 }
 
+/// What a station's link makes of each of its chats' rows: offline, in words (and gone for its update), or its link
+/// coming back; nothing while it is linked. Said once for the station (ChatsView `stations`), not on each row.
+export function rowWords(s: StationInfo, link: J): J {
+  if (!s.online) return { offline: downWords(link, s.name), ...(get(link, "cause") === "updating" ? { updating: true } : {}) };
+  const state = str(get(link, "state")) ?? "connecting";
+  if (state === "error") return { reconnecting: t("core-views.station.retrying", { name: s.name }) };
+  if (state === "reconnecting") return { reconnecting: t("core-views.station.reconnecting_now", { name: s.name }) };
+  return {};
+}
+
+/// A row as its station's state (rowWords) makes it: offline, it is not swiped away; gone for its update, its second line
+/// says so in place of where its agents were (what one needs of the viewer kept), as it is back by itself in a while.
+/// The app does the same with the list's rows (apps/mbui sfbase `station_on`); the core for those it lists elsewhere.
+export function stationOn(row: J, words: J): J {
+  const offline = str(get(words, "offline"));
+  const reconnecting = str(get(words, "reconnecting"));
+  if (offline === null && reconnecting === null) return row;
+  const out: J = { ...row };
+  if (offline !== null) {
+    out.offline = offline;
+    delete out.swipeArchive;
+    delete out.swipeAsk;
+  }
+  if (reconnecting !== null) out.reconnecting = reconnecting;
+  if (get(words, "updating") === true) {
+    out.updating = true;
+    if (out.stateLead !== "need") {
+      out.stateText = offline;
+      for (const k of ["stateLead", "stateLeadText", "stateRest", "stateAbout"]) delete out[k];
+    }
+  }
+  return out;
+}
+
+/// The list with each row as its station's state makes it (stationOn): for what lists its rows elsewhere (a search).
+function stationsOn(chats: J): J {
+  const words = new Map(arr(get(chats, "stations")).map((s) => [str(get(s, "station")) ?? "", s]));
+  if (![...words.values()].some((w) => get(w, "offline") !== undefined || get(w, "reconnecting") !== undefined)) return chats;
+  return { ...chats, days: arr(get(chats, "days")).map((d) => ({ ...d, items: arr(get(d, "items")).map((row) => stationOn(row, words.get(str(get(row, "station")) ?? ""))) })) };
+}
+
 /// Whether a station's versions offer the 测试版 switch.
 export function betaOffered(overview: J, accountInBeta: () => boolean): boolean {
   const station = arr(get(overview, "updates")).find((v) => get(v, "id") === "station");
@@ -1152,11 +1193,12 @@ export class Views implements Owner {
       case "search": {
         const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (chats === undefined || !("ok" in chats)) return chats;
-        return searchView(this.#searchSource, chats.ok, view);
+        return searchView(this.#searchSource, stationsOn(chats.ok), view);
       }
       case "chatSearch": {
-        const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
-        if (chats === undefined || !("ok" in chats)) return chats;
+        const listed = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
+        if (listed === undefined || !("ok" in listed)) return listed;
+        const chats = { ok: stationsOn(listed.ok) };
         const elsewhere = view.elsewhere === true && String(view.query ?? "").trim() !== "";
         const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, elsewhere ? undefined : (view.limit as number | undefined));
         // With something typed (`elsewhere`, the `@` menu), those of the viewer's other workspaces whose title has it
@@ -1167,7 +1209,7 @@ export class Views implements Owner {
             if (place.id === view.scope) continue;
             const theirs = this.#chats(place.id, false, false, "all");
             if (theirs === undefined || !("ok" in theirs)) continue;
-            for (const item of arr(refs.search(theirs.ok, view.query as string, undefined, undefined, undefined).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
+            for (const item of arr(refs.search(stationsOn(theirs.ok), view.query as string, undefined, undefined, undefined).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
           }
           found.items = refs.withOutside(arr(found.items), others, view.query as string, view.scope as string, view.limit as number | undefined);
         }
@@ -1448,13 +1490,13 @@ export class Views implements Owner {
         const listed = arr(read.ok);
         const asked = this.local.pendingRows(s.address);
         // What a row is made with besides its record: a row whose record and these are as they were is the one made
-        // before (rule 7: the list redoes only the rows that changed).
-        const link = this.link(s.address);
+        // before (rule 7: the list redoes only the rows that changed). Not its station's link: what that makes of a row
+        // goes once for the station (`stations`, stationOn), not on each of its rows.
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
         // (its connects: a Slack or Feishu row's link there, #rowMenu)
         const connects = arr(get(this.ok({ topic: "overview", station: s.address }), "connects"));
-        const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
+        const sig = JSON.stringify([s.address, s.name, mark, me, slackUsers, members_, watching, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
         for (const raw of [...asked, ...listed]) {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
@@ -1510,7 +1552,7 @@ export class Views implements Owner {
       // Refused for a security mode: why.
       if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
       const now = looks.doing(state, cause, this.ok({ topic: "overview", station: s.address }));
-      states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}), ...now });
+      states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}), ...now, ...rowWords(s, this.link(s.address)) });
     }
     const days = this.#days(rows);
     let trouble: J = null;
@@ -1614,12 +1656,6 @@ export class Views implements Owner {
     }
     if (mark?.emoji) row.stationEmoji = mark.emoji;
     if (mark?.icon) row.stationIcon = mark.icon;
-    if (!s.online) row.offline = downWords(this.link(s.address), s.name);
-    else {
-      const state = str(this.link(s.address).state) ?? "connecting";
-      if (state === "error") row.reconnecting = t("core-views.station.retrying", { name: s.name });
-      else if (state === "reconnecting") row.reconnecting = t("core-views.station.reconnecting_now", { name: s.name });
-    }
     const agents = arr(row.agents);
     const watch = present.rowWatch(agents);
     if (watch !== null) row.watch = watch;
@@ -1658,9 +1694,9 @@ export class Views implements Owner {
       row.archivable = true;
       if (present.offered(row, hint)) row.settled = true;
     }
-    // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there,
-    // regardless of the chat's state or whether it is recommended for archiving.
-    if (row.offline === undefined && row.pending !== true) {
+    // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there (its
+    // station's state, `stationOn`), regardless of the chat's state or whether it is recommended for archiving.
+    if (row.pending !== true) {
       row.swipeArchive = true;
       // (one someone else started: archiving it archives it for everyone in the workspace)
       const shown = get(row.creator, "shown");
@@ -1677,15 +1713,6 @@ export class Views implements Owner {
         row.stateLead = lead.kind;
         if (lead.text !== undefined) row.stateLeadText = lead.text;
         row.stateRest = lead.rest;
-      }
-    }
-    // Gone for its update: said on its second line, in place of where its agents were as it went (what one needs of the
-    // viewer kept), as it is back by itself in a while (2026-10-29: only its unplugged mark said it was away, not why).
-    if (!s.online && get(this.link(s.address), "cause") === "updating") {
-      row.updating = true;
-      if (row.stateLead !== "need") {
-        row.stateText = row.offline;
-        for (const k of ["stateLead", "stateLeadText", "stateRest", "stateAbout"]) delete row[k];
       }
     }
     const opener = this.#opener(s.address, raw);

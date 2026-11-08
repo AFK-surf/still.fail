@@ -12,6 +12,7 @@ import { StationAddr } from "../src/station/addr.ts";
 import { SOCKET_RETRY_MAX_MS } from "../src/sync/cloud.ts";
 import { apply, call, subscribe } from "./helpers.ts";
 import { HostWire } from "../src/station/wire.ts";
+import { stationOn } from "../src/views/views.ts";
 import { Wake } from "../src/wake.ts";
 import { run } from "./run.ts";
 import { base, overview, started, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
@@ -461,7 +462,15 @@ test("a_new_chat_whose_station_went_down_stays_said_down_and_is_asked_for_once_t
 });
 
 type Shown = { offline: boolean; offlineNote?: string; outbox: { text: string; state: string; waits?: string; error?: string }[] };
-type Listed = { trouble: { text: string; state: string } | null; days: { items: { id: string; offline?: string }[] }[] };
+type Listed = { trouble: { text: string; state: string } | null; stations: { station: string }[]; days: { items: { id: string; station: string; offline?: string }[] }[] };
+
+/// A row of the list as it is shown: as its station's state makes it (said once for the station, not on the row).
+function shownRow(list: Listed, id: string): { offline?: string; stateText?: string; updating?: boolean } | undefined {
+  const row = list.days.flatMap((d) => d.items).find((i) => i.id === id);
+  if (row === undefined) return undefined;
+  assert.equal(row.offline, undefined, "the list's row says nothing of its station's state");
+  return stationOn(row, list.stations.find((s) => s.station === row.station)) as { offline?: string };
+}
 
 test("a_station_down_says_why_as_the_device_can_tell_and_its_chat_takes_messages_that_go_once_it_is_reached", async () => {
   // A weak network took a phone's stations for down, said each 离线 while it was up, and its composer took nothing.
@@ -488,7 +497,7 @@ test("a_station_down_says_why_as_the_device_can_tell_and_its_chat_takes_messages
     apply(s.host, values);
     const chat = () => values.get(1) as Shown;
     const list = () => values.get(2) as Listed;
-    const row = () => list().days.flatMap((d) => d.items).find((i) => i.id === "k1");
+    const row = () => shownRow(list(), "k1");
     // still.fail cloud is reached and lists it online: not said 离线, but not reached from here.
     assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "unreached");
     assert.equal(chat().offline, true);
@@ -535,7 +544,7 @@ test("a_station_its_update_takes_down_is_said_updating_until_it_has_been_down_lo
     subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
     await s.host.time.pass(1000, 250);
     const chat = () => values.get(1) as Shown;
-    const row = () => (values.get(2) as Listed).days.flatMap((d) => d.items).find((i) => i.id === "k1") as { offline?: string; stateText?: string; updating?: boolean } | undefined;
+    const row = () => shownRow(values.get(2) as Listed, "k1");
     // Gone: said so at once, while its link is still coming back, not only once it is taken for offline.
     stationLater(s.host, (req) => (req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
     s.gate.stream = "fail";
