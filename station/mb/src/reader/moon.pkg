@@ -21,6 +21,7 @@ import {
   "station/counts",
   "station/activity",
   "station/jobs",
+  "station/posts",
   "moonbitlang/core/json",
 }
 
