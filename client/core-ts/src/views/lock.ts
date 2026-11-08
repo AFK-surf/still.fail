@@ -32,7 +32,7 @@ import type { Call } from "../core/calls.ts";
 import type { Owner } from "../core/routing.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
-import { type Entry, type Head, Signer, WEB_DEVICE_SECS, entryHash, next, readHead, shortCode } from "../lock.ts";
+import { CARRY_BYTES, type Entry, type Head, Signer, WEB_DEVICE_SECS, entryHash, next, readHead, shortCode } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -55,8 +55,6 @@ export const RENEW_SECS = 5 * 86400;
 /// A call the cloud answers "too many requests" is asked again this often, this many times (its budget is a minute's).
 const LIMITED_TRIES = 6;
 const LIMITED_WAIT = "10 seconds";
-/// How much of the lock a hello brings at most (a station reads its first line up to 16 KiB).
-const CARRY_BYTES = 12 * 1024;
 /// How soon a station that refused this device, though the lock as held here names it, is tried again.
 export const BEHIND_MS = 3_000;
 /// How many times it is, for one head of the lock.
@@ -442,13 +440,11 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
   return personal.standing(sub) === "member" && personal.root(sub) === fold(h.entries).persons.get(sub);
 }
 
-/// What a hello brings of the person's own lock: its chain, where it is what lets this device in here (not a device of
-/// the workspace's lock itself).
+/// What a hello brings of the person's own lock: its chain, wherever its member bound it here, this device in the
+/// workspace's lock as well or not: a station that goes by the person's own lock alone for them lets it in on that.
 function carriedPerson(inner: Inner, ws: string): Entry[] | null {
   const sub = inner.workspaces.owner(ws);
-  const h = held(inner, ws);
-  const base = part(inner, ws).base ?? bases.get(inner) ?? null;
-  if (sub === null || !h?.head || base === null || live(fold(h.entries).devices.get(base), now(inner)) !== undefined || !onBoundPerson(inner, ws)) return null;
+  if (sub === null || !onBoundPerson(inner, ws)) return null;
   const chain = inner.adb.personal().entries(sub);
   return JSON.stringify(chain).length <= CARRY_BYTES ? chain : null;
 }

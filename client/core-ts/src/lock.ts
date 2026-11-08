@@ -14,9 +14,11 @@ export type Entry = { v: 1; ws: string; seq: number; prev: string | null; at: nu
 export type Head = { seq: number; hash: string; genesis: string };
 /// What a connection says of the device in its hello: its base key, and that key's signature for this endpoint;
 /// `entries`, what put it in the lock lately, for a station that has not heard of it yet (views/lock.ts `carried`).
-/// `person`: the chain of the person's own lock, where this device is on it and not in the workspace's (views/lock.ts
+/// `person`: the chain of the person's own lock, where its member bound it in the workspace's (views/lock.ts
 /// `carriedPerson`).
 export type LockClaim = { device: string; proof: string; entries?: Entry[]; person?: Entry[] };
+/// How much of the locks a hello brings at most (a station reads its first line up to 16 KiB).
+export const CARRY_BYTES = 12 * 1024;
 
 /// JSON with object keys sorted, no space: what is hashed. Only integers, strings, booleans, null, arrays, objects.
 export function canonical(v: unknown): string {

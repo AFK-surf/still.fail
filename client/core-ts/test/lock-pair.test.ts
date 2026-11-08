@@ -824,6 +824,8 @@ test("a device on its person's own lock binds it in the workspace's once every s
   await m.run(read(inner, "ws"));
   assert.equal(persons(), root);
   assert.equal(onBoundPerson(inner, "ws"), true);
+  // Its hello brings the person's own lock, though it is in the workspace's lock too.
+  assert.deepEqual(inner.cloudSync.carryPerson?.("ws"), personal.entries("s1"));
   // Bound: not written again.
   const length = held(inner, "ws")!.entries.length;
   await m.run(bindPerson(inner, "ws"));
