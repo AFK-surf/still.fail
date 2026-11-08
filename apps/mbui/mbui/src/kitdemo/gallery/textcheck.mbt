@@ -126,6 +126,54 @@ fn text_check(name : String) -> (Int, Int, Int) {
 }
 
 ///|
+/// A composer's mark (`@[…]` drawn with a zero width space in each bracket's place) at the end of its words, and one
+/// within them, shaped by the host: each zero width character advances none, the last letter some, and all of it as
+/// far as the same words without them. Asked of Core Text (macOS), which answers 0 as the offset of a zero width space
+/// that ends the line: the mark's last letter at no width and its closing space as wide as the line, a caret after it
+/// twice as far as the words go (#4738, 2026-11-08). By sizes, not points: true at any font, any system. Not asked of
+/// the other hosts (not found so there). Each that is not so logged (TEXTCHECK zero-width …); how many.
+fn zero_width_check() -> Int {
+  guard @ui.platform() == 0 else { return 0 }
+  let zw = fn(ch : Char) { ch == '\u{200B}' || ch == '\u{200C}' || ch == '\u{200D}' || ch == '\u{2060}' || ch == '\u{FEFF}' }
+  let shaped = fn(text : String) -> Array[(Int, Int, Double)] {
+    let out = FixedArray::make(text.length() * 4 + 16, 0.0)
+    let k = @hostapi.shape(text, 14.0, 400, 0, out)
+    Array::makei(k, fn(i) { (out[i * 4].to_int(), out[i * 4 + 1].to_int(), out[i * 4 + 2]) })
+  }
+  let wide = fn(cs : Array[(Int, Int, Double)]) { cs.fold(init=0.0, fn(w, c) { w + c.2 }) }
+  let mut bad = 0
+  for text in ["\u{200B}@RoboTwin 四卡实验规划\u{200B}", "看 \u{200B}@首页\u{200B} 吧"] {
+    let cs = shaped(text)
+    let bare = text.iter().filter(fn(ch) { !zw(ch) }).collect()
+    let plain = wide(shaped(String::from_array(bare)))
+    let all = wide(cs)
+    let said : Array[String] = []
+    if (all - plain).abs() > 0.5 {
+      said.push("it goes \{all}, the words without its zero width characters \{plain}")
+    }
+    let mut last = -1
+    for i, c in cs {
+      let ch = text.view(start_offset=c.0, end_offset=c.0 + c.1)
+      if ch.iter().all(zw) {
+        if c.2 != 0.0 {
+          said.push("a zero width character at \{c.0} goes \{c.2}")
+        }
+      } else {
+        last = i
+      }
+    }
+    if last >= 0 && cs[last].2 <= 0.0 {
+      said.push("its last letter (at \{cs[last].0}) goes none")
+    }
+    if said.length() > 0 {
+      bad += 1
+      @hostapi.log("TEXTCHECK zero-width \{Json::string(text).stringify()}: " + said.join("; "))
+    }
+  }
+  bad
+}
+
+///|
 /// Whether the check ran already (it runs once, in the first frame's build, the host's text system up by then).
 let text_checked : Ref[Bool] = Ref(false)
 
@@ -135,6 +183,7 @@ pub fn text_check_run(c : @ui.Ctx, name : String) -> Unit {
   if !text_checked.val {
     text_checked.val = true
     let (asked, differ, skipped) = text_check(name)
+    let differ = differ + zero_width_check()
     @hostapi.log("TEXTCHECK done \{name}: \{asked} answers, \{differ} differ, \{skipped} skipped")
     @hostapi.exit(if differ == 0 && asked > 0 { 0 } else { 1 })
   }
