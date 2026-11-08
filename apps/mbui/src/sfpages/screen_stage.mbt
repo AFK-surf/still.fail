@@ -328,7 +328,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, picture
       c.box(style=stage_foot, fn() {
         c.box(style=stage_foot_column, fn() {
           // (beside the device they are at the foot of what is done with it: nothing over the app being debugged)
-          if !(u.logs.beside && u.logs.shown) {
+          if !(u.logs.beside && u.logs.shown.get()) {
             drops(c, s)
           }
           login_fill(c, s)

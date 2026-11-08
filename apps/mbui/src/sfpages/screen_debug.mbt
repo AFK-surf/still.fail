@@ -82,7 +82,7 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
       u.logs.by_device = true
       c.box(style=screen_row, fn() {
         c.box(style=debug_stage_body, fn() { screen_stage(c, s, u, key) }) |> ignore
-        if u.logs.beside && u.logs.shown {
+        if u.logs.beside && u.logs.shown.get() {
           debug_pane(c, s, u)
         }
       })
@@ -193,9 +193,9 @@ fn debug_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, column : Bool) -> Unit {
 ///|
 /// What is done with the device put away for it to have all the room, or brought back.
 fn debug_pane_button(c : @ui.Ctx, d : DebugLogs) -> Unit {
-  let word = @sf.t(if d.shown { "web-pages.screen.debug.paneHide" } else { "web-pages.screen.debug.paneShow" })
-  if round_button(c, "screen-pane", if d.shown { "shrink" } else { "expand" }, word) {
-    d.shown = !d.shown
+  let word = @sf.t(if d.shown.get() { "web-pages.screen.debug.paneHide" } else { "web-pages.screen.debug.paneShow" })
+  if round_button(c, "screen-pane", if d.shown.get() { "shrink" } else { "expand" }, word) {
+    d.shown.set(!d.shown.get())
   }
 }
 
@@ -514,7 +514,7 @@ priv struct DebugLogs {
   /// what the device has itself is by it (a wide page), not under its picture
   mut by_device : Bool
   /// what is done with it shows beside the device, or is put away for the device to have the room
-  mut shown : Bool
+  shown : @signals.Signal[Bool]
   /// the app 重启 App is for (id, name), once one was chosen
   mut last_app : (String, String)?
   mut relaunch_said : String
@@ -598,7 +598,7 @@ fn debug_logs_new() -> DebugLogs {
     settings_asked: false,
     beside: false,
     by_device: false,
-    shown: true,
+    shown: @signals.signal(true),
     shot_said: false,
     last_app: None,
     relaunch_said: "",

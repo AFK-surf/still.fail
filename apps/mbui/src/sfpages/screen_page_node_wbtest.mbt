@@ -150,3 +150,79 @@ fn screen_touch_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
 test "retained upright touch stage keeps rotation input takeover and terminal pictures" {
   assert_eq(screen_touch_frames(true), screen_touch_frames(false))
 }
+
+///|
+fn screen_native_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, w=951.0, h=669.0, platform=1)
+  defer { @sf.native_bars_reset() }
+  r.live()
+  let frames = []
+  for width in [84.0, 120.0, 84.0] {
+    @sf.native_bars.on.set(true)
+    @sf.native_bars.side.set(width)
+    @sf.native_over_clear()
+    r.t.draw()
+    assert_true(@sf.native_over.up)
+    assert_eq(r.ui().box_w, 951.0 - width)
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+  }
+  for a in @sf.native_over.acts.copy() {
+    if a.0 == "over/screen-full" { (a.3)() }
+  }
+  @sf.native_over_clear()
+  r.t.draw()
+  assert_true(r.ui().full.get())
+  assert_eq(r.ui().box_w, 951.0)
+  assert_eq(@sf.native_over.acts.length(), 0)
+  r.ui().full.set(false)
+  @sf.native_over_clear()
+  r.t.draw()
+  assert_eq(r.ui().box_w, 867.0)
+  for a in @sf.native_over.acts.copy() {
+    if a.0 == "over/screen-mode" { (a.3)() }
+  }
+  r.t.draw()
+  assert_true(r.told("screen.control").length() > 0)
+  assert_eq(r.told("screen.view").length(), 1)
+  screen_done(r.t)
+  frames
+}
+
+///|
+test "retained screen follows native column resizing and keeps native mode and full-screen actions" {
+  assert_eq(screen_native_frames(true), screen_native_frames(false))
+}
+
+///|
+fn screen_simulator_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, platform=0, w=1280.0, h=800.0)
+  simulator_live(r)
+  let frames = []
+  for size in [(1280.0, 800.0), (390.0, 844.0), (1280.0, 800.0)] {
+    r.t.resize(size.0, size.1)
+    r.t.draw()
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+    r.tap_label(tr("web-pages.screen.device.home"))
+    r.t.draw()
+  }
+  assert_eq(r.inputs().length(), 6)
+  for shown in [false, true] {
+    r.ui().logs.shown.set(shown)
+    r.t.draw()
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+  }
+  assert_eq(r.told("screen.view").length(), 1)
+  screen_done(r.t)
+  frames
+}
+
+///|
+test "retained simulator keeps resizing device input and log pane picture geometry" {
+  assert_eq(screen_simulator_frames(true), screen_simulator_frames(false))
+}

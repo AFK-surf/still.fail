@@ -250,13 +250,13 @@ fn screen_page_context(
   if over && u.full.get() {
     u.full.set(false)
   }
-  if u.full.get() != u.sideways_told {
-    let on = u.full.get()
-    c.after_build("screen-sideways/" + key, fn() {
-      u.sideways_told = on
-      @hostapi.set_sideways(on)
-    })
-  }
+  let sideways_on = u.full.get()
+  c.after_build("screen-sideways/" + key, fn() {
+    if sideways_on != u.sideways_told {
+      u.sideways_told = sideways_on
+      @hostapi.set_sideways(sideways_on)
+    }
+  })
   // back in 全屏 leaves it first
   if u.full.get() {
     c.on_back(fn() { u.full.set(false) })
@@ -328,12 +328,7 @@ fn screen_page_inside(c : @ui.Ctx, page : ScreenPageContext) -> Unit {
     if native {
       c.box(style=screen_fill, fn() {
         screen_content(c, s, u, key)
-        if s.can_take_over() {
-          c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore }) |> ignore
-        }
-        if s.driving() && typing {
-          c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore }) |> ignore
-        }
+        screen_native_overlays(c, s, u, typing)
       }) |> ignore
     } else if u.full.get() {
       c.box(style=screen_fill, fn() {
@@ -371,6 +366,16 @@ fn screen_page_inside(c : @ui.Ctx, page : ScreenPageContext) -> Unit {
     }
   })
   |> ignore }) |> ignore
+}
+
+///|
+fn screen_native_overlays(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool) -> Unit {
+  if s.can_take_over() {
+    c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore }) |> ignore
+  }
+  if s.driving() && typing {
+    c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore }) |> ignore
+  }
 }
 
 ///|
@@ -445,7 +450,8 @@ pub fn screen_page_node(
     }
     v.pick(fn() {
       session.said.get() |> ignore
-      if u.full.get() { 2 } else if !@sf.native_able() && !session.simulator() {
+      if u.full.get() { 2 } else if !@sf.soft_keyboard() && !@sf.native_on() { 1 } else if !session.simulator() {
+        if @sf.native_on() { 5 } else
         if !@sf.soft_keyboard() { 1 } else {
           let (w, h) = v.window()
           if w <= h { 3 } else { 4 }
@@ -458,6 +464,13 @@ pub fn screen_page_node(
           let page = context(c)
           screen_stage(c, page.session, page.ui, page.key, picture~)
           screen_full_overlays(c, page)
+        }) |> ignore
+      } else if stage == 5 {
+        body.padding(By(fn() { (0.0, 0.0, @sf.native_clear(), 0.0) })) |> ignore
+        screen_stage_node(body, fn(c, picture) {
+          let p = context(c)
+          screen_stage(c, p.session, p.ui, p.key, picture~)
+          screen_native_overlays(c, p.session, p.ui, p.typing)
         }) |> ignore
       } else if stage == 4 {
         body.row(Is(true)) |> ignore
@@ -499,10 +512,7 @@ pub fn screen_page_node(
           let p = context(c)
           screen_viewer_bar(c, p.session, p.ui, p.title, p.close)
         }) |> ignore
-        screen_stage_node(body, fn(c, picture) {
-          session.said.get() |> ignore
-          screen_stage(c, session, u, screen_key(at.station, at.screen), picture~)
-        }) |> ignore
+        screen_content_node(body, session, u, screen_key(at.station, at.screen)) |> ignore
       } else {
         @ui.old(body, fn(c) { screen_page_inside(c, context(c)) })
           .grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
