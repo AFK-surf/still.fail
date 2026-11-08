@@ -410,6 +410,36 @@ async fn live_locator(host : @host.Host, db_path : String, data : String, sep : 
 }
 
 ///|
+/// The search (search/worker.ts): each `{"type": "query"}` looked for in a fiber of its own, the searches taking turns
+/// where the worker let others through, answered `{id, groups}` or `{id, error}`; `{"type": "cancel", id}` stops one.
+/// The execution histories are not looked through here (the station asks the worker for them).
+async fn search_program(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=5000)
+  let cancelled : Set[String] = Set([])
+  while host.line() is Some(line) {
+    let told : Json = @json.parse(line) catch { _ => continue }
+    guard told is { "id": id, .. } else { continue }
+    let key = id.stringify()
+    match told {
+      { "type": "cancel", .. } => cancelled.add(key)
+      { "type": "query", .. } =>
+        ignore(
+          host.rt.fork(() => {
+            let answer : Json = try {
+              { "id": id, "groups": Json::array(@search.answer(db, host, data, sep, told, () => cancelled.contains(key))) }
+            } catch {
+              e => { "id": id, "error": Json::string(@search.describe(e)) }
+            }
+            cancelled.remove(key)
+            host.say(answer.stringify())
+          }),
+        )
+      _ => ()
+    }
+  }
+}
+
+///|
 fn main {
   let code = match (flag("--builder"), flag("--db"), flag("--data")) {
     (Some("archive-marks"), Some(db), _) =>
@@ -526,6 +556,8 @@ fn main {
         String(session) => Some(@signin.step(db, session))
         _ => None
       }))
+    (Some("search"), Some(db), Some(data)) =>
+      @host.run(shell_dir=beside(db, "shell"), host => search_program(host, db, data, flag("--sep").unwrap_or("/")))
     (Some("search-scope"), Some(db), _) => {
       // (the lanes taken in turn across steps, as one SearchScopePreparation keeps its turn)
       let turn = Ref(0)
