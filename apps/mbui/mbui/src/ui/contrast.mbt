@@ -4,8 +4,8 @@
 // with nothing in it, its ground or (where that does not show) its edge alone saying what it is: a gauge's cell, a
 // bar's track, a line (Ctx::lines too), a sheet's grip, each bar and shape of a page's bones (bones.mbt): at least
 // `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it carries
-// it (and under bones, as under the words they stand for), as a filled shape (Ctx::shapes) with words drawn over it
-// after it is too (a highlighter's swipe behind a word found). Each is measured where it is drawn, against what the
+// it (and under bones, as under the words they stand for), as a shape (Ctx::shapes) with words drawn over it after it
+// is too (a highlighter's scribble behind a word found). Each is measured where it is drawn, against what the
 // frame drew under it there (its instances before it, as the renderers lay them: fills, and glass's tint over what it
 // frosts); what lies on a picture, a video or another app's view, or is covered by what is drawn after it (a dialog's
 // scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else (Role Image: another system's
@@ -793,8 +793,8 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     if kind == 11.0 && a[b + 4] == 0.0 && self.ground_piece(k, holding) {
       continue
     }
-    // (a filled shape words are drawn over after it: their ground, as a box's is, a highlighter's swipe behind a word)
-    if kind == 11.0 && a[b + 4] == 0.0 && self.words_on(k, n.x, n.y, n.fw, n.fh) {
+    // (a shape words are drawn over after it: their ground, as a box's is, a highlighter's scribble behind a word)
+    if kind == 11.0 && self.words_on(k, n.x, n.y, n.fw, n.fh) {
       continue
     }
     if is_line {

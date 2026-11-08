@@ -110,11 +110,10 @@ fn found_strokes(
 }
 
 ///|
-/// The chat find's current occurrence: a highlighter swept across its text from the left, behind the glyphs and the
-/// stroke under them, a line at a time where the match wraps (`current`: which of the words' matches in the whole
-/// message, as `find_k`). Each line's is a band from near the glyphs' top to just under the baseline, short of the
-/// stroke 4 under it, its ends cut on a slant as a highlighter's chisel tip leaves them and its edges not quite
-/// straight: drawn by a hand, as the strokes are.
+/// The chat find's current occurrence: coloured in with a highlighter from the left, behind the glyphs and the stroke
+/// under them, a line at a time where the match wraps (`current`: which of the words' matches in the whole message, as
+/// `find_k`). Each line's is scribbled up and down across a band from near the glyphs' top to just under the baseline,
+/// short of the stroke 4 under it: drawn by a hand, as the strokes are.
 fn found_marker(
   c : @ui.Ctx,
   key : String,
@@ -164,9 +163,10 @@ fn found_marker(
       continue
     }
     let h = dmax(base + marker_below - top, 1.0)
+    let pen = marker_pen(h)
     c.layer(fn() {
       c.box(tx=x, ty=top, fn() {
-        c.shapes([@ui.shape_of([(marker_outline(whole, h, part, current * 3 + i), true)], fill=ink)], w=Px(whole), h=Px(h))
+        c.shapes([@ui.shape_of([(marker_scribble(whole, h, part, current * 3 + i), false)], stroke=ink, width=pen)], w=Px(whole), h=Px(h))
         |> ignore
       })
       |> ignore
@@ -181,41 +181,58 @@ fn found_marker(
 let marker_below : Double = 0.5
 
 ///|
-/// How far a highlighter's ends lean: its bottom this much left of its top.
-let marker_slant : Double = 3.5
+/// How wide a highlighter's tip is for a band `h` tall: a fifth of it and more, never under 2.5.
+fn marker_pen(h : Double) -> Double {
+  dmax(2.5, h * 0.22)
+}
 
 ///|
-/// A highlighter's band `w` by `h` drawn in as far as `part` from its left (x y pairs, clockwise from its top left):
-/// both ends slanted alike, its top and bottom rising a little to the right and wavering by under a point, the way
-/// `seed` (which match, which line) says, so no two are quite the same; nothing outside the `w` by `h` box.
-fn marker_outline(w : Double, h : Double, part : Double, seed : Int) -> Array[Double] {
+/// A highlighter scribbled up and down across a band `w` by `h`, as far as `part` from its left: where its tip goes
+/// (x y pairs, from its left), from the bottom to the top and back, each stroke leaning a little right and its turns
+/// a little short or long of the band's edges the way `seed` (which match, which line) says, so no two are quite the
+/// same. Each stroke four fifths of the tip's width on from the one before, so they leave nothing showing between them
+/// but at their turns; its tip (`marker_pen`) inside the `w` by `h` box.
+fn marker_scribble(w : Double, h : Double, part : Double, seed : Int) -> Array[Double] {
+  let pen = marker_pen(h)
+  let r = pen / 2.0
   let s = seed.to_double()
-  let rise = dmin(1.0, h * 0.1)
-  let wave = dmin(0.7, h * 0.06)
-  let edge = fn(x : Double, phase : Double, period : Double) {
-    wave * (1.0 + @dmath.sin(x / period * 2.0 * @math.PI + phase)) / 2.0
-  }
-  let top = fn(x : Double) { rise * (1.0 - x / w) + edge(x, s * 1.7, 23.0) }
-  let bottom = fn(x : Double) { h - rise * x / w - edge(x, s * 2.3 + 1.0, 31.0) }
-  let slant = dmin(marker_slant, w / 3.0)
-  let right = dmax(slant, dmin(part, w))
+  let step = pen * 0.8
+  let lean = dmin(0.8, step / 2.0)
+  let short = dmin(0.8, h * 0.06)
+  let right = dmin(part, w) - r
   let out = []
-  let steps = dmax(1.0, @math.ceil((right - slant) / 3.0)).to_int()
-  for k in 0..=steps {
-    let x = slant + (right - slant) * k.to_double() / steps.to_double()
-    out.push(x)
-    out.push(top(x))
+  if right < r {
+    return out
   }
-  for k in 0..=steps {
-    let x = (right - slant) * (1.0 - k.to_double() / steps.to_double())
+  let n = dmax(1.0, @math.ceil((w - 2.0 * r) / step)).to_int()
+  let mut px = r
+  let mut py = h - r
+  for k in 0..=n {
+    let up = k % 2 == 1
+    // (the tip's turn: in by up to `short`, as a hand does, and the stroke up leaning right)
+    let off = short * (1.0 + @dmath.sin(k.to_double() * 2.1 + s * 1.3)) / 2.0
+    let x = dmin(w - r, r + (w - 2.0 * r) * k.to_double() / n.to_double() + (if up { lean } else { 0.0 }))
+    let y = if up { r + off } else { h - r - off }
+    if x > right {
+      // (as far as it has gone: the stroke to where the tip is now)
+      if k > 0 && x > px {
+        let t = (right - px) / (x - px)
+        out.push(right)
+        out.push(py + (y - py) * t)
+      }
+      break
+    }
     out.push(x)
-    out.push(bottom(x))
+    out.push(y)
+    px = x
+    py = y
   }
   out
 }
 
 ///|
-/// Yellow on the light theme, orange in the dark: translucent so the message's own ink stays legible.
+/// Yellow on the light theme, orange in the dark: translucent so the message's own ink stays legible (its words, links
+/// and code 4.5 to 1 and more on it).
 fn find_marker_ink(dark : Bool) -> Int64 {
-  if dark { 0xFF700043L } else { 0xFFF12DB3L }
+  if dark { 0xFF700047L } else { 0xFFCC00D9L }
 }

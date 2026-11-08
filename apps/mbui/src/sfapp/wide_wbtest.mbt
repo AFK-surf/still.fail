@@ -412,7 +412,7 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
   assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.run_for(@sfpages.found_draw_ms)
-  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFF12DB3L }), msg="the current match has no highlighter")
+  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the current match has no highlighter")
   assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no strong stroke")
   assert_true(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches have no faint stroke")
   // Clearing the field removes the current message's mark as well as the other matches'.
@@ -420,7 +420,7 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   t.backspace()
   t.frame()
   assert_true(@sfpages.find_words_in("ws1/st1\u{1}s-c1").is_empty())
-  assert_false(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFF12DB3L }))
+  assert_false(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }))
   assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
   t.key(@ui.key_escape)
   t.frame()
@@ -463,7 +463,7 @@ test "wide: next and previous move the highlighter between occurrences in one me
   let second = w.rects(ranges[1].0, ranges[1].1)[0]
   // (the highlighter's bands: from where they start to where they end, none if none)
   let markers = fn() {
-    let bands = t.drawn_shapes().filter(fn(r) { r.5 == 0xFFF12DB3L })
+    let bands = t.drawn_shapes().filter(fn(r) { r.5 == 0xFFCC00D9L })
     if bands.is_empty() {
       []
     } else {

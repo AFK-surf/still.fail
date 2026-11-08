@@ -49,7 +49,7 @@ test "multiple matches on one search result line are each stroked under their ow
 /// The highlighters drawn in `ink` (Ctx::shapes' bands of them put back together): a box each, top to bottom.
 fn marker_boxes(t : @ui.Tester, ink : Int64) -> Array[(Double, Double, Double, Double)] {
   let out : Array[(Double, Double, Double, Double)] = []
-  let bands = t.drawn_shapes().filter(fn(b) { b.5 == ink && b.4 == 0.0 })
+  let bands = t.drawn_shapes().filter(fn(b) { b.5 == ink })
   bands.sort_by(fn(p, q) { p.1.compare(q.1) })
   for b in bands {
     match out.last() {
@@ -156,26 +156,32 @@ test "chat find draws a wrapped current match across its lines in order" {
 }
 
 ///|
-test "a highlighter's outline: slanted ends, within its box, drawn in from the left" {
+test "a highlighter scribbled up and down: within its box, the strokes close enough to cover, drawn in from the left" {
   for seed in 0..<6 {
-    let whole = marker_outline(60.0, 16.0, 60.0, seed)
+    let (w, h) = (60.0, 16.0)
+    let pen = marker_pen(h)
+    let whole = marker_scribble(w, h, w, seed)
     let xs = []
     let ys = []
     for k in 0..<(whole.length() / 2) {
       xs.push(whole[k * 2])
       ys.push(whole[k * 2 + 1])
     }
-    assert_true(xs.iter().all(fn(x) { x >= 0.0 && x <= 60.0 }) && ys.iter().all(fn(y) { y >= 0.0 && y <= 16.0 }))
-    // its top starts right of where its bottom does, at either end: a chisel tip's slant
-    assert_eq(xs[0], marker_slant)
-    assert_eq(xs[xs.length() - 1], 0.0)
-    // not a box: its top wavers or leans
-    assert_true(ys[0] != ys[xs.length() / 2 - 1])
-    let half = marker_outline(60.0, 16.0, 30.0, seed)
+    // its tip inside the box
+    assert_true(xs.iter().all(fn(x) { x >= pen / 2.0 - 0.001 && x <= w - pen / 2.0 + 0.001 }))
+    assert_true(ys.iter().all(fn(y) { y >= pen / 2.0 - 0.001 && y <= h - pen / 2.0 + 0.001 }))
+    // up and down, left to right, each stroke within a tip's width of the one before
+    for k in 1..<xs.length() {
+      assert_true((ys[k] - ys[k - 1]).abs() > h / 2.0, msg="stroke \{k} goes up or down")
+      assert_true(xs[k] >= xs[k - 1] - 0.001 && xs[k] - xs[k - 1] <= pen, msg="stroke \{k} \{xs}")
+    }
+    assert_true(xs[xs.length() - 1] > w - pen, msg="it reaches the band's end")
+    // drawn in: as far as its tip has gone
+    let half = marker_scribble(w, h, w / 2.0, seed)
     let mut most = 0.0
     for k in 0..<(half.length() / 2) {
       most = dmax(most, half[k * 2])
     }
-    assert_eq(most, 30.0)
+    assert_true(most <= w / 2.0 - pen / 2.0 + 0.001 && most > w / 2.0 - pen, msg="\{most}")
   }
 }
