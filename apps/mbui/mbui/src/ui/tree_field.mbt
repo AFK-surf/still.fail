@@ -238,6 +238,22 @@ pub fn Field::focus(self : Field) -> Unit {
 }
 
 ///|
+/// The keyboard's focus let go of where field `self` has it (what was written in it done with): no field takes keys,
+/// the keyboard goes, none gives it back (Ctx::blur); a focus asked for it and not given yet, asked no more. Where the
+/// focus is elsewhere, it stays.
+pub fn Field::let_go(self : Field) -> Unit {
+  self.st.focus_asked = false
+  let c = g()
+  let id = match self.st.tree_node {
+    Some(n) if tree_fields.contains(n) => tree_said_of.get(n).unwrap_or(0)
+    _ => self.st.built_id
+  }
+  if id != 0 && c.focus == id {
+    c.blur()
+  }
+}
+
+///|
 /// The keyboard's focus given field `field` by what holds it now: a field of the window's tree, at once (where it can
 /// take it); an old view's editor drawn now, that one (where the old view it is in takes input); none, asked of the one
 /// that comes to hold it, given as it does (a field of the tree's as it is made; an old view's editor as it is built),

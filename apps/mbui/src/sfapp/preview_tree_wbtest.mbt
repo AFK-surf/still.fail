@@ -2704,7 +2704,7 @@ test "viewer on the tree, a wide window, marking: a note's words written and mor
   click(pv("android-chat.annotate.done"))
   assert_eq(marking.comments.get(id), Some("这里对齐"), msg="let go: what was composed kept too")
   t.draw()
-  @sfbase.marks_open_note(t.ctx(), id)
+  @sfbase.marks_open_note(id)
   t.draw()
   assert_eq(marking.note_field.text(), "这里对齐", msg="opened again: all of it")
 }
@@ -4368,7 +4368,7 @@ test "viewer on the tree, marking on a phone and on a wide window, words being w
     assert_true(marking.writing is Some(_), msg="\{wide}: words begun")
     let marking_now = hosted()
     // (then what was being written put down, and a box drawn: its note asked for)
-    @sfbase.marks_put_down(t.ctx())
+    @sfbase.marks_put_down()
     t.draw()
     marking.tool = Rect
     t.drag(rx + rw * 0.55, ry + rh * 0.55, rx + rw * 0.8, ry + rh * 0.8)

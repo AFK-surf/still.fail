@@ -153,7 +153,7 @@ fn marks_tools_node(col : @view.View, tips : @sf.TipLayer) -> Unit {
         ink,
         round,
         fn() {
-          marks_put_down(@ui.current())
+          marks_put_down()
           marking.note = -1
           marking.tool = tool
           if tool != Select {
@@ -299,8 +299,8 @@ fn marks_actions_node_of(row : @view.View, vw : Viewer, ink : () -> @sf.ViewerIn
     // (round as marking's own actions are, picture_key: not as the bar's tools at the window's corner)
     Is(picture_key),
     fn() { marks_leave() },
-    fn() { vw.finish_marks(@ui.current(), false) },
-    fn() { vw.finish_marks(@ui.current(), true) },
+    fn() { vw.finish_marks(false) },
+    fn() { vw.finish_marks(true) },
     tip=tips,
   )
   |> ignore
@@ -391,7 +391,7 @@ fn note_box_node(w : @view.View) -> Unit {
         if id >= 0 {
           marking.note = -1
           marks_remove(id)
-          @ui.current().blur()
+          row.focus_let_go()
         }
       })
       // the field, a field of the tree's: as tall as it lays out (at least as a key is, its words in its middle)
@@ -425,7 +425,7 @@ fn note_box_node(w : @view.View) -> Unit {
       |> ignore
       // 完成
       note_key_node(row, "check", 18.0, note_ink, note_bg, pv("android-chat.annotate.done"), fn() {
-        marks_note_done(@ui.current())
+        marks_note_done()
       })
     })
     |> ignore
@@ -600,7 +600,7 @@ fn note_cards_node(r : @view.View) -> Unit {
             let (_, n, _, _) = note.get()
             "\{n}  " + note_said(mid)
           },
-          press=fn() { marks_open_note(@ui.current(), mid) },
+          press=fn() { marks_open_note(mid) },
         )
       },
     )
@@ -627,7 +627,7 @@ fn note_cards_node(r : @view.View) -> Unit {
         press=fn() {
           let (x, y, w, h) = more.rect()
           let items : Array[@sf.MenuItem?] = gone().map(fn(x) {
-            Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(@ui.current(), x.0) }))
+            Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(x.0) }))
           })
           @sf.menu(items, from=At(x, y, w, h), along=End)
         },
@@ -755,12 +755,12 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
       .on_press(fn() {
         let id = @signals.untracked(fn() { pin.get().0 })
         if marking.note == id {
-          marks_put_down(@ui.current())
+          marks_put_down()
           marking.picked = -1
           marking.note = -1
           marks_changed()
         } else {
-          marks_open_note(@ui.current(), id)
+          marks_open_note(id)
         }
       })
       |> ignore
@@ -962,7 +962,7 @@ fn marks_writing_node(h : @view.View, vw : Viewer) -> Unit {
         }
         (color, @sf.alpha(color, 0.55), color)
       },
-      submitted=fn(_) { marks_put_down(@ui.current()) },
+      submitted=fn(_) { marks_put_down() },
     )
     |> ignore
   })

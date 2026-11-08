@@ -633,7 +633,7 @@ pub fn link_row_node(
           .min_height(By(fn() {
             if under() {
               l.words_redone() |> ignore
-              Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
+              Some(node_sp(l, @ui.tree_theme().text_size(Body).1))
             } else {
               None
             }
@@ -842,12 +842,10 @@ pub fn switch_node(
         |> ignore
         let d = fn() { size().1 - 2.0 * switch_in }
         let travel = fn() { size().0 - 2.0 * switch_in - d() }
-        let k = fn() {
-          let t = knob.shown(track)
-          if @ui.current().rtl() { 1.0 - t } else { t }
-        }
+        // (from its start on: the window's tree lays its rows out from the left, its knob's way along the track the same)
+        let k = fn() { knob.shown(track) }
         // (held, the knob a lens: wider and larger about its middle, the knob fading under it)
-        let lens = fn() { if @ui.current().glass_solid() { 0.0 } else { held.shown(track) } }
+        let lens = fn() { if track.glass_solid() { 0.0 } else { held.shown(track) } }
         track.box(fn(o) {
           o.over(Is(true)).lines_up(Is(Some(Start))) |> ignore
           o.box(fn(kn) {

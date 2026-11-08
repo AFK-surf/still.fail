@@ -49,7 +49,7 @@ pub fn station_lead(online : () -> Bool, emoji : () -> String, icon : () -> Stri
         l
         .min_height(By(fn() {
           l.words_redone() |> ignore
-          Some(@ui.current().sp(@ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
+          Some(node_sp(l, @ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
         }))
         |> ignore
         state_dot_node(l, fn() { if online() { "online" } else { "offline" } })
@@ -59,7 +59,7 @@ pub fn station_lead(online : () -> Bool, emoji : () -> String, icon : () -> Stri
         l
         .min_height(By(fn() {
           l.words_redone() |> ignore
-          Some(@ui.current().sp(@ui.tree_theme().text_size(Body).1))
+          Some(node_sp(l, @ui.tree_theme().text_size(Body).1))
         }))
         |> ignore
     }

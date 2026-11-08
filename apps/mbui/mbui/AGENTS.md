@@ -21,6 +21,9 @@ yet and you can add one, add it.
   own): "this frame", "the frame before" or "this build" is no cause. Say it by its cause, recorded where the cause is
   taken, or by the moment (`Ctx::moment`). detlint's `frame-number` counts what is left and only lets it fall; the two
   go from mbui's API once none is.
+- What is built gets its Ctx passed (a node of the window's tree, what its View gives: `words_scale`, `pixel_scale`,
+  `cause_at`...; a handler, its event), never reaches a global one (`@ui.current()`); detlint's `ui-current` counts what
+  is left and only lets it fall.
 - Never wait for things to settle or for a motion to end, under any name: `rest`, `at_rest` used as a wait,
   `settle`, "until it stops moving", "until the animation landed", a fixed `wait`/`sleep`, a retry, a longer
   timeout. `assert_idle` / `at_rest` are assertions only. An end-to-end step waits only for its own named event that

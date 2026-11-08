@@ -7,10 +7,24 @@
 ///|
 /// Its options' columns as segmented has them: each as wide as the widest of their words in the chosen weight with
 /// segmented_in either side, `item_w` at least.
-fn seg_node_cols(labels : Array[String], item_w : Double) -> Double {
-  let c = @ui.current()
-  let size = c.sp(theme().t.ui)
-  labels.fold(init=item_w, fn(m, l) { dmax(m, choice_words_w(c, l, size, weight=500, tree=true) + 2.0 * segmented_in) })
+fn seg_node_cols(v : @view.View, labels : Array[String], item_w : Double) -> Double {
+  let size = node_sp(v, theme().t.ui)
+  labels.fold(init=item_w, fn(m, l) { dmax(m, node_words_w(l, size, weight=500) + 2.0 * segmented_in) })
+}
+
+///|
+/// `labels`' options fitted to `room` as node `v` draws them (fitted's): their words at the system's size of words in
+/// its tree, in the theme its tree's words are drawn in.
+fn node_fitted(
+  v : @view.View,
+  labels : Array[String],
+  room : Double,
+  base : Double,
+  weight : Int,
+  side : Double,
+  least : Double,
+) -> Fitted {
+  fitted_by(fn(x) { node_sp(v, x) }, @ui.tree_theme().tabular, labels, room, base, weight, side, least)
 }
 
 ///|
@@ -33,7 +47,7 @@ pub fn seg_node(
   // (measured again as all words are, the system's size of words changed: View::words_redone)
   let col = fn() {
     parent.words_redone() |> ignore
-    seg_node_cols(labels(), item_w)
+    seg_node_cols(parent, labels(), item_w)
   }
   let gaps = fn() { segmented_gap * (labels().length() - 1).to_double() }
   // (as wide as its columns, its track round them: what it is laid out before it gives way)
@@ -50,7 +64,7 @@ pub fn seg_node(
             track.words_redone() |> ignore
 
             Some(
-              fitted(@ui.current(), labels(), w - 2.0 * segmented_pad - gaps(), theme().t.ui, 500, segmented_in, segmented_least, tree=true),
+              node_fitted(track, labels(), w - 2.0 * segmented_pad - gaps(), theme().t.ui, 500, segmented_in, segmented_least),
             )
           }
           _ => None
@@ -312,13 +326,12 @@ pub fn seg_fill_node(
       match track.laid_size_told() {
         Some((w, _)) => {
           track.words_redone() |> ignore
-          let c = @ui.current()
           let base = @ui.tree_theme().text_size(Base).0
-          let size = c.sp(base)
+          let size = node_sp(track, base)
           let room = w - 2.0 * seg_inset
-          let need = labels().fold(init=0.0, fn(s, l) { s + choice_words_w(c, l, size, tree=true) + 2.0 * seg_side })
+          let need = labels().fold(init=0.0, fn(s, l) { s + node_words_w(l, size) + 2.0 * seg_side })
           if need > room + 0.5 {
-            Some(fitted(c, labels(), room, base, 400, seg_side, seg_least, tree=true))
+            Some(node_fitted(track, labels(), room, base, 400, seg_side, seg_least))
           } else {
             None
           }
@@ -408,10 +421,10 @@ pub fn seg_fill_node(
       // (a finger held on an option, where glass is not drawn solid: the thumb there, a lens over it; the one chosen
       // only as it is let go on it, @kit.toggle_group's)
       let fingered : @signals.Signal[Int] = @signals.signal(-1)
-      let lensed = fn() { !@ui.current().glass_solid() && fingered.get() >= 0 }
+      let lensed = fn() { !strip.glass_solid() && fingered.get() >= 0 }
       let held = EdgeWay::new(0.0)
       strip.reacts(lensed, fn(down) { held.go_by(strip, if down { 1.0 } else { 0.0 }, @motion.lift_spring) })
-      let lens = fn() { if @ui.current().glass_solid() { 0.0 } else { held.shown(strip) } }
+      let lens = fn() { if strip.glass_solid() { 0.0 } else { held.shown(strip) } }
       // the thumb's and the lens's cover (@ui.Ctx::cover's): the item it goes to, what it set out from (items by their
       // shares) and how far it is from there (0 to 1, on a cover's spring), sent on as it goes to another item, from
       // that moment; where it is drawn the blend of where those items are laid out as it is drawn (moved or resized
@@ -516,8 +529,7 @@ pub fn seg_fill_node(
               None
             } else {
               o.words_redone() |> ignore
-              let c = @ui.current()
-              Some(choice_words_w(c, label(), c.sp(@ui.tree_theme().text_size(Base).0), tree=true) + 2.0 * seg_side)
+              Some(node_words_w(label(), node_sp(o, @ui.tree_theme().text_size(Base).0)) + 2.0 * seg_side)
             }
           }))
           // (a basis of none where its width is said: flex's basis would else be taken over it)
@@ -567,8 +579,7 @@ pub fn seg_fill_node(
               o.words_redone() |> ignore
               let (size, line) = @ui.tree_theme().text_size(Base)
               let k = smaller()
-              let c = @ui.current()
-              let (size, line) = if k == 1.0 { (size, line) } else { (c.sp_of(c.sp(size) * k), c.sp_of(c.sp(line) * k)) }
+              let (size, line) = if k == 1.0 { (size, line) } else { (node_sp_of(w, node_sp(w, size) * k), node_sp_of(w, node_sp(w, line) * k)) }
               { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
             }))
             .ink(By(fn() { if on() { theme().p.text } else { theme().p.muted } }))
@@ -655,12 +666,11 @@ let seg_radius : Double = 10.0
 /// size of words and the theme as they change (a binding reading it follows them).
 fn seg_room_of(v : @view.View, labels : Array[String]) -> (Double, Double) {
   v.words_redone() |> ignore
-  let c = @ui.current()
   let t = @ui.tree_theme()
-  let size = c.sp(t.text_size(Base).0)
-  let whole = labels.fold(init=2.0 * seg_inset, fn(s, l) { s + choice_words_w(c, l, size, tree=true) + 2.0 * seg_side })
-  let menu = c.sp(t.text_size(Body).0)
-  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, choice_words_w(c, l, menu, tree=true)) })
+  let size = node_sp(v, t.text_size(Base).0)
+  let whole = labels.fold(init=2.0 * seg_inset, fn(s, l) { s + node_words_w(l, size) + 2.0 * seg_side })
+  let menu = node_sp(v, t.text_size(Body).0)
+  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, node_words_w(l, menu)) })
   (whole, 2.0 * seg_inset + 2.0 * seg_menu_in + widest + seg_menu_gap + seg_chevron)
 }
 

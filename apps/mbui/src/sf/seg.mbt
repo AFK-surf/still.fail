@@ -158,10 +158,21 @@ fn seg_room(c : @ui.Ctx, options : Array[String]) -> (Double, Double) {
 ///|
 /// How wide a choice's words `s` are on one line at `size` and `weight`, as they are drawn: the app's own words, their
 /// digits all one width where the theme they are drawn in says so (@ui.Theme `tabular`: 「7 天」's 7 as wide as 30's
-/// digits each): an old view's, `c`'s; a node's, the window's tree's (`tree`: @ui.tree_theme, what its words are drawn
-/// in, view_host's words_style), whatever theme `c` was left in.
-fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400, tree? : Bool = false) -> Double {
-  let tabular = if tree { @ui.tree_theme().tabular } else { c.theme().tabular }
+/// digits each): an old view's, `c`'s (a node's: node_words_w).
+fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400) -> Double {
+  words_w(c.theme().tabular, s, size, weight~)
+}
+
+///|
+/// The same of a node's words: in the theme the window's tree's words are drawn in (@ui.tree_theme, view_host's
+/// words_style), whatever theme an old view was left in.
+fn node_words_w(s : String, size : Double, weight? : Int = 400) -> Double {
+  words_w(@ui.tree_theme().tabular, s, size, weight~)
+}
+
+///|
+/// How wide words `s` are on one line at `size` and `weight`, their digits all one width where `tabular`.
+fn words_w(tabular : Bool, s : String, size : Double, weight? : Int = 400) -> Double {
   @ui.text_advance(s, size~, weight~, style=if tabular { @hostapi.style_tabular } else { 0 })
 }
 
@@ -286,10 +297,25 @@ fn fitted(
   weight : Int,
   side : Double,
   least : Double,
-  tree? : Bool = false,
 ) -> Fitted {
-  let size = c.sp(base)
-  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight~, tree~) })
+  fitted_by(fn(x) { c.sp(x) }, c.theme().tabular, labels, room, base, weight, side, least)
+}
+
+///|
+/// The same, their words drawn at `sp` of the size said (Ctx::sp, an old view's; node_sp, a node's), their digits all
+/// one width where `tabular` (the theme they are drawn in says so).
+fn fitted_by(
+  sp : (Double) -> Double,
+  tabular : Bool,
+  labels : Array[String],
+  room : Double,
+  base : Double,
+  weight : Int,
+  side : Double,
+  least : Double,
+) -> Fitted {
+  let size = sp(base)
+  let words = labels.map(fn(l) { words_w(tabular, l, size, weight~) })
   // (no smaller than the app says them: the size the system's own size of words draws)
   let smallest = dmin(1.0, base / size)
   let (widths, fit) = option_widths(words, room, side, least, smallest)
@@ -300,14 +326,14 @@ fn fitted(
     Smaller(k0) => {
       let most = room - 2.0 * least * labels.length().to_double()
       let mut k = k0
-      let mut drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~, tree~) })
+      let mut drawn = labels.map(fn(l) { words_w(tabular, l, size * k, weight~) })
       let mut sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       for _ in 0..<4 {
         if sum <= most + 0.01 || sum <= 0.0 || k < smallest {
           break
         }
         k = k * most / sum
-        drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~, tree~) })
+        drawn = labels.map(fn(l) { words_w(tabular, l, size * k, weight~) })
         sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       }
       if k < smallest || sum > most + 0.01 {
