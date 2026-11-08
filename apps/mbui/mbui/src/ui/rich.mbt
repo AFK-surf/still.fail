@@ -918,7 +918,7 @@ pub fn Ctx::rich(
         0
       }
     ),
-    shaped_in: words_shaped_in.val,
+    shaped_in: words_shaped_in.get(),
   })
   // each link told with its words and its id, once the paragraph is there
   match on_link_shown {

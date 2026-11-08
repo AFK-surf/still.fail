@@ -258,7 +258,7 @@ fn looks_looked(
   paint_phase.val = 0
   nodes_run.fresh = true
   nodes_run.whole = true
-  frame_watch_of().read(fn() { frame_body(c, w, h, scale, t, tell=!scrolled) }) |> ignore
+  frame_watch_of().read(fn() { frame_body_drawn(c, t, tell=!scrolled) }) |> ignore
   c.flat_from(0)
   frame_hook.val = hook
   looks_drawn.val = false

@@ -864,12 +864,10 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int32
-  mut font_scale : Double
   mut words_k : Double
   mut build_no : Int32
   mut sideways_depth : Int32
   mut bones : Int64
-  mut epoch : Int32
   mut wants_frame : Bool
   mut wake_at : Double
   mut wake_waited : Double
@@ -1040,7 +1038,6 @@ pub struct Ctx {
   mut lit_reach : Double
   mut lit_all : Bool
   mut lit_every : Bool
-  mut reads_out : Bool
   mut window_corner : Double
   window_corners : FixedArray[Double]
   mut direction : Direction
@@ -1080,6 +1077,7 @@ pub struct Ctx {
   mut t_paint : Double
   mut t_present : Double
   mut bench_list : Int32
+  // private fields
 }
 pub fn Ctx::a11y_lines(Self) -> String
 pub fn Ctx::action_asked(Self, Int32, @view.Action) -> Bool

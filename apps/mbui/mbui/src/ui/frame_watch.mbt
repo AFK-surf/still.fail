@@ -1,7 +1,7 @@
 // What a frame does again, by what it read. A frame's work, from taking what came from outside
 // to the end of its paint, runs under one watch (mbui/signals' Watch): all it reads of signals is followed, and that is
 // all it is built from: the core's data and the app's state, the frames' clock (frame_clock: Ctx::now), the host's
-// settings it is drawn by (frame_env), what came from outside that is no signal yet (outside_said: what
+// settings it is drawn by (host_said.mbt: one signal each, read where used), what came from outside that is no signal yet (outside_said: what
 // records, a message, a host's event, a step of the runtime's, a frame asked for between frames)
 // and the hand as what reads it reads it (hand.mbt: what the pointer is over, what is pressed, clicked, focused, the
 // hand's events; a pointer moved over what lights nothing changes none of it). So the next frame is built anew where
@@ -47,11 +47,6 @@ let frame_clock : @signals.Signal[Double] = @signals.signal(0.0)
 /// again as it comes.
 // kept across runs: only counts on
 let outside_said : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-/// What of the host the frame is drawn by and reads as it is built (looks_env), as each frame begins.
-// kept across runs: set as each frame begins
-let frame_env : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// The watch the frames' work runs under (made with the run: frame_watch_of).
@@ -395,11 +390,10 @@ fn outside_left() -> Unit {
 }
 
 ///|
-/// What the frame reads of what came from outside and of the host's settings, as it has taken them (frame_body):
-/// followed. (Of the hand, what reads it reads it: hand.mbt.)
+/// What the frame reads of what came from outside, as it has taken it (frame_body): followed. (Of the hand, what reads
+/// it reads it: hand.mbt; of the host's settings, what reads one reads it: host_said.mbt.)
 fn frame_inputs_read() -> Unit {
   outside_said.get() |> ignore
-  frame_env.get() |> ignore
 }
 ///|
 /// The last frame as its paint ended (looks_keep): its instances, with the tags of its looks by the clock before they
@@ -594,13 +588,6 @@ fn looks_apply(c : Ctx) -> Unit {
     _ => ()
   }
   in_looks.val = false
-}
-
-///|
-/// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
-/// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
-fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{atlas_now()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
 }
 
 ///|
@@ -917,8 +904,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
-  atlas_said.val = Some(h_atlas_generation())
-  frame_env.set(looks_env(c, w, h, scale))
+  frame_settings_arrive(w, h, scale)
   clock_frame_start(t)
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
@@ -1026,7 +1012,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     // (the hand's alone, gone to one old view: that one's part alone built for it, view_host.mbt)
     nodes_run.evented_only = if outside { -1 } else { went_to }
     nodes_run.whole = bench_whole.val && bench_measuring.val
-    let t0 = watch.read(fn() { frame_body(c, w, h, scale, t) })
+    let t0 = watch.read(fn() { frame_body_drawn(c, t) })
     frame_looked(c, w, h, scale, t, 0, false)
     return t0
   }

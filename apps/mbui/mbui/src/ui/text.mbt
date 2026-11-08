@@ -131,9 +131,8 @@ let text_cache : TextCache = {
 }
 
 ///|
-/// A frame begins: what it shapes and draws from the atlas is kept through it. What the host drew and measured
-/// before, forgotten where it is gone (@hostapi.atlas_generation): true then, everything laid out anew.
-fn text_frame() -> Bool {
+/// A frame begins: what it shapes and draws from the atlas is kept through it.
+fn text_frame() -> Unit {
   text_cache.frame = text_cache.frame + 1
   for a in [text_cache.atlas, text_cache.colour_atlas] {
     match a {
@@ -141,6 +140,13 @@ fn text_frame() -> Bool {
       None => ()
     }
   }
+  none_short()
+}
+
+///|
+/// As a frame begins (frame_settings_arrive): what the host drew and measured before, forgotten where it is gone
+/// (@hostapi.atlas_generation moved on), what measured words told (words_shaped_in).
+fn text_arrive() -> Unit {
   let g = atlas_now()
   if g != text_cache.generation {
     // (a host moves it on as its faces or its scale change, a face it was given is here (a page's, loaded later than
@@ -158,13 +164,10 @@ fn text_frame() -> Bool {
       // (and the words laid out in what it measured before, a text's or a paragraph's layout kept on its node, laid out
       // again: a page's face is loaded after it is given (words_forgotten then), its words laid out till it is in the
       // place's face, else kept with those widths and drawn in the face, 「s till.fa il」)
-      words_shaped_in.val += 1
+      words_shaped_in.set(@signals.untracked(fn() { words_shaped_in.get() }) + 1)
       view_words_rescaled()
-      return true
     }
   }
-  none_short()
-  false
 }
 
 ///|
@@ -373,6 +376,8 @@ fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
 
 ///|
 fn all_metrics(size : Double, weight : Int, style : Int) -> (Double, Double, Double, Double, Double, Bool) {
+  // (measured in what the host measures in now, followed: measured again as that changes)
+  words_shaped_in.get() |> ignore
   // (the font's figures change no line of it: its metrics are the same either way)
   let style = style & @hostapi.style_tabular.lnot()
   // (the size in tenths, the weight, the style's bits: faces and all, each in a field of its own)
@@ -548,6 +553,8 @@ fn has_digit(text : String) -> Bool {
 /// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
 /// after), shaped with no ligatures (@hostapi.style_no_ligatures): a ligature's letters would not be spaced.
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
+  // (measured in what the host measures in now, followed: measured again as that changes)
+  words_shaped_in.get() |> ignore
   let style = if spacing != 0.0 { style | @hostapi.style_no_ligatures } else { style }
   // (digits all one width only where they would not be: the code face's are, and words with none have none)
   let style = if (style & @hostapi.style_tabular) != 0 &&

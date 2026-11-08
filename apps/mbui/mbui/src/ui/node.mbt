@@ -375,7 +375,7 @@ struct Node {
   fl : @flex.Node
   // what the flex node was last given (layout.mbt, Ctx::flex_tree): the
   // kind, what a leaf measures (text and its font, a rich paragraph, an
-  // image's size), the layout epoch
+  // image's size), the grid of pixels it was laid out on (scale, whole pixels or not)
   mut lk_kind : Int
   mut lk_text : String
   mut lk_shorter : Array[String]
@@ -393,7 +393,8 @@ struct Node {
   mut lk_rich : Rich?
   mut lk_iw : Double
   mut lk_ih : Double
-  mut lk_epoch : Int
+  mut lk_scale : Double
+  mut lk_whole : Bool
   // who held it when it was last laid out (its parent's ident): moved under another, both are laid out anew (@flex's
   // compute: a node moved under another parent dirties both)
   mut lk_up : Int
@@ -583,7 +584,8 @@ fn Node::new() -> Node {
     lk_rich: None,
     lk_iw: -1.0,
     lk_ih: -1.0,
-    lk_epoch: -1,
+    lk_scale: -1.0,
+    lk_whole: false,
     lk_up: 0,
     otx: 0.0,
     oty: 0.0,

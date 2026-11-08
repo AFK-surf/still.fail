@@ -300,8 +300,6 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
-  /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
-  mut font_scale : Double
   /// how much smaller words are drawn where they are now (Ctx::words_smaller: 1 none), times the system's size
   mut words_k : Double
   /// the build's number (frame_body's passes, over every frame, counted over the program: app.mbt builds_made): what is
@@ -311,9 +309,6 @@ pub struct Ctx {
   mut sideways_depth : Int
   /// the colour what is built now is drawn in as its bones (Ctx::bones), 0 none: what is made is marked so
   mut bones : Int64
-  // the layout epoch: when it moves on, nothing laid out before is reused
-  // (Ctx::flex_tree)
-  mut epoch : Int
   mut wants_frame : Bool
   mut wake_at : Double
   /// the earliest wake asked for this frame that what is shown waits for (not `later`): -1 none
@@ -420,7 +415,7 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   /// whether the pointer's latest event came after the latest key (Ctx::pointer_after_keys)
-  mut pointer_after_keys : Bool
+  priv mut pointer_after_keys : Bool
   mut held_told : Double
   /// what a press told held long (Ctx::long_press) was on, and in which build (frame_body's pass: one built again sees
   /// it no more, as it sees no click)
@@ -622,9 +617,6 @@ pub struct Ctx {
   // every id lit by the hand at once (Ctx::lit, and Ctx::hovered where the pointing is a mouse's): a test's, to hold
   // that the hand changes looks alone (Tester::hand_moves)
   mut lit_every : Bool
-  /// whether something reads the widgets out this frame (a screen reader, any service of the system's accessibility:
-  /// @hostapi.a11y_on), asked once as the frame begins
-  mut reads_out : Bool
   mut window_corner : Double
   /// each of the window's corners as the system draws them (top left, then round it), window_corner the roundest
   window_corners : FixedArray[Double]
@@ -709,12 +701,10 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
-    font_scale: 1.0,
     words_k: 1.0,
     build_no: 0,
     sideways_depth: 0,
     bones: 0L,
-    epoch: 0,
     wants_frame: false,
     wake_at: -1.0,
     wake_waited: -1.0,
@@ -885,7 +875,6 @@ fn Ctx::new() -> Ctx {
     lit_reach: 0.0,
     lit_all: false,
     lit_every: false,
-    reads_out: false,
     window_corner: 0.0,
     window_corners: FixedArray::make(4, 0.0),
     inner_faults: [],

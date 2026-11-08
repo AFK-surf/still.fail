@@ -416,14 +416,17 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let s = f.style
   // (each length said in points on whole device pixels where the host sets things on them: whole_px_layout)
   let whole = self.whole_px
-  let mut ch = n.lk_epoch != self.epoch || n.lk_kind != n.kind
+  // (laid out on another grid of pixels (the engine's rounding, an image's size in points), or laid out anew every
+  // frame (layout_reuse off): laid out anew)
+  let mut ch = n.lk_scale != self.scale || n.lk_whole != whole || n.lk_kind != n.kind || !layout_reuse.val
   // A slot may have held another kind of leaf: an image also writes lk_text, but does not replace the text's
   // layout. Its words matching those of the next text must not keep the layout of the text before that image.
   if !layout_reuse.val || n.lk_kind != n.kind {
     n.full = None
     n.rl = None
   }
-  n.lk_epoch = self.epoch
+  n.lk_scale = self.scale
+  n.lk_whole = whole
   n.lk_kind = n.kind
   let dir : @flex.FlexDirection = if n.dir == Row {
     if n.rtl {
@@ -776,7 +779,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_tabular != n.tabular ||
         n.lk_balance != n.balance ||
         n.lk_max_lines != n.max_lines ||
-        n.lk_shaped != words_shaped_in.val {
+        n.lk_shaped != words_shaped_in.get() {
         n.lk_text = n.text
         n.lk_shorter = n.shorter
         n.lk_size = n.font_size
@@ -788,7 +791,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_tabular = n.tabular
         n.lk_balance = n.balance
         n.lk_max_lines = n.max_lines
-        n.lk_shaped = words_shaped_in.val
+        n.lk_shaped = words_shaped_in.get()
         n.full = None
         ch = true
       }
