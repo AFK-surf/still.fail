@@ -375,10 +375,6 @@ pub let touch_list_row_h : Double = 66.0
 let touch_title_h : Double = 22.0
 
 ///|
-/// Touch's chat row's second line (meta: S5) and a face at its end.
-let touch_meta_h : Double = 20.0
-
-///|
 let touch_face_d : Double = 18.0
 
 ///|
@@ -386,14 +382,8 @@ let touch_face_d : Double = 18.0
 let mouse_face_d : Double = 16.0
 
 ///|
-let mouse_row_in : Double = 7.0
-
-///|
 /// Keyboard and mouse's chat row's title's line's height (head: S5).
 let mouse_head_h : Double = 20.0
-
-///|
-let mouse_meta_h : Double = 18.0
 
 ///|
 /// What search finds on this screen (sfpages' switcher.mbt: ⌘K's list, the phone's search page), one design: a line

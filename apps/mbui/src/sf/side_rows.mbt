@@ -89,7 +89,6 @@ pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
   }
 }
 
-
 ///|
 /// An action in a sidebar's band over its list (新建对话, Pin 文件夹, 待处理: Sidebar.css.ts navNew's row): not one of the
 /// list's rows but the band's, on one line with what else stands over the list (the search's field): its height, its
@@ -197,10 +196,6 @@ pub fn side_list() -> @ui.Style {
 ///|
 // kept across runs: a value (no field of it changes)
 let side_list_top : @ui.Style = @ui.css("pt=S1")
-
-///|
-/// How far under the band a sidebar's list stands (side_list_top's).
-pub let side_list_top_in : Double = 4.0
 
 ///|
 /// A sidebar's list under its band (side_list): what `rows` builds and the room under its last (list_foot_in),

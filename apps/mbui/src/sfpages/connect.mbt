@@ -165,7 +165,6 @@ fn cd_identity(c : @ui.Ctx, core : Core, here : Here, station : String, station_
 // kept across runs: said by the menu's 停用 and 启用; connect_reset empties it
 let cd_switching : Map[String, Bool] = {}
 
-
 ///|
 fn connect_reset() -> Unit {
   cd_switching.clear()
@@ -914,10 +913,6 @@ fn cd_avatar(c : @ui.Ctx, core : Core, cv : Json?, size : Double) -> Unit {
 }
 
 ///|
-/// The sizes: its picture 52 (its kind's mark three fifths of it), the icons 14, the kind's 13, a select 280.
-let cd_avatar_size : Double = 52.0
-
-///|
 let cd_avatar_mark : Double = 0.6
 
 ///|
@@ -934,42 +929,8 @@ let cd_select_w : Double = 280.0
 let cd_avatar_box : @ui.Style = @ui.css("align=ACenter justify=JCenter radius=Xl")
 
 ///|
-/// Its head (pages.css.ts identity: 16 apart, its middle in line, 28 over what follows; identityName 22 on 34 in 600;
-/// identitySub 6 under it, 6 by 14 apart, the ui's 13 on 20 muted; connectStatus, kindTag 5 and ownerLine 6 apart).
-// kept across runs: a value (no field of it changes)
-let cd_identity_box : @ui.Style = @ui.css("row w=Full gap=S4 pb=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_identity_text : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_sub : @ui.Style = @ui.css("row w=Full pt=S1_5 gap=S3_5 align=ACenter")
-
-///|
 // kept across runs: a value (no field of it changes)
 let cd_sub_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_sub_ink : @ui.TextStyle = cd_sub_words.then(@ui.text_style(color=Fg))
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_status : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_kind_tag : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_owner_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// The callout on amber (12 by 14 in, a corner of 14; its title in the amber's ink, its list 6 under it, 4 apart).
@@ -997,62 +958,6 @@ let cd_effect_words : @ui.Style = @ui.style(w=@sf.grow)
 let cd_bullet : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
-/// A card's buttons at its end (pages.css.ts cardActions: 8 apart).
-// kept across runs: a value (no field of it changes)
-let cd_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
-
-///|
-/// A card with its buttons last (cd_foot_actions): its foot as far in as makes them concentric with its corners
-/// (@sf.card_foot_in).
-fn cd_footed_card() -> @ui.Style {
-  @sf.desk_card.then(@sf.foot_pad(@sf.button_height()))
-}
-
-///|
-/// A cd_footed_card's buttons at its end, reaching past its words to its foot corner's.
-fn cd_foot_actions() -> @ui.Style {
-  cd_card_actions.then(@sf.foot_across(@sf.button_height()))
-}
-
-///|
-/// How it runs (Connect.css.ts runCard: a card, its rows 14 apart; runCardRow: 14 apart, at their tops; runCardLabel:
-/// 36 wide, 2 down, the ui's 13 muted; runCardText: as wide as is left, 2 apart, the ui's 13; the feishu app's labels
-/// 84 wide; controls.css.ts cardFoot: the meta's 12 muted).
-// kept across runs: a value (no field of it changes)
-let cd_run_card : @ui.Style = @sf.desk_card
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_run_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_run_label : @ui.Style = @ui.css("w=S9 pt=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_app_label : @ui.Style = @ui.style(w=Fixed(cd_app_label_w), pt=S0_5)
-
-///|
-let cd_app_label_w : Double = 84.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_run_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_card_foot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_mono : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
-
-///|
 /// textButton: underlined (here the muted ink, the words' under the pointer); inlineLink: the accent's ink.
 // kept across runs: a value (no field of it changes)
 let cd_text_button_box : @ui.Style = @ui.css("disabled{opacity=O55}")
@@ -1074,27 +979,9 @@ let cd_link_box : @ui.Style = @ui.css("")
 let cd_link_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText)
 
 ///|
-/// 显示全部 (moreSessions: 8 under the list).
-// kept across runs: a value (no field of it changes)
-let cd_more_room : @ui.Style = @ui.css("w=Full pt=S2")
-
-///|
 /// The sessions to choose from (sessionChoices: 52vh at most, scrolling).
 // kept across runs: a value (no field of it changes)
 let cd_session_choices : @ui.Style = @ui.css("w=Full")
-
-///|
-/// A session's row: its title as wide as is left, its time 5.5em at least at the right in the meta's 12 muted.
-// kept across runs: a value (no field of it changes)
-let cd_row_title : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_row_time : @ui.Style = @ui.css("min_w=S16 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// What is wrong on its callout (the ui's 13, the words' ink).

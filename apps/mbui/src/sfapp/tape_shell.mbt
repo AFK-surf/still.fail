@@ -68,7 +68,7 @@ fn paned_under(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// Under the tape's panels (an island): what every frame of the app's state does (app_state_island's), what the
+/// Under the tape's panels (an island): the window's top dragging it where its buttons are, what the
 /// signed-in frame does before its pages (signed_in_frame), what the tape's frame does under them (sfdesk's tape_under).
 fn taped_under(c : @ui.Ctx, src : Source) -> Unit {
   if @ui.window_inset() {

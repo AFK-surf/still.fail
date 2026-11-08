@@ -123,17 +123,6 @@ let nav_page_of : Ref[Page?] = { val: None }
 let cards_foot : Double = 0.0
 
 ///|
-/// Whether the wide frame lays its cards across beside the column of the system's glass (sfapp's sides: their ground
-/// under the column).
-pub fn on_cards() -> Bool {
-  @sf.native_on() && wide.tape
-}
-
-// ---- what a page hands the system's bars: the one way a page has into them. Each answers whether it took it (the
-// page then draws nothing of its own for it) or not (no system's bars, every other device: the page draws its own, as
-// it did). A page asks nothing else of them.
-
-///|
 /// One of the page's actions (`id`, its words and icon: an icon's name, or `raw`, an icon as the host's bars take it)
 /// in the system's bars; `act` what it does chosen. With `rows`, a menu of the system's own opened from it instead (a
 /// chat's "…": its items as the page's menu has them, None a line between groups; each chosen runs its own), which
@@ -577,7 +566,6 @@ let native_mark_w : Double = 1.0
 /// How far over the window's foot 待处理's button ends (the host's column: 新建对话 under it, 12 apart, and the room the
 /// home indicator keeps).
 let native_bell_up : Double = 156.0
-
 
 ///|
 /// The column of the system's glass, the Duo's shape in mind (its right thumb at the inner screen's right edge, low): at

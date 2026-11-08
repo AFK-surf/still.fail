@@ -67,15 +67,6 @@ fn chats_shown(src : Source, scope : String, filter : String) -> Map[String, Jso
 }
 
 ///|
-/// The list `filter` of workspace `scope` scrolled to its row `last` of the `rows` it has: within half a page of their
-/// end, a page more asked for while the core has more (its `more`), the list as it was asked let go of.
-pub fn chats_scrolled(c : @ui.Ctx, src : Source, scope : String, filter : String, last : Int, rows : Int) -> Unit {
-  guard chats_more(src, scope, filter) > 0 && last >= rows - chats_page / 2 else { return }
-  let limit = chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
-  c.tell("chats-more/" + scope + "\u{1}" + filter, fn() { chats_ask_more(src, scope, filter, limit) })
-}
-
-///|
 /// How many rows list `filter` of workspace `scope` has past those the core sent (its `more`).
 pub fn chats_more(src : Source, scope : String, filter : String) -> Int {
   match field(src.topic("chats", chats_params(scope, filter)).get().value, "more") {

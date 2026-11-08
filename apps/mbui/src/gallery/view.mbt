@@ -32,15 +32,6 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   }
 }
 
-///|
-fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Dates
 
@@ -485,4 +476,9 @@ fn picture(c : @ui.Ctx, src : Source, it : Item) -> Unit {
 /// says how the page is laid out; the colours are one on every screen (@sf.begin).
 fn small(c : @ui.Ctx) -> Bool {
   @sf.layout(c.window_size().0) is Small
+}
+
+///|
+using @sf {
+  dmin,
 }

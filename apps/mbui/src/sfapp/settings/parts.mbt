@@ -396,14 +396,6 @@ pub let status_top : Ref[Double] = Ref(0.0)
 pub let nav_foot : Ref[Double] = Ref(0.0)
 
 ///|
-/// A bar's room, `h` high (none when it is 0): the status bar's over a page, the navigation bar's under it.
-fn bar_room_gap(c : @ui.Ctx, h : Double) -> Unit {
-  if h > 0.0 {
-    c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
-  }
-}
-
-///|
 /// The room a place's top page keeps at its foot for the bottom bar.
 pub let bar_room : Ref[Double] = Ref(0.0)
 
@@ -738,28 +730,6 @@ let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibol
 let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wide_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-/// What a section is about, under its head where the wide frame says it (page.css.ts sectionSub: 12, muted, 3 under
-/// the head, 10 over what it holds); none on a phone, whose pages say it under what it holds.
-fn section_note(c : @ui.Ctx, words : String) -> Unit {
-  if !wide.val || words == "" {
-    return
-  }
-  c.box(style=wide_section_note, fn() { c.text(words, style=wide_note_words) |> ignore }) |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_section_note : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
-
-///|
 /// What stands at the column's edge in the wide frame, 16 in as the title is (a section's control); 12 on a phone.
 fn inset(c : @ui.Ctx, body : () -> Unit) -> Unit {
   c.box(style=if wide.val { wide_inset } else { phone_inset }, body) |> ignore
@@ -855,7 +825,6 @@ let wide_card_room : @ui.Style = @ui.css("w=Full px=S4 pb=S2_5")
 let card_ground : @ui.Style = @ui.css("w=Full radius=Xl3 bg=Card clip").then(@ui.style(p=@sf.room_of(@sf.card_pad)))
 
 ///|
-///|
 /// A settings button's height.
 pub let settings_button_h : Double = 38.0
 
@@ -865,19 +834,6 @@ pub let settings_button_h : Double = 38.0
 /// words after it: its words where they were).
 // kept across runs: a value (no field of it changes)
 pub let foot_across : @ui.Style = @sf.foot_across(settings_button_h)
-
-///|
-// kept across runs: a value (no field of it changes)
-let foot_start : @ui.Style = @sf.foot_start(settings_button_h, button_pad)
-
-///|
-/// A block across a card's foot, its ground reaching past the card's words to the ladder's inset.
-// kept across runs: a value (no field of it changes)
-let block_across : @ui.Style = @sf.block_across
-
-///|
-/// A settings button's words in from its ends (button_box: 16).
-let button_pad : Double = 16.0
 
 ///|
 /// A card with a block in its foot corners: its foot the ladder's inset.
@@ -1118,18 +1074,9 @@ let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wra
 let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full, balance=true)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wide_value : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
 /// A row's title: the body's words on one line, as wide as the row lets them.
 // kept across runs: a value (no field of it changes)
 let row_title_words : @ui.TextStyle = @sf.body.then(row_title_strong).then(@sf.one_line).then(@sf.full_words)
-
-///|
-/// A row's title with a tag after it: its words' width, on one line.
-// kept across runs: a value (no field of it changes)
-let row_title_tagged : @ui.TextStyle = @sf.body.then(@sf.one_line)
 
 ///|
 /// A row's title as strong as the library's rows' titles (link_row's, a switch row's: Medium), so a page's rows of this
@@ -1220,55 +1167,6 @@ fn chevron(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   @sf.icon(c, "chevron-right", size=14.0, color=t.p.subtle) |> ignore
 }
-
-///|
-/// A row that opens a page: its icon (settings' rows: `icon`, design/icons' name), its name, how
-/// things stand at its end (`bad` in red; `dot`, a red dot before it), a chevron. True on the frame after a tap.
-fn go_row(
-  c : @ui.Ctx,
-  key : String,
-  title : String,
-  value? : String = "",
-  bad? : Bool = false,
-  dot? : Bool = false,
-  icon? : String = "",
-  lead? : () -> Unit,
-) -> Bool {
-  list_row(c, key~, fn() {
-    if icon != "" {
-      row_icon(c, icon)
-    }
-    match lead {
-      Some(f) => f()
-      None => ()
-    }
-    row_title(c, title)
-    if value != "" {
-      c.box(style=near_beside, max_w=220.0, fn() {
-        if dot {
-          presence_dot(c, "error")
-        }
-        // SettingParts.kt:258 (14sp)
-        let look = if wide.val { wide_value } else { @sf.value }
-        c.text(value, style=if bad { look.then(@sf.bad) } else { look }) |> ignore
-      })
-      |> ignore
-    }
-    chevron(c)
-  })
-}
-
-///|
-/// A settings row's icon, before its name: the line art in the muted ink.
-fn row_icon(c : @ui.Ctx, name : String) -> Unit {
-  let t = @sf.theme()
-  @sf.icon(c, name, size=@sf.row_icon, color=t.p.muted) |> ignore
-}
-
-///|
-/// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
-// kept across runs: a value (no field of it changes)
-let near_beside : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// A connect's presence, a station's state: online green, at work the accent, failing red,
@@ -1494,56 +1392,6 @@ let wide_button_h : Double = 46.0
 let wide_button_box : @ui.Style = @ui.css("row w=Full px=S5 radius=Full gap=S2 align=ACenter justify=JCenter")
 
 ///|
-/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, rippled where it is pressed (not when off);
-/// its label after its mark, 6 apart. On a list card to the card's padding, its line
-/// 12 in and rounded concentric with the card, as a ListRow.
-// kept across runs: a value (no field of it changes)
-let pick_room : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line_off : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line : @ui.Style = pick_line_off
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_card_line_off : @ui.Style = pick_line_off.then(@ui.css("px=S3 radius=Inner"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_card_line : @ui.Style = pick_line.then(@ui.css("px=S3 radius=Inner"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_label_line : @ui.Style = near_beside.then(@sf.full_width)
-
-///|
-/// A word at a row's end that does something (撤回): a spinner in its place while it is
-/// under way, a red mark before it a moment after it failed. True on the frame after a tap.
-fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : String?) -> Bool {
-  if busy {
-    spinner(c)
-    return false
-  }
-  let id = c.id(key)
-  c.box(style=near_beside, fn() {
-    doing_mark(c, false, failed)
-    c.box(id~, fn() {
-      // Settings.kt:288 (14sp)
-      c.text(label, style=@sf.value.then(@sf.accent)) |> ignore
-      // Controls.kt pressText: rippled round its words, 6 past them on each side and 3 above and under, 8 round
-      @motion.ripple(c, id, press_corner, out_x=press_out, out_y=press_out / 2.0)
-    })
-    |> ignore
-  })
-  |> ignore
-  hit(c, id)
-}
-
-///|
 /// A text button's ground under the finger past its words (Controls.kt pressText: PRESS_OUT on each side, half that
 /// above and under), and its corner (PRESS_CORNER).
 let press_out : Double = 6.0
@@ -1624,78 +1472,11 @@ let body_box : @ui.Style = @ui.css("w=Full px=S4 py=S3_5 gap=S3")
 let body_on_card : @ui.Style = body_box.then(@ui.css("px=S3 py=S3"))
 
 ///|
-/// A paragraph and a quieter one under it.
-fn para(c : @ui.Ctx, main : String, sub? : String = "") -> Unit {
-  c.box(style=@sf.full_width, fn() {
-    // Security.kt:105 (15sp, line 22)
-    c.text(main, style=@sf.paragraph.then(@sf.full_words)) |> ignore
-    if sub != "" {
-      // Security.kt:106 (15sp, line 22)
-      c.text(sub, style=@sf.lead.then(@sf.full_words)) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// A quiet note.
 fn note(c : @ui.Ctx, words : String) -> Unit {
   // Security.kt:110 (12sp, line 18)
   c.text(words, style=@sf.note.then(@sf.full_words)) |> ignore
 }
-
-///|
-/// A small dot: on green, else warn or the line's grey.
-fn dot(c : @ui.Ctx, on : Bool, warned? : Bool = false) -> Unit {
-  let t = @sf.theme()
-  c.box(
-    style=dot_shape,
-    bg=if on {
-      t.p.green
-    } else if warned {
-      warn
-    } else {
-      t.p.line
-    },
-    fn() {  },
-  )
-  |> ignore
-}
-
-///|
-/// A check's state in its words on a soft pill of its tone: green, the accent and amber in
-/// their inks; its ground its colour at 12% (amber's 14%), the chip's grey for neutral.
-fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
-  let t = @sf.theme()
-  let ink = match tone {
-    "green" => t.p.green_ink
-    "red" => t.p.red
-    "blue" => t.p.blue
-    "accent" => t.p.accent_text
-    "amber" => t.p.warn_ink
-    _ => t.p.muted
-  }
-  // (its ground its tone's at 12%, 14%: off the scale of opacities)
-  let ground = match tone {
-    "neutral" => t.p.chip
-    "amber" => @sf.alpha(ink, 0.14)
-    _ => @sf.alpha(ink, 0.12)
-  }
-  c.box(style=tone_pill_box, bg=ground, fn() {
-    // Profiles.kt:760 (12sp)
-    c.text(words, style=tone_pill_words, color=ink) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// TonePill: 6 in at its sides, 1 over and under, 6 round.
-// kept across runs: a value (no field of it changes)
-let tone_pill_box : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tone_pill_words : @ui.TextStyle = @sf.caption.then(@sf.one_line)
 
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
@@ -1746,97 +1527,6 @@ pub fn mono(
 /// What it holds in the middle of where it is, across.
 // kept across runs: a value (no field of it changes)
 let centre_column : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-/// The core's done or waiting lead at the start of `s` (ui/StatusText.kt doneLead, waitLead; present.ts: 做完了,
-/// 做完了：…; 在等：…, 等待中; Done, Done: …; Waiting, Waiting: …): whether it is done, and how long the lead is.
-fn status_lead(s : String) -> (Bool, Int)? {
-  for w in ["做完了", "已完成"] {
-    if s == w {
-      return Some((true, w.length()))
-    }
-    if s.has_prefix(w + "：") {
-      return Some((true, w.length() + 1))
-    }
-  }
-  if s == "Done" {
-    return Some((true, 4))
-  }
-  if s.has_prefix("Done: ") {
-    return Some((true, 6))
-  }
-  for w in ["在等：", "等待："] {
-    if s.has_prefix(w) {
-      return Some((false, w.length()))
-    }
-  }
-  if s == "等待中" {
-    return Some((false, s.length()))
-  }
-  if s == "Waiting" {
-    return Some((false, 7))
-  }
-  if s.has_prefix("Waiting: ") {
-    return Some((false, 9))
-  }
-  None
-}
-
-///|
-/// A state in words, its done or waiting lead as a check or the wait mark before what follows it.
-fn status_text(c : @ui.Ctx, s : String, style~ : @ui.TextStyle) -> Unit {
-  let t = @sf.theme()
-  match status_lead(s) {
-    Some((done, n)) => {
-      let reason = s.view(start_offset=n).to_owned()
-      c.box(style=status_line, fn() {
-        @sf.icon(c, if done { "check" } else { "wait" }, size=status_icon, color=t.p.muted) |> ignore
-        if reason != "" {
-          c.text(" " + reason, style~) |> ignore
-        }
-      })
-      |> ignore
-    }
-    None => c.text(s, style~) |> ignore
-  }
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_line : @ui.Style = @ui.css("row align=ACenter")
-
-///|
-/// A state's words, as small as where they stand has them: 11, 12, 13, muted, on one line.
-// kept across runs: a value (no field of it changes)
-let status_xs2 : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_xs : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-/// A state's lead as an icon, as tall as the words.
-let status_icon : Double = 14.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line_ground : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S1,
-  py=@sf.pick_line_y,
-  gap=S3,
-  align=ACenter,
-  radius=@sf.pick_line_r,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)
 
 ///|
 /// A page head's own action in the wide frame (ui.tsx Button with Plus): the library's button, its ＋ and words. True on

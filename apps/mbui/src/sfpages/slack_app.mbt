@@ -760,24 +760,6 @@ let sa_card_in : Double = 20.0
 let sa_white : Int64 = 0xFFFFFFFFL
 
 ///|
-/// The fold (appFold: 28 over and under it; its line 6 by 0 in, 10 apart, its title in 600; its body 8 under it, 10
-/// apart).
-// kept across runs: a value (no field of it changes)
-let sa_fold : @ui.Style = @ui.css("w=Full py=S7")
-
-///|
-// kept across runs: a value (no field of it changes)
-let sa_fold_line : @ui.Style = @ui.css("row py=S1_5 gap=S2_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let sa_fold_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let sa_fold_body : @ui.Style = @ui.css("w=Full pt=S2 gap=S2_5")
-
-///|
 /// The guide (tokenGuide: its steps 18 apart).
 // kept across runs: a value (no field of it changes)
 let sa_guide : @ui.Style = @ui.css("w=Full gap=S4_5")

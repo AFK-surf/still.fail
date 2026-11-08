@@ -68,8 +68,6 @@ let share_in : ShareIn = {
   find: @ui.Field::new(),
 }
 
-
-
 ///|
 /// Whether what is shared is up in the wide window's panel (share_panel) rather than in a sheet: by the window, as the
 /// library's presenters are (a sheet on Small).
@@ -113,13 +111,11 @@ fn over_view(c : @ui.Ctx, src : Source) -> Unit {
   // a browser's window of its own (the extension's): nothing under the sheet to show, so what it holds is the window's
   if share_inline() {
     c.box(style=share_window, fn() { share_over_sheet(c, src) }) |> ignore
-    toast(c)
     return
   }
   sheet_contents(fn(kind) { if kind == ShareSheet { share_over_sheet(c, src) } })
   // (nothing of the app's under it: on the page's paper)
   @sf.presented(c, alone=true)
-  toast(c)
 }
 
 ///|
@@ -805,7 +801,7 @@ fn share_opened(
 ) -> Unit {
   let key = match key {
     Some(k) => k
-    None => if session == "" { "new:" + workspace_of(station) } else { station + ":" + session }
+    None => if session == "" { "new:" + @sfbase.workspace_of(station) } else { station + ":" + session }
   }
   if files.length() > 0 {
     let list = shared_into.get(key).unwrap_or([])
@@ -846,7 +842,6 @@ fn share_opened(
     app.nav.push(Chat({ station, session, title, station_name: "" }))
   }
 }
-
 
 ///|
 /// How many pictures shared in have been added as images (their keys' numbers).
@@ -911,7 +906,6 @@ fn shared_files_head(c : @ui.Ctx, files : Array[SharedFile], words : String, tit
   })
   |> ignore
 }
-
 
 ///|
 /// What another app shares, with a wide window (sfdesk's switcher.mbt):

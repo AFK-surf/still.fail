@@ -82,12 +82,6 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
 }
 
 ///|
-/// A picture held by a composer that has not got a message attachment for it yet.
-pub fn local_picture(c : @ui.Ctx, key : String, name : String, w : Double, h : Double) -> Unit {
-  media_content(c, local_media(key, file_kind(name)), w, h, FitCover, 0.0)
-}
-
-///|
 /// The station moves a staged file from its uploads folder into the session's uploads folder when its message is
 /// accepted, keeping its unique stored name. Only those paths can be matched across that move.
 fn staged_file_name(key : String) -> String {
@@ -602,7 +596,6 @@ let coming_pill : @ui.Style = @ui.style(
   bg=@sf.video_shade,
   align=ACenter,
 )
-
 
 ///|
 // kept across runs: a value (no field of it changes)

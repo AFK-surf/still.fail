@@ -993,7 +993,6 @@ fn new_send(
 
 // ── the run picker ────────────────────────────────────────────────────────
 
-
 ///|
 /// The column wide (newChatInner: 720 at most, 32 in from the pane's sides), the scene's width (ILLUS_SIZE: 320;
 /// narrow 230), a mark and a chevron in a choice.
@@ -1167,11 +1166,6 @@ let new_alone_box : @ui.Style = @ui.css("w=Full px=S8 gap=S2_5 align=ACenter")
 let new_alone_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, center=true, w=Full)
 
 ///|
-/// 新对话 (newChatTitle: the heading's, 600).
-// kept across runs: a value (no field of it changes)
-let new_title_box : @ui.Style = @ui.css("w=Full")
-
-///|
 // kept across runs: a value (no field of it changes)
 let new_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, center=true, w=Full)
 
@@ -1217,13 +1211,3 @@ let new_notice_box : @ui.Style = @ui.css("px=S3 py=S2 mb=S2 radius=Xl bg=A(Warn,
 ///|
 // kept across runs: a value (no field of it changes)
 let new_notice_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
-
-///|
-/// The way to where models are chosen (controls.css.ts chooser as a link): 28 high, 8 in, the link's ink.
-// kept across runs: a value (no field of it changes)
-let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter hovered{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let new_link : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Link, wrap=false, w=Cut)
-

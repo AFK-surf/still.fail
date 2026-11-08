@@ -78,35 +78,6 @@ pub fn Surface::style(self : Surface) -> @ui.Style {
 }
 
 ///|
-/// What sits at its corner, as a style's corner (inner).
-pub fn Surface::inner_radius(self : Surface) -> @ui.Radius {
-  rounded(self.inner)
-}
-
-///|
-/// The corner of what sits in `s`, or `fallback` where it stands in none (innerOr).
-pub fn inner_or(s : Surface?, fallback : Double) -> Double {
-  match s {
-    Some(s) => s.inner
-    None => fallback
-  }
-}
-
-///|
-/// The corner a surface's own corner leaves for what sits `pad` in from it when that is a pill `height` high (pillInner):
-/// the surface's corner the pill's half height and the pad together, round as the pill is, so a pill too short for a
-/// larger corner never leaves a crescent beside it.
-pub fn pill_inner(pad : Double, height : Double) -> Double {
-  @ui.concentric(around(pad, height / 2.0), pad)
-}
-
-///|
-/// A ground reaching `x` past its words on either side: they stand where they would without it (bleedX).
-pub fn bleed_x(x : Double) -> @ui.Style {
-  @ui.style(px=room(x), mx=room(-x))
-}
-
-///|
 /// The same at its start only, its end where it is (bleedStart).
 pub fn bleed_start(x : Double) -> @ui.Style {
   @ui.style(pl=room(x), ml=room(-x))
@@ -158,25 +129,9 @@ pub let columns : Columns = {
 }
 
 ///|
-/// Moved back by a column's offset: a part that starts in the column before it (intoColumn).
-pub fn into_column(offset : Double) -> @ui.Style {
-  @ui.style(ml=room(-offset))
-}
-
-///|
 /// What a layer holds centred in it, both ways (centred: the web's by translate, placed absolutely).
 // kept across runs: a value (no field of it changes)
 pub let centred : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-/// Centred across only (centredX).
-// kept across runs: a value (no field of it changes)
-pub let centred_x : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-/// Centred up and down only (centredY).
-// kept across runs: a value (no field of it changes)
-pub let centred_y : @ui.Style = @ui.css("h=Full justify=JCenter")
 
 ///|
 /// Each after the first laid `x` over the one before (faces in a stack): overlap.
@@ -220,20 +175,6 @@ pub fn oversize(x : Double) -> @ui.Style {
 /// `x` taken away, for a value that needs it inside another (neg).
 pub fn neg(x : Double) -> Double {
   -x
-}
-
-///|
-/// A row in surface `s` reaching `x` into its padding, its words where the surface's other words are (case 2 inside
-/// case 1): as far from the surface's sides as from its top (`first`) or foot (`last`), its corner the surface's inner
-/// one and that distance together, concentric, whatever the surface's padding is (edgeRow).
-pub fn edge_row(s : Surface, x : Double, first? : Bool = false, last? : Bool = false) -> @ui.Style {
-  let row = @ui.style(px=room(x), mx=room(-x), radius=rounded(@ui.concentric_out(s.inner, x)))
-  let row = if first { row.then(@ui.style(mt=room(-x))) } else { row }
-  if last {
-    row.then(@ui.style(mb=room(-x)))
-  } else {
-    row
-  }
 }
 
 ///|

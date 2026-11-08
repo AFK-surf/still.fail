@@ -180,15 +180,6 @@ fn fdrag_over(c : @ui.Ctx, x : Double, y : Double) -> Unit {
 }
 
 ///|
-/// Whether a row is what is being dragged.
-fn fdrag_carried(station : String, root : String, path : String) -> Bool {
-  match fdrag.item.get() {
-    Some(i) => i.station == station && i.root == root && i.path == path
-    None => false
-  }
-}
-
-///|
 /// What a drop of `item` into a folder of `station` does (browse.ts effectOf): across stations a copy (⌘: a move),
 /// within one a move (⌥: a copy).
 fn fdrag_effect(item : Dragged, station : String, mods : Int) -> String {
@@ -854,16 +845,6 @@ let fdrag_says : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Accent")
 let fdrag_says_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
-/// 个人收藏 while a folder dragged over it would be kept there (keep: ringed in the accent).
-// kept across runs: a value (no field of it changes)
-let fdrag_keep : @ui.Style = @ui.css("w=Full radius=Xl")
-
-///|
-// kept across runs: a value (no field of it changes)
-let fdrag_keep_on : @ui.Style = fdrag_keep.then(@ui.css("border=B1 border_color=Accent"))
-
-
-///|
 /// What is carried now (a row dragged), for what it goes over to show it (a chat's composer).
 pub fn dragged() -> Dragged? {
   fdrag.item.get()
@@ -891,7 +872,6 @@ let fclash_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=fa
 ///|
 // kept across runs: a value (no field of it changes)
 let fclash_value : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
-
 
 ///|
 /// What is carried's mark (16).
