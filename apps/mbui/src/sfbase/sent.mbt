@@ -119,6 +119,7 @@ fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
 /// will have them), its words in the runs the core read them in (`runs`: refs_sent_runs). Its key, for what flies there
 /// (flight.mbt).
 pub fn sent_local(
+  c : @ui.Ctx,
   rk : String,
   v : ChatView?,
   words : String,
@@ -146,7 +147,7 @@ pub fn sent_local(
       waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
       progress: None,
       uploads: cards,
-      created_at: @ui.current().moment(),
+      created_at: c.moment(),
       final: false,
     },
     // (a chat just made: none)

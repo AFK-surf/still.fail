@@ -531,8 +531,7 @@ fn draft_named(d : Draft, v : Json) -> Unit {
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
 /// then let it go to its own height on a Move as long as it goes down (to the least room the list keeps for it): all
 /// of it said now, as they set off (flight_start), and anew when they know their way (flight_placed).
-fn composer_hold(chat : String, room : Double, ms : Double) -> Unit {
-  let c = @ui.current()
+fn composer_hold(c : @ui.Ctx, chat : String, room : Double, ms : Double) -> Unit {
   @motion.anim(c, "composer/held/" + chat, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + chat, 0.0, global=true)
   a.snap(1.0)
@@ -1277,7 +1276,7 @@ fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[Flyi
           shown: None,
           picture: if draft_is_picture(f, draft_picture_key(src, r, f)) { Some(draft_picture_key(src, r, f)) } else { None },
           paint: None,
-          face: draft_face(c, src, r, d, f),
+          face: draft_face(src, r, d, f),
           ground: 0L,
           leaving: None,
           quote_words: None,
@@ -1322,7 +1321,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   for x in taken_refs {
     match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
       (Some(up), Some(from)) if up.done.get() is Some(a) && x.mode == "file" && text(Some(a), "path") != "" =>
-        flying.push({ key: text(Some(a), "path"), from, shown: None, picture: None, paint: None, face: fn() { ref_card(c, d.key, x) }, ground: 0L, leaving: None, quote_words: None, quote_to: None })
+        flying.push({ key: text(Some(a), "path"), from, shown: None, picture: None, paint: None, face: fn(c) { ref_card(c, d.key, x) }, ground: 0L, leaving: None, quote_words: None, quote_to: None })
       _ => ()
     }
   }
@@ -1331,7 +1330,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(d.key, words)
   let runs = @sfbase.refs_sent_runs(d.key, words)
-  let row = sent_local(rk, Some(v), words, shown, going=uploads, runs~)
+  let row = sent_local(c, rk, Some(v), words, shown, going=uploads, runs~)
   let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
   let chat = d.key
   flight_start(
@@ -1343,7 +1342,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     room,
     flying,
     field=field_key,
-    hold=fn(ms) { composer_hold(chat, room, ms) },
+    hold=fn(c, ms) { composer_hold(c, chat, room, ms) },
     desk=false,
     marks~,
     runs~,
@@ -2345,9 +2344,9 @@ fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, lo
 /// A file's tile as the composer draws it, nothing of it to be tapped (a file sent: drawn where it was until its
 /// message is in the list, flight.mbt): its box alone, without the remove button over its corner (Composer.kt
 /// sendTile).
-fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) -> () -> Unit {
+fn draft_face(src : Source, r : ChatRef, d : Draft, f : Pending) -> (@ui.Ctx) -> Unit {
   let picture = draft_picture_key(src, r, f)
-  fn() {
+  fn(c) {
     if draft_is_picture(f, picture) {
       picture_face(c, f, picture, 0) |> ignore
     } else {

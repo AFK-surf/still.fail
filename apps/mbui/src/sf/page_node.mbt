@@ -519,11 +519,13 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
 
 ///|
 /// What a row on a card (link_row_node) is by, before its words: one of still.fail's line icons, in the muted ink; or
-/// what makes it (a person's picture, a workspace's mark: an old view, hosted).
+/// what makes it (a person's picture, a workspace's mark: an old view, hosted); or a tile with a ground that makes it,
+/// in from the row's start, top and foot by the ladder's inset, concentric with its corners there.
 pub(all) enum RowLead {
   NoLead
   LeadIcon(String)
   LeadMade((@view.View) -> Unit)
+  LeadTile((@view.View) -> Unit)
 }
 
 ///|
@@ -604,10 +606,13 @@ pub fn link_row_node(
     r
     .row(Is(true))
     .gap(Is(12.0))
-    .padding(Is((text_in, text_in, text_in, text_in)))
+    // (a tile leading it: the row as tall as the tile and the ladder's inset over and under it, or its words and theirs,
+    // both across its middle; at its top, a tile shorter than its words stood off the row's middle, the user,
+    // 2026-11-08: 「workspace 怎么不居中」)
+    .padding(Is(if lead is LeadTile(_) { (text_in, corner_inset, text_in, corner_inset) } else { (text_in, text_in, text_in, text_in) }))
     .radius(Is(@ui.concentric(group_corner, list_pad)))
     .min_height(By(fn() { Some(theme().items.least) }))
-    .lines_up(By(fn() { Some(if under() { Start } else { Middle }) }))
+    .lines_up(By(fn() { Some(if under() && !(lead is LeadTile(_)) { Start } else { Middle }) }))
     |> ignore
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
@@ -638,6 +643,7 @@ pub fn link_row_node(
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
+      LeadTile(f) => r.box(fn(l) { l.margin(Is((corner_inset - text_in, 0.0, 0.0, 0.0))) |> ignore; f(l) }) |> ignore
     }
     // its words: its title (as wide as the row leaves it) and what it says, then its chevron; its note under them, and
     // what is below

@@ -354,6 +354,8 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: The TypeScript station's bundle (darwin-arm64)
+        env:
+          GH_TOKEN: ${{ github.token }} # read-only API fallback if the public release download fails
         run: |
           pnpm install --frozen-lockfile --prefer-offline > /dev/null
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)

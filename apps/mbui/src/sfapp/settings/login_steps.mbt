@@ -76,7 +76,7 @@ fn step_button_of(
   label : String,
   solid : Bool,
   external? : Bool = false,
-  more? : Array[(String, () -> Unit)] = [],
+  more? : Array[@sf.MenuItem] = [],
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -98,7 +98,7 @@ fn step_button_of(
       })
       c.semantics(b, Button, id=mid, label=@sf.t("common.login.otherWays"))
       if c.clicked(mid) {
-        @sf.menu(more.map(fn(w) { Some(@sf.menu_item_of(w.0, w.1)) }), from=Of(mid), along=End)
+        @sf.menu(more.map(fn(i) { Some(i) }), from=Of(mid), along=End)
       }
     }
   })
@@ -148,18 +148,17 @@ fn login_steps(
   // in the ⋯ of the page's button: its address copied (for a browser elsewhere), and where the station has one, the same
   // page in the station's browser (回到 … while its tab is open)
   let elsewhere = [
-    (
-      tr("common.link.copy"),
-      fn() {
-        @ui.current().copy_text(url)
-        (core.say)(tr("common.link.copied"))
-      },
-    ),
+    @sf.menu_item_of(tr("common.link.copy"), fn() {
+      // (a menu's item chosen, outside a build: on the clipboard and felt at once, as Ctx::copy_text has it there)
+      @hostapi.clipboard_set(url)
+      @ui.haptic(KeyboardTap)
+      (core.say)(tr("common.link.copied"))
+    }),
   ]
   match in_station {
     Some((name, open)) if flag(job, "browser") => {
       let label = fill(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, [("station", name)])
-      elsewhere.push((label, fn() { confirm_claude_auth(provider == "Claude" && text(job, "screen") == "", fn() { open(label) }) }))
+      elsewhere.push(@sf.menu_item_of(label, fn() { confirm_claude_auth(provider == "Claude" && text(job, "screen") == "", fn() { open(label) }) }))
     }
     _ => ()
   }
@@ -213,7 +212,9 @@ fn login_steps(
       ) {
       confirm_claude_auth(provider == "Claude", fn() {
         if !filled {
-          @ui.current().copy_text(user_code)
+          // (the press's, or the confirm's after it: on the clipboard and felt as it is pressed)
+          @hostapi.clipboard_set(user_code)
+          @ui.haptic(KeyboardTap)
         }
         login_state.copied[k] = true
         (core.open_link)(url)

@@ -29,7 +29,7 @@
 /// (switch.mbt).
 pub(all) struct NewChatFrame {
   core : Core
-  bar : () -> Unit
+  bar : (@ui.Ctx) -> Unit
   foot : Double
   in_place : Bool
   sent : (ChatRef) -> Unit
@@ -64,7 +64,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
   let topic = src.topic("newChat", { "scope": Json::string(w.id) }).get().snapshot()
   let v = topic.value
   c.box(style=new_ground, fn() {
-    c.box(style=new_bar_room, frame.bar) |> ignore
+    c.box(style=new_bar_room, fn() { (frame.bar)(c) }) |> ignore
     c.box(style=new_room, fn() {
       match field(v, "stations") {
         Some(Array(_)) =>
@@ -118,7 +118,7 @@ pub fn new_chat_left(
 ) -> Unit {
   c.box(style=new_frame_box, fn() {
     // its bar gone at once (the chat has its own), its room kept
-    let bar = c.box(style=new_bar_room, frame.bar)
+    let bar = c.box(style=new_bar_room, fn() { (frame.bar)(c) })
     c.look(bar, @ui.look(alpha=0.0))
     c.box(style=new_room, fn() { new_on(c, src, w, frame, v, field(v, "station"), Going(up, fade)) }) |> ignore
     list_space(c, frame.foot)
@@ -228,7 +228,7 @@ fn new_narrow(
   }
   let width = composer_width(c.width)
   // (as far from the page's foot as a chat's composer: composer_foot_in)
-  let under : @ui.Space = @sf.room_of(composer_foot_in(c.width))
+  let under : @ui.Space = @sf.room_of(composer_foot_in(c, c.width))
   c.layer(fn() {
     c.spacer()
     let foot = c.box(style=new_foot, fn() {
@@ -661,7 +661,7 @@ fn new_composer_place(
       }
       let name = text(station, "name")
       // (at the page's foot, laid out narrow: in a panel's foot corners as a chat's is; roomy, in the page's middle)
-      let at = if wide { composer_alone } else { composer_place(c.width) }
+      let at = if wide { composer_alone } else { composer_place(c, c.width) }
       let place = c.box(style=new_composer_box, fn() {
         c.sized(width, c.height, fn() {
           composer(c, src, w, spec, fn(d) { new_send(c, src, frame, v, address, name, d) }, place=at)
@@ -880,14 +880,14 @@ fn new_send(
     words,
     flying_quotes(c, src, d, station) + flying_files(c, src, d),
     field=composer_field_key,
-    hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
+    hold=fn(c, ms) { composer_hold(c, d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
     marks~,
     runs~,
   )
-  let row = sent_local(rk, None, words, up, going~, quotes~, runs~)
-  @sfbase.flight_carry_into(d.key, draft, rk, row, hold=fn(ms) { composer_hold(draft, 0.0, box, ms) })
+  let row = sent_local(c, rk, None, words, up, going~, quotes~, runs~)
+  @sfbase.flight_carry_into(c, d.key, draft, rk, row, hold=fn(c, ms) { composer_hold(c, draft, 0.0, box, ms) })
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
   fresh.sending.set(true)
@@ -899,7 +899,7 @@ fn new_send(
   fresh.became.set(Some(r))
   fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
   fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
-  @sfbase.became_starts(wide=!frame.in_place)
+  @sfbase.became_starts(c, wide=!frame.in_place)
   @sfbase.writing_starting(src, d, true)
   // what the core does, in order: the words taken, the chat made, what is written meanwhile on into its draft; then
   // the message sent into it, once both are

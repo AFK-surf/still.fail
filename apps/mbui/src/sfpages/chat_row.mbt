@@ -809,7 +809,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
-          @sfbase.copy_chat_link(@ui.current(), item.title, link)
+          @sfbase.copy_chat_link(item.title, link)
         }),
       ),
     )
@@ -1304,7 +1304,7 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
         items.push(
           Some(
             @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
-              @sfbase.copy_chat_link(@ui.current(), r.title, link)
+              @sfbase.copy_chat_link(r.title, link)
             }),
           ),
         )
@@ -1369,7 +1369,7 @@ fn share_items(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.openInSlack"), icon="external", fn() {
           if !@sfbase.open_slack(slack_app, slack_url) {
-            @sfbase.say(@ui.current(), @sf.t("android-chat.link.failed"))
+            @sfbase.toast_later(@sf.t("android-chat.link.failed"))
           }
         }),
       ),
@@ -1380,7 +1380,7 @@ fn share_items(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.openInFeishu"), icon="external", fn() {
           if !@ui.open_url(feishu_url) {
-            @sfbase.say(@ui.current(), @sf.t("android-chat.link.failed"))
+            @sfbase.toast_later(@sf.t("android-chat.link.failed"))
           }
         }),
       ),

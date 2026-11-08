@@ -43,8 +43,9 @@ pub fn message_link(station : String, session : String, seq : Double) -> String 
 }
 
 ///|
-/// Copies a chat's link as a reference is sent (chatLinkText): `[title](link)`.
-pub fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
+/// Copies a chat's link as a reference is sent (chatLinkText): `[title](link)`, as a press asks it (a menu's item, a
+/// button): on the clipboard and felt at once, said so.
+pub fn copy_chat_link(title : String, link : String) -> Unit {
   let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_string()
   let shown = if shown == "" { link } else { shown }
   // (its first 120 characters, as Android's chatLinkText cuts it)
@@ -57,8 +58,7 @@ pub fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
     n += 1
   }
   let shown = cut.to_string()
-  c.copy_text("[" + shown + "](" + link + ")")
-  say(c, @sf.t("web-main.chat.linkCopied"))
+  copy_out("[" + shown + "](" + link + ")", said=@sf.t("web-main.chat.linkCopied"))
 }
 
 ///|

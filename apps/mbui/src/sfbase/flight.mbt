@@ -57,7 +57,7 @@ pub(all) struct SendFlight {
   /// the composer's room when sent (held a quarter of the way: `hold`, the composer's own, told how long), and whether
   /// it is the desktop's (the web's flight: desk)
   room : Double
-  mut hold : (Double) -> Unit
+  mut hold : (@ui.Ctx, Double) -> Unit
   desk : Bool
   /// the field's words as it laid them out (where each line starts, where each offset stood) and where the words sent
   /// start in them (what came before them trimmed off): what their pieces go from (flight_pieces); None, they go as
@@ -107,9 +107,9 @@ pub(all) struct FlyingFile {
   shown : @ui.DrawnState?
   picture : String?
   mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
-  face : () -> Unit
+  face : (@ui.Ctx) -> Unit
   ground : Int64
-  leaving : ((Double, Double, Double, Double), () -> Unit)?
+  leaving : ((Double, Double, Double, Double), (@ui.Ctx) -> Unit)?
   quote_words : (String, Double)?
   mut quote_to : Double?
 }
@@ -169,7 +169,7 @@ pub fn flight_start(
   room : Double,
   files : Array[FlyingFile],
   field~ : String,
-  hold~ : (Double) -> Unit,
+  hold~ : (@ui.Ctx, Double) -> Unit,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
@@ -211,7 +211,7 @@ pub fn flight_start(
         set_out: -1.0,
         after: 0.0,
       }))
-      hold(flight_wait_ms)
+      hold(c, flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
       // wait for nothing (list_turns.mbt)
       turns_of(turns).send(c, flight_wait_ms + flight_len(desk))
@@ -240,7 +240,7 @@ pub fn flight_carry_start(
   words : String,
   files : Array[FlyingFile],
   field~ : String,
-  hold~ : (Double) -> Unit,
+  hold~ : (@ui.Ctx, Double) -> Unit,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
@@ -287,7 +287,7 @@ pub fn flight_carry_start(
         after: 0.0,
         from_top,
       }))
-      hold(flight_wait_ms)
+      hold(c, flight_wait_ms)
     }
     None => ()
   }
@@ -298,11 +298,12 @@ pub fn flight_carry_start(
 /// turns `turns`, row `key` (in its list from now: sent_local), its composer held as the new chat's was (`hold`, the
 /// chat's own) till they set out. What is asked in its list after them waits for them.
 pub fn flight_carry_into(
+  c : @ui.Ctx,
   from : String,
   chat : String,
   turns : String,
   key : String,
-  hold~ : (Double) -> Unit,
+  hold~ : (@ui.Ctx, Double) -> Unit,
 ) -> Unit {
   match flight_of(from) {
     Some(f) if f.carried => {
@@ -310,8 +311,8 @@ pub fn flight_carry_into(
       f.turns = turns
       f.key = key
       f.hold = hold
-      hold(flight_wait_ms)
-      turns_of(turns).send(@ui.current(), flight_wait_ms + flight_len(f.desk))
+      hold(c, flight_wait_ms)
+      turns_of(turns).send(c, flight_wait_ms + flight_len(f.desk))
     }
     _ => ()
   }
@@ -544,10 +545,10 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
       f.after = if f.desk { 0.0 } else { flight_carry_after_ms }
       f.way.animate(1.0, @motion.tween(f.ms, ease=Linear, delay=f.after))
       // (the composer let go as they set out: their ground comes in round them from there)
-      (f.hold)(f.after)
+      (f.hold)(c, f.after)
     } else {
       f.way.animate(1.0, @motion.tween(f.ms, ease=Linear))
-      (f.hold)(flight_settle * f.ms)
+      (f.hold)(c, flight_settle * f.ms)
     }
   }
 }
@@ -588,7 +589,7 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
         f.way.snap(0.0)
         f.way.animate(1.0, @motion.tween(ms, ease=Linear, delay=f.after), start_at=f.set_out)
         if !f.carried {
-          (f.hold)(dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
+          (f.hold)(c, dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
         }
       }
     }
@@ -1111,7 +1112,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
         // a card on its way is the message's own, carried (flight_landing)
         (Some(_), None, _) => ()
         _ => {
-          let tile = c.box(fn() { (ff.face)() })
+          let tile = c.box(fn() { (ff.face)(c) })
           @motion.placed(c, tile, fn() {
             let (tx, ty, tw, th) = c.node_rect(tile)
             let alpha = flight_shown(c, tile, ff.shown, ff.from, tw, th, 0.0)
@@ -1142,7 +1143,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
         let to = "flight/to/" + ff.key
         match ff.leaving {
           Some(((lx, ly, lw, lh), face)) => {
-            let part = c.box(style=@ui.style(w=Fixed(lw), h=Fixed(lh)), face)
+            let part = c.box(style=@ui.style(w=Fixed(lw), h=Fixed(lh)), fn() { face(c) })
             c.stratum(part, Flying)
             c.draw_only(part)
             @motion.placed(c, part, fn() {

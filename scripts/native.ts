@@ -930,6 +930,53 @@ function unpack(tgz: string, part: string, target: Target, k: string, from: stri
   }
 }
 
+// The browser download endpoint can fail while GitHub's release API and the asset itself are still available. Only
+// try this after that endpoint fails, so an unpublished part does not spend an API request on every build.
+async function releaseThroughApi(name: string): Promise<{ bytes: Buffer; url: string } | null> {
+  const [owner, repo, extra] = REPO.split("/");
+  if (!owner || !repo || extra !== undefined) return null;
+  const root = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases`;
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const api = async (url: string, accept: string, timeout: number): Promise<Response> => {
+    const get = (authenticated: boolean) => fetch(url, {
+      headers: { accept, ...(authenticated && token ? { authorization: `Bearer ${token}` } : {}) },
+      // Keep the token at api.github.com; an asset redirect goes to a separate, signed download URL.
+      redirect: "manual", signal: AbortSignal.timeout(timeout),
+    });
+    const r = await get(Boolean(token));
+    return token && (r.status === 401 || r.status === 403) ? get(false) : r;
+  };
+  try {
+    const found = await api(`${root}/tags/${encodeURIComponent(RELEASE)}`, "application/vnd.github+json", 30_000);
+    if (!found.ok) { log(`release API answered ${found.status}`); return null; }
+    const release = await found.json() as { assets?: { name?: unknown; id?: unknown; digest?: unknown }[] };
+    const asset = Array.isArray(release.assets) ? release.assets.find((a) => a.name === name) : undefined;
+    if (!asset || typeof asset.id !== "number" || !Number.isSafeInteger(asset.id) || asset.id <= 0) return null;
+    const url = `${root}/assets/${asset.id}`;
+    let response = await api(url, "application/octet-stream", 300_000);
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (location === null) return null;
+      const destination = new URL(location, url);
+      if (destination.protocol !== "https:") return null;
+      response = await fetch(destination, { headers: { accept: "application/octet-stream" }, redirect: "follow", signal: AbortSignal.timeout(300_000) });
+    }
+    if (!response.ok) { log(`release asset API answered ${response.status}`); return null; }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    // Some GitHub API versions answer metadata rather than bytes when they cannot serve the asset.
+    if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) { log("release asset API did not give a gzip archive"); return null; }
+    if (typeof asset.digest === "string" && asset.digest.startsWith("sha256:") &&
+        asset.digest !== `sha256:${createHash("sha256").update(bytes).digest("hex")}`) {
+      log("release asset API gave bytes with a different digest");
+      return null;
+    }
+    return { bytes, url };
+  } catch (e) {
+    log(`release API could not give ${name} (${(e as Error).message})`);
+    return null;
+  }
+}
+
 async function download(part: string, target: Target, k: string): Promise<string | null> {
   const name = asset(part, target, k);
   const inbox = process.env.STILLFAIL_NATIVE_INBOX;
@@ -941,16 +988,16 @@ async function download(part: string, target: Target, k: string): Promise<string
   const started = Date.now();
   let url = "";
   let bytes: Buffer | null = null;
+  let releaseFailed = false;
+  const releaseUrl = `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`;
   // (each place in turn: one that answers and then breaks off is said so, and the next one asked: a body cut short
   // failed the whole job with only the socket's error, 39431384793)
-  // (and, last, the same asset through GitHub's API: on 2026-11-08 the release's download page answered 504 for every
-  // asset for an hour, runners and machines alike, while the API's asset by its id was given at once)
-  for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, API_ASSETS]) {
+  for (const at of [`${STORE}/${name}`, releaseUrl]) {
     let answered = false;
     try {
-      const r = at === API_ASSETS ? await assetByApi(name) : await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
-      if (r === null) continue;
+      const r = await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
       if (!r.ok) {
+        if (at === releaseUrl && r.status !== 404) releaseFailed = true;
         if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
         continue;
       }
@@ -959,9 +1006,14 @@ async function download(part: string, target: Target, k: string): Promise<string
       url = at;
       break;
     } catch (e) {
+      if (at === releaseUrl) releaseFailed = true;
       const cause = (e as Error & { cause?: Error }).cause?.message;
       log(`${part} ${target}: ${answered ? `${at} broke off while sending it` : `could not reach ${new URL(at).host}`} (${(e as Error).message}${cause ? `: ${cause}` : ""})`);
     }
+  }
+  if (!bytes && releaseFailed) {
+    const fromApi = await releaseThroughApi(name);
+    if (fromApi !== null) { bytes = fromApi.bytes; url = fromApi.url; }
   }
   if (!bytes) return null;
   const tgz = join(tmpdir(), `${name}.${process.pid}`);
@@ -1143,28 +1195,6 @@ async function published(): Promise<Set<string> | null> {
   }
   const out = gh(["api", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", ".assets[].name"], { allowFail: true });
   return out ? new Set(out.split("\n").filter(Boolean)) : null;
-}
-const API_ASSETS = `https://api.github.com/repos/${REPO}/releases/assets`;
-/// A release asset through GitHub's API (its id from the release's list, then the asset as bytes), with the job's
-/// token where there is one; null when the release has no such asset or the list is not given.
-async function assetByApi(name: string): Promise<Response | null> {
-  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-  const auth: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
-  const list = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${RELEASE}`, {
-    headers: { ...auth, accept: "application/vnd.github+json" },
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!list.ok) {
-    log(`${name}: GitHub's API answered ${list.status} for the release's list`);
-    return null;
-  }
-  const id = ((await list.json()) as { assets: { id: number; name: string }[] }).assets.find((a) => a.name === name)?.id;
-  if (id === undefined) return null;
-  return fetch(`${API_ASSETS}/${id}`, {
-    headers: { ...auth, accept: "application/octet-stream" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(300_000),
-  });
 }
 async function exists(name: string): Promise<boolean> {
   const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { method: "HEAD", redirect: "manual" });

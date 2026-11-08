@@ -43,13 +43,14 @@ fn page_switch_to(top : Page) -> Unit {
     page_switch.from_new = page_switch.was == Some(NewChat)
     if page_switch.from_new {
       // (the new chat as it was laid out last: measured as the frame before drew it, read once, followed by nothing)
+      let c = @ui.current()
       let measured = fn(key : String) {
-        @signals.untracked(fn() { @motion.measured(@ui.current(), key) }).unwrap_or(0.0)
+        @signals.untracked(fn() { @motion.measured(c, key) }).unwrap_or(0.0)
       }
       fresh.room.set(measured("new/composer"))
       fresh.foot.set(measured("new/foot"))
       // the new chat left: its scene leaves by its own way, from now
-      became_starts(wide=true)
+      became_starts(c, wide=true)
     }
   }
   // a new chat come to: nothing made for it yet

@@ -132,9 +132,7 @@ fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.Me
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyMessage"), icon="copy", fn() {
-          let c = @ui.current()
-          c.copy_text(words)
-          say(c, @sf.t("common.copied"))
+          copy_out(words, said=@sf.t("common.copied"))
         }),
       ),
     )
@@ -143,9 +141,7 @@ fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.Me
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyMessageLink"), icon="link", fn() {
-          let c = @ui.current()
-          c.copy_text(link)
-          say(c, @sf.t("common.link.copied"))
+          copy_out(link, said=@sf.t("common.link.copied"))
         }),
       ),
     )

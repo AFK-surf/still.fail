@@ -234,19 +234,12 @@ pub fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Dou
       @sf.menu_held(c, "thing") |> ignore
       let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.things.show"), fn() { away(seq) }, icon="chat"))]
       if url != "" {
-        menu.push(Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { copy_link(c, url) }, icon="copy")))
+        menu.push(Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(url, said=@sf.t("common.link.copied")) }, icon="copy")))
       }
       @sf.menu(menu, from=@sf.at_point(x, y))
     }
     None => ()
   }
-}
-
-///|
-/// A link's address copied, said so.
-fn copy_link(c : @ui.Ctx, url : String) -> Unit {
-  c.copy_text(url)
-  say(c, @sf.t("common.link.copied"))
 }
 
 ///|

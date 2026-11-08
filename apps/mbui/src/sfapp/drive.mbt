@@ -49,8 +49,7 @@ pub fn files_can_lend(src : Source, w : Workspace) -> Bool {
 
 ///|
 /// ＋ of 文件 (the bottom bar's notch): Pin 文件夹, on the one station there is or one chosen first.
-pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  ignore(c)
+pub fn files_lend(src : Source, w : Workspace) -> Unit {
   @sfdesk.add_favorite_folder(src, w.id, @sfdesk.favorite_stations(src, w.id))
 }
 
