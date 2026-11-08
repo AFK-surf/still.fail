@@ -364,6 +364,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
           overview: (viewer, lang) => agents.overview(viewer, lang),
           place: () => agents.place(),
           entry: (kind) => agents.connectKinds?.get(kind)?.entry,
+          heldBy: agents.heldBy,
           reconnect: async (kind, id) => void (await agents.connectKinds?.get(kind)?.reconnect(id)),
         })
       : []),

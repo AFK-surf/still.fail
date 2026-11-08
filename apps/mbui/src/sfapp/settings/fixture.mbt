@@ -988,6 +988,9 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
     ("connection", obj([("state", str(if presence == "error" { "error" } else { "connected" })), ("error", str("Slack 拒绝了 token"))])),
     ("createdBy", obj([("id", str("lin@example.com")), ("name", str("林")), ("shown", obj([("name", str("林")), ("display", str("你")), ("mine", Json::boolean(true))]))])),
     ("sessions", Json::number(4.0)),
+    // (a station that runs its new conversations elsewhere and moves it: connects/workspace.ts)
+    ("startsOn", Json::null()),
+    ("moves", Json::boolean(true)),
     ("statusText", str(status)),
     ("presence", str(presence)),
     ("modeText", str(if mode == "multi-session" { "每个 thread 一个会话" } else { "所有 thread 共用一个会话" })),

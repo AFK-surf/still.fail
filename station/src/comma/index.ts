@@ -62,6 +62,9 @@ export type CommaOptions = ConnectsOptions & {
   homeVersion: () => number;
   onHomeChange: (changed: () => void) => () => void;
   previousExited: Promise<void>;
+  /// What the station calls itself to Comma for a connect of workspace `ws` (null: the home one): that workspace's
+  /// name and its own there, so the still.fail stations Comma lists say which workspace each is. Default: the host's name.
+  name?: (ws: string | null) => string;
 };
 
 export type CommaParts = ReturnType<typeof makeComma>;
@@ -96,7 +99,7 @@ export function makeComma(options: CommaOptions) {
         read: (ref, after, limit) => scoped().chats.read(ref, after, limit),
         say: (ref, text, key, requester, connect) => scoped().chats.say(ref, text, key, requester, connect),
       } : null;
-      return new CommaSurface({ connect: c.id, server: c.server, token: c.token, name: hostname(), tasks: t, store: options.store,
+      return new CommaSurface({ connect: c.id, server: c.server, token: c.token, name: options.name?.(c.workspace ?? null) ?? hostname(), tasks: t, store: options.store,
         models: () => options.models?.(c.id) ?? [], book, stats: isHome ? () => scoped().indexes : options.empty,
         chats, inScope, previousExited: options.previousExited });
     });

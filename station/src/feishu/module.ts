@@ -24,6 +24,7 @@ export const FeishuLive = Layer.effectDiscard(
         hub: () => agents.hub,
         overview: (viewer, lang) => agents.overview(viewer, lang),
         place: () => agents.place(),
+        heldBy: agents.heldBy,
       }),
     );
     const isFeishu = (connect: string) => feishu.connects().some((c) => c.id === connect);

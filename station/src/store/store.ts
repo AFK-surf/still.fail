@@ -2485,6 +2485,29 @@ export class Store {
     this.#run("INSERT INTO relayed_to (connect, channel, at) VALUES (?1, ?2, ?3) ON CONFLICT (connect, channel) DO UPDATE SET at = ?3", connect, channel, this.now());
   }
 
+  /// The station a chat of a connect's thread runs on, when it is another of the workspace's (connects/remote.ts).
+  connectThreadStation(connect: string, channel: string, threadTs: string): string | null {
+    return (this.#one("SELECT station FROM connect_threads WHERE connect = ? AND channel = ? AND thread_ts = ?", connect, channel, threadTs)?.station as string | undefined) ?? null;
+  }
+
+  /// A chat of a connect's thread runs on `station` from now on.
+  setConnectThreadStation(connect: string, channel: string, threadTs: string, station: string): void {
+    this.#run("INSERT INTO connect_threads (connect, channel, thread_ts, station) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (connect, channel, thread_ts) DO UPDATE SET station = ?4", connect, channel, threadTs, station);
+  }
+
+  /// A connect's threads whose chats run on other stations, as a move hands them on; and taken off this station.
+  connectThreads(connect: string): { channel: string; threadTs: string; station: string }[] {
+    return this.#all("SELECT channel, thread_ts, station FROM connect_threads WHERE connect = ?", connect).map((r) => ({ channel: r.channel as string, threadTs: r.thread_ts as string, station: r.station as string }));
+  }
+  dropConnectThreads(connect: string): void {
+    this.#run("DELETE FROM connect_threads WHERE connect = ?", connect);
+  }
+
+  /// The threads a connect's sessions here take part in, as a move of the connect hands them on (theirs run here still).
+  connectLocalThreads(connect: string): { channel: string; threadTs: string }[] {
+    return this.#all("SELECT DISTINCT t.channel, t.thread_ts FROM thread_sessions s JOIN threads t ON t.id = s.thread WHERE s.connect = ?", connect).map((r) => ({ channel: r.channel as string, threadTs: r.thread_ts as string }));
+  }
+
   /// Chats kept instead of offered for archiving. Null selects every viewer, for automatic archiving.
   keptChats(viewer: string | null): Set<number> {
     const rows = viewer === null ? this.#all("SELECT DISTINCT thread FROM kept_chats")

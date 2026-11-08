@@ -267,9 +267,93 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
     ),
   )
   items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.changeOwner"), icon="user", fn() { cd_owner_dialog(core, here, station, cv) })))
+  // (to another station of its workspace, which runs it from then on; a station from before cannot)
+  if flag(cv, "moves") {
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.move"), icon="arrow-right", fn() { cd_station_dialog(core, here, station, cv, true) })))
+  }
   items.push(None)
   items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.delete"), icon="trash", danger=true, delete)))
   @sf.menu(items, from=Of(mid), along=End)
+}
+
+///|
+/// A station of the workspace by its name (its address till its view is read).
+fn cd_station_name(core : Core, here : Here, address : String) -> String {
+  match @settings.stations_of(core, here).value {
+    Some(Array(a)) =>
+      match a.iter().find_first(fn(s) { text(Some(s), "station") == address }) {
+        Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
+        _ => address
+      }
+    _ => address
+  }
+}
+
+///|
+/// A station of its workspace picked for the connect: where its new conversations run (`moving` false: its own
+/// station first, said as such), or where it moves to (`moving`: the others online, the connect itself and its tokens
+/// going there, its chats staying where they run).
+fn cd_station_dialog(core : Core, here : Here, station : String, cv : Json?, moving : Bool) -> Unit {
+  let id = text(cv, "id")
+  let key = "connect-station/" + (desk_dialogs.val + 1).to_string()
+  let starts = text(cv, "startsOn")
+  let choices = fn() -> Array[(String, String)] {
+    let all = match @settings.stations_of(core, here).value {
+      Some(Array(a)) => a
+      _ => []
+    }
+    let out : Array[(String, String)] = []
+    if !moving {
+      out.push(("", @sf.t("web-pages.connect.startsHere", args=[("station", cd_station_name(core, here, station))])))
+    }
+    for s in all {
+      let address = text(Some(s), "station")
+      if address != station && (!moving || flag(Some(s), "online")) {
+        out.push((address, cd_station_name(core, here, address)))
+      }
+    }
+    out
+  }
+  let picked : Ref[String] = Ref(
+    if moving {
+      match choices().get(0) {
+        Some(o) => o.0
+        None => ""
+      }
+    } else {
+      starts
+    },
+  )
+  open_dialog(
+    @sf.t(if moving { "web-pages.connect.move" } else { "web-pages.connect.startsOn" }),
+    description=@sf.t(if moving { "web-pages.connect.moveLead" } else { "web-pages.connect.startsOnLead" }),
+    fn(c, _) {
+      let options = choices()
+      if options.length() == 0 {
+        c.text(@sf.t("web-pages.connect.moveNone"), style=cn_note) |> ignore
+      } else {
+        @sf.field(c, @sf.t("web-pages.connect.station"), fn() {
+          @sf.select(c, key + "/select", picked.val, options, fn(v) { picked.val = v }, label=@sf.t("web-pages.connect.station"), w=cd_select_w)
+        })
+      }
+    },
+    fn(c, shut) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() { shut() }) |> ignore
+      if moving {
+        @sf.button(c, @sf.t("web-pages.connect.moveDo"), key=key + "/save", tone=Primary, disabled=picked.val == "", on_press=fn() {
+          // back to the list: the connect is the other station's from now on
+          (core.pop)()
+          cd_act(core, station, id, @sf.t("web-pages.connect.move"), "connect.move", [("to", str(picked.val))], done=@sf.t("web-pages.connect.moved"))
+          shut()
+        }) |> ignore
+      } else {
+        @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, disabled=picked.val == starts, on_press=fn() {
+          cd_put(core, station, id, obj([("station", str(picked.val))]), done=@sf.t("web-pages.connect.startsOnSaved"))
+          shut()
+        }) |> ignore
+      }
+    },
+  )
 }
 
 ///|
@@ -485,6 +569,21 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
           cd_mode_dialog(core, station, item)
         },
       ) |> ignore
+      // the station its new conversations run on (a connect is its workspace's: its chats may run on any station of
+      // it), picked in a dialog; a single-session connect's one session, and a station from before, say none
+      if !single && flag(cv, "moves") && text(cv, "kind") != "comma" {
+        let starts = text(cv, "startsOn")
+        @sf.link_row(
+          c,
+          "connect-starts/" + id,
+          @sf.t("web-pages.connect.startsOn"),
+          // (a line of its own: a station's name may be long)
+          note=cd_station_name(core, here, if starts == "" { station } else { starts }),
+          on_press=fn() {
+            cd_station_dialog(core, here, station, cv, false)
+          },
+        ) |> ignore
+      }
       // the one they all go into: its chat, another chosen
       if single {
         let bound = field(item, "bound")
