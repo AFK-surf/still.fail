@@ -39,7 +39,7 @@ fn screen_rig(
   here? : String = "",
   h264? : Bool = false,
   os? : String = "",
-  retained? : Bool = false,
+  retained? : Bool = true,
   in_tab? : Bool = false,
   own_bar? : @ui.Style? = None,
 ) -> ScreenRig {
@@ -167,16 +167,23 @@ fn screen_rig(
   )
   if retained {
     @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
       root.pick(fn() { app.nav.top() }, fn(v, page) {
         v.over(Is(true)) |> ignore
         match page {
-          Screen(at) => screen_page_node(v, src, at, fn() { @sf.no_frame }, in_tab~, own_bar=fn() { own_bar }) |> ignore
+          Screen(at) => {
+            screen_page_node(v, src, at, fn() { @sf.no_frame }, in_tab~, own_bar=fn() { own_bar },
+              scope=fn(c, body) { c.with_theme(@sf.ui_theme(), body) }) |> ignore
+            v.owns(fn() { screen_left(src, at.station, at.screen) }) |> ignore
+          }
           _ => ()
         }
       })
       @ui.old(root, fn(c) {
-        @sf.presented(c)
-        @sfbase.toasts(c, @sf.toast_bottom)
+        c.with_theme(@sf.ui_theme(), fn() {
+          @sf.presented(c)
+          @sfbase.toasts(c, @sf.toast_bottom)
+        })
       }).over(Is(true)) |> @ui.old_takes_own |> ignore
     })
   }

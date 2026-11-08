@@ -35,7 +35,7 @@ priv struct ScreenUi {
   /// how far the mouse's buttons were dragged from theirs
   mouse_moved : Afloat
   /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say)
-  mut mouse_set : Bool?
+  mouse_set : @signals.Signal[Bool?]
   /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
   mut scale_asked : Int
   /// the display's resolution last asked for (0 wide none): asked once, as the scale is
@@ -103,7 +103,7 @@ fn screen_ui(key : String) -> ScreenUi {
     None => {
       let u : ScreenUi = {
         zoom: screen_zoom(),
-        pad: { x: 0.5, y: 0.5, moves: 0 },
+        pad: { x: @signals.signal(0.5), y: @signals.signal(0.5), moves: 0 },
         held: { mods: 0 },
         full: @signals.signal(false),
         fulled: false,
@@ -112,7 +112,7 @@ fn screen_ui(key : String) -> ScreenUi {
         tools_open: false,
         tools_moved: afloat_new(),
         mouse_moved: afloat_new(),
-        mouse_set: None,
+        mouse_set: @signals.signal(None),
         scale_asked: 0,
         size_asked: (0, 0),
         saying: false,
@@ -1051,7 +1051,7 @@ fn full_tools(
   close : () -> Unit,
 ) -> Unit {
   let capsule = c.id("screen-tools-capsule")
-  let (laid_dx, laid_dy) = (u.tools_moved.dx, u.tools_moved.dy)
+  let (laid_dx, laid_dy) = (u.tools_moved.dx.get(), u.tools_moved.dy.get())
   // a round button 4 in from the capsule's edge: its corner 20 + 4
   c.box(style=full_tools_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
     let (icon, label) = if u.tools_open {
@@ -1305,7 +1305,7 @@ fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool
 fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   s.driving() &&
   !s.simulator() &&
-  (match u.mouse_set {
+  (match u.mouse_set.get() {
     Some(on) => on
     None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"
   })
@@ -1317,7 +1317,7 @@ fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
 /// are.
 fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let capsule = c.id("screen-mouse-capsule")
-  let (laid_dx, laid_dy) = (u.mouse_moved.dx, u.mouse_moved.dy)
+  let (laid_dx, laid_dy) = (u.mouse_moved.dx.get(), u.mouse_moved.dy.get())
   c.box(style=screen_corner_end(screen_foot_end), fn() {
     c.box(style=mouse_pair_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
       afloat_dragged(c, u.mouse_moved, capsule)
@@ -1348,8 +1348,8 @@ fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// How far a floating capsule (the folded tools, the mouse's buttons) was dragged from its corner, and from where a
 /// drag of it began.
 priv struct Afloat {
-  mut dx : Double
-  mut dy : Double
+  dx : @signals.Signal[Double]
+  dy : @signals.Signal[Double]
   mut from : (Double, Double)?
   /// the window's size as it was last built: its layout before is of another window once it changes
   mut win : (Double, Double)
@@ -1357,7 +1357,7 @@ priv struct Afloat {
 
 ///|
 fn afloat_new() -> Afloat {
-  { dx: 0.0, dy: 0.0, from: None, win: (0.0, 0.0) }
+  { dx: @signals.signal(0.0), dy: @signals.signal(0.0), from: None, win: (0.0, 0.0) }
 }
 
 ///|
@@ -1370,13 +1370,13 @@ fn afloat_dragged(c : @ui.Ctx, f : Afloat, id : Int) -> Unit {
         let (fx, fy) = match f.from {
           Some(at) => at
           None => {
-            let at = (f.dx, f.dy)
+            let at = (f.dx.get(), f.dy.get())
             f.from = Some(at)
             at
           }
         }
-        f.dx = fx + d.x - d.x0
-        f.dy = fy + d.y - d.y0
+        f.dx.set(fx + d.x - d.x0)
+        f.dy.set(fy + d.y - d.y0)
       } else {
         f.from = None
       }
@@ -1396,8 +1396,8 @@ fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy
   let now = c.window_size()
   if f.win != now {
     f.win = now
-    f.dx = 0.0
-    f.dy = 0.0
+    f.dx.set(0.0)
+    f.dy.set(0.0)
     return
   }
   match c.laid_rect(capsule) {
@@ -1409,8 +1409,8 @@ fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy
       if x0 < 0.0 || x0 + w > ww {
         return
       }
-      f.dx = dmax(-x0, dmin(ww - w - x0, f.dx))
-      f.dy = dmax(-y0, dmin(wh - h - y0, f.dy))
+      f.dx.set(dmax(-x0, dmin(ww - w - x0, f.dx.get())))
+      f.dy.set(dmax(-y0, dmin(wh - h - y0, f.dy.get())))
     }
     None => ()
   }

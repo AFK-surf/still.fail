@@ -1,5 +1,5 @@
 ///|
-fn chat_page_node(v : @view.View, src : Source, w : Workspace, r : ChatRef) -> Unit {
+fn chat_page_node(v : @view.View, src : Source, w : Workspace, r : ChatRef, page : () -> Page) -> Unit {
   let key = chat_key(r)
   let width = fn() {
     let ww = v.window().0
@@ -10,6 +10,7 @@ fn chat_page_node(v : @view.View, src : Source, w : Workspace, r : ChatRef) -> U
   let shown = fn() { if opened() { tabs() } else { side_leaving(key).unwrap_or(tabs()) } }
   side_beside_node(v, key, opened, width, fn(p, _left) {
     @ui.old(p, fn(c) {
+      let page = page()
       let (_, target) = fold_target(src, w, c.window_size().0)
       fold_bars(fold_built(c, target))
       @sfbase.held_pictures_waiting.val = false
@@ -17,8 +18,17 @@ fn chat_page_node(v : @view.View, src : Source, w : Workspace, r : ChatRef) -> U
       fold_goes.page_id = page_id
       c.shown_across(page_id, but="page-bar") |> ignore
       context_page(c, page_id)
-      drawn_page.val = Some(Chat(r))
-      if app.nav.top() == Chat(r) { top_drawn.val = true }
+      drawn_page.val = Some(page)
+      if app.nav.top() == page { top_drawn.val = true }
+      if page is History(_, history, entry) {
+        c.tell("history-page/" + history, fn() { history_beside(src, r, history, entry) })
+      }
+      match page {
+        Service(station, job) => tab_beside_say(c, src, station, r.session, "service:" + job) |> ignore
+        PreviewFile(station, session, path, name) =>
+          tab_beside_say(c, src, station, session, file_tab(session, path, name)) |> ignore
+        _ => ()
+      }
       let (way, to) = (@sfbase.page_way.id, @sfbase.page_way.to)
       let over = width() < side_both_least
       let target = if opened() && !over { side_width(width()) } else { 0.0 }

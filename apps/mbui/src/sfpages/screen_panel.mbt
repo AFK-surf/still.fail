@@ -442,7 +442,7 @@ fn center_panel(
     @sf.panel_group(c, fn() {
       let on = mouse_shown(s, u)
       if @sf.switch_row(c, "screen-mouse-shown", @sf.t("web-pages.screen.mouseButtons"), on) != on {
-        u.mouse_set = Some(!on)
+        u.mouse_set.set(Some(!on))
         prefs_chosen(c, s, "screenMouse", if on { "off" } else { "" })
       }
     })

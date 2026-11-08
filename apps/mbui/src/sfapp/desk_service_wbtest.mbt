@@ -3,6 +3,40 @@
 // served from the station; closed, its site view let go.
 
 ///|
+test "desk: a service link waits for its owner, shows its error, and opens the answered chat" {
+  for retained in [false, true] {
+    new_run()
+    let previous = @sfdesk.pane_makes.val
+    defer { @sfdesk.pane_makes.val = previous }
+    @sfdesk.pane_makes.val = retained
+    let phase = @signals.signal(0)
+    let base = fixture("chat-info")
+    let src : Source = { ..base, topic: fn(name, params) {
+      if name == "job" && params.get("id") == Some(Json::string("j-web")) && phase.get() < 2 {
+        { value: None, error: if phase.get() == 1 { Some({ "message": "owner unavailable" }) } else { None }, version: phase.get() }
+      } else {
+        (base.topic)(name, params)
+      }
+    } }
+    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+    open_chat(r)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0)
+    t.draw()
+    app.nav.push(Service("ws1/st1", "j-web"))
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() is Service(_, _))
+    phase.set(1)
+    t.frame()
+    assert_true(t.words().iter().any(fn(w) { w.0.contains("owner unavailable") }))
+    phase.set(2)
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == Chat(r))
+    assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
+    assert_true(t.query(Button, label="刷新") is Some(_))
+  }
+}
+
+///|
 test "desk: a web service asked as a page is its chat with the service beside it, served from the station; closed, let go" {
   new_run()
   // (its agent's services known to the chat: the core keeps only a tab of one of them)

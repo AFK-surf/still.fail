@@ -294,21 +294,21 @@ fn pad_gain(dp_per_ms : Double) -> Double {
 /// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the
 /// station says it is once the finger has been still a moment (something else moved it, or the screen's edge held it).
 priv struct PadPointer {
-  mut x : Double
-  mut y : Double
+  x : @signals.Signal[Double]
+  y : @signals.Signal[Double]
   /// how many times the finger has moved it: the wait for the station's word starts again from each
   mut moves : Int
 }
 
 ///|
 fn PadPointer::at(self : PadPointer) -> (Double, Double) {
-  (self.x, self.y)
+  (self.x.get(), self.y.get())
 }
 
 ///|
 fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
-  self.x = clamp01(self.x + dx)
-  self.y = clamp01(self.y + dy)
+  self.x.set(clamp01(self.x.get() + dx))
+  self.y.set(clamp01(self.y.get() + dy))
   self.moves += 1
 }
 
@@ -317,8 +317,8 @@ fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
 fn PadPointer::follow(self : PadPointer, cursor : (Double, Double)?) -> Unit {
   match cursor {
     Some((x, y)) => {
-      self.x = clamp01(x)
-      self.y = clamp01(y)
+      self.x.set(clamp01(x))
+      self.y.set(clamp01(y))
     }
     None => ()
   }

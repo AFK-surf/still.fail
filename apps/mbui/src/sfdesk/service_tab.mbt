@@ -190,12 +190,16 @@ let sv_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, cente
 fn service_beside(c : @ui.Ctx, src : Source, w : Workspace, station : String, job : String) -> Unit {
   let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
   match text(found.value, "session") {
-    "" =>
-      match found.error {
-        Some(e) => sv_said(c, svc("android-chat.preview.notFound", args=[("error", text(Some(e), "message"))]))
-        None => ()
-      }
+    "" => service_wait_error(c, found.error)
     session => tab_beside(c, src, w, station, session, "service:" + job)
+  }
+}
+
+///|
+fn service_wait_error(c : @ui.Ctx, error : Json?) -> Unit {
+  match error {
+    Some(e) => sv_said(c, svc("android-chat.preview.notFound", args=[("error", text(Some(e), "message"))]))
+    None => ()
   }
 }
 
@@ -211,11 +215,22 @@ fn tab_beside(
   session : String,
   tab : String,
 ) -> Unit {
+  let r = tab_beside_say(c, src, station, session, tab)
+  chat_page(c, src, w, r)
+}
+
+///|
+fn tab_beside_chat(station : String, session : String) -> (ChatRef, Bool) {
   let stack = app.nav.pages()
-  let (r, under) = match stack {
+  match stack {
     [.., Chat(u), _] if u.station == station && u.session == session => (u, true)
     _ => ({ station, session, title: "", station_name: "" }, false)
   }
+}
+
+///|
+fn tab_beside_say(c : @ui.Ctx, src : Source, station : String, session : String, tab : String) -> ChatRef {
+  let (r, under) = tab_beside_chat(station, session)
   c.tell("beside/" + tab, fn() {
     if under {
       app.nav.pop() |> ignore
@@ -224,5 +239,5 @@ fn tab_beside(
     }
     side_change(src, r, "open", Some(tab))
   })
-  chat_page(c, src, w, r)
+  r
 }

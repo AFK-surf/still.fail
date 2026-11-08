@@ -394,7 +394,8 @@ test "断开 in 控制中心 closes the screen" {
   open_center(r)
   r.t.tap_text(tr("web-pages.screen.leave"))
   nav_rested(r.t)
-  assert_true(screens_open.is_empty())
+  assert_false(app.nav.top() is Screen(_), msg="leave removed the screen page")
+  assert_true(screens_open.is_empty(), msg="stream released after leaving")
   screen_done(r.t)
 }
 

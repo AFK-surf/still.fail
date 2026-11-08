@@ -107,7 +107,7 @@ priv struct ScreenSess {
   /// the copies made on the screen not yet put on the device's clipboard (the viewer takes them)
   copied : Array[Copied]
   /// the files picked for its machine (screen_drops.mbt)
-  drops : Array[ScreenDropItem]
+  drops : @sf.LiveArray[ScreenDropItem]
   mut drops_serial : Int
   mut pumping : Bool
   /// a paste under way
@@ -200,7 +200,7 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         parts: [],
         looked: "",
         copied: [],
-        drops: [],
+        drops: @sf.LiveArray::new(),
         drops_serial: 0,
         pumping: false,
         pasting: false,

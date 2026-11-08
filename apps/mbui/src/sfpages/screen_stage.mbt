@@ -688,6 +688,8 @@ fn screen_gestures(
 ) -> Unit {
   let g = u.gesture
   let frame = c.frame_number()
+  // Keep the hand dependency when this island builds again in the same frame.
+  c.drag_of(stage) |> ignore
   if g.frame == frame {
     return
   }

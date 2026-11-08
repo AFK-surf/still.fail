@@ -213,11 +213,19 @@ fn pane_made(
     )
   }
   match page {
-    Chat(r) => Some(("chat/" + chat_key(r), fn(v, _page, _under, _stint, k) {
-      v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
+    Chat(_) | History(_, _, _) | Service(_, _) | PreviewFile(_, _, _, _) => Some(("chat-entry", fn(v, page, _under, _stint, k) {
+      v.pick(fn() { (@sfbase.workspace_in_view(src).0.map(fn(w) { w.id }), pane_chat_ref(src, page())) }, fn(p, picked) {
         guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
         pane_made_host(p, src, k, old_content=true)
-        chat_page_node(p, src, w, r)
+        match picked.1 {
+          Some(r) => chat_page_node(p, src, w, r, page)
+          None => @ui.old(p, fn(c) {
+            if page() is Service(station, job) {
+              let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
+              service_wait_error(c, found.error)
+            }
+          }).grow(Is(1.0)) |> ignore
+        }
       })
     }))
     Place(name) =>
@@ -243,6 +251,21 @@ fn pane_made(
 /// on in the app; off for a test that draws them as their old view does, to be compared.
 // kept across runs: said by a test alone, round what it draws
 pub let pane_makes : Ref[Bool] = Ref(true)
+
+///|
+/// The chat a detail link belongs to, once a service's owner is known.
+fn pane_chat_ref(src : Source, page : Page) -> ChatRef? {
+  match page {
+    Chat(r) | History(r, _, _) => Some(r)
+    PreviewFile(station, session, _, _) => Some(tab_beside_chat(station, session).0)
+    Service(station, job) => {
+      let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
+      let session = text(found.value, "session")
+      if session == "" { None } else { Some(tab_beside_chat(station, session).0) }
+    }
+    _ => None
+  }
+}
 
 ///|
 /// What page_one and pane_page_one did for the page in its island, done for entry `k`'s page made once in node `p`: moved

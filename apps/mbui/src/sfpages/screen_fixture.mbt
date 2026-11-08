@@ -74,7 +74,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
   match m {
     "screen-trackpad" | "screen-trackpad-command" => {
       // a finger moved right, slowly (ScreenViewerTest: the pointer near 0.66 of the frame)
-      u.pad.x = 0.66
+      u.pad.x.set(0.66)
       if m == "screen-trackpad-command" {
         u.held.mods = mod_meta
       }
