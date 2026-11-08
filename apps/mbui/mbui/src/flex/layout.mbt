@@ -1880,8 +1880,9 @@ fn first_fit(flow : Array[Node], room : Double, cb_w : Double, cb_h : Double) ->
 ///|
 /// What each of a row's items `flow` takes along it as fit_flow measures it, with its margins (0 for what is put where
 /// it is said): what may leave is there whole or not at all, and what never gives way (shrink 0: kept as wide as what
-/// it holds) is never narrower: each as wide as what it holds; the rest at least their least, or what the row keeps
-/// of them (fit_need: words cut short keep some of them). And which is its ⋯ (Style's `drop` -1; -1 none).
+/// it holds) or is never narrower than what it holds (Style's min_held, as the line lays it out: row_item_min) is never
+/// narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them (fit_need:
+/// words cut short keep some of them). And which is its ⋯ (Style's `drop` -1; -1 none).
 fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double], Int) {
   let need = Array::make(flow.length(), 0.0)
   let mut more = -1
@@ -1893,6 +1894,8 @@ fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double]
     let least = if known(b.min_w) { b.min_w } else { 0.0 }
     let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
       size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    } else if c.style.min_held {
+      row_item_min(c, b, cb_w, cb_h)
     } else if known(b.w) {
       b.w
     } else if known(c.style.fit_need) {

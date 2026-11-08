@@ -600,6 +600,38 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
 }
 
 ///|
+test "a row that leaves out what has not the room (View::fits) counts what is kept no narrower than it holds (View::keeps_held) whole: what may leave leaves for it, as the room comes back it is back" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  let w = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
+      let title = row.box(fn(k) {
+        k.min_width(Is(Some(0.0))).keeps_held(Is(true)).words(Is("界面草图界面草图"), ink=0x333333FFL, look~) |> ignore
+      })
+      let goes = row.box(fn(g) { g.width(Is(Some(60.0))).height(Is(Some(20.0))).drops(Is(1)) |> ignore })
+      parts.val = (Some(title), Some(goes))
+    })
+    |> ignore
+  })
+  t.draw()
+  let (title, goes) = (parts.val.0.unwrap(), parts.val.1.unwrap())
+  let whole = title.laid_size().0
+  assert_true(whole > 100.0 && !goes.left_out(), msg="room for both: \{whole}, \{goes.left_out()}")
+  // (as wide as the words and what may leave, less a point: no room for both)
+  w.set(whole + 8.0 + 60.0 - 1.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="no room for both: what may leave left out")
+  assert_eq(title.laid_size().0, whole, msg="no room for both: the words whole")
+  w.set(whole + 8.0 + 60.0)
+  t.frame()
+  assert_true(!goes.left_out(), msg="the room back: what left is back")
+}
+
+///|
 /// The clip each instance of colour `color` was drawn in (its rect x0 y0 x1 y1, `dx` taken off its x, then its corners'
 /// radii and smoothness), as the last frame drew it.
 fn clips_of(color : Int64, dx : Double) -> Array[Array[Double]] {
