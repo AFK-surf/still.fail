@@ -412,9 +412,9 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
   assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.run_for(@sfpages.found_draw_ms)
-  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the current match has no highlighter")
-  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no strong stroke")
-  assert_true(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches have no faint stroke")
+  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the matches are not coloured in")
+  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
+  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
   // Clearing the field removes the current message's mark as well as the other matches'.
   t.backspace()
   t.backspace()
@@ -432,7 +432,7 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
 }
 
 ///|
-test "wide: next and previous move the highlighter between occurrences in one message" {
+test "wide: next and previous move the stroke between occurrences in one message, both coloured in" {
   new_run()
   let base = fixture("chat")
   let src : Source = {
@@ -461,14 +461,9 @@ test "wide: next and previous move the highlighter between occurrences in one me
   assert_eq(ranges.length(), 2)
   let first = w.rects(ranges[0].0, ranges[0].1)[0]
   let second = w.rects(ranges[1].0, ranges[1].1)[0]
-  // (the highlighter's bands: from where they start to where they end, none if none)
-  let markers = fn() {
-    let bands = t.drawn_shapes().filter(fn(r) { r.5 == 0xFFCC00D9L })
-    if bands.is_empty() {
-      []
-    } else {
-      [bands.iter().fold(init=(bands[0].0, bands[0].0 + bands[0].2), fn(m, b) { (if b.0 < m.0 { b.0 } else { m.0 }, if b.0 + b.2 > m.1 { b.0 + b.2 } else { m.1 }) })]
-    }
+  // (the matches coloured in: a band of it over a match's words)
+  let coloured = fn(rect : (Double, Double, Double, Double)) {
+    t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L && r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
   }
   let strong_under = fn(rect : (Double, Double, Double, Double)) {
     t.drawn_lines().iter().any(fn(l) {
@@ -476,27 +471,23 @@ test "wide: next and previous move the highlighter between occurrences in one me
       l.0 >= rect.0 - 3.0 && l.0 <= rect.0 + rect.2 + 3.0 && l.1 >= rect.1 && l.1 <= rect.1 + rect.3 + 8.0
     })
   }
-  assert_eq(markers().length(), 1)
-  // (its bands start on a whole point, a point of room round its slanted end: 3 left of the words, 2 the shape's own)
-  assert_true((markers()[0].0 - first.0).abs() < 4.0)
-  assert_true(markers()[0].1 - markers()[0].0 < first.2 + 10.0, msg="one occurrence's highlighter, not two")
+  assert_true(coloured(first) && coloured(second), msg="both occurrences coloured in")
   assert_true(strong_under(first) && !strong_under(second))
   t.enter()
   t.frame()
   t.frame()
   assert_eq(@sfpages.find_k(), 1)
-  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get() < @sf.stroke_ms, msg="the sweep starts again for the next occurrence")
+  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get() < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
+  assert_true(coloured(first) && coloured(second), msg="the colouring in is still, as the reader moves")
   t.run_for(@sf.stroke_ms)
-  assert_eq(markers().length(), 1)
-  assert_true((markers()[0].0 - second.0).abs() < 4.0, msg="the second occurrence is current")
-  assert_true(!strong_under(first) && strong_under(second))
+  assert_true(!strong_under(first) && strong_under(second), msg="the second occurrence is current")
   t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
   t.frame()
   t.frame()
   t.run_for(@sf.stroke_ms)
   assert_eq(@sfpages.find_k(), 0)
-  assert_eq(markers().length(), 1)
-  assert_true((markers()[0].0 - first.0).abs() < 4.0, msg="the previous occurrence is current again")
+  assert_true(strong_under(first) && !strong_under(second), msg="the previous occurrence is current again")
+  assert_true(coloured(first) && coloured(second))
 }
 
 ///|

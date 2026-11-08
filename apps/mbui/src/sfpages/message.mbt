@@ -86,13 +86,13 @@ pub fn picking(
             Some((x, y, _, _)) => (x, y)
             None => (0.0, 0.0)
           }
-          let finding = find_chat() == here.list.unwrap().rk
-          let current = finding && rd.found_at == ts
-          // (the highlighter first: the strokes are drawn over it)
-          if current {
-            found_marker(c, "pick/" + at, marked, find_k(), rd.found_drawn.get(), x, y)
+          if find_chat() == here.list.unwrap().rk {
+            // (⌘F's: every match coloured in, the stroke over it the current one's alone)
+            found_scribbles(c, "pick/" + at, marked, x, y)
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
+          } else {
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=rd.found_at != ts)
           }
-          found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=finding || rd.found_at != ts, current=if current { find_k() } else { -1 })
         }
       }
       @sfbase.pickable(c, at, author, role, words, fill, @sfbase.mouse_picks(), body, keep=!marked.is_empty() || (ts != "" && passage_wanted(here, ts)), marks~, share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })

@@ -2,10 +2,9 @@
 // bar, in place of its buttons, so it covers nothing of the chat. The core looks in all the chat's messages
 // (`chat.find`: those not in the window shown too, and with `bring` those not on the device), 120 ms after the last
 // key, answering which have the words and how many times; the list goes to the one the reader is at (the window moved
-// about it first where it is outside: `chat.around`), the words bold, the current occurrence marked with a strong
-// stroke and an animated highlighter, the others with faint strokes. Enter the next, ⇧Enter the one before, Esc closes
-// it; closed, what was looked for is
-// forgotten. The list it goes along is the page's (FindList).
+// about it first where it is outside: `chat.around`), the words bold, each coloured in with a highlighter and the
+// time the reader is at stroked under (search_marks.mbt). Enter the next, ⇧Enter the one before, Esc closes it;
+// closed, what was looked for is forgotten. The list it goes along is the page's (FindList).
 
 ///|
 /// What the core found (`chat.find`): the words looked for, the messages that have them (oldest first, each with how
