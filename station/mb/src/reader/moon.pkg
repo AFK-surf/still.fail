@@ -3,6 +3,8 @@ import {
   "station/wire",
   "station/sql",
   "station/marks",
+  "station/bindings",
+  "station/upjobs",
   "moonbitlang/core/json",
 }
 
