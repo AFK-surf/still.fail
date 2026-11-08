@@ -162,16 +162,53 @@ export function listSessions(s: Store): SessionRow[] {
 /// Histories visible in a search. The existing index is ordered by connect, then workspace, so first seek the distinct
 /// connects and then only the rows in the viewer's workspaces. The public workspace is included once even when asked
 /// for as the viewer's own. Preserve the old whole-table ordering when activity times tie.
-export const HISTORY_SESSIONS = `WITH RECURSIVE connects(connect) AS (
+const historySessionsQuery = (columns: string) => `WITH RECURSIVE connects(connect) AS (
   VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
   UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
     FROM connects c WHERE c.connect IS NOT NULL
 ), workspaces(ws) AS (SELECT ?1 UNION SELECT '*' UNION SELECT NULL WHERE ?2)
-SELECT s.* FROM connects c CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
+SELECT ${columns} FROM connects c CROSS JOIN workspaces w CROSS JOIN sessions s INDEXED BY sessions_by_connect
 WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws IS w.ws
 ORDER BY s.last_active_at DESC, s.rowid ASC`;
+export const HISTORY_SESSIONS = historySessionsQuery("s.*");
 export function historySessions(s: Store, viewer: { workspace: string; home: boolean }): SessionRow[] {
   return all(s, HISTORY_SESSIONS, viewer.workspace, Number(viewer.home)).map(toSession);
+}
+
+export type HistorySession = Pick<SessionRow, "key" | "workspace" | "cwd" | "title">;
+const HISTORY_SESSION_SNAPSHOT = historySessionsQuery("s.key, s.workspace, s.cwd, s.title");
+const HISTORY_SESSION_BATCH = 128;
+let historySnapshotId = 0;
+
+/// Capture the original order and the fields a history needs, without holding a main-database snapshot during file I/O.
+/// Sorting still visits every visible session. Only one bounded page of session objects is brought into JavaScript.
+export function historySessionSnapshot(s: Store, viewer: { workspace: string; home: boolean }):
+  Iterable<HistorySession> & { length: number; close(): void } {
+  const table = `history_session_snapshot_${++historySnapshotId}`;
+  try { s.db.prepare(`CREATE TEMP TABLE ${table} AS ${HISTORY_SESSION_SNAPSHOT}`).run(viewer.workspace, Number(viewer.home)); }
+  catch (error) {
+    // A query-only connection forbids even temporary tables. Its original read remains available.
+    const code = (error as { errcode?: number }).errcode;
+    if (code === undefined || (code & 255) !== 8) throw error;
+    const rows = historySessions(s, viewer);
+    return { length: rows.length, [Symbol.iterator]: () => rows[Symbol.iterator](), close() {} };
+  }
+  try {
+    const length = (s.db.prepare(`SELECT COUNT(*) AS n FROM temp.${table}`).get() as { n: number }).n;
+    const page = s.db.prepare(`SELECT rowid AS position, key, workspace, cwd, title FROM temp.${table}
+      WHERE rowid > ? ORDER BY rowid LIMIT ${HISTORY_SESSION_BATCH}`);
+    return { length,
+      *[Symbol.iterator]() {
+        let after = 0;
+        for (;;) {
+          const rows = page.all(after) as (HistorySession & { position: number })[];
+          for (const row of rows) { after = row.position; yield row; }
+          if (rows.length < HISTORY_SESSION_BATCH) return;
+        }
+      },
+      close() { s.db.exec(`DROP TABLE temp.${table}`); },
+    };
+  } catch (error) { s.db.exec(`DROP TABLE temp.${table}`); throw error; }
 }
 
 /// The session list's active or archived rows: do not bring the other kind out of the database just to discard it.
