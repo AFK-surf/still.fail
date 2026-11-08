@@ -236,6 +236,8 @@ pub fn history_open(Array[String]) -> Unit
 
 pub fn history_steps(@ui.Ctx, @sfbase.Source, String, String) -> Unit
 
+pub fn history_steps_node(@view.View, @sfbase.Source, String, String, @sf.TipLayer) -> Unit
+
 pub fn history_usage(@sfbase.Source, String, String) -> Array[@json.Json]
 
 pub fn history_usage_line(@sfbase.Source, String, String) -> String

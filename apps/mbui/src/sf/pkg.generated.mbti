@@ -274,6 +274,8 @@ pub let code_big_size : @ui.TextSize
 
 pub fn code_block(@ui.Ctx, String, String, colours? : String?, face? : Int32?) -> Unit
 
+pub fn code_block_node(@view.View, () -> String, () -> String, () -> String?) -> Unit
+
 pub let code_edge : @ui.Color
 
 pub fn code_face() -> Bytes
@@ -1477,6 +1479,8 @@ pub fn pill(@ui.Ctx, String, tone? : PillTone, icon? : String) -> Unit
 pub let pill_h : Double
 
 pub let pill_in : Double
+
+pub fn pill_node(@view.View, () -> String, tone? : PillTone) -> @view.View
 
 pub let pin_raised : Raised
 
