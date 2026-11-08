@@ -6986,6 +6986,68 @@ fn Tree::each_drawn_in_order(
 }
 
 ///|
+/// Node `id` as the scene's walk finds it (Tree::each_drawn_laid), alone: its content, where the window draws it, how
+/// opaque, how big and where it would be were nothing grown, shrunk or drawn off, worked out from the top down as the
+/// walk works each out from what holds it, the same numbers; and its place in the order. None where the walk finds it
+/// not: not in the order, left out (it or what holds it), or drawing nothing of its own.
+pub fn Tree::drawn_one(
+  self : Tree,
+  id : NodeId,
+) -> (Content, Double, Double, Double, Double, Double, Double, Int)? {
+  guard self.alive_id(id) && id.at < self.order_of.length() else { return None }
+  let i = self.order_of[id.at]
+  guard i >= 0 && i < self.order.length() else { return None }
+  guard self.nodes[id.at].content is Some(c) else { return None }
+  let path = []
+  let mut j = i
+  while j >= 0 {
+    path.push(j)
+    j = self.order_holder[j]
+  }
+  let g = self.pixel_grid
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut a = 1.0
+  let mut s = 1.0
+  let mut ux = 0.0
+  let mut uy = 0.0
+  for k = path.length() - 1; k >= 0; k = k - 1 {
+    let n = self.nodes[self.order[path[k]]]
+    if n.out {
+      return None
+    }
+    // (each as Tree::each_drawn_in_order works it out: written the same, the same numbers)
+    let mut ox = n.look.drawn_off.0
+    let mut oy = n.look.drawn_off.1
+    if g > 0.0 && (ox != 0.0 || oy != 0.0) {
+      ox = (ox * g).round() / g
+      oy = (oy * g).round() / g
+    }
+    let mut nx = n.lx + ox + (1.0 - n.ls) * n.lpx
+    let mut ny = n.ly + oy + (1.0 - n.ls) * n.lpy
+    let mut na = n.la
+    let mut ns = n.ls
+    let mut lx = n.lx
+    let mut ly = n.ly
+    if k < path.length() - 1 {
+      nx = x + s * nx
+      ny = y + s * ny
+      na = a * na
+      ns = s * ns
+      lx = ux + lx
+      ly = uy + ly
+    }
+    x = nx
+    y = ny
+    a = na
+    s = ns
+    ux = lx
+    uy = ly
+  }
+  Some((c, x, y, a, s, ux, uy, i))
+}
+
+///|
 /// What a walk of the scene keeps of each in the order as it goes (Tree::each_drawn_in_order), kept for the next.
 priv struct Walk {
   mut x : FixedArray[Double]

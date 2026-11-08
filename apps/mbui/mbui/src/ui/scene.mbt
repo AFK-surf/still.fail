@@ -757,66 +757,69 @@ fn Ctx::push_inst(
   }
   let b = self.ninst * inst_size
   let a = self.inst
-  a[b] = x
-  a[b + 1] = y
-  a[b + 2] = w
-  a[b + 3] = h
-  a[b + 4] = radius
-  a[b + 5] = kind
-  a[b + 6] = bw
-  a[b + 7] = blur
-  a[b + 8] = ((color >> 24) & 0xFFL).to_double() / 255.0
-  a[b + 9] = ((color >> 16) & 0xFFL).to_double() / 255.0
-  a[b + 10] = ((color >> 8) & 0xFFL).to_double() / 255.0
+  // (each number written unchecked: the room for it grown above, the clip's level whole)
+  a.unsafe_set(b, x)
+  a.unsafe_set(b + 1, y)
+  a.unsafe_set(b + 2, w)
+  a.unsafe_set(b + 3, h)
+  a.unsafe_set(b + 4, radius)
+  a.unsafe_set(b + 5, kind)
+  a.unsafe_set(b + 6, bw)
+  a.unsafe_set(b + 7, blur)
+  a.unsafe_set(b + 8, ((color >> 24) & 0xFFL).to_double() / 255.0)
+  a.unsafe_set(b + 9, ((color >> 16) & 0xFFL).to_double() / 255.0)
+  a.unsafe_set(b + 10, ((color >> 8) & 0xFFL).to_double() / 255.0)
   // (what the looks it is in hold, fainter by them: words_alpha; a box's edge as its ground, glyph_look's way)
   let alpha = alpha * words_alpha.val
   let c2d = if kind == 0.0 { c2d * words_alpha.val } else { c2d }
-  a[b + 11] = (color & 0xFFL).to_double() / 255.0 * alpha
-  a[b + 12] = c2a
-  a[b + 13] = c2b
-  a[b + 14] = c2c
-  a[b + 15] = c2d
+  a.unsafe_set(b + 11, (color & 0xFFL).to_double() / 255.0 * alpha)
+  a.unsafe_set(b + 12, c2a)
+  a.unsafe_set(b + 13, c2b)
+  a.unsafe_set(b + 14, c2c)
+  a.unsafe_set(b + 15, c2d)
   let k = clip_top()
-  a[b + 16] = clip_stack[k]
-  a[b + 17] = clip_stack[k + 1]
-  a[b + 18] = clip_stack[k + 2]
-  a[b + 19] = clip_stack[k + 3]
-  a[b + 24] = clip_stack[k + 4]
-  a[b + 25] = clip_stack[k + 5]
-  a[b + 26] = clip_stack[k + 6]
-  a[b + 27] = clip_stack[k + 7]
-  a[b + 28] = clip_stack[k + 8]
-  a[b + 29] = clip_stack[k + 9]
-  a[b + 30] = clip_stack[k + 10]
-  a[b + 31] = clip_stack[k + 11]
+  guard k >= 0 else { abort("push_inst: no clip pushed") }
+  a.unsafe_set(b + 16, clip_stack.unsafe_get(k))
+  a.unsafe_set(b + 17, clip_stack.unsafe_get(k + 1))
+  a.unsafe_set(b + 18, clip_stack.unsafe_get(k + 2))
+  a.unsafe_set(b + 19, clip_stack.unsafe_get(k + 3))
+  a.unsafe_set(b + 24, clip_stack.unsafe_get(k + 4))
+  a.unsafe_set(b + 25, clip_stack.unsafe_get(k + 5))
+  a.unsafe_set(b + 26, clip_stack.unsafe_get(k + 6))
+  a.unsafe_set(b + 27, clip_stack.unsafe_get(k + 7))
+  a.unsafe_set(b + 28, clip_stack.unsafe_get(k + 8))
+  a.unsafe_set(b + 29, clip_stack.unsafe_get(k + 9))
+  a.unsafe_set(b + 30, clip_stack.unsafe_get(k + 10))
+  a.unsafe_set(b + 31, clip_stack.unsafe_get(k + 11))
   // the clip outside it its own cuts through, if any (40-51)
   for j in 0..<12 {
-    a[b + 40 + j] = clip_stack[k + 12 + j]
+    a.unsafe_set(b + 40 + j, clip_stack.unsafe_get(k + 12 + j))
   }
-  a[b + 20] = 0.0 // the image it shows, if any
+  // the image it shows, if any
+  a.unsafe_set(b + 20, 0.0)
   // a rect's or frosted glass's notch (none); liquid glass and glyphs in it set theirs after
-  a[b + 21] = 0.0
-  a[b + 22] = 0.0
-  a[b + 23] = 0.0
+  a.unsafe_set(b + 21, 0.0)
+  a.unsafe_set(b + 22, 0.0)
+  a.unsafe_set(b + 23, 0.0)
   // not turned
-  a[b + 32] = 0.0
-  a[b + 33] = 0.0
-  a[b + 34] = 0.0
-  a[b + 35] = 0.0
+  a.unsafe_set(b + 32, 0.0)
+  a.unsafe_set(b + 33, 0.0)
+  a.unsafe_set(b + 34, 0.0)
+  a.unsafe_set(b + 35, 0.0)
   // its corners all `radius` (a box's each its own: corners_last)
-  a[b + 36] = radius
-  a[b + 37] = radius
-  a[b + 38] = radius
-  a[b + 39] = radius
+  a.unsafe_set(b + 36, radius)
+  a.unsafe_set(b + 37, radius)
+  a.unsafe_set(b + 38, radius)
+  a.unsafe_set(b + 39, radius)
   // fading towards no cut
-  a[b + 52] = 0.0
-  a[b + 53] = 0.0
-  a[b + 54] = 0.0
-  a[b + 55] = 0.0
-  a[b + 56] = 0.0
-  a[b + 57] = 0.0
-  a[b + 58] = 0.0
-  a[b + 59] = 0.0
+  a.unsafe_set(b + 52, 0.0)
+  a.unsafe_set(b + 53, 0.0)
+  a.unsafe_set(b + 54, 0.0)
+  a.unsafe_set(b + 55, 0.0)
+  a.unsafe_set(b + 56, 0.0)
+  a.unsafe_set(b + 57, 0.0)
+  a.unsafe_set(b + 58, 0.0)
+  a.unsafe_set(b + 59, 0.0)
   if inst_owners_kept() {
     inst_owned(self.ninst)
   }

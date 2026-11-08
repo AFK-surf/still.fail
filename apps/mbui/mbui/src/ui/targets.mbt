@@ -180,9 +180,11 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
   let mode = dr.mode
   dr.mode = mode_hits
   next_old_hits.clear()
-  tree.each_drawn(fn(c, _, _, a) {
-    if c.id.at == 0 || a <= 0.002 || !c.hosted {
-      return
+  // (the old views alone, where the scene's walk finds them: old_drawn)
+  for d in old_drawn(tree) {
+    let (c, _, _, a, _, _, _, _) = d
+    if c.id.at == 0 || a <= 0.002 {
+      continue
     }
     targets_island.val = Some(c.id)
     if old_whole.val {
@@ -224,7 +226,7 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
         None => ()
       }
     }
-  })
+  }
   targets_island.val = None
   let layers_from = self.next_hit_ids.length()
   next_layer_hits.clear()

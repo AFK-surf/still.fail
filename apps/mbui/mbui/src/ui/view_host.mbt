@@ -697,15 +697,14 @@ fn old_place(tree : @view.Tree) -> Unit {
   old_placed.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
-  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
-    if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
-      let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
-      old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
-      // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
-      // there: off where its layout alone puts it by what places it beside another or offsets it)
-      old_placed_off[c.id] = (ux - ox, uy - oy)
-    }
-  })
+  for d in old_drawn(tree) {
+    let (c, x, y, a, s, ux, uy, _) = d
+    let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
+    old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
+    // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
+    // there: off where its layout alone puts it by what places it beside another or offsets it)
+    old_placed_off[c.id] = (ux - ox, uy - oy)
+  }
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
@@ -713,6 +712,21 @@ fn old_place(tree : @view.Tree) -> Unit {
     }) &&
     // (one as tall as what it holds measured in a box of its own, whatever it fills: old_natural_after_layout)
     !old_islands.iter().any(fn(o) { o.id == old_placed[0].0 && o.natural is Some(_) })
+}
+
+///|
+/// The old views hosted in `tree` as the scene's walk finds them (Tree::drawn_one), in its order: found each where it is,
+/// not all of the tree gone through for the few.
+fn old_drawn(tree : @view.Tree) -> Array[(@view.Content, Double, Double, Double, Double, Double, Double, Int)] {
+  let found : Array[(@view.Content, Double, Double, Double, Double, Double, Double, Int)] = []
+  for o in old_islands {
+    match tree.drawn_one(o.id) {
+      Some(d) if d.0.hosted && !found.iter().any(fn(f) { f.7 == d.7 }) => found.push(d)
+      _ => ()
+    }
+  }
+  found.sort_by_key(fn(d) { d.7 })
+  found
 }
 
 ///|
