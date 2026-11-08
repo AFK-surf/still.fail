@@ -115,6 +115,10 @@ pub fn Tester::census(self : Tester) -> Census {
         if (n.ground & 0xFFL) != 0L {
           color[census_hex(n.ground)] = true
         }
+        // (the edge round it, as an old view's border is counted)
+        if (n.edge & 0xFFL) != 0L {
+          color[census_hex(n.edge)] = true
+        }
       }
     None => ()
   }
