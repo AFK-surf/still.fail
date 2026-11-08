@@ -12,6 +12,7 @@ import {
   "station/turns",
   "station/said",
   "station/archivelast",
+  "station/letters",
   "moonbitlang/core/json",
 }
 

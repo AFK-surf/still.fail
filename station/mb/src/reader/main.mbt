@@ -327,6 +327,24 @@ fn main {
           }
         })
       })
+    (Some("page-letters"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let letters : Ref[@letters.Letters?] = Ref(None)
+        builder(host, db, "old page letters", (db, ask) => {
+          let l = match letters.val {
+            Some(l) => l
+            None => {
+              let l = @letters.Letters::new(db)
+              letters.val = Some(l)
+              l
+            }
+          }
+          match ask {
+            { "thread": Number(thread, ..), .. } => Some(l.step(thread.to_int64()))
+            _ => None
+          }
+        })
+      })
     (Some("turn-counts"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => turn_builder(host, db))
     (Some("session-list"), Some(db), _) =>
@@ -348,7 +366,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters --db <file>")
       2
     }
   }
