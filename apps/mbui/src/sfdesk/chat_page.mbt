@@ -127,7 +127,7 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     chat_screen_first(r, v.screens)
   }
   if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
-    composer_focus()
+    composer_focus(c, src, r)
   }
   if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
     c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })

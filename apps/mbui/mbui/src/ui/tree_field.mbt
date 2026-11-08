@@ -254,6 +254,20 @@ pub fn Field::let_go(self : Field) -> Unit {
 }
 
 ///|
+/// Whether the editor holding field `self` has the keyboard's focus (a field of the window's tree, or an old view's
+/// editor it was given), followed as Ctx::has_focus is: what reads it told as the focus comes to that editor or leaves
+/// it. Held by none: false (a focus asked for it is the Field's own till one holds it, Field::focus).
+pub fn Field::focused(self : Field) -> Bool {
+  let id = match self.st.tree_node {
+    Some(n) if tree_fields.contains(n) => tree_said_of.get(n).unwrap_or(0)
+    // (an old view's editor by the id it was built at, while that id's editor is this Field's still)
+    _ if g().editors.get(self.st.built_id).map_or(false, fn(e) { physical_equal(e, self.st) }) => self.st.built_id
+    _ => 0
+  }
+  g().has_focus(id)
+}
+
+///|
 /// The keyboard's focus given field `field` by what holds it now: a field of the window's tree, at once (where it can
 /// take it); an old view's editor drawn now, that one (where the old view it is in takes input); none, asked of the one
 /// that comes to hold it, given as it does (a field of the tree's as it is made; an old view's editor as it is built),
@@ -275,7 +289,9 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
       // (the node by the id it was built at, and that id's editor this Field's still: one built after at the same key
       // with another Field holds that one, not this)
       if n.kind == kind_editor && n.id == st.built_id && self.editors.get(n.id).map_or(false, fn(e) { physical_equal(e, st) }) {
-        if island_allows(self.island_of_id(st.built_id)) {
+        // (under a modal layer of the tree's over the old view built now, kept for the layer to give back, as
+        // Ctx::focus_editor's)
+        if !view_focus_kept_for(self, st.built_id) && island_allows(self.island_of_id(st.built_id)) {
           self.focus_moved(st.built_id)
         }
         return

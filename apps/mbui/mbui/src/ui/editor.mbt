@@ -855,10 +855,11 @@ pub fn Ctx::editor(
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
-  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
+  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id); under a
+  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's)
   if field is Some(_) && st.focus_asked {
     st.focus_asked = false
-    if island_allows(self.island_said()) {
+    if !view_focus_kept_for(self, id) && island_allows(self.island_said()) {
       self.focus_moved(id)
     }
   }

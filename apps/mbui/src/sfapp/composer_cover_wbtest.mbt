@@ -66,7 +66,7 @@ test "composer over messages: its padding takes the focus and clears a selection
   let (_, top, _, _, _, _) = t.drawn_glass()[0]
   t.tap(200.0, top + 4.0)
   assert_eq(t.ctx().selected_text(), "")
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   let before = t.list_offset()
   t.wheel(200.0, top + 4.0, 160.0)
   t.run_for(@ui.wheel_ease_ms)
@@ -95,6 +95,6 @@ test "composer over messages: clicking inside its field clears a previous messag
   assert_true(t.ctx().selected_text() != "")
   let (x, y, _, h) = t.rect_of("按空格输入").unwrap()
   t.tap(x + 100.0, y + h / 2.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_eq(t.ctx().selected_text(), "")
 }

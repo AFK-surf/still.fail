@@ -1505,6 +1505,7 @@ pub fn Field::colors(Self, placeholder~ : Int64, caret~ : Int64) -> Unit
 pub fn Field::composed_said(Self) -> String
 pub fn Field::composing(Self) -> Bool
 pub fn Field::focus(Self) -> Unit
+pub fn Field::focused(Self) -> Bool
 pub fn Field::follow(Self, String, generation? : Int32) -> Unit
 pub fn Field::laid(Self, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, trim? : Bool) -> FieldLaid
 pub fn Field::let_go(Self) -> Unit

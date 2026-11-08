@@ -232,7 +232,7 @@ pub fn composer(
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat; not taken from
     // a field written in, but asked under a modal layer over it all the same: kept for that layer to give back)
     if !@sf.soft_keyboard() && !c.field_focused_here() {
-      c.focus_editor(composer_field_key)
+      c.focus_field(w.field)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
       c.tell("composer/taking", fn() { composing.taking.set(false) })
@@ -242,16 +242,16 @@ pub fn composer(
   // (asked again till it is found held as a frame begins: the page it was asked from let go of as the new one comes,
   // its field's focus with it, nav.mbt forget)
   if composing.wanted && !spec.locked {
-    if c.editor_focused(composer_field_key) {
+    if w.field.focused() {
       composing.wanted = false
     } else {
-      c.focus_editor(composer_field_key)
+      c.focus_field(w.field)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
       c.tell("composer/taking", fn() { composing.taking.set(false) })
     }
   }
-  let focused = c.editor_focused(composer_field_key)
+  let focused = w.field.focused()
   // The cache choice takes focus into its menu. Keep an already open composer in place while that menu is open, so
   // the notice and its menu do not move under the pointer. A composer that was a capsule stays one.
   let choosing_cache = composing.cold_open.get() == notice_choice_key(spec.draft, "wait")
@@ -303,7 +303,7 @@ pub fn composer(
     c.cursor(cap, IBeam)
   }
   if !spec.locked && c.clicked(cap) {
-    c.focus_editor(composer_field_key)
+    c.focus_field(w.field)
   }
   // words dragged in from another app and let go on it beside its field (its ＋, send, its edge: on the field they go
   // where they were let go): into its field at its caret, as a paste's
@@ -569,7 +569,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
       let said = if now.trim() == "" { words } else { now.trim_end().to_owned() + "\n" + words }
       w.field.set(said)
       c.tell("composer/followed/" + w.key, fn() { writing_text(src, w, said) })
-      c.focus_editor(composer_field_key)
+      c.focus_field(w.field)
     }
     None => ()
   }
@@ -897,7 +897,7 @@ fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = 
 /// goes, and with it the focus and the screen's keyboard).
 fn quote_focus_to_words(c : @ui.Ctx, w : Writing) -> Unit {
   if w.quotes.get().iter().any(fn(q) { c.editor_focused("composer/quote/" + text(Some(q), "id")) }) {
-    c.focus_editor(composer_field_key)
+    c.focus_field(w.field)
   }
 }
 
@@ -969,7 +969,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
                 writing_comment(src, w, id, res.text)
               }
               if res.submitted is Some(_) {
-                c.focus_editor(composer_field_key)
+                c.focus_field(w.field)
               }
             },
           )
@@ -1058,7 +1058,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               @sfbase.refs_put(w.key, w.field, words)
               writing_text(src, w, words)
               writing_remove(src, w, id)
-              c.focus_editor(composer_field_key)
+              c.focus_field(w.field)
             }
             if said.retried {
               @sfbase.writing_paste_again(src, w, id)

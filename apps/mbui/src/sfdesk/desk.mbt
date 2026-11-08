@@ -48,5 +48,4 @@ pub fn reset() -> Unit {
   add_profile_reset()
   places_reset()
   chat_page_reset()
-  layers_reset()
 }

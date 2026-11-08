@@ -20,7 +20,7 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
 /// A new chat in the workspace (NewChat): the pages', the 文件 tab beside it where the stations lend their files
 /// (useStationDrive: as the view has its stations), on a station it can start on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  new_keys(c, src)
+  new_keys(c, src, w)
   let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
   let frame = new_frame(src, w)
   let station = field(v, "station")
@@ -80,10 +80,10 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// The new chat's own key, as a chat's (chat_keys): Space with no field focused, its composer (composer.focus), as its
 /// hint 按空格输入 says.
-fn new_keys(c : @ui.Ctx, src : Source) -> Unit {
+fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let prefs = src.topic("prefs", {}).get().value
   if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
-    c.focus_editor(@sfpages.composer_field_key)
+    c.focus_field(writing(src, "new:" + w.id).field)
   }
 }
 
