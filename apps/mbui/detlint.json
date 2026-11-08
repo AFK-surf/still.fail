@@ -482,10 +482,11 @@
       "src/sfapp/narrow_shell.mbt": 3,
       "src/sfapp/tape_shell.mbt": 4,
       "src/sfbase/viewer_tree.mbt": 3,
+      "src/sfdesk/frame.mbt": 1,
       "src/sfdesk/page_pane.mbt": 1,
       "src/sfdesk/pane_view.mbt": 1,
       "src/sfdesk/side_node.mbt": 4,
-      "src/sfdesk/tape_view.mbt": 2,
+      "src/sfdesk/tape_view.mbt": 1,
       "src/sfpages/landing_node.mbt": 1,
       "src/sfpages/search.mbt": 1,
       "src/sfpages/security.mbt": 1

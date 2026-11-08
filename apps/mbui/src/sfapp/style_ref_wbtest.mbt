@@ -54,37 +54,37 @@ test "styles: the lock's waiting page, every state, drawn as before" {
   }
   inspect(out.to_string(), content=(
     #|waiting narrow 28261:276919d4
-    #|waiting wide 58348:4f2a3baa
+    #|waiting wide 58300:3d0f259d
     #|waiting-dark narrow 28177:273f1828
-    #|waiting-dark wide 58173:b7323b60
+    #|waiting-dark wide 58125:a68233b
     #|finding narrow 34240:be2ffdf1
-    #|finding wide 64997:79a17c8b
+    #|finding wide 64941:60ae07a8
     #|finding-dark narrow 34337:52a2c840
-    #|finding-dark wide 65003:146df0d8
+    #|finding-dark wide 64947:cfd3b903
     #|code narrow 26964:88a7f87b
-    #|code wide 57180:3b25a09e
+    #|code wide 57132:eca4c01
     #|code-dark narrow 26856:ce8b5d5e
-    #|code-dark wide 56981:bb246c47
+    #|code-dark wide 56933:bcc53334
     #|wrong narrow 28173:7d27636f
-    #|wrong wide 58409:1187e091
+    #|wrong wide 58361:99b592ba
     #|wrong-dark narrow 28275:4b23cc12
-    #|wrong-dark wide 58420:25a585e2
+    #|wrong-dark wide 58372:b3135e79
     #|checking narrow 35247:a55b4d68
-    #|checking wide 66124:78efaf5b
+    #|checking wide 66068:41ce6ab8
     #|checking-dark narrow 35339:cf8b4c9d
-    #|checking-dark wide 66125:7363fd4e
+    #|checking-dark wide 66069:5e63ee5
     #|none narrow 27729:50cff18b
-    #|none wide 57824:2c504078
+    #|none wide 57776:96048427
     #|none-dark narrow 27649:92e439f
-    #|none-dark wide 57653:2f7dad9c
+    #|none-dark wide 57605:4b2ab2c7
     #|failed narrow 23488:6a0bface
-    #|failed wide 53576:f5b73484
+    #|failed wide 53528:cecaea53
     #|failed-dark narrow 23488:d6aa537e
-    #|failed-dark wide 53485:252375c4
+    #|failed-dark wide 53437:e5a3c97f
     #|nocode narrow 28261:276919d4
-    #|nocode wide 58348:4f2a3baa
+    #|nocode wide 58300:3d0f259d
     #|nocode-dark narrow 28177:273f1828
-    #|nocode-dark wide 58173:b7323b60
+    #|nocode-dark wide 58125:a68233b
     #|
 
 
@@ -145,15 +145,15 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     #|settings narrow 76418:78e6df57
     #|station narrow 86425:11f0a459
     #|me-reading narrow 23860:9496c484
-    #|settings wide 166266:47315bf3
-    #|station wide 224517:a39acd0d
-    #|me-reading wide 160912:7974c60
+    #|settings wide 166217:3ff036f4
+    #|station wide 224468:b59322d8
+    #|me-reading wide 160863:95a10e87
     #|settings-dark narrow 76686:4ba88ca0
     #|station-dark narrow 86258:47aff2b5
     #|me-reading-dark narrow 23998:61f49844
-    #|settings-dark wide 166192:314fd668
-    #|station-dark wide 224154:36b5e728
-    #|me-reading-dark wide 160914:ce20f7ea
+    #|settings-dark wide 166143:2f9700e1
+    #|station-dark wide 224105:fdcad2e7
+    #|me-reading-dark wide 160865:b791b0f9
     #|
 
 

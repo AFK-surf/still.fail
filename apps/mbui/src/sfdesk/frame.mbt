@@ -422,6 +422,10 @@ fn dock_side_at(
   {
     box: (inside + rail, top + f.mt, f.side_w, dock_h),
     block: (inside, top + f.mt, dock_w, dock_h),
+    // (on the tape, open, a panel of its own: the ground it floats on; else where the move has its ground)
+    ground: if wide.tape && !bar { dock_ground(bar) } else { f.ground },
+    shadow: (f.blur, f.fall, @sf.alpha(@sf.theme().p.shadow, f.shade)),
+    held_w: f.side_w,
     links,
     round,
     edge: (dock_line, @sf.alpha(@sf.theme().p.line, f.line)),
@@ -451,6 +455,83 @@ fn dock_edge_node(n : @view.View, at : () -> SideAt) -> Unit {
 }
 
 ///|
+/// The block (shell.css.ts dock: the rail and the sidebar on one ground) as nodes in `n` (as large as what holds the
+/// block, over it), where `at` says it is: a node with its ground and its shadow, as round as its corners are
+/// (dock_round_node), holding, cut to it, one old view: the rail (`rail`, as wide as the rail is drawn: as narrow as a
+/// point beside the system's tabs, where it holds nothing but what its build says of the block) and beside it the
+/// sidebar of a place not made once over the block (side_made: `side`, as wide as the sidebar is laid out, built only
+/// while what is in it is drawn). Its line is drawn over all it holds by dock_edge_node, its chats' lists by side_node.
+/// That old view's node (what a list's thumb of it is shown by: pane_edge).
+fn dock_node(
+  n : @view.View,
+  at : () -> SideAt,
+  rail : (@ui.Ctx) -> Unit,
+  side : (@ui.Ctx, Bool) -> Unit,
+) -> @view.View {
+  let held : Ref[@view.View?] = Ref(None)
+  n.box(fn(o) {
+    o.over(Is(true)) |> ignore
+    // (laid out where the block is, not drawn off where it is laid out: the old views in it laid out where they are
+    // drawn; the rail and the sidebar side by side in it, as wide as each is, what goes past it cut, its own ground and
+    // shadow under that)
+    o.box(fn(g) {
+      g
+      .width(By(fn() { Some(at().block.2) }))
+      .height(By(fn() { Some(at().block.3) }))
+      .margin(By(fn() { (at().block.0, at().block.1, 0.0, 0.0) }))
+      .ground(By(fn() { at().ground }))
+      .shadow(By(fn() { at().shadow }))
+      .clips(Is(true))
+      .row(Is(true))
+      |> ignore
+      dock_round_node(g, at)
+      // the rail and the sidebar of a place not made once over the block, one old view as yet (as the block's was): as
+      // wide as the rail is drawn (its box's own width: rail's) and the sidebar is laid out (held_w, the same through
+      // the block's move between showing it and not), the block's height, cut to the block; in it the rail, then the
+      // sidebar beside it, built only while what is in it is drawn
+      g.box(fn(i) {
+        i
+        .width(By(fn() {
+          let a = at()
+          // (beside the system's tabs no rail: only as wide as that margin, its build what it says of the block)
+          Some(a.box.0 - a.block.0 + a.held_w)
+        }))
+        .height(By(fn() { Some(at().block.3) }))
+        .shrink(Is(0.0))
+        |> ignore
+        held.val = Some(
+          @ui.old(i, fn(c) {
+            let a = at()
+            let rail_w = a.box.0 - a.block.0
+            c.box(style=dock_row, fn() {
+              c.box(style=@ui.style(w=Fixed(rail_w), h=Full), fn() { rail(c) }) |> ignore
+              c.box(style=@ui.style(w=Fixed(a.held_w), h=Full), fn() {
+                if a.shown && !side_made(side_place()) {
+                  side(c, a.bar)
+                }
+              })
+              |> ignore
+            })
+            |> ignore
+          }, key=tape_island_key)
+          .over(Is(true))
+          |> @ui.old_takes_own,
+        )
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+  held.val.unwrap_or(n)
+}
+
+///|
+/// The block's old view: the rail and the sidebar side by side, its whole height (dock_node).
+// kept across runs: a value (no field of it changes)
+let dock_row : @ui.Style = @ui.css("row h=Full")
+
+///|
 /// Node `v` as round as the block where `at` says it is (dock_radius): its corners linked as the block's are, to the
 /// corner rule as well (@ui.tree_corners_linked); else one radius all round.
 fn dock_round_node(v : @view.View, at : () -> SideAt) -> Unit {
@@ -459,7 +540,7 @@ fn dock_round_node(v : @view.View, at : () -> SideAt) -> Unit {
 }
 
 ///|
-/// How wide the block's line is (dock_look's border).
+/// How wide the block's line is.
 // kept across runs: a value (no field of it changes)
 let dock_line : Double = 1.0
 
@@ -468,10 +549,14 @@ let dock_line : Double = 1.0
 /// (x, y, w, h), its corners (linked as its look's are, else one radius: dock_round_node) and its line (how wide, its
 /// colour: dock_edge_node), whether what is in it is drawn, how tall its top row is (the brand's, where the block's
 /// move has got: fold_bars'), where that move has got between open and the floating bar (the band's), whether the
-/// block is the closed bar, whether on the tape.
+/// block is the closed bar, whether on the tape; the block's ground and its shadow (blur, fall, colour); how wide the
+/// sidebar is laid out in it (its box's, or on the block's way between showing it and not the larger end's: fold_held).
 priv struct SideAt {
   box : (Double, Double, Double, Double)
   block : (Double, Double, Double, Double)
+  ground : Int64
+  shadow : (Double, Double, Int64)
+  held_w : Double
   links : FixedArray[@ui.CornerOf]?
   round : Double
   edge : (Double, Int64)
@@ -480,98 +565,6 @@ priv struct SideAt {
   band : Double
   bar : Bool
   tape : Bool
-}
-
-///|
-/// The rail and the sidebar as one block (shell.css.ts dock) in its column `col` (the shell's grid's first, a phone's or
-/// a tablet's bars `top` and `foot` clear), as the web's CSS has it: open, the column's whole, the sidebar's ground;
-/// closed (`bar`), the closed bar: 6 from the window's edges (under its buttons' row where they are in the app's top
-/// row), 8 from the page, as wide as the rail, a floating panel's ground, its line and a faint shadow, its corner
-/// concentric with the places' grounds 6 in; shown a while (`peek`), reaching over the page as wide as the rail and the
-/// sidebar (its margin past the column), a floating panel's shadow; on the tape a panel of its own, apart from the
-/// page. Off the tape `fold` says where the block's move has got (pane_view.mbt's FoldLook) and whether it goes: its
-/// margins, line, shadow, corner and ground, the sidebar's width, the rail's, from there; at rest the corner its own
-/// (linked to the window's). `s`: the sidebar's width; `x`: how far it is drawn moved across.
-fn dock(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  all : Array[Workspace],
-  bar : Bool,
-  peek : Bool,
-  s : Double,
-  col : Double,
-  top : Double,
-  foot : Double,
-  x : Double,
-  held? : Bool = false,
-  fold? : (FoldLook, Bool)? = None,
-) -> Unit {
-  let t = @sf.theme()
-  // on the tape (open, apart from the page), a panel of its own as the closed bar is: 6 from the window's edges, 8 from
-  // the page's panel
-  let apart = wide.tape && !bar
-  let f = match fold {
-    Some((f, _)) => f
-    None => fold_look_tape(s, col, top, foot)
-  }
-  let moving = fold is Some((_, true))
-  let (ml, mt, mr, mb) = (f.ml, f.mt, f.mr, f.mb)
-  // what is in the sidebar drawn while any of it shows: open, shown a while, or still on its way to the bar (its line,
-  // ::after's opacity, the tree's: dock_edge_node)
-  let shown = !bar || peek || f.showing > 0.0
-  // the sidebar beside the rail: open its own width and 8 more, reaching 8 into the rail's; the group's in the bar
-  let side_w = f.side_w
-  // (a panel's corners the tape's sidebar's, the closed bar's its own: each in the window's the window's less its 6 from
-  // it where it follows it; on its way between, as round as its move has it)
-  let look = match dock_radius(bar, moving, f) {
-    Some(r) => dock_look.then(@ui.style(radius=r))
-    None => dock_look
-  }
-  let look = look.then(@ui.style(bg=Data(if apart { dock_ground(bar) } else { f.ground })))
-  let (dock_w, dock_h) = dock_size(bar, f, col, top, foot, c.height)
-  // (over the page, as the web's block is; `held`, in an island of its own: tape_view.mbt, pane_view.mbt)
-  let column = fn() {
-    c.box(style=dock_column.then(@ui.style(w=Fixed(col))), tx=x + f.x, fn() {
-      let b = c.box(
-        style=look.then(
-          @ui.style(
-            w=Fixed(dock_w),
-            h=Fixed(dock_h),
-            shadow=Cast(f.blur, f.fall, @sf.alpha(t.p.shadow, f.shade)),
-          ),
-        ),
-        // (named as the web's block is: what finds it, layout.sh and the tests, by it; along a screen whose corners it
-        // follows, an iPhone Duo's, none)
-        moves=if @sf.native_card_corner() > 0.0 { "" } else { "dock" },
-        left=ml,
-        top=top + mt,
-        fn() {
-          if !@sf.native_on() {
-            rail(c, src, w, all, bar, moving=if moving { Some(f) } else { None })
-          }
-          c.box(style=dock_side.then(@ui.style(w=Fixed(side_w))), moves="sidebar", fn() {
-            if shown && s > 0.0 {
-              // (in the bar: what the web's sidebar does there, at once, as the bar starts out; the bar's as long as it
-              // is drawn as the bar, its filter in the bar's corner)
-              wide.in_bar = bar
-              // (what is in it as wide as it: a part that asks how wide its box is is told the sidebar's)
-              c.sized(side_w, c.height, fn() { sidebar(c, src, w, side_w) })
-              wide.in_bar = false
-            }
-          })
-          |> ignore
-        },
-      )
-      ignore(b)
-    })
-    |> ignore
-  }
-  if held {
-    column()
-  } else {
-    c.layer(column) |> ignore
-  }
 }
 
 ///|
@@ -591,19 +584,6 @@ fn dock_radius(bar : Bool, moving : Bool, f : FoldLook) -> @ui.Radius? {
 }
 
 ///|
-/// The block's column, the window's height.
-// kept across runs: a value (no field of it changes)
-let dock_column : @ui.Style = @ui.css("h=Full")
-
-///|
-/// The block open (its line and shadow there but clear) and closed to the bar or on the tape (a floating panel's, its
-/// corner concentric with the places' grounds 6 in: shell.css.ts dock, closed; on the tape the page's panel's, all the
-/// tape's panels alike, asked 2026-10-24); both cut what goes past their edges, inside their line. On its ground
-/// (dock_ground). The line drawn by the tree over all it holds (dock_edge_node): here only its width.
-// kept across runs: a value (no field of it changes)
-let dock_look : @ui.Style = @ui.css("row border=B1 border_color=Clear clip")
-
-///|
 /// What the block stands on: open, the sidebar's ground; a panel of its own (the closed bar, or on the tape) the
 /// ground it floats on (apart_ground), as the lists' bands on it are: one ground under all of it, whatever the theme's
 /// surface is on this system. The rail's marks are on discs of it (rail_hung).
@@ -614,11 +594,6 @@ fn dock_ground(bar : Bool) -> Int64 {
     @sf.theme().p.sidebar
   }
 }
-
-///|
-/// The sidebar in the block: its width, the block's height.
-// kept across runs: a value (no field of it changes)
-let dock_side : @ui.Style = @ui.css("h=Full")
 
 ///|
 /// Whether a finger has the pointer now (the frame's panes: a finger drags their lists and holds to pick words, a mouse

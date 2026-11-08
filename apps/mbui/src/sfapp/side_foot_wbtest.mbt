@@ -14,9 +14,17 @@ fn side_row_at(t : @ui.Tester, label : String, edge : Double) -> (Double, Double
 }
 
 ///|
-/// The sidebar's panel on the tape (the block's: the rail and the sidebar in it).
+/// The sidebar's panel on the tape (the block's ground: the rail and the sidebar on it, a node of the window's tree,
+/// among the tree's: dock_ground).
 fn side_panel(t : @ui.Tester) -> @ui.Laid? {
-  t.boxes().iter().find_first(fn(b) { b.moves == "dock" })
+  t.boxes_held().iter().find_first(dock_ground)
+}
+
+///|
+/// Whether box `b` is the block's ground as the window's tree draws it (frame.mbt dock_node): a ground at the window's
+/// left edge (6 in at most), taller than the window's half, narrower than it.
+fn dock_ground(b : @ui.Laid) -> Bool {
+  b.kind != "text" && b.bg != 0L && b.x >= 0.0 && b.x <= 6.0 && b.h > 300.0 && b.w < 600.0
 }
 
 ///|
