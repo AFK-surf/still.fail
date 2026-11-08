@@ -522,6 +522,11 @@ fn narrow_made_as(
           }
         })
       })
+    Screen(at) =>
+      made("screen/" + at.station + "/" + at.screen, fn(p, _core, _here, frame, _stint, _acts) {
+        p.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+        @sfpages.screen_page_node(p, src, at, frame) |> ignore
+      })
     Settings =>
       made("settings", fn(p, core, here, frame, stint, _acts) {
         @sfpages.settings_home_node(p, core, here, fn(r) { (core.push)(r) }, on_back=core.pop, frame~, stint~, bars=fn() {

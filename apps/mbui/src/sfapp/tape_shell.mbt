@@ -19,6 +19,7 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
   // a page opened in the page's panel shows once the core has given what it shows, the one before staying till then
   // (page_local_ms at most), as a page pushed on a phone slides in then
   @sfdesk.tape_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
+  wide_screen(v, src)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)
 }
@@ -32,6 +33,7 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   @ui.old(v, fn(c) { paned_under(c, src) }).over(Is(true)) |> ignore
   // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_wait, pane_pages)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
+  wide_screen(v, src)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)
 }
@@ -97,7 +99,6 @@ fn taped_over(c : @ui.Ctx, src : Source) -> Unit {
   match workspace_in_view(src).0 {
     Some(w) => {
       match app.nav.top() {
-        Screen(at) => c.layer(fn() { @sfpages.screen_page(c, src, at, system_frame()) }) |> ignore
         DriveRead(at) => c.layer(fn() { @sfpages.reader_page(c, src, at) }) |> ignore
         DrivePlay(at) => c.layer(fn() { @sfpages.play_page(c, src, at) }) |> ignore
         _ => ()
@@ -110,4 +111,21 @@ fn taped_over(c : @ui.Ctx, src : Source) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// A remote screen above the wide shell, before its presenters and file overlays.
+fn wide_screen(v : @view.View, src : Source) -> Unit {
+  v.pick(fn() {
+    if workspace_in_view(src).0 is Some(_) {
+      match app.nav.top() { Screen(at) => Some(at); _ => None }
+    } else { None }
+  }, fn(p, at) {
+    p.over(Is(true)) |> ignore
+    if at is Some(at) {
+      @sfpages.screen_page_node(p, src, at, fn() {
+        { back:None, top:status_top_now(v.window().0), foot:nav_foot(), named:false }
+      }) |> ignore
+    }
+  })
 }
