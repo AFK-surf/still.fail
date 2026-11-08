@@ -2054,6 +2054,7 @@ priv enum Prop {
   Picture
   Drop
   Fits
+  FitWhole
   Turn
   Lines
   Fades
@@ -3911,6 +3912,16 @@ pub fn View::drops(self : View, k : Live[Int]) -> View {
 /// A row that leaves out of what it holds what has not the room (View::drops), as it changes. Layout's.
 pub fn View::fits(self : View, on : Live[Bool]) -> View {
   self.bind(Fits, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fits = on })
+  self
+}
+
+///|
+/// Kept whole in a row that leaves out what has not the room (View::fits): what may leave (View::drops) leaves for it
+/// first; once nothing more may, it gives way as it otherwise would (its words cut short: View::cuts), as it changes.
+/// The old views' `keep` on words cut short: a bar's title cut only after what is beside it has gone. Cut last, not
+/// never: View::keeps_held is never narrower than what it holds, whatever the room, so its words are never cut. Layout's.
+pub fn View::fit_whole(self : View, on : Live[Bool]) -> View {
+  self.bind(FitWhole, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fit_whole = on })
   self
 }
 

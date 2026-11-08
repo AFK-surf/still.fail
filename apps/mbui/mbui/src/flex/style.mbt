@@ -146,13 +146,16 @@ pub(all) struct Style {
   // min-width, with its margins). `drop` k > 0: the k-th to be left out (the last in the row first of the same k);
   // -1: there only while something of its row is left out (its ⋯); 0: always there. `fits`: a row holding some of
   // either. Left out, an item is laid out nowhere (Node::left_out). `fit_need`: what such a row keeps of an item
-  // that stays, more than its min-width (NaN: its min-width), before one that may leave does. `one_of`: a row whose
+  // that stays, more than its min-width (NaN: its min-width), before one that may leave does; `fit_whole`: such a row
+  // keeps all of what it holds (as the line would lay it out given the room), and it gives way only once nothing more
+  // may leave (the old views' `keep` on words cut short: a title cut only after what is beside it has gone). `one_of`: a row whose
   // items are ways of saying one thing, each shorter than the one before, of which it keeps only the first that fits
   // it whole (the last where none does: SwiftUI's ViewThatFits), the rest left out.
   mut drop : Int
   mut fits : Bool
   mut one_of : Bool
   mut fit_need : Double
+  mut fit_whole : Bool
   // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
   // what holds them. What may come down so, the widest first (layout.mbt last_resort).
@@ -255,6 +258,7 @@ pub fn Style::new() -> Style {
     fits: false,
     one_of: false,
     fit_need: 0.0 / 0.0,
+    fit_whole: false,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
@@ -335,6 +339,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.fits = false
   self.one_of = false
   self.fit_need = 0.0 / 0.0
+  self.fit_whole = false
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
   self.min_held = false
