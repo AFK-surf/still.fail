@@ -46,6 +46,25 @@ test "multiple matches on one search result line are each stroked under their ow
 }
 
 ///|
+/// The highlighters drawn in `ink` (Ctx::shapes' bands of them put back together): a box each, top to bottom.
+fn marker_boxes(t : @ui.Tester, ink : Int64) -> Array[(Double, Double, Double, Double)] {
+  let out : Array[(Double, Double, Double, Double)] = []
+  let bands = t.drawn_shapes().filter(fn(b) { b.5 == ink && b.4 == 0.0 })
+  bands.sort_by(fn(p, q) { p.1.compare(q.1) })
+  for b in bands {
+    match out.last() {
+      Some((x, y, w, h)) if b.1 <= y + h + 0.5 && b.0 < x + w && b.0 + b.2 > x => {
+        let l = dmin(x, b.0)
+        let r = dmax(x + w, b.0 + b.2)
+        out[out.length() - 1] = (l, y, r - l, dmax(y + h, b.1 + b.3) - y)
+      }
+      _ => out.push((b.0, b.1, b.2, b.3))
+    }
+  }
+  out
+}
+
+///|
 test "chat find marks only the current occurrence across paragraphs, sweeping in and moving on" {
   for dark in [false, true] {
     let current = @signals.signal(0)
@@ -60,6 +79,7 @@ test "chat find marks only the current occurrence across paragraphs, sweeping in
       }
       let box = c.box(id~, fn() {
         found_marker(c, "find-message", ["hit"], current.get(), drawn.get(), x, y)
+        found_strokes(c, "find-message", ["hit"], drawn.get(), x, y, faint=true, current=current.get())
         c.rich([@ui.plain("hit hit")], size=16.0) |> ignore
         c.rich([@ui.plain("another hit")], size=16.0) |> ignore
       })
@@ -79,17 +99,27 @@ test "chat find marks only the current occurrence across paragraphs, sweeping in
     assert_true(@ui.contrast_ratio(theme.p.text, page) >= 4.5, msg="message text stays legible")
     assert_true(@ui.contrast_ratio(theme.p.accent_text, page) >= 4.5, msg="links stay legible")
     assert_true(@ui.contrast_ratio(theme.p.code_ink, code) >= 4.5, msg="code stays legible")
-    let markers = fn() { t.drawn_rects().filter(fn(r) { r.4 == ink }) }
+    let markers = fn() { marker_boxes(t, ink) }
     assert_eq(markers().length(), 1)
-    assert_true(markers()[0].2 > 0.0 && markers()[0].2 < first.2 + 4.0, msg="the marker sweeps in")
-    assert_true((markers()[0].0 - first.0).abs() < 3.0, msg="the first match is current")
+    assert_true(markers()[0].2 > 0.0 && markers()[0].2 < first.2 + 4.0 - 1.0, msg="the marker sweeps in")
+    assert_true((markers()[0].0 - first.0).abs() < 4.0, msg="the first match is current: \{markers()} \{first}")
     drawn.set(@sf.stroke_ms)
     t.frame()
-    assert_true((markers()[0].2 - first.2 - 4.0).abs() < 0.1, msg="the full marker stays")
+    assert_true((markers()[0].2 - first.2 - 4.0).abs() < 3.0, msg="the full marker stays: \{markers()} \{first}")
+    // under the glyphs, and short of the strong stroke under them: the stroke shows whole
+    let m = markers()[0]
+    assert_true(m.1 > first.1 && m.1 + m.3 < first.1 + first.3, msg="the marker stays within its line")
+    let stroke_top = t.drawn_lines()
+      .filter(fn(l) { l.5 == theme.p.accent && l.0 >= m.0 - 1.0 && l.2 <= m.0 + m.2 + 1.0 })
+      .fold(init=1.0e9, fn(top, l) { dmin(top, dmin(l.1, l.3) - l.4 / 2.0) })
+    assert_true(stroke_top < 1.0e9, msg="the current match has a strong stroke")
+    // (its bands are whole pixels, a pixel of room round its edges: the outline itself ends marker_below under the
+    // baseline, short of the stroke's highest, 0.75)
+    assert_true(m.1 + m.3 <= stroke_top + 1.0, msg="the marker reaches over the stroke: \{m} \{stroke_top}")
     current.set(2)
     t.frame()
     assert_eq(markers().length(), 1)
-    assert_true((markers()[0].0 - third.0).abs() < 3.0 && (markers()[0].1 - third.1).abs() < third.3, msg="the marker moved to the third match in the next paragraph")
+    assert_true((markers()[0].0 - third.0).abs() < 4.0 && (markers()[0].1 - third.1).abs() < third.3, msg="the marker moved to the third match in the next paragraph")
     current.set(-1)
     t.frame()
     assert_eq(markers().length(), 0)
@@ -118,9 +148,34 @@ test "chat find draws a wrapped current match across its lines in order" {
   let rects = w.rects(0, w.text.length())
   assert_true(rects.length() > 1)
   let ink = find_marker_ink(@sf.theme().dark)
-  let markers = fn() { t.drawn_rects().filter(fn(r) { r.4 == ink }) }
+  let markers = fn() { marker_boxes(t, ink) }
   assert_eq(markers().length(), rects.length())
   drawn.set(@sf.stroke_ms / 4.0)
   t.frame()
   assert_true(markers().length() < rects.length(), msg="later lines wait for the sweep")
+}
+
+///|
+test "a highlighter's outline: slanted ends, within its box, drawn in from the left" {
+  for seed in 0..<6 {
+    let whole = marker_outline(60.0, 16.0, 60.0, seed)
+    let xs = []
+    let ys = []
+    for k in 0..<(whole.length() / 2) {
+      xs.push(whole[k * 2])
+      ys.push(whole[k * 2 + 1])
+    }
+    assert_true(xs.iter().all(fn(x) { x >= 0.0 && x <= 60.0 }) && ys.iter().all(fn(y) { y >= 0.0 && y <= 16.0 }))
+    // its top starts right of where its bottom does, at either end: a chisel tip's slant
+    assert_eq(xs[0], marker_slant)
+    assert_eq(xs[xs.length() - 1], 0.0)
+    // not a box: its top wavers or leans
+    assert_true(ys[0] != ys[xs.length() / 2 - 1])
+    let half = marker_outline(60.0, 16.0, 30.0, seed)
+    let mut most = 0.0
+    for k in 0..<(half.length() / 2) {
+      most = dmax(most, half[k * 2])
+    }
+    assert_eq(most, 30.0)
+  }
 }

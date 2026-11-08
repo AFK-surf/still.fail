@@ -110,8 +110,11 @@ fn found_strokes(
 }
 
 ///|
-/// The chat find's current occurrence: a highlighter swept across its text, behind the glyphs. The selected index is
-/// in the whole message, not per paragraph or line. A wrapped match is drawn a line at a time, from start to end.
+/// The chat find's current occurrence: a highlighter swept across its text from the left, behind the glyphs and the
+/// stroke under them, a line at a time where the match wraps (`current`: which of the words' matches in the whole
+/// message, as `find_k`). Each line's is a band from near the glyphs' top to just under the baseline, short of the
+/// stroke 4 under it, its ends cut on a slant as a highlighter's chisel tip leaves them and its edges not quite
+/// straight: drawn by a hand, as the strokes are.
 fn found_marker(
   c : @ui.Ctx,
   key : String,
@@ -125,30 +128,90 @@ fn found_marker(
     Some(w) => w
     None => return
   }
-  let ranges = @sf.find_words(w.text, words)
-  let (a, b) = match ranges.get(current) {
+  let (a, b) = match @sf.find_words(w.text, words).get(current) {
     Some(range) => range
     None => return
   }
-  let rects = w.rects(a, b)
-  let total = rects.fold(init=0.0, fn(sum, r) { sum + r.2 + 4.0 })
+  // each line of the match: where its band starts in the box, how wide, its top and the baseline under it
+  let bands : Array[(Double, Double, Double, Double)] = []
+  for p in w.pieces {
+    let lay = p.layout
+    let la = if a > p.start { a - p.start } else { 0 }
+    let lb = if b - p.start < lay.text.length() { b - p.start } else { lay.text.length() }
+    if la >= lb {
+      continue
+    }
+    for rect in lay.rects(la, lb) {
+      let (rx, ry, rw, rh) = rect
+      let mut line = 0
+      for l in 0..<lay.line_y.length() {
+        if lay.line_y[l] <= ry {
+          line = l
+        }
+      }
+      let base = p.y - by + lay.line_y[line] + lay.line_base[line]
+      bands.push((p.x - bx + rx - 2.0, rw + 4.0, p.y - by + ry + rh * 0.14, base))
+    }
+  }
+  let total = bands.fold(init=0.0, fn(sum, band) { sum + band.1 })
   let mut left_to_draw = total * @sf.stroke_part(drawn, 0)
   let ink = find_marker_ink(@sf.theme().dark)
-  for (x, y, width, height) in rects {
-    let whole = width + 4.0
+  for i, band in bands {
+    let (x, whole, top, base) = band
     let part = dmax(0.0, dmin(whole, left_to_draw))
     left_to_draw = left_to_draw - whole
     if part <= 0.0 {
       continue
     }
-    let mark_height = height * 0.76
-    let mark_style = @ui.style(w=Fixed(part), h=Fixed(mark_height), bg=Data(ink)).then(@ui.css("radius=Sm"))
+    let h = dmax(base + marker_below - top, 1.0)
     c.layer(fn() {
-      c.box(style=mark_style, tx=x - bx - 2.0, ty=y - by + height * 0.12, fn() {  })
+      c.box(tx=x, ty=top, fn() {
+        c.shapes([@ui.shape_of([(marker_outline(whole, h, part, current * 3 + i), true)], fill=ink)], w=Px(whole), h=Px(h))
+        |> ignore
+      })
       |> ignore
     })
     |> ignore
   }
+}
+
+///|
+/// How far under the baseline a highlighter reaches: short of the stroke under the words (its highest, its right end:
+/// 0.75 under it).
+let marker_below : Double = 0.5
+
+///|
+/// How far a highlighter's ends lean: its bottom this much left of its top.
+let marker_slant : Double = 3.5
+
+///|
+/// A highlighter's band `w` by `h` drawn in as far as `part` from its left (x y pairs, clockwise from its top left):
+/// both ends slanted alike, its top and bottom rising a little to the right and wavering by under a point, the way
+/// `seed` (which match, which line) says, so no two are quite the same; nothing outside the `w` by `h` box.
+fn marker_outline(w : Double, h : Double, part : Double, seed : Int) -> Array[Double] {
+  let s = seed.to_double()
+  let rise = dmin(1.0, h * 0.1)
+  let wave = dmin(0.7, h * 0.06)
+  let edge = fn(x : Double, phase : Double, period : Double) {
+    wave * (1.0 + @dmath.sin(x / period * 2.0 * @math.PI + phase)) / 2.0
+  }
+  let top = fn(x : Double) { rise * (1.0 - x / w) + edge(x, s * 1.7, 23.0) }
+  let bottom = fn(x : Double) { h - rise * x / w - edge(x, s * 2.3 + 1.0, 31.0) }
+  let slant = dmin(marker_slant, w / 3.0)
+  let right = dmax(slant, dmin(part, w))
+  let out = []
+  let steps = dmax(1.0, @math.ceil((right - slant) / 3.0)).to_int()
+  for k in 0..=steps {
+    let x = slant + (right - slant) * k.to_double() / steps.to_double()
+    out.push(x)
+    out.push(top(x))
+  }
+  for k in 0..=steps {
+    let x = (right - slant) * (1.0 - k.to_double() / steps.to_double())
+    out.push(x)
+    out.push(bottom(x))
+  }
+  out
 }
 
 ///|

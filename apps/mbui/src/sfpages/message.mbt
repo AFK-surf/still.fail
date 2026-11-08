@@ -88,10 +88,11 @@ pub fn picking(
           }
           let finding = find_chat() == here.list.unwrap().rk
           let current = finding && rd.found_at == ts
-          found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=finding || rd.found_at != ts, current=if current { find_k() } else { -1 })
+          // (the highlighter first: the strokes are drawn over it)
           if current {
             found_marker(c, "pick/" + at, marked, find_k(), rd.found_drawn.get(), x, y)
           }
+          found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=finding || rd.found_at != ts, current=if current { find_k() } else { -1 })
         }
       }
       @sfbase.pickable(c, at, author, role, words, fill, @sfbase.mouse_picks(), body, keep=!marked.is_empty() || (ts != "" && passage_wanted(here, ts)), marks~, share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })
