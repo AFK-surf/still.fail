@@ -65,8 +65,26 @@ fn cause_of(i : Inputs) -> String {
 }
 
 ///|
+/// How a composer goes by what its cause changed from and to (`per_cause`'s, composer): to another page as a Move
+/// whose unit is twice as far (slower), carried; opened or shut as a Move, where it is.
+fn cause_spec(was : String, now : String) -> Spec {
+  if cause_carries(was, now) {
+    move(points=2.0)
+  } else {
+    move()
+  }
+}
+
+///|
+fn cause_carries(was : String, now : String) -> Bool {
+  was.split("/").to_array()[1] != now.split("/").to_array()[1]
+}
+
+///|
 /// A composer an old view builds (reshape and layout by the cause, `carry` as it goes to another page, `foot` where
-/// said), or the tree's (moves_for); `built` counts the tree's builds of it, `moves` holds what moves. The Tester.
+/// said), or the tree's (moves_for); `built` counts the tree's builds of it, `moves` holds what moves. `per_cause`: how
+/// it goes and whether it is carried by what its cause changed from and to (cause_spec, cause_carries; the tree's
+/// moves_for's spec_of and carry_of, an old view's spec and carry said as it is built). The Tester.
 fn composer(
   i : Inputs,
   node : Bool,
@@ -75,11 +93,20 @@ fn composer(
   built? : Ref[Int] = Ref(0),
   moves? : Ref[Moves?] = Ref(None),
   old_over? : Ref[Double] = Ref(0.0),
+  per_cause? : Bool = false,
 ) -> @ui.Tester {
+  // (the old view's: the cause before the one it is built for now, and that one)
+  let causes = Ref((cause_of(i), cause_of(i)))
   let t = @ui.Tester::new(
     fn(c) {
       if !node {
         let by = cause_of(i)
+        if by != causes.val.1 {
+          causes.val = (causes.val.1, by)
+        }
+        let (was, _) = causes.val
+        let spec = if per_cause { cause_spec(was, by) } else { move() }
+        let carries = !per_cause || cause_carries(was, by)
         let l = composer_laid(i.open.get(), i.page.get(), i.kb.get())
         let was_page = i.page.get()
         old_over.val = reshaped_over(c, "t/composer")
@@ -92,10 +119,10 @@ fn composer(
               extra = c.box(ml=4.0, mt=-46.0, w=Px(16.0), h=Px(16.0), bg=extra_ground, fn() {  })
             }
           })
-          reshape(c, b, "t/composer", by~, spec=move(), carry=carry && was_page == 1, foot~)
-          layout(c, send, "t/send", by~, spec=move())
+          reshape(c, b, "t/composer", by~, spec~, carry=carry && carries && was_page == 1, foot~)
+          layout(c, send, "t/send", by~, spec~)
           if extra >= 0 {
-            layout(c, extra, "t/extra", by~, spec=move())
+            layout(c, extra, "t/extra", by~, spec~)
           }
         })
         |> ignore
@@ -127,7 +154,11 @@ fn composer(
             .ground(Is(send_ground))
             |> ignore
           })
-          let m = moves_for(b, fn() { cause_of(i) })
+          let m = if per_cause {
+            moves_for(b, fn() { cause_of(i) }, spec_of=cause_spec, carry_of=cause_carries)
+          } else {
+            moves_for(b, fn() { cause_of(i) })
+          }
           m.reshapes(b, carry=fn() { carry && i.page.get() == 1 }, foot~)
           m.moves_with(send)
           b.show(fn() { laid().extra }, fn(e) {
@@ -187,12 +218,13 @@ fn composer_way(
   start? : (Inputs) -> Unit = fn(_) {  },
   carry? : Bool = false,
   foot? : Bool = false,
+  per_cause? : Bool = false,
 ) -> (Array[Array[Double]], Array[Double]) {
   let i = inputs()
   start(i)
   let moves : Ref[Moves?] = Ref(None)
   let old_over = Ref(0.0)
-  let t = composer(i, node, carry~, foot~, moves~, old_over~)
+  let t = composer(i, node, carry~, foot~, moves~, old_over~, per_cause~)
   let lag = if node { 0.0 } else { 16.0 }
   let seen = [composer_seen(t)]
   let over = []
@@ -223,9 +255,10 @@ fn goes_alike(
   start? : (Inputs) -> Unit = fn(_) {  },
   carry? : Bool = false,
   foot? : Bool = false,
+  per_cause? : Bool = false,
 ) -> Unit raise {
-  let (old, old_over) = composer_way(false, change, start~, carry~, foot~)
-  let (new, new_over) = composer_way(true, change, start~, carry~, foot~)
+  let (old, old_over) = composer_way(false, change, start~, carry~, foot~, per_cause~)
+  let (new, new_over) = composer_way(true, change, start~, carry~, foot~, per_cause~)
   let same = Array::makei(old.length(), fn(k) { seen_alike(old[k], new[k]) })
   assert_eq(
     (same, seen_alike(old_over, new_over)),
@@ -252,6 +285,17 @@ test "a composer opened from its foot as a keyboard comes in the same change: th
 ///|
 test "a composer gone to another page with what it holds: from where it was, its send with it, the part only that page has carried on its ground, where an old view's go; drawn over its laid top by nothing" {
   goes_alike(fn(i) { i.page.set(1) }, carry=true)
+}
+
+///|
+test "a composer going by what its cause changed from and to (spec_of, carry_of): opened on its clock where it is, gone to another page on another carried, both in one change as the page's, opened on that page not carried; where an old view's go" {
+  goes_alike(fn(i) { i.open.set(true) }, per_cause=true)
+  goes_alike(fn(i) { i.page.set(1) }, carry=true, per_cause=true)
+  goes_alike(fn(i) {
+    i.open.set(true)
+    i.page.set(1)
+  }, carry=true, per_cause=true)
+  goes_alike(fn(i) { i.open.set(true) }, start=fn(i) { i.page.set(1) }, carry=true, per_cause=true)
 }
 
 ///|
