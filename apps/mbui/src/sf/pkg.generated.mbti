@@ -1852,6 +1852,8 @@ pub let section_note_gap : Double
 
 pub let section_note_most : @ui.Len
 
+pub fn seen_at(Double) -> Double
+
 pub let seg_card_radius : @ui.Radius
 
 pub fn seg_fill_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, said? : String) -> @view.View
@@ -2287,6 +2289,8 @@ pub fn ui_theme_now() -> @ui.Theme
 pub fn under_bar_room() -> @ui.Space
 
 pub let under_card_words : @ui.Style
+
+pub let unseen_scale : Double
 
 pub fn untitled_clear() -> @ui.Style
 

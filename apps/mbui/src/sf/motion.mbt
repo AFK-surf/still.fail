@@ -102,3 +102,19 @@ pub let sleep_ms : Double = @kit.media_sleep_ms
 /// One breath of what waits (waiting.css.ts breathe): 1.4 s, from whole to `low` and back on
 /// CSS's ease-in-out each way.
 pub let breath_ms : Double = 1400.0
+
+///|
+/// How clear a thing coming or going is drawn at `scale` of its size: not at all at half of it or less, wholly at
+/// its size (the user, 2026-11-08: 50% 缩放以下就看不见). A fade of its own goes on top of this.
+pub fn seen_at(scale : Double) -> Double {
+  if scale <= unseen_scale {
+    0.0
+  } else if scale >= 1.0 {
+    1.0
+  } else {
+    (scale - unseen_scale) / (1.0 - unseen_scale)
+  }
+}
+
+///|
+pub let unseen_scale : Double = 0.5
