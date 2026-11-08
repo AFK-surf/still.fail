@@ -243,6 +243,37 @@ test("an_accounts_devices_are_a_topic_read_again_after_a_write", async () => {
   core.close();
 });
 
+test("an_operators_lists_that_failed_to_come_are_asked_again_while_the_socket_stays_open", async () => {
+  for (const [said, comes] of [[502, true], [404, false]] as const) {
+    const host = new FakeHost();
+    signIn(host);
+    let probes = 0;
+    host.onFetch((req) => {
+      const path = req.url.replace("https://stillfail.test", "");
+      if (path === "/v1/me") return jsonResponse(200, { workspaces: [], invitations: [], relay_url: "https://relay.test" });
+      if (path === "/v1/admin/me") return ++probes <= 2 ? jsonResponse(said, { error: "x" }) : jsonResponse(200, { email: "a@x.com" });
+      if (path.startsWith("/v1/admin/")) return jsonResponse(200, {});
+      return jsonResponse(404, { error: "not_found" });
+    });
+    const core = await Core.create(host, { clock: host.time.clock });
+    const ui = core.connect();
+    const values = new Map();
+    subscribe(core, ui, 1, { topic: "adminOverview", account: "s1" });
+    await host.settle();
+    // The socket heard all along: it never opens again, so it reads nothing again.
+    for (let i = 0; i < 3; i++) {
+      await host.time.pass(SOCKET_RETRY_MS * 3, 50);
+      host.socketSend("/v1/events", "pong");
+      await host.settle();
+    }
+    assert.equal(host.sockets.length, 1);
+    apply(host, values);
+    assert.equal(v(values, 1) !== undefined, comes, `${said}`);
+    assert.equal(count(host, "/v1/admin/me"), comes ? 3 : 1, `${said}`);
+    core.close();
+  }
+});
+
 test("what_a_person_does_is_under_way_until_it_answers_and_reads_are_not", async () => {
   const { host, core } = await cloudCore();
   const ui = core.connect();
