@@ -409,19 +409,35 @@ fn main {
     (Some("session-backfill"), Some(db), _) =>
       // (the backfills sessions/workspace-activity-worker.ts makes by `kind`, none: the activity; those not here yet
       // are left to it)
-      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session backfill", (db, ask) => match ask {
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let letters : Ref[@letters.Letters?] = Ref(None)
+        builder(host, db, "session backfill", (db, ask) => match ask {
         { "kind": "activity", .. } => Some(@activity.activity_step(db))
         { "kind": "recovery", .. } => Some(@activity.recovery_step(db))
         { "kind": "awake", .. } => Some(@activity.awake_step(db))
         { "kind": "legacy-said", .. } => Some(@legacy.said_maintenance(db))
         { "kind": "legacy-edits", .. } => Some(@legacy.edits_maintenance(db))
         { "kind": "legacy-policy", .. } => Some(@legacy.policy_step(db))
+        { "kind": "legacy-agent", .. } => Some(@legacy.agent_maintenance(db))
+        { "kind": "legacy-login", .. } => Some(@legacy.login_cards_maintenance(db))
+        { "kind": "page-letter-gc", .. } => {
+          let l = match letters.val {
+            Some(l) => l
+            None => {
+              let l = @letters.Letters::new(db)
+              letters.val = Some(l)
+              l
+            }
+          }
+          Some(l.gc_step())
+        }
         { "kind": "legacy-decision-time", .. } => Some(@legacy.decision_time_step(db))
         { "kind": "legacy-decision-session", .. } => Some(@legacy.decision_session_step(db))
         { "kind": "legacy-decision-session-repair", .. } => Some(@legacy.decision_session_repair_step(db))
         { "kind": String(_), .. } => raise @legacy.Fallback
         _ => Some(@activity.activity_step(db))
-      }))
+      })
+      })
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {

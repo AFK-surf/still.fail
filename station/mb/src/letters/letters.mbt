@@ -246,3 +246,47 @@ pub fn Letters::step(self : Letters, thread : Int64, limit? : Int = 64) -> Bool 
   db.exec("COMMIT")
   ready
 }
+
+///|
+/// One batch of reclaiming orphaned scopes and rows (`pageLetterGcStep`): a scope of an older epoch queued as garbage,
+/// then at most `limit` of one garbage scope's rows and changed keys removed; whether nothing is left then.
+pub fn Letters::gc_step(self : Letters, limit? : Int = 64) -> Bool raise {
+  guard limit >= 1 && limit <= 64 else { raise Failure("page letter batch must be 1–64") }
+  let db = self.db
+  if !self.install() {
+    return true
+  }
+  db.exec("BEGIN IMMEDIATE")
+  errdefer (db.exec("ROLLBACK") catch { _ => () })
+  let older = "FROM page_letter_scopes WHERE epoch<(SELECT epoch FROM page_letter_meta WHERE id=1)"
+  if first_row(db, "SELECT CAST(thread AS TEXT) AS thread,token \{older} ORDER BY page_letter_scopes.epoch,page_letter_scopes.thread LIMIT 1", [])
+    is Some(stale) {
+    let key = [value(stale, "thread"), value(stale, "token")]
+    ignore(
+      db.run(
+        "INSERT INTO page_letter_garbage(thread,token) SELECT CAST(?1 AS INTEGER),?2 WHERE NOT EXISTS (SELECT 1 FROM page_letter_garbage WHERE thread=CAST(?1 AS INTEGER) AND token=?2)",
+        key,
+      ),
+    )
+    ignore(db.run("DELETE FROM page_letter_scopes WHERE thread=CAST(? AS INTEGER) AND token=?", key))
+  }
+  guard first_row(db, "SELECT CAST(thread AS TEXT) AS thread,token FROM page_letter_garbage ORDER BY page_letter_garbage.thread,page_letter_garbage.token LIMIT 1", [])
+    is Some(garbage) else {
+    db.exec("COMMIT")
+    return true
+  }
+  let key = [value(garbage, "thread"), value(garbage, "token")]
+  let remove = (table : String, count : Int) => db.run(
+    "DELETE FROM \{table} WHERE thread=CAST(?1 AS INTEGER) AND token=?2 AND n IN (SELECT n FROM \{table} WHERE thread=CAST(?1 AS INTEGER) AND token=?2 ORDER BY n LIMIT ?3)",
+    key + [Json::number(count.to_double())],
+  )
+  let rows = remove("page_letter_rows", limit)
+  let dirty = if rows < limit { remove("page_letter_dirty", limit - rows) } else { 0 }
+  if rows + dirty < limit {
+    ignore(db.run("DELETE FROM page_letter_garbage WHERE thread=CAST(? AS INTEGER) AND token=?", key))
+  }
+  let remaining = first_row(db, "SELECT 1 FROM page_letter_garbage LIMIT 1", []) is Some(_) ||
+    first_row(db, "SELECT 1 \{older} ORDER BY epoch,thread LIMIT 1", []) is Some(_)
+  db.exec("COMMIT")
+  !remaining
+}

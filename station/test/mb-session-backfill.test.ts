@@ -105,9 +105,9 @@ test("a kind the MoonBit builder leaves to the worker is asked of the worker, wh
     };
     // the program's own kind, then one only the worker has (its answers say their kind)
     assert.equal((await ask({ kind: "activity" })).kind, undefined);
-    const theirs = await ask({ kind: "page-letter-gc" });
+    const theirs = await ask({ kind: "active-jobs" });
     assert.equal(theirs.error, undefined);
-    assert.equal(theirs.kind, "page-letter-gc");
+    assert.equal(theirs.kind, "active-jobs");
     assert.equal((await ask({ kind: "activity" })).kind, "activity", "the worker answers from then on");
     assert.equal(new Int32Array(priority)[1], 0, "no permit left held");
   } finally {
