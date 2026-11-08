@@ -3,10 +3,13 @@ import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { test } from "node:test";
+import { LiveLocator } from "../src/sessions/live-locator.ts";
 import { Rig } from "./hub-fakes.ts";
 
 test("a live subscription yields while locating a session's many old transcripts", async () => {
-  const rig = new Rig();
+  const rig = new Rig({ fileStore: true });
+  const locator = new LiveLocator(rig.dir, (key) => rig.store.getSession(key), () => rig.config.profiles);
+  rig.hub.live.locateAsync = (key, signal) => locator.locate(key, signal);
   const exists = fs.existsSync;
   let id: number | undefined;
   try {
@@ -49,6 +52,7 @@ test("a live subscription yields while locating a session's many old transcripts
     fs.existsSync = exists;
     syncBuiltinESMExports();
     if (id !== undefined) rig.hub.live.unsubscribe("one", id);
+    await locator.close();
     await rig.close();
   }
 });

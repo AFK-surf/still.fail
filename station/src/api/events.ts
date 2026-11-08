@@ -95,6 +95,8 @@ export type EventsDeps = {
   heldNow?(key: string): unknown[];
   /// Whether a session is still there (a summary is told only of one that is).
   sessionExists(key: string): boolean;
+  /// Whether a live result still belongs to a session visible to this viewer, in one lookup when available.
+  liveSeen?(viewer: Viewer, key: string): boolean;
   /// The overview as `viewer` sees it, in `lang` (GET /overview); none until the agents' side is up.
   overview?(viewer: Viewer, lang: Lang): Promise<unknown>;
   /// A session's process state (the overview counts running and warm ones).
@@ -589,7 +591,11 @@ export class Events {
     }
     // Those sessions as they run, on this same stream: each message a `live` event with its key.
     for (const [key, from, last] of live) {
-      const stop = this.deps.live?.(key, from, last, (message) => client.send("live", { ...(message as object), key }), brief);
+      const stop = this.deps.live?.(key, from, last, (message) => {
+        if (this.deps.liveSeen?.(viewer, key) ?? (this.deps.sessionExists(key) && this.sees(client, { session: key }))) {
+          client.send("live", { ...(message as object), key });
+        }
+      }, brief);
       if (stop) client.stops.push(stop);
     }
     // Those jobs' last lines: a `job-log` event now, and again each time the log changes, until the stream goes.
