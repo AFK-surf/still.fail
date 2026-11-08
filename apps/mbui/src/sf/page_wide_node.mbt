@@ -394,6 +394,7 @@ fn wide_link_row_node(
   trouble : () -> String,
   strong : Bool,
   lead : RowLead,
+  lead_ink : () -> Int64,
   goes : Bool,
   ends : Bool,
   mark : () -> String,
@@ -456,7 +457,7 @@ fn wide_link_row_node(
             }
           }))
           |> ignore
-          icon_node(l, name, desk_mark, By(fn() { theme().p.muted })) |> ignore
+          icon_node(l, name, desk_mark, By(lead_ink)) |> ignore
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore

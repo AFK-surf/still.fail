@@ -191,6 +191,8 @@ fn pane_made(
             let core = settings_core(src, w)
             let here = fn() { @settings.here_of(core, w.id, w.name) }
             @settings.frame(core, @signals.untracked(here))
+            // (a dialog a fixture's mode puts up over its page, before the page is made: setting_page's)
+            settings_fixture(src, core)
             pane_made_host(p, src, k)
             // (back over it only under another settings page or a place of the rail's: setting_page's; a place of the
             // rail's itself, none, whatever is under it: place_page's; its words read as they are said, in the
@@ -242,7 +244,7 @@ fn pane_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions) =>
+        Some(r) if @settings.made_once(r) =>
           pane_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -279,6 +281,10 @@ fn pane_made(
     Setting(MemoryDoc(address, skill, at)) =>
       made("memory-doc/" + address + "/" + skill + "/" + at.to_string(), fn(a, core, here, _stint, frame, width) {
         @sfpages.memory_doc_node(a, core, here, address, skill, at, on_back=core.pop, frame~, width~)
+      })
+    Setting(AutoPolicy(st)) =>
+      made("auto-policy/" + st, fn(a, core, here, _stint, frame, width) {
+        @sfpages.policy_node(a, core, here, st, on_back=core.pop, frame~, width~)
       })
     Setting(Permissions) =>
       made("permissions", fn(a, core, _here, _stint, frame, width) {

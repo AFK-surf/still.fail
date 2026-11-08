@@ -551,7 +551,8 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// title on its line while `title_after_shown` says (a tag: whose it is), its title cut short where the line has not
 /// the room for both. `folds`: it
 /// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `tail` after what it
-/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). Its words as they are said.
+/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). One that `adds` one more to the list
+/// it ends (添加): one that acts, after a ＋ in the link's ink. Its words as they are said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -576,7 +577,12 @@ pub fn link_row_node(
   folds? : () -> Bool,
   tail? : (@view.View) -> Unit,
   tail_shown? : () -> Bool = fn() { true },
+  adds? : Bool = false,
 ) -> Unit {
+  // (one that adds: one that acts, after a ＋ in the link's ink, link_row's `adds`)
+  let acts = acts || adds
+  let lead = if adds { LeadIcon("plus") } else { lead }
+  let lead_ink = fn() { if adds { link_ink() } else { theme().p.muted } }
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
@@ -597,8 +603,8 @@ pub fn link_row_node(
       None => note
     }
     wide_link_row_node(
-      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, title_after_shown, folds, tail, tail_shown,
+      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, lead_ink, goes, ends, mark, acts, below,
+      below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown,
     )
     return
   }
@@ -639,7 +645,7 @@ pub fn link_row_node(
             }
           }))
           |> ignore
-          icon_node(l, name, row_icon, By(fn() { theme().p.muted })) |> ignore
+          icon_node(l, name, row_icon, By(lead_ink)) |> ignore
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore

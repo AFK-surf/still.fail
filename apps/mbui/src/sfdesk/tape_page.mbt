@@ -327,6 +327,8 @@ fn tape_made(
                 let core = settings_core(src, w)
                 let here = fn() { @settings.here_of(core, w.id, w.name) }
                 @settings.frame(core, @signals.untracked(here))
+                // (a dialog a fixture's mode puts up over its page, before the page is made: setting_page's)
+                settings_fixture(src, core)
                 // (made in a panel of its own: lent to all it makes, however late, its cards the panel's: @sf.pane_lent)
                 p.lends(@sf.pane_lent, true) |> ignore
                 f(p, core, here, stint, told, acts)
@@ -360,7 +362,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions) =>
+        Some(r) if @settings.made_once(r) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -388,6 +390,10 @@ fn tape_made(
       made("memory-doc/" + address + "/" + skill + "/" + at.to_string(), fn(p, core, here, _stint, told, _acts) {
         context_node(p)
         @sfpages.memory_doc_node(p, core, here, address, skill, at, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    Setting(AutoPolicy(st)) if pane_makes.val =>
+      made("auto-policy/" + st, fn(p, core, here, _stint, told, _acts) {
+        @sfpages.policy_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
     Setting(Permissions) if pane_makes.val =>
       made("permissions", fn(p, core, _here, _stint, told, _acts) {
