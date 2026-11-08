@@ -195,3 +195,25 @@ test "its avatar is back in its activity once a message has come out of it, the 
   assert_eq(em.copied, "")
   emit_restore()
 }
+
+///|
+test "activity: an agent given words it has yet to take is at work: its line there as they wait for it" {
+  // Queued (the station has the words, its agent not yet taken them; or a summary read before it took them says so):
+  // its line went, and came back as it took them, each time words were sent (2026-11-09).
+  new_run()
+  @sffixture.fix_working_status.val = "queued"
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("测试一下")
+  tap_send(t)
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
+  t.draw()
+  t.run_for(flight_wait_ms + @ui.move_most_ms + 1000.0)
+  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  fix_clock.val = None
+}

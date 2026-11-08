@@ -336,6 +336,13 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
 }
 
 ///|
+/// Whether an agent's activity shows: at work, or given words it has yet to take (queued), which it goes on to work on.
+/// Gone while queued, its line went and came back each time words were sent to it (2026-11-09).
+fn at_work(a : Agent) -> Bool {
+  a.status == "running" || a.status == "queued"
+}
+
+///|
 /// The entries and where their messages end, before the live rows at the foot.
 fn chat_entries(v : ChatView) -> (Array[Entry], Int) {
   let out : Array[Entry] = [Top]
@@ -385,7 +392,7 @@ fn chat_entry_tail(out : Array[Entry], v : ChatView) -> Unit {
   }
   if !v.newer {
     for a in v.agents {
-      if a.status == "running" {
+      if at_work(a) {
         out.push(Working(a))
       }
     }
@@ -537,8 +544,8 @@ fn chat_entries_same(a : ChatView, b : ChatView) -> Bool {
   a.state == b.state &&
   a.elsewhere.is_empty() && b.elsewhere.is_empty() &&
   a.outbox.is_empty() && b.outbox.is_empty() &&
-  a.agents.iter().all(fn(agent) { agent.status != "running" }) &&
-  b.agents.iter().all(fn(agent) { agent.status != "running" })
+  a.agents.iter().all(fn(agent) { !at_work(agent) }) &&
+  b.agents.iter().all(fn(agent) { !at_work(agent) })
 }
 
 ///|
@@ -673,7 +680,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   let running : Map[String, Agent] = {}
   if !v.newer {
     for a in v.agents {
-      if a.status == "running" {
+      if at_work(a) {
         running[a.key] = a
       }
     }

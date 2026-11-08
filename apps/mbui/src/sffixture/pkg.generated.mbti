@@ -267,6 +267,8 @@ pub let fix_working_important : @ref.Ref[Bool]
 
 pub let fix_working_now : @ref.Ref[(String, String)]
 
+pub let fix_working_status : @ref.Ref[String]
+
 pub fn fix_write(Fixture, String) -> FixWrite
 
 pub let fix_writes : Map[String, FixWrite]
