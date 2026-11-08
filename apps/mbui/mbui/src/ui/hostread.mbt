@@ -28,12 +28,6 @@ pub fn wake_after(ms : Double) -> Unit {
 }
 
 ///|
-/// A frame as soon as the host can.
-pub fn request_frame() -> Unit {
-  h_request_frame()
-}
-
-///|
 /// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser, 5 Linux (a Tester's `platform`; a program's over its
 /// host's: set_platform).
 pub fn platform() -> Int {

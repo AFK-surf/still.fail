@@ -1,5 +1,5 @@
-// The framework asks for the frames inputs need (inputrec.mbt `took_input`, app.mbt `on_frame`), and for one asked
-// between frames (Ctx::request_frame).
+// The framework asks for the frames inputs need (inputrec.mbt `took_input`, app.mbt `on_frame`), and for one owed
+// between frames by what the view reads changing (Ctx::read_changed).
 
 ///|
 test "every input asks the host for a frame, a key nothing under the pointer takes too" {
@@ -46,11 +46,12 @@ test "a pointer moved with nothing down: a frame for it, built only where what i
 }
 
 ///|
-test "a frame asked for between frames reaches the host" {
+test "what the view reads changed between frames: the frame it owes reaches the host" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
   t.draw()
   t.fake.wants = false
-  g().request_frame()
+  // (a handler's between frames: the focus moved, a list sent to its end)
+  g().read_changed("the focus moved")
   assert_true(t.fake.wants)
 }
 

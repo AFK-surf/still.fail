@@ -1,12 +1,10 @@
 // Files dragged in from outside the app (Finder, Explorer) and let go on its window: the host says where they are held
 // as they move and, once let go, the pick their reading is (macOS's MBView, Windows' drop target in win_files.h: their
 // `mbui.drop` messages, {"type":"over","x","y"},
-// {"type":"left"}, {"type":"drop","x","y","pick"}), taken as any message is, at a frame's start. A view asks where they
-// are held now (files_held: what it would take them shows so) and takes each drop once (take_drop), its files read as
-// a pick's are (Pick::files: a folder's by their way down, each folder itself named with a "/" at its end). A box may
-// follow them instead as the host says them, outside any build (Ctx::on_files): told where they are held over it, and
-// taking them as they are let go on it, before any build sees them. Under a Tester: Tester::hold_files,
-// Tester::drop_files.
+// {"type":"left"}, {"type":"drop","x","y","pick"}). A box follows them as the host says them, outside any build
+// (Ctx::on_files): told where they are held over it, and taking them as they are let go on it, their files read as a
+// pick's are (Pick::files: a folder's by their way down, each folder itself named with a "/" at its end). Under a
+// Tester: Tester::hold_files, Tester::drop_files.
 //
 // Words dragged in from outside (another app's text, a browser page's) are said only as they are let go, with what they
 // say ({"type":"words","x","y","text"}: macOS's MBView): on a field (what a press there reaches) they go into it where
@@ -18,8 +16,9 @@
 // may be taken as where they are instead of read: by a box that takes them so (Ctx::paths_into: a chat's composer,
 // naming them by the station they are on); let go on a field no such box holds, as their paths, a line each, as a
 // Mac's text fields take files from the Finder (on a box that takes words for its field, Ctx::words_into, into that
-// field). Either way they are not read. A drop of files is read only as a view takes it (take_drop); one that nothing
-// takes in the frame it came is let go, unread, as that frame ends (drops_frame_end).
+// field). Either way they are not read. A drop of files is read only as a box takes it (Ctx::on_files); one that
+// nothing takes as it comes is let go, unread: at once, or, let go with its paths, as the frame that could take them so
+// ends (drops_frame_end).
 
 ///|
 /// Whether files can be dragged in from outside and let go on the window here: the hosts that say so (macOS's and
@@ -53,26 +52,21 @@ priv struct PathsLetGo {
 }
 
 ///|
-/// Where files from outside are held over the window now, and the drops not taken yet (where each was let go, the
-/// pick their reading is, by the host's number, the frame's number); words from outside let go on no field, the frame
-/// they came in (the hit target and what holds it, what they say, the frame's number); files let go with their paths:
-/// that frame's build may take them (Ctx::words_into, Ctx::paths_into, take_drop), none after it.
+/// Words from outside let go on no field, the frame they came in (the hit target and what holds it, what they say, the
+/// frame's number); files let go with their paths that no box took as files: that frame's build may take them
+/// (Ctx::words_into, Ctx::paths_into), none after it.
 priv struct Dropping {
-  mut held : (Double, Double)?
-  drops : Array[(Double, Double, Int, Int)]
   mut words : (Array[Int], String, Int)?
   mut paths : PathsLetGo?
 }
 
 ///|
-let dropping : Dropping = { held: None, drops: [], words: None, paths: None }
+let dropping : Dropping = { words: None, paths: None }
 
 ///|
 fn drop_reset() -> Unit {
-  dropping.held = None
   files_on.clear()
   files_on_held.val = 0
-  dropping.drops.clear()
   dropping.words = None
   dropping.paths = None
 }
@@ -115,9 +109,9 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
 }
 
 ///|
-/// Files of drop `pick` let go at (`x`, `y`) with their paths: left for this frame's build, a box that takes them by
-/// their paths (Ctx::paths_into) or as words for its field (Ctx::words_into), or a view as files (take_drop); taken by
-/// none, the field they were let go on puts their paths in as it ends (drops_frame_end).
+/// Files of drop `pick` let go at (`x`, `y`) with their paths, no box taking them as files (Ctx::on_files): left for
+/// this frame's build, a box that takes them by their paths (Ctx::paths_into) or as words for its field
+/// (Ctx::words_into); taken by none, the field they were let go on puts their paths in as it ends (drops_frame_end).
 fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) -> Unit {
   old_input_brought()
   let c = g()
@@ -165,7 +159,7 @@ pub fn Ctx::words_into(self : Ctx, id : Int, key : String) -> Unit {
       match paths_on(self, id, field) {
         Some(d) => {
           dropping.paths = None
-          drop_taken(d.pick)
+          forget_drop(d.pick)
           if d.target == field {
             place_caret_at(st, d.x, d.y, self.clock)
           }
@@ -185,26 +179,18 @@ pub fn Ctx::paths_into(self : Ctx, id : Int, key : String) -> Array[DroppedPath]
   hand_events_read()
   guard paths_on(self, id, self.id(key)) is Some(d) else { return None }
   dropping.paths = None
-  drop_taken(d.pick)
+  forget_drop(d.pick)
   Some(d.paths)
 }
 
 ///|
-/// Drop `pick` taken otherwise than as files (by their paths): let go, unread.
-fn drop_taken(pick : Int) -> Unit {
-  match dropping.drops.search_by(fn(d) { d.2 == pick }) {
-    Some(i) => forget_drop(dropping.drops.remove(i).2)
-    None => ()
-  }
-}
-
-///|
 /// As the frame ends (its builds over): files let go with their paths that no box took, put in as their paths on the
-/// field they were let go on, as a paste's words, the field taking the focus (shown by the frame after); the drops none
-/// took in it, let go, unread.
+/// field they were let go on, as a paste's words, the field taking the focus (shown by the frame after); either way
+/// let go, unread.
 fn drops_frame_end(c : Ctx) -> Unit {
   if dropping.paths is Some(d) {
     dropping.paths = None
+    forget_drop(d.pick)
     match c.editors.get(d.target) {
       Some(st) if d.frame == c.frame_no => {
         c.focus_visible = false
@@ -217,14 +203,10 @@ fn drops_frame_end(c : Ctx) -> Unit {
       _ => ()
     }
   }
-  for d in dropping.drops {
-    forget_drop(d.2)
-  }
-  dropping.drops.clear()
 }
 
 ///|
-/// A drop of files no view took: its reading never begun, or let go.
+/// A drop of files no box took: its reading never begun, or let go.
 fn forget_drop(id : Int) -> Unit {
   @hostapi.forget_dropped(id)
 }
@@ -291,12 +273,13 @@ fn init {
             p.wait("files dropped")
             take(p)
           }
-          None => {
-            dropping.drops.push((x, y, id, c.frame_no))
-            if !paths.is_empty() {
+          // (taken by none as files: left to what takes them by their paths, else let go now)
+          None =>
+            if paths.is_empty() {
+              forget_drop(id)
+            } else {
               paths_let_go(x, y, paths, id)
             }
-          }
         }
       }
       "words" => {
@@ -338,7 +321,7 @@ let files_on_held : Ref[Int] = Ref(0)
 /// host says them, in its message, outside any build, as the last frame drew what is there: `held` told where they are
 /// held over it (None: gone from over it: taken away, let go, or over another), `take` asked as they are let go on it
 /// (not on a field, with their paths: those are the field's) whether it takes them there. `Some(f)` takes them: `f`
-/// given the pick their reading is, begun now, and no build sees the drop (take_drop, Ctx::paths_into); None leaves
+/// given the pick their reading is, begun now, and no build sees the drop (Ctx::paths_into); None leaves
 /// them to what is further out, then to the frame's build as ever. Said as the box is built (what takes them is what
 /// the last build said).
 pub fn Ctx::on_files(
@@ -371,7 +354,6 @@ fn files_on_at(x : Double, y : Double) -> Array[Int] {
 /// Files from outside held over the window at `at` (None: taken away or let go): told to the box that takes them they
 /// are over (Ctx::on_files), and to the one they left.
 fn files_held_at(at : (Double, Double)?) -> Unit {
-  dropping.held = at
   let id = match at {
     Some((x, y)) => files_on_at(x, y).get(0).unwrap_or(0)
     None => 0
@@ -407,34 +389,6 @@ fn files_take_at(x : Double, y : Double) -> ((Pick) -> Unit)? {
 }
 
 ///|
-/// Where files from outside the app are held over the window now (x, y), None when none are.
-pub fn files_held() -> (Double, Double)? {
-  dropping.held
-}
-
-///|
-/// The oldest drop of files from outside not taken yet, in the frame it came, let go where `over` says (by default
-/// anywhere): where they were let go, and the pick their reading is, begun now (its `files` None until they are
-/// read). Each is taken once, as files: not by its paths too (Ctx::paths_into). Those let go on a field with their
-/// paths are the field's (or a box's that takes them for it), never taken so. One no view takes as it came is let go,
-/// unread, as its frame ends.
-pub fn take_drop(over? : (Double, Double) -> Bool = fn(_, _) { true }) -> (Double, Double, Pick)? {
-  let c = g()
-  let on_field = fn(id) { dropping.paths is Some(d) && d.pick == id && c.editors.contains(d.target) }
-  guard dropping.drops.search_by(fn(d) { d.3 == c.frame_no && !on_field(d.2) && over(d.0, d.1) }) is Some(i) else {
-    return None
-  }
-  let (x, y, id, _) = dropping.drops.remove(i)
-  if dropping.paths is Some(d) && d.pick == id {
-    dropping.paths = None
-  }
-  // (a Tester's: the ask Tester::drop_files made, from 1)
-  let p : Pick = { hosts: [@hostapi.dropped_pick(id)], got: [None] }
-  p.wait("files dropped")
-  Some((x, y, p))
-}
-
-///|
 /// Files from outside held over the window at (x, y), as a host says while they are dragged (None: taken away).
 pub fn Tester::hold_files(self : Tester, at : (Double, Double)?) -> Unit {
   match at {
@@ -446,8 +400,8 @@ pub fn Tester::hold_files(self : Tester, at : (Double, Double)?) -> Unit {
 ///|
 /// `files` (their names, a folder's by their way down and a folder itself with a "/" at its end, and bytes) let go on
 /// the window at (x, y), as a host says, with their `paths` where it says them (the Finder's: one for each of `files`,
-/// a folder as that file says, its size that file's bytes); read by the frame after the one that takes the drop, as a
-/// pick is.
+/// a folder as that file says, its size that file's bytes); taken as the frame that takes the message begins
+/// (Ctx::on_files), read by the frame after, as a pick is.
 pub fn Tester::drop_files(
   self : Tester,
   x : Double,

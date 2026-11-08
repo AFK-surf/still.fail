@@ -523,9 +523,9 @@ test "a task run at its moment, one made ready at a later moment waiting: that o
 }
 
 ///|
-/// An offscreen frame whose view forks a fiber and asks for a frame asks the host for nothing (frame_offscreen): the
-/// fiber ready, run by the next frame of the window.
-test "an offscreen frame's view forking a fiber and asking for a frame: the host asked for nothing" {
+/// An offscreen frame whose view forks a fiber asks the host for nothing (frame_offscreen), though a fiber ready as a
+/// frame ends owes one (fx_frame_end): the fiber ready, run by the next frame of the window.
+test "an offscreen frame's view forking a fiber: the host asked for nothing" {
   let t = Tester::new(still_view)
   t.draw()
   let at = whole_ms(t.time()) + offscreen_after_ms
@@ -536,7 +536,6 @@ test "an offscreen frame's view forking a fiber and asking for a frame: the host
     if !forked.val {
       forked.val = true
       c.fork(async fn() { ran.val += 1 }) |> ignore
-      c.request_frame()
     }
     still_view(c)
   }

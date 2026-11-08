@@ -352,36 +352,41 @@ test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input 
 }
 
 ///|
+/// How long a host takes to load a page (a test's slow host): its event that long after it was asked.
+let slow_page_ms : Int = 500
+
+///|
+/// A sheet's spring, slow: it opens for seconds, so a tap in a script comes while it moves.
+let slow_sheet_stiffness : Double = 10.0
+
+///|
 test "a scripted step waits for nothing settling: a tap goes as soon as its words hold still, what comes later by its name" {
-  let frames = Ref::new(0)
-  let moving_until = Ref::new(0)
-  let ticket = Ref::new(0)
-  let opened_at = Ref::new(0)
-  let tapped_at = Ref::new(0)
+  let open = Ref(false)
+  let page = Ref(false)
+  // as 按一下 was tapped: whether the sheet was still moving, whether the page had come
+  let tapped : Ref[(Bool, Bool)?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
-    frames.val = frames.val + 1
-    // something moving (a sheet opening) for 40 frames after 动起来
-    if frames.val < moving_until.val {
-      c.request_frame()
-    }
-    // a page the host loads for 30 frames after 打开 (what hostcall.mbt asks of a host: a ticket until its event)
-    if ticket.val > 0 && frames.val >= opened_at.val + 30 {
-      @ui.runtime().outside_end(ticket.val)
-      ticket.val = 0
-    }
+    // something moving (a sheet opening) after 动起来: a spring the tap sets out
+    let _ = c.spring("sheet", if open.val { 1.0 } else { 0.0 }, stiffness=slow_sheet_stiffness, damping=6.0)
+    let moving = c.spring_rest("sheet") > c.moment()
     c.column(fn() {
       if c.button("动起来") {
-        moving_until.val = frames.val + 40
+        open.val = true
       }
       if c.button("打开") {
-        ticket.val = @ui.runtime().outside_start("page 1 (a slow host)")
-        opened_at.val = frames.val
+        // a page the host loads (what hostcall.mbt asks of a host: a ticket until its event, a while after)
+        let rt = @ui.runtime()
+        let ticket = rt.outside_start("page 1 (a slow host)")
+        rt.after(slow_page_ms, fn() {
+          page.val = true
+          rt.outside_end(ticket)
+        })
       }
-      if ticket.val == 0 && opened_at.val > 0 {
+      if page.val {
         c.text("页面来了") |> ignore
       }
       if c.button("按一下") {
-        tapped_at.val = frames.val
+        tapped.val = Some((moving, page.val))
       }
     })
     |> ignore
@@ -389,11 +394,11 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
   // the tap goes while the other moves on: nothing waits for it to stop
   let log = t.drive("tap 动起来\ntap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(tapped_at.val > 0 && tapped_at.val < moving_until.val)
+  assert_eq(tapped.val, Some((true, false)))
   // what the host's page brings is waited for by what it shows
   let log = t.drive("tap 打开\nuntil 页面来了\ntap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(tapped_at.val >= opened_at.val + 30)
+  assert_true(tapped.val is Some((_, true)), msg="\{tapped.val}")
   t.draw()
 }
 
