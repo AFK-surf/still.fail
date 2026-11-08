@@ -69,7 +69,11 @@ fn cancelled_owned_row(node : Bool) -> Unit raise {
     let params = @sfbase.core_topic_params("chat", chat_params(row_ref(item)))
     let (x, y) = t.find(item.title).unwrap()
     t.press_at(x, y)
-    assert_true(client.peek_topic("chat", params~) is Some(_), msg="down prefetched, node=\{node}")
+    if node {
+      assert_true(client.peek_topic("chat", params~) is None, msg="the retained row waits for its press to show")
+      t.run_for(@ui.tap_indication_ms)
+    }
+    assert_true(client.peek_topic("chat", params~) is Some(_), msg="the row prefetched, node=\{node}")
     t.touch(3, x, y)
     t.draw()
     assert_true(client.peek_topic("chat", params~) is None, msg="cancel released, node=\{node}")
@@ -95,6 +99,10 @@ fn opening_owned_row(node : Bool, release_row : Bool) -> Unit raise {
     let params = @sfbase.core_topic_params("chat", raw)
     let (x, y) = t.find(item.title).unwrap()
     t.press_at(x, y)
+    if node {
+      assert_true(client.peek_topic("chat", params~) is None, msg="the retained row waits for its press to show")
+      t.run_for(@ui.tap_indication_ms)
+    }
     let sub = client.peek_topic("chat", params~).unwrap()
     page_source.val.unwrap().topic("chat", raw).get() |> ignore
     assert_true(physical_equal(sub, client.peek_topic("chat", params~).unwrap()))

@@ -254,7 +254,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
 /// still.fail cloud is asked; `done` said once it answers. (Home on `ws` itself read as broken: its chats turned to
 /// 已登录的账号均无法访问此 workspace as the cloud let it go, until the list dropped it.)
 fn ws_gone(core : Core, ws : String, what : String, call : String, params : Json, done : String) -> Unit {
-  let (all, _, _) = @sfbase.workspaces_of((core.topic)("workspaces", {}).value)
+  let (all, _, _) = @sfbase.workspaces_of((core.topic)("workspaces", {}).get().value)
   match all.iter().find_first(fn(w) { w.id != ws }) {
     Some(o) => {
       app.picked.set(o.id)

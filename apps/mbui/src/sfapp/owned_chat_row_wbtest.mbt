@@ -93,7 +93,12 @@ fn owned_row_left_case(
     @sfbase.reading_of(chat.station + "\u{1}" + chat.session) |> ignore
   }
   let (x, y) = t.find(item.title).unwrap()
+  let before_press = sent.filter(fn(s) { s.contains("\"subscribe\":") }).length()
   t.press_at(x, y)
+  if node {
+    assert_eq(sent.filter(fn(s) { s.contains("\"subscribe\":") }).length(), before_press, msg="the retained row waits for its press to show")
+    t.run_for(@ui.tap_indication_ms)
+  }
   guard client.peek_topic("chat", params~) is Some(sub) else {
     let asked = sent.filter(fn(s) { s.contains("\"subscribe\":") }).length()
     let ended = sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length()
