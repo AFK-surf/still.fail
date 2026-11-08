@@ -96,6 +96,9 @@ let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
 let panel_screens : Map[String, (String, String, Int)] = {}
 
 ///|
+let panel_screen_nodes : Map[String, Bool] = {}
+
+///|
 fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab : String, own_bar? : @ui.Style? = None) -> Bool {
   guard station_tab(tab) is Some((kind, station, screen)) else { return false }
   let frame : PageFrame = { back: None, top: 0.0, foot: 0.0, named: false }
@@ -125,7 +128,9 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
 pub fn station_tabs_sweep(c : @ui.Ctx, src : Source) -> Unit {
   let gone : Array[String] = []
   for tab, (station, screen, frame) in panel_screens {
-    if frame != c.frame_number() {
+    if panel_screen_nodes.contains(tab) {
+      gone.push(tab)
+    } else if frame != c.frame_number() {
       match app.nav.top() {
         Screen(at) if at.station == station && at.screen == screen => ()
         _ => @sfpages.screen_left(src, station, screen)

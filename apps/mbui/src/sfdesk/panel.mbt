@@ -488,48 +488,7 @@ fn side_panel(
   front : String,
 ) -> Unit {
   c.box(style=side_panel_style, fn() {
-    // (the desktop app has no title bar: the panel's bar drags the window as the page's does)
-    let bar = c.id("side/bar")
-    if @ui.window_inset() {
-      c.window_drag(bar)
-    }
-    // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs.
-    // One whose page has a bar of its own (a service's: its address names it): that bar the panel's, its × at its end,
-    // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
-    let alone = side_on_tape.val && tabs.length() == 1
-    // (on its side the screen's tools are a rail, with no name of its own: the panel's row names it)
-    let (ww, wh) = c.window_size()
-    let screen_alone = screen_tab_alone(tabs) && !column_short.get() && ww <= wh
-    let own_bar = (alone && tab_service(front) is Some(_)) || screen_alone
-    if !own_bar {
-      c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
-        if alone {
-          side_title(c, src, r, v, tabs[0])
-        } else {
-          c.box(style=side_tab_list, fn() {
-            for tab in tabs {
-              side_tab_of(c, src, r, v, tab, tab == front)
-            }
-          })
-          |> ignore
-        }
-        // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
-        match station_tab_page(r, front) {
-          Some(p) if @sfbase.window_opens_for(p) =>
-            if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
-              @sfbase.open_window(p) {
-              side_change(src, r, "close", Some(front))
-            }
-          _ => ()
-        }
-        // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
-        // (histories_ticked)
-        if !column_short.get() && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
-          side_change(src, r, "clear", None)
-        }
-      })
-      |> ignore
-    }
+    let (screen_alone, own_bar) = side_panel_head(c, src, r, v, tabs, front)
     c.box(style=side_pane, fn() {
       if front == "jobs" {
         // a service up pressed: its own tab, in front (JobsTab onOpen)
@@ -742,4 +701,51 @@ let side_title_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold
 /// corner it stands where it is concentric.
 fn bar_button_side() -> Double {
   @sf.bar_key_side
+}
+
+///|
+fn side_panel_head(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tabs : Array[String], front : String) -> (Bool, Bool) {
+  // (the desktop app has no title bar: the panel's bar drags the window as the page's does)
+  let bar = c.id("side/bar")
+  if @ui.window_inset() {
+    c.window_drag(bar)
+  }
+  // a panel of its own on the tape showing one tab: that tab its title, the panel's close its only ×; else the tabs.
+  // One whose page has a bar of its own (a service's: its address names it): that bar the panel's, its × at its end,
+  // no row of the panel's over it (the user, 2026-10-28: two rows there too much)
+  let alone = side_on_tape.val && tabs.length() == 1
+  // (on its side the screen's tools are a rail, with no name of its own: the panel's row names it)
+  let (ww, wh) = c.window_size()
+  let screen_alone = screen_tab_alone(tabs) && !column_short.get() && ww <= wh
+  let own_bar = (alone && tab_service(front) is Some(_)) || screen_alone
+  if !own_bar {
+    c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar() }, id=bar, fn() {
+      if alone {
+        side_title(c, src, r, v, tabs[0])
+      } else {
+        c.box(style=side_tab_list, fn() {
+          for tab in tabs {
+            side_tab_of(c, src, r, v, tab, tab == front)
+          }
+        })
+        |> ignore
+      }
+      // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
+      match station_tab_page(r, front) {
+        Some(p) if @sfbase.window_opens_for(p) =>
+          if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
+            @sfbase.open_window(p) {
+            side_change(src, r, "close", Some(front))
+          }
+        _ => ()
+      }
+      // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
+      // (histories_ticked)
+      if !column_short.get() && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+        side_change(src, r, "clear", None)
+      }
+    })
+    |> ignore
+  }
+  (screen_alone, own_bar)
 }

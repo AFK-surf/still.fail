@@ -53,6 +53,7 @@ fn screen_picture_node(parent : @view.View, read : () -> ScreenPicture) -> @view
 ///|
 fn screen_stage_node(
   parent : @view.View, draw : (@ui.Ctx, (ScreenPicture?) -> Unit) -> Unit,
+  scope? : (@ui.Ctx, () -> Unit) -> Unit = fn(_, body) { body() },
 ) -> @view.View {
   let picture : @signals.Signal[ScreenPicture?] = @signals.signal(None, same=fn(a, b) {
     match (a, b) {
@@ -70,7 +71,7 @@ fn screen_stage_node(
       if ready { screen_picture_node(p, fn() { picture.get().unwrap() }) |> ignore }
     })
     @ui.old(v, fn(c) {
-      draw(c, fn(value) { picture.set(value) })
+      scope(c, fn() { draw(c, fn(value) { picture.set(value) }) })
     }).over(Is(true)) |> ignore
   })
 }

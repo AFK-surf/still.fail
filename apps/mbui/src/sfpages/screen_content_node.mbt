@@ -2,7 +2,8 @@
 // with the legacy page while those controls move to retained nodes.
 
 ///|
-fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : String, prepare? : (@ui.Ctx) -> Unit = fn(_) { }) -> @view.View {
+fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : String, prepare? : (@ui.Ctx) -> Unit = fn(_) { }, scope? : (@ui.Ctx, () -> Unit) -> Unit = fn(_, body) { body() }) -> @view.View {
+  let scoped = fn(draw : (@ui.Ctx) -> Unit) { fn(c : @ui.Ctx) { scope(c, fn() { draw(c) }) } }
   parent.box(fn(v) {
     v.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
     v.pick(fn() {
@@ -13,16 +14,16 @@ fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : 
     }, fn(body, mode) {
       body.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
       if mode == 0 {
-        screen_stage_node(body, fn(c, picture) {
+        screen_stage_node(body, scope~, fn(c, picture) {
           prepare(c)
           s.said.get() |> ignore
           screen_stage(c, s, u, key, picture~)
-        }) |> ignore
+        }).ground(By(fn() { if u.in_tab { @sf.ui_theme_now().color(Faint) } else { 0L } })) |> ignore
       } else {
         body.row(Is(mode == 2)) |> ignore
         body.box(fn(stage) {
           stage.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
-          screen_stage_node(stage, fn(c, picture) {
+          screen_stage_node(stage, scope~, fn(c, picture) {
             prepare(c)
             s.said.get() |> ignore
             u.logs.beside = mode == 2 && flag(s.state, "debug")
@@ -46,20 +47,20 @@ fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : 
           }, fn(pane, shown) {
             if shown {
               pane.width(Is(Some(debug_pane_w))) |> ignore
-              @ui.old(pane, fn(c) {
+              @ui.old(pane, scoped(fn(c) {
                 s.said.get() |> ignore
                 debug_pane(c, s, u)
-              }).over(Is(true)) |> ignore
+              })).over(Is(true)) |> ignore
             }
           })
         } else {
-          @ui.old(body, natural=true, fn(c) {
+          @ui.old(body, natural=true, scoped(fn(c) {
             s.said.get() |> ignore
             if s.driving() && flag(s.state, "poses") {
               c.box(style=debug_tools_bar, fn() { debug_poses(c, s, u) }) |> ignore
             }
             c.box(style=debug_tools_bar, fn() { debug_tools(c, s, u) }) |> ignore
-          }) |> ignore
+          })) |> ignore
         }
       }
     })

@@ -238,3 +238,55 @@ test "retained simulator keeps resizing device input and log pane picture geomet
     assert_eq(screen_simulator_frames(true, platform), original)
   }
 }
+
+///|
+fn screen_tab_frames(retained : Bool, platform : Int, simulator : Bool) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, platform~, in_tab=true,
+    own_bar=Some(@ui.css("w=Full h=S14 bg=Bg")),
+    screen=if simulator { "simulator:device-1" } else { "browser:tab-1" })
+  r.live(others=[])
+  let frames = []
+  for size in [(390.0, 844.0), (844.0, 390.0), (390.0, 844.0)] {
+    r.t.resize(size.0, size.1)
+    r.t.draw()
+    assert_true(r.ui().in_tab)
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+    r.tap_at(0.25, 0.75)
+  }
+  assert_eq(r.told("screen.view").length(), 1)
+  assert_true(r.inputs().length() > 0)
+  screen_done(r.t)
+  frames
+}
+
+///|
+test "retained screen tabs keep their own bar rotation input and simulator viewport" {
+  for platform in [0, 1, 2] {
+    for simulator in [false, true] {
+      assert_eq(screen_tab_frames(true, platform, simulator), screen_tab_frames(false, platform, simulator))
+    }
+  }
+}
+
+///|
+test "a retained screen tab draws its opaque stage ground below the video" {
+  let r = screen_rig(retained=true, in_tab=true)
+  r.live(others=[])
+  let drawn = r.t.drawn_instances()
+  let mut video = false
+  let mut centre = (0.0, 0.0)
+  for a in drawn {
+    if a[5] == 4.0 {
+      video = true
+      centre = (a[0] + a[2] / 2.0, a[1] + a[3] / 2.0)
+    } else if video && a[5] == 0.0 && a[11] == 1.0 {
+      assert_false(a[0] <= centre.0 && a[1] <= centre.1 &&
+        a[0] + a[2] >= centre.0 && a[1] + a[3] >= centre.1,
+        msg="opaque rectangle over video: \{a}")
+    }
+  }
+  assert_true(video)
+  screen_done(r.t)
+}

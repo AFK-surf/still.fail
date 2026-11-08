@@ -63,6 +63,7 @@ fn ftab_place_of(ws : String) -> DriveAt?? {
 ///|
 fn tab_reset() -> Unit {
   panel_screens.clear()
+  panel_screen_nodes.clear()
   panel_screen_pages.clear()
   ftab.building = false
   ftab.places.clear()

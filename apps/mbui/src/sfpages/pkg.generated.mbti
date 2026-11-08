@@ -842,4 +842,4 @@ pub fn settings_node(@settings.Route, @view.View, @settings.Core, () -> @setting
 
 pub fn settings_node_key(@settings.Route) -> String?
 
-pub fn screen_page_node(@view.View, @sfbase.Source, @sfbase.ScreenAt, () -> @sf.PageFrame, on_close? : () -> Unit) -> @view.View
+pub fn screen_page_node(@view.View, @sfbase.Source, @sfbase.ScreenAt, () -> @sf.PageFrame, on_close? : () -> Unit, in_tab? : Bool, own_bar? : () -> @ui.Style?, ground? : () -> Int64, scope? : (@ui.Ctx, () -> Unit) -> Unit) -> @view.View

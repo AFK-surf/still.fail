@@ -40,6 +40,8 @@ fn screen_rig(
   h264? : Bool = false,
   os? : String = "",
   retained? : Bool = false,
+  in_tab? : Bool = false,
+  own_bar? : @ui.Style? = None,
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -142,7 +144,7 @@ fn screen_rig(
         match app.nav.top() {
           Screen(at) => {
             shown.val = Some(at)
-            if !retained { screen_page(c, src, at, @sf.no_frame) }
+            if !retained { screen_page(c, src, at, @sf.no_frame, in_tab~, own_bar~) }
           }
           _ =>
             match shown.val {
@@ -168,7 +170,7 @@ fn screen_rig(
       root.pick(fn() { app.nav.top() }, fn(v, page) {
         v.over(Is(true)) |> ignore
         match page {
-          Screen(at) => screen_page_node(v, src, at, fn() { @sf.no_frame }) |> ignore
+          Screen(at) => screen_page_node(v, src, at, fn() { @sf.no_frame }, in_tab~, own_bar=fn() { own_bar }) |> ignore
           _ => ()
         }
       })
