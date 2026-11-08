@@ -529,10 +529,12 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
       }
       // a press where there is no row (a row's own is the row's): nothing chosen; a right click there, the folder's
       // menu
-      if !row_took(c) {
-        if c.clicked(lid) {
+      c.on_press(lid, fn() {
+        if !row_took(c) {
           b.clear(c, src)
         }
+      })
+      if !row_took(c) {
         match c.menu_asked(lid) {
           Some((x, y)) => @sf.menu(folder_menu(), from=@sf.at_point(x, y))
           None => ()
@@ -850,17 +852,25 @@ pub fn drive_row(
       }
       None => ()
     }
-    if c.clicked(id) || c.clicked(did) {
+    // pressed, it is chosen (a finger's opens it); the second of two clicks opens it; its disclosure, in or out
+    c.on_press(id, fn() {
       held.row_ids = (id, did)
-    }
-    if asked is Some(_) {
-      ()
-    } else if depth is Some(_) && e.dir && c.clicked(did) {
-      on_toggle()
-    } else if c.double_clicked(id) || (finger && c.clicked(id)) {
+      if finger {
+        (row.open)()
+      } else {
+        (row.press)()
+      }
+    })
+    c.on_double_press(id, fn() {
+      held.row_ids = (id, did)
       (row.open)()
-    } else if c.clicked(id) {
-      (row.press)()
+    })
+    // (its disclosure takes a press only where it opens and closes: elsewhere the row's own)
+    if depth is Some(_) && e.dir {
+      c.on_press(did, fn() {
+        held.row_ids = (id, did)
+        on_toggle()
+      })
     }
   }
   let over = c.hovered(id)
@@ -990,17 +1000,18 @@ pub fn drive_row(
             // (there whether shown or not, clear while not: the hand changes no box)
             c.box(style=if shown { more_shown } else { more_clear }, fn() {
               // (round, in the middle of the row's capsule end, concentric with it)
-              if @sf.icon_button(
-                  c,
-                  "more",
-                  key=key + "/menu/more",
-                  size=if compact { more_compact } else { more_size },
-                  on=open,
-                  round=true,
-                  label=@sf.t("web-main.menu.more"),
-                ) {
-                drive_row_menu(key, (row.items)(), Of(more), along=End)
-              }
+              @sf.icon_button(
+                c,
+                "more",
+                key=key + "/menu/more",
+                size=if compact { more_compact } else { more_size },
+                on=open,
+                round=true,
+                label=@sf.t("web-main.menu.more"),
+                on_press=fn() {
+                  drive_row_menu(key, (row.items)(), Of(more), along=End)
+                },
+              ) |> ignore
             })
             |> ignore
           } else {
@@ -1301,7 +1312,7 @@ fn folder_empty(c : @ui.Ctx, upload : (() -> Unit)?) -> Unit {
   c.box(style=empty_box, fn() {
     @sf.icon(c, "folder", size=empty_icon, color=t.p.muted) |> ignore
     match upload {
-      Some(up) => if @sf.button(c, @sf.t("web-pages.drive.upload"), key="files/empty/upload", icon="upload") { up() }
+      Some(up) => @sf.button(c, @sf.t("web-pages.drive.upload"), key="files/empty/upload", icon="upload", on_press=up) |> ignore
       None => ()
     }
   })
