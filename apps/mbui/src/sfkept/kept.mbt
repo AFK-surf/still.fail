@@ -570,6 +570,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"作为文件发送 082940\",\"here\":\"01M5QR8C3QJPYRPMG6HH16S4CW/ee610fc7304bd108beb906de47b317d035d79a7e88d0fb3912094d6f403f4621\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"作为文件发送 082940\",\"here\":\"01M5R2AFYHQX9GJX7EGCWX71AK/9195ff0d5044f43cb492b577a29ad05b5072e7e3968dff72522311ead1470d42\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"作为文件发送 082940\",\"here\":\"01M6HT4D29JYVV6GNVYMJV1WEM/d6c9848be5f6b741c6dfa92882930c0f7f11776d33812c7e8dbd1b1ff6d0759e\"}",{"refs":[]}]
+  #|["words","{\"call\":\"ref.pasted\",\"text\":\"作为文件发送 082940\",\"here\":\"01M6WEPVRNJNW4JT9BP3ZCMPTP/f3370c54636dfc1a8ed06e9c1cd960ed49ffc1bd13998150a516ee656b3a3ca7\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"你好\",\"here\":\"01M5FDBVD5RF42KAAZ76EXFCP9/bc23842577592a2ae8d4514dc380e5fcf6f188fc3b6e6cb8313ea47acd9bd572\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"你好\",\"here\":\"01M5P67WCK94QRXXVWKDS8M6EE/a9e7a272167cad91ca8e29b8ff578aaaf4f335bf5b2712bcf0f6b4e5e293b2ae\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"你好\",\"here\":\"01M5Q1T3TEPFT5PWB2C6QK6ZBK/7d72667ab8025d151abaf91ba9fad7400529675ad45bba9d420cbd67b17ce310\"}",{"refs":[]}]
