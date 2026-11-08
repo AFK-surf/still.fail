@@ -446,6 +446,17 @@ export class Cloud {
     return s && s.workspace && !this.removed() ? s.workspace : null;
   }
 
+  private homeMembership(s: CloudState): Membership {
+    return { workspace: s.workspace, workspace_name: s.workspace_name, name: s.name, peers: s.peers, revocations: s.revocations, home: true };
+  }
+
+  private joinedMembership(j: Joined, home: string): Membership | null {
+    if (j.workspace === home || this.leftOut(j.workspace) !== null) return null;
+    const own = this.locked(j.workspace);
+    const peers = own === null ? j.peers : j.peers.filter((p) => own.state !== null && typeof p?.id === "string" && own.state.stations.has(p.id));
+    return { ...j, peers, home: false };
+  }
+
   /// Every workspace the station is in now, its home one first. A joined workspace with a
   /// lock counts once this station pinned it (until then it waits: joining it said which to pin), its roster only the
   /// stations that lock names. A locked station is in locked workspaces only: an unlocked one's members are the control
@@ -453,14 +464,11 @@ export class Cloud {
   memberships(): Membership[] {
     const s = this.state;
     if (s === null || !s.workspace || this.removed()) return [];
-    const home: Membership = { workspace: s.workspace, workspace_name: s.workspace_name, name: s.name, peers: s.peers, revocations: s.revocations, home: true };
     const joined = (s.joined ?? []).flatMap((j): Membership[] => {
-      if (j.workspace === s.workspace || this.leftOut(j.workspace) !== null) return [];
-      const own = this.locked(j.workspace);
-      const peers = own === null ? j.peers : j.peers.filter((p) => own.state !== null && typeof p?.id === "string" && own.state.stations.has(p.id));
-      return [{ ...j, peers, home: false }];
+      const membership = this.joinedMembership(j, s.workspace);
+      return membership === null ? [] : [membership];
     });
-    return [home, ...joined];
+    return [this.homeMembership(s), ...joined];
   }
 
   /// Why a workspace this station joined is none it takes members of now (`memberships` leaves it out): the lock joining
@@ -478,7 +486,11 @@ export class Cloud {
 
   /// The station in `workspace`, if it is in it now.
   membership(workspace: string): Membership | null {
-    return this.memberships().find((m) => m.workspace === workspace) ?? null;
+    const s = this.state;
+    if (s === null || !s.workspace || this.removed()) return null;
+    if (workspace === s.workspace) return this.homeMembership(s);
+    const joined = (s.joined ?? []).find((j) => j.workspace === workspace);
+    return joined === undefined ? null : this.joinedMembership(joined, s.workspace);
   }
 
   /// still.fail's relays, ours first, as `relays()` in the Rust station: `relay_urls`, else `relay_url`; what is no URL

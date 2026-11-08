@@ -448,6 +448,7 @@ test("a station in a second workspace pins that one's lock there: none of its me
   // for, and not pinned, as it does not name this station.
   applyState(cloud, frame([inB]), (f) => sent.push(f));
   assert.deepEqual(ws(), [WS]);
+  assert.equal(cloud.membership(B), null, "a named workspace with an unpinned lock is not admitted");
   assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
   applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first] }));
   assert.equal(cloud.locked(B), null);
@@ -464,6 +465,7 @@ test("a station in a second workspace pins that one's lock there: none of its me
   assert.ok(existsSync(joinedLockPath(cloud.data, B)) && !existsSync(joinedPendingPath(cloud.data, B)));
   assert.deepEqual(ws(), [WS, B]);
   assert.deepEqual(cloud.membership(B)!.peers.map((p) => p.id), [b.stations[0]!.hex], "the stations B's lock names only");
+  assert.deepEqual(cloud.membership(B), cloud.memberships().find((m) => m.workspace === B), "single and full roster agree after pinning");
   // B's members: with B's lock's keys, on devices it names, as it says.
   const endpoint = ed().hex;
   const keys = (x: string) => cloud.grantKeys(x === WS ? null : x);

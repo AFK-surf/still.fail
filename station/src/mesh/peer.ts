@@ -9,7 +9,7 @@
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
-import { BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
+import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
 import { Reader } from "./serve.ts";
@@ -33,8 +33,19 @@ const SLOW_MS = 10_000;
 export function member(cloud: Cloud, peer: string, workspace: string | null): string {
   if (!cloud.peersCurrent) throw new Error("workspace peer roster is not current; waiting for the control plane");
   const s = cloud.state;
-  const all = cloud.memberships();
-  const of = workspace === null ? (all.find((m) => m.peers.some((p) => p?.id === peer)) ?? all[0]) : cloud.membership(workspace);
+  let of;
+  if (workspace === null) {
+    // Home is first in the roster. A home peer needs no lock or roster checks in unrelated joined workspaces.
+    const home = cloud.home();
+    const first = home === null ? null : cloud.membership(home);
+    if (first !== null && first.peers.some((p) => p?.id === peer)) of = first;
+    else {
+      const all = cloud.memberships();
+      of = all.find((m) => m.peers.some((p) => p?.id === peer)) ?? all[0];
+    }
+  } else {
+    of = cloud.membership(workspace);
+  }
   if (s === null || of === undefined || of === null) throw new Error("station is outside this workspace");
   if (!of.peers.some((p) => p?.id === peer) || peer === s.station) throw new Error("peer is not another station in this workspace");
   return of.workspace;
@@ -101,7 +112,10 @@ class Incoming implements AsyncIterableIterator<Buffer> {
 /// fail on the way (a file that changed while it was read, the other end gone).
 async function sendBytes(stream: Stream, bytes: Bytes): Promise<void> {
   try {
-    for await (const piece of bytes) await within(IDLE_MS, stream.write(piece), "the other station took nothing for 30 s");
+    for await (const piece of bytes) {
+      bytes[CHECK_BYTES]?.();
+      await within(IDLE_MS, stream.write(piece), "the other station took nothing for 30 s");
+    }
     await stream.finish();
   } catch (error) {
     await stream.reset(FAILED).catch(() => {});
@@ -338,6 +352,10 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
       const r = asked as { method?: unknown; session?: unknown; key?: unknown } | null;
       log.warn("mesh", "peer request answered slowly", { peer: peer.slice(0, 12), method: String(r?.method ?? ""), session: String(r?.session ?? ""), key: String(r?.key ?? ""), ms });
     }
+    // A guarded answer may have become unauthorized since its handler returned. Do not send its head (including the
+    // body size) either; after the head, sendBytes checks again immediately before each body write.
+    try { outgoing?.[CHECK_BYTES]?.(); }
+    catch (error) { answer = { error: (error as Error).message }; outgoing = null; }
     try {
       await stream.write(Buffer.from(JSON.stringify(answer) + (bytes ? "\n" : "")));
       if (outgoing !== null) await sendBytes(stream, outgoing);
