@@ -337,6 +337,24 @@ const PARTS: Record<string, Part> = {
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
     },
   },
+  // The station's reader in MoonBit (station/mb: read/mb-reader.ts), linked to the shell's static library (the
+  // shell-apple part's, its key in this one's). The Mac's for now; elsewhere the station keeps the worker it replaces.
+  reader: {
+    files: () => ["stillfail-reader"],
+    targets: ["darwin-arm64"],
+    env: "STILLFAIL_MB_READER",
+    rust: false,
+    inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
+      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/moon.mod",
+      ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
+    recipe: (t) => ({ moon: "native release", shell: key("shell-apple", t) }),
+    build(t, out) {
+      if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") throw new Error("the reader is built on an Apple Silicon Mac");
+      const shell = ensure("shell-apple", t);
+      run("bash", [join(ROOT, "station/mb/build.sh")], { env: { ...process.env, SHELL_LIB: join(shell, "libstillfail_shell.a") } });
+      copyFileSync(join(ROOT, "station/mb/_build/native/release/build/station/reader/reader.exe"), join(out, "stillfail-reader"));
+    },
+  },
   // The core's shell for the mbui app on Apple (scripts/core.sh shell's): the crate as a static library, with what it
   // needs of the system (rustc's native-static-libs), for macOS (rustc's oldest, 11.0, below the app's 12.0) and iOS (17.0, a
   // device's and the simulator's). Built on a Mac by CI's natives job, fetched by the mbui app's builds: built in each

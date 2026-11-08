@@ -35,6 +35,7 @@ import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_LETTER_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
+import { MbReader, type ReaderLike, mbReaderBinary } from "./mb-reader.ts";
 import { wall } from "../ops/fibers.ts";
 import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
@@ -44,7 +45,7 @@ const IDLE_MS = 60_000;
 const SLOW_MS = 2_000;
 
 /// `held`: the read it is answering, if any.
-type Slot = { worker: Worker; held: Asked | null; idle?: () => void; retiring?: boolean };
+type Slot = { worker: ReaderLike; held: Asked | null; idle?: () => void; retiring?: boolean };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
@@ -150,6 +151,9 @@ export class Readers {
   private readonly backfill: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
+  /// The MoonBit reader's program (read/mb-reader.ts), which writes the store's log into it (`log`); none: a worker
+  /// does, as it does every other read (and with a worker of its own given, `workerFile`, that one).
+  mbReader: string | null;
   /// What only the hub knows, given to every read: sessions' process states and client keys (the hub sets these).
   processes: () => Map<string, string> = () => new Map();
   clientKeys: () => Map<string, string> = () => new Map();
@@ -158,6 +162,7 @@ export class Readers {
   constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL, tellers = 1, backfill: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
     this.data = data;
     this.workerFile = workerFile;
+    this.mbReader = workerFile === undefined ? mbReaderBinary() : null;
     this.backfill = backfill;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
     // Two: one a background page (a history brought on, a stretch filled) may hold, one left for a page someone waits on.
@@ -177,7 +182,8 @@ export class Readers {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
-    const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const worker: ReaderLike = line === this.log && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
+      : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
     const begun = wall.now();
     worker.on("message", (answer: Answer | Ready) => {

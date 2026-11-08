@@ -1185,6 +1185,20 @@ impl Inner {
                 sqls.insert(id, (path, conn));
                 Ok(json!({ "id": id }))
             }
+            // A database another process keeps (the station's, by its path) and writes as well: never made here, never
+            // held for this process alone, waited for `wait` ms when it is busy.
+            "sql.attach" => {
+                let path = PathBuf::from(str_of(a, "path")?);
+                let wait = a.get("wait").and_then(Value::as_u64).unwrap_or(0);
+                let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+                let conn = rusqlite::Connection::open_with_flags(&path, flags).map_err(err)?;
+                conn.busy_timeout(std::time::Duration::from_millis(wait)).map_err(err)?;
+                conn.set_prepared_statement_cache_capacity(256);
+                conn.execute_batch("PRAGMA synchronous = NORMAL;").map_err(err)?;
+                let id = self.next.fetch_add(1, Ordering::Relaxed);
+                sqls.insert(id, (None, conn));
+                Ok(json!({ "id": id }))
+            }
             "sql.delete" => {
                 let name = str_of(a, "name")?;
                 let path = self.dir.join("databases").join(format!("{name}.db"));
@@ -1219,6 +1233,9 @@ impl Inner {
                     "sql.all" => {
                         let mut statement = conn.prepare_cached(sql).map_err(err)?;
                         let columns = statement.column_count();
+                        // `named`: the columns' names beside the rows ({columns, rows}), as the station's reads give them.
+                        let names: Option<Vec<String>> = a.get("named").and_then(Value::as_bool).unwrap_or(false)
+                            .then(|| statement.column_names().into_iter().map(String::from).collect());
                         let mut rows = statement.query(rusqlite::params_from_iter(sql_params(a))).map_err(err)?;
                         let mut out = Vec::new();
                         while let Some(row) = rows.next().map_err(err)? {
@@ -1234,7 +1251,10 @@ impl Inner {
                             }
                             out.push(Value::Array(values));
                         }
-                        Ok(Value::Array(out))
+                        Ok(match names {
+                            Some(columns) => json!({ "columns": columns, "rows": out }),
+                            None => Value::Array(out),
+                        })
                     }
                     _ => Err(format!("no operation {op}")),
                 }
@@ -1847,6 +1867,29 @@ mod tests {
         let id = serde_json::from_str::<Value>(&answer(call + 4).0).unwrap()["id"].as_u64().unwrap();
         shell.call(call + 5, "zstd.push".into(), format!(r#"{{"id":{id}}}"#).as_bytes(), Some(b"not zstd at all".to_vec()));
         assert_ne!(answer(call + 5).1, "");
+    }
+
+    #[test]
+    fn attaches_a_database_another_process_keeps() {
+        let dir = TempDir::new();
+        let path = dir.path().join("station.db");
+        // the station's own connection, in WAL, holding it while the shell's is open beside it
+        let station = rusqlite::Connection::open(&path).unwrap();
+        station.execute_batch("PRAGMA journal_mode = WAL; CREATE TABLE t (k TEXT, n INTEGER); INSERT INTO t VALUES ('a', 1);").unwrap();
+        let shell = Shell::start(dir.path().join("shell"), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        let at = serde_json::to_string(&path.display().to_string()).unwrap();
+        let id = sync("sql.attach", &format!(r#"{{"path":{at},"wait":0}}"#))["value"]["id"].as_u64().unwrap();
+        let rows = sync("sql.all", &format!(r#"{{"id":{id},"sql":"SELECT k, n FROM t","named":true}}"#));
+        assert_eq!(rows["value"], json!({ "columns": ["k", "n"], "rows": [["a", 1]] }));
+        // both write: neither holds it for itself
+        station.execute("INSERT INTO t VALUES ('b', 2)", []).unwrap();
+        let checkpoint = sync("sql.all", &format!(r#"{{"id":{id},"sql":"PRAGMA wal_checkpoint(PASSIVE)","named":true}}"#));
+        assert_eq!(checkpoint["value"]["columns"], json!(["busy", "log", "checkpointed"]));
+        // a path with no database is not made one
+        let missing = serde_json::to_string(&dir.path().join("none.db").display().to_string()).unwrap();
+        assert!(sync("sql.attach", &format!(r#"{{"path":{missing}}}"#))["error"].is_string());
+        assert!(!dir.path().join("none.db").exists());
     }
 
     #[test]

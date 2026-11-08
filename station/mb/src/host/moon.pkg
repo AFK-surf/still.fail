@@ -1,0 +1,9 @@
+import {
+  "mbui/effect",
+  "station/wire",
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  "native-stub": ["host.c"],
+)
