@@ -390,7 +390,14 @@ export class CommaSurface extends ConnectedSurface {
         try {
           answer = await this.ask(method, page);
         } catch (error) {
-          if ((error as Error).message !== "rate_limited") return;
+          const reason = (error as Error).message;
+          if (reason !== "rate_limited") {
+            // Only report known Comma codes; a peer's other text can contain private data.
+            if (live()) log.info("comma", "an index was not sent", { connect: this.id, method,
+              error: ["invalid_page", "page_too_large", "too_many_rows", "too_many_tasks", "not_this_group",
+                "station_connection_changed"].includes(reason) ? reason : "no answer or unrecognized refusal" });
+            return;
+          }
           await wall.sleep(1000);
           continue;
         }
