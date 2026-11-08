@@ -17,7 +17,7 @@ import { topicKey, type Topic } from "../protocol.ts";
 import { CLOUD } from "../status.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { equal, isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
-import type { LockClaim } from "../lock.ts";
+import { CARRY_BYTES, type LockClaim } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
 
@@ -445,7 +445,10 @@ export class CloudSync {
   /// (it lists the devices for a lock's owner to check) and to the station with the credential.
   credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null = null): Effect.Effect<Credential, CoreError> {
     const entries = claim === null ? null : (this.carry?.(workspace) ?? null);
-    const person = claim === null ? null : (this.carryPerson?.(workspace) ?? null);
+    // (both, only as they fit a station's head together: the entries then, which a station that has not heard of this
+    // device yet needs to let it in at all)
+    const chain = claim === null ? null : (this.carryPerson?.(workspace) ?? null);
+    const person = chain !== null && entries !== null && JSON.stringify(entries).length + JSON.stringify(chain).length > CARRY_BYTES ? null : chain;
     const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
     return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
   }
