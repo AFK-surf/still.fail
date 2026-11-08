@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, onBoundPerson, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -349,8 +349,10 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const failed: { ws: string; error: string }[] = [];
       for (const sub of subs) {
         const added = yield* Effect.result(inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label }, t("core-misc.personal.reason.add"), seed));
-        if (added._tag === "Success") chains[sub] = added.success;
-        else failed.push({ ws: personOf(sub), error: added.failure.message });
+        if (added._tag === "Success") {
+          chains[sub] = added.success;
+          yield* putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey });
+        } else failed.push({ ws: personOf(sub), error: added.failure.message });
       }
       return { t: "approved", workspaces: Object.keys(chains).map(personOf), failed, chains };
     }
@@ -887,7 +889,8 @@ export function personalBegin(inner: Inner, subs: string[]): Effect.Effect<unkno
     if (before) drop(before);
     const y = trying(inner, subs.map(personOf));
     const trusted = [...new Set(subs.flatMap((sub) => personal.approvers(sub).map((d) => d.id)))];
-    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: null, personal: { subs, key } };
+    // (the key it signs the workspaces' locks with: a device on the person's lock puts it in those where they bound it)
+    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: signerOf(inner), personal: { subs, key } };
     y.searching = true;
     inner.runner.fork(
       Effect.gen(function* () {
