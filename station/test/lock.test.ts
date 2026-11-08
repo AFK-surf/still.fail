@@ -12,7 +12,7 @@ import { type Entry, admit, apply, canonical, devicesFor, endpointBytes, entryHa
 import { applyState } from "../src/cloud/presence.ts";
 import { Cloud, writeState } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
-import { inLock, inLockBringing, lockRoute } from "../src/mesh/serve.ts";
+import { inLock, inLockBringing, lockRoute, personChainsOf, stillIn } from "../src/mesh/serve.ts";
 import { GrantKey } from "./fake-control-plane.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -679,6 +679,52 @@ test("a hello bringing its person's own lock is let in on it where its member bo
   assert.throws(() => inLockBringing(restarted, admitted(phone.base), "member", endpoint, { lock: { person: next.slice(0, 4) } }), LockRefusal);
   // Another's lock is not told here, nor one that was not bound.
   assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), { ...viewer, sub: "alice" } as any)[0], 409);
+});
+
+test("bound to a lock of their own, a member's app devices are let in only as they are on it, a web page still by its entry", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const owner = ed().hex;
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { sub: "alice", email: "", name: "", role: "owner", workspace: WS, device: owner, lockDevice: { base: w.alice.base.hex, proof: w.alice.base.sign(endpointBytes(WS, owner)) } } as any)[0], 200);
+  const entry = (chain: Entry[], kind: string, body: unknown, key: Key) => {
+    const last = chain[chain.length - 1];
+    chain.push(signed({ v: 1, ws: "person:carol", seq: chain.length, prev: last ? entryHash(last) : null, at: 1000, kind, body }, key));
+  };
+  // carol's device of the workspace's lock is the first of her own; her tablet, also in the workspace's lock, is not on it.
+  const own = ed(), tablet = { signer: ed(), base: ed() }, web = ed();
+  const now = Math.floor(Date.now() / 1000);
+  const chain: Entry[] = [];
+  entry(chain, "genesis", { sub: "carol", device: { key: own.id, id: w.carol.base.hex, label: "first" } }, own);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "device", { id: tablet.base.hex, sub: "carol", kind: "app", label: "tablet", sign_key: tablet.signer.id }, now), w.carol.signer)]);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "device", { id: web.hex, sub: "carol", kind: "web", label: "web", exp: now + 86400 }, now), w.carol.signer)]);
+  const endpoint = ed().hex;
+  const admitted = (base: Key) => ({ viewer: { sub: "carol", email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: base.hex, proof: base.sign(endpointBytes(WS, endpoint)) } }, exp: 4102444800 }) as any;
+  // Not bound: each by its entry.
+  assert.equal(inLockBringing(cloud, admitted(tablet.base), "member", endpoint, {}).viewer.role, "member");
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "person", { sub: "carol", person: entryHash(chain[0]!) }, now), w.carol.signer)]);
+  // Bound: the tablet, not on her own lock, is no longer let in on its entry; nor her first, until the lock is heard.
+  assert.throws(() => inLockBringing(cloud, admitted(tablet.base), "member", endpoint, { lock: { person: [...chain] } }), LockRefusal);
+  assert.throws(() => inLockBringing(cloud, admitted(w.carol.base), "member", endpoint, {}), LockRefusal);
+  assert.equal(inLockBringing(cloud, admitted(w.carol.base), "member", endpoint, { lock: { person: [...chain] } }).viewer.role, "member");
+  // Heard once: an older client that brings none is let in on what was heard.
+  const kept = inLockBringing(cloud, admitted(w.carol.base), "member", endpoint, {});
+  assert.equal(kept.viewer.role, "member");
+  // A web page holds no key of her own lock: by its entry still.
+  assert.equal(inLockBringing(cloud, admitted(web), "member", endpoint, {}).viewer.role, "member");
+  // Taken off her own lock (another device of hers on it now): the connection already in is no longer, and the station
+  // is told as the chain grows.
+  const other = { key: ed(), base: ed() };
+  entry(chain, "device", { key: other.key.id, id: other.base.hex, label: "other" }, own);
+  entry(chain, "device.remove", { key: own.id }, other.key);
+  let told = 0;
+  const stop = personChainsOf(cloud).listen(() => told++);
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: [...chain] })), kept.viewer)[0], 200);
+  stop();
+  assert.equal(told, 1);
+  assert.throws(() => stillIn(cloud, kept, "member", endpoint), LockRefusal);
+  // One let in on her own lock alone stays in as it is on it.
+  const otherIn = inLockBringing(cloud, admitted(other.base), "member", endpoint, { lock: { person: [...chain] } });
+  assert.equal(stillIn(cloud, otherIn, "member", endpoint).viewer.role, "member");
 });
 
 test("a device brings what put it in the lock to a station that has not heard of it yet, taken only as any entry is", () => {

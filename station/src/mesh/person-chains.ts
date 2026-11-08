@@ -17,6 +17,7 @@ const same = (a: unknown, b: unknown) => {
 export class PersonChains {
   readonly #kept = new Map<string, unknown[]>();
   readonly #path: string | null;
+  readonly #told = new Set<() => void>();
 
   constructor(path: string | null = null) {
     this.#path = path;
@@ -36,14 +37,28 @@ export class PersonChains {
     return longer;
   }
 
-  /// Checked and let in on it: kept, when it is more than was.
+  /// The longest heard of the lock: none, none heard.
+  kept(genesis: string): unknown[] | null {
+    return this.#kept.get(genesis) ?? null;
+  }
+
+  /// Checked and let in on it: kept, when it is more than was; then whoever listens told (a device taken off it may be
+  /// connected still).
   keep(genesis: string, chain: unknown[]): void {
     if (this.#kept.get(genesis)?.length === chain.length) return;
     this.#kept.set(genesis, chain);
-    if (this.#path === null) return;
-    mkdirSync(dirname(this.#path), { recursive: true });
-    const temp = `${this.#path}.tmp`;
-    writeFileSync(temp, JSON.stringify(Object.fromEntries(this.#kept)), { mode: 0o600 });
-    renameSync(temp, this.#path);
+    if (this.#path !== null) {
+      mkdirSync(dirname(this.#path), { recursive: true });
+      const temp = `${this.#path}.tmp`;
+      writeFileSync(temp, JSON.stringify(Object.fromEntries(this.#kept)), { mode: 0o600 });
+      renameSync(temp, this.#path);
+    }
+    for (const f of [...this.#told]) f();
+  }
+
+  /// Told each time a chain kept grows; returns what stops it.
+  listen(f: () => void): () => void {
+    this.#told.add(f);
+    return () => void this.#told.delete(f);
   }
 }
