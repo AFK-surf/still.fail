@@ -409,6 +409,9 @@ export class StationsSync {
         // so its failed range read is asked again, independently of whether the catch-up read brings anything new.
         this.#core.store.invalidate(topic);
       }
+      // A history shown: its first read may have failed while the stream was away, and a station that follows the
+      // sessions at work tells nothing of one at rest, so it would wait for ever.
+      else if (topic.topic === "live" && this.#links.get(address)?.followsRunning === true) this.channels.bring(transcriptOf(address, String(topic.key)), Priority.shown, "latest");
       else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }

@@ -3052,6 +3052,32 @@ test("an_agent_used_lately_has_its_whole_history_brought_in_the_background_one_n
   core.close();
 });
 
+test("a_history_opened_while_its_station_is_away_is_read_as_its_stream_goes_on", async () => {
+  // A station that follows the sessions at work itself, its stream going on from where it was (an update of the station,
+  // a phone waking): a history opened meanwhile, of a session at rest the device holds nothing of, is read then.
+  const answers: J = base();
+  const timeline = "GET /sessions/k1/timeline?before=1000000000000000&limit=200&brief=1";
+  delete answers[timeline];
+  const s = await ui(answers, (st) => ((st.gate.follows = true), (st.gate.resumes = true), (st.gate.marks = true)));
+  const { host, core, read, gate } = s;
+  await read();
+  gate.stream = "fail";
+  s.end();
+  await host.time.pass(50, 10);
+  // Its read fails while the station is away (as one over a link that is gone does).
+  answers[timeline] = status(502, { error: "away" });
+  core.receive(s.ui, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  assert.deepEqual([liveOf(core).offline, liveOf(core).timeline], [true, []]);
+  answers[timeline] = { start: 0, entries: ["a", "b"], end: 2 };
+  gate.stream = "open";
+  await host.time.pass(RECONNECT_MAX_MS + 50, 50);
+  await read();
+  await read();
+  assert.deepEqual([liveOf(core).loaded, liveOf(core).timeline], [true, ["a", "b"]]);
+  core.close();
+});
+
 test("an_agent_at_rest_says_what_it_used_and_what_can_be_done_to_its_context_as_its_summary_says_now", async () => {
   const answers: J = base();
   const used = { modelCalls: 4, inputTokens: 1000, cachedTokens: 900, outputTokens: 20, model: "claude-opus-5-5", contextTokens: 300, contextWindow: null, cost: 1.5, unpricedCalls: 0 };
