@@ -335,7 +335,8 @@ fn flag(name : String) -> String? {
 /// A builder of old state, as a builder worker is (read/requested-builder.ts): each line asks for a batch of `scope`
 /// (`{"scope": "all"}`; one with `cancel` is let go), each answer says whether all is done, or why not. A database busy
 /// with another's write is no error: the batch is asked again. The pool takes the backfill permit around each ask.
-/// `step`: one batch of what it builds for what it was asked (None: what it does not build; `name`, said then).
+/// `step`: one batch of what it builds for what it was asked (None: what it does not build; `name`, said then). A
+/// store it leaves to the worker (`@legacy.Fallback`) is answered `{"fallback": true}`.
 async fn builder(host : @host.Host, db_path : String, name : String, step : (@sql.Db, Json) -> Bool? raise) -> Unit {
   let db = @sql.Db::attach(host, db_path, wait=250)
   db.exec("PRAGMA synchronous = NORMAL")
@@ -353,6 +354,7 @@ async fn builder(host : @host.Host, db_path : String, name : String, step : (@sq
         None => { "done": false, "error": Json::string("invalid \{name} preparation request") }
       }
     } catch {
+      @legacy.Fallback => { "fallback": true }
       e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
     }
     host.say(answer.stringify())
@@ -389,6 +391,16 @@ fn main {
     (Some("people-since"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "people-time", (db, ask) => match ask {
         { "thread": Number(thread, ..), .. } => Some(@lookups.people_step(db, thread.to_int64()))
+        _ => None
+      }))
+    (Some("legacy-edits"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "legacy edits", (db, ask) => match ask {
+        { "thread": Number(_, ..), .. } => Some(@legacy.edits_step(db))
+        _ => None
+      }))
+    (Some("legacy-said"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "legacy said", (db, ask) => match ask {
+        { "thread": Number(_, ..), .. } => Some(@legacy.said_step(db))
         _ => None
       }))
     (Some("outflow-chats"), Some(db), _) =>
@@ -484,7 +496,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said --db <file>")
       2
     }
   }
