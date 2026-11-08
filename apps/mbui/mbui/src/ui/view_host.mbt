@@ -3751,11 +3751,19 @@ fn view_key(code : Int, mods : Int) -> Bool {
     .fold(init=-3, fn(a, b) { if b > a { b } else { a } })
   // (where the focus is in the tree: its node, or the one an old view's stop or field with it is hosted in)
   let held = focus_node_of(c.focus)
+  // (a modal layer of the tree's over where the focus is (one that leaves it in a field under it: a panel that does
+  // not take it) and over the old frame's layers that take the keys: the keys the field does not take its, before
+  // theirs)
+  let modal = tree.modal_stack()
+  let under_modal = match held {
+    Some(nid) => modal > tree.stack_of(nid)
+    None => false
+  }
   let over = match held {
     Some(nid) => tree.stack_of(nid) > old_keys
     None => false
   }
-  if old_keys > -3 && !over {
+  if old_keys > -3 && !over && !(under_modal && modal > old_keys) {
     return false
   }
   // (a field's in none of the tree: the old frame's)
