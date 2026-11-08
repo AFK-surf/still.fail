@@ -8,4 +8,5 @@ export class SessionListBuilder extends RequestedBuilder<string> {
   }
 
   readyIndex(signal?: AbortSignal): Promise<void> { return this.ready(["all"], signal); }
+  readySearch(signal?: AbortSignal): Promise<void> { return this.ready(["search"], signal); }
 }

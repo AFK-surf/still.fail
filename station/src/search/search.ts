@@ -11,6 +11,7 @@ import { type Asker, type Group, terms } from "./match.ts";
 import type { FileSearch } from "./files.ts";
 import type { Answered, Told } from "./worker.ts";
 import { SearchScopeBuilder } from "./scope-builder.ts";
+import { SessionListBuilder } from "../read/session-list-builder.ts";
 
 /// How long a search may take before it is answered with nothing.
 const QUERY_MS = 30_000;
@@ -26,6 +27,8 @@ export class Search {
   #closed = false;
   readonly #scope: SearchScopeBuilder;
   #preparingScope: Promise<void> | null = null;
+  readonly #sessionList: SessionListBuilder;
+  #preparingSessions: Promise<void> | null = null;
   /// The machine's files (none: not searched here).
   #files: FileSearch | null;
 
@@ -33,6 +36,7 @@ export class Search {
     this.#data = options.data;
     this.#files = options.files ?? null;
     this.#scope = new SearchScopeBuilder(join(options.data, "stillfail.db"), options.backfill);
+    this.#sessionList = new SessionListBuilder(join(options.data, "stillfail.db"), options.backfill);
   }
 
   start(): void {
@@ -49,6 +53,7 @@ export class Search {
     this.#worker = worker;
     worker.on("message", (answer: Answered) => {
       if ("scopePending" in answer) { if (!this.#closed) this.#prepareScope(); return; }
+      if ("sessionListPending" in answer) { if (!this.#closed) this.#prepareSessions(); return; }
       const waiter = this.#waiting.get(answer.id);
       if (!waiter) return;
       this.#waiting.delete(answer.id);
@@ -91,6 +96,15 @@ export class Search {
     }).finally(() => { if (this.#preparingScope === pending) this.#preparingScope = null; });
   }
 
+  #prepareSessions(): void {
+    if (this.#preparingSessions !== null) return;
+    const pending = this.#sessionList.readySearch();
+    this.#preparingSessions = pending;
+    void pending.catch((error: unknown) => {
+      if (!this.#closed) log.warn("search", "the session list could not be prepared", { error: (error as Error).message });
+    }).finally(() => { if (this.#preparingSessions === pending) this.#preparingSessions = null; });
+  }
+
   #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
     const worker = this.#worker ?? this.#spawn();
     if (!worker) return Promise.reject(new Error("the search is stopped"));
@@ -109,7 +123,7 @@ export class Search {
 
   async stop(): Promise<void> {
     this.#closed = true;
-    await Promise.all([this.#worker?.terminate(), this.#scope.close()]);
+    await Promise.all([this.#worker?.terminate(), this.#scope.close(), this.#sessionList.close()]);
     this.#worker = null;
   }
 }
