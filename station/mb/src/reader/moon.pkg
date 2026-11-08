@@ -20,6 +20,7 @@ import {
   "station/legacy",
   "station/counts",
   "station/activity",
+  "station/jobs",
   "moonbitlang/core/json",
 }
 

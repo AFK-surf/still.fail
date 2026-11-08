@@ -418,6 +418,10 @@ fn main {
         { "kind": "legacy-said", .. } => Some(@legacy.said_maintenance(db))
         { "kind": "legacy-edits", .. } => Some(@legacy.edits_maintenance(db))
         { "kind": "legacy-policy", .. } => Some(@legacy.policy_step(db))
+        { "kind": "process-jobs", .. } => {
+          @jobs.install(db)
+          Some(@jobs.step(db))
+        }
         { "kind": "legacy-agent", .. } => Some(@legacy.agent_maintenance(db))
         { "kind": "legacy-login", .. } => Some(@legacy.login_cards_maintenance(db))
         { "kind": "page-letter-gc", .. } => {
