@@ -65,7 +65,7 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 
 ///|
 /// The chat `r` in the pane (ChatPage.tsx ChatScreen).
-fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, side? : Bool = true) -> Unit {
   let chat = (src.topic)("chat", chat_params(r)).value
   let view = view_of_chat(src, r).0
   let key = chat_key(r)
@@ -87,7 +87,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
     None => ()
   }
   c.box(style=chat_ground, fn() {
-    with_side(c, src, w, r, view, fn() {
+    let talk = fn() {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
         chat_talk(c, src, w, r, pane, fn() {
@@ -101,7 +101,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         })
       })
       |> ignore
-    })
+    }
+    if side { with_side(c, src, w, r, view, talk) } else { talk() }
   })
   |> ignore
   // the new chat it became leaving over it, or one left for it fading over it (newchat.mbt)

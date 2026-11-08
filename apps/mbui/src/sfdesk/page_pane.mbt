@@ -213,6 +213,13 @@ fn pane_made(
     )
   }
   match page {
+    Chat(r) => Some(("chat/" + chat_key(r), fn(v, _page, _under, _stint, k) {
+      v.pick(fn() { @sfbase.workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(p, _id) {
+        guard @sfbase.workspace_in_view(src).0 is Some(w) else { return }
+        pane_made_host(p, src, k, old_content=true)
+        chat_page_node(p, src, w, r)
+      })
+    }))
     Place(name) =>
       match @settings.route_of(name) {
         Some(r) if @sfpages.settings_node_key(r) is Some(_) =>
@@ -245,7 +252,7 @@ pub let pane_makes : Ref[Bool] = Ref(true)
 /// system's bars, while its entry shows (fold_goes' `made` by its entry, `shown`). Nothing in it moves of its own for
 /// what moves the page (a keyboard, the block): no motion of the old view's is in it to be scoped to its foot
 /// (@motion.scope's), its own (the update's bar's room) bound to its cause.
-fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
+fn pane_made_host(p : @view.View, src : Source, k : Int, old_content? : Bool = false) -> Unit {
   p
   .grow(Is(1.0))
   .min_height(Is(Some(0.0)))
@@ -259,15 +266,16 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
     }
   }))
   |> ignore
-  context_node(p)
-  fold_goes.made[k] = p
-  p.owns(fn() {
-    match fold_goes.made.get(k) {
-      Some(v) if v.id() == p.id() => fold_goes.made.remove(k)
-      _ => ()
-    }
-  })
-  |> ignore
+  if !old_content {
+    context_node(p)
+    fold_goes.made[k] = p
+    p.owns(fn() {
+      match fold_goes.made.get(k) {
+        Some(v) if v.id() == p.id() => fold_goes.made.remove(k)
+        _ => ()
+      }
+    }) |> ignore
+  }
   p.show(fn() { @ui.window_inset() }, fn(t) {
     t
     .over(Is(true))

@@ -1,4 +1,40 @@
 ///|
+fn chat_screen_panel_frames(retained : Bool) -> (Array[Array[Double]], Array[Json]) raise {
+  new_run()
+  let previous = @sfdesk.pane_makes.val
+  defer { @sfdesk.pane_makes.val = previous }
+  @sfdesk.pane_makes.val = retained
+  let base = fixture("chat-screen-tab")
+  @sfpages.open_screen_fixture("chat-screen-tab")
+  let inputs : Array[Json] = []
+  let src : Source = { ..base, call: fn(name, params, done) {
+    if name == "screen.input" { inputs.push(params) }
+    (base.call)(name, params, done)
+  } }
+  open_chat(screens_chat)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.stream_fed(1).length() > 0, msg="screen decoder opened, retained=\{retained}")
+  t.stream_shows(1, 1000.0, 1280, 720)
+  let frames : Array[Array[Double]] = []
+  for size in [(1440.0, 900.0), (1000.0, 700.0), (1440.0, 900.0)] {
+    t.resize(size.0, size.1)
+    t.run_for(@ui.move_most_ms)
+    let frame = t.drawn_instances().iter().find_first(fn(a) { a[5] == 4.0 && a[2] > 100.0 && a[3] > 100.0 }).unwrap()
+    frames.push([frame[0], frame[1], frame[2], frame[3]])
+    let before = inputs.length()
+    t.tap(frame[0] + frame[2] * 0.25, frame[1] + frame[3] * 0.75)
+    assert_true(inputs.length() > before, msg="screen input at \{size}")
+  }
+  (frames, inputs)
+}
+
+///|
+test "retained chat screen panel keeps decoded video and mouse input across beside and overlay layouts" {
+  assert_eq(chat_screen_panel_frames(true), chat_screen_panel_frames(false))
+}
+
+///|
 test "retained screen entries keep their control panel above each shell and return to the app" {
   for size in [(390.0, 844.0), (900.0, 700.0), (1440.0, 900.0)] {
     new_run()

@@ -8,12 +8,13 @@
 /// An old view the whole window with a field "页字段", asking for the focus once as it is built while `ask`; while
 /// `open`, a modal layer of the tree's over it giving no focus, holding a box (`leaves`: one that leaves what is typed to
 /// the field under it, a menu a finger opened beside it: View::leaves_typing).
-fn plain_modal_tester(open : @signals.Signal[Bool], ask : @signals.Signal[Bool], leaves? : Bool = false) -> Tester {
+fn plain_modal_tester(open : @signals.Signal[Bool], ask : @signals.Signal[Bool], leaves? : Bool = false,
+  present? : @signals.Signal[Bool] = @signals.signal(true), returns? : Bool = false) -> Tester {
   let asked = Ref(false)
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   t.check_looks(false)
   set_view_app(fn(root) {
-    root.box(fn(h) {
+    root.show(fn() { present.get() }, fn(h) {
       h.grow(Is(1.0)) |> ignore
       old(h, fn(c) {
         c.editor("页/字段", placeholder="页字段") |> ignore
@@ -31,6 +32,7 @@ fn plain_modal_tester(open : @signals.Signal[Bool], ask : @signals.Signal[Bool],
     |> ignore
     root.show(fn() { open.get() }, fn(l) {
       l.over(Is(true)).modal(Is(true)).presses(Is(true)) |> ignore
+      if returns { l.focus_returns() |> ignore }
       if leaves {
         l.leaves_typing() |> ignore
       }
@@ -38,6 +40,22 @@ fn plain_modal_tester(open : @signals.Signal[Bool], ask : @signals.Signal[Bool],
     })
   })
   t
+}
+
+///|
+test "a covering layer never restores an editor of a disposed old island" {
+  let (open, ask, present) = (@signals.signal(false), @signals.signal(true), @signals.signal(true))
+  let t = plain_modal_tester(open, ask, present~, returns=true)
+  t.draw()
+  assert_true(t.ime().0)
+  open.set(true)
+  t.draw()
+  present.set(false)
+  t.draw()
+  open.set(false)
+  t.draw()
+  assert_eq(t.ctx().focus, 0)
+  assert_false(t.ime().0)
 }
 
 ///|

@@ -2511,6 +2511,17 @@ pub fn old(
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
           let o = old_islands.remove(i)
+          // A disposed island cannot receive the focus back from a covering layer.
+          // Outside that layer, the same editor may move to a replacement island on a layout change;
+          // its ordinary focus is kept, as it is between builds of old views.
+          let c = g()
+          for l in layer_focus_open {
+            if l.back_node == Some(id) {
+              if c.focus == l.back { c.focus_moved(0) }
+              l.back = 0
+              l.back_node = None
+            }
+          }
           // (what is made once of it among the old frame's let go; what it made, followed and kept went with its
           // scope, as its node did)
           let keys = made_roots.iter().filter(fn(e) { physical_equal(e.1, o.made) }).map(fn(e) { e.0 }).collect()
@@ -4355,6 +4366,7 @@ fn old_part_within(c : Ctx, island : @view.NodeId, id : Int) -> (Double, Double)
 priv struct LayerFocus {
   layer : @view.NodeId
   mut back : Int
+  mut back_node : @view.NodeId?
   mut back_in : @view.NodeId?
   /// opened since the last frame ended: what under it asks for the focus as that frame builds it (a page first drawn
   /// under it) is what had it as it opened, as an old overlay built after the page has it (view_focus_kept_for)
@@ -4395,6 +4407,7 @@ fn view_focus_kept_for(c : Ctx, id : Int) -> Bool {
       // (asked as the frame it opened in builds it: what it gives back; asked after: what had it as it opened kept)
       if layer_focus_open[i].fresh {
         layer_focus_open[i].back = id
+        layer_focus_open[i].back_node = Some(island)
       }
       true
     }
@@ -4428,6 +4441,7 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     for m in layer_focus_open {
       if m.back_in == Some(l.layer) {
         m.back = l.back
+        m.back_node = l.back_node
         m.back_in = l.back_in
       }
     }
@@ -4460,11 +4474,12 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     match layer_focus_open.search_by(fn(l) { l.layer == layer }) {
       Some(i) => {
         layer_focus_open[i].back = had
+        layer_focus_open[i].back_node = focus_node_of(had)
         layer_focus_open[i].back_in = had_in
         layer_focus_open[i].fresh = true
         layer_focus_open[i].first = t.opens_first(layer)
       }
-      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true, first: t.opens_first(layer) })
+      None => layer_focus_open.push({ layer, back: had, back_node: focus_node_of(had), back_in: had_in, fresh: true, first: t.opens_first(layer) })
     }
     // (one that gives the focus nothing as it opens (View::focus_returns): what had it before it still what had it, for
     // what opens over it)

@@ -525,29 +525,21 @@ fn side_panel(
       }
     })
     |> ignore
-    // its edge (ResizeHandle): dragged, its width (kept while the app runs); pressed, the panel closed; pressed
-    // twice, its own width again; over the page, none
-    if side_over.val {
-      return
-    }
-    match
-      @sf.resize_handle(
-        c,
-        "side/edge",
-        c.width,
-        min=panel_min,
-        max=panel_max,
-        label=@sf.t("web-pages.chat.resizePanel"),
-        edge=Left,
-        press=@sf.t("web-pages.chat.closePanel"),
-      ) {
-      Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
-      Pressed => side_change(src, r, "clear", None)
-      Twice => panel_own.width.set(None)
-      Untouched => ()
-    }
+    side_panel_edge(c, src, r, side_over.val)
   })
   |> ignore
+}
+
+///|
+fn side_panel_edge(c : @ui.Ctx, src : Source, r : ChatRef, over : Bool) -> Unit {
+  if over { return }
+  match @sf.resize_handle(c, "side/edge", c.width, min=panel_min, max=panel_max,
+    label=@sf.t("web-pages.chat.resizePanel"), edge=Left, press=@sf.t("web-pages.chat.closePanel")) {
+    Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
+    Pressed => side_change(src, r, "clear", None)
+    Twice => panel_own.width.set(None)
+    Untouched => ()
+  }
 }
 
 ///|
