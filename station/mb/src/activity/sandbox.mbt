@@ -92,7 +92,7 @@ pub fn sha256_hex(data : Array[Int]) -> String {
 
 ///|
 /// A string's UTF-8 bytes as JavaScript encodes it for a hash (a lone surrogate as U+FFFD).
-fn utf8(s : String) -> Array[Int] {
+pub fn utf8(s : String) -> Array[Int] {
   let out = []
   let n = s.length()
   let mut i = 0
