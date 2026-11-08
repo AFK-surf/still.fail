@@ -490,6 +490,10 @@ pub fn fixture_json(json : String) -> Source {
 /// What a fixture mode opens over Home at the start (src/sffix): a new chat, with one of its sheets; the bar's panel;
 /// a place.
 pub fn open_mode(mode : String) -> Unit {
+  // (a connect's page whose model is drafted another station's: 借用 at its panel's foot)
+  if mode == "settings-connect-borrow" {
+    @sffixture.new_fix.borrow = true
+  }
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
     if mode.has_prefix("newchat-crowded") || mode.has_prefix("newchat-providers") || mode == "newchat-tall-model" {

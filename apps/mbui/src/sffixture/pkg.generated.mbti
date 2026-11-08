@@ -682,6 +682,7 @@ pub(all) struct NewFix {
   mut presets_late : Bool
   liked : Array[String]
   mut providers : Bool
+  mut borrow : Bool
 }
 
 // Type aliases

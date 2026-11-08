@@ -23,6 +23,35 @@ pub fn button_node(
   icon? : String = "",
   card_words? : Bool = false,
 ) -> @view.View {
+  button_by(parent, label, fn(_) { press() }, tone, busy, disabled, across, icon, card_words)
+}
+
+///|
+/// button_node's button that opens what goes beside it (a menu under it): `open` given the button itself as it is
+/// pressed, where it is placed then.
+pub fn button_opens_node(
+  parent : @view.View,
+  label : () -> String,
+  open : (@view.View) -> Unit,
+  tone? : Tone = Plain,
+  icon? : String = "",
+) -> @view.View {
+  button_by(parent, label, open, tone, fn() { false }, fn() { false }, false, icon, false)
+}
+
+///|
+/// button_node's button, `press` given the button itself as it is pressed.
+fn button_by(
+  parent : @view.View,
+  label : () -> String,
+  press : (@view.View) -> Unit,
+  tone : Tone,
+  busy : () -> Bool,
+  disabled : () -> Bool,
+  across : Bool,
+  icon : String,
+  card_words : Bool,
+) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
   let height = button_height()
@@ -90,7 +119,7 @@ pub fn button_node(
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
     .on_press(fn() {
       if @signals.untracked(live) {
-        press()
+        press(v)
       }
     })
     |> ignore

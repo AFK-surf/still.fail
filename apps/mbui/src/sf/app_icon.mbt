@@ -59,33 +59,45 @@ pub fn avatars_base() -> String {
 pub fn app_buddies(c : @ui.Ctx, ask : ((Result[Json, Json]) -> Unit) -> Unit) -> Array[AppAvatar] {
   // (said by each build until it is asked: a build let go of asks nothing)
   if !buddies_asked.val {
-    c.after_build("app-icon/buddies", fn() {
-      if !buddies_asked.val {
-        buddies_asked.val = true
-        ask(fn(r) {
-          buddy_list.set(Some(
-            match r {
-              Ok(Array(a)) =>
-                a.map(fn(b) {
-                  let word = fn(k : String) {
-                    match b {
-                      Object(m) =>
-                        match m.get(k) {
-                          Some(String(v)) => v
-                          _ => ""
-                        }
-                      _ => ""
-                    }
-                  }
-                  { id: word("id"), label: word("label"), bg: word("bg"), mark: "", mono: false }
-                })
-              _ => []
-            },
-          ))
-        })
-      }
-    })
+    c.after_build("app-icon/buddies", fn() { app_buddies_ask(ask) })
   }
+  app_buddies_now()
+}
+
+///|
+/// The buddies asked of the core (`ask`: its `buddies` call), unless they were already: what is made once asks it as it
+/// is made (app_buddies' after its build).
+pub fn app_buddies_ask(ask : ((Result[Json, Json]) -> Unit) -> Unit) -> Unit {
+  if buddies_asked.val {
+    return
+  }
+  buddies_asked.val = true
+  ask(fn(r) {
+    buddy_list.set(Some(
+      match r {
+        Ok(Array(a)) =>
+          a.map(fn(b) {
+            let word = fn(k : String) {
+              match b {
+                Object(m) =>
+                  match m.get(k) {
+                    Some(String(v)) => v
+                    _ => ""
+                  }
+                _ => ""
+              }
+            }
+            { id: word("id"), label: word("label"), bg: word("bg"), mark: "", mono: false }
+          })
+        _ => []
+      },
+    ))
+  })
+}
+
+///|
+/// The buddies as the core said them, followed; none until it has answered.
+pub fn app_buddies_now() -> Array[AppAvatar] {
   buddy_list.get().unwrap_or([])
 }
 

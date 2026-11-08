@@ -30,6 +30,8 @@ pub let accents : Array[AccentTone]
 
 pub fn action(@ui.Ctx, String, String, icon? : String, busy? : Bool, disabled? : Bool, bad? : Bool) -> Bool
 
+pub fn action_node(@view.View, () -> String, () -> Unit, icon? : String, busy? : () -> Bool, disabled? : () -> Bool, bad? : Bool) -> Unit
+
 pub let agent_card_w : @ui.Len
 
 pub fn agent_mark_corner(Double) -> @ui.Radius
@@ -42,9 +44,15 @@ pub fn alpha(Int64, Double) -> Int64
 
 pub fn apart(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn apart_node(@view.View, (@view.View) -> Unit) -> @view.View
+
 pub fn app_avatar_icon(AppAvatar, String, Int32, Int32, FixedArray[Byte]) -> @pixels.Canvas?
 
 pub fn app_buddies(@ui.Ctx, ((Result[@json.Json, @json.Json]) -> Unit) -> Unit) -> Array[AppAvatar]
+
+pub fn app_buddies_ask(((Result[@json.Json, @json.Json]) -> Unit) -> Unit) -> Unit
+
+pub fn app_buddies_now() -> Array[AppAvatar]
 
 pub fn app_icon_jpeg(@pixels.Canvas) -> (Bytes, String)
 
@@ -185,6 +193,7 @@ pub let button_h : Double
 pub fn button_height() -> Double
 
 pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : () -> Bool, disabled? : () -> Bool, across? : Bool, icon? : String) -> @view.View
+pub fn button_opens_node(@view.View, () -> String, (@view.View) -> Unit, tone? : Tone, icon? : String) -> @view.View
 
 pub fn button_start_reach() -> @ui.Style
 
@@ -326,6 +335,8 @@ pub let copied_ms : Double
 
 pub fn copy_command(@ui.Ctx, String, String, copy~ : String, copied~ : String) -> Unit
 
+pub fn copy_command_node(@view.View, () -> String, copy~ : String, copied~ : String) -> Unit
+
 pub let corner_fit : @paint.CornerFit
 
 pub let corner_inset : Double
@@ -464,6 +475,8 @@ pub let dialog_wide_w : Double
 
 pub fn dials(@ui.Ctx, Array[Dial], details? : Array[String], columns? : Int32) -> Unit
 
+pub fn dials_node(@view.View, () -> Array[Dial], details? : () -> Array[String], columns? : Int32) -> Unit
+
 pub let diff_line_in : @ui.Space
 
 pub let diff_mark_in : @ui.Space
@@ -570,6 +583,8 @@ pub fn figure_words(@ui.Ctx, () -> Unit, () -> Unit) -> Unit
 
 pub fn figures(@ui.Ctx, Array[(String, String, String)]) -> Unit
 
+pub fn figures_node(@view.View, () -> Array[(String, String, String)]) -> Unit
+
 pub let file_capsule_h : @ui.Len
 
 pub let file_capsule_words_end : Double
@@ -610,6 +625,8 @@ pub let fill_chip_corner : Double
 
 pub let fill_chip_h : Double
 
+pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () -> String, small? : Bool, said? : () -> String, tips? : TipLayer) -> @view.View
+
 pub let fill_chip_small_h : Double
 
 pub fn find_passage(String, String) -> (Int32, Int32)?
@@ -621,6 +638,8 @@ pub let first_lead_most : @ui.Len
 pub let first_most : @ui.Len
 
 pub fn first_one(@ui.Ctx, String, () -> Unit, art? : () -> Unit, lead? : String) -> Unit
+
+pub fn first_one_node(@view.View, () -> String, (@view.View) -> Unit, art? : (@view.View) -> Unit, lead? : () -> String) -> Unit
 
 pub fn fixed_anchor(@view.View, (Double, Double, Double, Double)) -> @view.View
 
@@ -700,6 +719,8 @@ pub let group_row_end_radius : @ui.Radius
 
 pub fn group_rows(@ui.Ctx, String, Array[(String, () -> Unit)]) -> Unit
 
+pub fn[T : Eq, K : Hash + Eq] keyed_rows_node(@view.View, () -> Array[T], (T) -> K, (@view.View, @signals.Signal[T]) -> Unit) -> Unit
+
 pub fn group_rows_reset() -> Unit
 
 pub fn group_waiting(@ui.Ctx, () -> Unit, text? : String) -> Unit
@@ -764,9 +785,14 @@ pub fn icon(@ui.Ctx, String, size? : Double, color? : Int64, by_ink? : Bool) -> 
 
 pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
+pub fn icon_action_node(@view.View, String, () -> String, () -> Unit, disabled? : () -> Bool, tips? : TipLayer) -> @view.View
+
+pub fn icon_action_opens_node(@view.View, String, () -> String, (@view.View) -> Unit, disabled? : () -> Bool, tips? : TipLayer) -> @view.View
+
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String, on_press? : () -> Unit) -> Bool
 
 pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String) -> @view.View
+pub fn icon_button_opens_node(@view.View, String, () -> String, (@view.View) -> Unit) -> @view.View
 
 pub let icon_button_side : Double
 
@@ -829,6 +855,8 @@ pub fn keys_row_node(@view.View, () -> String, () -> String, () -> Bool, () -> B
 pub fn keys_rows_node(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn kind_icon(String) -> String
+
+pub fn labelled_field_node(@view.View, () -> String, (@view.View) -> Unit, hint? : () -> String, error? : () -> String) -> Unit
 
 pub let lacking : @ui.TextStyle
 
@@ -898,6 +926,8 @@ pub fn list_apart(@ui.Ctx) -> Unit
 
 pub let list_card_corner : Double
 
+pub fn list_card_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub let list_card_radius : @ui.Radius
 
 pub fn list_foot_in(ListAt) -> Double
@@ -955,6 +985,8 @@ pub fn look_lent(@view.View, Look) -> Unit
 pub fn look_node(@view.View) -> Look
 
 pub fn loose(@ui.Ctx, () -> Unit) -> Unit
+
+pub fn loose_node(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn lower(String) -> String
 
@@ -1290,6 +1322,8 @@ pub fn oversize(Double) -> @ui.Style
 
 pub fn own_head(@ui.Ctx, (Double) -> Unit, String, rename? : () -> Unit, rename_label? : String, busy? : Bool, tags? : () -> Unit, lines? : Array[String], dot? : String, state? : () -> Unit, warnings? : Array[(String, Bool)], actions? : () -> Unit) -> Unit
 
+pub fn own_head_node(@view.View, (@view.View, Double) -> Unit, () -> String, rename? : () -> Unit, renames? : () -> Bool, rename_label? : () -> String, busy? : () -> Bool, tags? : (@view.View) -> Unit, lines? : () -> Array[String], state? : (@view.View) -> Unit, actions? : (@view.View) -> Unit, dot? : () -> String, state_shown? : () -> Bool, warnings? : () -> Array[(String, Bool)]) -> Unit
+
 pub fn page(@ui.Ctx, String, String, Array[() -> Unit], on_back~ : () -> Unit, frame? : PageFrame, lead? : String, about? : String, actions? : () -> Unit, head? : () -> Unit, small? : String) -> Unit
 
 pub fn page_bar(@ui.Ctx, () -> Unit, corners? : (Double, Double)?) -> Unit
@@ -1514,7 +1548,7 @@ pub let pill_h : Double
 
 pub let pill_in : Double
 
-pub fn pill_node(@view.View, () -> String, tone? : PillTone) -> @view.View
+pub fn pill_node(@view.View, () -> String, tone? : PillTone, icon? : String) -> @view.View
 
 pub let pin_raised : Raised
 
@@ -1619,6 +1653,8 @@ pub let quieter : @ui.TextStyle
 pub fn quota_chip(@ui.Ctx, @json.Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
 
 pub fn quota_chips(@ui.Ctx, @json.Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
+
+pub fn quota_chips_node(@view.View, () -> @json.Json?, small? : Bool, marked? : Bool, gap? : Double, tips? : TipLayer) -> Unit
 
 pub fn quota_said(@json.Json?) -> String
 
@@ -1769,6 +1805,8 @@ pub fn rule_ink(@ui.Ctx) -> Int64
 pub let rule_line : @ui.Style
 
 pub fn said_row(@ui.Ctx, String, String, value? : () -> Unit, lead? : (@ui.Ctx) -> Unit) -> Unit
+
+pub fn said_row_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
 
 pub fn sample_words(Int32) -> String
 
@@ -2018,6 +2056,8 @@ pub let step_words : @ui.TextStyle
 
 pub fn steps(@ui.Ctx, Array[() -> Unit]) -> Unit
 
+pub fn steps_node(@view.View, Array[(@view.View) -> Unit]) -> Unit
+
 pub fn stroke_corner(StrokeShape) -> (Double, Double)
 
 pub let stroke_gap_ms : Double
@@ -2226,6 +2266,8 @@ pub fn vector(@ui.Ctx, String, @pixels.Vector, Double) -> Int32
 
 pub fn verify_ok(@ui.Ctx, String) -> Unit
 
+pub fn verify_ok_node(@view.View, () -> String) -> Unit
+
 pub fn video_capsule(@ui.Ctx, String, Double, coming? : Double?, corner? : Double) -> Unit
 
 pub let video_capsule_h : Double
@@ -2321,6 +2363,8 @@ pub fn wait_line(@ui.Ctx, String, key? : String, error? : Bool) -> Unit
 pub fn wait_line_node(@view.View, () -> String) -> @view.View
 
 pub fn wait_more(@ui.Ctx, WaitNote?, () -> Unit) -> Unit
+
+pub fn wait_more_node(@view.View, () -> WaitNote, (@view.View) -> Unit) -> Unit
 
 pub fn wait_pill(@ui.Ctx, String, key? : String, error? : Bool) -> Unit
 

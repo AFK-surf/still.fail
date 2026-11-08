@@ -607,6 +607,16 @@ fn narrow_made_as(
       made("workspace", fn(p, core, here, frame, stint, _acts) { @sfpages.workspace_node(p, core, here, on_back=core.pop, frame~, stint~) })
     Setting(VaultItems) =>
       made("vault-items", fn(p, core, here, frame, _stint, _acts) { @sfpages.vault_items_node(p, core, here, on_back=core.pop, frame~) })
+    // (by its station: another station's another page; as a place of the bottom bar's, its ＋ the bar's notch:
+    // connects_add)
+    Setting(Connects(only)) =>
+      made("connects/" + only, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint~)
+      })
+    Setting(Connect(station, id)) =>
+      made("connect/" + station + "/" + id, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint~)
+      })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)

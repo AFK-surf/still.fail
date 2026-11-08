@@ -154,6 +154,7 @@ priv enum PageItem {
   Top
   Back
   Title
+  Head
   Lead
   Block(String)
   Foot
@@ -170,7 +171,10 @@ priv enum PageItem {
 /// its foot; all of it scrolling in the page, each part made only while it shows (View::scrolls_window). What it says
 /// of itself told `said` as that changes (a frame's bar that names it: its title, and what it is for by a mark beside
 /// it, `about`). Where its list is scrolled to its own, the same through its arrangements, or kept by whoever holds it
-/// (`scroll`: a page of parts, each part's page its own as it was left).
+/// (`scroll`: a page of parts, each part's page its own as it was left). `head`: a head of its own in place of its
+/// title, which says its name (an account's: own_head_node), made where the title would be (under the frame's bar that
+/// names it too); narrow, under back where the frame gives that, back's line its first, what the page does (`actions`)
+/// at that line's end (own_head's back_line), told the head as it is made (head_back_holds).
 pub fn page_node(
   v : @view.View,
   title : () -> String,
@@ -185,6 +189,7 @@ pub fn page_node(
   width? : () -> Double,
   scroll? : @view.Scroll,
   tips? : TipLayer,
+  head? : (@view.View) -> Unit,
 ) -> Unit {
   // (what it says of itself to the frame's bar that names it, as that changes, whole: the frame's own to keep)
   match said {
@@ -216,8 +221,8 @@ pub fn page_node(
       None => own_scroll
     }
     match l {
-      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll)
-      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips)
+      Narrow => narrow_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, head)
+      Wide => wide_page_node(p, title, blocks, block, on_back, frame, lead, actions, scroll, about, tips, head)
     }
   })
   // (its own layer only where it has what is for by a mark to say: nothing over a page that has none)
@@ -313,7 +318,14 @@ fn narrow_page_node(
   lead : () -> String,
   actions : ((@view.View) -> Unit)?,
   scroll : @view.Scroll,
+  head : ((@view.View) -> Unit)?,
 ) -> Unit {
+  // (a head of its own under back: back's line its first, what the page does at that line's end, own_head's)
+  let back_holds = fn() {
+    let f = frame()
+    head is Some(_) && f.back is Some(_) && !f.named
+  }
+  v.lends(head_back_holds, back_holds) |> ignore
   let items = fn() -> Array[PageItem] {
     let f = frame()
     let out = []
@@ -323,7 +335,9 @@ fn narrow_page_node(
     if f.back is Some(_) {
       out.push(Back)
     }
-    if !f.named {
+    if head is Some(_) {
+      out.push(Head)
+    } else if !f.named {
       out.push(Title)
     }
     if lead() != "" {
@@ -347,7 +361,34 @@ fn narrow_page_node(
             s.row(Is(true)).padding(Is((pg_back_x, pg_back_top, pg_back_x, pg_back_foot))).lines_up(Is(Some(Middle)))
             |> ignore
             nav_back_node(s, fn() { frame().back.unwrap_or("") }, on_back)
+            // (what its own head does, at the line's end: own_head's back_line)
+            match (head, actions) {
+              (Some(_), Some(f)) =>
+                s.show(back_holds, fn(e) {
+                  e.grow(Is(1.0)).row(Is(true)).lies_along(Is(End)) |> ignore
+                  e.box(fn(a) {
+                    style_node(a, fn() { head_actions })
+                    f(a)
+                  })
+                  |> ignore
+                })
+              _ => ()
+            }
           }
+          // a head of its own in place of its title, in the page's room as its cards are (pg_card_room: 10 under it;
+          // under the frame's bar that names it, 8 under that too: pg_barred_head)
+          Head =>
+            match head {
+              Some(h) =>
+                page_block(s, fn(room) {
+                  room.box(fn(b) {
+                    b.padding(By(fn() { (0.0, if frame().named { pg_head_named_top } else { 0.0 }, 0.0, page_card_foot) })) |> ignore
+                    h(b)
+                  })
+                  |> ignore
+                })
+              None => ()
+            }
           // its large title (a place's top page: none, the frame's bar names it)
           Title => {
             s
@@ -412,6 +453,16 @@ fn narrow_page_node(
   })
   |> ignore
 }
+
+///|
+/// How far under the frame's bar that names it a page's own head stands (pg_barred_head's pt=S2).
+let pg_head_named_top : Double = 8.0
+
+///|
+/// Whether back's line over the narrow page made once a part is in holds what the page's own head does (page_node's
+/// `head`: own_head's back_line), as the page's frame says it now; outside one, never.
+// kept across runs: what each page made once lends (View::lends), let go with it
+let head_back_holds : @view.Lent[() -> Bool] = @view.Lent::new()
 
 ///|
 /// How tall a page's part is counted before it was first laid out (narrow_list's old list's).
@@ -584,10 +635,12 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
 ///|
 /// What a row on a card (link_row_node) is by, before its words: one of still.fail's line icons, in the muted ink; or
 /// what makes it (a person's picture, a workspace's mark: an old view, hosted); or a tile with a ground that makes it,
-/// in from the row's start, top and foot by the ladder's inset, concentric with its corners there.
+/// in from the row's start, top and foot by the ladder's inset, concentric with its corners there. `LeadLine`: what
+/// makes it, held by the row's first line where lines are under it as a line icon is (a status's dot, a group's mark).
 pub(all) enum RowLead {
   NoLead
   LeadIcon(String)
+  LeadLine((@view.View) -> Unit)
   LeadMade((@view.View) -> Unit)
   LeadTile((@view.View) -> Unit)
 }
@@ -623,6 +676,9 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// chevron), on its first line where lines are under it, as high as that line; `face`: its `lead` a round picture (a
 /// person's), which stands across the row's middle, and its control too where lines are under its first (wide under a
 /// finger, so is a control with lines under it: the row is wide enough for its lines beside it).
+/// `title_cut`, `value_cut`: its title, what it says, a summary cut short on its line where it has less room;
+/// `chevron_room`: a chevron's room kept where it has none, so a list's ends line up. What is after its title
+/// (`title_after`) leaves its line (View::drops) where it says so and the line has not the room.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -654,6 +710,9 @@ pub fn link_row_node(
   control? : (@view.View) -> Unit,
   adds? : Bool = false,
   wide_title? : () -> @ui.TextStyle,
+  title_cut? : Bool = false,
+  value_cut? : Bool = false,
+  chevron_room? : Bool = false,
 ) -> Unit {
   // (one that adds: one that acts, after a ＋ in the link's ink, link_row's `adds`)
   let acts = acts || adds
@@ -691,7 +750,7 @@ pub fn link_row_node(
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, danger, value_look, note_look, lead, face,
       lead_ink, goes, ends, mark, acts, below, below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown,
-      control, wide_title,
+      control, wide_title, title_cut, value_cut, chevron_room,
     )
     return
   }
@@ -716,7 +775,7 @@ pub fn link_row_node(
     // middle)
     match lead {
       NoLead => ()
-      LeadIcon(name) =>
+      LeadIcon(_) | LeadLine(_) =>
         r.box(fn(l) {
           // (as tall as its first line is drawn at least, the system's size of words applied as it changes, the icon in
           // its middle up and down: row_lead's)
@@ -732,7 +791,11 @@ pub fn link_row_node(
             }
           }))
           |> ignore
-          icon_node(l, name, row_icon, By(lead_ink)) |> ignore
+          match lead {
+            LeadIcon(name) => icon_node(l, name, row_icon, By(lead_ink)) |> ignore
+            LeadLine(f) => f(l)
+            _ => ()
+          }
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
@@ -767,11 +830,11 @@ pub fn link_row_node(
             // (what follows its title on its line while it is said, 8 apart across their middle: the title cut short
             // where the line leaves it less, link_row's title_line; its title the same words all along)
             let after_now = fn() { title_after is Some(_) && title_after_shown() }
-            t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+            t.row(Is(true)).lines_up(Is(Some(Middle))).fits(Is(title_after is Some(_))) |> ignore
             t.box(fn(w) {
               w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
               styled_words(w, title, fn() {
-                if after_now() || (note_cut && value() == "") { plain().then(cut_words) } else { plain() }
+                if after_now() || (note_cut && value() == "") || title_cut { plain().then(cut_words) } else { plain() }
               })
               |> ignore
               if acts {
@@ -792,8 +855,15 @@ pub fn link_row_node(
           tv.show(fn() { value() != "" }, fn(said) {
             said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
             said.show(value_dot, fn(d) { status_dot_node(d) })
+            if value_cut {
+              said.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            }
             said.box(fn(w) {
-              styled_words(w, value, fn() { value_look(if value_bad() { pg_value.then(bad) } else { pg_value }) }) |> ignore
+              styled_words(w, value, fn() {
+                let look = value_look(if value_bad() { pg_value.then(bad) } else { pg_value })
+                if value_cut { look.then(cut_words) } else { look }
+              })
+              |> ignore
             })
             |> ignore
           })
@@ -802,6 +872,8 @@ pub fn link_row_node(
         row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore
+        } else if chevron_room {
+          first.box(fn(e) { e.width(Is(Some(pg_chevron))).height(Is(Some(pg_chevron))) |> ignore }) |> ignore
         }
         // (what is done here, at its end: on its first line where lines are under it, as high as that line; a face's
         // by the whole row's side there, below)
@@ -1063,7 +1135,8 @@ let switch_disabled_alpha : Double = 0.5
 /// A row on a group's card that turns something on or off (switch_row's; narrow, in a card: its title, `note` quieter
 /// under it, its switch at its end across their middle; wide: wide_control_row_node's); the switch alone answers. `on`,
 /// `turn`: switch_node's. `in_words`: on a page's card of words (page_card_node), where narrow it is a row of its words
-/// (16 between them and the switch), not a group's row.
+/// (16 between them and the switch), not a group's row. `busy`: what it set is on its way (switch_row's: a spinner
+/// before its switch, not turned again meanwhile).
 pub fn switch_row_node(
   parent : @view.View,
   title : () -> String,
@@ -1073,8 +1146,12 @@ pub fn switch_row_node(
   disabled? : () -> Bool = fn() { false },
   lead? : (@view.View) -> Unit,
   in_words? : Bool = false,
+  busy? : () -> Bool = fn() { false },
 ) -> Unit {
-  let control = fn(r : @view.View) { switch_node(r, on, turn, title, disabled~) }
+  let control = fn(r : @view.View) {
+    r.show(busy, fn(s) { spinner_node(s, size=spinner_size) |> ignore })
+    switch_node(r, on, turn, title, disabled=fn() { disabled() || busy() })
+  }
   if look_node(parent) is Wide {
     // (among a card's words, its title as strong as a setting's: switch_row's wide)
     if in_words {
@@ -1334,7 +1411,8 @@ pub fn page_card_node(parent : @view.View, body : (@view.View) -> Unit, footed? 
 
 ///|
 /// Words on a card (card_lines', cardRowText) in `parent`: its `title` strong, `words` under it, `note` quieter under
-/// them, `bad` in red, 2 apart, each while it says any, as it says it now.
+/// them, `bad` in red, 2 apart, each while it says any, as it says it now. As tall as its lines always, where the card
+/// it is on is short of room while it moves too: never squeezed under what follows it on the card.
 pub fn card_lines_node(
   parent : @view.View,
   title : () -> String,
@@ -1343,7 +1421,7 @@ pub fn card_lines_node(
   bad? : () -> String = fn() { "" },
 ) -> Unit {
   parent.box(fn(l) {
-    l.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(card_lines_gap)) |> ignore
+    l.min_width(Is(Some(0.0))).gap(Is(card_lines_gap)) |> ignore
     for line in [(title, desk_strong), (words, desk_words), (note, desk_muted), (bad, desk_note_bad)] {
       let (said, look) = line
       l.show(fn() { said() != "" }, fn(w) { styled_words(w, said, fn() { look }) |> ignore })

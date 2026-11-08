@@ -408,8 +408,11 @@ fn doing_mark_node(
 }
 
 ///|
-/// doing_mark's mark beside a row's words (inline: 12).
+/// doing_mark's mark and spinner beside a row's words (inline: 12), and at its end (14).
 let doing_mark_inline : Double = 12.0
+
+///|
+let doing_mark_end : Double = 14.0
 
 ///|
 /// What a station says of its rule, made up, for what is shown while it is read (form_rows in its bones): it may be

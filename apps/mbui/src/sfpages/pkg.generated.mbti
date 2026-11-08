@@ -123,11 +123,11 @@ pub fn composer_width(Double) -> Double
 
 pub fn composer_words_width(Double) -> Double
 
-pub fn connect_page(@ui.Ctx, @sfbase.Source, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
+pub fn connect_node(@view.View, @sfbase.Source, @settings.Core, () -> @settings.Here, String, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
 
 pub fn connects_add(@sfbase.Source, @settings.Core, @settings.Here) -> ((@sf.Beside) -> Unit)?
 
-pub fn connects_page(@ui.Ctx, @sfbase.Source, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
+pub fn connects_node(@view.View, @sfbase.Source, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit) -> Unit
 
 pub fn context_tile_id(@ui.Ctx) -> Int32
 
