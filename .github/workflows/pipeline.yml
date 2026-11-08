@@ -201,7 +201,7 @@ jobs:
           $since = (Get-Process -Id $PID).StartTime.AddMinutes(-10)
           Get-Process | Where-Object { $_.StartTime -gt $since } | Sort-Object StartTime | Format-Table -AutoSize Id, ProcessName, StartTime, Path | Out-String -Width 200
 
-  # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
+  # main: the prebuilt natives in the releases bucket's natives/ (what `prebuild --release` put in the release
   # native-artifacts, the prebuild workflow's or a Mac's, copied over: nothing is built here), once the API (which serves
   # natives/) is out. Seconds when the store has them.
   natives-store:
@@ -326,6 +326,15 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
+      # (the browser's iroh from the native cache, as a run before fetched it: the release's download answered 504
+      # twice on 2026-11-08, failing #4761's and #4765's bundle; a part of a key is the same bytes, kept once fetched)
+      - name: The browser's iroh's key
+        id: native-keys
+        run: echo "key=natives-bundle-$(node scripts/native.ts key iroh-wasm wasm32)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
       # (the app's page, each of the web app's pages: deploy.py builds the app for the browser where MoonBit is)
       - uses: ./.github/actions/mbui-moonbit
       - name: deploy.py --dry-run
