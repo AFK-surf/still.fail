@@ -686,6 +686,7 @@ pub fn reset() -> Unit {
   // what the settings' core keeps (settings_core.mbt, notices.mbt, faces.mbt, bars.mbt)
   picture_pick.val = None
   reporting_host.set(None)
+  reporting_said.set(None)
   notices_reset()
   faces_reset()
   bars_picked.set(None)

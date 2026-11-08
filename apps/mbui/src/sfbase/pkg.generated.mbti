@@ -1617,7 +1617,6 @@ pub fn thumb_place(String, String, String, String) -> String
 
 pub fn thumb_shows(String) -> Double
 
-pub fn thumbs_said() -> Unit
 
 pub fn toast_later(String, action? : String, run? : () -> Unit) -> Unit
 

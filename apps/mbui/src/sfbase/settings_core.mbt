@@ -142,7 +142,7 @@ fn settings_core_of(
       match reporting_host.get() {
         Some(h) => {
           (h.set)(on)
-          reporting_said.set(@signals.untracked(fn() { reporting_said.get() }) + 1)
+          reporting_said.set(Some(on))
         }
         None => ()
       }
@@ -175,6 +175,7 @@ pub(all) struct ReportingHost {
 pub let reporting_host : @signals.Signal[ReportingHost?] = @signals.signal(None)
 
 ///|
-/// Told as this device is set to send them or not (what reads it reads the host again).
-// kept across runs: only counts on
-let reporting_said : @signals.Signal[Int] = @signals.signal(0)
+/// What this device was last set here to send them or not (None: not set here; what reads it reads the host again as
+/// it is set otherwise).
+// kept across runs: put back with the host (pages_reset)
+let reporting_said : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
