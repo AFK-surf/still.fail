@@ -4412,7 +4412,7 @@ pub fn way_in(
     way_in_said.val = (said, bad)
   }
   let open = @motion.anim(c, "sign-in/said", if said != "" { 1.0 } else { 0.0 }, global=true)
-  open.follow(if said != "" { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height("sign-in/said")))
+  open.follow(if said != "" { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(c, "sign-in/said")))
   let share = open.get()
   way_in_page(c, art, fn() {
     if !bare {

@@ -65,7 +65,7 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
       a.snap(if first { 1.0 } else { 0.0 })
     }
     // (a share of its room: a Move as long as the room is tall, as what is under a post goes)
-    a.follow(if shown { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(name)))
+    a.follow(if shown { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(c, name)))
     let share = a.get()
     if !shown && share <= 0.0 {
       continue

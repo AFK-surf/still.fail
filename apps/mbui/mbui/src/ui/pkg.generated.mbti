@@ -1293,6 +1293,7 @@ pub fn Ctx::on_files(Self, Int32, held~ : ((Double, Double)?) -> Unit, take~ : (
 pub fn Ctx::on_key(Self, Int32, (Int32, Int32) -> Bool) -> Unit
 pub fn Ctx::on_page_release(Self, String, () -> Unit) -> Unit
 pub fn Ctx::on_press(Self, Int32, () -> Unit) -> Unit
+pub fn Ctx::on_unbuilt(Self, Int32, () -> Unit) -> Bool
 pub fn Ctx::open_url(Self, String) -> Bool
 pub fn Ctx::overlay(Self, String, modal? : Bool, trap? : Bool, escape? : Bool, on_escape? : () -> Bool, stays? : () -> Bool, outside? : Bool, scrim? : Int64, anchor? : Int32, initial_focus? : Int32, return_focus? : Int32, inert? : Bool, () -> Unit) -> Overlay
 pub fn Ctx::own_colours(Self, Int32) -> Unit
@@ -1309,6 +1310,7 @@ pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? 
 pub fn Ctx::place_by_size(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
 pub fn Ctx::place_most(Self, padding? : Double) -> Double
 pub fn Ctx::pointer(Self) -> (Double, Double, Bool)
+pub fn Ctx::pointer_after_keys(Self) -> Bool
 pub fn Ctx::pointer_at(Self) -> Double
 pub fn Ctx::pointer_in_overlay(Self, Int32) -> Bool
 pub fn Ctx::pointer_in_overlay_since(Self, Int32) -> Double

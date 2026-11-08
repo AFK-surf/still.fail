@@ -419,6 +419,8 @@ pub struct Ctx {
   mut press_late : Bool
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
+  /// whether the pointer's latest event came after the latest key (Ctx::pointer_after_keys)
+  mut pointer_after_keys : Bool
   mut held_told : Double
   /// what a press told held long (Ctx::long_press) was on, and in which build (frame_body's pass: one built again sees
   /// it no more, as it sees no click)
@@ -773,6 +775,7 @@ fn Ctx::new() -> Ctx {
     press_strayed: false,
     press_late: false,
     pointer_t: 0.0,
+    pointer_after_keys: true,
     held_told: -1.0,
     held_on: 0,
     held_build: -1,
@@ -2520,6 +2523,13 @@ pub fn Ctx::present_ms(self : Ctx) -> Double {
 pub fn Ctx::pointer_at(self : Ctx) -> Double {
   hand.pointer.get() |> ignore
   self.pointer_t
+}
+
+///|
+/// Whether the pointer's latest event (pressed, moved, let go) came after the latest key, each as it came: what the keys
+/// did since (a menu's highlight moved under a pointer at rest), the pointer has not undone yet.
+pub fn Ctx::pointer_after_keys(self : Ctx) -> Bool {
+  self.pointer_after_keys
 }
 
 ///|

@@ -21,9 +21,9 @@ priv struct KitState {
   mut tip_next : Int
   /// Which ways an old view's tooltip was eligible to open, so an already displaced one does not take the slot back.
   tip_ready : Map[Int, TipReady]
-  /// where what a popover, a hover card or a tooltip hangs on was drawn, by the panel's id, and the frame it was last
-  /// put by it (beside): kept on while it is shown, for the frames its trigger is drawn nowhere (gone as it goes out)
-  anchors : Map[Int, ((Double, Double, Double, Double), Int)]
+  /// where what a popover, a hover card or a tooltip hangs on was drawn, by the panel's id (beside): kept while the
+  /// panel is built, for the frames its trigger is drawn nowhere (its exit as it goes), let go with it (anchor_of)
+  anchors : Map[Int, (Double, Double, Double, Double)]
   /// toasts as drawn (toast.mbt), by their viewport's id; when the next of a viewport's goes (toast_due), by its key
   toasts : Map[Int, Kept]
   toast_dues : Map[String, Double]
@@ -41,10 +41,6 @@ priv struct KitState {
   /// a sheet's springs and scrim (sheet.mbt), by its id; the id of the one built last by each key (sheet_rest)
   sheets : Map[Int, SheetKept]
   sheet_keys : Map[String, Int]
-  /// the pointer this frame and the last (whether it moved: what moves a menu's highlight), as of frame `ptr_frame`
-  mut ptr : (Double, Double)
-  mut ptr_was : (Double, Double)
-  mut ptr_frame : Int
 }
 
 ///|
@@ -67,24 +63,22 @@ fn KitState::new() -> KitState {
     forms: {},
     sheets: {},
     sheet_keys: {},
-    ptr: (-1.0, -1.0),
-    ptr_was: (-1.0, -1.0),
-    ptr_frame: -1,
   }
 }
 
 ///|
-/// Whether the pointer moved since the last frame.
-fn pointer_moved(c : @ui.Ctx) -> Bool {
-  install()
-  let k = kit.val
-  if k.ptr_frame != c.frame_number() {
-    k.ptr_frame = c.frame_number()
-    k.ptr_was = k.ptr
-    let (x, y, _) = c.pointer()
-    k.ptr = (x, y)
-  }
-  k.ptr != k.ptr_was
+/// Whether the pointer's own event put it over `id` or moved it there since (what moves a menu's highlight): its latest
+/// event (Ctx::pointer_at) no earlier than it came over `id` (Ctx::hover_since: not `id` come under a pointer at rest, a
+/// menu opened or scrolled under it), and after the latest key (Ctx::pointer_after_keys: else the keys moved the
+/// highlight since).
+fn pointer_moved(c : @ui.Ctx, id : Int) -> Bool {
+  c.pointer_after_keys() && c.pointer_at() >= c.hover_since(id)
+}
+
+///|
+/// An id of the kit's own for `id`, to be told by as what built it is no longer built (@ui.Ctx::on_unbuilt).
+fn unbuilt_id(id : Int, what : Int) -> Int {
+  (id * 31 + what) ^ 0x6b697400
 }
 
 ///|

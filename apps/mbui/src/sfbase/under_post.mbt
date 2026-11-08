@@ -80,7 +80,7 @@ pub fn under_post(
     }
   }
   // (a share of its room: a Move as long as the room is tall)
-  let spec = (if shown { open } else { close }).per_unit(@motion.reveal_height("under/" + key))
+  let spec = (if shown { open } else { close }).per_unit(@motion.reveal_height(c, "under/" + key))
   // (in a row of a list as what it shows changes: on the way its rows go then, from its start and as long, so that
   // what is over and under it moves one way with it: @ui.Ctx::row_way)
   match (c.row_way(), start_at) {

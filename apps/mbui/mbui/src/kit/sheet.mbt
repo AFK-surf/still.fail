@@ -67,11 +67,12 @@ priv struct SheetKept {
   mut held : Double
   /// how much of its scrim shows (0 … 1), fading in and out over sheet_scrim_ms
   fade : @motion.Anim
-  /// open last frame; drawn (until it has sunk away); the height it was asked for last; the frame it was opened in
+  /// open last frame; drawn (until it has sunk away); the height it was asked for last; opened and not
+  /// risen yet from below (its height told as what it holds is first laid out comes from below at that)
   mut was_open : Bool
   mut shown : Bool
   mut asked : Double
-  mut opened : Int
+  mut rising : Bool
 }
 
 ///|
@@ -116,7 +117,7 @@ pub fn sheet(
         was_open: false,
         shown: false,
         asked: -1.0,
-        opened: -1,
+        rising: false,
       }
       kit.val.sheets[id] = s
       s
@@ -138,10 +139,14 @@ pub fn sheet(
     s.fade.animate(1.0, scrim_fade())
     s.shown = true
     s.asked = target
-    s.opened = c.frame_number()
-  } else if open && target != s.asked {
-    if s.opened == c.frame_number() {
-      // (opened this frame, its height known only as this frame lays out what it holds: from below at that)
+    s.rising = true
+  } else if open && s.rising && s.below.value_at(c) < s.asked - 0.5 {
+    // (risen some way: what it is asked for from now on is another height while open)
+    s.rising = false
+  }
+  if open && s.was_open && target != s.asked {
+    if s.rising {
+      // (opened and not risen yet, its height known only as what it holds is laid out: from below at that)
       s.h.put(target)
       s.below.put(target)
       s.below.go_at(c, 0.0)

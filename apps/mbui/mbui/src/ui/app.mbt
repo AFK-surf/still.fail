@@ -1023,6 +1023,8 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   c.py = y
   // the event's own time (`t`): events handled together happened apart
   c.pointer_t = t
+  // (after the latest key: Ctx::pointer_after_keys)
+  c.pointer_after_keys = true
   if scroll_logging() {
     h_log("TOUCH \{kind} \{t} \{x} \{y} \{h_now()}")
   }
@@ -2017,6 +2019,8 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
 /// A key, taken as it came (on_key) or as the input method's deleting stands for it (on_text).
 fn key_in(code : Int, mods : Int) -> Unit {
   let c = g()
+  // (the keys came after the pointer's latest event: Ctx::pointer_after_keys)
+  c.pointer_after_keys = false
   // (the focus where a modal layer of the window's tree lets it take input; else none's, for this key: island_allows)
   let focus = c.focus_allowed()
   // a key catcher's while it has the focus: all of it (device.mbt)

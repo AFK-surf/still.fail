@@ -92,7 +92,8 @@ pub struct Value {
   priv mut to : Double
   priv mut run : Run?
   priv mut runner : @effect.Fiber[Bool]?
-  priv mut used : Int
+  /// kept by its key (`value`): whether what asks it is built (until it is not: value_unbuilt)
+  priv mut built : Bool
   priv mover : @ui.Mover
 }
 
@@ -110,7 +111,7 @@ impl @ui.Moving for Value with rest_at(self, now, frame) {
 ///|
 /// A value at `v`, still (kept by whoever holds it; `value` keeps one by key).
 pub fn Value::new(v : Double) -> Value {
-  { v, vel: 0.0, to: v, run: None, runner: None, used: -1, mover: @ui.Mover::new() }
+  { v, vel: 0.0, to: v, run: None, runner: None, built: false, mover: @ui.Mover::new() }
 }
 
 ///|
@@ -297,6 +298,44 @@ pub fn Value::follow(self : Value, target : Double, spec : Spec) -> Unit {
 let values : Map[Int, Value] = Map([])
 
 ///|
+/// The keys of the values whose asker was no longer built while they ran: let go once they are still (values_let_go).
+// kept across runs: forgotten as a Tester starts anew (reset_fx)
+let values_moving : Array[Int] = []
+
+///|
+/// What asked the value kept by `id` is no longer built: forgotten, or once its run is over (values_let_go).
+fn value_unbuilt(id : Int) -> Unit {
+  match values.get(id) {
+    Some(v) => {
+      v.built = false
+      if v.run is None {
+        values.remove(id)
+      } else {
+        values_moving.push(id)
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// The values no longer asked that ran, forgotten once still (asked again meanwhile: kept).
+fn values_let_go() -> Unit {
+  if values_moving.is_empty() {
+    return
+  }
+  let keep : Array[Int] = []
+  for id in values_moving {
+    match values.get(id) {
+      Some(v) if !v.built => if v.run is None { values.remove(id) } else { keep.push(id) }
+      _ => ()
+    }
+  }
+  values_moving.clear()
+  values_moving.append(keep)
+}
+
+///|
 /// A value kept from frame to frame by `key` (in the current id scope, or anywhere with `global`), starting at `init`
 /// (Motion's useMotionValue).
 pub fn value(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) -> Value {
@@ -310,22 +349,9 @@ pub fn value(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) -
       v
     }
   }
-  v.used = c.frame_number()
-  @ui.built_used(fn() { v.used = @ui.current().frame_number() })
+  v.built = true
+  ignore(c.on_unbuilt(hash_mix(0x76616c75, id), fn() { value_unbuilt(id) }))
   v
-}
-
-///|
-fn sweep_values(c : @ui.Ctx) -> Unit {
-  let frame = c.frame_number()
-  if frame % 60 != 0 || values.is_empty() {
-    return
-  }
-  let old : Array[Int] = []
-  values.each(fn(id, v) { if frame - v.used > 120 && v.run is None { old.push(id) } })
-  for id in old {
-    values.remove(id)
-  }
 }
 
 ///|
@@ -378,8 +404,6 @@ priv struct Showing {
 priv struct Pres {
   mut cur : Showing?
   leaving : Array[Showing]
-  /// the frame it was last asked for in
-  mut seen : Int
 }
 
 ///|
@@ -405,14 +429,13 @@ pub fn animate_presence(
   let p = match presences.get(id) {
     Some(p) => p
     None => {
-      let p = { cur: None, leaving: [], seen: 0 }
+      let p = { cur: None, leaving: [] }
       presences[id] = p
       p
     }
   }
-  p.seen = c.build_number()
-  // (asked again by a list's row kept as its nodes, each frame it is: @ui.built_again)
-  @ui.built_again(fn(_) { p.seen = @ui.current().build_number() })
+  // (kept while what asks it is built, a list's row kept as its nodes too: let go as it is not, presence_unbuilt)
+  ignore(c.on_unbuilt(hash_mix(0x70726573, id), fn() { presence_unbuilt(id) }))
   let rt = @ui.runtime()
   match (shown, p.cur) {
     (true, None) => {
@@ -560,8 +583,9 @@ priv struct LayoutFx {
   p : Value
   mut spec : Spec
   mut node : Int
-  /// the build it was asked in (Ctx::build_number: its node one of that build's)
-  mut build : Int
+  /// whether the build being made asked it, said until that build is laid out (its node is one of that build's only:
+  /// layouts_after); kept while what asks it is built (layout_unbuilt)
+  mut asked : Bool
   mut known : Bool
   /// what it moves for (animate_layout's `by`) as asked this build, as last laid out, and as the frame before laid it out
   mut by : String
@@ -599,7 +623,7 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
         p: Value::new(1.0),
         spec,
         node: i,
-        build: -1,
+        asked: true,
         known: false,
         by: "",
         laid_by: "",
@@ -618,12 +642,14 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
   l.node = i
   l.spec = spec
   l.by = by
-  l.build = c.build_number()
+  l.asked = true
   // (asked again by a list's row kept as its nodes, of its node where it is put back: @ui.built_again)
   @ui.built_again(fn(by) {
     l.node = i + by
-    l.build = @ui.current().build_number()
+    l.asked = true
   })
+  // (kept while what asks it is built: let go as it is not, layout_unbuilt)
+  ignore(c.on_unbuilt(hash_mix(0x6c61796f, id), fn() { layout_unbuilt(id) }))
 }
 
 ///|
@@ -723,62 +749,57 @@ fn layout_moved(c : @ui.Ctx, l : LayoutFx, frame : Int) -> Unit {
 /// After layout: each animated node's new box against its last; a change starts the progress from the box it showed
 /// in; its look this frame is the projection from where it is laid out to where it shows.
 fn layouts_after(c : @ui.Ctx) -> Unit {
-  sweep_values(c)
-  sweep_presences(c)
+  values_let_go()
   if layouts.is_empty() {
     return
   }
+  // (the frame being made: each build of it moves a node from where the last frame drew it; what holds a frame's
+  // identity, none of its causes: kept)
   let frame = c.frame_number()
-  let build = c.build_number()
-  let gone : Array[Int] = []
-  layouts.each(fn(id, l) {
-    // (not asked in this build: not built in it, its node another's)
-    if l.build != build {
-      gone.push(id)
+  layouts.each(fn(_, l) {
+    // (not asked in this build: its node another's in it; let go once what asks it is no longer built, layout_unbuilt)
+    if !l.asked {
       return
     }
+    l.asked = false
     // (what its move reads, read for what draws its node: the part's or the row's kept, Ctx::reads_for)
     c.reads_for(l.node, fn() { layout_moved(c, l, frame) })
   })
-  for id in gone {
-    match layouts.get(id) {
-      Some(l) => l.p.halt()
-      None => ()
-    }
-    layouts.remove(id)
-  }
 }
 
 ///|
-/// What `animate_presence` was not asked for this frame (what held it is no longer built: Motion's AnimatePresence
-/// unmounted) ends at once, no exit drawn: its scopes close.
-fn sweep_presences(c : @ui.Ctx) -> Unit {
-  if presences.is_empty() {
-    return
+/// What asked layout animation `id` is no longer built: its progress halted, let go.
+fn layout_unbuilt(id : Int) -> Unit {
+  match layouts.get(id) {
+    Some(l) => l.p.halt()
+    None => ()
   }
-  // (not asked in this build: not built in it)
-  let build = c.build_number()
-  let gone : Array[Int] = []
-  presences.each(fn(id, p) { if p.seen != build { gone.push(id) } })
-  for id in gone {
-    match presences.get(id) {
-      Some(p) => {
-        match p.cur {
-          Some(s) => s.scope.close_now()
-          None => ()
-        }
-        p.cur = None
+  layouts.remove(id)
+}
+
+///|
+/// What asked `animate_presence` `id` is no longer built (Motion's AnimatePresence unmounted): it ends at once, no exit
+/// drawn, its scopes closed.
+fn presence_unbuilt(id : Int) -> Unit {
+  match presences.get(id) {
+    Some(p) => {
+      match p.cur {
+        Some(s) => s.scope.close_now()
+        None => ()
       }
-      None => ()
+      p.cur = None
     }
-    presences.remove(id)
+    None => ()
   }
+  presences.remove(id)
 }
 
 ///|
 fn reset_fx() -> Unit {
   values.clear()
+  values_moving.clear()
   presences.clear()
   drag_states.clear()
   layouts.clear()
 }
+

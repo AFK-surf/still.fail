@@ -227,21 +227,15 @@
     "motion-length": {},
     "tester-branch": {},
     "frame-number": {
-      "src/kit/popover.mbt": 5,
-      "src/kit/sheet.mbt": 2,
-      "src/kit/time.mbt": 2,
-      "src/kit/toast.mbt": 2,
-      "src/motion/anim.mbt": 9,
-      "src/motion/fx.mbt": 10,
-      "src/motion/layer.mbt": 13
+      "src/motion/anim.mbt": 2,
+      "src/motion/fx.mbt": 1,
+      "src/motion/layer.mbt": 2
     },
     "ui-current": {
-      "src/kit/popover.mbt": 1,
       "src/kit/toast_node.mbt": 1,
       "src/kit/zoom.mbt": 4,
-      "src/motion/anim.mbt": 10,
-      "src/motion/fx.mbt": 6,
-      "src/motion/layer.mbt": 2,
+      "src/motion/anim.mbt": 7,
+      "src/motion/fx.mbt": 3,
       "src/motion/way.mbt": 2
     }
   },
