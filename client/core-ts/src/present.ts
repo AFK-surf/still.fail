@@ -204,16 +204,17 @@ export function ending(s: J): string | null {
 /// Where a session stands.
 export function sessionStatus(s: J): string {
   if (get(s, "process") === "running") return "running";
-  if ((u64(get(s, "pending")) ?? 0) > 0) return "queued";
   const turn = get(s, "lastTurn");
-  if (!isObject(turn)) return "idle";
   // A turn not ended yet is running, whatever `process` says: the station reads its process states before its
-  // database (read/pool.ts), so a turn that has just begun can come with the process still cold.
-  if (turn.endedAt === null && (turn.outcome === null || turn.outcome === undefined)) return "running";
-  const e = ending(s);
+  // database (read/pool.ts), so a turn that has just begun can come with the process still cold. One that ended
+  // waiting on work it started is at work too, messages given it or not: the turn they begin takes over from it,
+  // not a queue between the two (its activity in the chat went and came back as words were sent, 2026-11-08).
+  const e = isObject(turn) ? ending(s) : null;
+  if (isObject(turn) && ((turn.endedAt === null && (turn.outcome === null || turn.outcome === undefined)) || e === "waiting")) return "running";
+  if ((u64(get(s, "pending")) ?? 0) > 0) return "queued";
+  if (!isObject(turn)) return "idle";
   if (e === "all_done") return "final";
   if (e === "need_help") return "block";
-  if (e === "waiting") return "running";
   const outcome = str(turn.outcome);
   return outcome === "failed" ? "failed" : outcome === "aborted" ? "aborted" : "unexpected";
 }
