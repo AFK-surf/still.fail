@@ -1002,6 +1002,12 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // it stands told again; what was built reads where it stands only as list_hand_move asks it. The build before having
   // laid out otherwise is no reason to build: what it read back of that layout is asked there too)
   let mut list_scrolled = false
+  // (an old view's list the hand moved: what is drawn in it moved with nothing it read told, no old view kept as drawn
+  // in this frame, view_ride.mbt's island_still)
+  old_lists_moved.val = !list_hand_dirty.is_empty()
+  if old_lists_moved.val {
+    islands_unkept()
+  }
   if why == "" && (laid_why == "" || laid_why == laid_otherwise) && !list_hand_dirty.is_empty() {
     let stopped = c.list_hand_move(t)
     if stopped == "" {

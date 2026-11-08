@@ -87,6 +87,8 @@ priv struct Riding {
   mut y1 : Double
   mut nodes : Int
   kept : Array[Array[(Int, Double, Double)]]
+  /// an old view hosted (island_rides): drawn again only where it was
+  island : Bool
 }
 
 ///|
@@ -323,6 +325,7 @@ fn Ctx::ride_begin(
   uy : Double,
   clips : Int,
   rings : Int,
+  island? : Bool = false,
 ) -> Unit {
   riding.val = Some({
     id: c.id,
@@ -345,6 +348,7 @@ fn Ctx::ride_begin(
     y1: y + c.h,
     nodes: 0,
     kept: [],
+    island,
   })
 }
 
@@ -358,7 +362,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   let side_x = ride_side(r.x0, r.x1, clip_stack[k], clip_stack[k + 2])
   let side_y = ride_side(r.y0, r.y1, clip_stack[k + 1], clip_stack[k + 3])
   let n = self.ninst - r.k0
-  if r.spoiled || (side_x != 0 && side_y != 0) {
+  if r.spoiled || (!r.island && side_x != 0 && side_y != 0) {
     ride_let_go(r.id)
     return
   }
@@ -444,7 +448,11 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
 fn ride_node(c : @view.Content, x : Double, y : Double, s : Double, moved_not : Bool) -> Unit {
   guard riding.val is Some(r) else { return }
   r.nodes = r.nodes + 1
-  if moved_not || s != 1.0 || c.hosted || c.bones != 0L || c.glass is Some(_) {
+  if moved_not ||
+    s != 1.0 ||
+    (c.hosted && !(r.island && r.id == c.id)) ||
+    c.bones != 0L ||
+    c.glass is Some(_) {
     r.spoiled = true
   }
   r.x0 = dmin(r.x0, x)
@@ -516,6 +524,11 @@ fn Ctx::ride_kept_for(
   guard ride_kept.get(c.id) is Some(k) else { return None }
   let dx = x - k.x
   let dy = y - k.y
+  // (an old view hosted: only where it was, nothing it read as it was painted changed since, nor built anew, nothing
+  // said to move)
+  if c.hosted && !(dx == 0.0 && dy == 0.0 && island_still(c.id, self.build_no) && !self.moves_now()) {
+    return None
+  }
   let fits = s == 1.0 &&
     a == k.a &&
     ux - x == k.off_x &&
@@ -546,6 +559,7 @@ fn Ctx::ride_kept_for(
 /// so in its place among them.
 fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
   ride_drawn.val = ride_drawn.val + 1
+  ride_caps.clear()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs.append(k.segs)
   let mut from = 0
@@ -578,6 +592,12 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
   }
   self.ride_copy(k, from, k.inst.length() / inst_size, dx, dy, seg_by)
 }
+
+///|
+/// The captures the glass of the row drawn again (Ctx::ride_again) took as it was painted, each the one it takes in
+/// this frame.
+// kept across runs: emptied as each row is drawn again
+let ride_caps : Map[Int, Int] = {}
 
 ///|
 /// Row kept `k`'s instances `i0` until `i1` put after the frame's, moved by (dx, dy), their shapes' pieces where they
@@ -663,8 +683,26 @@ fn ride_put(
     let b = (at + i) * inst_size
     s.unsafe_set(b, s.unsafe_get(b) + dx)
     s.unsafe_set(b + 1, s.unsafe_get(b + 1) + dy)
-    if s.unsafe_get(b + 5) == 11.0 {
+    let kind = s.unsafe_get(b + 5)
+    if kind == 11.0 {
       s.unsafe_set(b + 12, s.unsafe_get(b + 12) + seg_by)
+    } else if (kind == 5.0 || kind == 6.0) && s.unsafe_get(b + 20) < 0.0 {
+      // (glass, an old view's: a capture of this frame's, as one kept and drawn again takes, Ctx::insts_replay)
+      let was = (-s.unsafe_get(b + 20)).to_int()
+      let now = match ride_caps.get(was) {
+        Some(c) => c
+        None => {
+          glass_paint.run = glass_paint.run + 1
+          ride_caps[was] = glass_paint.run
+          glass_paint.run
+        }
+      }
+      s.unsafe_set(b + 20, -now.to_double())
+      if kind == 5.0 {
+        glass_paint.frost_run = now
+      }
+      glass_paint.run_start = -1
+      glass_paint.run_len = 0
     }
     let m = k.moves.unsafe_get(i0 + i)
     if m != 0 {
@@ -716,5 +754,127 @@ fn ride_side(a0 : Double, a1 : Double, c0 : Double, c1 : Double) -> Int {
     2
   } else {
     -1
+  }
+}
+
+///|
+/// What an old view hosted read as it was painted last (Ctx::island_painted), and the old frame's build it was painted
+/// of: drawn again as kept (Ctx::ride_again) only while none of it changed.
+priv struct IslandWatch {
+  watch : @signals.Watch
+  mut built : Int
+}
+
+///|
+/// Whether an old view's list the hand moved this frame (frame_watch.mbt's frame_drawn): no old view drawn as kept.
+// kept across runs: written as each frame begins
+let old_lists_moved : Ref[Bool] = Ref(false)
+
+///|
+/// Each old view hosted's, by its node.
+// kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
+let island_watches : ByNode[IslandWatch] = ByNode::new()
+
+///|
+/// Whether node `c`, an old view hosted, is drawn as kept where nothing of it changed: not the old frame's whole, not in
+/// its bones, laid out in a box of the old frame's; not while the hand moves an old view's list (what it draws moves
+/// each frame then: not kept to be drawn again).
+fn island_rides(c : @view.Content) -> Bool {
+  c.hosted && !old_whole.val && c.bones == 0L && !old_lists_moved.val && old_box_of.get(c.id) is Some(_)
+}
+
+///|
+/// Whether the old view hosted in `id` reads as it did when it was painted last, of build `built`.
+fn island_still(id : @view.NodeId, built : Int) -> Bool {
+  match island_watches.get(id) {
+    Some(w) => !w.watch.is_stale() && w.built == built
+    None => false
+  }
+}
+
+///|
+/// The old view hosted in `c` painted by `paint`: where it is the row being drawn (island_rides), what it reads followed
+/// (as the frame's paint follows what it reads: a frame asked for as it changes, that paint read anew), and the glyphs
+/// it draws from kept for it (held in the atlas while it is drawn again: view_glyphs_held).
+fn Ctx::island_painted(self : Ctx, c : @view.Content, paint : () -> Unit) -> Unit {
+  guard riding.val is Some(r) && r.island && r.id == c.id else { return paint() }
+  let w = match island_watches.get(c.id) {
+    Some(w) => w
+    None => {
+      let w : IslandWatch = {
+        watch: @signals.watch(fn() {
+          // (as the frame's paint watch is told: paint_watch_of)
+          paint_watch_of().touch()
+          if frame_running.val && paint_phase.val == 0 {
+            ()
+          } else if frame_running.val {
+            paint_said.val = "a value an old view's paint read changed as it was painted"
+          } else {
+            h_frame_owed()
+          }
+        }),
+        built: -1,
+      }
+      island_watches[c.id] = w
+      w
+    }
+  }
+  let kept : Array[(Int, Double, Double)] = []
+  let was = glyphs_kept.val
+  glyphs_kept.val = Some(kept)
+  // (what it asks of the frames as it is painted: a frame, a moment, a cycle, apart from what the rest of the frame asks;
+  // a look by the clock it draws, cycle_look.mbt's tag, worked out as the frame's paint ends)
+  let (wants, wake, cycling) = (self.wants_frame, self.wake_at, self.cycling)
+  let tagged = cycle_tagged.val
+  self.wants_frame = false
+  self.wake_at = -1.0
+  self.cycling = false
+  w.watch.read(paint)
+  let asked = self.wants_frame ||
+    self.wake_at >= 0.0 ||
+    self.cycling ||
+    cycle_tagged.val != tagged ||
+    self.moves_now()
+  self.wants_frame = self.wants_frame || wants
+  if wake >= 0.0 && (self.wake_at < 0.0 || wake < self.wake_at) {
+    self.wake_at = wake
+  }
+  self.cycling = self.cycling || cycling
+  glyphs_kept.val = was
+  // (what goes on by the clock as it is painted (a motion, a fling, a caret's blink, a waiting band's breath), and what
+  // is said to move while it is painted, drawn anew in the frames after, never as kept)
+  w.built = if asked { -1 } else { self.build_no }
+  r.kept.push(kept)
+}
+
+///|
+/// No old view hosted drawn again as it was kept (an old view's list the hand moves: what they draw moved, nothing they
+/// read told): each painted anew the next frame it is drawn.
+fn islands_unkept() -> Unit {
+  for id in island_watches.keys() {
+    match island_watches.get(id) {
+      Some(w) => w.built = -1
+      None => ()
+    }
+  }
+}
+
+///|
+/// What the old view hosted in `id` read let go of, with its node.
+fn island_watch_gone(id : @view.NodeId) -> Unit {
+  match island_watches.get(id) {
+    Some(w) => {
+      w.watch.stop()
+      island_watches.remove(id)
+    }
+    None => ()
+  }
+}
+
+///|
+/// All of it let go, as a run begins.
+fn island_watches_clear() -> Unit {
+  for id in island_watches.keys() {
+    island_watch_gone(id)
   }
 }
