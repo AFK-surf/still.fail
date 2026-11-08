@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { newBoxPair, openSeal, saveContext, type BoxCert } from "../src/vault/crypto.ts";
 import { Secrets } from "../src/vault/secrets.ts";
+import { VaultStore } from "../src/vault/store.ts";
 
 test("a newly published device reads only its owner's waiting secrets", () => {
   const visits: number[] = [];
@@ -21,9 +22,10 @@ test("a newly published device reads only its owner's waiting secrets", () => {
       return typeof value === "function" ? value.bind(target) : value;
     } });
     try {
+      const vaults = new VaultStore(observed);
       const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => null,
         hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
-        proxy: {} as never, vaults: {} as never, plain: {} as never });
+        proxy: {} as never, vaults, plain: {} as never });
       const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s',?,?)");
       const put = (id: string, owner: string, status: string) => insert.run(id, status, JSON.stringify({
         ws: "w", id, session: "s", vault: "v", owner, at: 0, item: "i", mode: "env", status,
@@ -40,6 +42,7 @@ test("a newly published device reads only its owner's waiting secrets", () => {
       secrets.reboxed();
       const box = newBoxPair();
       const cert = { device: "alice-device", box: box.pub } as BoxCert;
+      db.prepare("INSERT INTO vault_boxes(ws,device,body) VALUES('w',?,?)").run(cert.device, JSON.stringify(cert));
       const lock = { ws: "w", devices: new Map([[cert.device, { sub: "alice" }]]),
         members: new Map([["alice", { email: "alice@example.test" }]]) };
       tracing = true;
@@ -57,9 +60,10 @@ test("a newly published device reads only its owner's waiting secrets", () => {
 test("an older handover can write its pending save after reboxing", () => {
   const db = new DatabaseSync(":memory:");
   try {
+    const vaults = new VaultStore(db);
     const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => null,
       hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
-      proxy: {} as never, vaults: {} as never, plain: {} as never });
+      proxy: {} as never, vaults, plain: {} as never });
     secrets.carry({ keeper: { boxes: [], held: [] }, unsaved: [["mine", { value: "test-secret" }]] });
     secrets.reboxed();
     db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w','mine','s','pending',?)").run(JSON.stringify({
@@ -68,6 +72,7 @@ test("an older handover can write its pending save after reboxing", () => {
     }));
     const box = newBoxPair();
     const cert = { device: "alice-device", box: box.pub } as BoxCert;
+    db.prepare("INSERT INTO vault_boxes(ws,device,body) VALUES('w',?,?)").run(cert.device, JSON.stringify(cert));
     const lock = { ws: "w", devices: new Map([[cert.device, { sub: "alice" }]]),
       members: new Map([["alice", { email: "alice@example.test" }]]) };
     secrets.boxed(lock as never, cert);
@@ -95,9 +100,10 @@ test("a newly registered device looks up only the older handover's save ids", as
       return typeof value === "function" ? value.bind(target) : value;
     } });
     try {
+      const vaults = new VaultStore(observed);
       const secrets = new Secrets({ db: observed, data: ".", now: () => 0, home: () => "w", lock: () => null,
         hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
-        proxy: {} as never, vaults: {} as never, plain: {} as never, backfill: { previousGone } });
+        proxy: {} as never, vaults, plain: {} as never, backfill: { previousGone } });
       const insert = db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s',?,?)");
       const put = (id: string, status: string, owner: string) => insert.run(id, status, JSON.stringify({
         ws: "w", id, session: "s", vault: "v", owner, at: 0, item: "i", mode: "env", status,
@@ -108,6 +114,7 @@ test("a newly registered device looks up only the older handover's save ids", as
       secrets.carry({ keeper: { boxes: [], held: [] }, unsaved: [["mine", { value: "test-secret" }]] });
       const box = newBoxPair();
       const cert = { device: "alice-device", box: box.pub } as BoxCert;
+      db.prepare("INSERT INTO vault_boxes(ws,device,body) VALUES('w',?,?)").run(cert.device, JSON.stringify(cert));
       const lock = { ws: "w", devices: new Map([[cert.device, { sub: "alice" }]]),
         members: new Map([["alice", { email: "alice@example.test" }]]) };
       tracing = true;
@@ -124,9 +131,10 @@ test("a newly registered device looks up only the older handover's save ids", as
 test("a device tells its owner's waiting requests in their existing order", () => {
   const db = new DatabaseSync(":memory:");
   try {
+    const vaults = new VaultStore(db);
     const secrets = new Secrets({ db, data: ".", now: () => 0, home: () => "w", lock: () => null,
       hub: { store: { subscribe() {}, getSession() { return {}; } } } as never,
-      proxy: {} as never, vaults: {} as never, plain: {} as never });
+      proxy: {} as never, vaults, plain: {} as never });
     const unsaved: [string, Record<string, string>, { ws: string; owner: string }[]][] = [];
     for (const id of ["z", "a"]) {
       db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES('w',?,'s','pending',?)").run(id, JSON.stringify({
@@ -140,6 +148,7 @@ test("a device tells its owner's waiting requests in their existing order", () =
     secrets.listen((r) => told.push(r.id));
     const box = newBoxPair();
     const cert = { device: "alice-device", box: box.pub } as BoxCert;
+    db.prepare("INSERT INTO vault_boxes(ws,device,body) VALUES('w',?,?)").run(cert.device, JSON.stringify(cert));
     const lock = { ws: "w", devices: new Map([[cert.device, { sub: "alice" }]]),
       members: new Map([["alice", { email: "alice@example.test" }]]) };
     secrets.boxed(lock as never, cert);

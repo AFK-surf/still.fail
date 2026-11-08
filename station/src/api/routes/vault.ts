@@ -22,9 +22,9 @@ export type VaultDeps = {
   events?: Events;
   /// Wait for an older station's writes to stop; undefined means the handover is already complete.
   beforeWrite?(): false | Promise<boolean> | undefined;
-  /// A device's box certificate taken (a newer one than held): the secrets agents asked to keep for its person are
-  /// sealed to it too (vault/secrets.ts `boxed`).
-  boxed?(lock: LockState, cert: BoxCert): void;
+  /// A checked certificate is held: seal its person's waiting saves to it (vault/secrets.ts `boxed`). False says a
+  /// conflicting write delayed reboxing; the certificate is already held and its retry is scheduled there.
+  boxed?(lock: LockState, cert: BoxCert): boolean | void;
 };
 
 /// A refusal with its code, which the core says as it is.
@@ -202,6 +202,8 @@ export const routes = ({ vaults, lock, events, boxed, beforeWrite }: VaultDeps):
       method: "PUT",
       pattern: /^\/vault\/boxes$/,
       handle: async (r) => {
+        const waiting = beforeWrite?.();
+        if (waiting === false || (waiting !== undefined && (!await waiting || beforeWrite?.() === false))) return refuse(503, "vault_handover", "the previous station has not finished handing over");
         const l = locked(r);
         if (isAnswer(l)) return l;
         const cert = body(r) as BoxCert;
@@ -210,13 +212,21 @@ export const routes = ({ vaults, lock, events, boxed, beforeWrite }: VaultDeps):
         // Published by the device itself, as the lock admits it: a signing key alone (an admin's, who put a device in
         // under someone's name) does not publish a box that the person's secrets would be sealed to.
         if (deviceOf(l, r) !== cert.device) return refuse(403, "vault_not_device", "a device publishes its own box certificate");
-        const had = vaults.box(l.ws, cert.device);
-        // An older one than held changes nothing.
-        if (had !== null && had.at > cert.at) return json(200, JSON.stringify({ box: had }));
-        vaults.putBox(cert);
-        tell("vault-box", cert, `vault-box\0${cert.device}`, { workspace: cert.ws });
-        boxed?.(l, cert);
-        return json(200, JSON.stringify({ box: cert }));
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const held = vaults.boxSnapshot(l.ws, cert.device), had = held?.value ?? null;
+          // An older one than held changes nothing, including when it was replaced during this write.
+          if (had !== null && had.at > cert.at) {
+            // A prior attempt may have stored this newer certificate but been unable to finish reboxing its saves.
+            if (had.ws === l.ws && had.device === cert.device && certOk(l, had) === null && boxed?.(l, had) === false)
+              return refuse(503, "vault_busy", "the box certificate or a pending request changed while it was being reboxed");
+            return json(200, JSON.stringify({ box: had }));
+          }
+          if (!vaults.putBoxIf(cert, held?.body ?? null)) continue;
+          tell("vault-box", cert, `vault-box\0${cert.device}`, { workspace: cert.ws });
+          if (boxed?.(l, cert) === false) return refuse(503, "vault_busy", "the box certificate or a pending request changed while it was being reboxed");
+          return json(200, JSON.stringify({ box: cert }));
+        }
+        return refuse(503, "vault_busy", "the box certificate changed while it was being written");
       },
     },
   ];
