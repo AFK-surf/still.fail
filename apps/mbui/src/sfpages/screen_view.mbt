@@ -450,13 +450,10 @@ pub fn screen_page_node(
     }
     v.pick(fn() {
       session.said.get() |> ignore
-      if u.full.get() { 2 } else if !@sf.soft_keyboard() && !@sf.native_on() { 1 } else if !session.simulator() {
-        if @sf.native_on() { 5 } else
-        if !@sf.soft_keyboard() { 1 } else {
-          let (w, h) = v.window()
-          if w <= h { 3 } else { 4 }
-        }
-      } else { 0 }
+      if u.full.get() { 2 } else if @sf.native_on() { 5 } else if !@sf.soft_keyboard() { 1 } else {
+        let (w, h) = v.window()
+        if w <= h { 3 } else { 4 }
+      }
     }, fn(body, stage) {
       body.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
       if stage == 2 {
@@ -467,11 +464,12 @@ pub fn screen_page_node(
         }) |> ignore
       } else if stage == 5 {
         body.padding(By(fn() { (0.0, 0.0, @sf.native_clear(), 0.0) })) |> ignore
-        screen_stage_node(body, fn(c, picture) {
-          let p = context(c)
-          screen_stage(c, p.session, p.ui, p.key, picture~)
-          screen_native_overlays(c, p.session, p.ui, p.typing)
-        }) |> ignore
+        screen_content_node(body, session, u, screen_key(at.station, at.screen),
+          prepare=fn(c) { context(c) |> ignore }) |> ignore
+        @ui.old(body, fn(c) {
+          session.said.get() |> ignore
+          screen_native_overlays(c, session, u, c.keyboard_up())
+        }).over(Is(true)) |> @ui.old_takes_own |> ignore
       } else if stage == 4 {
         body.row(Is(true)) |> ignore
         @ui.old(body, fn(c) {
@@ -480,10 +478,13 @@ pub fn screen_page_node(
             screen_rail(c, p.session, p.ui, p.typing, p.catcher, p.close)
           }) |> ignore
         }).width(Is(match @sf.rail_w { Fixed(w) => Some(w); _ => None })) |> ignore
-        screen_stage_node(body, fn(c, picture) {
-          session.said.get() |> ignore
-          screen_stage(c, session, u, screen_key(at.station, at.screen), picture~)
-          screen_side_overlays(c, session, u, c.keyboard_up())
+        body.box(fn(content) {
+          content.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+          screen_content_node(content, session, u, screen_key(at.station, at.screen)) |> ignore
+          @ui.old(content, fn(c) {
+            session.said.get() |> ignore
+            screen_side_overlays(c, session, u, c.keyboard_up())
+          }).over(Is(true)) |> @ui.old_takes_own |> ignore
         }) |> ignore
         @ui.old(body, fn(c) {
           session.said.get() |> ignore
@@ -497,25 +498,19 @@ pub fn screen_page_node(
             c.box(style=take_over_place, fn() { take_over(c, p.session) }) |> ignore
           }
         }) |> ignore
-        screen_stage_node(body, fn(c, picture) {
-          session.said.get() |> ignore
-          screen_stage(c, session, u, screen_key(at.station, at.screen), picture~)
-        }) |> ignore
+        screen_content_node(body, session, u, screen_key(at.station, at.screen)) |> ignore
         @ui.old(body, natural=true, fn(c) {
           session.said.get() |> ignore
-          if session.driving() {
+          if session.driving() && (!session.simulator() || c.keyboard_up()) {
             foot(c, session, u, c.keyboard_up(), "screen-keys/" + screen_key(at.station, at.screen))
           }
         }) |> ignore
-      } else if stage == 1 {
+      } else {
         @ui.old(body, natural=true, unlaid=fn() { @sf.viewer_bar_h }, fn(c) {
           let p = context(c)
           screen_viewer_bar(c, p.session, p.ui, p.title, p.close)
         }) |> ignore
         screen_content_node(body, session, u, screen_key(at.station, at.screen)) |> ignore
-      } else {
-        @ui.old(body, fn(c) { screen_page_inside(c, context(c)) })
-          .grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
       }
     })
   })

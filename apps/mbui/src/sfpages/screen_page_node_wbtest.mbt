@@ -196,18 +196,27 @@ test "retained screen follows native column resizing and keeps native mode and f
 }
 
 ///|
-fn screen_simulator_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
-  let r = screen_rig(retained~, platform=0, w=1280.0, h=800.0)
+fn screen_simulator_frames(retained : Bool, platform : Int) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, platform~, w=1280.0, h=800.0)
+  defer { @sf.native_bars_reset() }
+  if platform == 1 {
+    @sf.native_bars.on.set(true)
+    @sf.native_bars.side.set(84.0)
+  }
   simulator_live(r)
   let frames = []
-  for size in [(1280.0, 800.0), (390.0, 844.0), (1280.0, 800.0)] {
+  // The native column keeps 84 px; retain room for the existing device toolbar.
+  let narrow_w = if platform == 1 { 600.0 } else { 390.0 }
+  for size in [(1280.0, 800.0), (narrow_w, 844.0), (1280.0, 800.0)] {
     r.t.resize(size.0, size.1)
     r.t.draw()
     let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
     assert_true(images.length() > 0)
     frames.push(images)
+    let inputs_before = r.inputs().length()
     r.tap_label(tr("web-pages.screen.device.home"))
     r.t.draw()
+    assert_eq(r.inputs().length(), inputs_before + 2, msg="platform=\{platform} retained=\{retained} size=\{size}")
   }
   assert_eq(r.inputs().length(), 6)
   for shown in [false, true] {
@@ -224,5 +233,8 @@ fn screen_simulator_frames(retained : Bool) -> Array[Array[Array[Double]]] raise
 
 ///|
 test "retained simulator keeps resizing device input and log pane picture geometry" {
-  assert_eq(screen_simulator_frames(true), screen_simulator_frames(false))
+  for platform in [0, 1, 2] {
+    let original = screen_simulator_frames(false, platform)
+    assert_eq(screen_simulator_frames(true, platform), original)
+  }
 }

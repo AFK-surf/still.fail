@@ -74,7 +74,7 @@ pub fn look_for(w : Double) -> Look {
 ///|
 /// A page that takes no frame's arrangement (a remote screen's, whole in what it is given), drawn as a page `w` wide is
 /// arranged.
-pub fn arranged(w : Double, wide~ : () -> Unit, narrow~ : () -> Unit) -> Unit {
+pub fn[T] arranged(w : Double, wide~ : () -> T, narrow~ : () -> T) -> T {
   match look_for(w) {
     Wide => wide()
     Narrow => narrow()

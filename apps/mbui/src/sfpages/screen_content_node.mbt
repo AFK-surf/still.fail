@@ -2,16 +2,19 @@
 // with the legacy page while those controls move to retained nodes.
 
 ///|
-fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : String) -> @view.View {
+fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : String, prepare? : (@ui.Ctx) -> Unit = fn(_) { }) -> @view.View {
   parent.box(fn(v) {
     v.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
     v.pick(fn() {
       s.said.get() |> ignore
-      if !s.simulator() { 0 } else if @sf.look_for(if u.in_tab { 0.0 } else { v.window().0 }) is Wide { 2 } else { 1 }
+      if !s.simulator() { 0 } else {
+        @sf.arranged(if u.in_tab { 0.0 } else { v.window().0 }, wide=fn() { 2 }, narrow=fn() { 1 })
+      }
     }, fn(body, mode) {
       body.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
       if mode == 0 {
         screen_stage_node(body, fn(c, picture) {
+          prepare(c)
           s.said.get() |> ignore
           screen_stage(c, s, u, key, picture~)
         }) |> ignore
@@ -20,6 +23,7 @@ fn screen_content_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : 
         body.box(fn(stage) {
           stage.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
           screen_stage_node(stage, fn(c, picture) {
+            prepare(c)
             s.said.get() |> ignore
             u.logs.beside = mode == 2 && flag(s.state, "debug")
             u.logs.by_device = mode == 2

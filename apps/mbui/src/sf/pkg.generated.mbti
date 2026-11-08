@@ -62,7 +62,7 @@ pub let app_own_px : Int32
 
 pub fn around(Double, Double) -> Double
 
-pub fn arranged(Double, wide~ : () -> Unit, narrow~ : () -> Unit) -> Unit
+pub fn[T] arranged(Double, wide~ : () -> T, narrow~ : () -> T) -> T
 
 pub fn ask(String, String, (String) -> Unit, value? : String, placeholder? : String, hint? : String, secret? : Bool, empty? : Bool, from? : Anchor) -> Unit
 
