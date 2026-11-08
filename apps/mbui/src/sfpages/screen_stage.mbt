@@ -625,8 +625,12 @@ priv struct Gesture {
   mut tap_open : Bool
   mut tx : Double
   mut ty : Double
-  /// the frame whose pointer was last taken
-  mut frame : Int
+  /// directly, a drag: where its last move went on the picture
+  mut moved_to : (Double, Double)?
+  /// what the hand did that is to go to the screen and be felt, not yet told: kept here as it is done, so a frame
+  /// built again (which sees none of what the first build took) adds nothing and loses nothing of it
+  sent : Array[Json]
+  buzz : Array[@ui.Haptic]
 }
 
 ///|
@@ -649,7 +653,9 @@ fn gesture_new() -> Gesture {
     tap_open: false,
     tx: 0.0,
     ty: 0.0,
-    frame: -1,
+    moved_to: None,
+    sent: [],
+    buzz: [],
   }
 }
 
@@ -669,19 +675,14 @@ fn screen_gestures(
   catcher : String,
 ) -> Unit {
   let g = u.gesture
-  let frame = c.frame_number()
-  if g.frame == frame {
-    return
-  }
-  g.frame = frame
   // a mouse is itself: the screen's pointer where it is
   if @sf.pointer_rests() {
-    screen_mouse(c, s, u, stage, catcher, frame)
+    screen_mouse(c, s, u, stage, catcher)
     return
   }
   u.mouse.over = false
-  let sent : Array[Json] = []
-  let buzz : Array[@ui.Haptic] = []
+  let sent = g.sent
+  let buzz = g.buzz
   let (ox, oy) = match c.rect_of(stage) {
     Some((x, y, _, _)) => (x, y)
     None => (u.stage_x, u.stage_y)
@@ -717,6 +718,7 @@ fn screen_gestures(
         g.two = None
         g.two_moved = false
         g.two_held = false
+        g.moved_to = None
         let near = ((g.sx - g.tx) * (g.sx - g.tx) + (g.sy - g.ty) * (g.sy - g.ty)).sqrt() <
           screen_slop * 4.0
         g.again = g.pad && g.tap_open && near
@@ -782,7 +784,10 @@ fn screen_gestures(
                         sent.push(pointer_input("down", at, btn_primary))
                         g.mode = 1
                         match screen_frame_at(x, y, u.shown(), true) {
-                          Some(at2) => sent.push(pointer_input("move", at2, btn_primary))
+                          Some(at2) => {
+                            g.moved_to = Some(at2)
+                            sent.push(pointer_input("move", at2, btn_primary))
+                          }
                           None => ()
                         }
                       }
@@ -819,10 +824,14 @@ fn screen_gestures(
                   }
                 }
               }
+              // (where it is on the picture, once each: held still, no move again)
               1 =>
                 match screen_frame_at(x, y, u.shown(), true) {
-                  Some(at) => sent.push(pointer_input("move", at, btn_primary))
-                  None => ()
+                  Some(at) if g.moved_to != Some(at) => {
+                    g.moved_to = Some(at)
+                    sent.push(pointer_input("move", at, btn_primary))
+                  }
+                  _ => ()
                 }
               2 => if fit.w > 0.0 { u.zoom.pan(x - g.lx, y - g.ly) }
               3 =>
@@ -920,11 +929,15 @@ fn screen_gestures(
     None => ()
   }
   if sent.length() > 0 || buzz.length() > 0 {
-    c.tell("screen-pointer/" + s.view + "/\{frame}", fn() {
-      for j in sent {
+    c.tell("screen-pointer/" + s.view, fn() {
+      let js = sent.copy()
+      let hs = buzz.copy()
+      sent.clear()
+      buzz.clear()
+      for j in js {
         s.input(s.src, j)
       }
-      for h in buzz {
+      for h in hs {
         @ui.haptic(h)
       }
     })
@@ -943,7 +956,7 @@ fn scroll_by(
   frame : (Int, Int)?,
 ) -> Unit {
   guard frame is Some((fw, _)) else { return }
-  if shown.w <= 0.0 {
+  if shown.w <= 0.0 || (dx == 0.0 && dy == 0.0) {
     return
   }
   let k = fw.to_double() / shown.w
@@ -964,6 +977,8 @@ priv struct MouseDrive {
   mut over : Bool
   /// where it last pressed on the stage, in the window's points: where typing is likeliest to go
   mut pressed : (Double, Double)?
+  /// what it did that is to go to the screen, not yet told (as Gesture's)
+  sent : Array[Json]
 }
 
 ///|
@@ -972,7 +987,7 @@ let screen_ime_h : Double = 20.0
 
 ///|
 fn mouse_drive_new() -> MouseDrive {
-  { down: false, sent_down: false, mods: 0, at: None, over: false, pressed: None }
+  { down: false, sent_down: false, mods: 0, at: None, over: false, pressed: None, sent: [] }
 }
 
 ///|
@@ -981,9 +996,9 @@ fn mouse_drive_new() -> MouseDrive {
 /// edge, at its edge) and up, its secondary button a right click, its wheel (in pixels, not a pinch); with ⇧ ⌃ ⌥ ⌘
 /// held as a button goes down, their keys round it. A press on the stage, a picture's letterbox too, gives it the
 /// keyboard. Only while driving it: only looking, nothing goes.
-fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher : String, frame : Int) -> Unit {
+fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher : String) -> Unit {
   let m = u.mouse
-  let sent : Array[Json] = []
+  let sent = m.sent
   let send = fn(j : Json) { sent.push(j) }
   let (ox, oy) = match c.rect_of(stage) {
     Some((x, y, _, _)) => (x, y)
@@ -1088,8 +1103,10 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
   let (ix, iy) = m.pressed.unwrap_or((ox + shown.x, oy + shown.y + shown.h))
   c.key_catcher_place(catcher, ix, iy, screen_ime_h)
   if sent.length() > 0 {
-    c.tell("screen-mouse/" + s.view + "/\{frame}", fn() {
-      for j in sent {
+    c.tell("screen-mouse/" + s.view, fn() {
+      let js = sent.copy()
+      sent.clear()
+      for j in js {
         s.input(s.src, j)
       }
     })

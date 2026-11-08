@@ -360,16 +360,15 @@ fn case_button_press(
       "down": Json::boolean(down),
     }))
   }
-  let frame = c.frame_number()
   if now && !was {
     held[b.name] = true
-    c.tell("screen-case-down/" + s.view + "/" + b.name + "/\{frame}", fn() { tell(true) })
+    c.tell("screen-case-down/" + s.view + "/" + b.name, fn() { tell(true) })
   } else if !now && was {
     held.remove(b.name)
-    c.tell("screen-case-up/" + s.view + "/" + b.name + "/\{frame}", fn() { tell(false) })
+    c.tell("screen-case-up/" + s.view + "/" + b.name, fn() { tell(false) })
   } else if !now && c.clicked(id) {
     // (down and up between two frames)
-    c.tell("screen-case-tap/" + s.view + "/" + b.name + "/\{frame}", fn() {
+    c.tell("screen-case-tap/" + s.view + "/" + b.name, fn() {
       tell(true)
       tell(false)
     })

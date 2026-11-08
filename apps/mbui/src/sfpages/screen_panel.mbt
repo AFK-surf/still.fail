@@ -518,8 +518,7 @@ fn center_panel(
           if chosen != now && chosen >= 0 && steps[chosen] != u.scale_asked {
             let p = steps[chosen]
             u.scale_asked = p
-            let n = c.frame_number()
-            c.tell("screen-scale/" + s.view + "/\{n}", fn() {
+            c.tell("screen-scale/" + s.view, fn() {
               s.input(src, Json::object({ "t": Json::string("scale"), "percent": Json::number(p.to_double()) }))
             })
           }
@@ -553,8 +552,7 @@ fn center_panel(
           if chosen != now && chosen >= 0 && modes[chosen] != u.size_asked {
             let (w, h) = modes[chosen]
             u.size_asked = (w, h)
-            let n = c.frame_number()
-            c.tell("screen-resolution/" + s.view + "/\{n}", fn() {
+            c.tell("screen-resolution/" + s.view, fn() {
               s.input(src, {
                 "t": Json::string("resolution"),
                 "width": Json::number(w.to_double()),
@@ -633,8 +631,7 @@ fn combo_tiles(c : @ui.Ctx, s : ScreenSess, combos : Array[Combo], done : () -> 
           })
           c.semantics(t, Button, id~, label=k.name, actions=[Activate])
           if c.clicked(id) {
-            let n = c.frame_number()
-            c.tell("screen-combo/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
+            c.tell("screen-combo/" + s.view + "/" + k.keys, fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
             done()
           }
         }
@@ -689,8 +686,7 @@ fn key_tiles(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
           c.semantics(t, Button, id~, label~, actions=[Activate])
           if c.clicked(id) {
             let mods = u.held.take()
-            let n = c.frame_number()
-            c.tell("screen-panel-key/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, key, key, mods) })
+            c.tell("screen-panel-key/" + s.view + "/" + key, fn() { stroke(fn(j) { s.input(s.src, j) }, key, key, mods) })
           }
         }
       })
