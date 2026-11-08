@@ -249,10 +249,10 @@ pub fn tip_owns(owner : TipOwner) -> Bool {
 }
 
 ///|
-/// An old view's last opening causes and the build that still held it (kept parts mark it used as they are put back).
+/// An old view's last opening causes, kept while what builds the tooltip is built (forgotten as it is no longer:
+/// @ui.Ctx::on_unbuilt; come again, each of them is a new cause).
 priv struct TipReady {
   mut causes : (Bool, Bool, Bool, Bool)
-  mut build : Int
 }
 
 ///|
@@ -329,15 +329,14 @@ pub fn tooltip(
   // every build while it remains eligible, so the displaced tip cannot immediately take the slot back.
   let ready = (!shut && focused, !shut && rested, held, shown)
   let state = match kit.val.tip_ready.get(id) {
-    Some(s) if s.build >= c.build_number() - 1 => s
-    _ => {
-      let s = { causes: (false, false, false, false), build: c.build_number() }
+    Some(s) => s
+    None => {
+      let s = { causes: (false, false, false, false) }
       kit.val.tip_ready[id] = s
       s
     }
   }
-  state.build = c.build_number()
-  @ui.built_used(fn() { state.build = @ui.current().build_number() })
+  ignore(c.on_unbuilt(unbuilt_id(id, 1), fn() { kit.val.tip_ready.remove(id) }))
   let (old_focus, old_rest, old_held, old_shown) = state.causes
   let (by_focus, by_rest, by_hand, by_app) = ready
   if (by_focus && !old_focus) || (by_rest && !old_rest) || (by_hand && !old_held) || (by_app && !old_shown) {
@@ -413,21 +412,20 @@ fn beside(
 }
 
 ///|
-/// Where the trigger `anchor` of panel `pid` was drawn last frame (Ctx::rect_of), else, while the panel was put by it
-/// the frame before, where it was then (a tip going out as its trigger goes, a row's button pressed away); else
+/// Where the trigger `anchor` of panel `pid` was drawn last frame (Ctx::rect_of), else, while the panel has been built
+/// since it was put by it, where it was then (a tip going out as its trigger goes, a row's button pressed away); else
 /// nowhere yet.
 fn anchor_of(c : @ui.Ctx, pid : Int, anchor : Int) -> (Double, Double, Double, Double)? {
-  let frame = c.frame_number()
   let r = match c.rect_of(anchor) {
     Some(r) => Some(r)
-    None =>
-      match kit.val.anchors.get(pid) {
-        Some((r, at)) if at == frame || at == frame - 1 => Some(r)
-        _ => None
-      }
+    None => kit.val.anchors.get(pid)
   }
   match r {
-    Some(r) => kit.val.anchors[pid] = (r, frame)
+    Some(r) => {
+      kit.val.anchors[pid] = r
+      // (let go with the panel: no longer built, its trigger's place is none of its)
+      ignore(c.on_unbuilt(unbuilt_id(pid, 2), fn() { kit.val.anchors.remove(pid) }))
+    }
     None => ()
   }
   r

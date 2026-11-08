@@ -1,7 +1,7 @@
 // Animated values kept from frame to frame (Compose's Animatable and animateFloatAsState; Motion's MotionValue and
-// animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. A motion told
-// in a frame starts there, at its time (that frame draws it at its start; its end known as it is told); told between
-// frames, at the next. Its time goes by the frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) puts every
+// animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. A motion starts
+// at the moment it is told (a frame told it draws it at its start; told between frames, the next frame draws it as far
+// on as the time since says), its end known as it is told. Its time goes by the frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) puts every
 // motion at its end at once; a screenshot's run moves as any run.
 
 ///|
@@ -19,17 +19,19 @@ pub struct Anim {
   mut gen : Generator?
   mut from : Double
   mut v0 : Double
-  /// when it started (ms); -1: it starts at the first frame after `asked` (told between frames)
+  /// when it started (ms, the moment it was told, or the one it was told to start at); -1: never told to go
   mut start : Double
-  mut asked : Int
   mut dur : Double
   /// whether it goes, read outside this package only so (Anim::moving)
   priv mut running : Bool
-  /// the frame it was last stepped in and the moment (a frame painted alone is at another moment of the same frame
-  /// number: frame_watch.mbt), and the frame it was last used in
-  mut stepped : Int
-  mut stepped_at : Double
-  mut used : Int
+  /// the moment it was last stepped to (where it is then is a function of its way and that moment, however many frames
+  /// there are at it: stepped again there, it is where it was; -inf: not since it was told)
+  priv mut stepped_at : Double
+  /// kept by its key (anim): whether what asks it is built (until it is not: anim_unbuilt)
+  priv mut built : Bool
+  /// asked outside a build only (as a frame is painted: a look worked out as it is drawn), the frame it was last asked
+  /// in (-1: asked in builds): what paints it is no owner ui knows, so it is let go by frames unasked (anims_let_go)
+  priv mut painted : Int
   /// what it is said to move by (Ctx::moving), and what it is said to be: its key, who told it to go
   id : @ui.Mover
   mut name : String
@@ -127,12 +129,11 @@ pub fn Anim::new(v : Double) -> Anim {
     from: v,
     v0: 0.0,
     start: -1.0,
-    asked: -1,
     dur: 0.0,
     running: false,
-    stepped: -1,
-    stepped_at: -1.0,
-    used: -1,
+    stepped_at: @double.neg_infinity,
+    built: false,
+    painted: -1,
     id: @ui.Mover::new(),
     name: "",
     told: "",
@@ -140,13 +141,12 @@ pub fn Anim::new(v : Double) -> Anim {
 }
 
 ///|
-/// Steps it to this frame (once a frame, at its moment).
+/// Steps it to this moment (once a moment: where it is then is its way's at that moment, however many frames are drawn
+/// at it).
 fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
-  let frame = c.frame_number()
-  if self.stepped == frame && self.stepped_at == c.moment() {
+  if self.stepped_at == c.moment() {
     return
   }
-  self.stepped = frame
   self.stepped_at = c.moment()
   if !self.running {
     return
@@ -154,15 +154,6 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
   if c.still() {
     self.finish()
     return
-  }
-  if self.start < 0.0 {
-    if frame <= self.asked {
-      // it starts at the next frame
-      return
-    }
-    self.start = c.moment()
-    // (said to move again: not read in the frame it was to start in, it had been let be)
-    c.moving_as(self.id, self as &@ui.Moving, self.told)
   }
   // (going: what reads it reads the clock, built again each frame: frame_watch.mbt)
   // (read for its mover: the performance record names it, not this place)
@@ -201,24 +192,20 @@ fn Anim::finish(self : Anim) -> Unit {
 
 ///|
 /// When it is there (whole ms, as its time goes), asked at each frame's end while it moves: read only, the same
-/// whoever asks first. Told to go between frames, it starts at the first frame after (its first step there): until
-/// then +inf; not read in that frame (nothing shows it), at rest, said to move again by its first step.
+/// whoever asks first. It goes from the moment it was told (between frames too: that moment, a frame asked for to
+/// show it), so its end is known as it is told.
 pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
   ignore(now)
-  if !self.running {
-    -1.0
-  } else if self.start >= 0.0 {
+  ignore(frame)
+  if self.running && self.start >= 0.0 {
     self.start + self.dur.ceil()
-  } else if frame <= self.asked {
-    @double.infinity
   } else {
     -1.0
   }
 }
 
 ///|
-/// When it is there (whole ms, the frames' clock): from when it was told in a frame; +inf while it has not started
-/// yet (told between frames, it starts at the first frame after), before now (-1) when it is at rest. For the frames
+/// When it is there (whole ms, the frames' clock): from the moment it was told; before now (-1) when it is at rest. For the frames
 /// (rounded up): the next of a chain of motions starts at `ends()`, its declared end.
 pub fn Anim::ends_at(self : Anim) -> Double {
   if !self.running {
@@ -245,11 +232,11 @@ pub fn Anim::ends(self : Anim) -> Double {
 ///|
 /// Whether the end it declared as it was told (`ends()`) has come, on the frames' clock: what waits for a motion (what
 /// is shown after it, a press it holds back, state let go once it is over) waits till then, from its cause, not for it
-/// to be seen still (sf/motion.mbt: no logic reads whether a motion runs). Never told: it has; told between frames,
-/// not before it starts; with motion reduced, as it was told.
+/// to be seen still (sf/motion.mbt: no logic reads whether a motion runs). Never told: it has; with motion reduced, as
+/// it was told.
 pub fn Anim::over(self : Anim) -> Bool {
   let c = @ui.current()
-  let over = (self.start < 0.0 && self.asked < 0) || c.moment() >= self.ends()
+  let over = self.start < 0.0 || c.moment() >= self.ends()
   // (what is built from it changes as it is told, and at its end, or the next frame where it starts then)
   c.shows_motion(self.id, !over && self.ends() == @double.infinity)
   if !over && self.ends() < @double.infinity {
@@ -285,7 +272,7 @@ pub fn Anim::target(self : Anim) -> Double {
 
 ///|
 /// Off to `target` by `spec`, from where it is now and as fast as it moves (or `velocity`, per second), from this
-/// frame's time on (told between frames: from the next frame's). `start_at`: from that moment instead, one the
+/// moment on (told between frames: from that moment, the next frame drawing it as far on). `start_at`: from that moment instead, one the
 /// framework worked out (the motion before's `ends()`), never later than now: one motion going on from where the one
 /// before it was declared to end, whichever frame saw that; its value this frame as far on as the time since says.
 /// Already over by now (a chain caught up after a while unseen), it is there at once and is not said to move.
@@ -340,10 +327,8 @@ pub fn Anim::animate(
     }
     None => c.moment()
   }
-  self.asked = c.frame_number()
-  // (started earlier: stepped this frame to where it is by now, as get() asks)
-  self.stepped = if start_at is Some(_) { -1 } else { c.frame_number() }
-  self.stepped_at = c.moment()
+  // (started earlier: stepped to where it is by now as get() asks; else at its start now, where it is)
+  self.stepped_at = if start_at is Some(_) { @double.neg_infinity } else { c.moment() }
   // motion reduced: its length none, there at once, its end the moment it was told, so a chain goes on
   // from it in the same build, all of it there at once
   if c.still() {
@@ -399,7 +384,6 @@ pub fn Anim::snap(self : Anim, v : Double) -> Unit {
   self.gen = None
   self.velocity = 0.0
   self.running = false
-  self.stepped = @ui.current().frame_number()
   self.stepped_at = @ui.current().moment()
 }
 
@@ -407,6 +391,84 @@ pub fn Anim::snap(self : Anim, v : Double) -> Unit {
 /// What animates, kept from frame to frame by its key (in the scope it was asked in), forgotten once neither used nor
 /// moving for a while.
 let anims : Map[Int, Anim] = {}
+
+///|
+/// The keys of the Anims whose asker was no longer built while they moved: let go once they are still (anims_let_go).
+// kept across runs: forgotten as a Tester starts anew (reset)
+let anims_moving : Array[Int] = []
+
+///|
+/// Anim `a`, kept by `id`, asked by what is built now: kept while that is built, let go as it is no longer.
+fn anim_built(c : @ui.Ctx, id : Int, a : Anim) -> Unit {
+  if c.on_unbuilt(hash_mix(0x616e696d, id), fn() { anim_unbuilt(id) }) {
+    a.built = true
+    a.painted = -1
+  } else if !a.built {
+    // (asked as a frame is painted, by nothing built: no owner to be told of; kept by frames, as it was)
+    if a.painted < 0 {
+      anims_painted.push(id)
+    }
+    a.painted = c.frame_number()
+  }
+}
+
+///|
+/// The keys of the Anims asked outside builds only (Anim::painted).
+// kept across runs: forgotten as a Tester starts anew (reset)
+let anims_painted : Array[Int] = []
+
+///|
+/// What asked the Anim kept by `id` is no longer built (a page gone, a row scrolled away: made anew at rest when it comes
+/// back): forgotten, or once it has got where it went (anims_let_go).
+fn anim_unbuilt(id : Int) -> Unit {
+  match anims.get(id) {
+    Some(a) => {
+      a.built = false
+      if a.running {
+        anims_moving.push(id)
+      } else {
+        anims.remove(id)
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// The Anims no longer asked that were moving, forgotten once their way is over by `now` (asked again meanwhile: kept).
+fn anims_let_go(c : @ui.Ctx) -> Unit {
+  let now = c.moment()
+  if !anims_painted.is_empty() {
+    // (what paints them is no owner ui knows: let go when no frame asked them for a while, still)
+    let frame = c.frame_number()
+    let keep : Array[Int] = []
+    for id in anims_painted {
+      match anims.get(id) {
+        Some(a) if a.painted >= 0 =>
+          if frame - a.painted > 120 && !a.running {
+            anims.remove(id)
+          } else {
+            keep.push(id)
+          }
+        _ => ()
+      }
+    }
+    anims_painted.clear()
+    anims_painted.append(keep)
+  }
+  if anims_moving.is_empty() {
+    return
+  }
+  let keep : Array[Int] = []
+  for id in anims_moving {
+    match anims.get(id) {
+      Some(a) if !a.built => if a.running && now < a.ends() { keep.push(id) } else { anims.remove(id) }
+      _ => ()
+    }
+  }
+  anims_moving.clear()
+  anims_moving.append(keep)
+}
 
 ///|
 /// A number kept from frame to frame by `key`, starting at `init`; it goes as it is told (Anim::animate, follow,
@@ -425,8 +487,7 @@ pub fn anim(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) ->
   if a.name == "" {
     a.name = key
   }
-  a.used = c.frame_number()
-  @ui.built_used(fn() { a.used = @ui.current().frame_number() })
+  anim_built(c, id, a)
   a.step(c)
   a
 }
@@ -478,21 +539,6 @@ pub fn told(c : @ui.Ctx, key : String, target : Double, spec? : Spec = spring(),
 }
 
 ///|
-/// Forgets what has not been used for a while and does not move (a page gone, a row scrolled away: made anew at rest
-/// when it comes back).
-fn sweep_anims(c : @ui.Ctx) -> Unit {
-  let frame = c.frame_number()
-  if frame % 60 != 0 || anims.is_empty() {
-    return
-  }
-  let old : Array[Int] = []
-  anims.each(fn(id, a) { if frame - a.used > 120 && !a.running { old.push(id) } })
-  for id in old {
-    anims.remove(id)
-  }
-}
-
-///|
 /// How much the pressed look of the thing with `id` shows (0 … 1): in over 75 ms as a finger goes down, out over 150
 /// once it lifts, a press however short shown whole first (the timing of Android's ripple, RippleDrawable, as the
 /// app's `clickable`s have it). Only a look: the tap is the thing's own, at once.
@@ -508,8 +554,7 @@ pub fn pressing(c : @ui.Ctx, id : Int) -> Double {
       anim(c, key, 0.0, global=true)
     }
   }
-  a.used = c.frame_number()
-  @ui.built_used(fn() { a.used = @ui.current().frame_number() })
+  anim_built(c, motion_key(key), a)
   a.step(c)
   if down {
     a.follow(1.0, tween(75.0, ease=Linear))

@@ -38,15 +38,12 @@ pub(all) struct Toasts {
 }
 
 ///|
-/// A viewport's toasts as drawn last frame, in order, and those of them put away (coming out); and as the frame before
-/// left them, with its number: each build of a frame starts from there (a frame may be built twice), only what was put
-/// away in it (a swipe, its time) kept put away.
+/// A viewport's toasts as drawn last, in order, and those of them put away (coming out), each as its cause came: no
+/// longer given, swiped, closed, acted on, its time out. A build again of the frame goes on from there: what put one
+/// away was so.
 priv struct Kept {
   mut drawn : Array[Toast]
   gone : Map[String, Bool]
-  mut frame : Int
-  mut drawn_before : Array[Toast]
-  gone_before : Map[String, Bool]
 }
 
 ///|
@@ -68,19 +65,10 @@ pub fn toaster(
   let kept = match kit.val.toasts.get(vid) {
     Some(k) => k
     None => {
-      let k = { drawn: [], gone: {}, frame: -1, drawn_before: [], gone_before: {} }
+      let k = { drawn: [], gone: {} }
       kit.val.toasts[vid] = k
       k
     }
-  }
-  if kept.frame != c.frame_number() {
-    kept.frame = c.frame_number()
-    kept.drawn_before = kept.drawn
-    kept.gone_before.clear()
-    kept.gone.each(fn(id, v) { kept.gone_before[id] = v })
-  } else {
-    kept.drawn = kept.drawn_before
-    kept.gone_before.each(fn(id, v) { kept.gone[id] = v })
   }
   // as drawn last frame (those no longer given put away), then the new ones
   let order : Array[Toast] = []

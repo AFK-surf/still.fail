@@ -70,11 +70,14 @@ fn parts_frame_end(c : Ctx) -> Unit {
   rows_nodes_end(c)
   c.list_hand_end()
   clock_frame_end(c)
+  // (what the frame no longer built told so: Ctx::on_unbuilt)
+  unbuilt_told(c)
 }
 
 ///|
 fn parts_forget() -> Unit {
   kept_clock.dues.clear()
+  unbuilt_watch.clear()
 }
 
 /// What `body` builds, in a box of its own filling the one being built (out of the flow: the one being built laid out

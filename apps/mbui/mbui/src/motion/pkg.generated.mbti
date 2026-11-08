@@ -202,7 +202,7 @@ pub fn reshaped_over(@ui.Ctx, String) -> Double
 
 pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, middle? : Bool, align? : @ui.Align, () -> Unit) -> Unit
 
-pub fn reveal_height(String) -> Double
+pub fn reveal_height(@ui.Ctx, String) -> Double
 
 pub fn reveal_node(@view.View, () -> Bool, (@view.View) -> Unit) -> @view.View
 
@@ -283,11 +283,7 @@ pub struct Anim {
   mut from : Double
   mut v0 : Double
   mut start : Double
-  mut asked : Int32
   mut dur : Double
-  mut stepped : Int32
-  mut stepped_at : Double
-  mut used : Int32
   id : @ui.Mover
   mut name : String
   mut told : String

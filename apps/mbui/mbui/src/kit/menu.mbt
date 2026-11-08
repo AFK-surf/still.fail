@@ -202,7 +202,7 @@ fn menu_panel(
                 let iid = ids[n]
                 let r = c.interact(iid, disabled=e.disabled)
                 // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
-                if r.hovered && pointer_moved(c) && !e.disabled {
+                if r.hovered && pointer_moved(c, iid) && !e.disabled {
                   if !c.has_focus(iid) {
                     c.focus_on(iid)
                   }
@@ -458,7 +458,7 @@ fn menu_anchor(c : @ui.Ctx, pid : Int, trigger : Int, open : Bool) -> (Double, D
     Some(r) => r
     None =>
       match kit.val.anchors.get(pid) {
-        Some((r, _)) if !open => r
+        Some(r) if !open => r
         _ => (0.0, 0.0, 0.0, 0.0)
       }
   }
@@ -545,7 +545,7 @@ pub fn menubar(
         if open < 0 && c.has_focus(tid) && c.take_key(@ui.key_code_down) {
           open = k
         }
-        if open >= 0 && open != k && r.hovered && pointer_moved(c) {
+        if open >= 0 && open != k && r.hovered && pointer_moved(c, tid) {
           open = k
         }
         let st = {

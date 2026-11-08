@@ -30,6 +30,12 @@ pub(all) struct ChatPick {
 pub let pk : ChatPick = { ts: "", source_ts: None, author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
 
 ///|
+/// The moment the passage picked was picked anew (-1 none): its bar comes in from then (pick_bar), shown again after a
+/// handle moved or the list let go of as it is by then, not coming in again.
+// kept across runs: put back as a test starts (pick_reset)
+let picked_at : Ref[Double] = Ref(-1.0)
+
+///|
 /// What is picked as told (picked): one passage at a time, by an identity of its own (`serial`: a number each passage
 /// picked takes, never one given again; 0 none), the message it is of and where it ran as it was picked (from, to:
 /// a finger's, in its words; -1 a mouse's, the page's selection holding it).
@@ -190,6 +196,7 @@ pub fn pick_reset() -> Unit {
   message_menu.set("")
   pk.taken_at = -1
   pk.sel.reset()
+  picked_at.val = -1.0
   picked.set(picked_none)
   pick_mouse_made.val = -1
   // (the press last felt, by its frame: a Tester's frames count from 0 again, and a press another test's pick was felt
@@ -310,6 +317,7 @@ pub fn pickable(
     words.trim(chars=" \n\t") != ""
   if pk.sel.hold(c, key, id, may~) {
     pk.ts = ts
+    picked_at.val = c.moment()
     pk.source_ts = source_ts
     pk.author = author
     pk.role = role
@@ -527,7 +535,7 @@ pub fn pick_layer(
         )
         // coming as a small panel does (@kit.pop_in), each passage picked anew; a handle moved, or the list let go of,
         // it is where it is
-        match @motion.presence(c, "pick/bar/\{pk.ts}/\{pk.taken_at}", true, enter=@kit.pop_in, initial=true) {
+        match @motion.presence(c, "pick/bar/\{pk.ts}/\{pk.taken_at}", true, enter=@kit.pop_in, initial=true, start_at?=if picked_at.val >= 0.0 { Some(picked_at.val) } else { None }) {
           Some(l) => c.look(b, l)
           None => ()
         }
