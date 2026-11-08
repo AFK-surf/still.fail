@@ -25,7 +25,9 @@ pub fn hover(
   words_along? : Bool = false,
   body : () -> Unit,
 ) -> Bool {
-  @kit.hover_card(
+  // (not open as it was last built: opening now, or going)
+  let shut = !hover_open.contains(key)
+  let open = @kit.hover_card(
     c,
     key,
     trigger,
@@ -47,8 +49,11 @@ pub fn hover(
             s,
             fn() {
               hover_now.val = Some((key, s.panel))
+              let shut_was = hover_shut.val
+              hover_shut.val = shut
               body()
               hover_now.val = None
+              hover_shut.val = shut_was
             },
             inner=if padded { hover_inner } else { hover_bare },
           )
@@ -59,12 +64,26 @@ pub fn hover(
     },
     body,
   )
+  if open {
+    hover_open[key] = true
+  } else {
+    hover_open.remove(key)
+  }
+  open
 }
 
 ///|
-/// The card whose body is being built (its key, its panel's id); the cards kept open by what was pressed in them,
-/// by their keys: what that opened (@sf.last_presented), while it is drawn.
+/// The card whose body is being built (its key, its panel's id), and whether it was not open as it was last built
+/// (opening now, or going: what it holds as it is, none of it moving on from an opening before); the cards open as they
+/// were last built (by their keys); the cards kept open by what was pressed in them, by their keys: what that opened
+/// (@sf.last_presented), while it is drawn.
 let hover_now : Ref[(String, Int)?] = Ref(None)
+
+///|
+let hover_shut : Ref[Bool] = Ref(false)
+
+///|
+let hover_open : Map[String, Bool] = {}
 
 ///|
 let hover_holds : Map[String, Int] = {}
@@ -371,13 +390,14 @@ fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
 /// a copy; with none staying, new and gone fade in place. As they are the first time the card shows them.
 fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit) -> Unit {
   let keys = latest.map(fn(l) { text(Some(l), "key") })
-  let frame = c.frame_number()
   let lid = c.id("agent-card/lines")
   let ran = match ran_lines.get(lid) {
-    // drawn the frame before (or in this one's earlier build): what they were then
-    Some(r) if r.frame >= frame - 1 => r
+    // the card open as it was last built, or going, with the same lines: what they were then (opening with the same,
+    // none of them moves any more since it went: as anew)
+    Some(r) if !hover_shut.val || r.keys == keys => r
+    // (the card opening: as they are now, none moving on from an opening before)
     _ => {
-      let r = { keys: keys.copy(), words: {}, frame, pitch: 0.0, gone: [] }
+      let r = { keys: keys.copy(), words: {}, pitch: 0.0, gone: [] }
       ran_lines[lid] = r
       // (as they are: none on its way from an opening before)
       for k in keys {
@@ -387,7 +407,6 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
       r
     }
   }
-  ran.frame = frame
   let spec = @motion.tween(lines_ms, ease=lines_ease)
   if ran.keys != keys {
     let before = ran.keys
@@ -471,12 +490,11 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
 
 ///|
 /// The lines of an agent's card as last drawn (useLinesMotion's `was`), by its list: their keys in order, their
-/// words, the frame they were drawn in (one not drawn the frame before is the card opened again: none moves), how far
-/// apart they are, the copies of those gone, leaving.
+/// words, how far apart they are, the copies of those gone, leaving. As the card opens they are as they are then: none
+/// moves (hover's `hover_shut`).
 priv struct RanLines {
   mut keys : Array[String]
   words : Map[String, (String, Bool)]
-  mut frame : Int
   mut pitch : Double
   gone : Array[GoneLine]
 }
@@ -496,6 +514,8 @@ let ran_lines : Map[Int, RanLines] = {}
 fn hover_reset() -> Unit {
   ran_lines.clear()
   hover_now.val = None
+  hover_shut.val = false
+  hover_open.clear()
   hover_holds.clear()
 }
 

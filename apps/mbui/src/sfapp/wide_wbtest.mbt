@@ -2457,11 +2457,10 @@ test "wide: a working agent's card whose standing is long (what it waits for) ha
 }
 
 ///|
-test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
+/// The chat of fixture `chat-agent-card` on 大屏 with its agents' cards' latest lines as `latest` says (its lines, the
+/// view's version), and where its latest agent's message's name is (the pointer resting there opens its card).
+fn lines_card(latest : @signals.Signal[(Array[(String, String)], Int)]) -> (@ui.Tester, Double, Double) raise {
   new_run()
-  let latest : @signals.Signal[(Array[(String, String)], Int)] = @signals.signal(
-    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
-  )
   let base = fixture("chat-agent-card")
   let src : Source = {
     ..base,
@@ -2485,15 +2484,62 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
-  let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
-    match acc {
-      Some(a) if a.2 >= w.2 => acc
-      _ => Some(w)
-    }
-  })
+  let last = t
+    .words()
+    .filter(fn(w) { w.0 == "Claude" && w.5 > 0.0 })
+    .iter()
+    .fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    })
   guard last is Some(name) else { fail("no agent's message") }
-  t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
+  (t, name.1 - 20.0, name.2 + name.4 / 2.0)
+}
+
+///|
+/// Long enough for an agent's card the pointer left to have closed and gone (its close delay, then its going).
+let card_gone_ms : Double = 1000.0
+
+///|
+/// A moment into an agent's card's coming, as it opens: its lines drawn, none moving yet were they to (lines_ms).
+let card_opening_ms : Double = 40.0
+
+///|
+test "wide: an agent's card opened again has its latest lines as they are then: none runs on from what it showed before" {
+  let latest : @signals.Signal[(Array[(String, String)], Int)] = @signals.signal(
+    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
+  )
+  let (t, x, y) = lines_card(latest)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  assert_eq(word("读了 src/ui/list.mbt").length(), 1, msg="its card, its lines")
+  // the pointer gone from it: the card closed and gone
+  t.move(1270.0, 790.0)
+  t.run_for(card_gone_ms)
+  assert_eq(word("跑了列表的测试").length(), 0, msg="its card gone")
+  // one more done while it is closed; the pointer back, resting till it opens, and a little more
+  latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms + card_opening_ms)
+  // as they are: no copy of the first leaving, the new one as whole as those that stayed, a line apart
+  assert_eq(word("读了 src/ui/list.mbt").length(), 0, msg="no copy of what it showed before")
+  let (a, b, n) = (word("跑了列表的测试"), word("改了 src/ui/list.mbt"), word("提交了改动"))
+  assert_true(a.length() == 1 && b.length() == 1 && n.length() == 1, msg="\{(a, b, n)}")
+  assert_true((n[0].5 - a[0].5).abs() < 0.01, msg="the new one as whole: \{(a, n)}")
+  assert_true(((n[0].2 - b[0].2) - (b[0].2 - a[0].2)).abs() < 0.01 && b[0].2 > a[0].2, msg="\{(a, b, n)}")
+}
+
+///|
+test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
+  let latest : @signals.Signal[(Array[(String, String)], Int)] = @signals.signal(
+    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
+  )
+  let (t, x, y) = lines_card(latest)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
+  t.move(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
