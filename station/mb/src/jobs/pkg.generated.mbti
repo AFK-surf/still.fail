@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn active_schema(Bool, Bool) -> String
+
+pub fn active_step(@sql.Db, limit? : Int32) -> Bool raise
+
 pub fn install(@sql.Db) -> Unit raise
 
 pub fn schema() -> String
