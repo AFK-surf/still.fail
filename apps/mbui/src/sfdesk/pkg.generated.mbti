@@ -534,7 +534,6 @@ pub struct ContextMenu {
   mut image : String
   mut field : Int32
   mut words : String
-  mut frame : Int32
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String
