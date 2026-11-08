@@ -247,7 +247,7 @@ pub fn chat_list(
       room~,
       finding=find_chat() == chat_key(r),
       on_found=fn(rd) {
-        found_start(rd)
+        found_start(rd, find_chat() == rk)
         found_now.val = true
       },
       find_around~,

@@ -1,15 +1,15 @@
 // Contrast, measured: what a frame draws to be seen stands off what it is drawn on far enough to be seen (still.fail's
-// mbui ui/contrast.mbt). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up
-// in bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
+// mbui ui/contrast.mbt). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up in
+// bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
 // with nothing in it, its ground or (where that does not show) its edge alone saying what it is: a gauge's cell, a
 // bar's track, a line (Ctx::lines too), a sheet's grip, each bar and shape of a page's bones (bones.mbt): at least
-// `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it
-// carries it (and under bones, as under the words they stand for). Each is measured where
-// it is drawn, against what the frame drew under it there (its instances before it, as the renderers lay them: fills,
-// and glass's tint over what it frosts); what lies on a picture, a video or another app's view, or is covered by what
-// is drawn after it (a dialog's scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else
-// (Role Image: another system's screen, a code to scan), nor what is in a widget said disabled (WCAG asks nothing of
-// what cannot be used).
+// `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it carries
+// it (and under bones, as under the words they stand for), as a shape (Ctx::shapes) with words drawn over it after it
+// is too (a highlighter's scribble behind a word found). Each is measured where it is drawn, against what the
+// frame drew under it there (its instances before it, as the renderers lay them: fills, and glass's tint over what it
+// frosts); what lies on a picture, a video or another app's view, or is covered by what is drawn after it (a dialog's
+// scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else (Role Image: another system's
+// screen, a code to scan), nor what is in a widget said disabled (WCAG asks nothing of what cannot be used).
 
 ///|
 /// Which node drew each instance of a frame, kept only while a test asks (Tester::contrast_faults): `owner[k]`
@@ -502,6 +502,25 @@ fn Ctx::ground_piece(self : Ctx, k : Int, holding : Array[Bool]) -> Bool {
 }
 
 ///|
+/// Whether words are drawn after instance `k` over the box (`x`, `y`, `w`, `h`) its shape fills (the node's: a shape
+/// goes to the renderers as bands 8 tall, its last perhaps under its words' glyphs, the whole shape their ground): a
+/// glyph meeting it by more than a point each way.
+fn Ctx::words_on(self : Ctx, k : Int, x : Double, y : Double, w : Double, h : Double) -> Bool {
+  let a = self.inst
+  for j in (k + 1)..<self.ninst {
+    let q = j * inst_size
+    if a[q + 5] == 1.0 &&
+      a[q] + 1.0 < x + w &&
+      x + 1.0 < a[q] + a[q + 2] &&
+      a[q + 1] + 1.0 < y + h &&
+      y + 1.0 < a[q + 1] + a[q + 3] {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Whether node `i` is `own` or in it.
 fn Ctx::node_in(self : Ctx, i : Int, own : Int) -> Bool {
   let mut q = i
@@ -772,6 +791,10 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     // (a filled shape in the colour of a ground with words in it, touching it: that ground's piece, as a popover's arrow
     // is the popover's)
     if kind == 11.0 && a[b + 4] == 0.0 && self.ground_piece(k, holding) {
+      continue
+    }
+    // (a shape words are drawn over after it: their ground, as a box's is, a highlighter's scribble behind a word)
+    if kind == 11.0 && self.words_on(k, n.x, n.y, n.fw, n.fh) {
       continue
     }
     if is_line {

@@ -412,14 +412,15 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
   assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.run_for(@sfpages.found_draw_ms)
-  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no accent stroke")
-  assert_true(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches have no faint stroke")
+  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the matches are not coloured in")
+  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
+  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
   // Clearing the field removes the current message's mark as well as the other matches'.
   t.backspace()
   t.backspace()
   t.frame()
   assert_true(@sfpages.find_words_in("ws1/st1\u{1}s-c1").is_empty())
-  assert_false(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width))
+  assert_false(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }))
   assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
   t.key(@ui.key_escape)
   t.frame()
@@ -428,6 +429,65 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   // opened again: empty
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   assert_eq(@sfpages.find_query(), "")
+}
+
+///|
+test "wide: next and previous move the stroke between occurrences in one message, both coloured in" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match name {
+        "chat.find" => done(Ok({ "words": ["一起"], "hits": [{ "seq": 8, "count": 2 }], "held": 11, "of": 11, "whole": true }))
+        "chat.find.go" => {
+          let at = field(Some(params), "at")
+          let by = number(Some(params), "by").to_int()
+          let k = if at is Some(Object(_)) { (number(at, "k").to_int() + by + 2) % 2 } else { 0 }
+          done(Ok({ "at": { "seq": 8, "k": Json::number(k.to_double()) }, "position": Json::number((k + 1).to_double()), "total": 2 }))
+        }
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.type_text("一起")
+  t.run_for(@sfpages.find_typing_ms * 2.0 + @sf.stroke_ms)
+  t.frame()
+  let w = t.ctx().words_of("pick/ts8").unwrap()
+  let ranges = @sf.find_words(w.text, ["一起"])
+  assert_eq(ranges.length(), 2)
+  let first = w.rects(ranges[0].0, ranges[0].1)[0]
+  let second = w.rects(ranges[1].0, ranges[1].1)[0]
+  // (the matches coloured in: a band of it over a match's words)
+  let coloured = fn(rect : (Double, Double, Double, Double)) {
+    t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L && r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
+  }
+  let strong_under = fn(rect : (Double, Double, Double, Double)) {
+    t.drawn_lines().iter().any(fn(l) {
+      l.4 == @sf.message_stroke.width && l.5 == @sf.theme().p.accent &&
+      l.0 >= rect.0 - 3.0 && l.0 <= rect.0 + rect.2 + 3.0 && l.1 >= rect.1 && l.1 <= rect.1 + rect.3 + 8.0
+    })
+  }
+  assert_true(coloured(first) && coloured(second), msg="both occurrences coloured in")
+  assert_true(strong_under(first) && !strong_under(second))
+  t.enter()
+  t.frame()
+  t.frame()
+  assert_eq(@sfpages.find_k(), 1)
+  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get() < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
+  assert_true(coloured(first) && coloured(second), msg="the colouring in is still, as the reader moves")
+  t.run_for(@sf.stroke_ms)
+  assert_true(!strong_under(first) && strong_under(second), msg="the second occurrence is current")
+  t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+  t.frame()
+  t.frame()
+  t.run_for(@sf.stroke_ms)
+  assert_eq(@sfpages.find_k(), 0)
+  assert_true(strong_under(first) && !strong_under(second), msg="the previous occurrence is current again")
+  assert_true(coloured(first) && coloured(second))
 }
 
 ///|
