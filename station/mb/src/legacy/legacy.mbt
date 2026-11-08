@@ -443,3 +443,247 @@ pub fn said_maintenance(db : @sql.Db) -> Bool raise {
   }
   said_drain(db) < batch
 }
+
+// Lookups copied from their source by id up to the last id when they were made: the archive policy
+// (archive-policy-index.ts), the decisions by time (legacy-decision-time.ts) and by session
+// (legacy-decision-session.ts, and its repair beside an old table whose index was removed).
+
+///|
+/// The meta row's state, checked: `complete` (or 2 where `two` allows it), else `unsupported`.
+fn checked_state(db : @sql.Db, table : String, unsupported : String, two? : Bool = false) -> Int raise {
+  guard first(db, "SELECT version,complete FROM \{table} WHERE id=1", []) is Some(m) &&
+    int(m, "version") == version &&
+    (int(m, "complete") == 0 || int(m, "complete") == 1 || (two && int(m, "complete") == 2)) else {
+    raise Failure(unsupported)
+  }
+  int(m, "complete")
+}
+
+///|
+fn has_policy(db : @sql.Db) -> Bool raise {
+  if !exists(db, "table", "archive_policy_lookup_meta") {
+    return false
+  }
+  ignore(checked_state(db, "archive_policy_lookup_meta", "archive policy lookup has an unsupported version"))
+  true
+}
+
+///|
+fn has_decision_time(db : @sql.Db) -> Bool raise {
+  if !exists(db, "table", "legacy_decision_time_meta") {
+    return false
+  }
+  if !exists(db, "table", "legacy_decision_time") {
+    raise Failure("legacy decision-time metadata has no lookup")
+  }
+  ignore(checked_state(db, "legacy_decision_time_meta", "legacy decision-time lookup has an unsupported version"))
+  true
+}
+
+///|
+/// A decision-session lookup's state (`sessionState`): none, or 0/1 (2: the repair's table being emptied).
+fn session_state(db : @sql.Db, table : String) -> Int? raise {
+  if !exists(db, "table", "\{table}_meta") {
+    return None
+  }
+  if !exists(db, "table", table) {
+    raise Failure("legacy decision-session metadata has no lookup")
+  }
+  Some(
+    checked_state(
+      db,
+      "\{table}_meta",
+      "legacy decision-session lookup has an unsupported version",
+      two=table == "legacy_decision_session_repair",
+    ),
+  )
+}
+
+///|
+fn has_session_lookup(db : @sql.Db, table : String) -> Bool raise {
+  match session_state(db, table) {
+    Some(s) if s != 2 => exists(db, "index", "\{table}_by_session")
+    _ => false
+  }
+}
+
+///|
+/// At most `limit` source ids copied into a lookup by `put` (`?1` the id), with the cursor; whether all are then.
+/// `gate`: the lookup is there to copy into (checked again under the write lock).
+fn copy_ids(
+  db : @sql.Db,
+  meta_table : String,
+  source : String,
+  put : String,
+  incompatible : String,
+  limit : Int,
+  gate : () -> Bool raise,
+) -> Bool raise {
+  if !gate() {
+    return true
+  }
+  write(db, () => {
+    if !gate() {
+      return 1
+    }
+    guard first(
+        db,
+        "SELECT version,complete,CAST(cursor AS TEXT) cursor,CAST(end_id AS TEXT) end_id FROM \{meta_table} WHERE id=1",
+        [],
+      )
+      is Some(m) else {
+      raise Failure(incompatible)
+    }
+    if int(m, "version") != version {
+      raise Failure(incompatible)
+    }
+    if int(m, "complete") == 1 {
+      return 1
+    }
+    let cursor = get(m, "cursor")
+    let end = get(m, "end_id")
+    let lim = Json::number(limit.to_double())
+    let rows = if end is Null {
+      []
+    } else if cursor is Null {
+      db.all(
+        "SELECT CAST(id AS TEXT) AS id FROM \{source} WHERE id<=CAST(?1 AS INTEGER) ORDER BY \{source}.id LIMIT ?2",
+        [end, lim],
+      )
+    } else {
+      db.all(
+        "SELECT CAST(id AS TEXT) AS id FROM \{source} WHERE id>CAST(?1 AS INTEGER) AND id<=CAST(?2 AS INTEGER) ORDER BY \{source}.id LIMIT ?3",
+        [cursor, end, lim],
+      )
+    }
+    for row in rows {
+      ignore(db.run(put, [get(row, "id")]))
+    }
+    let done = rows.length() < limit
+    let reached = match rows.last() {
+      Some(r) => get(r, "id")
+      None => cursor
+    }
+    ignore(
+      db.run("UPDATE \{meta_table} SET cursor=CAST(? AS INTEGER),complete=? WHERE id=1", [
+        reached,
+        Json::number(if done { 1.0 } else { 0.0 }),
+      ]),
+    )
+    if done { 1 } else { 0 }
+  }) ==
+  1
+}
+
+///|
+/// One batch of the archive policy lookup (`archivePolicyIndexStep`).
+pub fn policy_step(db : @sql.Db) -> Bool raise {
+  copy_ids(
+    db,
+    "archive_policy_lookup_meta",
+    "archive_policy",
+    "INSERT INTO archive_policy_lookup(id,ws) SELECT p.id,p.ws FROM archive_policy p WHERE p.id=CAST(?1 AS INTEGER) AND NOT EXISTS (SELECT 1 FROM archive_policy_lookup k WHERE k.id=p.id)",
+    "unsupported archive policy preparation",
+    batch,
+    () => has_policy(db),
+  )
+}
+
+///|
+/// One batch of the decisions-by-time lookup (`decisionTimeIndexStep`).
+pub fn decision_time_step(db : @sql.Db) -> Bool raise {
+  copy_ids(
+    db,
+    "legacy_decision_time_meta",
+    "decision_checks",
+    "INSERT INTO legacy_decision_time(id,created_at,session) SELECT id,created_at,session FROM decision_checks d WHERE d.id=CAST(?1 AS INTEGER) AND NOT EXISTS (SELECT 1 FROM legacy_decision_time l WHERE l.id=d.id)",
+    "unsupported legacy decision-time preparation",
+    batch,
+    () => has_decision_time(db),
+  )
+}
+
+///|
+fn session_put(table : String) -> String {
+  "INSERT INTO \{table}(id,session) SELECT id,session FROM decision_checks d WHERE d.id=CAST(?1 AS INTEGER) AND NOT EXISTS (SELECT 1 FROM \{table} l WHERE l.id=d.id)"
+}
+
+///|
+/// One batch of the decisions-by-session lookup (`decisionSessionIndexStep`).
+pub fn decision_session_step(db : @sql.Db) -> Bool raise {
+  let table = "legacy_decision_session"
+  copy_ids(
+    db,
+    "\{table}_meta",
+    "decision_checks",
+    session_put(table),
+    "unsupported legacy decision-session preparation",
+    batch,
+    () => has_session_lookup(db, table),
+  )
+}
+
+///|
+let repair : String = "legacy_decision_session_repair"
+
+///|
+fn repair_reconcile(ids : String) -> String {
+  "DELETE FROM \{repair} WHERE id IN (\{ids}); INSERT INTO \{repair}(id,session) SELECT id,session FROM decision_checks WHERE id IN (\{ids});"
+}
+
+///|
+/// The repair's index and triggers (as `REPAIR_INDEX`, `REPAIR_TRIGGERS`), made once its old rows are gone.
+let repair_ddl : String = [
+  "CREATE INDEX \{repair}_by_session ON \{repair}(session);",
+  "CREATE TRIGGER \{repair}_insert AFTER INSERT ON decision_checks BEGIN INSERT INTO \{repair}(id,session) SELECT id,session FROM decision_checks WHERE id=NEW.id ON CONFLICT(id) DO UPDATE SET session=excluded.session; END;",
+  "CREATE TRIGGER \{repair}_update AFTER UPDATE OF id,session ON decision_checks WHEN OLD.id IS NOT NEW.id OR OLD.session IS NOT NEW.session BEGIN \{repair_reconcile("OLD.id,NEW.id")} END;",
+  "CREATE TRIGGER \{repair}_delete AFTER DELETE ON decision_checks BEGIN \{repair_reconcile("OLD.id")} END;",
+].join("\n")
+
+///|
+fn repair_needs_work(db : @sql.Db) -> Bool raise {
+  match session_state(db, repair) {
+    Some(2) => true
+    Some(0) => has_session_lookup(db, repair)
+    _ => false
+  }
+}
+
+///|
+/// One batch of the decisions-by-session repair (`decisionSessionRepairStep`): its old table emptied in batches, then
+/// its index and triggers made and the lookup copied as the other.
+pub fn decision_session_repair_step(db : @sql.Db) -> Bool raise {
+  if !repair_needs_work(db) {
+    return true
+  }
+  if session_state(db, repair) == Some(2) {
+    ignore(
+      write(db, () => {
+        if session_state(db, repair) == Some(2) {
+          ignore(
+            db.run("DELETE FROM \{repair} WHERE id IN (SELECT id FROM \{repair} ORDER BY id LIMIT ?)", [
+              Json::number(batch.to_double()),
+            ]),
+          )
+          if first(db, "SELECT 1 FROM \{repair} LIMIT 1", []) is None {
+            db.exec(repair_ddl)
+            db.exec(
+              "UPDATE \{repair}_meta SET complete=0,cursor=NULL,end_id=(SELECT MAX(id) FROM decision_checks) WHERE id=1",
+            )
+          }
+        }
+        0
+      }),
+    )
+    return false
+  }
+  copy_ids(
+    db,
+    "\{repair}_meta",
+    "decision_checks",
+    session_put(repair),
+    "unsupported legacy decision-session preparation",
+    batch,
+    () => has_session_lookup(db, repair),
+  )
+}
