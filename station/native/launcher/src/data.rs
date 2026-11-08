@@ -1,6 +1,6 @@
 //! The data directory and what the launcher keeps in it, as the Rust station did (mesh/app/src/former.rs,
 //! mesh/station/src/main.rs): where it is, its lock, run/station.json, and what config.json says the launcher needs (the
-//! MCP endpoint's host and port, the station's language).
+//! MCP endpoint's port, the station's language).
 
 use std::fs::{File, OpenOptions};
 #[cfg(unix)]
@@ -97,8 +97,9 @@ pub fn now_ms() -> u64 {
 /// What the launcher reads of config.json ($STILLFAIL_CONFIG, else <data>/config.json).
 #[derive(Debug, PartialEq)]
 pub struct Config {
-    /// The MCP endpoint's host and port; `named` when the config sets the port (then taken is an error).
-    pub host: String,
+    /// The MCP endpoint's port; `named` when the config sets the port (then taken is an error). It is on 127.0.0.1
+    /// whatever the config says (an `http.host` of before is not read): a station has no way in from outside but the
+    /// mesh (AGENTS.md).
     pub port: u16,
     pub named: bool,
     pub english: bool,
@@ -122,13 +123,9 @@ impl Config {
             Value::Null => None,
             v => Some(v.as_u64().and_then(|p| u16::try_from(p).ok()).ok_or_else(|| format!("http.port: not a port: {v}"))?),
         };
-        let host = match &http["host"] {
-            Value::Null => "127.0.0.1".to_string(),
-            v => v.as_str().ok_or_else(|| format!("http.host: not a string: {v}"))?.to_string(),
-        };
         // As client/i18n's Lang::from_locale: none, empty or zh… is Chinese, anything else English.
         let english = raw["language"].as_str().map(|l| l.trim().to_ascii_lowercase()).is_some_and(|l| !l.is_empty() && !l.starts_with("zh"));
-        Ok(Config { host, port: port.unwrap_or(4750), named: port.is_some(), english })
+        Ok(Config { port: port.unwrap_or(4750), named: port.is_some(), english })
     }
 }
 
@@ -162,8 +159,8 @@ mod tests {
     #[test]
     fn the_config_names_the_mcp_port_or_leaves_the_usual_one() {
         let of = |s: &str| Config::of(&serde_json::from_str(s).unwrap());
-        assert_eq!(of("null").unwrap(), Config { host: "127.0.0.1".into(), port: 4750, named: false, english: false });
-        assert_eq!(of(r#"{"http":{"host":"0.0.0.0","port":5000},"language":"en-US"}"#).unwrap(), Config { host: "0.0.0.0".into(), port: 5000, named: true, english: true });
+        assert_eq!(of("null").unwrap(), Config { port: 4750, named: false, english: false });
+        assert_eq!(of(r#"{"http":{"host":"0.0.0.0","port":5000},"language":"en-US"}"#).unwrap(), Config { port: 5000, named: true, english: true });
         assert!(!of(r#"{"language":"zh-CN"}"#).unwrap().english);
         assert!(of(r#"{"http":{"port":70000}}"#).is_err());
     }
