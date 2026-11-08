@@ -115,3 +115,38 @@ test "retained full screen keeps touch and mouse pictures and tools without reop
     assert_eq(screen_full_frames(true, platform), screen_full_frames(false, platform))
   }
 }
+
+///|
+fn screen_touch_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, touch="direct")
+  r.live(others=[])
+  let frames = []
+  for size in [(390.0, 844.0), (844.0, 390.0), (390.0, 844.0)] {
+    r.t.resize(size.0, size.1)
+    r.t.draw()
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+    if size.0 > size.1 {
+      let (x, y) = r.labelled("控制").unwrap()
+      frames.push([[x, y]])
+    }
+    r.tap_at(0.25, 0.75)
+  }
+  assert_eq(r.inputs().length(), 6)
+  for phase in ["live", "reconnecting", "ended"] {
+    r.state(phase, control=false, controllers=["Agent"], take_over=true)
+    r.t.draw()
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+  }
+  assert_eq(r.told("screen.view").length(), 1)
+  screen_done(r.t)
+  frames
+}
+
+///|
+test "retained upright touch stage keeps rotation input takeover and terminal pictures" {
+  assert_eq(screen_touch_frames(true), screen_touch_frames(false))
+}

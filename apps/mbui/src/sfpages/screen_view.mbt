@@ -351,32 +351,10 @@ fn screen_page_inside(c : @ui.Ctx, page : ScreenPageContext) -> Unit {
         screen_rail(c, s, u, typing, catcher, close)
         c.box(style=screen_fill, fn() {
           screen_content(c, s, u, key)
-          // sideways the frame takes the height: who drives it floats over its top, while it does
-          if s.can_take_over() {
-            c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore })
-            |> ignore
-          }
-          // the keys a phone's keyboard has not, over the frame's foot while it is up
-          if s.driving() && typing {
-            c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore })
-            |> ignore
-          } else if mouse_shown(s, u) {
-            // else the mouse's buttons, floating over its foot's corner
-            c.layer(fn() { mouse_float(c, s, u) }) |> ignore
-          }
+          screen_side_overlays(c, s, u, typing)
         })
         |> ignore
-        // the rail's line, said beside it over its foot once the people on it are tapped
-        if u.saying && s.state is Some(_) {
-          c.layer(fn() {
-            c.box(style=rail_say_place, fn() {
-              c.box(style=rail_say_box, fn() { c.text(text(s.state, "line"), style=rail_say_words) |> ignore })
-              |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
+        screen_rail_saying(c, s, u)
       })
       |> ignore
     } else {
@@ -393,6 +371,38 @@ fn screen_page_inside(c : @ui.Ctx, page : ScreenPageContext) -> Unit {
     }
   })
   |> ignore }) |> ignore
+}
+
+///|
+fn screen_side_overlays(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool) -> Unit {
+  // sideways the frame takes the height: who drives it floats over its top, while it does
+  if s.can_take_over() {
+    c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore })
+    |> ignore
+  }
+  // the keys a phone's keyboard has not, over the frame's foot while it is up
+  if s.driving() && typing {
+    c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore })
+    |> ignore
+  } else if mouse_shown(s, u) {
+    // else the mouse's buttons, floating over its foot's corner
+    c.layer(fn() { mouse_float(c, s, u) }) |> ignore
+  }
+}
+
+///|
+fn screen_rail_saying(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  // the rail's line, said beside it over its foot once the people on it are tapped
+  if u.saying && s.state is Some(_) {
+    c.layer(fn() {
+      c.box(style=rail_say_place, fn() {
+        c.box(style=rail_say_box, fn() { c.text(text(s.state, "line"), style=rail_say_words) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
 }
 
 ///|
@@ -435,7 +445,12 @@ pub fn screen_page_node(
     }
     v.pick(fn() {
       session.said.get() |> ignore
-      if u.full.get() { 2 } else if !@sf.soft_keyboard() && !@sf.native_able() && !session.simulator() { 1 } else { 0 }
+      if u.full.get() { 2 } else if !@sf.native_able() && !session.simulator() {
+        if !@sf.soft_keyboard() { 1 } else {
+          let (w, h) = v.window()
+          if w <= h { 3 } else { 4 }
+        }
+      } else { 0 }
     }, fn(body, stage) {
       body.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
       if stage == 2 {
@@ -443,6 +458,41 @@ pub fn screen_page_node(
           let page = context(c)
           screen_stage(c, page.session, page.ui, page.key, picture~)
           screen_full_overlays(c, page)
+        }) |> ignore
+      } else if stage == 4 {
+        body.row(Is(true)) |> ignore
+        @ui.old(body, fn(c) {
+          let p = context(c)
+          c.box(style=screen_row, fn() {
+            screen_rail(c, p.session, p.ui, p.typing, p.catcher, p.close)
+          }) |> ignore
+        }).width(Is(match @sf.rail_w { Fixed(w) => Some(w); _ => None })) |> ignore
+        screen_stage_node(body, fn(c, picture) {
+          session.said.get() |> ignore
+          screen_stage(c, session, u, screen_key(at.station, at.screen), picture~)
+          screen_side_overlays(c, session, u, c.keyboard_up())
+        }) |> ignore
+        @ui.old(body, fn(c) {
+          session.said.get() |> ignore
+          screen_rail_saying(c, session, u)
+        }).over(Is(true)) |> @ui.old_takes_own |> ignore
+      } else if stage == 3 {
+        @ui.old(body, natural=true, unlaid=fn() { @ui.Space::S14.px() }, fn(c) {
+          let p = context(c)
+          screen_top_bar(c, p.session, p.ui, p.title, p.close)
+          if p.session.can_take_over() {
+            c.box(style=take_over_place, fn() { take_over(c, p.session) }) |> ignore
+          }
+        }) |> ignore
+        screen_stage_node(body, fn(c, picture) {
+          session.said.get() |> ignore
+          screen_stage(c, session, u, screen_key(at.station, at.screen), picture~)
+        }) |> ignore
+        @ui.old(body, natural=true, fn(c) {
+          session.said.get() |> ignore
+          if session.driving() {
+            foot(c, session, u, c.keyboard_up(), "screen-keys/" + screen_key(at.station, at.screen))
+          }
         }) |> ignore
       } else if stage == 1 {
         @ui.old(body, natural=true, unlaid=fn() { @sf.viewer_bar_h }, fn(c) {
