@@ -647,7 +647,7 @@ fn tree_field_bar_near(x : Double, y : Double) -> Int? {
 fn thumb_under(b : BarAt, x : Double, y : Double) -> Bool {
   let gr = scroll_bar_grab
   pointing() is Mouse &&
-  g().bar_shows(b) > 0.002 &&
+  g().bar_shows(b, g().clock) > 0.002 &&
   x >= b.tx - gr &&
   x < b.tx + b.tw + gr &&
   y >= b.ty - gr &&
@@ -702,7 +702,7 @@ fn tree_field_bar_down(id : @view.NodeId, x : Double, y : Double, at : Double) -
   let c = g()
   guard c.bar_drawn(tree_said_id(id)) is Some(b) else { return false }
   // (its thumb a target only as it is drawn at all, as an old view's is only where it shows: Ctx::paint_bar's)
-  guard c.bar_shows(b) > 0.002 else { return false }
+  guard c.bar_shows(b, at) > 0.002 else { return false }
   let gr = scroll_bar_grab
   guard x >= b.tx - gr && x < b.tx + b.tw + gr && y >= b.ty - gr && y < b.ty + b.th + gr && x >= b.x0 && x < b.x1 &&
     y >= b.y0 && y < b.y1 else {
