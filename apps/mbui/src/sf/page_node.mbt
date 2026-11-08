@@ -1288,6 +1288,33 @@ pub fn round_key_node(
 }
 
 ///|
+/// A round key on a disc of its own as a node: `side` across, round, on `ground`, what `inside` makes in its middle
+/// (an icon, a spinner while what it set going is asked); read out a button named `label`, `press` done as it is
+/// pressed, rippling round its corner.
+pub fn disc_key_node(
+  parent : @view.View,
+  label : () -> String,
+  press : () -> Unit,
+  side~ : Double,
+  ground~ : () -> Int64,
+  inside : (@view.View) -> Unit,
+) -> Unit {
+  parent.box(fn(k) {
+    k
+    .width(Is(Some(side)))
+    .height(Is(Some(side)))
+    .radius(Is(side / 2.0))
+    .ground(By(ground))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(Middle))
+    |> ignore
+    pressed_node(k, press, Is(side / 2.0), Button, label)
+    inside(k)
+  })
+  |> ignore
+}
+
+///|
 /// A top bar's title (`look`: top_bar_title_look, Home's workspace name's its own; in the tree theme's ink), on one line,
 /// giving way in its row where it has not the room (the line then ends in an ellipsis, as every one-line words' do).
 pub fn top_bar_title_node(

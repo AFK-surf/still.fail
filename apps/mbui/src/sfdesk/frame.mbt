@@ -1051,8 +1051,6 @@ fn main_page(
     // a web service, a visualization opened aside: its chat with it beside it (service_tab.mbt)
     Service(station, job) => service_beside(c, src, w, station, job)
     PreviewFile(station, key, path, name) => tab_beside(c, src, w, station, key, file_tab(key, path, name))
-    // the plain text a phone's history opens: the phone's own
-    Words(_, _) => ()
   }
 }
 

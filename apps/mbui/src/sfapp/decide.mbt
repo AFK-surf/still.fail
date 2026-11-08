@@ -16,8 +16,6 @@ priv struct Decide {
   letters_held : Map[String, Double]
   /// a job's sheet: what it said (0) or its output (1)
   mut job_tab : Int
-  /// the history's tab: its steps (0) or its details (1)
-  mut history_tab : Int
   /// groups and steps of a history opened, by their key
   opened : Map[String, Bool]
 }
@@ -28,7 +26,6 @@ let dui : Decide = {
   letters_open: "",
   letters_held: {},
   job_tab: 0,
-  history_tab: 0,
   opened: {},
 }
 
@@ -39,7 +36,7 @@ fn decide_reset() -> Unit {
   dui.letters_open = ""
   dui.letters_held.clear()
   dui.job_tab = 0
-  dui.history_tab = 0
+  history_tab.set(0)
   dui.opened.clear()
   history_placed.clear()
   history_short.clear()

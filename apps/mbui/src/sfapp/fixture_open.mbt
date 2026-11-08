@@ -100,7 +100,7 @@ pub fn open_fixture(mode : String) -> Unit {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {
-        dui.history_tab = 1
+        history_tab.set(1)
       } else {
         @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
       }

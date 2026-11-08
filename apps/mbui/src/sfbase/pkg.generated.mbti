@@ -2813,7 +2813,6 @@ pub(all) enum Page {
   Service(String, String)
   PreviewFile(String, String, String, String)
   History(ChatRef, String, Int32?)
-  Words(String, String)
   NewChat
   Place(String)
   Setting(@settings.Route)
