@@ -2,7 +2,7 @@
 
 This is still.fail's app on every platform (README.md: which app is built), written in mbui, which is in this
 repository at `mbui/` (no pin: a change to mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md`
-applies here as well. In short, and what is particular to this app:
+applies here as well; what follows is particular to this app.
 
 ## The terms (术语)
 
@@ -12,8 +12,9 @@ Four things decide how the app looks and answers:
   half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged, and
   sheets from the foot (小屏) or popovers beside what opened them (中屏, 大屏).
 - **原生操控** (the native input, `@sf.native_input()`): touch or keyboard and mouse, as the app was started, the same
-  the whole run. The size words, icons and rows are drawn at (never a press's room: 44×44 at least, overlapping
-  none), what shows only under a pointer and touch's way to the same, Enter, scroll bars, the search field or ⌘K.
+  the whole run. It decides the size words, icons and rows are drawn at (not the room a press gets, which is 44×44 at
+  least on every input, overlapping none), what shows only under a pointer and touch's way to the same, Enter, scroll
+  bars, the search field or ⌘K.
 - **当前操控** (the current input, `@ui.pointing()`): touch or keyboard and mouse at the moment; it may change. How a
   thing answers the hand alone, never what is shown, where or how big.
 - **页面宽窄** (a page's width, `@sf.look()`): 窄排法 / 宽排法, by the width of the box a page is drawn in.
@@ -72,7 +73,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
   - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
     `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
-  - Both go into `sfpages` and `sfshell` as pages merge.
+  - `src/sfpages` holds the pages already merged, one for every screen; `sfdesk` and `sfapp` import it.
 - **What doesn't change:**
   - Something both need moves down into `sfbase` or the library, once.
   - Logic is the core's, never a page's.
@@ -85,8 +86,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
     library's primitives (`c.lit`, `c.menu_asked`, tips).
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
-    between. Merging two copies keeps neither and drops the other: the page is no worse on either
-    screen than its copy was there, shown before and after.
+    between. The merged page is no worse on either screen than its copy was there, shown before and after.
 
 ## Motion
 
@@ -102,8 +102,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 ## Running the app in development
 
 - `scripts/wasm-app.sh run` runs the Mac app built for Wasm in mbui's native shell (the user, 2026-11-03: no C of the
-  app compiled in development); `build` alone builds it (6 s after a change of the app; the shell is built again only
-  when the host's C, the core's parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The
+  app compiled in development); `build` alone builds it (the shell is built again only when the host's C, the core's
+  parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The
   native app (`scripts/mac.sh`) is CI's and the releases'.
 - The same on the other platforms, `PLATFORM=android|ios|windows scripts/wasm-app.sh run`: the shell an APK (installed
   only when it changed; the app compiled here for the device and put in its files), an iOS simulator's app (which reads
@@ -114,7 +114,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
-  renderer across scenes; use a `film` job for video. The matching build, cache and scene records are in `docs/media.md`.
+  renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
   with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their
@@ -127,27 +127,12 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
   (`TARGETS=native scripts/test.sh`, CI's check-mbui native). detlint's `host-import` holds it.
 
-## Time is declared, nothing is waited for, nothing is flaky
-
-> 一个测试里动画是多少帧，跑多久现实时间，对测试不会有任何影响。如果测试断言了动画第 3 秒应该是什么样，测试就能正确得到
-> 第三秒的视图，而前两秒到底是一秒一帧还是直接跳过，都不影响测试的正确性。
-
-> 不稳定测试是整个系统最严重的故障。我们的系统就不应该存在偶发失败。存在偶发失败说明整个系统就是烂的，而不是某个测试有问题。
+## Time is declared
 
 - What the app shows is tested in the Tester (`src/sfapp`, `src/sfreplay` replaying recorded core tapes): walk to it,
-  say the moment, assert. The frames between must not matter.
-- No flow, script or test waits for the app to settle or for a motion to end, under any name (`rest`, "until it
-  stops moving", "until it landed"), nor a fixed `wait`/`sleep`, a retry or a longer timeout. An end-to-end step
-  waits only for its own named event from outside the app (`answered`, `decoded`, `shown`, an outside wait done) or a
-  fact of state (a row by its id). `detlint.json` (run with `mbui/scripts/detlint`) counts what is
-  left and only lets it fall.
-- A check that fails and then passes on the same commit is not "偶发": something uncontrolled got in (real time, the
-  network, an emulator's or simulator's state, a host callback's order, another job's files). Do not rerun it green
-  and move on; find it and take it out of the run.
+  say the moment, assert, as mbui's rules say. `detlint.json` (run with `mbui/scripts/detlint`) counts the waits left
+  and only lets them fall.
 
 ## Before a PR
 
 - Don't `moon fmt` here (it rewrites a hundred files nobody touched).
-- One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto
-  `origin/main`; check `git diff origin/main --stat` lists only your files.
-- Merge it yourself once every check has finished green (`gh pr checks <n> --watch`), not only the gate.

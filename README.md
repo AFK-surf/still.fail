@@ -72,7 +72,8 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | --- | --- |
 | `station/` | Station (`stillfail-station`): agent runtimes, Slack and Feishu, jobs, files, screens, vault; native parts in `station/native/` |
 | `client/` | Shared client core (`core-ts`), its native shells and translations (`i18n`) |
-| `web/` | Web app, official site and component stories |
+| `web/` | The web's host of the app, and its sign-in, share and admin pages |
+| `website/` | The official site |
 | `apps/mbui/` | The apps (Android, iOS, macOS, Windows, Linux), written in mbui (`apps/mbui/mbui`) |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |
 | `docs/` | Development and operation notes; release notes in `docs/releases/` |
@@ -80,8 +81,6 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | `vendor/` | Patched third-party Rust crates |
 
 ## Documentation
-
-Some design notes are only in Chinese for now.
 
 - [Development setup](docs/development.md) and [contributing](CONTRIBUTING.md)
 - [Operations](docs/operations.md): how the maintainers build and deploy the hosted service, on their own infrastructure
