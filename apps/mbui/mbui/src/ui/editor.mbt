@@ -1592,6 +1592,10 @@ fn Ctx::paint_field(
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if resting || phase % 2 == 0 {
       let (x, y, w, h) = st.caret_box(tl, fb, coff)
+      // on whole pixels across: at 150% a caret on a half pixel is smeared over one column more, and where it starts at
+      // the field's clip, that column's centre is on the clip's edge, kept on some rows and cut on others
+      let x = on_pixels(x, self.scale)
+      let w = on_pixels(w, self.scale)
       self.emit_rect(x, y, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha)
     }
   }
