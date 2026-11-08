@@ -74,8 +74,6 @@ pub fn copy_path(@ui.Ctx, String) -> Unit
 
 pub fn drag_ask(Asking) -> Unit
 
-pub fn drag_frame(@ui.Ctx, @sfbase.Source, String, outside? : Bool) -> Unit
-
 pub fn dragged() -> @sfbase.Dragged?
 
 pub fn drive_folder(@sfbase.Source, String, String, String) -> (@json.Json?, String?)

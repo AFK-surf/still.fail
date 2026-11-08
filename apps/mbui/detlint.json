@@ -433,9 +433,7 @@
     },
     "motion-length": {},
     "tester-branch": {},
-    "frame-number": {
-      "src/sfdesk/drag.mbt": 2
-    }
+    "frame-number": {}
   },
   "excused": {
     "frame-request": {},

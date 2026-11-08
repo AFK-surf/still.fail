@@ -48,8 +48,6 @@ pub fn drive_start(s : DvStation) -> String? {
 ///|
 /// The files' sidebar of workspace `ws`: its add-favorite action, then the places.
 pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
-  // what is dragged over it moved on or let go
-  drag_frame(c, src, ws)
   c.box(style=nav_side, fn() {
     side_top(c)
     let stations = favorite_stations(src, ws)
@@ -114,7 +112,6 @@ pub fn files_places(
   foot? : Double = 0.0,
   go? : (DriveAt) -> Unit = files_go,
 ) -> Unit {
-  drag_frame(c, src, ws)
   let here = this_machine()
   // those with a drive, this machine's first, then as the workspace lists them
   let (known, error) = drive_stations(src, ws)
@@ -194,8 +191,8 @@ pub fn files_places(
           PReading => @sf.waiting(c, fn() { places_sample(c) })
           PNone =>
             c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
-          PFavoriteHead => favorite_drop(c, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side) })
-          PFavoriteHint => favorite_drop(c, "hint", fn() {
+          PFavoriteHead => favorite_drop(c, src, ws, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side) })
+          PFavoriteHint => favorite_drop(c, src, ws, "hint", fn() {
             c.box(style=@sf.theme().chat_list.side_hint, fn() {
               @sf.icon(c, "star", size=nav_icon, color=@sf.theme().p.subtle) |> ignore
               c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta()) |> ignore
@@ -237,9 +234,9 @@ fn place_lit(station : String, root : String, path : String) -> Bool {
 
 ///|
 /// A part of 个人收藏 takes a folder dragged onto it; a favorite's own drop target takes precedence.
-fn favorite_drop(c : @ui.Ctx, key : String, body : () -> Unit) -> Unit {
+fn favorite_drop(c : @ui.Ctx, src : Source, ws : String, key : String, body : () -> Unit) -> Unit {
   let kid = c.id("files/keep/" + key)
-  let keeping = fdrag_target(c, kid, "keep/" + key, None, "", true, true, 0, outside=false) is Some(_)
+  let keeping = fdrag_target(c, src, kid, "keep/" + key, None, "", true, true, 0, outside=false, ws~) is Some(_)
   c.box(style=if keeping { keep_on } else { keep_off }, id=kid, body) |> ignore
 }
 
@@ -263,8 +260,8 @@ fn favorite_row(
     Some(r) => { station: f.station, root: Some(r.path), path: "" }
     None => { station: f.station, root: Some(f.root), path: f.path }
   }
-  favorite_drop(c, "favorite/" + place, fn() {
-    fdrag_side_row(c, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
+  favorite_drop(c, src, ws, "favorite/" + place, fn() {
+    fdrag_side_row(c, src, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
       let key = "files/fav/" + place
       let id = c.id(key)
       let label = @sf.t("web-pages.files.unfavorite", args=[("name", f.name)])
@@ -378,7 +375,7 @@ fn station_row(
   nav_apart(c, more, fn() {
     c.box(style=station_item, fn() {
       match start {
-        Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
+        Some(r) => fdrag_side_row(c, src, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
         None => row()
       }
       if open {
@@ -445,7 +442,7 @@ fn station_places(
     for k, p in places {
       let (name, path, disk) = p
       let into : DriveAt = { station: s.station, root: Some(path), path: "" }
-      fdrag_side_row(c, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
+      fdrag_side_row(c, src, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
         if nav_row(
             c,
             "files/place/" + s.station + "/" + path,

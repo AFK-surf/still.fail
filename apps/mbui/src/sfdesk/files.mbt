@@ -69,8 +69,6 @@ pub fn files_shell(
   here : DriveAt,
   room : Double,
 ) -> Unit {
-  // what is dragged moved on or let go, before what it goes over is drawn
-  drag_frame(c, src, ws)
   // the address moved (a link, the sidebar, history): the side in front follows it
   let arrive = ws + "\n" + here.station + "\n" + here.root.unwrap_or("") + "\n" + here.path
   if shell.arrived != arrive {
@@ -150,6 +148,8 @@ pub fn files_shell(
     }
   }
   let page = c.id("files-page")
+  // files from the computer let go on a folder drawn in it go up into it
+  fdrag_files(c, page)
   c.box(style=page_box, id=page, fn() {
     let bar = c.id("files-bar")
     if @ui.window_inset() {

@@ -3,8 +3,10 @@
 // `mbui.drop` messages, {"type":"over","x","y"},
 // {"type":"left"}, {"type":"drop","x","y","pick"}), taken as any message is, at a frame's start. A view asks where they
 // are held now (files_held: what it would take them shows so) and takes each drop once (take_drop), its files read as
-// a pick's are (Pick::files: a folder's by their way down, each folder itself named with a "/" at its end). Under a
-// Tester: Tester::hold_files, Tester::drop_files.
+// a pick's are (Pick::files: a folder's by their way down, each folder itself named with a "/" at its end). A box may
+// follow them instead as the host says them, outside any build (Ctx::on_files): told where they are held over it, and
+// taking them as they are let go on it, before any build sees them. Under a Tester: Tester::hold_files,
+// Tester::drop_files.
 //
 // Words dragged in from outside (another app's text, a browser page's) are said only as they are let go, with what they
 // say ({"type":"words","x","y","text"}: macOS's MBView): on a field (what a press there reaches) they go into it where
@@ -68,6 +70,8 @@ let dropping : Dropping = { held: None, drops: [], words: None, paths: None }
 ///|
 fn drop_reset() -> Unit {
   dropping.held = None
+  files_on.clear()
+  files_on_held.val = 0
   dropping.drops.clear()
   dropping.words = None
   dropping.paths = None
@@ -248,12 +252,11 @@ fn init {
       _ => ""
     }
     match kind {
-      "over" => dropping.held = Some((num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val))
+      "over" => files_held_at(Some((num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val)))
       "drop" => {
-        dropping.held = None
+        files_held_at(None)
         let id = num("pick").to_int()
         let (x, y) = (num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val)
-        dropping.drops.push((x, y, id, g().frame_no))
         // (where they are, as the host says: taken so, they are not read)
         let paths = match v {
           Object(m) =>
@@ -278,12 +281,26 @@ fn init {
             }
           _ => []
         }
-        if !paths.is_empty() {
-          paths_let_go(x, y, paths, id)
+        // (taken as they are let go by what takes them there, Ctx::on_files: not those let go on a field with their
+        // paths, which are the field's)
+        let c = g()
+        let on_field = !paths.is_empty() && c.editors.contains(hit_in(c.hit_ids, c.hit_rects, x, y))
+        match (if on_field { None } else { files_take_at(x, y) }) {
+          Some(take) => {
+            let p : Pick = { hosts: [@hostapi.dropped_pick(id)], got: [None] }
+            p.wait("files dropped")
+            take(p)
+          }
+          None => {
+            dropping.drops.push((x, y, id, c.frame_no))
+            if !paths.is_empty() {
+              paths_let_go(x, y, paths, id)
+            }
+          }
         }
       }
       "words" => {
-        dropping.held = None
+        files_held_at(None)
         match v {
           Object(m) =>
             match m.get("text") {
@@ -293,9 +310,100 @@ fn init {
           _ => ()
         }
       }
-      _ => dropping.held = None
+      _ => files_held_at(None)
     }
   })
+}
+
+///|
+/// What takes files from outside over a box (Ctx::on_files): told where they are held over it, asked as they are let
+/// go on it.
+priv struct FilesOn {
+  held : ((Double, Double)?) -> Unit
+  take : (Double, Double) -> ((Pick) -> Unit)?
+}
+
+///|
+/// What takes files from outside over each box (Ctx::on_files), by its id: what its last build said.
+// kept across runs: said as each box is built, let go with its page (Ctx::forget); a run's start clears it (drop_reset)
+let files_on : Map[Int, FilesOn] = {}
+
+///|
+/// The box that takes them that files from outside are held over now (Ctx::on_files; 0 none): told as they leave it.
+// kept across runs: as the host says where they are held; a run's start clears it (drop_reset)
+let files_on_held : Ref[Int] = Ref(0)
+
+///|
+/// Files from outside over box `id` (on it or on what it holds; the innermost of those that say so), followed as the
+/// host says them, in its message, outside any build, as the last frame drew what is there: `held` told where they are
+/// held over it (None: gone from over it: taken away, let go, or over another), `take` asked as they are let go on it
+/// (not on a field, with their paths: those are the field's) whether it takes them there. `Some(f)` takes them: `f`
+/// given the pick their reading is, begun now, and no build sees the drop (take_drop, Ctx::paths_into); None leaves
+/// them to what is further out, then to the frame's build as ever. Said as the box is built (what takes them is what
+/// the last build said).
+pub fn Ctx::on_files(
+  self : Ctx,
+  id : Int,
+  held~ : ((Double, Double)?) -> Unit,
+  take~ : (Double, Double) -> ((Pick) -> Unit)?,
+) -> Unit {
+  if id == 0 {
+    return
+  }
+  files_on[id] = { held, take }
+  self.own(id)
+}
+
+///|
+/// What is drawn at (x, y) that takes files from outside (Ctx::on_files), the innermost first.
+fn files_on_at(x : Double, y : Double) -> Array[Int] {
+  let within = drop_within(g(), x, y)
+  let out = []
+  for i = within.length() - 1; i >= 0; i = i - 1 {
+    if files_on.contains(within[i]) {
+      out.push(within[i])
+    }
+  }
+  out
+}
+
+///|
+/// Files from outside held over the window at `at` (None: taken away or let go): told to the box that takes them they
+/// are over (Ctx::on_files), and to the one they left.
+fn files_held_at(at : (Double, Double)?) -> Unit {
+  dropping.held = at
+  let id = match at {
+    Some((x, y)) => files_on_at(x, y).get(0).unwrap_or(0)
+    None => 0
+  }
+  let was = files_on_held.val
+  files_on_held.val = id
+  if was != 0 && was != id {
+    match files_on.get(was) {
+      Some(f) => (f.held)(None)
+      None => ()
+    }
+  }
+  match (files_on.get(id), at) {
+    (Some(f), Some(p)) => (f.held)(Some(p))
+    _ => ()
+  }
+}
+
+///|
+/// Files from outside let go at (x, y): what takes them there (Ctx::on_files), the innermost that does; None: none.
+fn files_take_at(x : Double, y : Double) -> ((Pick) -> Unit)? {
+  for id in files_on_at(x, y) {
+    match files_on.get(id) {
+      Some(f) =>
+        match (f.take)(x, y) {
+          Some(take) => return Some(take)
+          None => ()
+        }
+      None => ()
+    }
+  }
+  None
 }
 
 ///|

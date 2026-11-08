@@ -76,11 +76,12 @@ let rows_sample_props : RowProps = {
 let rows_sample_names : Array[(Bool, Int)] = [(true, 4), (true, 6), (false, 9), (false, 5), (false, 12), (false, 7), (false, 8), (false, 6)]
 
 ///|
-/// A row pressed: what it would carry (drag.mbt), as the web's draggedOf has it.
-fn drag_press(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
+/// Row `id` followed as it is pressed: what it would carry (drag.mbt), as the web's draggedOf has it; `tab`: a chat's
+/// 文件 tab's (let go off it, for the chat's composer); not while `live` is not.
+fn drag_press(c : @ui.Ctx, id : Int, src : Source, at : DriveAt, e : DvEntry, tab : Bool, live : Bool) -> Unit {
   let root = at.root.unwrap_or("")
   let path = dv_join(at.path, e.name)
-  fdrag_press(c, {
+  fdrag_source(c, id, {
     station: at.station,
     station_name: station_name(src, at.station),
     root,
@@ -89,13 +90,13 @@ fn drag_press(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
     name: e.name,
     size: e.size,
     dir: e.dir,
-  })
+  }, tab, live)
 }
 
 ///|
-/// A place a row or a column can be let go this frame (drag.mbt fdrag_target), as its folder is shown.
-fn drag_target(c : @ui.Ctx, id : Int, key : String, into : DriveAt, name : String, s : Shown, depth : Int) -> String? {
-  fdrag_target(c, id, key, Some(into), name, s.write, s.transfers, depth)
+/// A place a row or a column can be let go (drag.mbt fdrag_target), as its folder is shown.
+fn drag_target(c : @ui.Ctx, src : Source, id : Int, key : String, into : DriveAt, name : String, s : Shown, depth : Int) -> String? {
+  fdrag_target(c, src, id, key, Some(into), name, s.write, s.transfers, depth)
 }
 
 ///|
@@ -592,7 +593,7 @@ fn column(
   // (a ground round its rows: a press there chooses none)
   c.cursor(cid, Arrow)
   let lit = match (s.drop_on)(at) {
-    Some(into) => drag_target(c, cid, ckey, into, dv_name(dv_absolute(root, at.path)), s, 1)
+    Some(into) => drag_target(c, src, cid, ckey, into, dv_name(dv_absolute(root, at.path)), s, 1)
     None => None
   }
   let sized = column_box.then(@ui.style(w=Fixed(width)))

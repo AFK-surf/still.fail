@@ -163,18 +163,6 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     ftab.picked.clear()
   }
   ftab.chat = chat
-  // a row let go off the tab (the desk's drag_frame lets the carried go where nothing here takes it)
-  let carried = dragged()
-  drag_frame(c, src, ws, outside=false)
-  match (carried, dragged()) {
-    (Some(i), None) => {
-      let (px, py, _) = c.pointer()
-      ftab.let_go = Some((i, px, py))
-    }
-    // (another carried: what was let go before and not taken is not for it)
-    (None, Some(_)) => ftab.let_go = None
-    _ => ()
-  }
   let (list, _) = dv_stations(src, ws)
   let stations = list.unwrap_or([]).filter(fn(s) { s.drive && (!only_station || s.station == station) })
   let start : DriveAt? = match stations.iter().find_first(fn(s) { s.station == station }) {

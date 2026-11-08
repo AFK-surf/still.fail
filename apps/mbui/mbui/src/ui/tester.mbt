@@ -159,6 +159,7 @@ fn reset_globals() -> Unit {
   wheel_mods.clear()
   captures.clear()
   drags.clear()
+  press_follow_reset()
   sideways.clear()
   shows_asked.clear()
   app_said.clear()

@@ -1028,6 +1028,8 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   }
   if kind == 0 {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // (what follows a press that goes down on it, told: Ctx::follow_press)
+    press_follow_down(target, x, y)
     // a scroll bar's thumb (a mouse's, scroll_bar.mbt): held from here, the press nothing else's (no tap, no words
     // picked, the focus where it is)
     if c.bar_press(target) {
@@ -1262,6 +1264,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     }
     c.bar_pointer(x, y)
     if c.down {
+      press_follow_moved(x, y)
       track_x.add(t, x)
       track_y.add(t, y)
       // moved past the slop: no long press of it (Android's), and on a field no tap either
@@ -1362,6 +1365,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     if c.bar_press_off() {
       return
     }
+    press_follow_up(x, y, false)
     if c.down {
       track_x.up(t, x)
       track_y.up(t, y)
@@ -1536,6 +1540,7 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
   c.word_drag = 0
   // (a hold handed here and not taken yet: called off with the press)
   view_handed.val = None
+  press_follow_up(x, y, true)
   if c.edge == 2 {
     c.back_gesture(3, x, t) |> ignore
   }

@@ -1169,6 +1169,7 @@ pub fn Ctx::focus_shown(Self, Int32) -> Bool
 pub fn Ctx::focusable(Self, Int32, node? : Int32, keys? : Int32, on_press? : Bool) -> Unit
 pub fn Ctx::focused_id(Self) -> Int32
 pub fn Ctx::follow_back(Self, (@view.BackStep) -> Unit) -> Unit
+pub fn Ctx::follow_press(Self, Int32, (PressStep) -> Unit) -> Unit
 pub fn Ctx::forget_parts(Self) -> Unit
 pub fn[X] Ctx::fork(Self, async () -> X, name? : String) -> @effect.Fiber[X]
 pub fn Ctx::frame_dt(Self) -> Double
@@ -1288,6 +1289,7 @@ pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
 pub fn Ctx::now_of(Self, Mover, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
+pub fn Ctx::on_files(Self, Int32, held~ : ((Double, Double)?) -> Unit, take~ : (Double, Double) -> ((Pick) -> Unit)?) -> Unit
 pub fn Ctx::on_key(Self, Int32, (Int32, Int32) -> Bool) -> Unit
 pub fn Ctx::on_page_release(Self, String, () -> Unit) -> Unit
 pub fn Ctx::on_press(Self, Int32, () -> Unit) -> Unit
@@ -2095,6 +2097,13 @@ pub(all) struct Press {
   moved : Bool
   long : Bool
   mods : Int32
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) enum PressStep {
+  Down(Double, Double)
+  Moving(Double, Double)
+  Up(Double, Double)
+  Off
 } derive(Eq, Show, @debug.Debug)
 
 pub(all) enum Radius {
