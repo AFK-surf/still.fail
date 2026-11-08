@@ -1332,6 +1332,7 @@ pub fn link_row(
   title_style? : @ui.TextStyle,
   title_cut? : Bool = false,
   value_cut? : Bool = false,
+  tile? : Bool = false,
 ) -> Bool {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
@@ -1393,11 +1394,20 @@ pub fn link_row(
       _ => ()
     }
   }
+  // (a tile leading it: link_row_node's LeadTile, the row as tall as the tile and the ladder's inset over and under it, or
+  // its words and theirs, both across its middle)
+  let narrow_style = if tile {
+    narrow_row(goes).then(row_tile_row)
+  } else if under && !face {
+    narrow_row(goes).then(row_top)
+  } else {
+    narrow_row(goes)
+  }
   let b = match look() {
     Narrow =>
-      c.box(style=(if under && !face { narrow_row(goes).then(row_top) } else { narrow_row(goes) }).then(row_line(true)), id~, fn() {
+      c.box(style=narrow_style.then(row_line(true)), id~, fn() {
         match lead {
-          Some(f) => if under && !face { row_lead(c, Narrow, f) } else { f() }
+          Some(f) => if under && !face && !tile { row_lead(c, Narrow, f) } else { f() }
           None => ()
         }
         let said = fn() {
@@ -1669,6 +1679,10 @@ let value_dotted : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 /// (mbui ui/squeeze.mbt). Its parts from its top.
 // kept across runs: a value (no field of it changes)
 let row_top : @ui.Style = @ui.css("align=AStart")
+
+///|
+/// A row led by a tile (link_row's `tile`): the ladder's inset over and under what it holds.
+let row_tile_row : @ui.Style = @ui.style(py=room(corner_inset))
 
 ///|
 /// What a row has below its note (its allowance's chips), 6 under it, as wide as its words.

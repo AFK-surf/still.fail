@@ -9,7 +9,7 @@
 fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
   {
     core: settings_core(src, w),
-    bar: fn() {  },
+    bar: fn(_) {  },
     foot: 0.0,
     in_place: false,
     sent: fn(r) { new_sent(src, w, r) },

@@ -22,6 +22,19 @@ pub fn acting_reset() -> Unit {
 }
 
 ///|
+/// `text` put on the system's clipboard, felt as a copy is (a key's light tap), and `said` in the toast where it is
+/// given: for an event's handler (a menu's item chosen, a press's confirm), outside a build, as Ctx::copy_text has it
+/// there.
+pub fn copy_out(text : String, said? : String) -> Unit {
+  @hostapi.clipboard_set(text)
+  @ui.haptic(KeyboardTap)
+  match said {
+    Some(words) => toast_later(words)
+    None => ()
+  }
+}
+
+///|
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
 /// `action`'s words on it doing `run` ("" none).
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {

@@ -152,7 +152,7 @@ pub fn item_opening(String) -> Bool
 
 pub fn join(Array[String], String) -> String
 
-pub fn kept_ask(@ui.Ctx, Core) -> Unit
+pub fn kept_ask(Core) -> Unit
 
 pub fn kept_asked() -> Int32
 

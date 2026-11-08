@@ -486,7 +486,7 @@ pub fn login_steps(
   let page_more = fn() {
     let mkey = "profile-more/" + key
     if @sf.icon_button(c, "more", key=mkey, label=@sf.t("common.login.otherWays")) {
-      let items = [Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { copy_link(@ui.current(), url) }))]
+      let items = [Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(url, said=@sf.t("common.link.copied")) }))]
       match in_station {
         Some((name, busy, open)) if flag(job, "browser") => {
           let label = @sf.t(if text(job, "screen") != "" { "common.login.backToStation" } else { "common.login.openInStation" }, args=[("station", name)])
