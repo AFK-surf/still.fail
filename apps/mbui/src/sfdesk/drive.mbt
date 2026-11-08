@@ -365,6 +365,8 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
   let root = at.root.unwrap_or("")
   let st = f.st
   let write = f.rights.write
+  // Keep the entries' operation state while a newly opened folder is still loading.
+  src.topic("doing", {}).get() |> ignore
   let view = view_in(src, "page", list_room(src, f.room))
   let (value, error) = drive_folder(src, at.station, root, at.path)
   let entries = @sfbase.dv_entries(src, at.station, root, at.path).unwrap_or([])
