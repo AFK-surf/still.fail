@@ -5,8 +5,7 @@
 
 ///|
 /// A new chat's page, rising over the page on top.
-fn new_chat(c : @ui.Ctx) -> Unit {
-  ignore(c)
+fn new_chat() -> Unit {
   fresh_reset()
   lower_sheet()
   app.menu = false
@@ -19,8 +18,7 @@ fn new_chat(c : @ui.Ctx) -> Unit {
 fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
   {
     core: settings_core(src, w),
-    bar: fn() {
-      let c = @ui.current()
+    bar: fn(c) {
       if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top()) {
         @sfbase.close_page(NewChat) |> ignore
       }

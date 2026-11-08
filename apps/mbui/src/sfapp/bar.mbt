@@ -1032,7 +1032,7 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
   if moves {
     // (the notch where it is drawn, and where its lips are then: none while the circle is not through the edge)
     let notch = fn() {
-      let (cy, r) = notch_at(bar.k_painted(@ui.current()))
+      let (cy, r) = notch_at(bar.k_painted(c))
       (cy, r, notch_lips(w, cy, r))
     }
     let glass = at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar())
@@ -1133,7 +1133,7 @@ fn disc_look(c : @ui.Ctx, disc : Int, moves : Bool, k_now : Double, up_now : Dou
     }
   }
   if moves {
-    c.look_by(disc, fn() { look(bar.k_painted(@ui.current()), bar.up.value_at(@ui.current().moment())) })
+    c.look_by(disc, fn() { look(bar.k_painted(c), bar.up.value_at(c.moment())) })
   } else if k_now < 1.0 || up_now > 0.0 {
     c.look(disc, look(k_now, up_now))
   }
@@ -1235,9 +1235,9 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, tint : Tin
     // one as opaque as it is lit, gone once nearly dim), as they are built when it is still
     Going(g) => {
       let shown = icon(idle)
-      c.look_by(shown, fn() { @ui.look(alpha=if g.painted(@ui.current()) < 0.999 { 1.0 } else { 0.0 }) })
+      c.look_by(shown, fn() { @ui.look(alpha=if g.painted(c) < 0.999 { 1.0 } else { 0.0 }) })
       lit_over(1.0, Some(fn() {
-        let v = g.painted(@ui.current())
+        let v = g.painted(c)
         @ui.look(alpha=if v > 0.001 { v } else { 0.0 })
       }))
     }
@@ -1344,13 +1344,12 @@ fn bar_action_run(src : Source, ws : Workspace, t : Double) -> Unit {
   if !told.shown || bar.drag >= 0.0 || bar.holds || bar.k_at(t) <= 0.9 {
     return
   }
-  let c = @ui.current()
   match told.action {
-    "ling" => new_chat(c)
+    "ling" => new_chat()
     "plus" =>
       match bar_place_add(src, ws, told.active) {
         Some(run) => run(Of(bar_action_anchor.val))
-        None => files_lend(c, src, ws)
+        None => files_lend(src, ws)
       }
     _ => ()
   }
@@ -1527,7 +1526,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
   m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Out, at~)
   m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Out, at~)
   // first laid out (its width known), or under reduced motion: everything where it goes, at once
-  if w > 0.0 && (!m.placed || @ui.current().still()) {
+  if w > 0.0 && (!m.placed || @ui.reduced_motion()) {
     m.placed = true
     m.jump()
   }
@@ -1878,7 +1877,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
             if k_moves {
               let n = items.length()
               let laid = now_cs[j]
-              c.moved_by(p, fn(_, _) { (bar_centres(w, bar.k_painted(@ui.current()), n)[j] - laid, 0.0) })
+              c.moved_by(p, fn(_, _) { (bar_centres(w, bar.k_painted(c), n)[j] - laid, 0.0) })
             }
           }
         }
@@ -1981,9 +1980,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   if now < m.vis.end() || m.vis.target < 1.0 {
     let vis = m.vis
     c.look_by(holder, fn() {
-      let v = vis.painted(@ui.current())
+      let v = vis.painted(c)
       if v != vis.target {
-        @motion.log_frame(@ui.current(), "bar/vis", "value=\{v} to=\{vis.target}")
+        @motion.log_frame(c, "bar/vis", "value=\{v} to=\{vis.target}")
       }
       @ui.look(alpha=v, dy=(1.0 - v) * bar_drop - raised)
     })
@@ -2136,7 +2135,6 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   let px = d.x
   let py = d.y
   let o_at = m.o.value_at(t)
-  let c = @ui.current()
   // another place chosen is felt, unless the finger already felt it getting there (a drag let go on it)
   let on_tab = fn(place : String) {
     // a bar chosen landing: the ball rides this place as it lands (where it rides is where it stays: nothing tells it
@@ -2151,7 +2149,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
         @ui.haptic(TextHandleMove)
         m.felt = at
       }
-      go_place(c, place, l.sets, l.cur)
+      go_place(t, place, l.sets, l.cur)
     }
   }
   // another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
@@ -2184,7 +2182,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
     })
     set_bars(src, ws.id, l.sets, i)
     match key {
-      Some(k) => go_place(c, k, l.sets, i)
+      Some(k) => go_place(t, k, l.sets, i)
       None => ()
     }
   }

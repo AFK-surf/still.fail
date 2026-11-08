@@ -22,7 +22,7 @@ pub fn language_from_prefs(prefs : Json?) -> Unit {
 /// Light or dark, as this device is set (the prefs' `appearance`), or as the system is (@hostapi.system_dark)
 /// when it follows it; the host told when it changes (its bars follow, or are as dark as the frame's page says:
 /// `page_dark`).
-pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
+pub fn appearance(c : @ui.Ctx, src : Source, page_dark : Bool?) -> Unit {
   let prefs = src.topic("prefs", {}).get().value
   // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
   language_said(src)
@@ -52,7 +52,7 @@ pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
   }
   // (told once the frame's builds are over, as the last saw the page)
   if prefs is Some(_) && told_bars.val != Some(bars) {
-    @ui.current().after_build("bars", fn() {
+    c.after_build("bars", fn() {
       if told_bars.val != Some(bars) {
         told_bars.val = Some(bars)
         @hostapi.set_dark(bars)

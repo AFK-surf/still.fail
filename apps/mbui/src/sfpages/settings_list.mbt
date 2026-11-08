@@ -56,16 +56,17 @@ fn settings_row(
 }
 
 ///|
+/// The settings' list as it stands, in its order, as the core says it, built in `c` (settings_parts_of: the bottom bar's
+/// row as `c`'s window has the bar, what is kept as asked of the core now).
+pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[SettingsPart] {
+  settings_parts_of(core, here, bars=@sfbase.bars_shown(c), kept=@settings.kept_said(c, core))
+}
+
+///|
 /// The settings' list as it stands, in its order, as the core says it: the topics its rows read are those the pages
-/// they open read. `bars`: whether the window has the bottom bar (none said: as `c`'s window is); not `asks`, what is
-/// kept said as last read, nothing asked of the core for it (what reads it asks: kept_ask).
-pub fn settings_parts(
-  c : @ui.Ctx,
-  core : Core,
-  here : @settings.Here,
-  bars? : Bool,
-  asks? : Bool = true,
-) -> Array[SettingsPart] {
+/// they open read. `bars`: whether the window has the bottom bar; `kept`: what 本机缓存's row says (@settings.kept_said,
+/// or kept_told: as last read, nothing asked of the core for it, what reads it asking: kept_ask).
+fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : String) -> Array[SettingsPart] {
   let w = @settings.workspace_view(core, here).value
   let stations = match @settings.stations_of(core, here).value {
     Some(Array(a)) => Some(a)
@@ -229,7 +230,7 @@ pub fn settings_parts(
       bad=refused,
     ),
   ]
-  if bars.unwrap_or(@sfbase.bars_shown(c)) {
+  if bars {
     device.push(settings_row(BarSettings, "bars", "view-columns", @sf.t("android-misc.bar.title"), value=@settings.bars_value(core)))
   }
   let platform = @ui.platform()
@@ -243,7 +244,7 @@ pub fn settings_parts(
   if platform == 2 {
     device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
   }
-  device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=if asks { @settings.kept_said(c, core) } else { @settings.kept_told() }))
+  device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=kept))
   parts.push({ key: "device", heading: @sf.t("android-settings.home.device"), rows: device })
   // 关于: this build, or the newer one there is
   let v = (core.version_now)()
@@ -685,9 +686,9 @@ pub fn settings_home_node(
   // it is asked to be read again, not as the list is worked out)
   let query = fn() { settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower() }
   let parts = @signals.computed(fn(_) {
-    settings_found(settings_parts(@ui.current(), core, here(), bars=bars(), asks=false), core, query())
+    settings_found(settings_parts_of(core, here(), bars=bars(), kept=@settings.kept_told()), core, query())
   })
-  v.reacts(fn() { @settings.kept_asked() }, fn(_) { @settings.kept_ask(@ui.current(), core) })
+  v.reacts(fn() { @settings.kept_asked() }, fn(_) { @settings.kept_ask(core) })
   // (its cards: each by its group's key (the account's and the workspace's by their rows'), its heading, its rows' keys; the account and the workspace each a card of
   // their own, as large as who and where they are)
   let cards = fn() -> Array[(String, String, Array[String])] {

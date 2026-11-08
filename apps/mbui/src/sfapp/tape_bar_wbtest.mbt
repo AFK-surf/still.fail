@@ -241,7 +241,7 @@ test "on the tape a finger's tap on the bar's mark shows what the page is for ti
   let press = fn() {
     let id = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden })[0].id
     t.advance(between_frames_ms)
-    @ui.current().ask_action(id, Activate)
+    t.ctx().ask_action(id, Activate)
     t.run_for(@ui.move_most_ms)
   }
   press()
