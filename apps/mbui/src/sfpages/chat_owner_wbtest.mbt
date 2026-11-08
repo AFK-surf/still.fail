@@ -154,3 +154,29 @@ test "the old row's independent read remains until its explicit leave" {
 test "the retained row's independent read remains until its explicit leave" {
   opening_owned_row(true, true)
 }
+
+///|
+test "a quick tap keeps a chat read until the page takes over" {
+  let (t, client, sent, item, page_source, page_shows, _, _, row_source, page_entry) = owned_row_test(true)
+  let raw = chat_params(row_ref(item))
+  let params = @sfbase.core_topic_params("chat", raw)
+  // A graph reading the chat can be invalidated by a core reply after the tap, before the page's first frame.
+  let transient = @signals.watch(fn() {  })
+  transient.read(fn() { row_source.val.unwrap().topic("chat", raw).get() }) |> ignore
+  let original = client.peek_topic("chat", params~).unwrap()
+  let (x, y) = t.find(item.title).unwrap()
+  t.press_at(x, y)
+  t.touch(2, x, y)
+  assert_true(app.nav.top() is Chat(_), msg="the quick tap opened the chat")
+  transient.stop()
+  assert_true(client.peek_topic("chat", params~) is Some(s) && physical_equal(s, original), msg="the opening keeps the original subscription before the page's first frame")
+  let (serial, _) = app.nav.top_stay()
+  let page_reads = @sfbase.page_chat_reader(page_source.val.unwrap(), page_entry.val.unwrap(), serial)
+  page_reads(Chat(row_ref(item)))
+  assert_true(physical_equal(client.peek_topic("chat", params~).unwrap(), original))
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 0)
+  page_shows.set(false)
+  assert_true(client.peek_topic("chat", params~) is None, msg="the last page reader releases the subscription")
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  @ui.run_let_go()
+}

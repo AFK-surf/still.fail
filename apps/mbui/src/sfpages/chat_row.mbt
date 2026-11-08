@@ -195,7 +195,11 @@ pub fn chat_row(
         unprime(src, r, reader)
       }
     } else {
-      let primed = row_primed.val
+      let primed = match row_primed.val {
+        Some(reader) => Some(reader)
+        None if !src.read_only => Some(src.lease_topic("chat", chat_params(r)))
+        None => None
+      }
       row_primed.val = None
       let reader = match primed { Some(reader) => @sfbase.prepare_chat_handoff(reader); None => None }
       match opened {

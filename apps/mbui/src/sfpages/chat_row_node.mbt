@@ -51,7 +51,13 @@ pub fn chat_row_node(
     let i = @signals.untracked(item)
     opened.val = true
     let r = row_ref(i)
-    let early = primed.val
+    // A quick tap has no prefetch yet. Keep a reader from the open event until the page has its own, even if the
+    // graph that first read the chat changes in a core reply before that page's first frame.
+    let early = match primed.val {
+      Some(reader) => Some(reader)
+      None if !src.read_only => Some(src.lease_topic("chat", chat_params(r)))
+      None => None
+    }
     primed.val = None
     let reader = match early { Some(reader) => @sfbase.prepare_chat_handoff(reader); None => None }
     let on_line = match (down_at.val, state_at.val) {
