@@ -1014,38 +1014,6 @@ export interface MachineLogin {
 }
 
 /**
- * A provider a key can be added for (shapes/providers.ts); a station lists its ids (`id`, `name`, `group`), the core fills the
- * rest in as the picker's tiles.
- */
-export interface ApiProvider {
-	id: string;
-	name: string;
-	/** labs | china | gateways | cloud | inference | local */
-	group: string;
-	/** The mark of its maker; none: the generic one. */
-	mark?: string;
-	/** How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand). */
-	kind?: string;
-	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok; Cursor, Devin: its account, a plan alone). */
-	hasKey?: boolean;
-	hasPlan?: boolean;
-	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok | cursor | devin). */
-	runtime?: string;
-	/** Its address is the person's own: asked for with the key. */
-	endpointRequired?: boolean;
-	/** An example of such an address. */
-	endpointExample?: string;
-	/** At such an address, the protocols it can speak there (more than one: asked which). */
-	protocols?: string[];
-	/** Works without a key. */
-	keyOptional?: boolean;
-	/** What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision`. */
-	uses?: string[];
-	/** What the core says of it: what it can do, in words. */
-	usesText?: string;
-}
-
-/**
  * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
  * runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`).
  */
@@ -1298,11 +1266,6 @@ export interface Overview {
 	 * older than it: not offered).
 	 */
 	consoleSignIn?: boolean;
-	/**
-	 * The providers a key can be added for (none from a station older than them: they are then not offered), as the
-	 * station lists them.
-	 */
-	apiProviders?: ApiProvider[];
 	/** The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them). */
 	updates?: SoftwareVersion[];
 	/** Its agents' processes, in a line. */

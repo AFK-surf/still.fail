@@ -86,6 +86,8 @@ pub(all) struct Reading {
   mut at_end : Bool
   /// where the core was last told the chat is (chat.place: "" not yet), and the screen's scale it was laid out at
   mut told_place : String
+  /// the message at the top as it was last told (its seq, "" at its end)
+  mut told_at : String
   mut scale : Double
   /// the jump button: shown since when (or hidden since when), and which
   mut jump : Bool
@@ -238,6 +240,7 @@ pub fn reading_of(key : String) -> Reading {
         top_off: 0.0,
         at_end: true,
         told_place: "",
+        told_at: "\u{0}",
         scale: 1.0,
         jump: false,
         ask: false,
@@ -1651,8 +1654,11 @@ pub fn focus_chat(r : ChatRef, v : ChatView, end : Bool?) -> Json {
 
 ///|
 /// Where the chat is, told the core (`chat.place`): the message at the top and how far its top is below
-/// the list's (in the screen's pixels, as Android's app tells it), none at its end; told again only where that moved.
-pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit {
+/// the list's (in the screen's pixels, as Android's app tells it), none at its end; told again as the message at the
+/// top changes, and where it is to the pixel as it is left (`exact`). Not each pixel it moves: rows moving on their own
+/// (words sent going up into the list) moved it each frame, told and written down each frame (2026-11-08: 20 a send).
+/// Opened again this run, it is where it was to the pixel (kept_places).
+pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading, exact? : Bool = false) -> Unit {
   // kept here too, for opening it again this run
   if rd.top_seq >= 0.0 {
     kept_places[r.station + "\u{1}" + r.session] = {
@@ -1676,10 +1682,15 @@ pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit
     place["offset"] = Json::number((rd.top_off * scale).round())
   }
   let said = Json::object(place).stringify()
-  if said == rd.told_place {
+  let at = match place.get("seq") {
+    Some(seq) => seq.stringify()
+    None => ""
+  }
+  if said == rd.told_place || (!exact && at == rd.told_at) {
     return
   }
   rd.told_place = said
+  rd.told_at = at
   (src.call)("chat.place", Json::object(place), fn(_) {  })
 }
 

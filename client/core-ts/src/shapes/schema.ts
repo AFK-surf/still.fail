@@ -863,7 +863,8 @@ export const SHAPES: Record<string, Shape> = {
     ["machineLogins", vec("MachineLogin"), { default: true, doc: "This machine's own logins (none from a station older than them)." }],
     ["sharing", "bool", { default: true, doc: "It can share profiles and skills with the workspace's other stations." }],
     ["consoleSignIn", "bool", { default: true, doc: "An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station\nolder than it: not offered)." }],
-    ["apiProviders", vec("ApiProvider"), { default: true, doc: "The providers a key can be added for (none from a station older than them: they are then not offered), as the\nstation lists them." }],
+    // (not `apiProviders`, the providers a key can be added for: the core's own forms read it, no client; a third of
+    // each station the `stations` list sent, 2026-11-08)
     ["updates", vec("SoftwareVersion"), { default: true, doc: "The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them)." }],
     ["processesText", "String", { doc: "Its agents' processes, in a line." }],
     ["footprint", opt("FootprintBrief"), { doc: "How much of the disk it takes (none from a station older than the footprint page, which then is not offered)." }],

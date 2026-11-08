@@ -173,7 +173,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     (Some(v), Some(rd)) if !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
       match v.thread {
-        Some(_) if rd.placed => tell_place(src, r, v, rd)
+        Some(_) if rd.placed => tell_place(src, r, v, rd, exact=true)
         _ => ()
       }
     }

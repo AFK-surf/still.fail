@@ -263,6 +263,8 @@ priv struct Draft {
   /// is sent or put back empty, so what goes up from it is another upload than the same in the message before, or in
   /// another new chat ("" until the core has said it)
   mut id : String
+  /// what it is as kept (draft_sig), worked out again only as a part of it changes: asked each frame
+  mut sig : @signals.Computed[String]?
 }
 
 ///|
@@ -337,6 +339,7 @@ fn draft_by(c : @ui.Ctx, src : Source, key : String) -> Draft {
         warm_n: 0,
         focus: 0,
         id: "",
+        sig: None,
       }
       drafts[key] = d
       // (asked of the core once the frame's builds are over)
@@ -471,7 +474,16 @@ fn draft_view(d : Draft) -> Map[String, Json] {
 
 ///|
 fn draft_sig(d : Draft) -> String {
-  Json::object(draft_view(d)).stringify()
+  // (written out anew each frame while a composer showed, the words, quotes and files all: 2026-11-08)
+  let sig = match d.sig {
+    Some(sig) => sig
+    None => {
+      let sig = @signals.computed(fn(_) { Json::object(draft_view(d)).stringify() })
+      d.sig = Some(sig)
+      sig
+    }
+  }
+  sig.get()
 }
 
 ///|
