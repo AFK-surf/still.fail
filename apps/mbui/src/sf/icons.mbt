@@ -73,12 +73,6 @@ pub fn icon_path(name : String) -> String {
 }
 
 ///|
-/// Whether `name` is one of the icons.
-pub fn has_icon(name : String) -> Bool {
-  icon_data.contains(name)
-}
-
-///|
 /// Icon `name` (design/icons: "chevron-left", "list", "search"…) `size`
 /// square in `color`.
 pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64, by_ink? : Bool = false) -> Int {
@@ -454,7 +448,6 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
   }
   out
 }
-
 
 ///|
 /// What is at work steps round: eight, the brightest a step further every 100 ms,

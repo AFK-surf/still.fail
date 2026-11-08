@@ -58,7 +58,6 @@ fn workspace_shown(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, loo
   )
 }
 
-
 ///|
 /// What the workspace's page holds (`v`, its view): its name and its mark, its people, its relays, leaving or deleting
 /// it.
@@ -567,11 +566,6 @@ let ws_add_icon : Double = 20.0
 ///|
 // kept across runs: a value (no field of it changes)
 let ws_add_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
-
-///|
-/// ⋯ (an icon button: 32, round: at its row's end in the middle of it, in none of its corners).
-// kept across runs: a value (no field of it changes)
-let ws_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 pub let ws_more_icon : Double = 16.0

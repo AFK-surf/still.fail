@@ -54,15 +54,6 @@ pub fn clock_ms(ms : Double) -> String {
 }
 
 ///|
-fn two_digits(n : Int64) -> String {
-  if n < 10L {
-    "0\{n}"
-  } else {
-    "\{n}"
-  }
-}
-
-///|
 /// A speed as it is shown: 1×, 1.5×, 0.25×.
 pub fn speed_label(speed : Double) -> String {
   let whole = speed.floor()
@@ -2477,3 +2468,13 @@ let desk_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, wrap
 fn more_line(label : String, icon : String, disabled~ : Bool, on_press~ : () -> Unit) -> MenuItem {
   menu_item_of(label, on_press, icon~, disabled~)
 }
+
+///|
+fn two_digits(n : Int64) -> String {
+  if n < 10L {
+    "0\{n}"
+  } else {
+    "\{n}"
+  }
+}
+

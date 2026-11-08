@@ -150,23 +150,6 @@ fn nav_button(
 }
 
 ///|
-/// A day's heading.
-fn section_header(c : @ui.Ctx, label : String) -> Int {
-  let t = @sf.theme()
-  c.box(pl=20.0, pr=20.0, pt=14.0, pb=6.0, fn() {
-    c.text(label, size=t.t.ui, weight=600, color=t.p.text, wrap=false, line=21.0)
-    |> ignore
-  })
-}
-
-///|
-/// The marks' colours (MarkRed).
-let mark_blue : Int64 = 0x3B82F6FFL
-
-///|
-let mark_red : Int64 = 0xE5484DFFL
-
-///|
 let mark_yellow : Int64 = 0xF2B01EFFL
 
 ///|

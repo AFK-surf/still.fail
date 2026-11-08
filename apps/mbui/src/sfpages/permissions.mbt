@@ -384,11 +384,6 @@ pub fn station_archiving_node(
 }
 
 ///|
-/// A link in a note's words (12).
-pub let link_size : Double = 12.0
-
-
-///|
 /// A permission's mark (round, on the canvas, its glyph 18), its state
 /// at its first row's end (the meta's 12 in 500: given in green with a check 14, refused in red).
 let permission_glyph : Double = 18.0

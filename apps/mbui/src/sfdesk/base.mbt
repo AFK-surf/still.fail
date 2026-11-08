@@ -265,16 +265,6 @@ using @sfbase {
 }
 
 ///|
-fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-
-///|
 /// A sidebar's rows, the library's (src/sf side_rows.mbt).
 using @sf {
   nav_fade,
@@ -350,4 +340,10 @@ using @sfpages {
   unpremultiplied,
   usage_tiles,
   video_least,
+}
+
+///|
+using @sf {
+  dmin,
+  dmax,
 }

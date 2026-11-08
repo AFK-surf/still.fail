@@ -25,7 +25,8 @@ fn settings_tester(
 ///|
 test "settings from Home come in from the right and go back to the right" {
   new_run()
-  let t = @ui.Tester::new(fn(c) { view(c, fixture("settings")) }, w=390.0, h=844.0)
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   t.draw()
   // The gear is at Home's right edge. Once the core has said what the settings show, they come from that side.
   open_setting("home")

@@ -273,19 +273,6 @@ fn narrow_lists(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// At the stack's root, with nothing over it or in it taking back: the shell's back (back_where: a place's top page
-/// other than the chats back to the chats, in place). Above it the stack's own (swiped from the edge, the back key),
-/// which pops as back_where does.
-fn narrow_root_back(c : @ui.Ctx) -> Unit {
-  if narrow_takes_back() {
-    match @sfbase.back_step() {
-      Some(f) => c.on_back(f)
-      None => ()
-    }
-  }
-}
-
-///|
 /// Whether back at the narrow stack's root is the shell's now (back_where's: a place's top page other than the chats
 /// back to the chats): nothing pushed on the stack, no menu, sheet or presenter over it. All it reads is told as it
 /// changes (the stack, the presenters).
@@ -301,34 +288,6 @@ fn narrow_page_key(c : @ui.Ctx, w : Workspace) -> String {
   let t = @sf.theme()
   "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
   "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
-}
-
-///|
-/// Page `page` of the stack laid out Small, in workspace `w`.
-fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
-  // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide frame's pane
-  // says (sfdesk's frame.mbt): the page sliding in or out, a keyboard making it shorter, move none of it (it goes with
-  // the page, at once)
-  let whole = c.box(style=page_whole, fn() {
-    // kept as it was drawn while nothing it shows can have changed (mbui's Ctx::kept_part), read out, as the wide
-    // frame's panes are (sfdesk's tape_part): a mark stepping in it, a list of another page scrolled builds none of it.
-    // Its key what it is laid out by besides what it reads: the window, the bars' room, the keyboard's, the ground,
-    // where it stands in the stack and the way a place came in
-    let key = narrow_page_key(c, w)
-    // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the frame is
-    // built anew, the way there's 3)
-    c.kept_part(
-      c.id("page/kept"),
-      key,
-      fn() {
-        let (now, all, _, invited) = workspace_in_view(src)
-        page_view(c, src, now.unwrap_or(w), all, invited, page)
-      },
-      read_out=true,
-      own=true,
-    )
-  })
-  @motion.scope(c, whole, bottom=true)
 }
 
 ///|
@@ -379,7 +338,6 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   @sfdesk.keys_dialog(c, src)
   // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
   @sf.presented(c)
-  toast(c)
   finger_loupe(c)
 }
 

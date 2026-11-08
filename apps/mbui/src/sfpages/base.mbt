@@ -182,25 +182,6 @@ using @sfbase {
 }
 
 ///|
-pub fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-
-///|
-pub fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
 using @settings {
   binding_of,
   policy_forms,
@@ -267,4 +248,10 @@ using @settings {
   type Core,
   type Asked,
   type Here,
+}
+
+///|
+using @sf {
+  dmin,
+  dmax,
 }

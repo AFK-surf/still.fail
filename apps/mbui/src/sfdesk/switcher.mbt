@@ -158,15 +158,6 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
 /// The panel: 14% down the window, 560 wide at most and 32 short of the window, 480 high at
 /// most and 72% of the window; 12 in (EDGE), its corner a row's (18) and that (30: concentric with its rows where
 /// its list is scrolled to its end, not a pill's 19 the rows are not round by), a small panel's
@@ -216,7 +207,6 @@ let switcher_search_size : Double = 16.0
 ///|
 let switcher_search_line : Double = 24.0
 
-///|
 ///|
 /// One of the keys' actions as ⌘K offers it (the core names it): its icon, what it does; for update.app and
 /// update.station, the version it goes to and the station updated. Its keys are put in as it is offered.

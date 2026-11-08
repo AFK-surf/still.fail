@@ -242,3 +242,10 @@ pub fn app(c : @ui.Ctx) -> Unit {
   @sfcore.frame(@core.subscribe("accounts"))
   @sfapp.view(c, the_source)
 }
+
+///|
+/// The app's window tree over the kept conversations (sfapp's app_tree over this package's source): what `app` is the
+/// old frame around, the one way the app is drawn.
+pub fn app_tree(root : @view.View) -> Unit {
+  @sfapp.app_tree(the_source)(root)
+}

@@ -132,7 +132,6 @@ fn transfers_list(
   }
 }
 
-
 ///|
 /// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
 /// comes and goes, as far as it has come (@sf.coming_mark in its mark's place), red's dot when one failed; pressed, their list beside
@@ -185,18 +184,6 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
     ftransfers.open.set(!ftransfers.open.get())
   }
   transfers_list(c, src, ws, id, go, false)
-}
-
-///|
-/// Whether a small screen's home's top bar has its key (transfers_key): what comes.
-pub fn transfers_key_shown(src : Source, ws : String) -> Bool {
-  transfers_shown(src, ws)
-}
-
-///|
-/// Whether there is anything that comes and goes (the sidebar's foot, a small screen's home show it then).
-pub fn transfers_shown(src : Source, ws : String) -> Bool {
-  !coming(src, ws).none()
 }
 
 ///|
@@ -391,13 +378,6 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
 /// The transfers' list (transfers: 360 wide).
 let ftransfers_w : Double = 360.0
 
-
-
-
-
-
-
-
 ///|
 /// A transfer (transfer: its mark 18, its words, its keys; 8 apart): what it holds as far in as a small panel's words
 /// (a row's padding in from the panel's), 8 over and under; set apart by that room alone, no line between.
@@ -435,12 +415,6 @@ let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w
 ///|
 // kept across runs: a value (no field of it changes)
 let ftransfer_actions : @ui.Style = @ui.css("row gap=SPx align=ACenter")
-
-
-
-
-
-
 
 ///|
 /// A row's mark (14).

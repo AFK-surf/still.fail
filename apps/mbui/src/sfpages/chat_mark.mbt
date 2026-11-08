@@ -88,7 +88,6 @@ let mark_pop_peak : Double = 1.3
 ///|
 let mark_pop_peak_at : Double = 0.6
 
-
 // A row's second line from where its chat stands (still.fail web/src/ChatMark.tsx WaitingText `slot`, ChatMark.css.ts
 // leadLine, leadSlot, waitingLead; Sidebar.css.ts navSessionLast): by what the core says leads it (ChatItem's
 // state_lead, its card's lead word state_lead_text, what follows state_rest), never read out of the words. A lead said
@@ -297,12 +296,3 @@ let state_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let state_rest_cut : @ui.TextStyle = @ui.text_style(w=Cut)
-
-///|
-/// A card's lead word: a mouse's 600, a finger's bold.
-// kept across runs: a value (no field of it changes)
-let lead_word : @ui.TextStyle = @ui.text_style(weight=Semibold, w=Hug)
-
-///|
-// kept across runs: a value (no field of it changes)
-let lead_word_touch : @ui.TextStyle = @ui.text_style(weight=Bold, w=Hug)

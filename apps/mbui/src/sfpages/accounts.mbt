@@ -1512,7 +1512,6 @@ fn profile_env(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
   })
 }
 
-
 ///|
 /// Its variables written (EnvSection's table): a name and a value a row (a secret's kept masked until it is written
 /// anew), deleted or added, saved as what changed (a name gone or renamed: null).
@@ -1657,15 +1656,8 @@ let pf_mark_glyph : Double = 26.0
 ///|
 let pf_chip_glyph : Double = 14.0
 
-
 ///|
 let pf_user_avatar : Double = 24.0
-
-
-
-
-
-
 
 ///|
 /// What its last check said, cut short where its line has less.
@@ -1689,7 +1681,6 @@ pub let pf_tag : @ui.Style = @ui.css("row h=S4_5 px=S1 gap=SPx align=ACenter rad
 ///|
 // kept across runs: a value (no field of it changes)
 pub let pf_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, weight=Medium, color=Muted, wrap=false)
-
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1725,18 +1716,6 @@ let pf_device_code : @ui.Style = @ui.css("px=S3 py=S1_5 radius=Lg bg=Hover")
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_device_code_words : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let pf_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pf_share_rows : @ui.Style = @ui.css("w=Full pt=S2_5 gap=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pf_share_value : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1808,11 +1787,6 @@ let pf_env_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_env_name : @ui.Style = @ui.css("w=S48")
-
-///|
-/// How it runs: its switches 14 apart.
-// kept across runs: a value (no field of it changes)
-let pf_run_rows : @ui.Style = @ui.css("w=Full gap=S3_5")
 
 ///|
 /// A profile made up, for what its page shows while it is read (profile_view in its bones): its name, how it stands,

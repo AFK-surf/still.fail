@@ -203,10 +203,10 @@ pub(all) struct Here {
 }
 
 // ---------------------------------------------------------------------------
-// Reading the core's JSON (as sfapp/model.mbt: a field left out reads as nothing)
+// Reading the core's JSON (a field left out reads as nothing): the app's one reading of it, sfbase passing it on
 
 ///|
-fn field(v : Json?, key : String) -> Json? {
+pub fn field(v : Json?, key : String) -> Json? {
   match v {
     Some(Object(m)) => m.get(key)
     _ => None
@@ -214,7 +214,7 @@ fn field(v : Json?, key : String) -> Json? {
 }
 
 ///|
-fn text(v : Json?, key : String) -> String {
+pub fn text(v : Json?, key : String) -> String {
   match field(v, key) {
     Some(String(s)) => s
     _ => ""
@@ -230,7 +230,7 @@ pub fn opt_text(v : Json?, key : String) -> String? {
 }
 
 ///|
-fn flag(v : Json?, key : String) -> Bool {
+pub fn flag(v : Json?, key : String) -> Bool {
   match field(v, key) {
     Some(True) => true
     _ => false
@@ -246,7 +246,7 @@ pub fn has(v : Json?, key : String) -> Bool {
 }
 
 ///|
-fn number(v : Json?, key : String) -> Double {
+pub fn number(v : Json?, key : String) -> Double {
   match field(v, key) {
     Some(Number(n, ..)) => n
     _ => 0.0
@@ -259,7 +259,7 @@ fn count(v : Json?, key : String) -> Int {
 }
 
 ///|
-fn items(v : Json?, key : String) -> Array[Json] {
+pub fn items(v : Json?, key : String) -> Array[Json] {
   match field(v, key) {
     Some(Array(a)) => a
     _ => []
@@ -320,24 +320,6 @@ pub fn join(parts : Array[String], sep : String) -> String {
     first = false
   }
   b.to_string()
-}
-
-///|
-fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
-fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -461,8 +443,8 @@ pub fn station_name(address : String) -> String {
 }
 
 ///|
-/// The workspace of an address (ws/st).
-fn workspace_of(address : String) -> String {
+/// The workspace an address (`<workspace>/<station>`) is of (the app's one reading of it: sfbase passes it on).
+pub fn workspace_of(address : String) -> String {
   match address.find("/") {
     Some(i) => address.unsafe_substring(start=0, end=i)
     None => address
@@ -717,4 +699,9 @@ fn int_of(s : String, or_else : Int) -> Int {
 /// topics say nothing and its calls are never answered, so what is only shown asks the real core for nothing.
 pub fn Core::quiet(self : Core) -> Core {
   { ..self, topic: fn(_, _) { @signals.computed(fn(_) { { value: None, error: None, version: 0 } }) }, call: fn(_, _, _) {  }, picture: fn(_, _) { "" } }
+}
+
+///|
+using @sf {
+  dmax,
 }

@@ -155,12 +155,6 @@ pub fn keeping_stop(src : Source, id : String) -> Unit {
 }
 
 ///|
-/// None of them brought any more, what came of each kept (`fill.stopAll`).
-pub fn keeping_stop_all(src : Source) -> Unit {
-  (src.call)("fill.stopAll", {}, fn(_) {  })
-}
-
-///|
 /// What comes to this device from workspace `ws`'s stations (the `downloads` topic): its downloads (a chat's file, a
 /// drive's, a folder zipped), newest first, and what was opened and let go being brought, the one coming first.
 pub fn coming_of(src : Source, ws : String) -> (Array[Json], Array[Json]) {

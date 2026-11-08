@@ -33,15 +33,6 @@ pub fn next_in(current : String, list : Array[String]) -> String? {
 }
 
 ///|
-/// What comes before `current` in `list`, or None at its start (or when it is not in it).
-pub fn prev_in(current : String, list : Array[String]) -> String? {
-  match list.search(current) {
-    Some(at) if at > 0 => list.get(at - 1)
-    _ => None
-  }
-}
-
-///|
 /// Names with their numbers compared as numbers: `E2` before `E10`.
 pub fn compare_natural(a : String, b : String) -> Int {
   let x = a.to_array()
@@ -107,12 +98,6 @@ pub fn extension_of(name : String) -> String {
     Some(i) => name.view(start_offset=i + 1).to_owned().to_lower()
     None => ""
   }
-}
-
-///|
-/// Whether `name` is a subtitle this player reads (SubRip, WebVTT, ASS/SSA).
-pub fn is_subtitle(name : String) -> Bool {
-  subtitle_extensions.contains(extension_of(name))
 }
 
 ///|

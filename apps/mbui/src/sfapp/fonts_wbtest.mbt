@@ -135,7 +135,7 @@ test "a face's file the host cannot read where it is: had through the core inste
   }
   // (the app from the frame its host is set so)
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.set_unreadable_font("/data/500")
   on.val = true
   t.draw()

@@ -4,51 +4,16 @@
 // generated Shapes.kt decode it.
 
 ///|
-pub fn field(v : Json?, key : String) -> Json? {
-  match v {
-    Some(Object(m)) => m.get(key)
-    _ => None
-  }
-}
-
-///|
-pub fn text(v : Json?, key : String) -> String {
-  match field(v, key) {
-    Some(String(s)) => s
-    _ => ""
-  }
-}
-
-///|
-pub fn opt_text(v : Json?, key : String) -> String? {
-  match field(v, key) {
-    Some(String(s)) => Some(s)
-    _ => None
-  }
-}
-
-///|
-pub fn flag(v : Json?, key : String) -> Bool {
-  match field(v, key) {
-    Some(True) => true
-    _ => false
-  }
-}
-
-///|
-pub fn number(v : Json?, key : String) -> Double {
-  match field(v, key) {
-    Some(Number(n, ..)) => n
-    _ => 0.0
-  }
-}
-
-///|
-pub fn items(v : Json?, key : String) -> Array[Json] {
-  match field(v, key) {
-    Some(Array(a)) => a
-    _ => []
-  }
+/// A field of the core's JSON, its words, its flag, its number, its items (a field left out reads as nothing), and the
+/// workspace a station (`<workspace>/<station>`) is of: the settings' reading, the one for every package above them.
+pub using @settings {
+  workspace_of,
+  field,
+  text,
+  opt_text,
+  flag,
+  number,
+  items,
 }
 
 ///|
@@ -489,17 +454,6 @@ pub fn first_line(words : String) -> String {
   ""
 }
 
-
-///|
-/// The workspace a station (`<workspace>/<station>`) is of.
-pub fn workspace_of(station : String) -> String {
-  match station.find("/") {
-    Some(k) => station.view(end_offset=k).to_string()
-    None => station
-  }
-}
-
-
 ///|
 /// The station this machine is, as its host says (its station's cloud.json),
 /// read once it is one; "" where it is none, asked again (one 添加这台 Mac adds, known without the app opened again).
@@ -521,7 +475,6 @@ pub fn this_machine() -> String {
     }
   }
 }
-
 
 ///|
 /// Whether `screen` of `station` is this machine's own display (its `desktop` screen): seen

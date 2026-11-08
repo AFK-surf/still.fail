@@ -12,11 +12,15 @@ fn signed_out_run() -> Unit raise {
   ))
   r.attach()
   @ui.on_message("core", @core.receive)
-  let t = @ui.Tester::new(@sfreplay.app)
+  let t = @ui.Tester::new(@sfreplay.app, tree=@sfreplay.app_tree)
   // posted to mbui's queue, taken by the next frame as it begins
   assert_eq(r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }), 1)
   assert_true(t.find("登录") is None)
   t.draw()
+  assert_true(t.find("登录") is Some(_))
+  // (past the app's first splash's second, which the window's tree waits from its start whatever the core says: then
+  // nothing left to wake for)
+  t.run_for(@sfapp.splash_label_ms)
   assert_true(t.find("登录") is Some(_))
   t.assert_idle()
   @core.Replay::detach()

@@ -352,8 +352,6 @@ pub fn fixture_app(String) -> @sfbase.Source
 
 pub fn fixture_json(String) -> @sfbase.Source
 
-pub fn fixture_json_app(String) -> @sfbase.Source
-
 pub fn flag(@json.Json?, String) -> Bool
 
 pub let flash_held : @ref.Ref[Bool]
@@ -875,6 +873,8 @@ pub fn size_of_kept(String) -> @sfbase.Viewport?
 pub fn split_cookies(String) -> Array[String]
 
 pub fn split_query(String) -> (String, String)
+
+pub let splash_label_ms : Double
 
 pub let src_now : @ref.Ref[() -> Double]
 
