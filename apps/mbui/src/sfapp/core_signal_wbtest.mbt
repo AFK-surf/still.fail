@@ -959,7 +959,7 @@ test "reopening a chat reads the current station and follows later updates" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = fixture_app("home")
-  let params : Map[String, Json] = { "scope": "ws1" }
+  let params : Map[String, Json] = { "scope": "ws1", "brief": true }
   let src : Source = {
     ..base,
     topic_read: fn(name, p) {
@@ -1735,7 +1735,7 @@ test "a chat after closing the switcher reads station changes made in the gap" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sffixture.fixture("home")
-  let params : Map[String, Json] = { "scope": "ws1" }
+  let params : Map[String, Json] = { "scope": "ws1", "brief": true }
   let src : Source = {
     ..base,
     topic_read: fn(name, p) {
