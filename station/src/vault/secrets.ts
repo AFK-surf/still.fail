@@ -33,7 +33,7 @@ import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
-import { hasVaultMembers, initializePendingIndex, pendingAuditComplete, pendingIndexComplete, pendingIndexStarted, PENDING_BODIES, PENDING_DUE, PENDING_DUPLICATES, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
+import { hasVaultMembers, initializePendingIndex, pendingAuditComplete, pendingIndexComplete, pendingIndexStarted, PENDING_BODIES, PENDING_DUE, PENDING_DUPLICATES, PENDING_MEMBER, PENDING_NO_TIME, PENDING_NUL_FIELDS, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
 import { hasInvalidVaultMembers, vaultMembersComplete, vaultMembersStarted } from "./member-index.ts";
 import { reboxIndexComplete, REBOX_LEGACY, REBOX_READY } from "./rebox-index.ts";
 
@@ -938,6 +938,7 @@ export class Secrets {
         add(this.#d.db.prepare(PENDING_NO_TIME).all(ws));
         add(this.#d.db.prepare(PENDING_OTHER_TIME).all(ws));
         add(this.#d.db.prepare(PENDING_DUPLICATES).all(ws));
+        add(this.#d.db.prepare(PENDING_NUL_FIELDS).all(ws));
         if (this.#d.coming?.() !== true) for (const id of lost!.ids) {
           const kept = this.#kept(ws, id);
           if (kept?.request.status === "pending") selected.set(id, JSON.stringify(kept.request));
@@ -987,7 +988,11 @@ export class Secrets {
     const bodies = await this.#uses.read(ws, vault, vault === PLAIN ? viewer.email.toLowerCase() : null, limit);
     // A large old database may still have been filling its index: access can change while that read waits.
     if (vault !== PLAIN && (this.#d.lock(ws) === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
-    const requests = bodies.map((body) => JSON.parse(body) as Request);
+    // SQLite's JSON paths may select a different field than JSON.parse when an old body has duplicate keys or a
+    // NUL in a key. Never expose a use whose parsed vault or plain-library owner differs from the authorized scope.
+    const email = viewer.email.toLowerCase();
+    const requests = bodies.map((body) => JSON.parse(body) as Request)
+      .filter((r) => r.vault === vault && (vault !== PLAIN || r.owner === email) && r.save == null);
     const names = new Map<string, string | null>();
     const prepare = this.#d.hub.prepareLatestThreads;
     const titleIfReady = this.#d.titleIfReady;
