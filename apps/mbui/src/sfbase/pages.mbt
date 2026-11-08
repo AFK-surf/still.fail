@@ -28,8 +28,6 @@ pub(all) enum Page {
   /// an agent's execution history (history.mbt): its chat, its session, the transcript entry it opens at (a link's
   /// `entry`; None: its newest)
   History(ChatRef, String, Int?)
-  /// an entry of a history opened in full: the line it was under, its words
-  Words(String, String)
   /// a new chat (newchat.mbt), rising from the bottom; it becomes the chat it makes, in place
   NewChat
   /// a place of the bottom bar's other than the chats and 文件 (stations, profiles, connects, usage, archive):
@@ -394,7 +392,6 @@ pub fn page_kind(p : Page) -> String {
     Service(_, _) => "Service"
     PreviewFile(_, _, _, _) => "PreviewFile"
     History(_, _, _) => "History"
-    Words(_, _) => "Words"
     NewChat => "NewChat"
     Place(place) => "Place " + place
     Setting(_) => "Setting"

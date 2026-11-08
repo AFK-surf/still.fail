@@ -149,3 +149,76 @@ fn nav_bar_in(
   })
   |> ignore
 }
+
+///|
+/// The bar (nav_bar's) as nodes in `parent`: back to where `back` says (nav_back_node), `on_back` as it is pressed;
+/// `title` in the middle, 84 clear of either side, cut short where it has less; what `trailing` makes at its end, on
+/// back's 32 line; on the page's ground, from `top` above it down (the status bar's height as it is).
+pub fn nav_bar_node(
+  parent : @view.View,
+  back : () -> String,
+  title : () -> String,
+  on_back : () -> Unit,
+  top? : () -> Double = fn() { 0.0 },
+  trailing? : (@view.View) -> Unit,
+) -> Unit {
+  parent.box(fn(b) {
+    b
+    .padding(Is((nav_bar_x, nav_bar_top, nav_bar_x, nav_bar_foot)))
+    .ground(By(fn() { theme().p.bg }))
+    |> ignore
+    // under the status bar
+    b.box(fn(s) { s.height(By(fn() { Some(top()) })) |> ignore }) |> ignore
+    b.box(fn(i) {
+      i.lines_up(Is(Some(Middle))) |> ignore
+      // the title, in the flow: as tall as its line makes the bar
+      i.box(fn(col) {
+        col.padding(Is((nav_title_x, 0.0, nav_title_x, 0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        col.box(fn(l) {
+          l.height(Is(Some(nav_line_h))).lies_along(Is(Middle)).clips(Is(true)).min_width(Is(Some(0.0))) |> ignore
+          l.box(fn(w) {
+            styled_words(w, title, fn() { nav_title_words }).cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      // back and what is at the end, on the 32 line at its top
+      i.box(fn(e) {
+        e.over(Is(true)).row(Is(true)).height(Is(Some(nav_line_h))).lines_up(Is(Some(Middle))) |> ignore
+        nav_back_node(e, back, on_back)
+        e.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
+        match trailing {
+          Some(f) =>
+            e.box(fn(t) {
+              t.row(Is(true)).height(Is(Some(nav_line_h))).lines_up(Is(Some(Middle))) |> ignore
+              f(t)
+            })
+            |> ignore
+          None => ()
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// nav_bar_box's room (16 at either end, 6 over, 10 under), the title's clear of either side (nav_title_clear) and
+/// the line back, the title and what is at the end share (nav_line's 32).
+let nav_bar_x : Double = 16.0
+
+///|
+let nav_bar_top : Double = 6.0
+
+///|
+let nav_bar_foot : Double = 10.0
+
+///|
+let nav_title_x : Double = 84.0
+
+///|
+let nav_line_h : Double = 32.0

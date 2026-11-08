@@ -343,8 +343,8 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The pages of the stack made once as nodes of the tree's in the narrow shell (nav_view's `made`), by their kind, the
-/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆, 一台 station 的记忆 and 归档; a chat (and the
-/// new chat that becomes it), its old view in it as yet (chat_page_made). Each in the workspace in view, made
+/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆, 一台 station 的记忆 and 归档, an agent's history;
+/// a chat (and the new chat that becomes it), its old view in it as yet (chat_page_made). Each in the workspace in view, made
 /// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
@@ -381,12 +381,13 @@ fn narrow_made_as(
       () -> PageFrame,
       () -> Int,
       ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
+      Int,
     ) -> Unit,
   ) {
     Some(
       (
         kind,
-        fn(outer : @view.View, page : () -> Page, under : Page?, stint : () -> Int, _entry : Int) {
+        fn(outer : @view.View, page : () -> Page, under : Page?, stint : () -> Int, serial : Int) {
           // (a place switched to on the bar: all of it but its ground coming in from the ball's side, page_view's)
           let v = match place {
             true if under is None => {
@@ -439,7 +440,7 @@ fn narrow_made_as(
                 // (its words in pieces picked with the mouse, as an old view's page's in this frame are (narrow_page's
                 // c.selectable), before what it holds is made)
                 @ui.words_picked(p)
-                f(p, core, here, frame, stint, acts)
+                f(p, core, here, frame, stint, acts, serial)
               }
               None => ()
             }
@@ -480,7 +481,7 @@ fn narrow_made_as(
       ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit,
     ) -> Unit,
   ) {
-    made_at(kind, place, f)
+    made_at(kind, place, fn(p, core, here, frame, stint, acts, _serial) { f(p, core, here, frame, stint, acts) })
   }
   match page {
     // (a chat, and the new chat that becomes one in place: the same page, a node of the tree's, its old view in it as
@@ -605,6 +606,12 @@ fn narrow_made_as(
     Setting(Memory(address)) =>
       made("memory/" + address, fn(p, core, here, frame, _stint, _acts) {
         @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
+      })
+    // an agent's history (history_node), made again for another agent's
+    // (its old parts built as the stack builds its page's: Nav::page_island, by the page's serial)
+    History(r, key, entry) =>
+      made_at("history/" + r.station + "/" + key, place, fn(p, _core, _here, frame, _stint, _acts, serial) {
+        history_node(p, src, r, key, entry, frame, serial)
       })
     _ => None
   }

@@ -464,6 +464,8 @@ pub let diff_mark_in : @ui.Space
 
 pub fn dclamp(Double, Double, Double) -> Double
 
+pub fn disc_key_node(@view.View, () -> String, () -> Unit, side~ : Double, ground~ : () -> Int64, (@view.View) -> Unit) -> Unit
+
 pub fn dmax(Double, Double) -> Double
 
 pub fn dmin(Double, Double) -> Double
@@ -1175,6 +1177,8 @@ pub fn nav_back(@ui.Ctx, String, String, max_w? : Double) -> Bool
 pub fn nav_bar(@ui.Ctx, String, String, String, sub? : () -> Unit, trailing? : () -> Unit, back_max? : Double, bg? : Int64, top? : Double) -> Bool
 
 pub let nav_fade : @motion.Spec
+
+pub fn nav_bar_node(@view.View, () -> String, () -> String, () -> Unit, top? : () -> Double, trailing? : (@view.View) -> Unit) -> Unit
 
 pub fn nav_ground(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> Int64
 

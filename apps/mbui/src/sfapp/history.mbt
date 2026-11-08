@@ -10,15 +10,6 @@
 // Slack user's name offers 这是我 or 不是我 (`slack.identity`); a place is a way there.
 
 ///|
-/// A page's compact bar: back, with where it goes back to, in the accent; the title in the middle;
-/// what is at its end.
-fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
-  @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top(), on_press=fn() {
-    @sfbase.go_back() |> ignore
-  })
-}
-
-///|
 fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
   { "station": Json::string(r.station), "key": Json::string(key) }
 }
@@ -31,151 +22,6 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
   @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
   history_placed.remove("history/" + r.station + "/" + key)
   history_short.remove("history/" + r.station + "/" + key)
-}
-
-///|
-/// The page: its bar (copying its link at its end), the agent at its head with what can be
-/// done to it and the tabs, then its steps or its details; its steps opened at `entry` (a transcript entry), else at
-/// its newest.
-fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
-  let t = @sf.theme()
-  let chat = src.topic("chat", chat_params(r)).get().snapshot()
-  let title = text(chat.value, "title")
-  let link = match chat_link(r.station, key) {
-    "" => ""
-    l => l + "?history=" + @codec.encode_uri_component(key)
-  }
-  // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
-    page_bar(c, "history", tr("common.back"), tr("android-chat.history.title"), fn() {
-      if title != "" && link != "" {
-        nav_button(c, "copy", 18.0, key="history/copy", said=tr("web-mobile.history.copyLink"), on_press=fn() {
-          copy_chat_link(title, link)
-        })
-      }
-    })
-    history_body(c, src, r, key, entry, chat)
-    // a Slack user's name tapped: its menu (link_menu.mbt)
-    link_menu_layer(c)
-  })
-  |> ignore
-}
-
-///|
-/// What the history's page shows under its bar: the
-/// agent at its head with what can be done to it and the tabs, then its steps or its details.
-fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?, chat : Topic) -> Unit {
-  let t = @sf.theme()
-  let a = agent_json(chat.value, key)
-  match a {
-    None => {
-      waiting_messages(
-        c,
-        match chat.error {
-          Some(e) => Some(error_words(e))
-          None => None
-        },
-      )
-      return
-    }
-    Some(_) => ()
-  }
-  let s = field(a, "session")
-  c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
-    model_mark_big(
-      c,
-      text(field(s, "maker"), "id"),
-      text(s, "runtime"),
-      20.0,
-      state_of_badge(text(a, "badge")),
-      t.p.bg,
-    )
-    // (its name cut short where what it does and its tabs leave it less: a name)
-    c.box(w=Fill(1.0), fn() {
-      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false, w=Cut) |> ignore
-    })
-    |> ignore
-    history_actions(c, src, r, a)
-    @sf.head_end(c, fn() {
-      dui.history_tab = @sf.segmented(
-        c,
-        "history/tab",
-        [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
-        dui.history_tab,
-      )
-    })
-  })
-  |> ignore
-  history_summary(c, a)
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    if dui.history_tab == 0 {
-      // its steps, as every pane draws them (sfpages' history_steps.mbt); opened at an entry, brought to it once
-      let lkey = "history/" + r.station + "/" + key
-      match entry {
-        Some(e) if !history_placed.contains(lkey) => {
-          history_placed[lkey] = true
-          @sfpages.history_focus(r.station, key, e)
-        }
-        _ => ()
-      }
-      @sfpages.history_steps(c, src, r.station, key)
-    } else {
-      history_details(c, src, r, key, a)
-    }
-  })
-  |> ignore
-}
-
-///|
-/// What can be done to it now: stop a turn, let an idle process go; each a 28 disc, a spinner
-/// while it is asked.
-fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
-  let t = @sf.theme()
-  let s = field(a, "session")
-  let key = text(s, "key")
-  let status = text(a, "status")
-  let one = fn(icon : String, done : String, call : String) {
-    let dkey = call + "/" + r.station + "/" + key
-    let busy = doing(dkey)
-    let id = c.id("history/" + call)
-    c.on_press(id, fn() {
-      if !busy {
-        act(
-          src,
-          done,
-          dkey,
-          call,
-          { "station": Json::string(r.station), "key": Json::string(key) },
-          done~,
-        )
-      }
-    })
-    c.box(
-      w=Px(28.0),
-      h=Px(28.0),
-      radius=14.0,
-      bg=t.p.chip,
-      align=ACenter,
-      justify=JCenter,
-      id~,
-      fn() {
-        if busy {
-          @sf.spinner(c, size=12.0) |> ignore
-        } else {
-          @sf.icon(c, icon, size=14.0, color=t.p.text) |> ignore
-        }
-        // History.kt: clip(CircleShape).clickable
-        @motion.ripple(c, id, 14.0)
-      },
-    )
-    |> ignore
-  }
-  if status == "running" || status == "queued" {
-    one("stop", tr("android-chat.history.stopped"), "session.stop")
-  }
-  if text(s, "process") == "warm" {
-    one("unplug", tr("android-chat.history.evicted"), "session.evict")
-  }
 }
 
 ///|
@@ -386,31 +232,6 @@ fn run_row(c : @ui.Ctx, a : Json?, on_press? : () -> Unit) -> Unit {
     Some(f) => c.on_press(id, f)
     None => ()
   }
-}
-
-///|
-/// An entry opened in full: back to 执行历史, the line it was under, then
-/// all its words as Markdown, 20 from the sides, 12 between.
-fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit {
-  ignore(src)
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    page_bar(c, "words", tr("android-misc.reader.back"), "", fn() {  })
-    c.list("words/" + head + "/" + words.length().to_string(), 2, 200.0, fn(i) {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=if i == 1 { 30.0 } else { 12.0 }, fn() {
-        if i == 0 {
-          if head != "" {
-            c.text(head, size=t.t.meta, color=t.p.muted) |> ignore
-          }
-        } else {
-          @sf.markdown(c, words) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
 }
 
 // ── a call, drawn by what it is ────────────────────────

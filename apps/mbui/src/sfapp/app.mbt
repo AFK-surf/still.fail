@@ -663,8 +663,8 @@ fn page_view(
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)
-        History(r, key, entry) => history_page(c, src, r, key, entry)
-        Words(head, words) => words_page(c, src, head, words)
+        // (made once: narrow_shell.mbt's history_node)
+        History(_, _, _) => ()
         Screen(at) => @sfpages.screen_page(c, src, at, system_frame())
       }
       // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a
