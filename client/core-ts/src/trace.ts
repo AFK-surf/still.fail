@@ -15,6 +15,8 @@ export const EXPORT_MS = 3_000;
 /// position kept, the focus moving, a draft saved were 41% of a phone's spans, each sent up every few seconds.
 export const QUIET_MS = 100;
 const MAX_BUFFER = 1_000;
+/// The longest a batch that did not go out waits to be sent again.
+export const RETRY_MAX_MS = 60_000;
 
 type Anchor = { wallMs: number; monoMs: number };
 
@@ -43,7 +45,8 @@ export class SpanContext {
 export const Kind = { Internal: 1, Client: 3 } as const;
 export type Kind = (typeof Kind)[keyof typeof Kind];
 
-export type Export = (body: Uint8Array) => Effect.Effect<void>;
+/// Sends a batch; failing, it is kept to be sent again (one the cloud will never take is to succeed instead).
+export type Export = (body: Uint8Array) => Effect.Effect<void, unknown>;
 
 /// What a host is, for Axiom's `service.name` and `os.type` (set by the host's entry).
 export const service = { name: "stillfail-native", os: "macos" };
@@ -55,6 +58,8 @@ export class Tracer {
   #current: SpanContext | null = null;
   #buffer: unknown[] = [];
   #scheduled = false;
+  /// Batches in a row that did not go out.
+  #failed = 0;
   #export: Export | null = null;
   /// The app's build, once its UI has said it (`client.device`): Axiom's `service.version`, which tells what an
   /// update changed from what older builds still running do.
@@ -135,9 +140,23 @@ export class Tracer {
   record(span: unknown): void {
     if (this.#buffer.length >= MAX_BUFFER) return;
     this.#buffer.push(span);
+    this.#schedule();
+  }
+
+  #schedule(): void {
     if (this.#scheduled) return;
     this.#scheduled = true;
-    this.#runner.fork(laterSleep(EXPORT_MS).pipe(Effect.andThen(Effect.sync(() => this.flush()))));
+    const wait = this.#failed === 0 ? EXPORT_MS : Math.min(EXPORT_MS * 2 ** this.#failed, RETRY_MAX_MS);
+    this.#runner.fork(laterSleep(wait).pipe(Effect.andThen(Effect.sync(() => this.flush()))));
+  }
+
+  /// A batch that did not go out waits for the next, ahead of what came since. 2026-11-07: a phone whose network
+  /// went every few minutes had 40% of its failed reconnects never reach Axiom, nor anything else that ended as they
+  /// did: each was sent as the network was down, and let go.
+  #unsent(spans: unknown[]): void {
+    this.#failed++;
+    this.#buffer = spans.concat(this.#buffer).slice(0, MAX_BUFFER);
+    this.#schedule();
   }
 
   /// Sends what waits now, if there is somewhere to send it.
@@ -156,7 +175,14 @@ export class Tracer {
         },
       ],
     };
-    this.#runner.fork(e(toJsonBytes(body)));
+    this.#runner.fork(
+      Effect.match(e(toJsonBytes(body)), {
+        onSuccess: () => {
+          this.#failed = 0;
+        },
+        onFailure: () => this.#unsent(spans),
+      }),
+    );
   }
 }
 
