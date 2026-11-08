@@ -117,7 +117,7 @@ pub fn button_node(
           if solid { ink } else { theme().p.accent }
         },
       )
-      s.alpha(By(fn() { turning.shown(v) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
+      s.alpha(By(fn() { turning.shown(v) * seen_at(open.shown(v)) })).scale(By(fn() { dmax(open.shown(v), 0.0) }), about=At(0.0, 0.5)) |> ignore
     })
     // (its icon before its words where it has one: button's `icon`)
     if icon != "" {

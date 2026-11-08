@@ -217,7 +217,7 @@ fn button_part(
           if busy || over > 0.0 {
             c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
               let s = c.box(style=button_spin, fn() { turn() })
-              c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
+              c.look(s, @ui.look(alpha=turning * seen_at(over), scale=over, ox=0.0))
             })
             |> ignore
           }
@@ -4502,7 +4502,7 @@ pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = 
         let s = c.box(style=button_spin, fn() {
           spinner(c, size=button_icon, ring=alpha(ink, 0.3), arc=if solid { ink } else { p.accent }) |> ignore
         })
-        c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
+        c.look(s, @ui.look(alpha=turning * seen_at(over), scale=over, ox=0.0))
       })
       |> ignore
     }

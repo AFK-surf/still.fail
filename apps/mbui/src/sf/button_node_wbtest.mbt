@@ -232,11 +232,11 @@ test "the button as a node set to work and back: its spinner's room opening and 
   }
   let (old, new) = (seen(false), seen(true))
   let same = Array::makei(old.length(), fn(k) { drawn_near(old[k].0, new[k].0) && pieces_near(old[k].1, new[k].1) })
-  // (no spinner at rest, before or after; one on the way in and at work)
+  // (no spinner at rest, before or after; none yet while it is under half its size, one past that and at work)
   let spun = new.map(fn(k) { k.1.length() > 0 })
   assert_eq(
-    (same, spun[0], spun[1], spun[4], spun[8]),
-    (Array::make(old.length(), true), false, true, true, false),
+    (same, spun[0], spun[1], spun[2], spun[4], spun[8]),
+    (Array::make(old.length(), true), false, false, true, true, false),
     msg="old \{old}\nnode \{new}",
   )
 }

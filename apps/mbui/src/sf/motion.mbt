@@ -102,3 +102,17 @@ pub let sleep_ms : Double = @kit.media_sleep_ms
 /// One breath of what waits (waiting.css.ts breathe): 1.4 s, from whole to `low` and back on
 /// CSS's ease-in-out each way.
 pub let breath_ms : Double = 1400.0
+
+///|
+/// How clear a thing coming or going is drawn at `scale` of its size: not at all at half of it or less, wholly at its
+/// size, as a list's row coming or going is (@ui.row_gone_at, the user, 2026-10-31: 缩到 50% 左右的时候就变成完全看不见).
+/// A fade of its own goes on top of this.
+pub fn seen_at(scale : Double) -> Double {
+  if scale <= @ui.row_gone_at {
+    0.0
+  } else if scale >= 1.0 {
+    1.0
+  } else {
+    (scale - @ui.row_gone_at) / (1.0 - @ui.row_gone_at)
+  }
+}
