@@ -156,6 +156,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         Some(self.tree.rows_slot(my_tall.get().unwrap_or(est)))
       }))
       .shrink(Is(0.0))
+      // (as tall as it is counted, as wide as the column: what comes to show in it laid out from it alone)
+      .lays_out_alone()
       |> ignore
       slot.show(shows, fn(v) {
         // (as tall as what it holds, whatever its slot is counted as till that is told)

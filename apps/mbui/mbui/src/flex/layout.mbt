@@ -413,6 +413,29 @@ pub fn compute(
 }
 
 ///|
+/// Whether `node` was last laid out given both its width and its height (asked for a size, not for what it holds):
+/// its size is then what it was asked, whatever is under it; what is under it may be laid out again alone
+/// (relayout), nothing above it, where what holds it gave it that size by none of what it holds.
+pub fn Node::laid_given(self : Node) -> Bool {
+  self.p_ok && known(self.p_kw) && known(self.p_kh) && self.style.height_kind() == LEN_PT
+}
+
+///|
+/// `node` laid out again as it was last asked (Node::laid_given), what is under it with it, as compute() with `reuse`
+/// lays out what changed: where it is in what holds it, and its size, stand. A compute of its own (computes() counts it).
+pub fn relayout(node : Node) -> Unit {
+  generation.val = generation.val + 1
+  reusing.val = true
+  absolute_seen.val = false
+  let kw = node.p_kw
+  let kh = node.p_kh
+  size_node(node, kw, kh, kw, kh, node.p_cbw, node.p_cbh, true) |> ignore
+  if absolute_seen.val {
+    layout_static_absolute(node, node, 0.0, 0.0)
+  }
+}
+
+///|
 /// How tall `node` would be `width` wide with no bound on its height, as its subtree stands since the last compute():
 /// measured only, its measures kept among those of that compute: what that compute laid out stands as it was, where
 /// nothing in it is aligned by baseline (finding one lays items out while measuring their container, as compute's reuse
