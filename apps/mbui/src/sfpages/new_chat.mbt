@@ -239,27 +239,29 @@ fn new_narrow(
       let band = c.id("new/band")
       let band_room = @ui.style(pt=under, pb=if going { S0 } else { under })
       let mut over = -1
-      let ground = c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
-        over = c.box(style=new_over, fn() {
-          if !going {
-            new_notices(c, v, station, width)
-          }
-          c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
-        })
-        if !going {
-          c.box(style=@ui.style(w=Fixed(width)), fn() {
-            new_composer_place(c, src, w, frame, v, address, station, state, width)
+      let (ground, shaped) = composer_shaped(fn() {
+        c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
+          over = c.box(style=new_over, fn() {
+            if !going {
+              new_notices(c, v, station, width)
+            }
+            c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
           })
-          |> ignore
-        }
+          if !going {
+            c.box(style=@ui.style(w=Fixed(width)), fn() {
+              new_composer_place(c, src, w, frame, v, address, station, state, width)
+            })
+            |> ignore
+          }
+        })
       })
       // as the composer changes shape (a line more or less, opened or let go), what is over it and the band's top go
       // with its ground, on its curve, not to where they are laid out at once
-      with_composer(c, over, "new/over")
+      with_composer(c, over, "new/over", shaped)
       if sending_fade > 0.0 {
         c.look(over, @ui.look(alpha=1.0 - sending_fade))
       }
-      match composer_shape(c) {
+      match shaped {
         Some((by, spec)) => @motion.reshape(c, ground, "new/band", by~, spec~)
         None => ()
       }
@@ -531,10 +533,12 @@ fn new_wide(
         new_part(c, i, state, true)
         head.push(i)
       })
-      new_composer_place(c, src, w, frame, v, address, station, state, col)
+      let (_, shaped) = composer_shaped(fn() {
+        new_composer_place(c, src, w, frame, v, address, station, state, col)
+      })
       // the composer changing shape in the middle of the column, what is over it goes with its ground (as what is
       // under it does: new_column)
-      head.eachi(fn(k, i) { with_composer(c, i, "new/head/\{k}") })
+      head.eachi(fn(k, i) { with_composer(c, i, "new/head/\{k}", shaped) })
     },
     under=fn(col) {
       // (data-made-leave="fade": fading where it is)
@@ -576,13 +580,14 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
       Some(under) =>
         c.box(style=new_inner_tall.then(@ui.style(w=Fixed(col))), fn() {
           c.spacer()
-          body(col)
+          // (the composer in it: what is under it moves with its box)
+          let (_, shaped) = composer_shaped(fn() { body(col) })
           let least = @motion.measured(c, "new/under").unwrap_or(0.0)
           c.box(style=new_under_room.then(@ui.style(min_h=Fixed(least))), fn() {
             let held = c.box(style=new_under, fn() { under(col) })
             @motion.measure(c, held, "new/under")
             // (the composer over it changing shape: with its ground)
-            with_composer(c, held, "new/under/moves")
+            with_composer(c, held, "new/under/moves", shaped)
           })
           |> ignore
         })

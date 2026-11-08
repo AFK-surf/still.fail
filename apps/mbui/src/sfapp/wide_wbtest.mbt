@@ -861,9 +861,16 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
 }
 
 ///|
+/// How long a chat opened by a test has been seen before its sidebar is tapped: a hand taps what it has seen.
+let chat_seen_ms : Double = 300.0
+
+///|
 test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
+  // (the chat seen before the sidebar is tapped: its composer put there at once as it opened, at the run's first
+  // moment; a new chat tapped at that same moment is there at once too)
+  t.run_for(chat_seen_ms)
   let (_, cy, _, ch) = composer_glass(t)
   // to a new chat: the composer from the chat's foot up to its place in the page, the scene there at once (no page
   // crossfades)
