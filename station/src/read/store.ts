@@ -487,8 +487,9 @@ export function threadsOfShown(s: Store): number[] {
 
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
 /// first: those of one session, one thread (or those named), or all. A list that only needs to know whether there are
-/// unread messages can ask for existence instead of their exact count.
-export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" | "none" = "count"): ThreadSummary[] {
+/// unread messages can ask for existence instead of their exact count. A workspace-scoped list checks membership
+/// before reading each thread's message and other details.
+export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" | "none" = "count", visibleTo?: InWorkspace): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
   const rows: Json[] =
     Array.isArray(thread)
@@ -500,13 +501,19 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
       : session !== null
         ? all(s, `${base} WHERE t.id IN (SELECT thread FROM thread_sessions WHERE session = ?2)`, viewer, session)
         : all(s, base, viewer);
+  let candidates = rows.map((r) => ({ row: r, sessions: threadSessions(s, r.id) }));
+  if (visibleTo !== undefined) {
+    const seen = seenBy(s, visibleTo, candidates.flatMap((t) => t.sessions.map((m) => m.session)));
+    candidates = candidates.filter((t) => t.sessions.some((m) => seen(m.session)));
+  }
+  if (candidates.length === 0) return [];
   // Who the viewer is: themselves, and in a Slack thread the Slack users they are too.
   const selves = { own: [viewer], slack: [viewer, ...slackIdentities(s, viewer)] };
-  const summaries: ThreadSummary[] = rows.map((r) => {
+  const summaries: ThreadSummary[] = candidates.map(({ row: r, sessions }) => {
     const t = toThread(r);
     const read: number = r.read_n;
     return {
-      sessions: threadSessions(s, t.id),
+      sessions,
       last: lastEntry(s, t.id),
       lastMessage: lastSaid(s, t.id),
       read,

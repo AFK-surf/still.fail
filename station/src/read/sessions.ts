@@ -224,9 +224,7 @@ function threadView(
 
 /// The threads of the viewer's workspace (of one session).
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
-  const summaries = store.listThreads(s, viewer.email, session, null);
-  const seen = store.seenBy(s, viewer, summaries.flatMap((t) => t.sessions.map((m) => m.session)));
-  const visible = summaries.filter((t) => t.sessions.some((m) => seen(m.session)));
+  const visible = store.listThreads(s, viewer.email, session, null, "count", viewer);
   // A pending chat would otherwise make the reader rebuild this whole list once for each unprepared session.
   store.requireCcSessions(s, visible.flatMap((t) => t.thread.surface === store.STILLFAIL_SURFACE
     ? t.sessions.map((m) => m.session) : []));
