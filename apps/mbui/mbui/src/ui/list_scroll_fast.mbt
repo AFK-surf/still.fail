@@ -106,7 +106,7 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
     "laid watch"
   } else if !self.shown_watch.is_empty() {
     "shown watch"
-  } else if self.reads_out {
+  } else if reads_out() {
     "reads out"
   } else if !self.layers.is_empty() {
     "layers"

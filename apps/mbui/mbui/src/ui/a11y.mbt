@@ -170,7 +170,8 @@ fn a11y_hash(s : String) -> Int {
 /// As a frame has been painted: the host told what the widgets are when something reads them out and they are not as
 /// last told (app.mbt frame_body). Nothing while nothing reads them.
 fn Ctx::a11y_after_paint(self : Ctx) -> Unit {
-  if !self.reads_out {
+  // (whether something reads them out as the frame has it, followed: told as it comes to read them)
+  if !reads_out() {
     self.a11y_sent = ""
     return
   }

@@ -815,14 +815,14 @@ fn h_stream_codec(id : Int, cmd : String, data : Bytes) -> Unit {
 ///|
 /// Whether the host's H.264 decoder is driven from here (stream_feed.mbt): Tester::set_stream_feeds, a run's ENV line.
 fn h_stream_feeds() -> Bool {
-  @hostapi.stream_feeds()
+  feeds_said.now()
 }
 
 ///|
 /// Whether a stream may be shown by the host's own video layer (@hostapi.stream_layers): Tester::set_stream_layers, a
 /// run's ENV line.
 fn h_stream_layers() -> Bool {
-  @hostapi.stream_layers()
+  layers_said.now()
 }
 
 ///|
@@ -850,7 +850,7 @@ fn h_stream_next(id : Int) -> String {
 
 ///|
 fn h_h264_here() -> Bool {
-  @hostapi.h264_here()
+  h264_said.now()
 }
 
 ///|

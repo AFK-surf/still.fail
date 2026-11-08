@@ -372,7 +372,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
 /// a picture's decodes; and the focus let go of as Ctx::blur lets it go, on either side.
 fn view_drawn_by(t : @view.Tree) -> Unit {
   t.drawn_by(
-    words_scale=fn() { g().font_scale },
+    words_scale=fn() { font_scale() },
     pixel_scale=fn() { g().scale },
     glass_solid=fn() { glass_paint.solid },
     keyboard_inset=fn() { ime_said.get() },
@@ -568,7 +568,7 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
     select: false,
     max_lines: 0,
     faces: if set.words { faces_style(true, 0) } else { view_words_style() },
-    shaped_in: words_shaped_in.val,
+    shaped_in: words_shaped_in.get(),
   }
 }
 
@@ -786,10 +786,22 @@ fn view_told_as_built(c : Ctx) -> Unit {
 }
 
 ///|
-/// Where the old views are laid out, said as the frame's settings are (frame_watch.mbt looks_env): one laid out
-/// elsewhere or resized, the old frame is built again; one only moved or faded (what moves it, or what holds it, by its
-/// offset, a page slid by its width) builds nothing: it is moved where it is drawn and drawn as opaque as it is as the
-/// frame is painted (old_frame's moved_by, view_paint).
+/// Where the old views are laid out, as the frame began (old_laid_arrive), read by the old frame's build (old_frame): one
+/// laid out elsewhere or resized, the old frame is built again; one only moved or faded (what moves it, or what holds
+/// it, by its offset, a page slid by its width) builds nothing: it is moved where it is drawn and drawn as opaque as it
+/// is as the frame is painted (old_frame's moved_by, view_paint).
+// kept across runs: set as each frame begins
+let old_laid : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// Where the old views are laid out, said as the frame begins (host_said.mbt frame_settings_arrive).
+fn old_laid_arrive() -> Unit {
+  old_laid.set(view_island_said())
+}
+
+///|
+/// Where the old views are laid out, as one line: whether the one is the whole window, and each one's place in its
+/// parent and size.
 fn view_island_said() -> String {
   // (and whether the one is the frame whole, the rest of the tree showing nothing: built so or in a box of its own)
   "\{old_whole.val} " +
@@ -808,6 +820,8 @@ fn old_frame(c : Ctx) -> Unit {
       old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => view_brought(tree)
     _ => ()
   }
+  // (built for where they are laid out as the frame began: built again as that changes)
+  old_laid.get() |> ignore
   // (none laid out yet in this pass: each placed says its own, none where the old frame is the one old view)
   for o in old_islands {
     o.held_box = -1

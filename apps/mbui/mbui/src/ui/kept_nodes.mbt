@@ -41,8 +41,9 @@ priv struct RowNodes {
   mut said_base : Int
   /// how tall its slot is
   mut h : Double
-  /// what it was built from: its list's width, rows, scope, theme's direction, layer, picking, the page's time on top; the layout's epoch and
-  /// scale; whether it was read out
+  /// what it was built from: its list's width, rows, scope, theme's direction, layer, picking, the page's time on top;
+  /// the grid of pixels it was laid out on (scale, whole pixels or not: pixel_grid) and what the host measured its words
+  /// in (words_shaped_in), as it is kept laid out; whether it was read out
   mut iw : Double
   mut count : Int
   mut seed : Int
@@ -53,8 +54,9 @@ priv struct RowNodes {
   mut direction : Direction
   /// the page's time on top it was built on (what it asks of what it shows on it: Ctx::page_stint)
   mut stint : Int
-  mut epoch : Int
   mut scale : Double
+  mut whole_px : Bool
+  mut shaped : Int
   mut reads_out : Bool
   mut lit_all : Bool
   /// whether it was built in a list whose rows show only what they read (Ctx::list's `rows_read`), and the theme it
@@ -573,8 +575,9 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     layer: 0,
     direction: Ltr,
     stint: 0,
-    epoch: 0,
     scale: 0.0,
+    whole_px: false,
+    shaped: -1,
     reads_out: false,
     lit_all: false,
     reads_all: false,
@@ -707,9 +710,11 @@ fn Ctx::row_laid(
     rn.layer == st.layer &&
     rn.direction == st.direction &&
     rn.stint == st.stint &&
-    rn.epoch == self.epoch &&
     rn.scale == self.scale &&
-    rn.reads_out == self.reads_out &&
+    rn.whole_px == self.whole_px &&
+    rn.shaped == words_shaped_in.get() &&
+    layout_reuse.val &&
+    rn.reads_out == reads_out() &&
     rn.lit_all == self.lit_all {
     // (what is worked out again of it as it is put back, its places by its size and what it marks used, read as its
     // build read it: followed by its watch, not by what lays out its list)
@@ -835,9 +840,10 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   // (the parts kept among its nodes, where among them)
   rn.inner = rn.inner_now.map(fn(i) { (i, i.base - r) })
   rn.inner_now.clear()
-  rn.epoch = self.epoch
   rn.scale = self.scale
-  rn.reads_out = self.reads_out
+  rn.whole_px = self.whole_px
+  rn.shaped = words_shaped_in.get()
+  rn.reads_out = reads_out()
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
   // (what takes back as its build left it, where it changed it: its node, where one of its own, from its first)
@@ -1154,9 +1160,11 @@ fn Ctx::part_nodes(
     rn.sel == desk.selecting &&
     rn.layer == self.layer_cur &&
     rn.direction == self.direction &&
-    rn.epoch == self.epoch &&
     rn.scale == self.scale &&
-    rn.reads_out == self.reads_out &&
+    rn.whole_px == self.whole_px &&
+    rn.shaped == words_shaped_in.get() &&
+    layout_reuse.val &&
+    rn.reads_out == reads_out() &&
     rn.lit_all == self.lit_all {
     // (what is worked out again of it as it is put back, what it marks used, read as its build read it: followed by its
     // watch, not by what builds it)

@@ -1839,7 +1839,6 @@ pub fn Tester::perf_said(self : Tester) -> (Array[Bool], Array[String]) {
 /// The system asks for less transparency from now on, or no longer.
 pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
   self.fake.reduce_transparency = on
-  glass_paint.checked_at = -1000
 }
 
 ///|

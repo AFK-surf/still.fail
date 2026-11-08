@@ -88,15 +88,18 @@ fn faces_style(words : Bool, face : Int) -> Int {
 }
 
 ///|
-/// How many times the faces changed: words laid out before (a text's or a paragraph's, its node's layout kept) are laid
-/// out again.
-let words_shaped_in : Ref[Int] = Ref::new(0)
+/// What the host measures words in, as one number that moves on as it changes (the faces given, the host's glyphs'
+/// generation: text_arrive): read where words are measured (shape, all_metrics), so that what measured them is
+/// measured again as it changes; words laid out before (a text's or a paragraph's, its node's layout kept, a row kept
+/// as laid out) are laid out again.
+// kept across runs: put back as a run begins (faces_reset)
+let words_shaped_in : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Everything shaped and measured forgotten (its faces changed): shaped again as it is next asked for; the window's
 /// tree's words measured and drawn again in them at once (view_words_rescaled), as an old view's are laid out again.
 fn words_forgotten() -> Unit {
-  words_shaped_in.val += 1
+  words_shaped_in.set(@signals.untracked(fn() { words_shaped_in.get() }) + 1)
   clear_shapes()
   text_cache.fonts.clear()
   text_cache.metrics.clear()
@@ -113,7 +116,7 @@ fn words_forgotten() -> Unit {
 ///|
 /// As at the start (a Tester's): no face given.
 fn faces_reset() -> Unit {
-  words_shaped_in.val = 0
+  words_shaped_in.set(0)
   faces_env_read.val = false
   for i in 0..<faces_given.length() {
     faces_given[i] = false

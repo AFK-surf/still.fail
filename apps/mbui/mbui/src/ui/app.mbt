@@ -142,8 +142,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()
-  // (where the window's buttons are, read of the host so: what reads it built again as it changes, hostread.mbt)
-  inset_arrive()
+  // (the host's settings, each read of the host so: what read one built again as it changes, host_said.mbt)
+  host_settings_arrive()
   env_at_frame()
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
@@ -238,8 +238,10 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
-  // Offscreen frames bypass frame_drawn, so they read the host generation here.
+  // Offscreen frames bypass frame_drawn, so they read the host generation here (and tell nothing of the window's:
+  // its size and pixels are the window's, not this frame's).
   atlas_said.val = Some(h_atlas_generation())
+  text_arrive()
   frame_moment.val = t
   frame_serial.val += 1
   frame_body(g(), w, h, scale, t) |> ignore
@@ -306,33 +308,15 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   c.window_h = h
   // the theme set for this width (a phone's when narrower than its bound: Ctx::set_theme)
   c.pick_theme()
-  if scale != c.scale {
-    // images are as large as their pixels at this scale
-    c.epoch = c.epoch + 1
-  }
   c.scale = scale
-  // (lengths laid out on whole pixels or not: every layout made anew when that changes)
-  let whole = whole_px_layout()
-  if whole != c.whole_px {
-    c.whole_px = whole
-    c.epoch = c.epoch + 1
-  }
-  // the system's size of words: every layout made anew when it changes
-  let fs = font_scale()
-  if fs != c.font_scale && fs > 0.0 {
-    c.font_scale = fs
-    c.epoch = c.epoch + 1
-    view_words_rescaled()
-  }
+  // (what was laid out on other pixels laid out again, a node's and a row's kept as laid out: layout.mbt, kept_nodes.mbt)
+  c.whole_px = whole_px_layout()
   c.clock = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
   c.frame_no = c.frame_no + 1
   c.hand_moved = c.px != c.hand_was.0 || c.py != c.hand_was.1
   c.hand_was = (c.px, c.py)
-  if !layout_reuse.val {
-    c.epoch = c.epoch + 1
-  }
   // (no wake but a look's asked yet: frame_watch.mbt)
   looks_frame_start()
   c.wants_frame = false
@@ -342,16 +326,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   c.wake_by = None
   c.page_in_hand = false
   c.cycling = false
-  c.reads_out = h_a11y_on()
   c.cycles.clear()
   c.periodic.clear()
   c.nav_rest = -1.0
   c.read_back_moved = false
   faces_from_env()
-  if text_frame() {
-    // (what the host measures changed: every layout made anew, kept rows' too)
-    c.epoch = c.epoch + 1
-  }
+  text_frame()
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }

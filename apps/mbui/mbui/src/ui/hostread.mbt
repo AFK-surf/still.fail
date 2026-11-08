@@ -177,39 +177,24 @@ fn platform_keyboard(platform : Int) -> Bool {
 }
 
 ///|
-/// Whether the system is set to dark (a Tester's `dark`).
+/// Whether the system is set to dark (a Tester's `dark`), as the frame has it, followed (host_said.mbt).
 pub fn system_dark() -> Bool {
-  @hostapi.system_dark()
+  dark_said.now()
 }
 
 ///|
 /// How much bigger the system's setting makes words (@hostapi.font_scale; a Tester's `set_font_scale`): what Ctx's words
-/// are drawn at, times their size.
+/// are drawn at, times their size; as the frame has it, followed (host_said.mbt).
 pub fn font_scale() -> Double {
-  @hostapi.font_scale()
+  words_size_said.now()
 }
 
 ///|
 /// Whether the window's buttons are in the app's top row now (@hostapi.window_inset; a Tester's `window_inset`), as
-/// the frame has it: read of the host as each frame begins (inset_arrive), a signal, so that what read it is built
-/// again as it changes (a Mac's window going full screen and back), a list's row or a part kept as its nodes too.
+/// the frame has it, followed (host_said.mbt): what read it is built again as it changes (a Mac's window going full
+/// screen and back), a list's row or a part kept as its nodes too.
 pub fn window_inset() -> Bool {
-  if !frame_running.val {
-    inset_arrive()
-  }
-  inset_said.get()
-}
-
-///|
-/// Whether the window's buttons are in the app's top row, as the host said it last (window_inset).
-// kept across runs: put back by each Tester (inset_arrive as its first frame begins)
-let inset_said : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
-
-///|
-/// Whether the window's buttons are in the app's top row, read of the host (frame_drawn, as a frame begins; or as it
-/// is asked between frames): its signal set where it changed.
-fn inset_arrive() -> Unit {
-  inset_said.set(@hostapi.window_inset())
+  inset_said.now()
 }
 
 ///|

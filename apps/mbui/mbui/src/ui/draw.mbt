@@ -1857,8 +1857,14 @@ pub fn Ctx::list_pinned_by(self : Ctx, li : Int) -> Double {
 
 ///|
 /// Whether motion is reduced (the app's own choice, else the host's setting; or MBUI_REDUCE_MOTION=1): every motion at
-/// its end at once.
+/// its end at once. As the frame has it, followed (host_said.mbt): what read it built again as it changes.
 pub fn reduced_motion() -> Bool {
+  motion_reduced_said.now()
+}
+
+///|
+/// Whether motion is reduced, asked of the host and the app's choice as they are now (reduced_motion's).
+fn motion_reduced_asked() -> Bool {
   if reduce_env.val < 0 {
     reduce_env.val = if @hostapi.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
   }
@@ -1873,6 +1879,8 @@ let reduce_env : Ref[Int] = { val: -1 }
 /// None to follow the system's.
 pub fn set_motion_chosen(reduce : Bool?) -> Unit {
   motion_chosen.val = reduce
+  // (what reads it told at once: chosen as a frame is built, what reads it after reads the choice)
+  motion_reduced_said.arrive()
 }
 
 ///|

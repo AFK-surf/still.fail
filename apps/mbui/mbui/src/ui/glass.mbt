@@ -42,7 +42,6 @@ priv struct GlassPaint {
   mut run_start : Int
   mut run_len : Int
   mut solid : Bool
-  mut checked_at : Int
   mut forced : Int
   mut in_group : Int
   // text in adaptive liquid glass: its centre and half its size (0: none)
@@ -58,7 +57,6 @@ let glass_paint : GlassPaint = {
   run_start: -1,
   run_len: 0,
   solid: false,
-  checked_at: -1000,
   forced: -1,
   in_group: 0,
   ink_x: 0.0,
@@ -73,7 +71,6 @@ fn reset_glass() -> Unit {
   glass_paint.run_start = -1
   glass_paint.run_len = 0
   glass_paint.solid = false
-  glass_paint.checked_at = -1000
   glass_paint.forced = -1
   glass_paint.in_group = 0
   glass_paint.ink_r = 0.0
@@ -88,20 +85,22 @@ pub fn set_glass_solid(solid : Bool?) -> Unit {
     Some(true) => 1
     Some(false) => 0
   }
-  glass_paint.checked_at = -1000
 }
 
 ///|
 /// Whether glass is drawn solid in this frame.
 pub fn Ctx::glass_solid(self : Ctx) -> Bool {
   ignore(self)
-  glass_paint.solid
+  if glass_paint.forced >= 0 {
+    glass_paint.forced == 1
+  } else {
+    glass_solid_said.now()
+  }
 }
 
 ///|
-/// At the start of painting a frame: a new set of captures; what the system
-/// says about transparency, asked now and then (it is a setting, seldom
-/// changed).
+/// At the start of painting a frame: a new set of captures; glass solid or not as the frame has it (Ctx::glass_solid),
+/// followed by the paint.
 fn Ctx::glass_frame(self : Ctx) -> Unit {
   glass_paint.run = 0
   glass_paint.frost_run = 0
@@ -109,13 +108,7 @@ fn Ctx::glass_frame(self : Ctx) -> Unit {
   glass_paint.run_len = 0
   glass_paint.in_group = 0
   glass_paint.ink_r = 0.0
-  if glass_paint.forced >= 0 {
-    glass_paint.solid = glass_paint.forced == 1
-  } else if self.frame_no - glass_paint.checked_at >= 30 ||
-    self.frame_no < glass_paint.checked_at {
-    glass_paint.checked_at = self.frame_no
-    glass_paint.solid = h_reduce_transparency()
-  }
+  glass_paint.solid = self.glass_solid()
 }
 
 ///|
