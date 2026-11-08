@@ -1,7 +1,8 @@
 // A reader in MoonBit (station/mb, src/reader): a process of its own instead of a worker thread, asked and answering as
-// a worker is (read/worker.ts `Ask`, `Answer`, `Ready`), a line of JSON each way on its stdin and stdout. The pool
-// (read/pool.ts) gives it the reads that have been moved to it, so far the store's checkpoints (`log`). Where the
-// program is not there (a checkout that has not built it), the pool keeps the worker.
+// a worker is, a line of JSON each way on its stdin and stdout. The pool (read/pool.ts) gives it the reads that have
+// been moved to it, so far the store's checkpoints (`log`: read/worker.ts `Ask`, `Answer`, `Ready`); with `--builder`
+// it is a builder of old state (read/requested-builder.ts), so far the archive marks'. Where the program is not there
+// (a checkout that has not built it), the pool keeps the worker.
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
@@ -33,17 +34,17 @@ export interface ReaderLike {
   getHeapStatistics(): Promise<{ used_heap_size: number }>;
 }
 
-export class MbReader extends EventEmitter implements ReaderLike {
+/// The program's process, a line of JSON each way: told its lines as "message"s, its end as "exit".
+export class MbProcess extends EventEmitter {
   readonly #child: ChildProcess;
   #exited = false;
 
-  /// Started on the station's data directory `data`.
-  constructor(binary: string, data: string) {
+  constructor(binary: string, args: string[]) {
     super();
-    this.#child = spawn(binary, ["--data", data], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    this.#child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     createInterface({ input: this.#child.stdout! }).on("line", (line) => {
-      let answer: Answer | Ready;
-      try { answer = JSON.parse(line) as Answer | Ready; }
+      let answer: unknown;
+      try { answer = JSON.parse(line); }
       catch { return void log.warn("readers", "a MoonBit reader said what is not JSON", { line: line.slice(0, 200) }); }
       this.emit("message", answer);
     });
@@ -57,8 +58,8 @@ export class MbReader extends EventEmitter implements ReaderLike {
     });
   }
 
-  postMessage(ask: Ask) {
-    this.#child.stdin!.write(`${JSON.stringify(ask)}\n`);
+  postMessage(message: unknown) {
+    this.#child.stdin!.write(`${JSON.stringify(message)}\n`);
   }
 
   terminate(): Promise<number> {
@@ -73,4 +74,10 @@ export class MbReader extends EventEmitter implements ReaderLike {
   getHeapStatistics(): Promise<{ used_heap_size: number }> {
     return Promise.resolve({ used_heap_size: 0 });
   }
+}
+
+/// The reader, started on the station's data directory `data`.
+export class MbReader extends MbProcess implements ReaderLike {
+  constructor(binary: string, data: string) { super(binary, ["--data", data]); }
+  override postMessage(ask: Ask) { super.postMessage(ask); }
 }

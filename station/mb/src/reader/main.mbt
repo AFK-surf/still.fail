@@ -1,7 +1,7 @@
 // A reader of the station's database (station/src/read/pool.ts), in MoonBit: its asks come as lines of JSON on stdin,
 // as the TypeScript reader's come by postMessage (read/worker.ts `Ask`), and its answers go out as lines on stdout
 // (`Answer`), first a line saying it is ready. It answers what it has been moved here for, so far `checkpoint`; the
-// pool sends it nothing else.
+// pool sends it nothing else. With `--builder`, it is one of the builders of old state instead (`builder` below).
 
 ///|
 /// The connection a checkpoint is made on: one that may write, made at the first, used for nothing else.
@@ -71,11 +71,24 @@ fn message(e : Error) -> String {
 }
 
 ///|
-/// `--data <dir>`: the station's data directory.
-fn data_dir() -> String? {
+/// `name` in the directory `path` is in (the station's data directory: its database's).
+fn beside(path : String, name : String) -> String {
+  let slash = path.rev_find("/").unwrap_or(-1)
+  let back = path.rev_find("\\").unwrap_or(-1)
+  let cut = if slash > back { slash } else { back }
+  if cut < 0 {
+    name
+  } else {
+    path.exact_view(end=cut + 1).to_owned() + name
+  }
+}
+
+///|
+/// The value after `name` among the program's arguments.
+fn flag(name : String) -> String? {
   let args = @host.args()
   for i = 0; i + 1 < args.length(); i = i + 1 {
-    if args[i] == "--data" {
+    if args[i] == name {
       return Some(args[i + 1])
     }
   }
@@ -83,13 +96,39 @@ fn data_dir() -> String? {
 }
 
 ///|
-fn main {
-  let code = match data_dir() {
-    None => {
-      @host.note("usage: stillfail-reader --data <dir>")
-      2
+/// A builder of old state, as a builder worker is (read/requested-builder.ts): each line asks for a batch of `scope`
+/// (`{"scope": "all"}`; one with `cancel` is let go), each answer says whether all is done, or why not. A database busy
+/// with another's write is no error: the batch is asked again. The pool takes the backfill permit around each ask.
+async fn builder(host : @host.Host, db_path : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=250)
+  db.exec("PRAGMA synchronous = NORMAL")
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
     }
-    Some(data) =>
+    let ask : Json = @json.parse(line) catch { _ => Json::null() }
+    if ask is { "cancel": True, .. } {
+      continue
+    }
+    let answer : Json = if ask is { "scope": "all", .. } {
+      try {
+        { "done": Json::boolean(@marks.step(db)) }
+      } catch {
+        e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
+      }
+    } else {
+      { "done": false, "error": "invalid archive mark preparation request" }
+    }
+    host.say(answer.stringify())
+  }
+}
+
+///|
+fn main {
+  let code = match (flag("--builder"), flag("--db"), flag("--data")) {
+    (Some("archive-marks"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db))
+    (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
         let reader = { host, db: data + "/stillfail.db", writer: None }
         let ready : Json = { "ready": { "loadedMs": 0, "openedMs": 0 } }
@@ -100,6 +139,10 @@ fn main {
           }
         }
       })
+    _ => {
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks --db <file>")
+      2
+    }
   }
   @host.exit(code)
 }

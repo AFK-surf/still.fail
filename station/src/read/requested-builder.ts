@@ -2,7 +2,14 @@ import { setMaxListeners } from "node:events";
 import { Worker } from "node:worker_threads";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import { releaseStoppedBackfill } from "../store/backfill.ts";
+import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
+import { MbProcess } from "./mb-reader.ts";
+
+/// A builder in MoonBit (read/mb-reader.ts): its program and arguments. It knows nothing of the backfill permit, which
+/// the builder here takes for it around each batch it asks, and gives back when the batch is answered.
+export type MbBuilder = { binary: string; args: string[] };
+/// What stands for a MoonBit builder in the permit (a worker's thread id there): never a thread's.
+let nextOwner = 0x40000000;
 
 type Waiter = { resolve: () => void; reject: (error: Error) => void; done: () => void };
 const IDLE_MS = 5_000;
@@ -16,7 +23,11 @@ export class RequestedBuilder<K extends number | string> {
   readonly #field: "thread" | "session" | "scope";
   readonly #message: ((item: K, cancel: boolean) => Record<string, unknown>) | undefined;
   readonly #waiting = new Map<K, Set<Waiter>>();
-  #worker: Worker | null = null;
+  #worker: Worker | MbProcess | null = null;
+  readonly #mb: MbBuilder | null;
+  /// The MoonBit builder's own in the permit, and whether it holds it for the batch it was asked.
+  #owner = 0;
+  #holding = false;
   #current: K | null = null;
   #previousReady = false;
   #previousWaiting = false;
@@ -26,9 +37,32 @@ export class RequestedBuilder<K extends number | string> {
   #retryMs = 250;
 
   constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer }, workerFile: URL | undefined,
-    field: "thread" | "session" | "scope", name: string, message?: (item: K, cancel: boolean) => Record<string, unknown>) {
+    field: "thread" | "session" | "scope", name: string, message?: (item: K, cancel: boolean) => Record<string, unknown>, mb: MbBuilder | null = null) {
     this.#path = path; this.#options = options; this.#workerFile = workerFile; this.#field = field; this.#timers = new Fibers(name);
-    this.#message = message;
+    this.#message = message; this.#mb = mb;
+  }
+
+  #priority(): Int32Array | null {
+    return this.#options.priority instanceof SharedArrayBuffer ? new Int32Array(this.#options.priority) : null;
+  }
+
+  /// A batch asked of the MoonBit builder, once it holds the permit (as a worker takes it itself: store/backfill.ts);
+  /// without it, the batch is not done, after the pause a worker makes.
+  #askMb(process: MbProcess, message: Record<string, unknown>): void {
+    if (!takeBackfill(this.#priority(), this.#owner)) {
+      this.#timers.after(REQUEST_BACKFILL_PAUSE_MS, () => { if (this.#worker === process) this.#answer({ done: false }); });
+      return;
+    }
+    this.#holding = true;
+    process.postMessage(message);
+  }
+
+  /// The MoonBit builder's answer: the permit given back, and a batch that did not finish everything followed by the
+  /// pause a worker makes before it answers.
+  #answeredMb(process: MbProcess, result: { done: boolean; error?: string }): void {
+    if (this.#holding) { this.#holding = false; giveBackfill(this.#priority(), this.#owner); }
+    if (!result.done && !result.error) this.#timers.after(REQUEST_BACKFILL_PAUSE_MS, () => { if (this.#worker === process) this.#answer(result); });
+    else this.#answer(result);
   }
 
   ready(items: readonly K[], signal?: AbortSignal): Promise<void> {
@@ -78,7 +112,7 @@ export class RequestedBuilder<K extends number | string> {
       else if (waiters) { this.#waiting.delete(item); this.#waiting.set(item, waiters); }
       this.#retryMs = 250;
     }
-    if (!this.#waiting.has(item) && !result.done) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
+    if (!this.#waiting.has(item) && !result.done && !(this.#worker instanceof MbProcess)) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
     this.#pump();
   }
 
@@ -108,6 +142,18 @@ export class RequestedBuilder<K extends number | string> {
       });
       return;
     }
+    if (this.#worker === null && this.#mb !== null) {
+      const mb = new MbProcess(this.#mb.binary, this.#mb.args);
+      const owner = this.#owner = nextOwner++;
+      this.#worker = mb;
+      mb.on("message", (result: { done: boolean; error?: string }) => { if (this.#worker === mb) this.#answeredMb(mb, result); });
+      mb.once("error", (error: Error) => log.warn("readers", "an old-state builder failed", { error: error.message }));
+      mb.once("exit", () => {
+        releaseStoppedBackfill(this.#options.priority, owner);
+        this.#holding = false;
+        this.#gone(mb);
+      });
+    }
     if (this.#worker === null) {
       const file = this.#workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./said-worker.ts" : "./read/said-worker.js", import.meta.url);
       let worker: Worker;
@@ -120,17 +166,26 @@ export class RequestedBuilder<K extends number | string> {
       worker.once("error", (error) => log.warn("readers", "an old-state worker failed", { error: error.message }));
       worker.once("exit", () => {
         releaseStoppedBackfill(this.#options.priority, owner);
-        if (this.#worker !== worker) return;
-        this.#worker = null; this.#current = null;
-        if (this.#idle !== null) { this.#idle(); this.#idle = null; }
-        if (this.#closed || this.#waiting.size === 0) return;
-        const ms = this.#retryMs;
-        this.#retryMs = Math.min(ms * 2, 30_000);
-        this.#retry = this.#timers.after(ms, () => { this.#retry = null; this.#pump(); });
+        this.#gone(worker);
       });
     }
     const item = this.#waiting.keys().next().value as K | undefined;
-    if (item !== undefined) { this.#current = item; this.#worker.postMessage(this.#message?.(item, false) ?? { [this.#field]: item }); }
+    if (item === undefined) return;
+    this.#current = item;
+    const message = this.#message?.(item, false) ?? { [this.#field]: item };
+    if (this.#worker instanceof MbProcess) this.#askMb(this.#worker, message);
+    else this.#worker.postMessage(message);
+  }
+
+  /// The worker or builder process ended: what it held is asked again of another, after a growing wait.
+  #gone(worker: Worker | MbProcess): void {
+    if (this.#worker !== worker) return;
+    this.#worker = null; this.#current = null;
+    if (this.#idle !== null) { this.#idle(); this.#idle = null; }
+    if (this.#closed || this.#waiting.size === 0) return;
+    const ms = this.#retryMs;
+    this.#retryMs = Math.min(ms * 2, 30_000);
+    this.#retry = this.#timers.after(ms, () => { this.#retry = null; this.#pump(); });
   }
 
   async close(): Promise<void> {
