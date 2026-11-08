@@ -44,20 +44,27 @@ priv struct Composing {
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
   mut draft : String
-  /// as the frame before left them (the frame each build of this one starts from: frame_body may build it twice), and
-  /// that frame's number
+  /// the moment it was last switched to another chat and the one it was for till then (the switch as it was first built:
+  /// each build and frame made at that moment starts from that one, frame_body may build it twice)
+  mut draft_was : (Double, String)
+  /// the moment it was last laid out for another page (a new chat's roomy in the page, a chat's at its foot) and how it
+  /// was laid out and the choices in its row till then (as draft_was)
+  mut roomy_was : (Double, Bool?, (() -> Unit)?)
+  /// as they were before what this build is built at changed them (draft_was, roomy_was): as this build has them
   mut roomy_before : Bool?
   mut draft_before : String
-  mut frame : Int
-  /// whether what waits in it now was in it as the frame before drew it (the same draft): what is put in since comes in
-  /// (held_coming), what a draft opened with is there at once
+  /// whether what waits in it now was in it before it was switched to it at this moment (the same draft): what is put
+  /// in since comes in (held_coming), what a draft opened with is there at once
   mut same_draft : Bool
-  /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown the frame before)
+  /// whether this build is the one that switched it to another chat (the first built for it): what its field says
+  /// while empty put at once, as it is then (composer_text)
+  mut switching : Bool
+  /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown before, composer_was)
   mut notices_new : Bool
   /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
   notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String, Array[(Int, String, Bool)], (String, String)?)]
-  /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
-  /// from that this one has not, while they leave (a new chat's, gone to its chat)
+  /// the page's choices in its row as it was last built, as they were before this build's page (roomy_was), and those
+  /// of the page it came from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
   mut toolbar_before : (() -> Unit)?
   mut toolbar_leaving : (() -> Unit)?
@@ -75,9 +82,9 @@ priv struct Composing {
   cold_open : @signals.Signal[String]
   /// the shape its field's hint was last shown on (composer_hint): changed, the hint waits till it is there
   mut hint_shape : String
-  /// whether it is a box or a capsule and how roomy, as the frame began and as built now (frame, then, now): what opens
-  /// or lets go of it (composer)
-  mut opened : (Int, String, String)
+  /// whether it is a box or a capsule and how roomy: the moment that last changed, what it was till then and what it is
+  /// as built now (composer_opening)
+  mut opened : (Double, String, String)
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
   mut wanted : Bool
   /// each quote's card's colour as it was last drawn, by quote: where its ground sets out from as it is sent
@@ -85,8 +92,8 @@ priv struct Composing {
   grounds : Map[String, Int64]
   /// each quote's own picture as it was last drawn in its card, by quote: what flies from there as it is sent
   pictures : Map[String, MediaPicture]
-  /// what its box last changed shape for and how, in which build (composer_shape)
-  mut shaped : (Int, String, @motion.Spec)?
+  /// what its box changed shape for and how as it was built in what composer_shaped builds (None till it is)
+  mut shaped : (String, @motion.Spec)?
   /// each draft's composer's corner as it was last built, where it stands (its place's): what its chat's list keeps clear
   /// for it is worked out from (composer_least), not from another composer's built last (a chat beside another's)
   corners : @sf.LiveMap[String, Double]
@@ -109,8 +116,10 @@ let composing : Composing = {
   draft: "",
   roomy_before: None,
   draft_before: "",
-  frame: -1,
+  draft_was: (-1.0, ""),
+  roomy_was: (-1.0, None, None),
   same_draft: false,
+  switching: false,
   notices_new: false,
   notices_said: {},
   toolbar: None,
@@ -123,7 +132,7 @@ let composing : Composing = {
   cc_open: false,
   cold_open: @signals.signal("", same=fn(a, b) { a == b }),
   hint_shape: "",
-  opened: (-1, "", ""),
+  opened: (-1.0, "", ""),
   wanted: false,
   grounds: {},
   pictures: {},
@@ -148,8 +157,10 @@ fn composing_reset() -> Unit {
   composing.toolbar_before = None
   composing.toolbar_leaving = None
   composing.draft_before = ""
-  composing.frame = -1
+  composing.draft_was = (-1.0, "")
+  composing.roomy_was = (-1.0, None, None)
   composing.same_draft = false
+  composing.switching = false
   composing.notices_new = false
   composing.notices_said.clear()
   composing.restoring.clear()
@@ -158,7 +169,7 @@ fn composing_reset() -> Unit {
   composing.cc_open = false
   composing.cold_open.set("")
   composing.hint_shape = ""
-  composing.opened = (-1, "", "")
+  composing.opened = (-1.0, "", "")
   composing.wanted = false
   composing.hint_shown.set("")
   composing.taking.set(false)
@@ -202,13 +213,19 @@ pub fn composer(
   // switched to another chat (Chat.tsx: its thread another; a new chat's has none, whichever station): the cursor in
   // it with keyboard and mouse (its keyboard at hand), before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
   let whose = "\u{1}" + spec.session
-  if composing.frame != c.frame_number() {
-    composing.frame = c.frame_number()
-    composing.roomy_before = composing.roomy
-    composing.draft_before = composing.draft
-    composing.toolbar_before = composing.toolbar
-    composing.taking.set(false)
+  // (switched to another chat or laid out for another page: recorded as it is first built so, with its moment and what
+  // it was till then; what each build and frame at that moment starts from, frame_body building it again)
+  composing.switching = whose != composing.draft
+  if composing.switching {
+    composing.draft_was = (c.moment(), composing.draft)
   }
+  if composing.roomy != Some(spec.roomy) {
+    composing.roomy_was = (c.moment(), composing.roomy, composing.toolbar)
+  }
+  composing.draft_before = composer_was(c)
+  let (roomy_at, roomy_was, toolbar_was) = composing.roomy_was
+  composing.roomy_before = if roomy_at == c.moment() { roomy_was } else { composing.roomy }
+  composing.toolbar_before = if roomy_at == c.moment() { toolbar_was } else { composing.toolbar }
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
@@ -304,7 +321,7 @@ pub fn composer(
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
-  // laid out for another page than the frame before (a new chat's roomy in the page)
+  // laid out for another page than before (a new chat's roomy in the page): at the moment it was
   let moved = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
@@ -441,7 +458,7 @@ pub fn composer(
   // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
   // first point on, ios_app.m ime_over)
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved, foot=!spec.roomy && @sf.native_side())
-  composing.shaped = Some((c.build_number(), holds, shape))
+  composing.shaped = Some((holds, shape))
   // (its ＋ and send drawn whole on their way, its field going up past them as it opens: composer_hint_wbtest, the user
   // 2026-10-30 「输入框盖住了加号和发送」)
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices"), (said, "note")] {
@@ -456,21 +473,22 @@ pub fn composer(
 }
 
 ///|
-/// What the composer built in this build changes shape for and how (its box's reshape: `by`, `spec`), for what stands
-/// round it on its page (a new chat's choices over it, its scene): moved for that too, by the same, it goes with the
-/// box's ground in the same frames, not to its new place at once. None while it is not built in this build.
-fn composer_shape(c : @ui.Ctx) -> (String, @motion.Spec)? {
-  match composing.shaped {
-    Some((build, by, spec)) if build == c.build_number() => Some((by, spec))
-    _ => None
-  }
+/// `body` built (what builds the composer where it stands on its page), and what the composer built in it changes shape
+/// for and how (its box's reshape: `by`, `spec`), for what stands round it on its page (a new chat's choices over it,
+/// its scene): moved for that too, by the same, it goes with the box's ground in the same frames, not to its new place
+/// at once. None when `body` did not build it.
+fn[T] composer_shaped(body : () -> T) -> (T, (String, @motion.Spec)?) {
+  composing.shaped = None
+  // (left as it is after: one round it, its body this, reads it too)
+  let made = body()
+  (made, composing.shaped)
 }
 
 ///|
-/// Node `i` keyed `key`, standing round the composer built in this build (over it, under it, beside it), moves with
-/// its box as that changes shape (composer_shape); called once the composer is built.
-fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
-  match composer_shape(c) {
+/// Node `i` keyed `key`, standing round the composer (over it, under it, beside it), moves with its box as that
+/// changes shape (`shaped`, composer_shaped's for what built it).
+fn with_composer(c : @ui.Ctx, i : Int, key : String, shaped : (String, @motion.Spec)?) -> Unit {
+  match shaped {
     Some((by, spec)) => @motion.layout(c, i, key, spec~, by~)
     None => ()
   }
@@ -647,7 +665,7 @@ fn composer_text(
   // fades out, then the other in where it was, never one put for the other at once
   let wanted = if hint != "" { hint } else { spec.placeholder }
   // (another chat's, or its first: what it says from the first, as it is)
-  if composing.hint_shown.get() == "" || !composing.same_draft {
+  if composing.hint_shown.get() == "" || composing.switching {
     composing.hint_shown.set(wanted)
   }
   let said_key = "composer/said/" + spec.draft
@@ -2068,12 +2086,27 @@ pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : 
 let composer_shape_ms : Double = 300.0
 
 ///|
-/// Whether the composer opens or is let go this frame: `head` (how roomy, a box or not) other than as the frame began.
+/// Whether the composer opens or is let go at this moment: `head` (how roomy, a box or not) changed at it, from what
+/// it was as last built (each build and frame at that moment alike).
 fn composer_opening(c : @ui.Ctx, head : String) -> Bool {
-  let (frame, was, now) = composing.opened
-  let was = if frame != c.frame_number() { now } else { was }
-  composing.opened = (c.frame_number(), was, head)
-  was != "" && was != head
+  let (_, _, now) = composing.opened
+  if head != now {
+    composing.opened = (c.moment(), now, head)
+  }
+  let (at, was, _) = composing.opened
+  at == c.moment() && was != "" && was != head
+}
+
+///|
+/// The chat the composer was for before it was switched to the one it is for now, at this moment; else the one it is
+/// for (as last built).
+fn composer_was(c : @ui.Ctx) -> String {
+  let (at, was) = composing.draft_was
+  if at == c.moment() {
+    was
+  } else {
+    composing.draft
+  }
 }
 
 ///|
@@ -2152,6 +2185,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   let width = composer_width(c.width)
   let place = if apart { composer_place(c.width) } else { composer_alone }
   let mut notices = -1
+  let mut shaped = None
   let foot = c.box(style=chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_foot_in(c.width)))), fn() {
     match v {
       Some(v) => notices = c.box(style=chat_notices_box, fn() { chat_notices(c, src, r, v, width) })
@@ -2159,19 +2193,21 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     }
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
-        composer(
-          c,
-          src,
-          ws,
-          spec,
-          fn(w) {
-            match v {
-              Some(v) => send_in_chat(c, src, r, v, w)
-              None => ()
-            }
-          },
-          place~,
-        )
+        shaped = composer_shaped(fn() {
+          composer(
+            c,
+            src,
+            ws,
+            spec,
+            fn(w) {
+              match v {
+                Some(v) => send_in_chat(c, src, r, v, w)
+                None => ()
+              }
+            },
+            place~,
+          )
+        }).1
       })
     })
     |> ignore
@@ -2179,7 +2215,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   // what is said over it stands on its ground: up and down with it as it changes shape, in the same frames, not at
   // its new place at once (as a new chat's choices over it: new_chat.mbt)
   if notices >= 0 {
-    with_composer(c, notices, "composer/notices/" + spec.draft)
+    with_composer(c, notices, "composer/notices/" + spec.draft, shaped)
   }
   @motion.measure(c, foot, "composer/foot")
 }
@@ -2312,14 +2348,10 @@ let cc_note_box : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 /// its station is set; why it failed in a toast); its station down.
 fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Double) -> Unit {
   let key = r.station + ":" + r.session
-  // (built before its composer: whether this chat's composer was drawn the frame before, as the composer has it once
-  // it is built in this frame, or as it left it)
+  // (built before its composer: whether this chat's composer was drawn before, not switched to at this moment, as the
+  // composer has it once it is built, or as it left it)
   let whose = "\u{1}" + r.session
-  composing.notices_new = if composing.frame == c.frame_number() {
-    composing.draft_before == whose
-  } else {
-    composing.draft == whose
-  }
+  composing.notices_new = composer_was(c) == whose
   if v.archived {
     let restore = c.id("composer/restore")
     let busy = composing.restoring.contains(key)
