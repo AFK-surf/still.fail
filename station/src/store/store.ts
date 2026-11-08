@@ -34,6 +34,7 @@ import { hasLegacyDecisionTime, installDecisionTimeIndex } from "./legacy-decisi
 import { hasDecisionSessionRepair, hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex,
   DecisionSessionsUnavailable, LEGACY_LAST_DECISION_SHARED, LEGACY_LAST_DECISION_SEPARATE, LEGACY_LAST_DECISION_REPAIR } from "./legacy-decision-session.ts";
 import { retiredUsage } from "./usage-retire.ts";
+import { findRuntimeSource, type RuntimeSource } from "./runtime-source.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
@@ -1215,6 +1216,12 @@ export class Store {
     if (current === null) return sources;
     const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
     return [...sources.filter((s) => s.id !== current), entry];
+  }
+
+  /// One transcript's source, with the same identity and fallback rules as the ordered list.
+  runtimeSessionSource(key: string, id: string): RuntimeSource | null {
+    return findRuntimeSource(key, id, (sql, ...args) => this.#one(sql, ...args),
+      () => this.runtimeSessionSources(key).find((source) => source.id === id) ?? null);
   }
 
   /// A transcript is left unpacked while another shown or running session can still write it.
