@@ -37,15 +37,18 @@ pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T, same? : (
   let one = match self.kept.get(key) {
     Some(k) => k
     None => {
-      // (a new one: those nothing follows let go first, where no getter is working one out, whose own is not
-      // followed yet)
-      if kept_working.val == 0 {
+      // (a new one: those nothing follows let go first, once there are twice as many kept as the last time that was done,
+      // so making n costs O(n) in all; where no getter is working one out, whose own is not followed yet)
+      if kept_working.val == 0 && kept_count.made >= 2 * kept_count.left &&
+        kept_count.made >= kept_sweep_least {
         for l in kept_lists {
           (l.sweep)()
         }
+        kept_count.left = kept_count.made
       }
       let k = { value: @signals.computed(getter, same?) }
       self.kept[key] = k
+      kept_count.made += 1
       if !self.listed {
         self.listed = true
         kept_lists.push({ sweep: fn() { self.sweep() }, clear: fn() { self.clear() } })
@@ -58,6 +61,22 @@ pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T, same? : (
   kept_working.val -= 1
   v
 }
+
+///|
+/// How many are kept in all the Kepts (`made`), and how many were left as those nothing followed were last let go.
+priv struct KeptCount {
+  mut made : Int
+  mut left : Int
+}
+
+///|
+// kept across runs: back to 0 by kept_reset
+let kept_count : KeptCount = { made: 0, left: 0 }
+
+///|
+/// Fewer kept than this, none let go as another is made.
+// kept across runs: a value
+let kept_sweep_least : Int = 64
 
 ///|
 /// How many Kepts' reads are under way (a getter reading another Kept): none let go meanwhile.
@@ -82,6 +101,7 @@ fn[T] Kept::forget(self : Kept[T], key : String) -> Unit {
         k.value.dispose()
       }
       self.kept.remove(key) |> ignore
+      kept_count.made -= 1
     }
     None => ()
   }
@@ -104,6 +124,7 @@ fn[T] Kept::sweep(self : Kept[T]) -> Unit {
       None => ()
     }
     self.kept.remove(key) |> ignore
+    kept_count.made -= 1
   }
 }
 
@@ -139,6 +160,8 @@ fn kept_reset() -> Unit {
     (l.clear)()
   }
   kept_working.val = 0
+  kept_count.made = 0
+  kept_count.left = 0
 }
 
 ///|
