@@ -1,7 +1,7 @@
 // Exercise the real application tree and row; no page source is created by this fixture.
 
 ///|
-fn actual_row_handoff(legacy : Bool, end_early : Bool, intermediate : Bool, duplicate : Bool, changed_place? : Bool = false) -> Unit raise {
+fn actual_row_handoff(legacy : Bool, end_early : Bool, intermediate : Bool, duplicate : Bool, changed_place? : Bool = false, quick? : Bool = false, changed_thread? : Bool = false) -> Unit raise {
   new_run()
   let sent : Array[String] = []
   let left : Array[Map[String, Json]] = []
@@ -40,11 +40,27 @@ fn actual_row_handoff(legacy : Bool, end_early : Bool, intermediate : Bool, dupl
   let old = if legacy { Some(@signals.untracked(fn() { client.follow_topic("chat", params~) })) } else { None }
   let (x, y) = t.find(chat.title).unwrap()
   t.press_at(x, y)
-  guard client.peek_topic("chat", params~) is Some(original) else { fail("the actual row did not prefetch") }
+  if old is None {
+    assert_true(client.peek_topic("chat", params~) is None, msg="the row does not prefetch while a press could become a scroll")
+  }
+  if quick {
+    // Open before the delayed press indication; the open event itself must keep a reader for the page.
+    t.touch(2, x, y)
+  } else {
+    // A held press starts its prefetch once the indication is shown. No frame is drawn between up and page handover.
+    t.run_for(@ui.tap_indication_ms)
+  }
+  guard client.peek_topic("chat", params~) is Some(original) else { fail("the row did not keep a chat reader") }
   if old is Some(earlier) { assert_true(physical_equal(earlier, original)) }
-  let value = (base.topic_read)("chat", raw).value.unwrap()
+  let fields = match (base.topic_read)("chat", raw).value.unwrap() {
+    Object(fields) => fields.copy()
+    _ => fail("the chat fixture is not an object")
+  }
+  let initial_thread = if changed_thread { 7.0 } else { 101.0 }
+  fields["thread"] = { "id": Json::number(initial_thread) }
+  let value = Json::object(fields)
   client.receive_json({ "id": Json::number(original.id.to_double()), "value": value })
-  t.touch(2, x, y)
+  if !quick { t.touch(2, x, y) }
   let (serial, _) = app.nav.top_stay()
   assert_true(@sfbase.chat_open_is_pending(serial), msg="the row's reader is pending before the page is built")
   assert_true(client.peek_topic("chat", params~) is Some(s) && physical_equal(s, original), msg="the prefetch survives the up event before a frame")
@@ -101,7 +117,9 @@ fn actual_row_handoff(legacy : Bool, end_early : Bool, intermediate : Bool, dupl
       assert_eq(@sfbase.number(@sfbase.field(Some(focus[focus.length() - 1].1), "left"), "thread"), 101.0)
       let place = calls.filter(fn(call) { call.0 == "chat.place" })
       assert_true(earlier_place > 0, msg="the rendered page already reported its reading place")
-      let expected_places = if changed_place { earlier_place + 1 } else { earlier_place }
+      let expected_before = if changed_thread { 7.0 } else { 101.0 }
+      assert_eq(@sfbase.number(Some(place[earlier_place - 1].1), "thread"), expected_before, msg="the previous report has the expected thread")
+      let expected_places = if changed_place || changed_thread { earlier_place + 1 } else { earlier_place }
       assert_eq(place.length(), expected_places, msg="leaving reports a changed place and does not repeat an unchanged one")
       assert_eq(@sfbase.number(Some(place[place.length() - 1].1), "thread"), 101.0)
     } else {
@@ -127,8 +145,23 @@ fn actual_row_handoff(legacy : Bool, end_early : Bool, intermediate : Bool, dupl
 }
 
 ///|
-test "actual row hands a quick press to its page without an intermediate frame" {
+test "actual row hands a prefetch to its page without an intermediate frame" {
   actual_row_handoff(false, false, false, false)
+}
+
+///|
+test "an actual row hands a quick tap to its page without an intermediate frame" {
+  actual_row_handoff(false, false, false, false, quick=true)
+}
+
+///|
+test "a quick tap preserves an independent legacy reader" {
+  actual_row_handoff(true, false, false, false, quick=true)
+}
+
+///|
+test "ending the host during a quick tap releases its pending reader" {
+  actual_row_handoff(false, true, false, false, quick=true)
 }
 
 ///|
@@ -164,4 +197,14 @@ test "an undrawn equal chat entry does not hide a changed place at leave" {
 ///|
 test "a changed place at leave keeps an independent legacy reader" {
   actual_row_handoff(true, false, false, true, changed_place=true)
+}
+
+///|
+test "an undrawn equal entry reports a changed thread on leave" {
+  actual_row_handoff(false, false, false, true, changed_thread=true)
+}
+
+///|
+test "a changed thread at leave keeps an independent legacy reader" {
+  actual_row_handoff(true, false, false, true, changed_thread=true)
 }
