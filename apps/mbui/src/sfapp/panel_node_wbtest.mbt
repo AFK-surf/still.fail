@@ -7,10 +7,10 @@ fn panel_test_body(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
     @sf.panel_text(c, fn() { c.text("面板里的话，长一些，好看它怎么折行", style=@sf.paragraph) |> ignore })
     @sf.panel_foot(c, fn() {
-      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+      @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         said.push("ok")
         close()
-      }
+      }) |> ignore
     })
   }
 }
@@ -435,9 +435,9 @@ fn panel_rows_body(n : Int, held : Array[Bool]) -> (@ui.Ctx, () -> Unit) -> Unit
       @sf.panel_text(c, fn() { c.text("第\{i}行", style=@sf.paragraph) |> ignore })
     }
     @sf.panel_foot(c, fn() {
-      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+      @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         close()
-      }
+      }) |> ignore
     })
   }
 }
@@ -604,9 +604,9 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its bod
       from=At(600.0, 100.0, 0.0, 0.0),
       tall=0.5,
       foot=fn(c, close) {
-        if @sf.button(c, "好的", key="ok34", tone=Primary) {
+        @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
           close()
-        }
+        }) |> ignore
       },
     )
   }
@@ -679,9 +679,9 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its
     let t = menu_tester(1280.0, 800.0, 0)
     let pressed = Ref(0)
     let foot = fn(c : @ui.Ctx, _close : () -> Unit) {
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         pressed.val = pressed.val + 1
-      }
+      }) |> ignore
     }
     match kind {
       "tall foot" =>
@@ -689,9 +689,9 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its
       "foot" => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
       _ =>
         @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), head_end=fn(c) {
-          if @sf.button(c, "尾", key="end34", tone=Primary) {
+          @sf.button(c, "尾", key="end34", tone=Primary, on_press=fn() {
             pressed.val = pressed.val + 1
-          }
+          }) |> ignore
         })
     }
     t.run_for(@ui.move_most_ms)

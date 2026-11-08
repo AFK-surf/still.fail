@@ -123,10 +123,10 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
         @sf.panel_text(c, fn() { c.text("第\{i}行", style=@sf.paragraph) |> ignore })
       }
       @sf.panel_foot(c, fn() {
-        if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+        @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
           said.push("ok")
           close()
-        }
+        }) |> ignore
       })
     },
     from=At(600.0, 100.0, 0.0, 0.0),

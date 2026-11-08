@@ -14,8 +14,8 @@ pub let viewer_small_w : Double = 640.0
 /// in the Small tier, awake while `awake` (fading out over 320 ms and in over 120 ms, as the web's `data-awake`), at
 /// least `widest` wide (what it was laid out at before: the second of what this gives back); across the top
 /// otherwise, gone while `hidden`, back to `back` by name (`title`, where the file is, over its name while pointed at).
-/// `tools`: the file's own, then download. The first of
-/// what it gives back is whether it was closed (its ×, or its way back), the frame after.
+/// `tools`: the file's own, then download. `on_close` as it is closed (its ×, or its way back). What it gives back:
+/// the width it was laid out at (the floating bar's; none across the top).
 pub fn viewer_frame_bar(
   c : @ui.Ctx,
   key : String,
@@ -29,14 +29,16 @@ pub fn viewer_frame_bar(
   ink : ViewerInk,
   tools : () -> Unit,
   title? : String = "",
-) -> (Bool, Double) {
+  on_close~ : () -> Unit,
+) -> Double {
   if layout(c.width) is Small {
-    return viewer_head(c, key, name, meta, awake, widest, shown, ink, tools)
+    return viewer_head(c, key, name, meta, awake, widest, shown, ink, tools, on_close~)
   }
-  let mut went = false
-  let n = c.box(style=vfr_layer, fn() { went = viewer_bar(c, key + "/bar", back, name, meta, hidden, ink, tools, title~) })
+  let n = c.box(style=vfr_layer, fn() {
+    viewer_bar(c, key + "/bar", back, name, meta, hidden, ink, tools, title~, on_back=on_close)
+  })
   c.look(n, @ui.look(alpha=shown))
-  (went, 0.0)
+  0.0
 }
 
 ///|
@@ -76,7 +78,8 @@ fn viewer_head(
   shown : Double,
   ink : ViewerInk,
   tools : () -> Unit,
-) -> (Bool, Double) {
+  on_close~ : () -> Unit,
+) -> Double {
   let small = c.width <= viewer_small_w
   let seen = @motion.animate(c, key + "/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
       if awake {
@@ -90,7 +93,6 @@ fn viewer_head(
   let down = dmax(top, if small { vfr_head_top_small } else { vfr_head_top })
   let most = dmin(c.width - (if small { vfr_head_side_small } else { vfr_head_side }), vfr_head_most)
   let head = c.id(key + "/head")
-  let mut closed = false
   let n = c.box(style=vfr_head_room, fn() {
     c.box(style=@ui.style(w=Full, h=Fixed(down)), fn() {  }) |> ignore
     c.box(
@@ -111,9 +113,7 @@ fn viewer_head(
         // (short of room, the tools kept whole: the name gives way)
         c.box(style=keys_row(), keep=true, fn() {
           tools()
-          if viewer_tool(c, key + "/close", "close", t("web-main.preview.closeKey"), ink) {
-            closed = true
-          }
+          viewer_tool(c, key + "/close", "close", t("web-main.preview.closeKey"), ink, on_press=on_close)
         })
         |> ignore
       },
@@ -121,7 +121,7 @@ fn viewer_head(
     |> ignore
   })
   c.look(n, @ui.look(alpha=seen * shown))
-  (closed, c.laid_size(head).map(fn(s) { s.0 }).unwrap_or(0.0))
+  c.laid_size(head).map(fn(s) { s.0 }).unwrap_or(0.0)
 }
 
 ///|
@@ -132,8 +132,7 @@ fn viewer_head(
 /// 预览一样，有顶栏」「pc 也用文字按钮，不要用图标」). `copy`: a second doing before it, copying (a phone's 复制图片 beside
 /// its 保存到相册, 2026-11-06 用户「手机上都加复制」), at the foot 取消 and it as wide as their words, the doing the
 /// rest. `busy`: a doing under way (`busy_copy`: the copying), the other not pressed meanwhile; `disabled`: nothing to
-/// do it to yet. What it gives back: whether it was closed (its way back, 取消), whether the doing was pressed, whether
-/// the copying was, the frame after.
+/// do it to yet. As they are pressed: `on_close` (its way back, 取消), `on_act` (the doing), `on_copy` (the copying).
 pub fn viewer_frame_act(
   c : @ui.Ctx,
   key : String,
@@ -146,10 +145,10 @@ pub fn viewer_frame_act(
   busy? : Bool = false,
   busy_copy? : Bool = false,
   disabled? : Bool = false,
-) -> (Bool, Bool, Bool) {
-  let mut closed = false
-  let mut acted = false
-  let mut copied = false
+  on_close~ : () -> Unit,
+  on_act~ : () -> Unit,
+  on_copy? : () -> Unit = fn() {  },
+) -> Unit {
   let act_busy = busy && !busy_copy
   let act_off = disabled || (busy && busy_copy)
   let copy_busy = busy && busy_copy
@@ -168,19 +167,13 @@ pub fn viewer_frame_act(
           // (with a copying beside it, 取消 and it as wide as their words, the doing the rest: three as wide as each
           // other cut 保存到相册 short on a phone, 保存到…, as the Mac's text drew it at 390, and Save to Photos further,
           // 2026-11-06)
-          if button(c, t("common.cancel"), key=key + "/cancel", w=if copy is Some(_) { Auto } else { Fill(1.0) }) {
-            closed = true
-          }
+          button(c, t("common.cancel"), key=key + "/cancel", w=if copy is Some(_) { Auto } else { Fill(1.0) }, on_press=on_close) |> ignore
           match copy {
             Some(words) =>
-              if button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off) {
-                copied = true
-              }
+              button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off, on_press=on_copy) |> ignore
             None => ()
           }
-          if button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off, w=Fill(1.0)) {
-            acted = true
-          }
+          button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off, w=Fill(1.0), on_press=on_act) |> ignore
         })
         |> ignore
       })
@@ -189,22 +182,17 @@ pub fn viewer_frame_act(
     |> ignore
   } else {
     c.box(style=vfr_layer, fn() {
-      closed = viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
+      viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
         match copy {
           Some(words) =>
-            if button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off) {
-              copied = true
-            }
+            button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off, on_press=on_copy) |> ignore
           None => ()
         }
-        if button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off) {
-          acted = true
-        }
-      }, capsule_end=true)
+        button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off, on_press=on_act) |> ignore
+      }, capsule_end=true, on_back=on_close)
     })
     |> ignore
   }
-  (closed, acted, copied)
 }
 
 ///|

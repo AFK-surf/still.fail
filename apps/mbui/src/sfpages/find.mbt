@@ -78,7 +78,7 @@ pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
     find_close()
     finding.chat = key
   }
-  c.focus_editor(find_key)
+  c.focus_field(finding.field)
 }
 
 ///|
@@ -398,8 +398,8 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
 
 ///|
 /// One of the bar's buttons, named for a screen reader and in its tip under it; not pressed while `on` is false (drawn
-/// fainter); pressed, `does` (as it is let go: Ctx::on_press).
-fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool, does : () -> Unit) -> Unit {
+/// fainter); pressed, `on_press` (as it is let go: Ctx::on_press).
+fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool, on_press : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let b = c.box(style=if on { find_button_style } else { find_button_off }, id~, fn() {
@@ -408,7 +408,7 @@ fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bo
   c.semantics(b, Button, id~, label~)
   @sf.tip(c, key, id, label, side=Bottom)
   if on {
-    c.on_press(id, does)
+    c.on_press(id, on_press)
   }
 }
 

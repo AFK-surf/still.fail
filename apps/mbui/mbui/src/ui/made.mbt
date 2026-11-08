@@ -266,6 +266,12 @@ let made_placed : Array[(Int, Node)] = []
 let made_presses : Map[Int, () -> Unit] = {}
 
 ///|
+/// What the second of two presses on each target does in place of a press (Ctx::on_double_press), by its id, as its
+/// box was last built.
+// kept across runs: written as what says it is built; a run's start clears it
+let made_double_presses : Map[Int, () -> Unit] = {}
+
+///|
 /// A run begins: nothing made is kept.
 fn made_forget() -> Unit {
   for _, m in made_roots {
@@ -274,6 +280,7 @@ fn made_forget() -> Unit {
   made_roots.clear()
   made_placed.clear()
   made_presses.clear()
+  made_double_presses.clear()
   keys_taken.clear()
 }
 
@@ -429,6 +436,20 @@ pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
 }
 
 ///|
+/// The second of two presses on target `id` (a desktop's double click: the second let go within double_click_ms of the
+/// first, as near as double_click_slop) does `f` in place of what a press on it does (Ctx::on_press, which the first
+/// did): as it is let go, outside any build, its moment the event's. Said as `id`'s box is built.
+pub fn Ctx::on_double_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
+  if id == 0 {
+    return
+  }
+  self.takes_presses(id)
+  // (read so: what said it is built again as it is pressed twice, hand.mbt)
+  hand.double.has(id) |> ignore
+  made_double_presses[id] = f
+}
+
+///|
 /// What the part over a field said the field's keys do (Ctx::on_key), and the build that last said it (or put the part
 /// back unbuilt with it).
 priv struct KeysTaken {
@@ -513,7 +534,22 @@ fn keys_taken_built() -> Unit {
 /// Target `id` let go of a press (a click, a tap, a key): what a node made said a press on it does, done now, outside
 /// any build (Made::on_press).
 fn made_pressed(id : Int) -> Unit {
-  match made_presses.get(id) {
+  run_press(made_presses.get(id))
+}
+
+///|
+/// The second of two presses let go on target `id`: what was said it does (Ctx::on_double_press), done now, outside any
+/// build; whether one was said (none: it is a press as any other).
+fn made_double_pressed(id : Int) -> Bool {
+  let f = made_double_presses.get(id)
+  run_press(f)
+  f is Some(_)
+}
+
+///|
+/// A press's handler run outside any build: what it changes told once it has done.
+fn run_press(f : (() -> Unit)?) -> Unit {
+  match f {
     Some(f) => {
       @signals.start_batch()
       @signals.untracked(f)

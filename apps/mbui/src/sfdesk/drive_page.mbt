@@ -27,14 +27,14 @@ pub fn folder_page(
     match bar {
       Some(n) =>
         // (what can be done to it at the bar's end, as far as half the bar less the title's half: the rest in its ⋯)
-        if narrow_bar(c, n, folder_name(f.st, f.at), fn() {
-            c.box(style=@ui.style(max_w=Fixed(actions_most)), fn() {
-              folder_actions(c, src, f, style=bar_actions_row())
-            })
-            |> ignore
-          }) {
+        narrow_bar(c, n, folder_name(f.st, f.at), fn() {
+          c.box(style=@ui.style(max_w=Fixed(actions_most)), fn() {
+            folder_actions(c, src, f, style=bar_actions_row())
+          })
+          |> ignore
+        }, on_press=fn() {
           (n.back)()
-        }
+        })
       None => ()
     }
     folder_view(c, src, f, head=fn(count) { folder_head(c, src, f, front_it, bar is None, count) }, foot=match bar {
@@ -238,9 +238,12 @@ pub fn roots_page(
     @sf.empty(c, fn() {
       c.text(words, style=roots_empty_words) |> ignore
       match pick {
-        Some(s) if @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-roots/pick", tone=Primary) =>
-          add_favorite_folder(src, ws, [s], picked=fn(f) { go({ station: f.station, root: Some(f.root), path: f.path }) })
-        _ => ()
+        Some(s) =>
+          @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-roots/pick", tone=Primary, on_press=fn() {
+            add_favorite_folder(src, ws, [s], picked=fn(f) { go({ station: f.station, root: Some(f.root), path: f.path }) })
+          })
+          |> ignore
+        None => ()
       }
     })
   }
@@ -297,11 +300,11 @@ fn root_row(c : @ui.Ctx, s : DvStation, r : DvRoot, go : (DriveAt) -> Unit) -> U
     Some((what, hint)) => what + " · " + hint
     None => ""
   }
-  if @sf.link_row(c, key, r.name, note=r.path, trouble~, lead=fn() {
-      @sf.icon(c, "folder", size=t.items.mark, color=t.p.muted) |> ignore
-    }) {
+  @sf.link_row(c, key, r.name, note=r.path, trouble~, lead=fn() {
+    @sf.icon(c, "folder", size=t.items.mark, color=t.p.muted) |> ignore
+  }, on_press=fn() {
     go({ station: s.station, root: Some(r.path), path: "" })
-  }
+  }) |> ignore
 }
 
 ///|

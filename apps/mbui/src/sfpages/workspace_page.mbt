@@ -95,26 +95,27 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
         let icon = text(v, "icon")
         let marked = @sf.has_station_mark(emoji, icon)
         let on = [("workspace", ws)]
-        if @sf.link_row(
-            c,
-            "ws-mark",
-            @sf.t("android-settings.workspace.icon"),
-            value=if marked { "" } else { @sf.t("android-settings.workspace.iconNone") },
-            tail=fn() {
-              doing_mark(c, is_doing(core, ["workspace.rename"], on), failed_of(core, ["workspace.rename"], on))
-              if marked {
-                @sf.station_mark(c, emoji, icon, ws_mark_narrow, t.p.text)
-              }
-            },
-          ) {
-          open_mark_pick(core, name, emoji, icon, @sf.t("android-settings.workspace.iconWhat"), fn(emoji, icon, done) {
-            (core.call)(
-              "workspace.rename",
-              obj([("workspace", str(ws)), ("emoji", str(emoji)), ("icon", str(icon)), ("account", str(here.sub))]),
-              done,
-            )
-          })
-        }
+        @sf.link_row(
+          c,
+          "ws-mark",
+          @sf.t("android-settings.workspace.icon"),
+          value=if marked { "" } else { @sf.t("android-settings.workspace.iconNone") },
+          tail=fn() {
+            doing_mark(c, is_doing(core, ["workspace.rename"], on), failed_of(core, ["workspace.rename"], on))
+            if marked {
+              @sf.station_mark(c, emoji, icon, ws_mark_narrow, t.p.text)
+            }
+          },
+          on_press=fn() {
+            open_mark_pick(core, name, emoji, icon, @sf.t("android-settings.workspace.iconWhat"), fn(emoji, icon, done) {
+              (core.call)(
+                "workspace.rename",
+                obj([("workspace", str(ws)), ("emoji", str(emoji)), ("icon", str(icon)), ("account", str(here.sub))]),
+                done,
+              )
+            })
+          },
+        ) |> ignore
       }
     })
   })
@@ -147,7 +148,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
                 email,
                 @sf.t("android-settings.members.added", args=[("role", role_label(text(Some(a), "role")))]),
                 control=fn() {
-                  if ws_row_action(c, "remove-added/" + email, @sf.t("android-settings.members.remove"), core, ["workspace.removeAdded"], on) {
+                  ws_row_action(c, "remove-added/" + email, @sf.t("android-settings.members.remove"), core, ["workspace.removeAdded"], on, on_press=fn() {
                     @settings.act(
                       core,
                       @sf.t("android-settings.members.removeWhat"),
@@ -155,7 +156,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
                       obj([("workspace", str(ws)), ("email", str(email)), ("account", str(here.sub))]),
                       done=@sf.t("android-settings.members.removed"),
                     )
-                  }
+                  })
                 },
               )
               |> ignore }))
@@ -171,7 +172,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
                 if email != "" { email } else { @sf.t("android-settings.members.anyone") },
                 @sf.t("android-settings.members.invitation", args=[("role", role_label(text(iv, "role"))), ("until", stamp(iv, "expires_at", "until"))]),
                 control=fn() {
-                  if ws_row_action(c, "revoke/" + id, @sf.t("android-settings.members.revoke"), core, ["workspace.revokeInvitation"], on) {
+                  ws_row_action(c, "revoke/" + id, @sf.t("android-settings.members.revoke"), core, ["workspace.revokeInvitation"], on, on_press=fn() {
                     @settings.act(
                       core,
                       @sf.t("android-settings.members.revokeWhat"),
@@ -179,7 +180,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
                       obj([("workspace", str(ws)), ("invitation", str(id)), ("account", str(here.sub))]),
                       done=@sf.t("android-settings.members.revoked"),
                     )
-                  }
+                  })
                 },
               )
               |> ignore }))
@@ -302,7 +303,8 @@ fn ws_person(
   control? : () -> Unit,
   badge? : String = "",
   key? : String = "",
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   @sf.link_row(
     c,
     key,
@@ -316,7 +318,9 @@ fn ws_person(
     title_after?=if badge != "" { Some(fn() { you(c, badge) }) } else { None },
     goes=key != "",
     chevron=false,
+    on_press?=on_press,
   )
+  |> ignore
 }
 
 ///|
@@ -339,7 +343,8 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> 
   let key = if can { "member/" + sub } else { "" }
   let on = [("workspace", ws), ("member", sub)]
   let calls = ["workspace.setRole", "workspace.removeMember"]
-  let pressed = ws_person(
+  let from = c.id(key)
+  ws_person(
     c,
     fn() { avatar(c, core, email, name, ws_avatar, picture=text(mv, "picture")) },
     name,
@@ -348,10 +353,8 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> 
     tail=fn() { doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on)) },
     badge=if sub == here.sub { @sf.t("android-settings.members.you") } else { "" },
     key~,
+    on_press=fn() { ws_member_panel(core, here, v, m, name, Of(from)) },
   )
-  if pressed {
-    ws_member_panel(core, here, v, m, name, Of(c.id(key)))
-  }
 }
 
 ///|
@@ -460,26 +463,28 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
       // (a row of its own, its words on the line the others' are, in the link's ink)
       if manager {
         let add = c.id("relay-add")
-        if c.clicked(add) && !setting {
-          close()
-          ask(
-            @sf.t("android-settings.relays.add"),
-            "",
-            "https://relay.example.com",
-            @sf.t("android-settings.relays.addAction"),
-            hint=@sf.t("android-settings.relays.hint"),
-            fn(line) {
-              let next = relays.copy()
-              next.push(line)
-              @settings.act(
-                core,
-                @sf.t("android-settings.relays.add"),
-                "workspace.setRelays",
-                obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
-                done=@sf.t("android-settings.relays.added"),
-              )
-            },
-          )
+        if !setting {
+          c.on_press(add, fn() {
+            close()
+            ask(
+              @sf.t("android-settings.relays.add"),
+              "",
+              "https://relay.example.com",
+              @sf.t("android-settings.relays.addAction"),
+              hint=@sf.t("android-settings.relays.hint"),
+              fn(line) {
+                let next = relays.copy()
+                next.push(line)
+                @settings.act(
+                  core,
+                  @sf.t("android-settings.relays.add"),
+                  "workspace.setRelays",
+                  obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
+                  done=@sf.t("android-settings.relays.added"),
+                )
+              },
+            )
+          })
         }
         let words = @sf.t(if setting { "common.saving" } else { "android-settings.relays.add" })
         let row = c.box(style=@sf.panel_words_in().then(ws_way_line), id=add, fn() {
@@ -553,10 +558,18 @@ let ws_way_link : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Acce
 ///|
 /// What a row does at its end (RowAction): a quiet button as every row's on the settings' pages (账号's 退出), turning
 /// while it is under way, the failure mark before it a moment after.
-fn ws_row_action(c : @ui.Ctx, key : String, words : String, core : Core, calls : Array[String], on : Array[(String, String)]) -> Bool {
+fn ws_row_action(
+  c : @ui.Ctx,
+  key : String,
+  words : String,
+  core : Core,
+  calls : Array[String],
+  on : Array[(String, String)],
+  on_press~ : () -> Unit,
+) -> Unit {
   let busy = is_doing(core, calls, on)
   doing_mark(c, false, failed_of(core, calls, on))
-  @sf.button(c, words, key~, tone=Ghost, busy~)
+  @sf.button(c, words, key~, tone=Ghost, busy~, on_press=on_press) |> ignore
 }
 
 ///|

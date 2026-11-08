@@ -95,13 +95,13 @@ fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
   if s.open.get() && c.key_pressed(@ui.key_code_enter) {
     @sfbase.outside_yes(src, s)
   }
-  if @sf.button(c, @sf.t("common.cancel"), key="outside/cancel", tone=Ghost) {
+  @sf.button(c, @sf.t("common.cancel"), key="outside/cancel", tone=Ghost, on_press=fn() {
     @sfbase.outside_no(s)
-  }
+  }) |> ignore
   let label = @sf.t(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
-  if @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy.get()) {
+  @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy.get(), on_press=fn() {
     @sfbase.outside_yes(src, s)
-  }
+  }) |> ignore
 }
 
 ///|

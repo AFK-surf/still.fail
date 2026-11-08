@@ -405,17 +405,18 @@ fn connect_form(
       })
     }
     c.box(style=ap_submit, fn() {
-      if @sf.button(
-          c,
-          text(d, "submitLabel"),
-          key="add-profile-submit/" + form,
-          tone=Primary,
-          icon=if flag(d, "showKey") { "" } else { "plus" },
-          busy=submitting || pending,
-          disabled=!flag(d, "canSubmit"),
-        ) {
-        submit()
-      }
+      @sf.button(
+        c,
+        text(d, "submitLabel"),
+        key="add-profile-submit/" + form,
+        tone=Primary,
+        icon=if flag(d, "showKey") { "" } else { "plus" },
+        busy=submitting || pending,
+        disabled=!flag(d, "canSubmit"),
+        on_press=fn() {
+          submit()
+        },
+      ) |> ignore
     })
     |> ignore
     if text(d, "usesLine") != "" {
@@ -537,8 +538,11 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
                 }
               })
             }) |> ignore
-          } else if @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.keychainTip", args=[("name", "still.fail")])) {
-            sign_in(rt)
+          } else {
+            @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.keychainTip", args=[("name", "still.fail")]), on_press=fn() {
+              sign_in(rt)
+            })
+            |> ignore
           }
         }
       })

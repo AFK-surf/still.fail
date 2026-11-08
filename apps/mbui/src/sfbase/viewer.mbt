@@ -2665,7 +2665,7 @@ pub fn page_glass() -> @ui.Glass {
 
 ///|
 /// A button on the viewer's bars: 32 square, its corner 12, an 18 icon; quieter when
-/// it cannot be pressed; `held` (the tool in use) on white at 16%, its icon near white. True on the frame after it was
+/// it cannot be pressed; `held` (the tool in use) on white at 16%, its icon near white. `on_press` as it is
 /// tapped.
 pub fn picture_button(
   c : @ui.Ctx,
@@ -2676,7 +2676,8 @@ pub fn picture_button(
   enabled? : Bool = true,
   held? : Bool = false,
   said~ : String,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let id = c.id(key)
   let live = on && enabled
   let b = c.box(
@@ -2701,7 +2702,10 @@ pub fn picture_button(
   if live {
     @sf.tip(c, key + "/tip", id, said)
   }
-  live && c.clicked(id)
+  match on_press {
+    Some(f) if live => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 // ── a PDF ──────────────────────────────────────────────────────────────

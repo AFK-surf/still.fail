@@ -720,12 +720,8 @@ test "desktop: two clicks on the same thing within double_click_ms are a double 
     fn(c) {
       let id = c.id("thing")
       c.box(w=Px(100.0), h=Px(40.0), id~, fn() {  }) |> ignore
-      if c.clicked(id) {
-        clicks.push("click")
-      }
-      if c.double_clicked(id) {
-        clicks.push("double")
-      }
+      c.on_press(id, fn() { clicks.push("click") })
+      c.on_double_press(id, fn() { clicks.push("double") })
     },
     w=400.0,
     h=300.0,
@@ -733,7 +729,8 @@ test "desktop: two clicks on the same thing within double_click_ms are a double 
   )
   t.tap(20.0, 20.0)
   t.tap(20.0, 20.0)
-  assert_eq(clicks, ["click", "click", "double"])
+  // (the second of the two its double's, in place of a click's)
+  assert_eq(clicks, ["click", "double"])
   clicks.clear()
   t.run_for(@ui.double_click_ms + 100.0)
   t.tap(20.0, 20.0)

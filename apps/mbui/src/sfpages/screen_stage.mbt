@@ -381,18 +381,15 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
       c.box(style=ended_keys, flow=true, line_gap=@ui.Space::S2.px(), fn() {
-        if again_key(c, "screen-again/" + s.view, @sf.t("web-pages.screen.again")) {
-          c.tell("screen-again/" + s.view, fn() { s.open(s.src) })
-        }
-        if granting && again_key(c, "screen-grants/" + s.view, @sf.t("web-pages.screen.toGrants")) {
-          let station = s.station
-          c.tell("screen-grants/" + s.view, fn() {
-            @settings.station_parts[station] = "settings"
-            open_page(Setting(@settings.Route::Station(station)))
+        again_key(c, "screen-again/" + s.view, @sf.t("web-pages.screen.again"), on_press=fn() { s.open(s.src) })
+        if granting {
+          again_key(c, "screen-grants/" + s.view, @sf.t("web-pages.screen.toGrants"), on_press=fn() {
+            @settings.station_parts[s.station] = "settings"
+            open_page(Setting(@settings.Route::Station(s.station)))
           })
         }
-        if linux_setup && again_key(c, "screen-linux-setup/" + s.view, @sf.t("web-pages.screen.linuxSetup")) {
-          c.tell("screen-linux-setup/" + s.view, fn() {
+        if linux_setup {
+          again_key(c, "screen-linux-setup/" + s.view, @sf.t("web-pages.screen.linuxSetup"), on_press=fn() {
             @ui.open_url("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md") |> ignore
           })
         }
@@ -404,15 +401,18 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
 }
 
 ///|
-/// A capsule under what happened (重新打开, 前往权限设置), light on the screen's dark: whether it was pressed.
-fn again_key(c : @ui.Ctx, key : String, words : String) -> Bool {
+/// A capsule under what happened (重新打开, 前往权限设置), light on the screen's dark; `on_press` as it is pressed.
+fn again_key(c : @ui.Ctx, key : String, words : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let dark = c.theme().dark
   let i = c.box(style=if dark { again_solid } else { again_soft }, id~, fn() {
     c.text(words, style=if dark { again_solid_words } else { again_soft_words }) |> ignore
   })
   c.semantics(i, Button, id~, label=words, actions=[Activate])
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -445,17 +445,19 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
     // failed under them, as wide as its words (lines of their own)
     @sf.row_lines(c, fn() {
       c.box(style=drop_words, fn() { c.text(d.name.get(), style=drop_name) |> ignore }) |> ignore
-      if d.state.get() == "failed" && screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry")) {
-        s.retry(d)
+      if d.state.get() == "failed" {
+        screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry"), on_press=fn() {
+          s.retry(d)
+        })
       }
       let close = if d.state.get() == "done" || d.state.get() == "failed" {
         @sf.t("common.close")
       } else {
         @sf.t("common.cancel")
       }
-      if screen_row_key(c, "dismiss", "close", close) {
+      screen_row_key(c, "dismiss", "close", close, on_press=fn() {
         s.dismiss(d)
-      }
+      })
     }, fn() {
       match d.state.get() {
         "done" if d.install =>
@@ -466,16 +468,14 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
           // what is done with it there goes through the view: while driving it
           if s.driving() {
             c.box(style=drop_buttons, fn() {
-              if s.pastes() && soft_button(c, "paste-path", @sf.t("android-misc.screen.pastePath")) {
-                let path = d.path()
-                c.tell("screen-paste-path/\{d.serial}", fn() {
-                  s.paste(s.src, path, screen_act(c, @sf.t("android-misc.screen.pasteWhat")))
+              if s.pastes() {
+                soft_button(c, "paste-path", @sf.t("android-misc.screen.pastePath"), on_press=fn() {
+                  s.paste(s.src, d.path(), screen_act(c, @sf.t("android-misc.screen.pasteWhat")))
                 })
               }
-              if d.reveal && soft_button(c, "reveal", @sf.t("android-misc.screen.reveal")) {
-                let path = d.path()
-                c.tell("screen-reveal/\{d.serial}", fn() {
-                  s.reveal(s.src, path, screen_act(c, @sf.t("android-misc.screen.revealWhat")))
+              if d.reveal {
+                soft_button(c, "reveal", @sf.t("android-misc.screen.reveal"), on_press=fn() {
+                  s.reveal(s.src, d.path(), screen_act(c, @sf.t("android-misc.screen.revealWhat")))
                 })
               }
             })
@@ -519,22 +519,28 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
 
 ///|
 /// A small round key at a row's end (34, its icon 16 muted: DriveScreen's).
-fn screen_row_key(c : @ui.Ctx, key : String, icon : String, label : String) -> Bool {
+fn screen_row_key(c : @ui.Ctx, key : String, icon : String, label : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=row_key_round, id~, fn() {
     @sf.icon(c, icon, size=drop_key_icon, color=c.color(Muted)) |> ignore
   })
   c.semantics(i, Button, id~, label~, actions=[Activate])
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
 /// A button that is not the main one (primary false: the chip's ground, its words in the ink).
-fn soft_button(c : @ui.Ctx, key : String, label : String) -> Bool {
+fn soft_button(c : @ui.Ctx, key : String, label : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=soft_button_box, id~, keep=true, fn() { c.text(label, style=soft_button_words) |> ignore })
   c.semantics(i, Button, id~, label~, actions=[Activate])
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 // ── the gestures ─────────────────────────────────────────────────────────

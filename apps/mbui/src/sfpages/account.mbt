@@ -161,28 +161,30 @@ fn own_face(c : @ui.Ctx, core : Core, sub : String, email : String, name : Strin
     |> ignore
   })
   |> ignore
-  if c.clicked(id) && !busy && !picking {
-    if !own_picture_of(core, sub) {
-      pick_own_picture(core, sub)
-    } else {
-      @sf.menu(
-        [
-          Some(@sf.menu_item_of(@sf.t("android-settings.me.picture"), icon="photo", fn() { pick_own_picture(core, sub) })),
-          Some(
-            @sf.menu_item_of(@sf.t("android-settings.me.pictureDefault"), icon="user", fn() {
-              @settings.act(
-                core,
-                @sf.t("android-settings.me.pictureDefaultWhat"),
-                "account.removePicture",
-                obj([("account", str(sub))]),
-                done=@sf.t("android-settings.me.pictureDefaultSet"),
-              )
-            }),
-          ),
-        ],
-        from=Of(id),
-      )
-    }
+  if !busy && !picking {
+    c.on_press(id, fn() {
+      if !own_picture_of(core, sub) {
+        pick_own_picture(core, sub)
+      } else {
+        @sf.menu(
+          [
+            Some(@sf.menu_item_of(@sf.t("android-settings.me.picture"), icon="photo", fn() { pick_own_picture(core, sub) })),
+            Some(
+              @sf.menu_item_of(@sf.t("android-settings.me.pictureDefault"), icon="user", fn() {
+                @settings.act(
+                  core,
+                  @sf.t("android-settings.me.pictureDefaultWhat"),
+                  "account.removePicture",
+                  obj([("account", str(sub))]),
+                  done=@sf.t("android-settings.me.pictureDefaultSet"),
+                )
+              }),
+            ),
+          ],
+          from=Of(id),
+        )
+      }
+    })
   }
 }
 

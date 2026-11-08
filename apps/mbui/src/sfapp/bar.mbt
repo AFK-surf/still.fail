@@ -2567,10 +2567,10 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
         None => ()
       }
       // settings at the right edge, as at Home's
-      if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
+      nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings"), on_press=fn() {
         @sfbase.history_push()
         app.nav.push(Settings)
-      }
+      })
     })
     |> ignore
   })

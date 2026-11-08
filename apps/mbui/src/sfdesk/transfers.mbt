@@ -180,9 +180,9 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let (n, percent, failed) = all.going()
   let ring = if n > 0 { Some(percent.to_double() / 100.0) } else { None }
   let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
-  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~) {
+  @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~, on_press=fn() {
     ftransfers.open.set(!ftransfers.open.get())
-  }
+  })
   transfers_list(c, src, ws, id, go, false)
 }
 

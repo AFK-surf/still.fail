@@ -138,8 +138,10 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
           })
           c.semantics(b, Button, id~, label=name, selected=on)
-          if c.clicked(id) && !on {
-            (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+          if !on {
+            c.on_press(id, fn() {
+              (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+            })
           }
         }
       })

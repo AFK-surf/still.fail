@@ -176,10 +176,10 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
         }
       },
       fn() {
-        if wh_link(c, "history/profile", @sf.t("web-pages.chat.profileDetails")) {
+        wh_link(c, "history/profile", @sf.t("web-pages.chat.profileDetails"), on_press=fn() {
           @sfbase.history_push()
           app.nav.push(Setting(@settings.Route::Profile(station, text(s, "profile"))))
-        }
+        })
       },
     )
     // the station it runs on, what runs low on it at its end
@@ -228,9 +228,10 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
         },
         fn() {
           @settings.doing_mark(c, busy, failed, inline=true)
-          if wh_link(c, "history/context", @sf.t("web-pages.chat.contextManage")) {
-            @sfpages.open_context_actions(src, station, key, s, Of(c.id("history/context")))
-          }
+          let from = c.id("history/context")
+          wh_link(c, "history/context", @sf.t("web-pages.chat.contextManage"), on_press=fn() {
+            @sfpages.open_context_actions(src, station, key, s, Of(from))
+          })
         },
       )
     }
@@ -245,16 +246,18 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
 fn wh_evict(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let on = [("station", station), ("key", key)]
   let evicting = core_doing(src, ["session.evict"], on)
-  if wh_link(c, "history/evict", @sf.t("web-pages.chat.evict")) && !evicting {
-    act(
-      src,
-      @sf.t("web-pages.chat.evict"),
-      "",
-      "session.evict",
-      { "station": Json::string(station), "key": Json::string(key) },
-      done=@sf.t("web-pages.chat.evicted"),
-    )
-  }
+  wh_link(c, "history/evict", @sf.t("web-pages.chat.evict"), on_press=fn() {
+    if !evicting {
+      act(
+        src,
+        @sf.t("web-pages.chat.evict"),
+        "",
+        "session.evict",
+        { "station": Json::string(station), "key": Json::string(key) },
+        done=@sf.t("web-pages.chat.evicted"),
+      )
+    }
+  })
   @settings.doing_mark(c, evicting, core_failed(src, ["session.evict"], on), inline=true)
 }
 
@@ -299,10 +302,10 @@ fn wh_transcript(c : @ui.Ctx, src : Source, station : String, key : String, me :
           @sf.tip(c, "history/transcript", words, path)
         },
         fn() {
-          if wh_link(c, "history/copy-path", @sf.t("web-pages.chat.copyPath")) {
+          wh_link(c, "history/copy-path", @sf.t("web-pages.chat.copyPath"), on_press=fn() {
             c.copy_text(path)
             say(c, @sf.t("web-main.chat.transcriptCopied"))
-          }
+          })
         },
       )
     }
@@ -322,14 +325,17 @@ fn wh_line(c : @ui.Ctx, mark : () -> Unit, words : () -> Unit, end : () -> Unit)
 }
 
 ///|
-/// A link of the details (detailLink): its words, underlined on hover. True on the frame after a press.
-fn wh_link(c : @ui.Ctx, key : String, words : String) -> Bool {
+/// A link of the details (detailLink): its words, underlined on hover. `on_press` as it is pressed.
+fn wh_link(c : @ui.Ctx, key : String, words : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(id~, style=wh_link_box, fn() {
     c.text(words, style=if c.lit(id) { wh_link_hot } else { wh_dot }) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|

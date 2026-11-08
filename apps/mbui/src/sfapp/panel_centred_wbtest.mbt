@@ -18,9 +18,9 @@ test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot
     let h = if kind == "tall 500" { 500.0 } else { 800.0 }
     let t = menu_tester(1280.0, h, 0)
     let foot = fn(c : @ui.Ctx, close : () -> Unit) {
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     }
     match kind {
       "plain" => @sf.panel("面板", panel_test_body([]), from=Unanchored)
@@ -113,9 +113,9 @@ test "panel centred, 大屏 keyboard and mouse: untitled saying something; what 
     from=Unanchored,
     foot=fn(c, close) {
       c.box(style=@sf.panel_words_in(), fn() { c.text("脚注", style=@sf.paragraph) |> ignore }) |> ignore
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     },
   )
   t.run_for(@ui.move_most_ms)

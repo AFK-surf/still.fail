@@ -29,9 +29,9 @@ test "panel fits, 大屏 keyboard and mouse: as wide as its words as they change
           fits=true,
           w~,
           foot=fn(c, close) {
-            if @sf.button(c, "好的", key="ok34", tone=Primary) {
+            @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
               close()
-            }
+            }) |> ignore
           },
         )
       _ =>
@@ -42,9 +42,9 @@ test "panel fits, 大屏 keyboard and mouse: as wide as its words as they change
           fits=true,
           w~,
           head_end=fn(c) {
-            if @sf.button(c, "尾", key="end34", tone=Primary) {
+            @sf.button(c, "尾", key="end34", tone=Primary, on_press=fn() {
               ()
-            }
+            }) |> ignore
           },
         )
     }

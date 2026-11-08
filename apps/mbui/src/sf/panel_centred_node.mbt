@@ -107,11 +107,11 @@ fn panel_centred_node(
           @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
             let held = c.box(style=dialog_close_row, fn() {
               c.box(style=dialog_close_corner(), fn() {
-                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
                   // (its field let go of first, as the old frame has it: field_let_go)
                   field_let_go(keyed)
                   cancel()
-                }
+                }) |> ignore
               })
               |> ignore
             })
@@ -152,11 +152,11 @@ fn panel_centred_node(
                   }
                   if x.title_row is None {
                     c.box(style=dialog_close_at(), fn() {
-                      if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                      icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
                         // (its field let go of first, as the old frame has it: field_let_go)
                         field_let_go(keyed)
                         cancel()
-                      }
+                      }) |> ignore
                     })
                     |> ignore
                   }
@@ -309,9 +309,9 @@ fn panel_centred_node(
           @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
             let held = c.box(style=dialog_close_row, fn() {
               c.box(style=dialog_close_corner(), fn() {
-                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close")) {
+                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=t("common.close"), on_press=fn() {
                   cancel()
-                }
+                }) |> ignore
               })
               |> ignore
             })

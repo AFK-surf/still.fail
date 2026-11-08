@@ -225,7 +225,7 @@ fn create_app_steps(c : @ui.Ctx, core : Core, station : String, name : String) -
   @sf.steps(c, [
     fn() {
       c.text(@sf.t("web-main.slack.step.create", args=[("app", "still.fail"), ("name", named)]), style=@sf.step_words) |> ignore
-      if @sf.button(c, @sf.t("web-main.slack.create"), key="slack-create/" + station, icon="external", busy=opening) {
+      @sf.button(c, @sf.t("web-main.slack.create"), key="slack-create/" + station, icon="external", busy=opening, on_press=fn() {
         @settings.act(core, @sf.t("web-main.slack.create"), "slack.createAppUrl", obj([("station", str(station)), ("name", str(named))]), then=fn(
           v,
         ) {
@@ -234,7 +234,7 @@ fn create_app_steps(c : @ui.Ctx, core : Core, station : String, name : String) -
             None => ()
           }
         })
-      }
+      }) |> ignore
     },
     fn() { c.text(@sf.t("web-main.slack.step.appToken"), style=@sf.step_words) |> ignore },
     fn() { c.text(@sf.t("web-main.slack.step.install"), style=@sf.step_words) |> ignore },

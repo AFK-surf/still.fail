@@ -60,10 +60,10 @@ pub fn open_xshare(src : Source, r : ChatRef, thread : Double?, from~ : @sf.Anch
     description=@sf.t("web-pages.chat.xshare.lead"),
     foot=fn(c, close) {
       // (not before what it is shared with now is read: 完成 would share it with none)
-      if @sf.button(c, @sf.t("common.done"), key="xshare/done", tone=Primary, disabled=!xsharing.read) {
+      @sf.button(c, @sf.t("common.done"), key="xshare/done", tone=Primary, disabled=!xsharing.read, on_press=fn() {
         xshare_done(src, r, thread)
         close()
-      }
+      }) |> ignore
     },
   )
 }
@@ -100,13 +100,13 @@ fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       let lead = fn(c : @ui.Ctx) {
         @sf.workspace_badge(c, name, text(Some(p), "emoji"), text(Some(p), "icon"), xshare_mark)
       }
-      if @sf.check_row(c, "xshare/" + ws, name, on, lead~) != on {
-        if on {
-          xsharing.ticked.remove(ws)
-        } else {
+      @sf.check_row(c, "xshare/" + ws, name, on, lead~, on_change=fn(now) {
+        if now {
           xsharing.ticked[ws] = true
+        } else {
+          xsharing.ticked.remove(ws)
         }
-      }
+      })
     }
   })
   |> ignore

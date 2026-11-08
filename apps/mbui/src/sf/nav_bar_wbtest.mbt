@@ -9,9 +9,9 @@ test "back whose word has not the room: the chevron alone, the word not cut, the
       begin(c) |> ignore
       c.with_theme(ui_theme(), fn() {
         c.box(style=nav_back_test_room, fn() {
-          if nav_back(c, "back", "A folder with a long name", max_w=room.val) {
+          nav_back(c, "back", "A folder with a long name", max_w=room.val, on_press=fn() {
             went.val = went.val + 1
-          }
+          })
         })
         |> ignore
       })

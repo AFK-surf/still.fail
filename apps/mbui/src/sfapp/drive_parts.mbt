@@ -15,15 +15,15 @@ fn dv_reset() -> Unit {
 
 ///|
 /// A page's compact bar: back and where to, the title in the middle, what it does at the right; no
-/// line under it. True on the frame after back was tapped.
-fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit) -> Bool {
-  @sf.nav_bar(c, "dv-nav-back", back, title, trailing~, back_max=dmax(80.0, c.width / 2.0 - 120.0), bg=@sf.theme().p.bg, top=status_top())
+/// line under it; `on_press` as back is tapped.
+fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit, on_press~ : () -> Unit) -> Unit {
+  @sf.nav_bar(c, "dv-nav-back", back, title, trailing~, back_max=dmax(80.0, c.width / 2.0 - 120.0), bg=@sf.theme().p.bg, top=status_top(), on_press~)
 }
 
 ///|
 /// A round button in a bar, 34 across, the icon alone (18 unless said).
-fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String) -> Bool {
-  nav_button(c, icon, size, key~, said?)
+fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String, on_press~ : () -> Unit) -> Unit {
+  nav_button(c, icon, size, key~, said?, on_press~)
 }
 
 ///|

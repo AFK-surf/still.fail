@@ -26,8 +26,9 @@ fn top_bar(
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       match view {
-        Some(v) if v.stations > 0 =>
-          if nav_button(
+        Some(v) if v.stations > 0 => {
+          let from = c.id("home-filter")
+            nav_button(
               c,
               "filter",
               20.0,
@@ -47,9 +48,11 @@ fn top_bar(
                   ),
                 ),
               ]),
-            ) {
-            @sfpages.filter_menu(Of(c.id("home-filter")), filter, fn(f) { home_filter_go(src, w, f) })
-          }
+              on_press=fn() {
+                @sfpages.filter_menu(Of(from), filter, fn(f) { home_filter_go(src, w, f) })
+              },
+            )
+        }
         _ => ()
       }
       // Catching up and transfers stay beside the filter.
@@ -62,9 +65,14 @@ fn top_bar(
       c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JEnd, fn() {
         let wid = c.id("home-workspace")
         // (the fixture's home-sheet: opened by it, as the app starts)
-        if c.clicked(wid) || home_sheet_at_start.val {
+        let go = fn() {
           home_sheet_at_start.val = false
           @sfpages.open_workspaces(src, Of(wid))
+        }
+        c.on_press(wid, go)
+        // (asked from elsewhere: done as it is seen)
+        if home_sheet_at_start.val {
+          go()
         }
         c.box(dir=Row, h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
           @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
@@ -86,10 +94,10 @@ fn top_bar(
           }
         })
         |> ignore
-        if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
+        nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings"), on_press=fn() {
           @sfbase.history_push()
           app.nav.push(Settings)
-        }
+        })
       })
       |> ignore
     })
@@ -117,7 +125,7 @@ let nav_key_side : Double = 34.0
 
 ///|
 /// A round button in a bar: 34 across, the icon alone, no disc behind it (a ground while
-/// pressed). True on the frame after it was pressed.
+/// pressed). `on_press` as it is pressed.
 fn nav_button(
   c : @ui.Ctx,
   icon : String,
@@ -125,7 +133,8 @@ fn nav_button(
   key~ : String,
   color? : Int64,
   said? : String,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let b = c.box(
@@ -146,7 +155,10 @@ fn nav_button(
     Some(s) => c.semantics(b, Button, id~, label=s)
     None => ()
   }
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
