@@ -505,7 +505,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   }
   cycle_looks_begin()
   dr.tops.clear()
-  c.segs.clear()
+  c.segs_cut(0)
   text_runs.runs.clear()
   words_alpha.val = 1.0
   look_surface.val = (1.0, -1)

@@ -176,6 +176,7 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
   let spans = ride_spans.copy()
   ride_spans.clear()
   let segs = self.segs.copy()
+  let runs = seg_runs.copy()
   let tops = dr.tops.copy()
   let window_scale = self.scale
   for _, s in self.shots {
@@ -185,7 +186,7 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
     let n = self.nodes[s.node]
     self.inst = if s.inst.length() >= inst_size * 64 { s.inst } else { FixedArray::make(inst_size * 1024, 0.0) }
     self.ninst = 0
-    self.segs.clear()
+    self.segs_cut(0)
     dr.tops.clear()
     shooting.val = true
     shot_waits.val = false
@@ -211,8 +212,9 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
   self.ninst = ninst
   ride_spans.clear()
   ride_spans.append(spans)
-  self.segs.clear()
+  self.segs_cut(0)
   self.segs.append(segs)
+  seg_runs.append(runs)
   dr.tops.clear()
   dr.tops.append(tops)
 }

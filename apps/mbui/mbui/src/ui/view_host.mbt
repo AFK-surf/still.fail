@@ -203,8 +203,9 @@ priv struct ViewBlock {
   /// what each of its instances is checked as (inst_owners' `mark`: its shapes' pieces by the whole shape)
   marks : Array[Int]
   /// its shapes' pieces (scene.mbt's kind 12): put after the frame's as it is composed, its bands (kind 11) told
-  /// where they are then (their first piece counted from these)
+  /// where they are then (their first piece counted from these), and packed (Ctx::segs_put)
   segs : Array[Double]
+  pack : SegPack
   /// where its glass is among its instances (-1 none), whether it shares the last frosted capture, and whether glass was
   /// drawn solid as it was made (made again as that changes: the system asking for less transparency)
   glass_at : Int
@@ -1861,7 +1862,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     self.emit_lines(0.0, 0.0, c.lines, 1.0)
   }
   let segs = self.segs[seg_start:].to_array()
-  self.segs.truncate(seg_start)
+  self.segs_cut(seg_start)
   inst_owners.painting = was
   inst_owners.tree_painting = was_tree
   let len = (self.ninst - start) * inst_size
@@ -1894,6 +1895,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     cells,
     marks,
     segs,
+    pack: SegPack::new(),
     glass_at,
     shares: c.glass.map_or(false, fn(g) { g.shares_capture }),
     solid,
@@ -1928,7 +1930,7 @@ fn Ctx::view_blit(
   let n = block.length() / inst_size
   // (its shapes' pieces after the frame's: its bands told where they are now)
   let seg_base = (self.segs.length() / 4).to_double()
-  self.segs.append(made.segs)
+  self.segs_put(made.segs, made.pack)
   while (self.ninst + n) * inst_size > self.inst.length() {
     self.grow()
   }
