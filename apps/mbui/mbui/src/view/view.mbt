@@ -2067,6 +2067,68 @@ priv enum Prop {
 } derive(Eq, Hash)
 
 ///|
+/// Properties bound together on one node (View::binds_together): each read as its binding would be, all of them in one
+/// watch, and each set again only where it came out otherwise; one bound again alone (By or Is) is theirs no more, and
+/// the watch goes with the last of them.
+priv struct BoundTogether {
+  at : Int
+  gen : Int
+  parts : Array[BoundPart]
+  mut left : Int
+  mut stop : () -> Unit
+}
+
+///|
+priv struct BoundPart {
+  mut live : Bool
+  read : () -> Unit
+  apply : () -> Unit
+}
+
+///|
+// kept across runs: set only while View::binds_together runs what it binds, put back as it ends
+let binding_together : Ref[BoundTogether?] = Ref(None)
+
+///|
+/// What `f` binds By on this node (its properties, View::width and the like) bound together: as each would be alone
+/// (Tree::queued: run now, and in the frame after what any of them read changed, each set again only where it came out
+/// otherwise), but read in one watch, not one each: for a part that binds many of them from one look (a style). One
+/// bound again afterwards, alone, is that binding's and no more theirs. What `f` binds on another node is bound alone.
+pub fn View::binds_together(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(_) else { return self }
+  let g : BoundTogether = { at: self.at, gen: self.gen, parts: [], left: 0, stop: fn() {  } }
+  let was = binding_together.val
+  binding_together.val = Some(g)
+  f()
+  binding_together.val = was
+  if g.left == 0 {
+    return self
+  }
+  let stop = self.tree.queued(
+    fn() {
+      for p in g.parts {
+        if p.live {
+          (p.read)()
+        }
+      }
+    },
+    fn(_) {
+      for p in g.parts {
+        if p.live {
+          (p.apply)()
+        }
+      }
+    },
+  )
+  if g.left == 0 {
+    stop()
+  } else {
+    g.stop = stop
+  }
+  self
+}
+
+///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
 /// marking what its phase does again.
@@ -2101,6 +2163,45 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
+      // (said among others bound together on this node, View::binds_together: read in their one watch, set as it is)
+      match binding_together.val {
+        Some(g) if g.at == at && g.gen == gen => {
+          let now : Ref[T?] = Ref(None)
+          let part : BoundPart = {
+            live: true,
+            read: fn() { now.val = Some(f()) },
+            apply: fn() {
+              let n = tree.nodes[at]
+              if !n.live || n.gen != gen {
+                return
+              }
+              guard now.val is Some(v) else { return }
+              let work = tree.work
+              work.bound = work.bound + 1
+              if last.val == Some(v) {
+                work.same = work.same + 1
+                return
+              }
+              last.val = Some(v)
+              apply(v)
+              marked()
+            },
+          }
+          g.parts.push(part)
+          g.left = g.left + 1
+          n.props[prop] = fn() {
+            if part.live {
+              part.live = false
+              g.left = g.left - 1
+              if g.left == 0 {
+                (g.stop)()
+              }
+            }
+          }
+          return
+        }
+        _ => ()
+      }
     let stop = tree.queued(
       f,
       fn(v) {
