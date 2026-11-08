@@ -90,6 +90,7 @@ export type SessionStore = {
   /// The runtime sessions it ran in, the first first (optional: none known without it).
   runtimeSessions?(key: string): string[];
   runtimeSessionSources?(key: string): { id: string; runtime: string; profile: string | null }[];
+  runtimeSessionSource?(key: string, id: string): { id: string; runtime: string; profile: string | null } | null;
   setWaitFor(turn: string, what: string, watch: boolean): void;
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
@@ -1437,7 +1438,8 @@ export class SessionActor {
       log.info("session", "going on in a new runtime session on another account", { session: this.key, left: row.runtimeSessionId, profile: profile.id });
       agent = await driver.open(base, this.listener(generation));
       this.afresh = afresh;
-      const from = store.runtimeSessionSources?.(this.key).find((s) => s.id === row.runtimeSessionId);
+      const from = store.runtimeSessionSource ? store.runtimeSessionSource(this.key, row.runtimeSessionId!) ?? undefined
+        : store.runtimeSessionSources?.(this.key).find((s) => s.id === row.runtimeSessionId);
       if (from === undefined || from.runtime === row.runtime) resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
     } else if (row.runtimeSessionId) {
       try {
