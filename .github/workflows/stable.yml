@@ -316,6 +316,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
+      id-token: write # the clouds believe it as it tells them a release is out (scripts/release-told.sh)
     steps:
       - uses: actions/checkout@v5
         with: { persist-credentials: false, ref: '${{ needs.plan.outputs.sha }}' }
@@ -334,3 +335,10 @@ jobs:
             [ $i = 3 ] && exit 1; sleep 10
           done
           echo "Published stable 0.1.$RELEASE_VERSION from $RELEASE_REVISION" >> "$GITHUB_STEP_SUMMARY"
+      # (inline: this checkout is the release's revision, which can be older than scripts/release-told.sh)
+      - name: Tell the clouds the release is out (their stations and apps read their feeds then)
+        run: |
+          for origin in https://app.still.fail https://app.youdid.wtf; do
+            token=$(curl -fsS -H "authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$origin" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p') || token=""
+            if [ -n "$token" ] && curl -fsS --retry 3 -X POST -H "authorization: Bearer $token" "$origin/v1/releases/out" > /dev/null; then echo "$origin told"; else echo "$origin not told" >&2; fi
+          done

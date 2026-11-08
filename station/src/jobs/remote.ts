@@ -9,7 +9,7 @@
 // The records are the Rust's files, written the same way (remote/incoming/<id>/task.json, sessions/<id>/session.json,
 // outgoing/<id>.json, used/<id>.json), so either station reads what the other wrote. A task's station tells the one
 // that started it when the task ends or says something (`task.changed`), and that one then asks it what (`task.get`):
-// nothing asks about a task while nothing happens to it, but a task on a station from before that (asked every 5 s).
+// nothing asks about a task while nothing happens to it; one on a station from before that is not followed (its session is told).
 // What is retried (a request that did not get through, a closed session's stations every 60 s) and the hourly sweep
 // are Effect schedules; nothing here polls local state.
 import { createHash, randomBytes } from "node:crypto";
@@ -59,9 +59,6 @@ const PATCH_MAX = 64 * 1024 * 1024;
 export const IDLE_MS = 14 * 24 * 3600 * 1000;
 /// A source keeps asking an unreachable target to remove a closed session's directory this long.
 const CLOSE_FOR_MS = 30 * 24 * 3600 * 1000;
-/// How often a source asks about a task on a station from before `task.changed`, a closed session's stations, and a
-/// target sweeps.
-const WATCH_EVERY = "5 seconds";
 /// A request that did not get through (`task.changed` to the source, `task.get` after it) is asked again after 1 s,
 /// then twice as long each time, at most a minute apart.
 const AGAIN = Schedule.min([Schedule.exponential("1 second"), Schedule.spaced("1 minute")]);
@@ -296,10 +293,8 @@ export class Remote {
   /// waited behind another chat's sync of a big directory on a loaded station, past its caller's 30 s, and the callers
   /// asked again into the same line (2026-10-21, one test host for another: a 1 KB file synced in 61 s).
   private lanes = new Map<string, Promise<unknown>>();
-  /// The records followed now (outgoing tasks, closing sessions).
+  /// The closing sessions whose stations are being asked to remove their directories.
   private watching = new Set<string>();
-  /// The outgoing tasks followed, by the station (and workspace) they are on: asked about together.
-  private following = new Map<string, Set<string>>();
   /// The station is stopping: nothing more is followed.
   private stopped = false;
   /// Tasks asked about after their station said something (`check`), each with whether it said more meanwhile.
@@ -1724,11 +1719,9 @@ export class Remote {
     return join(this.root, "outgoing", `${hash([workspace, session, station, key])}.json`);
   }
 
-  /// Follows a task on a station from before `task.changed`: asks it every 5 s until it is over, telling its session
-  /// what it said on the way and how it ended. The tasks followed on one station are asked about in one request
-  /// (`task.gets`; one each of a station from before it). Across restarts (the record is a file).
-  private watch(path: string): void {
-    if (this.watching.has(path) || this.stopped) return;
+  /// A task on a station from before `task.changed`: that station never tells of it, and it is not asked about on a
+  /// timer; its session is told so, once.
+  private async unfollowed(path: string): Promise<void> {
     let entry: Json;
     try {
       entry = readJson(path);
@@ -1736,55 +1729,16 @@ export class Remote {
       return;
     }
     if (entry.delivered === true) return;
-    this.watching.add(path);
-    const station = text(entry, "station");
-    const workspace = field(entry, "workspace");
-    const group = JSON.stringify([station, workspace]);
-    const paths = this.following.get(group);
-    if (paths !== undefined) {
-      paths.add(path);
+    const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: that station is from before it tells how its tasks go, so this one is not followed. Update that station, or ask with get.`;
+    try {
+      await this.notify(text(entry, "session"), message);
+    } catch {
       return;
     }
-    this.follow(group, station, workspace, new Set([path]));
-  }
-
-  /// Asks `station` about the tasks of `paths` every WATCH_EVERY (the first time WATCH_EVERY after it was last asked)
-  /// until none is left to follow: over, or its station says it tells of it itself.
-  private follow(group: string, station: string, workspace: Json, paths: Set<string>): void {
-    this.following.set(group, paths);
-    let batched = true;
-    const round = Effect.promise(async (): Promise<boolean> => {
-      const asked = [...paths];
-      const outcomes = await this.round(station, workspace, asked, batched, () => (batched = false));
-      for (const [path, outcome, got] of outcomes) {
-        if (outcome === "over" || (outcome === "wait" && pushes(got))) {
-          paths.delete(path);
-          this.watching.delete(path);
-        }
-      }
-      // Delivered meanwhile, or its record gone: not asked about.
-      for (const path of asked) {
-        if (outcomes.some(([p]) => p === path)) continue;
-        paths.delete(path);
-        this.watching.delete(path);
-      }
-      return paths.size === 0;
-    });
-    void this.run(
-      Effect.sleep(WATCH_EVERY).pipe(
-        Effect.andThen(round),
-        Effect.repeat({ schedule: Schedule.spaced(WATCH_EVERY), until: (over) => over }),
-        Effect.ensuring(Effect.sync(() => {
-          if (this.following.get(group) === paths) this.following.delete(group);
-          // Followed after the last round had found none left: followed anew.
-          for (const path of [...paths]) {
-            this.watching.delete(path);
-            this.watch(path);
-          }
-        })),
-        Effect.asVoid,
-      ),
-    ).catch(() => undefined);
+    entry.delivered = true;
+    try {
+      writeJson(path, entry);
+    } catch {}
   }
 
   /// Asks `station` once about the tasks of `paths` (those still to be told), what it says settled: each one's outcome.
@@ -1802,12 +1756,12 @@ export class Remote {
     return Promise.all(entries.map(async ([path, entry], i): Promise<[string, Outcome, Got]> => [path, await this.settle(path, entry, got[i]), got[i]]));
   }
 
-  /// What follows an outcome: asked again soon or later, followed every 5 s on a station from before `task.changed`,
-  /// or nothing until its station says something.
+  /// What follows an outcome: asked again soon or later, nothing until its station says something, or (a station from
+  /// before `task.changed`) told it is not followed.
   private after(path: string, outcome: Outcome, got: Got): void {
     if (outcome === "again") this.check(path);
     else if (typeof outcome === "object") this.later(path, outcome.at);
-    else if (outcome === "wait" && !pushes(got)) this.watch(path);
+    else if (outcome === "wait" && !pushes(got)) void this.unfollowed(path);
   }
 
   /// Asks the station of the task started from here (`path`) about it now, and again (AGAIN) until it is reached and
@@ -1897,8 +1851,8 @@ export class Remote {
       }
     }
     const result = "result" in got ? got.result : null;
-    // Never started there (its prepare or start did not get through, and the agent went on with another key): followed
-    // for good, every 5 s, by the dozen on a loaded station (2026-10-21, the station's 90 to another host). Given up on, said once.
+    // Never started there (its prepare or start did not get through, and the agent went on with another key): asked
+    // about once more when it would have started, then given up on, said once.
     const unknown = "refused" in got && /unknown task/.test(got.refused);
     if (unknown || (result !== null && field(result, "job") === null)) {
       if (now - entry.since < GIVE_UP_MS) return { at: entry.since + GIVE_UP_MS };
@@ -2282,8 +2236,8 @@ export class Remote {
       }
       try {
         const answer = await this.ask(station, request);
-        // A station from before `task.changed` is asked about it every 5 s.
-        if (action === "start" && field(answer, "push") !== true) this.watch(this.outgoing(workspace, session, station, key));
+        // A station from before `task.changed` never tells of it: not followed, its session told so.
+        if (action === "start" && field(answer, "push") !== true) void this.unfollowed(this.outgoing(workspace, session, station, key));
         return synced === null ? answer : { ...answer, sync: synced };
       } catch (error) {
         // An uncertain start: asked about once its station would have started it (it says something before if it did).

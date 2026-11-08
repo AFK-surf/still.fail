@@ -13,6 +13,7 @@ import { version } from "../ops/version.ts";
 import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
 import { type Entry, asEntry, entryHash, fold } from "./lock.ts";
 import type { StationKey } from "./key.ts";
+import type { CloudSaid } from "./plane.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -20,18 +21,12 @@ import { wall } from "../ops/fibers.ts";
 const PING_MS = 30_000;
 /// How the cloud closes the socket of a station removed from its workspace.
 const CLOSE_REMOVED = 4004;
-const REMOVED_RETRY_MS = 600_000;
 const CONNECT_TIMEOUT_MS = 20_000;
 /// How long the roster the cloud said last counts as reached once its socket ended. A socket the cloud closes is back
 /// within seconds (one station's about every 20 minutes, 2026-10-29): those seconds are not shown as cut off. The roster itself
 /// is taken on past this (cloud/state.ts `peersCurrent`), until the station is removed.
 export const ROSTER_GRACE_MS = 60_000;
 
-/// REMOVED_RETRY, or STILLFAIL_REMOVED_RETRY_SECS (tests against a dev cloud).
-function removedRetry(): number {
-  const secs = Number(process.env.STILLFAIL_REMOVED_RETRY_SECS?.trim());
-  return Number.isFinite(secs) && secs > 0 ? secs * 1000 : REMOVED_RETRY_MS;
-}
 
 /// Whether the station is online at still.fail cloud, and since when or why not: <data>/run/presence.json, for
 /// `stillfail status`.
@@ -47,10 +42,12 @@ export type PresenceParts = {
   key: StationKey;
   up: SubscriptionRef.SubscriptionRef<boolean>;
   spec: () => ProviderSpec;
+  /// What the cloud tells the station of besides its state (plane.ts `told`).
+  said?: (event: CloudSaid) => void;
 };
 
 /// Keeps the socket for good (until interrupted): open while the station is up.
-export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(function* () {
+export const presence = ({ cloud, key, up, spec, said }: PresenceParts) => Effect.gen(function* () {
   const until = (wanted: boolean) => SubscriptionRef.changes(up).pipe(Stream.filter((now) => now === wanted), Stream.runHead);
   let backoff = 1000;
   for (;;) {
@@ -61,16 +58,16 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     const s = cloud.state;
     s.reload();
     if (s.removed()) {
-      const retry = removedRetry();
-      const every = retry === REMOVED_RETRY_MS ? "every 10 minutes" : `every ${retry / 1000} s`;
-      writePresence(s.data, false, `removed from its workspace; the cloud is asked again ${every}`);
-      // Enrolled again meanwhile (the file changes): ask at once.
-      yield* Effect.raceFirst(Effect.sleep(retry), cloud.changes.pipe(Stream.filter(() => !s.removed()), Stream.runHead));
+      // The cloud forgot the station as it removed it: only enrolling it again (by the station, which changes
+      // cloud.json) brings it back, and nothing else is asked until then.
+      writePresence(s.data, false, "removed from its workspace; enroll it again to bring it back");
+      yield* cloud.changes.pipe(Stream.filter(() => !s.removed()), Stream.runHead);
+      continue;
     }
     const started = yield* Clock.currentTimeMillis;
     const plane = spec();
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
-    const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
+    const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane, said), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
     lapse(s);
     const why = ended._tag === "Success" ? ended.success : failureText(ended.failure);
     writePresence(s.data, false, why);
@@ -103,9 +100,28 @@ export function lapse(s: CloudState, after: (ms: number, f: () => void) => unkno
   });
 }
 
+/// Whether `text` is something the cloud tells of besides the station's state (a release out, the models' catalog
+/// changed), told to `said`.
+function cloudSaid(text: string, said?: (event: CloudSaid) => void): boolean {
+  if (!text.startsWith('{"type":')) return false;
+  let event: unknown;
+  try {
+    event = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  const type = (event as { type?: unknown } | null)?.type;
+  if (type === "release") said?.({ type });
+  else if (type === "models") {
+    const etag = (event as { etag?: unknown }).etag;
+    said?.(typeof etag === "string" ? { type, etag } : { type });
+  } else return false;
+  return true;
+}
+
 /// One socket, signed at connect like enrollment: succeeds with why it ended when the cloud closes it, fails when it
 /// can't be had or breaks; closed when interrupted.
-const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
+const connect = (s: CloudState, key: StationKey, plane: ProviderSpec, said?: (event: CloudSaid) => void) =>
   Effect.callback<string, Error>((resume) => {
     const state = s.state!;
     const ts = nowSecs();
@@ -149,6 +165,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       if (binary) return;
       const text = data.toString();
       if (text === "pong") answered = true;
+      else if (cloudSaid(text, said)) return;
       else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
     });
     socket.on("close", (code, reason) => {

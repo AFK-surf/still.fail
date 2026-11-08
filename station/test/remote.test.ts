@@ -1014,21 +1014,11 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("a task waiting for the screen is not reported ended before it actually runs", async () => {
-    for (const older of [false, true]) {
+    {
       const jobsClock = testClock();
       let ticks = 0;
       const machine: Machine = { cpus: () => 8, ticks: () => [0, ticks += 1000], pressure: async () => "normal" };
       const { a, b, use, clock } = pair(undefined, { jobsClock, machine });
-      let polls = 0;
-      if (older) a.remote.attach(async (target, workspace, request) => {
-        if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
-        if (request.method === "task.gets") polls++;
-        const sent = overWire(request);
-        if (sent.method === "task.start") delete sent.push;
-        const answer = await answerPeer(b.remote, workspace ?? "ws", "A", sent);
-        if ("error" in answer) throw new Refused(answer.error);
-        return answer.result;
-      });
       const first = { station: "B", key: "first" };
       const second = { station: "B", key: "second" };
       await use("station_task", { ...first, action: "prepare", screen: true, command: "while [ ! -e proceed ]; do sleep 0.05; done" });
@@ -1048,7 +1038,6 @@ describe("remote", { concurrency: true }, () => {
         assert.equal(a.told.some(([, text]) => text.startsWith("Remote task second on ")), false);
       }
       assert.equal(existsSync(join(running.cwd, "second-ran")), false);
-      if (older) assert.ok(polls > 1, "a station without push was polled repeatedly while it waited");
       writeFileSync(join(running.cwd, "proceed"), "go");
       await until("the first task ends", () => b.store.getJob(running.id)!.state === "exited");
       await rounds("the second task runs", jobsClock, "5 seconds", () => b.store.getJob(waiting.job.id)!.state === "exited");
@@ -1086,19 +1075,28 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(a.told[1][1].includes("two"));
   });
 
-  test("the tasks followed on a station from before task.changed are asked about in one request", async () => {
+  test("a task on a station from before task.changed is not asked about on a timer: its session is told so, once", async () => {
     const clock = testClock();
     const s = station({ clock });
-    for (const key of ["k1", "k2", "k3"]) writeJson(s.remote.outgoing("ws", "s1", "old", key), { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+    const paths = ["k1", "k2"].map((key) => {
+      const path = s.remote.outgoing("ws", "s1", "old", key);
+      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      return path;
+    });
     const asked: Json[] = [];
     s.remote.attach(async (_station, _workspace, request) => {
       asked.push(request);
       return { tasks: request.tasks.map((t: Json) => ({ ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [] } })) };
     });
-    const all = (r: Json) => r.method === "task.gets" && r.tasks.length === 3;
-    await rounds("rounds asking about all three", clock, "5 seconds", () => asked.filter(all).length >= 3);
-    assert.deepEqual(asked.find(all)!.tasks.map((t: Json) => t.key).sort(), ["k1", "k2", "k3"]);
-    assert.ok(asked.every(all), "none on its own");
+    await rounds("both told", clock, "1 second", () => s.told.length === 2);
+    assert.ok(s.told.every(([session, text]) => session === "s1" && text.includes("is not followed")));
+    for (const path of paths) assert.equal(readJson(path).delivered, true);
+    const before = asked.length;
+    for (let i = 0; i < 6; i++) {
+      await Effect.runPromise(clock.adjust("10 seconds"));
+      await sleep(1);
+    }
+    assert.equal(asked.length, before, "not asked again");
   });
 
   test("a station from before task.gets is asked about each task on its own", async () => {
@@ -1138,7 +1136,7 @@ describe("remote", { concurrency: true }, () => {
       tasks: request.tasks.map((t: Json) =>
         t.key === "unknown" ? { ...t, error: "unknown task" }
         : t.key === "unstarted" ? { ...t, result: { key: t.key, job: null, log: null, notices: [] } }
-        : { ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [] } }),
+        : { ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [], push: true } }),
     }));
     await rounds("followed a while", clock, "1 minute", () => store.now() - readJson(unknown).since >= GIVE_UP_MS - 60_000);
     assert.equal(s.told.length, 0, "not before");

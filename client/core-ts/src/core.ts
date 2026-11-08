@@ -269,6 +269,7 @@ export class Core {
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
       asks.follow(inner.accounts);
+      inner.cloudSync.onRelease = () => asks.released();
       inner.adb = new Adb({
         host: inner.host,
         runner: inner.runner,
@@ -352,7 +353,9 @@ export class Core {
       inner.router.owners.push(fontFiles);
       handlers.fonts = (_i, call) => fontFiles.run((call as Extract<Call, { kind: "fonts" }>).call);
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
-      inner.router.owners.push(new AdminRelays(inner));
+      const adminRelays = new AdminRelays(inner);
+      inner.router.owners.push(adminRelays);
+      inner.cloudSync.onRelayLoad = (sub) => adminRelays.told(sub);
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;

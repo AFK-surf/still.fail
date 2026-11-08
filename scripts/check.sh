@@ -304,6 +304,13 @@ if part ts; then
     # animate, play, motionMs, glideShare) and does what it does as ever, its motion only taking no time. What loops
     # (motion.ts restingLoop), the phone's bar on its own springs and the official site's pointer play are all that ask.
     step "reduced motion as one clock" sh -c '! git grep -nE "reducedMotion\(\)|\.animate\(" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/src/mobile/Bar.tsx" ":!web/src/site/motion.ts"'
+    # No polling between still.fail's own parts (AGENTS.md): what a change adds to the core, the station or the cloud sets
+    # no timer that reads something of another part again; that part tells (an event, a stream). A timer that must be
+    # says on its line which it is with "timer:" (a heartbeat, a sample of this machine, a retry after a failure, a
+    # timeout or deadline, a debounce, an outside system that tells nothing). (`.every(` with a time: a list's is not one.)
+    added 'client/core-ts/src/*.ts' 'station/src/*.ts' 'cloud/src/*.ts' | grep -nE '\.every\(([A-Z0-9]|this\.timing)|setInterval\(|Schedule\.(spaced|fixed|exponential)|Effect\.repeat\(|Effect\.forever\(' \
+      | grep -v 'timer:' > "$tmp/timers" || true
+    step "no polling between still.fail's parts (in what this adds)" sh -c "! grep . '$tmp/timers'"
     # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
     # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
     # why with "own corner:".

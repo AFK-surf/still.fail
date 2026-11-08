@@ -133,6 +133,23 @@ export async function receiveIncidents(request: Request, env: Env): Promise<Resp
   return reply({ ok: true });
 }
 
+/** The workflows that put releases in the bucket (their feeds last): pipeline.yml's on main, stable.yml's. */
+const RELEASING = ["pipeline.yml", "stable.yml"];
+
+/**
+ * POST /v1/releases/out: a release's feeds were just put in the bucket (by one of RELEASING, believed by the OIDC token
+ * GitHub gives it on the default branch); every device and station connected is told, to read its feed again.
+ */
+export async function receiveReleased(request: Request, env: Env): Promise<Response> {
+  if (!env.STATUS_REPO) return reply({ error: "not_found" }, 404);
+  const token = bearerToken(request);
+  const claims = token ? await jwtVerify(token, githubKeys, { issuer: GITHUB_ACTIONS, audience: env.PUBLIC_ORIGIN }).then((v) => v.payload, () => null) : null;
+  const refs = RELEASING.map((file) => `${env.STATUS_REPO}/.github/workflows/${file}@refs/heads/main`);
+  if (!claims || claims.repository !== env.STATUS_REPO || !refs.includes(String(claims.workflow_ref))) return denied();
+  await env.DIRECTORY.getByName("primary").tellAll({ type: "release" }, { type: "release" });
+  return reply({ ok: true });
+}
+
 /** One round of checks (the cron's, a minute apart). `full`: which limits of its budget still.fail's own relay has reached (relay-load.ts). */
 export async function checkServices(env: Env, full: string[]): Promise<void> {
   const loads = env.RELAY_LOAD.getByName("primary");

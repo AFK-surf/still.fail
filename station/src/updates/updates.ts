@@ -85,9 +85,9 @@ export type SoftwareVersion = {
 
 /// How long things take, given so tests can be quick.
 export type Timing = {
-  /// How often what is out is read again, and while the station updates itself.
+  /// How often the runtimes' latest versions (other registries': npm, Devin's manifest) are read again. The station's
+  /// own release is read as still.fail cloud says one is out (`check`), never on a timer.
   every: number;
-  autoEvery: number;
   /// How long a runtime's update may take; the station's installer.
   runtimeLimit: number;
   stationLimit: number;
@@ -99,7 +99,6 @@ export type Timing = {
 
 export const TIMING: Timing = {
   every: 6 * 3600_000,
-  autoEvery: 10 * 60_000,
   runtimeLimit: 10 * 60_000,
   stationLimit: 20 * 60_000,
   doneShown: 10 * 60_000,
@@ -372,17 +371,19 @@ export class Updates {
   private schedule() {
     if (this.closed || !this.started) return;
     if (this.tick) void Effect.runFork(Fiber.interrupt(this.tick));
-    const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + (this.auto() ? this.timing.autoEvery : this.timing.every) - this.fibers.now());
+    const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + this.timing.every - this.fibers.now());
     this.tick = this.fibers.fork(Effect.sleep(due).pipe(Effect.andThen(Effect.promise(() => this.look()))));
   }
 
   private async look() {
     this.tick = null;
     try {
-      const every = this.auto() ? this.timing.autoEvery : this.timing.every;
-      // A reading under way (asked from a page) is waited for, not looked at again and again.
+      const every = this.timing.every;
+      // A reading under way (asked from a page) is waited for, not looked at again and again. The first reads the
+      // station's release too; those after, the runtimes'.
       if (this.checking) await this.checking;
-      else if (this.lastCheck === null || this.fibers.now() - this.lastCheck >= every) await this.check();
+      else if (this.lastCheck === null) await this.check();
+      else if (this.fibers.now() - this.lastCheck >= every) await this.check(false);
       this.autoUpdate("a newer release read");
     } catch (e) {
       // Not read: tried again when the next reading is due, not at once.
@@ -448,16 +449,18 @@ export class Updates {
   }
 
   /// Reads every version and what is out, now (once at a time: asked while a reading goes on, it is that reading);
-  /// a newer release of the station's channel is installed when it updates itself.
-  check(): Promise<void> {
+  /// a newer release of the station's channel is installed when it updates itself. `station`: its own release read
+  /// too (at the start, asked from a page, a release said to be out), else the runtimes' only.
+  check(station = true): Promise<void> {
     if (this.checking) return Promise.resolve();
     forgetShellPaths();
-    this.checking = this.read().finally(() => (this.checking = null));
+    this.checking = this.read(station).finally(() => (this.checking = null));
     return this.checking;
   }
 
-  private async read() {
-    let [station, ...runtimes] = await Promise.all([this.readStation(this.channel()), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
+  private async read(withStation: boolean) {
+    const held = this.items.station;
+    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
     for (const [kind, read] of [["station", station] as const, ...RUNTIMES.map((kind, i) => [kind, runtimes[i]!] as const)]) {

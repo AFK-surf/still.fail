@@ -33,7 +33,13 @@ export type ControlPlaneShape = {
   readonly releaseBase: () => string | null;
   /// Which member credentials the station takes now.
   readonly credential: () => Accepted;
+  /// What the provider tells the station on its presence socket besides its state, as it does: a release is out
+  /// (`release`), the models' catalog changed (`models`, with its ETag). Each is read again then, never on a timer.
+  readonly told: (what: CloudSaid["type"], f: (said: CloudSaid) => void) => void;
 };
+
+/// What still.fail cloud tells a station of (cloud/src/types.ts StationEvent).
+export type CloudSaid = { type: "release" } | { type: "models"; etag?: string };
 
 export type PlaneParts = {
   state: CloudState;
@@ -46,6 +52,15 @@ export type PlaneParts = {
 
 export function makeControlPlane({ state, changes, key, up, provider }: PlaneParts): ControlPlaneShape {
   const spec = () => specOf(provider ?? state.provider());
+  const listeners: [CloudSaid["type"], (said: CloudSaid) => void][] = [];
+  const said = (event: CloudSaid) => {
+    for (const [type, f] of listeners) {
+      if (type !== event.type) continue;
+      try {
+        f(event);
+      } catch {}
+    }
+  };
   type Telemetry = NonNullable<ProviderSpec["telemetry"]>;
   /// A batch of telemetry posted where `path` says, signed like the presence socket over its body's hash.
   const telemetry = (path: (t: Telemetry) => string | null, made: (station: string) => string) =>
@@ -69,7 +84,8 @@ export function makeControlPlane({ state, changes, key, up, provider }: PlanePar
     state,
     changes,
     spec,
-    presence: presence({ cloud: { state, changes }, key, up, spec }),
+    presence: presence({ cloud: { state, changes }, key, up, spec, said }),
+    told: (type, f) => void listeners.push([type, f]),
     notify: (notices, workspace) =>
       Effect.tryPromise({
         try: async () => {
