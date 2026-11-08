@@ -438,7 +438,7 @@ fn view_forget() -> Unit {
   old_around.val = false
   view_blocks.clear()
   view_shape_bands.clear()
-  ride_kept.clear()
+  ride_let_go_all()
   riding.val = None
   view_pictures.clear()
   inst_owners.tree_words.clear()
@@ -674,7 +674,7 @@ fn view_changes_taken(tree : @view.Tree) -> Unit {
   // (what was let go lets go of what it drew)
   for id in tree.take_removed() {
     view_blocks.remove(id)
-    ride_kept.remove(id)
+    ride_let_go(id)
     view_shape_bands.remove(id)
     view_pictures.remove(id)
     inst_owners.tree_words.remove(id)
@@ -1447,6 +1447,12 @@ fn Ctx::view_ring_take(self : Ctx, k : Int) -> (FixedArray[Double], (Int, (Doubl
   if k + 1 < n {
     self.inst.blit_to(self.inst, len=(n - k - 1) * inst_size, src_offset=(k + 1) * inst_size, dst_offset=k * inst_size)
   }
+  // (the headers after it one back with what they head)
+  for j in 0..<ride_spans.length() {
+    if ride_spans[j] > k {
+      ride_spans[j] = ride_spans[j] - 1
+    }
+  }
   if k < o.length() {
     o.remove(k) |> ignore
   }
@@ -1861,6 +1867,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   }
   inst_owners.tree_words[c.id] = view_words_set(c.words, c.words_look)
   self.ninst = start
+  self.spans_cut()
   glyphs_kept.val = was_kept
   {
     inst,

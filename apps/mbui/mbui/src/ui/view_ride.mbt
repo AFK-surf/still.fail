@@ -58,6 +58,9 @@ priv struct RideKept {
   /// the glyphs each of its nodes' blocks draws from (ViewBlock's `kept`): held in the atlas for it as a frame begins
   /// without its nodes gone through (view_glyphs_held)
   kept : Array[Array[(Int, Double, Double)]]
+  /// its instances as the host keeps them (@hostapi.group_set), drawn again by a header in their place (ride_head);
+  /// -1, copied each time
+  group : Int
 }
 
 ///|
@@ -90,6 +93,151 @@ priv struct Riding {
 /// What each row drew last, by its root (kept while it is drawn so: let go with the node, view_forget).
 // kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
 let ride_kept : ByNode[RideKept] = ByNode::new()
+
+///|
+/// The rows kept whose instances the host keeps (RideKept's `group`), by their group: what a header among the frame's
+/// stands for (Ctx::flat_from), drawn by the host itself where it keeps them.
+// kept across runs: let go with what kept them (ride_let_go), told to the host as the frame they were last in is
+// presented (ride_groups_told)
+let ride_groups : Map[Int, RideKept] = {}
+
+///|
+/// The groups made so far: a group's number is never another's, so the same header is never another's instances
+/// (frame_watch.mbt's insts_said, @damage's frames compared).
+// kept across runs: a group's number is never one a run before had
+let ride_groups_made : Ref[Int] = Ref(0)
+
+///|
+/// The groups let go since the last frame presented, told to the host after the next is (what that frame was compared
+/// with may hold them).
+// kept across runs: emptied as each frame is presented (ride_groups_told)
+let ride_groups_gone : Array[Int] = []
+
+///|
+/// Where the frame's instances hold a header (Ctx::ride_head), in order: the instance it is at, its group's after it
+/// up to its count in its room, unwritten.
+// kept across runs: emptied as a frame's instances are (Ctx::spans_cut), each drawn out where they are worked on
+let ride_spans : Array[Int] = []
+
+///|
+/// Whether the host keeps groups of instances (@hostapi.groups_here), a Tester's frames drawing them out as one would
+/// (Ctx::flat_from): asked once.
+// kept across runs: the host's, the same for the program's life
+let groups_host : Ref[Int] = Ref(-1)
+
+///|
+fn groups_on() -> Bool {
+  if fake.val is Some(_) {
+    return true
+  }
+  if groups_host.val < 0 {
+    groups_host.val = if @hostapi.groups_here() { 1 } else { 0 }
+  }
+  groups_host.val == 1
+}
+
+///|
+/// Row `id` kept as `k`, what it kept before let go.
+fn ride_keep(id : @view.NodeId, k : RideKept) -> Unit {
+  ride_let_go(id)
+  ride_kept[id] = k
+}
+
+///|
+/// What row `id` kept let go, its group with it.
+fn ride_let_go(id : @view.NodeId) -> Unit {
+  match ride_kept.get(id) {
+    Some(k) => {
+      if k.group >= 0 {
+        ride_groups.remove(k.group)
+        ride_groups_gone.push(k.group)
+      }
+      ride_kept.remove(id)
+    }
+    None => ()
+  }
+}
+
+///|
+/// All the rows kept let go (view_forget).
+fn ride_let_go_all() -> Unit {
+  for g, _ in ride_groups {
+    ride_groups_gone.push(g)
+  }
+  ride_groups.clear()
+  ride_kept.clear()
+}
+
+///|
+/// The frame presented: the groups let go before it told to the host, and to what compares frames.
+fn ride_groups_told() -> Unit {
+  if ride_groups_gone.is_empty() {
+    return
+  }
+  let real = fake.val is None
+  for g in ride_groups_gone {
+    presented.group_drop(g)
+    if real {
+      @hostapi.group_drop(g)
+    }
+  }
+  ride_groups_gone.clear()
+}
+
+///|
+/// Whether a row's instances (`n` in `inst`) can be kept by the host and drawn by a header: none worked on as the
+/// frame ends (a look's tag, slot 20 below 0; a native view's hole; a stream's picture, changing under the same
+/// numbers).
+fn ride_groupable(inst : FixedArray[Double], n : Int) -> Bool {
+  for i in 0..<n {
+    let b = i * inst_size
+    let t = inst[b + 20]
+    if t < 0.0 || inst[b + 5] == 9.0 || t >= @damage.stream_tex_base {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// The frame's instances from `i0` on drawn out where a header stands for a group's (Ctx::ride_head), as the host
+/// draws them: what works on them as they are finds them there.
+fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
+  while ride_spans.length() > 0 {
+    let at = ride_spans[ride_spans.length() - 1]
+    if at < i0 {
+      break
+    }
+    ride_spans.pop() |> ignore
+    let s = self.inst
+    let b = at * inst_size
+    let id = s[b + 12].to_int()
+    let first = s[b + 13].to_int()
+    let n = s[b + 14].to_int()
+    guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
+    ride_put(k, first, n, s, at, s[b], s[b + 1], s[b + 15])
+  }
+}
+
+///|
+/// The instance after instance `q` of `a` (one where an instance begins, as the frame's from its first): past the room
+/// a header there stands for (Ctx::ride_head).
+fn inst_after(a : FixedArray[Double], q : Int) -> Int {
+  let b = q * inst_size
+  if a[b + 5] == 13.0 {
+    q + a[b + 14].to_int()
+  } else {
+    q + 1
+  }
+}
+
+///|
+/// The headers among the frame's instances past where they end now let go (what was drawn after `ninst` dropped).
+fn Ctx::spans_cut(self : Ctx) -> Unit {
+  while ride_spans.length() > 0 && ride_spans[ride_spans.length() - 1] >= self.ninst {
+    ride_spans.pop() |> ignore
+  }
+}
 
 ///|
 /// The row being drawn now, as the tree is painted (none between paints).
@@ -211,12 +359,12 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   let side_y = ride_side(r.y0, r.y1, clip_stack[k + 1], clip_stack[k + 3])
   let n = self.ninst - r.k0
   if r.spoiled || (side_x != 0 && side_y != 0) {
-    ride_kept.remove(r.id)
+    ride_let_go(r.id)
     return
   }
   let e = ride_clip_at(k)
   if !ride_clip_square(e) {
-    ride_kept.remove(r.id)
+    ride_let_go(r.id)
     return
   }
   let inst = FixedArray::make(n * inst_size, 0.0)
@@ -247,7 +395,14 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   for j in (r.seg0 * 4)..<self.segs.length() {
     segs.push(self.segs[j])
   }
-  ride_kept[r.id] = {
+  // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends)
+  let group = if groups_on() && ride_groupable(inst, n) {
+    ride_groups_made.val = ride_groups_made.val + 1
+    ride_groups_made.val
+  } else {
+    -1
+  }
+  let kept : RideKept = {
     rev: r.rev,
     x: r.x,
     y: r.y,
@@ -270,6 +425,15 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     inside_y: side_y == 0,
     nodes: r.nodes,
     kept: r.kept,
+    group,
+  }
+  ride_keep(r.id, kept)
+  if group >= 0 {
+    ride_groups[group] = kept
+    if fake.val is None {
+      presented.group_set(group, inst, n)
+      @hostapi.group_set(group, inst, FixedArray::makei(n, fn(i) { moves[i].to_double() }), n)
+    }
   }
 }
 
@@ -417,7 +581,8 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
 
 ///|
 /// Row kept `k`'s instances `i0` until `i1` put after the frame's, moved by (dx, dy), their shapes' pieces where they
-/// are among the frame's now (`seg_by` on).
+/// are among the frame's now (`seg_by` on): where the host keeps its group, a header in their place (Ctx::ride_head),
+/// their room after it unwritten.
 fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy : Double, seg_by : Double) -> Unit {
   let n = i1 - i0
   guard n > 0 else { return }
@@ -425,8 +590,75 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
     self.grow()
   }
   let at = self.ninst
-  k.inst.blit_to(self.inst, len=n * inst_size, src_offset=i0 * inst_size, dst_offset=at * inst_size)
+  if k.group >= 0 && dr.mode == 0 && !shooting.val {
+    self.ride_head(k.group, i0, n, at, dx, dy, seg_by)
+  } else {
+    ride_put(k, i0, n, self.inst, at, dx, dy, seg_by)
+  }
+  if k.owned {
+    for i in 0..<n {
+      let q = at + i
+      inst_owned(q)
+      let (ow, cel, tre, mar) = k.owners[i0 + i]
+      inst_owners.owner[q] = ow
+      inst_owners.cell[q] = cel
+      inst_owners.tree[q] = tre
+      inst_owners.mark[q] = mar
+    }
+  }
+  self.ninst = at + n
+}
+
+///|
+/// A header at instance `at` (kind 13, scene.mbt): group `group`'s instances from `first`, `n` of them, moved by
+/// (dx, dy), their shapes' pieces `seg_by` on, drawn in its place and the room after it, as ride_put would write them.
+fn Ctx::ride_head(
+  self : Ctx,
+  group : Int,
+  first : Int,
+  n : Int,
+  at : Int,
+  dx : Double,
+  dy : Double,
+  seg_by : Double,
+) -> Unit {
   let s = self.inst
+  let b = at * inst_size
+  ride_head_blank.blit_to(s, len=inst_size, dst_offset=b)
+  s[b] = dx
+  s[b + 1] = dy
+  s[b + 5] = 13.0
+  s[b + 12] = group.to_double()
+  s[b + 13] = first.to_double()
+  s[b + 14] = n.to_double()
+  s[b + 15] = seg_by
+  ride_spans.push(at)
+  ride_heads.val = ride_heads.val + 1
+}
+
+///|
+/// How many headers were written (Ctx::ride_head): for a test.
+// kept across runs: only counts
+let ride_heads : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: never written
+let ride_head_blank : FixedArray[Double] = FixedArray::make(inst_size, 0.0)
+
+///|
+/// Row kept `k`'s instances from `i0`, `n` of them, written into `s` from instance `at`, moved by (dx, dy), their
+/// shapes' pieces `seg_by` on: what a header of its group stands for (the host's mb_groups_draw_out, groups.h).
+fn ride_put(
+  k : RideKept,
+  i0 : Int,
+  n : Int,
+  s : FixedArray[Double],
+  at : Int,
+  dx : Double,
+  dy : Double,
+  seg_by : Double,
+) -> Unit {
+  k.inst.blit_to(s, len=n * inst_size, src_offset=i0 * inst_size, dst_offset=at * inst_size)
   for i in 0..<n {
     let b = (at + i) * inst_size
     s.unsafe_set(b, s.unsafe_get(b) + dx)
@@ -451,18 +683,6 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
       }
     }
   }
-  if k.owned {
-    for i in 0..<n {
-      let q = at + i
-      inst_owned(q)
-      let (ow, cel, tre, mar) = k.owners[i0 + i]
-      inst_owners.owner[q] = ow
-      inst_owners.cell[q] = cel
-      inst_owners.tree[q] = tre
-      inst_owners.mark[q] = mar
-    }
-  }
-  self.ninst = at + n
 }
 
 ///|

@@ -860,7 +860,17 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
       // what of it differs from the frame presented before, the part a host that keeps its picture draws again
       //
       let t0 = h_now()
-      let parts = presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
+      let parts = presented.next(
+        buf,
+        count,
+        c.window_w,
+        c.window_h,
+        c.scale,
+        r,
+        gg,
+        b,
+        groups=!ride_spans.is_empty(),
+      )
       presented_ms.val = h_now() - t0
       if presented.telling() && presented.why() == 5 {
         h_log("DAMAGE whole, the part more than half: \{presented.told()}")
@@ -884,6 +894,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
       @hostapi.present(buf, count, r, gg, b)
     }
   }
+  ride_groups_told()
 }
 
 ///|

@@ -1657,8 +1657,10 @@ void mb_host_wake_after(double ms) {
   });
 }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
-  mb_render_present(buf, count, r, g, b);
+  mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,

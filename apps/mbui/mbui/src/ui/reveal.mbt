@@ -97,6 +97,7 @@ pub fn Ctx::reveal_from(self : Ctx, x : Double, y : Double, dark? : () -> Bool) 
     return
   }
   reveal_drop()
+  self.flat_from(0)
   // (the last frame's instances and their shapes' pieces, as it was painted: this frame is not painted yet)
   reveal.floats = n * inst_size
   reveal.insts = FixedArray::make(reveal.floats, 0.0)

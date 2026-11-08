@@ -933,6 +933,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   // (built into still by what kept it, nothing of that drawn: as a first frame's, from nothing, on as little room)
   self.inst = FixedArray::make(inst_size, 0.0)
   self.ninst = 0
+  self.spans_cut()
   self.count = 0
   self.cur = -1
   self.back = None

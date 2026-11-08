@@ -355,11 +355,13 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
 // Over another app (OverActivity: Native.overOther): what the app does not paint stays clear, the app under it shows.
 JNIEXPORT void JNICALL Java_dev_mbui_Native_overOther(JNIEnv *env, jclass c, jboolean on) { over_other = on ? 1 : 0; }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // the glyphs placed in the atlas as the frame was painted, uploaded before it is drawn (MBText.flush)
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_flush);
-  gl_present(buf, count, r, g, b);
+  gl_present((double *)mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 // (MBView.onDrawFrame, GL thread: only a native view's picture changed since the last frame)

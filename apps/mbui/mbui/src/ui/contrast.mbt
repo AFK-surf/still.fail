@@ -638,6 +638,7 @@ fn Ctx::contrast_where(self : Ctx, i : Int) -> String {
 /// under it, deeper than the one it lies on, is a cut through to that ground (round a dot over a picture, in the
 /// sidebar's colour), not a mark of its own.
 fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
+  self.flat_from(0)
   let a = self.inst
   let pictures = self.pictures()
   for n in inst_owners.own_colours {

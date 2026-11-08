@@ -161,6 +161,7 @@ fn Ctx::words_over_leaving_layer(self : Ctx, under : InstBy, over : InstBy) -> B
 ///|
 /// The pairs of nodes' words the frame just drawn shows one over the other, each once: their words, where they meet.
 fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool)] {
+  self.flat_from(0)
   let a = self.inst
   let ks : Array[Int] = []
   let rs : Array[(Double, Double, Double, Double)] = []

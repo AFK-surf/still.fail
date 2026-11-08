@@ -84,9 +84,13 @@ test "rows scrolled by whole pixels drawn as kept, moved: as each drawn anew the
   let t = ride_tester(at, third)
   for to in [20.0, 57.5, 150.0, 151.0] {
     let again = ride_drawn.val
+    let heads = ride_heads.val
     at.put(to)
     t.draw()
     assert_true(ride_drawn.val > again, msg="scrolled to \{to}: rows drawn as kept")
+    // (by a header of what the host keeps, drawn out as the paint ends as a host draws it)
+    assert_true(ride_heads.val > heads, msg="scrolled to \{to}: rows said by their groups' headers")
+    assert_true(ride_spans.is_empty(), msg="scrolled to \{to}: the Tester's frame drawn out")
     let kept = t.drawn_text()
     assert_eq(kept, ride_fresh(t, at, to), msg="scrolled to \{to}: as drawn anew")
   }
