@@ -182,9 +182,9 @@ fn face_row(
   if c.lit(c.id(rkey)) {
     fonts_pointed.val = if id == "" { "\u{1}" } else { id }
   }
-  if @sf.choice_row(c, rkey, on, name, body=fn() { face_words(c, rkey, name, face, status, bad) }) {
+  @sf.choice_row(c, rkey, on, name, body=fn() { face_words(c, rkey, name, face, status, bad) }, on_press=fn() {
     @settings.set_font(core, place, if id == "" { None } else { Some(id) })
-  }
+  }) |> ignore
 }
 
 ///|
@@ -268,10 +268,10 @@ fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : Str
             if c.lit(rid) {
               fonts_pointed.val = local_prefix + f
             }
-            if c.clicked(rid) {
+            c.on_press(rid, fn() {
               @settings.set_font(core, place, Some(local_prefix + f))
               local_open.val = false
-            }
+            })
             c.box(style=(if f == picked || c.lit(rid) { local_row_hot } else { local_row }).then(@sf.pick_high()), id=rid, fn() {
               c.text(f, style=local_name) |> ignore
               if f == picked {

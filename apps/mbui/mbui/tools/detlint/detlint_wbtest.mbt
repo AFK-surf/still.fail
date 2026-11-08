@@ -1350,6 +1350,29 @@ test "build-effect: what is handed on to a press's handler runs as it is pressed
 }
 
 ///|
+test "build-effect: a closure given to the Ctx's handler" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn send(src : Source) -> Unit {
+        #|  (src.call)("send", Json::null(), fn(_) {  })
+        #|}
+        #|fn view(c : @ui.Ctx, src : Source) -> Unit {
+        #|  c.on_press(1, fn() { send(src) })
+        #|  c.on_key(2, fn(_, _) { send(src); true })
+        #|  c.box(fn() { send(src) }) |> ignore
+        #|}
+        #|
+      ),
+    ),
+  ]
+  // what c.on_press / on_key is given runs as the press or the key comes; a box's children as it builds
+  assert_eq(lines(found(files, "build-effect", 1)), [8])
+}
+
+///|
 test "build-effect: a stream's callbacks are its events" {
   let files = [
     (

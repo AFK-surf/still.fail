@@ -145,9 +145,9 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     return
   }
   let (n, percent, failed) = all.going()
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     ftransfers.open.set(!ftransfers.open.get())
-  }
+  })
   rail_ground(
     c,
     id,
@@ -226,9 +226,11 @@ fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
 fn opened_title(c : @ui.Ctx, j : Json?, key : String, way : String?) -> Unit {
   let id = c.id(key)
   let there = opens(j)
-  if there && c.clicked(id) {
-    open_coming(j)
-  }
+  c.on_press(id, fn() {
+    if there {
+      open_coming(j)
+    }
+  })
   let b = c.box(style=ftransfer_title, id=if there { id } else { 0 }, fn() {
     c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
     match way {
@@ -317,15 +319,21 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") && @sf.panel_icon_button(c, "files/transfer/cancel/" + tid, "close", @sf.t("web-pages.files.cancelTransfer")) {
-        call("drive.transfer.cancel")
+      if flag(j, "active") {
+        @sf.panel_icon_button(c, "files/transfer/cancel/" + tid, "close", @sf.t("web-pages.files.cancelTransfer"), on_press=fn() {
+          call("drive.transfer.cancel")
+        }) |> ignore
       }
-      if state == "failed" && @sf.panel_icon_button(c, "files/transfer/retry/" + tid, "retry", @sf.t("web-pages.drive.retry")) {
-        call("drive.transfer.retry")
+      if state == "failed" {
+        @sf.panel_icon_button(c, "files/transfer/retry/" + tid, "retry", @sf.t("web-pages.drive.retry"), on_press=fn() {
+          call("drive.transfer.retry")
+        }) |> ignore
       }
-      if state == "done" && @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show")) {
-        ftransfers.open.set(false)
-        go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
+      if state == "done" {
+        @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show"), on_press=fn() {
+          ftransfers.open.set(false)
+          go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
+        }) |> ignore
       }
     })
     |> ignore

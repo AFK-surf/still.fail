@@ -52,9 +52,9 @@ pub fn work_mark(
   }
   let (whole, least) = (c.id("history/work-mark"), c.id("history/work-mark/least"))
   for id in [whole, least] {
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       open_work(src, params, id)
-    }
+    })
   }
   let counts = text(card, "workMarkShort")
   let count = text(card, "workMarkCount")

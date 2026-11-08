@@ -340,9 +340,9 @@ pub fn jobs_popover(
   |> ignore
   c.box(style=jobs_foot, fn() {
     let all = c.id("jobs-pop/all")
-    if c.clicked(all) {
+    c.on_press(all, fn() {
       tab("")
-    }
+    })
     let words = text(view, "allText") + " · " + @sf.t("web-main.jobs.inPanel")
     let b = c.box(style=jobs_all, id=all, fn() {
       c.text(words, style=if c.lit(all) { jobs_all_hot } else { jobs_all_words }) |> ignore
@@ -459,9 +459,11 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       if running {
         let (stopping, failed) = job_stopping(src, station, job)
         let sid = c.id("jobs-tab/stop")
-        if !stopping && c.clicked(sid) {
-          job_stop(src, station, job)
-        }
+        c.on_press(sid, fn() {
+          if !stopping {
+            job_stop(src, station, job)
+          }
+        })
         let b = c.box(style=job_detail_stop, id=sid, fn() {
           if stopping || failed is Some(_) {
             @settings.doing_mark(c, stopping, failed)

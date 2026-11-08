@@ -394,9 +394,9 @@ fn attention_item(
 ) -> Unit {
   let id = c.id(key)
   let drop = c.id(key + "/dismiss")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     go()
-  }
+  })
   let hover = c.lit(id) || c.lit(drop)
   let alert = kind == "alert"
   let b = c.box(style=if hover { att_item_on } else { att_item }, id~, fn() {
@@ -418,9 +418,9 @@ fn attention_item(
     match dismiss {
       // (always to a finger, which hovers over nothing)
       Some(d) if @sf.pointed_or_finger(c, hover) => {
-        if c.clicked(drop) {
+        c.on_press(drop, fn() {
           d()
-        }
+        })
         let on = c.lit(drop)
         let x = c.box(style=if on { att_dismiss_on } else { att_dismiss }, id=drop, fn() {
           c.text(@sf.t("web-main.attention.dismiss"), style=if on { att_dismiss_on_words } else { att_dismiss_words })

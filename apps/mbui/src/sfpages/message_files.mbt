@@ -437,13 +437,13 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // could not be had for want of its station (not its station having none): pressed, asked again
   let id = @sfbase.file_image_id(here.station, owner, stored_name(a.path))
   let unreached = p.unreached
-  if c.clicked(open) {
+  c.on_press(open, fn() {
     if unreached {
       src.images.again(here.station)
     } else {
       open_file(here, a, at~)
     }
-  }
+  })
   let thumb = @sfbase.thumb_place(here.station + "/" + owner + "/" + a.path, here.station, here.session, at)
   let downloading = download_of(src, here.station, owner, stored_name(a.path))
   file_menu(c, open, key, quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])

@@ -209,9 +209,9 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
                   c.text(dir_note(one, false), style=preset_dir_note) |> ignore
                 })
                 |> ignore
-                if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
+                @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove"), on_press=fn() {
                   e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
-                }
+                }) |> ignore
               })
               |> ignore
             }
@@ -235,7 +235,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
     },
     fn(c, shut) {
       if id != "" {
-        if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger) {
+        @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger, on_press=fn() {
           confirm(
             @sf.t("web-main.preset.deleteTitle", args=[("name", name.text())]),
             @sf.t("web-main.preset.deleteBody"),
@@ -246,16 +246,16 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
               (src.call)("preset.delete", Json::object({ "station": Json::string(address), "id": Json::string(id) }), fn(_) {  })
             },
           )
-        }
+        }) |> ignore
       }
       c.spacer()
-      if @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost, on_press=fn() {
         c.blur()
         shut()
-      }
+      }) |> ignore
       let ready = e.dirs.length() > 0 && name.text().trim(chars=" \n").to_owned() != ""
       let go = if id == "" { @sf.t("web-main.preset.create") } else { @sf.t("common.save") }
-      if @sf.button(c, go, key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
+      @sf.button(c, go, key=key("save"), tone=Primary, busy=e.saving, disabled=!ready, on_press=fn() {
         e.saving = true
         e.error = ""
         c.blur()
@@ -296,7 +296,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
             Err(err) => e.error = text(Some(err), "message")
           }
         })
-      }
+      }) |> ignore
     },
   )
 }
@@ -336,10 +336,10 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
         |> ignore
       })
       c.semantics(b, Button, id~, label=name)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         e.dirs.push(o)
         @sf.panel_back() |> ignore
-      }
+      })
     }
     // (last, its folder where the others' marks stand)
     let id = c.id(key("browse"))
@@ -382,7 +382,7 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
     foot=fn(c, _) {
       c.spacer()
       let here = (@sfbase.folder_browse_here.val)()
-      if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
+      @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "", on_press=fn() {
         let d = if e.browse_station == address {
           Json::object({ "path": Json::string(here) })
         } else {
@@ -402,7 +402,7 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
           e.dirs.push(d)
         }
         @sf.panel_back(to=1) |> ignore
-      }
+      }) |> ignore
     },
     left=fn() { (@sfbase.folder_browse_close.val)() },
   )

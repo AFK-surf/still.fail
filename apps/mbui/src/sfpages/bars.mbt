@@ -161,10 +161,10 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
         if !only {
           c.layer(fn() {
             let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
-            if c.clicked(rid) {
+            c.on_press(rid, fn() {
               let (now, ncur) = (core.bars)()
               @settings.save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
-            }
+            })
             // in the slot's top right corner, concentric with it (so with the card's, the last slot's corner in the
             // card's), however wide a slot is
             let said = @sf.t("android-misc.bar.remove", args=[("name", bar_place_name(key))])
@@ -187,9 +187,9 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
     }
     if set.length() < @settings.bar_size {
       let aid = c.id("bar-add/" + i.to_string())
-      if c.clicked(aid) {
+      c.on_press(aid, fn() {
         add(Of(aid))
-      }
+      })
       c.box(style=bar_face, id=aid, fn() {
         c.box(style=bar_face_words, fn() {
           c.box(style=bar_add_ring, fn() {

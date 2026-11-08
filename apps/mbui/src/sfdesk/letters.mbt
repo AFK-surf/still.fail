@@ -27,9 +27,9 @@ fn letters_list_of(c : @ui.Ctx, key : String, chats : Array[Json]) -> Unit {
       let cv = Some(ch)
       let ck = text(cv, "key")
       let id = c.id("letters/row/" + ck)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         letters_opened[key] = ck
-      }
+      })
       let b = c.box(style=letters_row, id~, fn() {
         c.box(style=letters_row_head, fn() {
           c.box(style=letters_grow, fn() { c.text(text(cv, "title"), style=letters_row_title, allow_ellipsis=true) |> ignore })
@@ -89,9 +89,9 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
       rows.push(fn() {
         // back to the list, and its title (which opens that chat)
         c.box(style=letters_head, fn() {
-          if @sf.icon_button(c, "arrow-left", key="letters/back", round=true, label=@sf.t("web-main.letters.back")) {
+          @sf.icon_button(c, "arrow-left", key="letters/back", round=true, label=@sf.t("web-main.letters.back"), on_press=fn() {
             letters_opened.remove(key)
-          }
+          }) |> ignore
           let title = text(cv, "title")
           let to = text(cv, "link")
           if to == "" {

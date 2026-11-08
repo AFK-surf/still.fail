@@ -115,9 +115,9 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           c.text(name, style=if on { groups_name_on } else if c.lit(id) { groups_name_lit } else { groups_name }) |> ignore
         })
         c.semantics(b, Tab, id~, label=name, selected=on)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           share_group_shown.val = group
-        }
+        })
       }
     })
     |> ignore

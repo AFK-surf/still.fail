@@ -202,9 +202,9 @@ fn software_list(c : @ui.Ctx, core : Core, station : String, updates : Array[Jso
       let checking = is_doing(core, ["software.check"], [("station", station)])
       let cid = c.id("software-check/" + station)
       if !checking {
-        if c.clicked(cid) {
+        c.on_press(cid, fn() {
           software_call(core, station, "software.check", [])
-        }
+        })
       }
       c.box(style=sw_check, id=cid, fn() {
         c.text(
@@ -232,16 +232,16 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
   let latest = text(v, "latest")
   let button = fn(label : String, primary : Bool) {
     if manager && flag(v, "updatable") {
-      if @sf.button(c, label, key="software/" + station + "/" + id, tone=if primary { Primary } else { Plain }, disabled=busy) {
+      @sf.button(c, label, key="software/" + station + "/" + id, tone=if primary { Primary } else { Plain }, disabled=busy, on_press=fn() {
         software_call(core, station, "software.update", [("id", str(id))])
-      }
+      }) |> ignore
     }
   }
   let repair = fn(label : String) {
     if manager && flag(v, "repairable") {
-      if @sf.button(c, label, key="software/" + station + "/" + id, tone=Primary, disabled=busy) {
+      @sf.button(c, label, key="software/" + station + "/" + id, tone=Primary, disabled=busy, on_press=fn() {
         software_call(core, station, "software.update", [("id", str(id)), ("repair", Json::boolean(true))])
-      }
+      }) |> ignore
     }
   }
   let own = id == "station"

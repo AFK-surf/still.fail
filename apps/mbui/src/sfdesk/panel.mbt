@@ -541,8 +541,10 @@ fn side_panel(
         }
         // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
         // (histories_ticked)
-        if !column_short.get() && @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
-          side_change(src, r, "clear", None)
+        if !column_short.get() {
+          @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close", on_press=fn() {
+            side_change(src, r, "clear", None)
+          }) |> ignore
         }
       })
       |> ignore
@@ -700,13 +702,13 @@ fn side_tab_mark_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : 
 fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : String, front : Bool) -> Unit {
   let t = @sf.theme()
   let id = c.id("side/tab/" + tab)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     side_change(src, r, "front", Some(tab))
-  }
+  })
   let close = c.id("side/tab-close/" + tab)
-  if c.clicked(close) {
+  c.on_press(close, fn() {
     side_change(src, r, "close", Some(tab))
-  }
+  })
   let (label, closing) = side_tab_names(src, r, v, tab)
   // lit, a tab's muted words and marks come up to the words' colour, as its ground comes (mbui ui/hand_moves.mbt)
   let lit = !front && c.lit(id)
