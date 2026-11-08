@@ -189,7 +189,7 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   let preferMoves = false;
   let retryMs = 250;
   let cancelRetry: (() => void) | null = null;
-  let worker: Worker | null = null;
+  let worker: Worker | MbBackfill | null = null;
   const interested = (id: string) => [...waiting].some((waiter) => waiter.scopes.has(id));
   const requeue = (work: Work) => {
     if (work.scope === undefined) moves = true;
@@ -225,7 +225,10 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   const start = () => {
     if (closed || !ready || path === null || worker !== null) return;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./scope-worker.ts" : "./usage/scope-worker.js", import.meta.url);
-    const current = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+    // (by the MoonBit builder, station/mb's src/usagefill scope.mbt, where its program is there: `MbBackfill`)
+    const mb = mbReaderBinary();
+    const current = mb !== null ? new MbBackfill(mb, ["--builder", "usage-scope", "--db", path], store.backfillPriority, 20)
+      : new Worker(file, { workerData: { path, priority: store.backfillPriority } });
     const owner = current.threadId;
     worker = current;
     current.unref();

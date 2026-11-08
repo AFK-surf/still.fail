@@ -362,6 +362,25 @@ async fn builder(host : @host.Host, db_path : String, name : String, step : (@sq
 }
 
 ///|
+/// The usage statistics' workspace upkeep (usage/scope-worker.ts): each `{"wake": true, scope?, range?}` a batch,
+/// answered as the worker answers (`done`, and `session`, `sessions`, `from`, `after`, `converted` where they apply).
+async fn usage_scope(host : @host.Host, db_path : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=250)
+  db.exec("PRAGMA synchronous = NORMAL")
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask : Json = @json.parse(line) catch { _ => Json::null() }
+    guard ask is { "wake": True, .. } else { continue }
+    let answer : Json = @usagefill.scope_batch(db, ask) catch {
+      e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
+    }
+    host.say(answer.stringify())
+  }
+}
+
+///|
 fn main {
   let code = match (flag("--builder"), flag("--db"), flag("--data")) {
     (Some("archive-marks"), Some(db), _) =>
@@ -471,6 +490,8 @@ fn main {
         { "drop": True, .. } => Some(@usagefill.drop_step(db))
         _ => Some(@usagefill.fill_step(db))
       }))
+    (Some("usage-scope"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => usage_scope(host, db))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {
@@ -564,7 +585,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire|usage-scope --db <file>")
       2
     }
   }
