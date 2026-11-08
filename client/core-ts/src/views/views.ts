@@ -571,6 +571,10 @@ export class Views implements Owner {
   /// The list rows made from each record (with what else they were made with), so a row whose record did not change
   /// is not made again (rule 7). Kept as long as the record is.
   readonly #rowsMade = new WeakMap<object, { sig: string; row: J }>();
+  /// A chat's messages as shown (`#shown`), by the message each was made of, and what else it was made with.
+  readonly #shownMade = new WeakMap<object, { by: unknown; waiting: boolean; out: J }>();
+  /// What parts of a view were last made with, by the view (`#steady`).
+  readonly #steadied = new Map<string, unknown>();
   readonly #core: ViewsEnv;
   readonly local: Local;
   /// Per live view, the topics it watches.
@@ -641,6 +645,7 @@ export class Views implements Owner {
     const key = topicKey(view);
     const live = this.#views.get(key);
     this.#views.delete(key);
+    if (view.topic === "chat") for (const k of [...this.#steadied.keys()]) if (k.startsWith(`shown\u0001${String(view.station)}\u0001`)) this.#steadied.delete(k);
     for (const w of live?.watches.values() ?? []) w.drop();
   }
 
@@ -1977,8 +1982,9 @@ export class Views implements Owner {
       const key = str(get(session, "key"));
       const detail = str(get(turn, "detail")) ?? "";
       if (key === undefined || get(turn, "outcome") !== "failed" || !detail.startsWith("overloaded:") || present.waiting(session) === null || get(about, "thread") !== id) continue;
-      const notice = messages.find((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
-      if (notice && isObject(notice.notice)) notice.notice = { ...notice.notice, retrySession: key };
+      const at = messages.findIndex((m) => m.system === true && m.seq === get(about, "seq") && m.ts === get(about, "ts"));
+      const notice = messages[at];
+      if (notice && isObject(notice.notice)) messages[at] = { ...notice, notice: { ...notice.notice, retrySession: key } };
     }
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
@@ -2009,11 +2015,11 @@ export class Views implements Owner {
     }
     this.local.outboxSettle(station, id, kept);
     const outbox = structuredClone(kept);
-    for (const m of messages) {
+    for (const [i, m] of messages.entries()) {
       const seq = u64(m.seq);
       if (seq === null) continue;
       const outgoing = this.local.outgoing(station, id, seq);
-      if (outgoing !== undefined) m.outgoing = outgoing;
+      if (outgoing !== undefined && m.outgoing !== outgoing) messages[i] = { ...m, outgoing };
     }
     const people = (Array.isArray(thread.people) ? thread.people : []).map((p: J) => present.person(p, viewer, members_));
     if (Array.isArray(thread.people)) thread.people = people;
@@ -2130,8 +2136,9 @@ export class Views implements Owner {
         view.stateAsk = ask.seq;
         continue;
       }
-      const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
-      if (isObject(m)) (m as J).asked = true;
+      const at = messages.findIndex((x) => u64(get(x, "seq")) === ask.seq);
+      // (on a copy: a message drawn is kept as it was drawn)
+      if (at >= 0 && isObject(messages[at])) messages[at] = { ...messages[at], asked: true };
     }
     // The bell to what waits floats over the list's end only while that is out of view there: one at the end itself
     // (the line saying what an agent needs, or the last post with nothing after it) shows whenever the end does, so
@@ -2183,15 +2190,32 @@ export class Views implements Owner {
     const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
     const manages = role === "owner" || role === "admin";
     const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
+    // What each message is shown as follows from it and from this (the chat's people and the station's state): while
+    // this is as it was, a message made before is the one shown, so a new message costs that message.
+    // (of its agents, what shownMessage reads of them: who each is, not what each did since)
+    const who = agents.map((a) => [get(a.session, "key"), get(a.session, "runtime"), get(a.session, "agentText"), get(a.session, "maker")]);
+    const by = this.#steady(`shown\u0001${station}\u0001${String(thread.id)}`, [who, viewer, slackUsers, members_, bots, thread.creator, updates, manages, reports]);
     const messages = said.map((raw) => {
+      const waiting = u64(raw.seq) !== null && waits.includes(raw.seq as number);
+      const was = this.#shownMade.get(raw);
+      if (was !== undefined && was.by === by && was.waiting === waiting) return was.out;
       const m = shownMessage(raw, agents, viewer, slackUsers, members_, bots, thread.creator);
-      const out: J = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
+      const out: J = { ...m, waiting };
       const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
       if (install !== null) out.install = install;
       else if (reports && m.system === true && u64(m.seq) !== null && (str(m.text) ?? "").startsWith("⚠️")) out.reportable = true;
+      this.#shownMade.set(raw, { by, waiting, out: sharedValue(out) });
       return out;
     });
     return blockedUnder(messages);
+  }
+
+  /// `value` as it was for `key` the last time, when it is equal to it: what is made of it can be kept by its identity.
+  #steady<T>(key: string, value: T): T {
+    const was = this.#steadied.get(key) as T | undefined;
+    if (was !== undefined && equal(was, value)) return was;
+    this.#steadied.set(key, value);
+    return value;
   }
 
   /// Chat `id`'s messages as its page draws them (`ChatView.messages`), from `entries` as its station reads them (GET
@@ -2641,6 +2665,9 @@ function asShaped(ty: Ty, value: J): J {
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
 /// `held`: whether a file's picture (an image's thumbnail, a video's still) is kept on the device, by its owner and
 /// name (`held: true` on it: the app's first page waits for it as for the rest of what it shows, a decode away).
+/// A message as drawn (`drawn`), by the message shown: what it was drawn with, and how.
+const drawnMade = new WeakMap<object, { parts: unknown[]; out: J }>();
+
 function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore, linked?: (text: string) => J[], held?: (session: string, name: string) => boolean): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
@@ -2673,37 +2700,47 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   const messages: J[] = arr(view.messages).map((m) => {
     if (!isObject(m)) return m;
     const files = own(m.attachments, m.authorKind === "agent" ? str(m.author) : null);
-    const out: J = { ...m, by: here(m.by), attachments: files };
     // The chats it links to, each with its title (one linked bare reads as it) and whether it is archived.
     const chats = linked?.(str(m.text) ?? "") ?? [];
-    if (chats.length > 0) out.chats = chats;
+    const by = here(m.by);
     // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
-    // Markdown, read here (once: markdown.ts keeps it by the words); still.fail's notice's are too, as its pill says
-    // them (noticeOf: a chat it opened is a link to it).
-    if (isObject(m.notice)) out.notice = { ...m.notice, md: markdown(str(m.notice.words) ?? "", md) };
+    // Markdown, read here (once: markdown.ts keeps it by the words; read again as its reader changes); still.fail's
+    // notice's are too, as its pill says them (noticeOf: a chat it opened is a link to it).
+    const tree = isObject(m.notice) ? markdown(str(m.notice.words) ?? "", md) : m.authorKind === "person" ? null : markdown(str(m.text) ?? "", md);
+    // Drawn as before while what it is drawn with is (its files, its links, who it is by, its words as read): the
+    // same object.
+    const was = drawnMade.get(m);
+    if (was !== undefined && equal(was.parts, [files, chats, by, tree])) return was.out;
+    const out: J = { ...m, by, attachments: files };
+    if (chats.length > 0) out.chats = chats;
+    if (isObject(m.notice)) out.notice = { ...m.notice, md: tree };
     else if (m.authorKind === "person") out.words = personWords(str(m.text) ?? "");
     else {
-      out.md = markdown(str(m.text) ?? "", md);
+      out.md = tree;
       if (Array.isArray(files) && files.length > 0) {
         const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
         if (placed.size > 0) out.placed = [...placed.keys()];
       }
     }
+    drawnMade.set(m, { parts: [files, chats, by, tree], out: sharedValue(out) });
     return out;
   });
   view.messages = messages;
   if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments), ...(typeof o.text === "string" && o.text !== "" ? { words: personWords(o.text) } : {}) }) : o));
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
-    const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));
+    const bySeq = new Map(messages.map((m, i) => [u64(m.seq), i]));
     const first: J[] = [];
+    const after = new Map<number, J[]>();
     for (const item of elsewhere) {
       const s = isObject(item) ? { ...item, by: here(item.by) } : item;
       // Before the first message (0), or after one shown; after one outside the window, not shown with it.
-      const after = bySeq.get(u64(s.after));
+      const at = bySeq.get(u64(s.after));
       if (u64(s.after) === 0) first.push(s);
-      else if (after !== undefined) after.elsewhere = [...(after.elsewhere ?? []), s];
+      else if (at !== undefined) after.set(at, [...(after.get(at) ?? []), s]);
     }
+    // (on copies: a message drawn is kept as it was drawn, for the next time)
+    for (const [i, items] of after) messages[i] = { ...messages[i], elsewhere: [...(messages[i].elsewhere ?? []), ...items] };
     view.elsewhere = first;
   }
   // The viewer's messages sent one after another, in their bubbles: close together, the time only under the last of

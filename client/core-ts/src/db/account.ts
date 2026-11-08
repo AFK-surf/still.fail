@@ -12,6 +12,7 @@
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
 import { lowerBound, upperBound } from "../ordered.ts";
+import { work } from "../work.ts";
 import { LogIndex, LogIndices } from "./log-index.ts";
 import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
@@ -181,6 +182,9 @@ class Collection {
 }
 
 /// Rows read by key, kept until written; the oldest go past `cap`.
+/// How many items of a log a read takes from SQLite one by one, beside those parsed already; more, it reads the range.
+const LOG_READ_ALONE = 16;
+
 class Cache {
   readonly #map = new Map<string, J>();
   readonly cap: number;
@@ -1514,22 +1518,37 @@ export class AccountDb {
   logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, J> {
     const [key, col] = logColumns(table);
     const out = new Map<number, J>();
-    const index = this.#logIndices.get(K(table, station, id));
-    if (index) {
-      const numbers = index.numbers;
-      const first = lowerBound(numbers, from);
-      const end = upperBound(numbers, to);
+    // Which numbers it holds, read once and kept as it is written (putLog), so a window read again is read from what is
+    // parsed: a chat's window read from SQLite on each of its new messages was much of what one cost (2026-11-08).
+    const numbers = this.logNumbers(table, station, id);
+    const first = lowerBound(numbers, from);
+    const end = upperBound(numbers, to);
+    const missing: number[] = [];
+    for (let i = first; i < end; i++) {
+      const n = numbers[i]!;
+      const item = this.#logCache.get(K(table, station, id, n));
+      if (item === undefined) missing.push(n);
+      else out.set(n, item);
+    }
+    // A hot window is already parsed: do not copy its JSON strings out of SQLite on every view update; what is not (a
+    // new item, one let go from the cache) read alone.
+    if (missing.length === 0) return out;
+    if (missing.length <= LOG_READ_ALONE) {
+      const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} IN (${missing.map(() => "?").join(", ")})`, [station, logId(table, id), ...missing]);
+      work.logRows += rows.length;
+      const read = new Map(rows.map((r) => [r[0] as number, this.#logItem(table, station, id, r[0] as number, r[1])]));
+      // (in order of number, as the range reads: those read alone put in their places)
+      const ordered = new Map<number, J>();
       for (let i = first; i < end; i++) {
         const n = numbers[i]!;
-        const item = this.#logCache.get(K(table, station, id, n));
-        if (item === undefined) break;
-        out.set(n, item);
+        const item = out.get(n) ?? read.get(n);
+        if (item !== undefined) ordered.set(n, item);
       }
-      // A hot window is already parsed: do not copy its JSON strings out of SQLite on every view update.
-      if (out.size === Math.max(0, end - first)) return out;
-      out.clear();
+      return ordered;
     }
+    out.clear();
     const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, logId(table, id), from, to]);
+    work.logRows += rows.length;
     for (const r of rows) {
       const n = r[0] as number;
       out.set(n, this.#logItem(table, station, id, n, r[1]));
