@@ -153,9 +153,15 @@ export class RevIndex {
   }
 
   since(since: number, limit: number): IndexRow[] {
-    return (this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, source, kind, rev, removed, json FROM ${this.#name} WHERE rev > ? ORDER BY rev LIMIT ?`).all(since, limit) as Json[]).map((r) => ({
-      key: Buffer.from(r.key).toString("utf8"), source: r.source, kind: r.kind, rev: r.rev, removed: r.removed !== 0, json: r.json,
-    }));
+    return Array.from(this.iterateSince(since, limit));
+  }
+
+  /// Read bodies one at a time; a page can stop before the remaining rows have been transferred from SQLite.
+  *iterateSince(since: number, limit: number): IterableIterator<IndexRow> {
+    const rows = this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, source, kind, rev, removed, json FROM ${this.#name} WHERE rev > ? ORDER BY rev LIMIT ?`).iterate(since, limit);
+    for (const r of rows as Iterable<Json>) {
+      yield { key: Buffer.from(r.key).toString("utf8"), source: r.source, kind: r.kind, rev: r.rev, removed: r.removed !== 0, json: r.json };
+    }
   }
 
   /// What connection `host`'s Comma holds now; tombstones every one holds go.
@@ -451,22 +457,23 @@ export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => J
   const reset = held.epoch !== epoch;
   const since = reset ? 0 : held.through;
   if (!reset && since >= rev) return null;
-  const changed = index.since(since, PAGE_ROWS + 1);
   const rows: Json[] = [];
   let bytes = 2;
   let taken = 0;
   let last = since;
-  for (const row of changed.slice(0, PAGE_ROWS)) {
+  let more = false;
+  for (const row of index.iterateSince(since, PAGE_ROWS + 1)) {
+    if (taken === PAGE_ROWS) { more = true; break; }
     const sent = wire(row);
     const size = sent === null ? 0 : Buffer.byteLength(JSON.stringify(sent)) + 1;
-    if (rows.length > 0 && bytes + size > PAGE_BYTES) break;
+    if (rows.length > 0 && bytes + size > PAGE_BYTES) { more = true; break; }
     if (sent !== null) rows.push(sent);
     bytes += size;
     taken += 1;
     last = row.rev;
   }
   // A page short of the end brings Comma to its last row; the last page to the index's rev, past pruned tombstones.
-  const through = taken < changed.length ? last : rev;
+  const through = more ? last : rev;
   return { epoch, reset, since, through, rows };
 }
 
