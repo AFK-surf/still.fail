@@ -230,12 +230,11 @@ pub fn sheet(
   }
   let hx = s.h.value_at(c)
   let bx = s.below.value_at(c)
-  let scrim_t = s.fade.get()
-  // (logic on a motion's end, to be told at once instead: shown is false only once it has sunk away and its scrim
-  // faded, the sheet drawn until then from what it is; sunk as far as it was told to go, not less: one closing with it
-  // gone first, the furthest they went no more what it sinks to, it still goes on to where it set out for, not ending
-  // where the others' going leaves it)
-  if !now && bx >= dmax(dmax(hx + raised, sinks), s.below.target()) - 0.5 && !s.fade.moving() {
+  // (shown is false only once it has sunk away and its scrim's fade is over, by its declared end, the sheet drawn until
+  // then from what it is; sunk as far as it was told to go, not less: one closing with it gone first, the furthest they
+  // went no more what it sinks to, it still goes on to where it set out for, not ending where the others' going leaves
+  // it)
+  if !now && bx >= dmax(dmax(hx + raised, sinks), s.below.target()) - 0.5 && s.fade.over() {
     // sunk away
     s.shown = false
     s.fade.snap(0.0)
@@ -244,9 +243,14 @@ pub fn sheet(
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
   // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
-  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
+  // (the scrim as far as it has come, as it is drawn: Ctx::bg_by on the layer's ground)
+  let scrim = scrim.unwrap_or(th.scrim)
+  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim~, inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx - raised, fn() {
-      look(c, { t: scrim_t, h: hx, below: bx }, fn() {
+      // (its look given the scrim's share as it is built: the sheet's own glass drawn solid darkens with it, a colour
+      // with no form read as it is drawn; the sheet is laid out again as it goes anyway, its height and place its
+      // springs' as they are built)
+      look(c, { t: s.fade.get(), h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
         // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away, nor raised under
         // another, which takes them: its top may be past the window's then)
@@ -261,6 +265,9 @@ pub fn sheet(
     // (where it stands, for what is to stay clear of it: sheet_top)
     @motion.measure(c, i, sheet_measured)
   })
+  if o.scrim >= 0 {
+    c.bg_by(o.scrim, fn() { @ui.alpha(scrim, s.fade.get()) })
+  }
   if now && o.dismissed is Some(_) {
     now = false
     s.held = -1.0

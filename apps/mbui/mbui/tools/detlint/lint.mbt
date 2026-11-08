@@ -144,6 +144,7 @@ fn lint_mbt(
   returns : Map[String, String],
   readers : Map[String, String],
   painted : Map[String, Unit],
+  motion_fields : Map[String, Unit],
 ) -> Unit {
   let app = !under(f.rel, cfg.framework)
   let frame_core = under(f.rel, cfg.frame_core)
@@ -217,7 +218,7 @@ fn lint_mbt(
   }
   // the frames' clock read followed by its own signal (`frame_clock.get()`), outside the tests and what paints
   // (build-clock)
-  let paint_at = paint_args(f)
+  let paint_at = paint_flows(f, paint_args(f))
   let painting = fn(k : Int) { in_paint(f, k, paint_at, painted) }
   for k, tk in toks {
     if tk.kind == "ident" &&
@@ -493,6 +494,11 @@ fn lint_mbt(
     // in the tests
     if !in_t && build_clock_read(f, c, returns) && !painting(c.at) {
       add("build-clock", c.at, f.line_text(c.at))
+    }
+    // an animated value read as it is built (build-motion): @motion.animate's, an Anim's, a Way's, a Value's read
+    // (`get`, `sample`) outside what a frame's paint is given; not in the tests, nor in the readers themselves
+    if !in_t && motion_read_built(f, c, returns, motion_fields) && !painting(c.at) {
+      add("build-motion", c.at, f.line_text(c.at))
     }
     // 5. the app reads the clock
     if c.name == "now" &&
@@ -1044,11 +1050,11 @@ fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
 
 ///|
 /// Which positional argument of call `c` is the target a motion follows: an Anim's or a Value's `follow(target, …)`,
-/// `@motion.animate(c, key, target)` and `@kit.animate`'s, `Ctx::spring(key, target)`; None for any other call.
+/// `@motion.animate(c, key, target)`, `Ctx::spring(key, target)`; None for any other call.
 fn follow_target(f : MbtFile, c : Call, returns : Map[String, String]) -> Int? {
   if c.kind == "method" && c.name == "follow" {
     Some(0)
-  } else if c.kind == "pkg" && c.name == "animate" && (c.qual == "@motion" || c.qual == "@kit") {
+  } else if c.kind == "pkg" && c.name == "animate" && c.qual == "@motion" {
     Some(2)
   } else if c.kind == "method" && c.name == "spring" && f.recv_type(c.at, returns) is Some("Ctx") {
     Some(1)
@@ -1832,4 +1838,323 @@ fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
     }
   }
   painted
+}
+
+///|
+/// The types whose value moves by the clock, read as they are (build-motion)
+let motion_types : Array[String] = ["Anim", "Way", "Value"]
+
+///|
+/// What @motion's functions give that moves by the clock, by their name, where no file linted says (build-motion: the
+/// app's run, @motion not among its files)
+let motion_returns : Array[(String, String)] = [("anim", "Anim"), ("told", "Anim"), ("value", "Value")]
+
+///|
+/// The readers themselves, and what they read in to give it (build-motion): not counted inside them
+let motion_readers : Array[String] = [
+  "Anim::get", "Anim::moving", "Way::get", "Value::get", "Value::sample", "animate", "pressing",
+]
+
+///|
+/// The fields of the files' structs of a type that moves by the clock (`fade : @motion.Anim`), by their name
+/// (build-motion: `s.fade.get()`)
+fn motion_fields(files : Array[MbtFile]) -> Map[String, Unit] {
+  let out : Map[String, Unit] = Map::new()
+  for f in files {
+    for it in f.items {
+      if it.kind != "struct" {
+        continue
+      }
+      for j in it.start..<(it.end - 1) {
+        let t = f.toks[j]
+        if t.kind == "ident" && f.toks[j + 1].text == ":" {
+          match f.type_at(j + 2) {
+            Some(ty) if motion_types.contains(ty) => out[t.text] = ()
+            _ => ()
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether the call `c` reads an animated value as it is built (build-motion): @motion.animate (its value this
+/// frame; motion's own `animate` in motion), or `get` / `sample` on an Anim, a Way or a Value (told by its type where
+/// the receiver is said, by its field where it is one: motion_fields)
+fn motion_read_built(
+  f : MbtFile,
+  c : Call,
+  returns : Map[String, String],
+  fields : Map[String, Unit],
+) -> Bool {
+  if c.is_def {
+    return false
+  }
+  if c.item >= 0 && motion_readers.contains(f.items[c.item].name) && under(f.rel, ["src/motion"]) {
+    return false
+  }
+  if c.name == "animate" &&
+    ((c.kind == "pkg" && c.qual == "@motion") || (c.kind == "bare" && under(f.rel, ["src/motion"]))) {
+    return true
+  }
+  if c.kind != "method" || (c.name != "get" && c.name != "sample") {
+    return false
+  }
+  let r = c.at - 2
+  if r < 0 {
+    return false
+  }
+  let rt = f.toks[r]
+  // (a field: `s.fade.get()`)
+  if rt.kind == "ident" && r > 0 && f.toks[r - 1].text == "." {
+    return fields.contains(rt.text)
+  }
+  // (made by @motion's own, said so: `let a = @motion.told(…)`, whatever the files linted name `told`)
+  if rt.kind == "ident" && motion_made(f, r) {
+    return true
+  }
+  f.recv_type(c.at, returns) is Some(t) && motion_types.contains(t)
+}
+
+///|
+/// Whether the name at `r` is let to what one of @motion's functions that give a moving value makes (`let a =
+/// @motion.told(…)`), the nearest such let before it in its item (build-motion)
+fn motion_made(f : MbtFile, r : Int) -> Bool {
+  let toks = f.toks
+  let name = toks[r].text
+  let it = f.item_of[r]
+  let lo = if it >= 0 { f.items[it].start } else { 0 }
+  let mut j = r - 1
+  while j >= lo {
+    if toks[j].kind == "ident" &&
+      toks[j].text == name &&
+      j > 0 &&
+      (toks[j - 1].text == "let" || toks[j - 1].text == "mut") &&
+      j + 1 < toks.length() &&
+      toks[j + 1].text == "=" {
+      return j + 4 < toks.length() &&
+        toks[j + 2].kind == "at" &&
+        toks[j + 2].text == "@motion" &&
+        toks[j + 3].text == "." &&
+        motion_returns.iter().any(fn(m) { m.0 == toks[j + 4].text })
+    }
+    j -= 1
+  }
+  false
+}
+
+///|
+/// The arguments, by their label, that hand what they are given to a paint taker (a list row's `ground_by`, a row's
+/// band's `lit_by`: Ctx::bg_by): what is read in them is read as the frame is painted (build-clock, build-motion)
+let paint_labels : Array[String] = ["ground_by", "lit_by"]
+
+///|
+/// What is given to a paint taker (`paint_at`), with what flows there: an argument of a paint label's
+/// (paint_labels), and each closure let to a name that goes only there, or only into another such let (`let ground =
+/// fn() { … }` handed on as `ground_by=ground`; `let (band, band_by) = …` with `lit_by=band_by`): the closures in
+/// its value read as the frame is painted (build-clock, build-motion)
+fn paint_flows(f : MbtFile, paint_at : Map[Int, Unit]) -> Map[Int, Unit] {
+  let toks = f.toks
+  let n = toks.length()
+  let out : Map[Int, Unit] = Map::new()
+  for k, _ in paint_at {
+    out[k] = ()
+  }
+  for c in f.calls {
+    if c.is_def {
+      continue
+    }
+    for a in c.args {
+      let labelled = match a.0 {
+        Some(l) => paint_labels.contains(l)
+        None =>
+          a.1.length() >= 3 &&
+          toks[a.1[0]].kind == "ident" &&
+          paint_labels.contains(toks[a.1[0]].text) &&
+          toks[a.1[1]].text == "?" &&
+          toks[a.1[2]].text == "="
+      }
+      if labelled {
+        for i in a.1 {
+          out[i] = ()
+        }
+      }
+    }
+  }
+  // each let: the names it binds, its value's tokens (to the end of its line, past what it opens), whether a closure is
+  // in it
+  let lets : Array[(Array[Int], Int, Int)] = []
+  for k, t in toks {
+    if t.kind != "ident" || t.text != "let" || f.in_test(k) {
+      continue
+    }
+    let mut j = k + 1
+    if j < n && toks[j].text == "mut" {
+      j += 1
+    }
+    if j >= n {
+      continue
+    }
+    let names : Array[Int] = []
+    if toks[j].kind == "ident" {
+      names.push(j)
+      j += 1
+    } else if toks[j].text == "(" && toks[j].end >= 0 {
+      for x in (j + 1)..<toks[j].end {
+        if toks[x].kind == "ident" {
+          names.push(x)
+        }
+      }
+      j = toks[j].end + 1
+    } else {
+      continue
+    }
+    // (its type, where said)
+    if j < n && toks[j].text == ":" {
+      while j < n && toks[j].text != "=" && toks[j].line == toks[k].line {
+        j = if is_open(toks[j]) && toks[j].end >= 0 { toks[j].end + 1 } else { j + 1 }
+      }
+    }
+    if j >= n || toks[j].text != "=" {
+      continue
+    }
+    let start = j + 1
+    let mut e = start
+    while e < n {
+      let next = if is_open(toks[e]) && toks[e].end >= 0 { toks[e].end + 1 } else { e + 1 }
+      if next >= n {
+        e = n
+        break
+      }
+      if toks[next].line > toks[next - 1].line && !value_goes_on(toks[next]) {
+        e = next
+        break
+      }
+      e = next
+    }
+    lets.push((names, start, e))
+  }
+  // the names let to a closure, or to what holds one of them (deferred): those whose every use is where it is painted,
+  // or in another such let's value, are painted. (Names by item and text: `item|name`.)
+  let key = fn(x : Int) { "\{f.item_of[x]}|\{toks[x].text}" }
+  let uses : Map[String, Array[Int]] = Map::new()
+  for x, t in toks {
+    // (a name's uses: not a field, nor an argument's label, `name=` or `name?=`, which is no use of a let of that name)
+    let label = x + 1 < n &&
+      (toks[x + 1].text == "=" || (toks[x + 1].text == "?" && x + 2 < n && toks[x + 2].text == "="))
+    if t.kind == "ident" && !(x > 0 && toks[x - 1].text == ".") && !label {
+      let k = key(x)
+      match uses.get(k) {
+        Some(a) => a.push(x)
+        None => uses[k] = [x]
+      }
+    }
+  }
+  let deferred : Array[Bool] = Array::make(lets.length(), false)
+  let deferred_names : Map[String, Unit] = Map::new()
+  let mut changed = true
+  while changed {
+    changed = false
+    for i, l in lets {
+      if deferred[i] {
+        continue
+      }
+      let (names, s0, e0) = l
+      let mut has = false
+      for x in s0..<e0 {
+        let t = toks[x]
+        if t.kind == "ident" &&
+          ((t.text == "fn" && x + 1 < n && toks[x + 1].text == "(") ||
+          (!(x > 0 && toks[x - 1].text == ".") && deferred_names.contains(key(x)))) {
+          has = true
+          break
+        }
+      }
+      if has {
+        deferred[i] = true
+        for m in names {
+          deferred_names[key(m)] = ()
+        }
+        changed = true
+      }
+    }
+  }
+  let painted : Array[Bool] = deferred.copy()
+  let mut shrunk = true
+  while shrunk {
+    shrunk = false
+    // (where a painted let's value is)
+    let in_value : Array[Bool] = Array::make(n, false)
+    for i, l in lets {
+      if painted[i] {
+        for x in l.1..<l.2 {
+          in_value[x] = true
+        }
+      }
+    }
+    for i, l in lets {
+      if !painted[i] {
+        continue
+      }
+      let (names, _, _) = l
+      // (painted where any name it binds goes only where it is painted, none of them called as it is built)
+      let mut any = false
+      let mut called = false
+      for m in names {
+        let mut only = true
+        // (one use at least: a closure let and never handed on is no paint's)
+        let mut used = false
+        for x in uses.get(key(m)).unwrap_or([]) {
+          if x <= m {
+            continue
+          }
+          used = true
+          if out.contains(x) || in_value[x] {
+            continue
+          }
+          only = false
+          if x + 1 < n && toks[x + 1].text == "(" {
+            called = true
+          }
+        }
+        if only && used {
+          any = true
+        }
+      }
+      if !any || called {
+        painted[i] = false
+        shrunk = true
+      }
+    }
+  }
+  // (the closures in a painted let's value: what is read in them is read as it is painted)
+  for i, l in lets {
+    if !painted[i] {
+      continue
+    }
+    let (_, s0, e0) = l
+    for x in s0..<e0 {
+      if toks[x].kind == "ident" && toks[x].text == "fn" && x + 1 < n && toks[x + 1].text == "(" && toks[x + 1].end >= 0 {
+        let mut b = toks[x + 1].end + 1
+        while b < e0 && !(toks[b].text == "{" && toks[b].end >= 0) {
+          b += 1
+        }
+        if b < e0 {
+          for y in x..=toks[b].end {
+            out[y] = ()
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether a line starting with `t` goes on the expression of the line before it (a method chained, a pipe, an
+/// operator, an else)
+fn value_goes_on(t : Tok) -> Bool {
+  [".", "|>", "&&", "||", "+", "-", "*", "/", "else"].contains(t.text)
 }

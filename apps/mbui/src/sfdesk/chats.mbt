@@ -302,13 +302,21 @@ fn filter_button(
     })
   })
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
-  let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, transition=nav_fade)
-  let ground = @sf.alpha(t.p.hover, hot)
+  // (its ground and its icon's colour eased as they are painted: the icon in the words' colour over itself in the
+  // muted one, each as far as it is lit and not, the same at either end)
+  let hot = @motion.told(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, spec=nav_fade)
+  let hover = t.p.hover
   // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
   let look = if in_bar { filter_box_bar() } else { filter_box }
-  let b = c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
-    @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.text, hot, t.p.muted)) |> ignore
+  let b = c.box(style=look, id~, fn() {
+    let plain = @sf.icon(c, "filter", size=side_icon, color=t.p.muted)
+    c.look_by(plain, fn() { @ui.look(alpha=1.0 - dmax(0.0, dmin(1.0, hot.get()))) })
+    let lit = c.layer(fn() {
+      c.box(style=filter_lit_at, fn() { @sf.icon(c, "filter", size=side_icon, color=t.p.text) |> ignore }) |> ignore
+    })
+    c.look_by(lit, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, hot.get()))) })
   })
+  c.bg_by(b, fn() { @sf.alpha(hover, hot.get()) })
   c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
   @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))
 }
@@ -328,6 +336,11 @@ fn filter_named(filter : String) -> String {
 ///|
 // kept across runs: a value (no field of it changes)
 let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+/// Where the filter's icon lit is drawn over the plain one: in the middle of its ground, as that one is.
+// kept across runs: a value (no field of it changes)
+let filter_lit_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// In the closed bar's top right corner, its ground's corner linked to that corner (filter_bar_link: concentric with it,

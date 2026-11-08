@@ -429,13 +429,15 @@ fn rail_ground(
   let hover = c.lit(id)
   // its ground and its icon's colour moved over 140 ms (color)
   let key = "rail/ground/" + id.to_string()
-  let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
+  // (its ground eased as it is painted, nav_ground_on; its icon's colour read as it is built: what `body` draws is
+  // drawn in the colour it is given, which no paint taker changes)
+  let ink = @motion.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, spec=nav_fade)
   let b = c.box(style=rail_item, id~, fn() {
     // (lit in the closed bar, on its floating ground: the words' colour at 12%, as plain a step above it as the
     // selected grey is above the sidebar; Rail.css.ts item, closed)
     let lit = if wide.closed.get() { @sf.alpha(t.p.text, lit_in_bar) } else { t.p.selected }
-    rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
-    |> ignore
+    let sq = rail_square(c, 0L, fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
+    nav_ground_on(c, sq, key, hover, on, lit~)
   })
   // named for a screen reader, and on hover beside it (its Tip, side right)
   if label != "" {
@@ -891,16 +893,13 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
   let over = c.lit(id)
   // in on its row pointed at; always to a finger, which hovers over
   // nothing
-  let shown = @kit.animate(
-    c,
-    "rail-menu/add-shown/" + place,
-    if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 },
-    transition=nav_fade,
-  )
+  // (built while it is shown or fading, till its fade's declared end; faded as it is drawn)
+  let to = if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 }
+  let shown = @motion.told(c, "rail-menu/add-shown/" + place, to, spec=nav_fade)
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
-    if shown > 0.0 {
-      @sf.icon(c, "plus", size=rail_menu_plus_icon, color=@sf.alpha(if over { t.p.text } else { t.p.muted }, shown))
-      |> ignore
+    if to > 0.0 || !shown.over() {
+      let i = @sf.icon(c, "plus", size=rail_menu_plus_icon, color=if over { t.p.text } else { t.p.muted })
+      c.look_by(i, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, shown.get()))) })
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.rail.add", args=[("name", label)]))

@@ -162,9 +162,10 @@ pub fn vault_editor_dialog(
               }) |> ignore
               if e.file_content != "" {
                 let name = if e.file_name != "" { e.file_name } else { @sf.t("web-pages.vault.kind.file") }
+                // (faded in as it is drawn)
                 let shown = @kit.presence(c, key("file/" + name), true).t
-                c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.alpha(@sf.theme().p.text, shown))], style=vd_file_name)
-                |> ignore
+                let i = c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.theme().p.text)], style=vd_file_name)
+                c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get()))) })
               }
             })
             |> ignore

@@ -35,10 +35,11 @@ pub fn progress(
   }
   let known = @motion.anim(c, key + "/progress/known", if t is Some(_) { 1.0 } else { 0.0 })
   known.follow(if t is Some(_) { 1.0 } else { 0.0 }, @motion.tween(progress_known_ms, ease=InOut))
+  // (read as it is built: the part come is laid out as wide as they say, and the band drawn into it with them)
   let k = known.get()
   // (a band runs while it is not known: the look's cycle, Ctx::cycle_look; motion reduced, it stands where the look
-  // puts it)
-  let shown = if t is Some(_) || k > 0.0 { Some(at.get()) } else { None }
+  // puts it. How far shown while it is known or on its way from known: till its declared end)
+  let shown = if t is Some(_) || !known.over() { Some(at.get()) } else { None }
   let i = c.box(w~, fn() { look(c, { t: shown, known: k }) })
   match (value, t) {
     (Some(v), Some(k)) =>

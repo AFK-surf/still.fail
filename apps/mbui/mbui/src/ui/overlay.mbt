@@ -56,10 +56,13 @@ pub fn Ctx::stacked(self : Ctx, stack : Int, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// What a layer reports: whether it was dismissed since the last frame (and why); its node.
+/// What a layer reports: whether it was dismissed since the last frame (and why); its node, and its ground's (a modal
+/// one's, `scrim`'s; -1 none): only the handle a scrim fading in and out is painted through (Ctx::bg_by), read by
+/// nothing else.
 pub(all) struct Overlay {
   id : Int
   node : Int
+  scrim : Int
   dismissed : Dismiss?
 }
 
@@ -213,12 +216,14 @@ pub fn Ctx::overlay(
   // (what is said in it, its: Ctx::back_within)
   let within_was = self.back_within
   self.back_within = gen
+  let mut ground = -1
   self.with_parent(i, fn() {
     if modal && (!inert || scrim != 0L) {
       // the ground that takes what the layer does not; leaving, its scrim still fading with it, taking nothing
       let b = self.box(w=Fill(1.0), h=Fill(1.0), bg=scrim, id=if inert { 0 } else { id }, fn() {  })
       self.nodes[b].layer = true
       self.nodes[b].blocks = !inert
+      ground = b
       // (what is put over it, a menu's thing held, painted once it is: Ctx::paint_raised)
       if scrim != 0L {
         dr.scrims.push(b)
@@ -236,7 +241,7 @@ pub fn Ctx::overlay(
   self.cur = saved_cur
   self.layer_cur = saved_layer
   self.group_cur = saved_group
-  { id, node: i, dismissed }
+  { id, node: i, scrim: ground, dismissed }
 }
 
 ///|

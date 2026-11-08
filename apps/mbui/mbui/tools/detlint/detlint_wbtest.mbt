@@ -2256,3 +2256,54 @@ test "build-clock: what a frame's paint reads is not counted" {
   )
   assert_eq(lines(fs), [8, 10])
 }
+
+///|
+test "build-motion" {
+  // an animated value read as it is built: @motion.animate's, an Anim's, a Way's, a Value's `get` (told by the type
+  // said, by what made it, by a field of that type); read in what a paint taker is given, a signal's get, in a test,
+  // not
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "struct S {\n  fade : @motion.Anim\n}\nfn p(c : @ui.Ctx, s : S, w : @motion.Way) -> Unit {\n  let v = @motion.animate(c, \"k\", 1.0)\n  let a = @motion.told(c, \"t\", 1.0)\n  let x = a.get()\n  c.look_by(n, fn() { look(alpha=a.get()) })\n  let y = s.fade.get()\n  let z = w.get()\n  let n = sig.get()\n  c.bg_by(n, fn() { ink(s.fade.get()) })\n}\n",
+      ),
+      ("src/kit/x_test.mbt", "test \"t\" {\n  let a = @motion.told(c, \"t\", 1.0)\n  ignore(a.get())\n}\n"),
+      // (a function of the files' own named as @motion's: what @motion's makes is still told by its let)
+      ("src/kit/q.mbt", "fn told() -> Unit {\n  ()\n}\n"),
+    ],
+    "build-motion",
+    4,
+  )
+  assert_eq(lines(fs), [5, 7, 9, 10])
+}
+
+///|
+test "build-motion: what flows to a paint taker is not counted" {
+  // a closure handed on by a paint label (`ground_by=`, `lit_by?=`), let to a name that goes only there (through
+  // another let, a tuple's name): not counted; one also called as it is built, a let of a value read now: counted
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "fn p(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n  let g = fn() { ink(a.get()) }\n  let h = if on { g } else { other }\n  let ground_by : (() -> Int64)? = Some(h)\n  row(c, ground_by?=ground_by)\n  let (band, band_by) = match e {\n    _ => (1, Some(fn() { ink(a.get()) }))\n  }\n  row(c, lit=band, lit_by=band_by)\n  row(c, ground_by=fn() { ink(a.get()) })\n  let d = fn() { a.get() }\n  c.bg_by(n, d)\n  d()\n  let v = a.get()\n  c.bg_by(n, fn() { v })\n}\n",
+      ),
+    ],
+    "build-motion",
+    2,
+  )
+  assert_eq(lines(fs), [11, 14])
+}
+
+///|
+test "build-motion: each way a closure goes on to a paint taker, one at a time" {
+  // a closure let and handed on: by a paint label (`ground_by?=`, `ground_by=`), through an if's arms, through Some in
+  // a let of its own type; each not counted
+  let head = "fn p(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n  let g = fn() { ink(a.get()) }\n"
+  for rest in [
+    "  row(c, ground_by?=g)\n}\n", "  row(c, ground_by=g)\n}\n", "  let h = if on { g } else { other }\n  row(c, ground_by=h)\n}\n",
+    "  let gb : (() -> Int64)? = Some(g)\n  row(c, ground_by?=gb)\n}\n",
+  ] {
+    found([("src/kit/p.mbt", head + rest)], "build-motion", 0) |> ignore
+  }
+}

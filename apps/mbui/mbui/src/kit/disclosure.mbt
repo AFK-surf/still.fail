@@ -58,7 +58,10 @@ fn unfolding(c : @ui.Ctx, key : String, open : Bool, label : String, body : () -
     return
   }
   let cid = c.id(key + "/content")
-  let k = if p.t > 1.0 { 1.0 } else if p.t < 0.0 { 0.0 } else { p.t }
+  // (read as it is built: its height is laid out by it, what is under it moving with it; a look would leave a hole
+  // as tall as it is, or draw it over what is under it)
+  let t = p.t.get()
+  let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
   let full = match c.rect_of(cid) {
     Some((_, _, _, h)) => Some(h)
     None => None
