@@ -151,6 +151,13 @@ fn main {
         { "thread": Number(thread, ..), .. } => Some(@cards.step(db, thread.to_int64()))
         _ => None
       }))
+    (Some("session-list"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session list", (db, ask) => match ask {
+        // (the list, and for search the list visited again: each batch takes a step of the list, then of the audit)
+        { "scope": "all", .. } => Some(@sessions.step(db))
+        { "scope": "search", .. } => Some(@sessions.step(db) && @sessions.audit(db))
+        _ => None
+      }))
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
         let reader = { host, db: data + "/stillfail.db", writer: None }
@@ -163,7 +170,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list --db <file>")
       2
     }
   }

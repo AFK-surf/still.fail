@@ -7,6 +7,7 @@ import {
   "station/upjobs",
   "station/widgets",
   "station/cards",
+  "station/sessions",
   "moonbitlang/core/json",
 }
 
