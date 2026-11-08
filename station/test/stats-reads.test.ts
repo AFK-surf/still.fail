@@ -9,7 +9,7 @@ import { Store, newMessage } from "../src/store/store.ts";
 import { installOutflowChatIndex, outflowChatIndexStep, outflowChatScopes } from "../src/store/outflow-index.ts";
 import type { InWorkspace } from "../src/store/rows.ts";
 import * as read from "../src/read/store.ts";
-import { outflowChats, outflowUsage } from "../src/read/outflow.ts";
+import { outflowChats, outflowMessages, outflowUsage } from "../src/read/outflow.ts";
 import { usageOps } from "../src/read/ops-usage.ts";
 import { peerRead, textOf } from "../src/comma/peer.ts";
 import { bytesOf } from "../src/mesh/bus.ts";
@@ -260,4 +260,24 @@ test("another station's read: one of the statistics reads, of the workspace it a
   assert.deepEqual(asked.at(-1)![1].ws, { workspace: "ws-joined", home: false });
   await assert.rejects(answer("peer", { op: "usage", args: {} }, "ws-home"), /no such read/, "none of the station's other reads");
   await assert.rejects(answer("peer", { op: "outflowChats", args: {} }, undefined), /workspace/);
+});
+
+test("a chat's messages as the Router reads them: a page at a time, who said each; another workspace's chat is none", () => {
+  const dir = tempdir();
+  const store = Store.open(join(dir, "stillfail.db"), null);
+  after(() => store.close());
+  store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1, createdBy: "ann@x", ws: null } as never);
+  store.insertSession({ key: "b", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/b", token: "b", createdAt: 1, lastActiveAt: 1, createdBy: "bob@x", ws: "other-ws" } as never);
+  const home = store.openThreadOf("ember", "CHAT", "200.1", "Fix", "ann@x", "a");
+  const away = store.openThreadOf("ember", "CHAT", "200.2", "Theirs", "bob@x", "b");
+  store.joinThread(home.id, "a", "ember");
+  store.joinThread(away.id, "b", "ember");
+  store.insertMessage(newMessage(home.id, "200.3", "person", "ann@x", "the build fails on main"));
+  store.insertMessage(newMessage(home.id, "200.4", "agent", "a", "fixed"));
+  const r = read.openStore(dir);
+  const all = outflowMessages(r, home.id, 0, 100) as any;
+  assert.deepEqual(all.messages.filter((m: any) => m.kind === "message").map((m: any) => [m.authorKind, m.text, m.person?.email ?? null]), [["person", "the build fails on main", "ann@x"], ["agent", "fixed", null]]);
+  const page = outflowMessages(r, home.id, all.messages[0].n, 1) as any;
+  assert.deepEqual([page.messages.length, page.more], [1, all.messages.length > 2]);
+  assert.equal(outflowMessages(r, away.id, 0, 100), null);
 });

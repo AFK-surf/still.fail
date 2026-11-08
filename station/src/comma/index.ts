@@ -9,7 +9,7 @@ import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
 import { NAMES_FILE } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import type { CommaStats } from "./stats.ts";
-import { CommaSurface } from "./surface.ts";
+import { type CommaChats, CommaSurface } from "./surface.ts";
 import { CommaTasks } from "./tasks.ts";
 
 type Json = any;
@@ -54,6 +54,8 @@ export type CommaOptions = ConnectsOptions & {
   create?: (connect: CommaConnect, book: NameBook, tasks: CommaTasks) => Connection;
   /// The workspace's statistics its connections send Comma (stats.ts).
   stats?: CommaStats | null;
+  /// The chats of its Task index as the Router reads and writes in them (module.ts).
+  chats?: CommaChats | null;
 };
 
 export type CommaParts = ReturnType<typeof makeComma>;
@@ -63,7 +65,7 @@ export function makeComma(options: CommaOptions) {
   const create =
     options.create ??
     ((c: CommaConnect, book: NameBook, t: CommaTasks) =>
-      new CommaSurface({ connect: c.id, server: c.server, token: c.token, name: hostname(), tasks: t, store: options.store, models: () => options.models?.(c.id) ?? [], book, stats: options.stats ?? null }));
+      new CommaSurface({ connect: c.id, server: c.server, token: c.token, name: hostname(), tasks: t, store: options.store, models: () => options.models?.(c.id) ?? [], book, stats: options.stats ?? null, chats: options.chats ?? null }));
   const connects = makeConnects<CommaConnect>(options, {
     kind: "comma",
     names: NAMES_FILE.comma,

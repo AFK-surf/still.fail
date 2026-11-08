@@ -10,7 +10,9 @@ type Json = any;
 
 /// What another station of the workspace asks of this one's statistics.
 export const READ = "outflow.read";
-const OPS = ["outflowUsage", "outflowChats"];
+const OPS = ["outflowUsage", "outflowChats", "outflowMessages"];
+/// The Router of the Comma connect on another station of the workspace writing in one of this station's chats.
+export const SAY = "comma.say";
 /// An answer of another station's read, at most.
 const ANSWER_MAX = 64 * 1024 * 1024;
 /// Chats a read takes at once.

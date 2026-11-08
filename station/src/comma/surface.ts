@@ -11,8 +11,10 @@
 //   a post while it waits for it. task.file: a file of a Task's Message, read a part at a time.
 // - task.status: where the session stands. task.leave: the Task runs elsewhere; the session leaves its thread.
 // - task.hello: as it connects, the Tasks it takes part in and how far it has each; Comma gives what it missed.
-// - stats.index (to Comma): the workspace's statistics (stats.ts), what Comma lacks of them a page at a time, as it
-//   connects and as they change; Comma answers what it holds.
+// - stats.index, task.index (to Comma): the workspace's statistics and its chats as Comma lists the Tasks its stations
+//   host (stats.ts), what Comma lacks of them a page at a time, as it connects and as they change; Comma answers what
+//   it holds.
+// - task.read, task.say: the Router reads a chat of the Task index, or writes in it as itself (`chats`, module.ts).
 // Comma's heartbeat is answered with one. Whatever else Comma asks (files, commands: a Comma station's) is refused.
 import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readSync, statSync } from "node:fs";
@@ -31,7 +33,7 @@ import { ConnectedSurface } from "../connects/surface.ts";
 import type { Handler, InboundFile, ModelChoice, Person, ThreadRef } from "../sessions/chat.ts";
 import { sessionKey } from "../sessions/hub.ts";
 import type { Attachment, Store } from "../store/store.ts";
-import { type CommaStats, heldFrom, nextPage, probePage } from "./stats.ts";
+import { type CommaStats, type IndexRow, type RevIndex, heldFrom, nextPage, probePage, statsWire, taskWire } from "./stats.ts";
 import { type CommaTasks, type Start, type Task, TASK_CHANNEL } from "./tasks.ts";
 
 type Json = any;
@@ -135,8 +137,17 @@ export type CommaSurfaceOptions = {
   models: () => ModelChoice[];
   book?: NameBook | null;
   lang?: Lang;
-  /// The workspace's statistics it sends Comma; none, none are sent.
+  /// The workspace's statistics and Task index it sends Comma; none, none are sent.
   stats?: CommaStats | null;
+  /// The chats of the Task index as the Router reads and writes in them; none, it does neither.
+  chats?: CommaChats | null;
+};
+
+/// The chats of the Task index (a ref: stats.ts chatRef), as the Router reads one (`task.read`) and writes in it as
+/// itself (`task.say`, once per key).
+export type CommaChats = {
+  read(ref: string, after: number, limit: number): Promise<Json>;
+  say(ref: string, text: string, key: string, requester: string, connect: string): Promise<Json>;
 };
 
 export class CommaSurface extends ConnectedSurface {
@@ -150,6 +161,7 @@ export class CommaSurface extends ConnectedSurface {
   private readonly models: () => ModelChoice[];
   private readonly lang: Lang;
   private readonly stats: CommaStats | null;
+  private readonly chats: CommaChats | null;
   /// Stays the same across the sockets of one process (Comma tells a process replaced from a socket dialed again).
   private readonly instance = randomUUID();
   /// The socket now, once Comma said it is connected; and the requests to Comma waiting for their answer.
@@ -174,6 +186,7 @@ export class CommaSurface extends ConnectedSurface {
     this.models = options.models;
     this.lang = options.lang ?? stationLang();
     this.stats = options.stats ?? null;
+    this.chats = options.chats ?? null;
   }
 
   // ── the connection ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -213,7 +226,11 @@ export class CommaSurface extends ConnectedSurface {
         log.info("comma", "connected to Comma", { connect: this.id, device: frame.device_id, run: frame.connector_run_id });
         this.send({ type: "metadata", capabilities: this.capabilities(), skills: [], system_info: { os: platform(), arch: arch(), hostname: this.name } });
         this.hello();
-        void this.sendStats(socket);
+        if (this.stats !== null) {
+          this.stats.start();
+          void this.sendIndex(socket, this.stats.stats, "stats.index", statsWire);
+          void this.sendIndex(socket, this.stats.tasks, "task.index", taskWire);
+        }
         return;
       case "heartbeat":
         this.send({ type: "heartbeat" });
@@ -287,7 +304,7 @@ export class CommaSurface extends ConnectedSurface {
       const known = (models[m.runtime] ??= []);
       if (m.model !== null && !known.includes(m.model)) known.push(m.model);
     }
-    return { scope: "", persistent_processes: false, computer_use_tool: false, host_access_required: false, execution_boundary: "stillfail-connect", runtime_probe: false, tasks: TASKS_VERSION, task_models: models, ...(this.stats === null ? {} : { stats_index: 1 }) };
+    return { scope: "", persistent_processes: false, computer_use_tool: false, host_access_required: false, execution_boundary: "stillfail-connect", runtime_probe: false, tasks: TASKS_VERSION, task_models: models, ...(this.stats === null ? {} : { stats_index: 1, task_index: 1 }) };
   }
 
   /// Tells Comma it is here, and how far it has each Task it takes part in: Comma gives what it missed.
@@ -296,13 +313,10 @@ export class CommaSurface extends ConnectedSurface {
     this.ask("task.hello", { tasks }).catch((error) => log.info("comma", "Comma was not told the station is here", { connect: this.id, error: (error as Error).message }));
   }
 
-  /// Keeps Comma's copy of the workspace's statistics current while `socket` is the connection: asks what Comma
-  /// holds, sends what it lacks a page at a time, and again a second after they changed. Comma answers `rate_limited`
-  /// to more than a few pages a second; any other refusal ends it until the next connection.
-  private async sendStats(socket: WebSocket) {
-    const stats = this.stats;
-    if (stats === null) return;
-    stats.start();
+  /// Keeps Comma's copy of an index current while `socket` is the connection: asks what Comma holds, sends what it
+  /// lacks a page at a time, and again a second after it changed. Comma answers `rate_limited` to more than a few pages
+  /// a second; any other refusal ends it until the next connection.
+  private async sendIndex(socket: WebSocket, stats: RevIndex, method: string, wire: (row: IndexRow) => Json | null) {
     let changed: () => void = () => {};
     let moved = new Promise<void>((resolve) => (changed = resolve));
     const stop = stats.listen(() => changed());
@@ -314,7 +328,7 @@ export class CommaSurface extends ConnectedSurface {
       while (live()) {
         let answer: Json;
         try {
-          answer = await this.ask("stats.index", page);
+          answer = await this.ask(method, page);
         } catch (error) {
           if ((error as Error).message !== "rate_limited") return;
           await wall.sleep(1000);
@@ -322,7 +336,7 @@ export class CommaSurface extends ConnectedSurface {
         }
         held = heldFrom(answer);
         if (held === null) return;
-        const next = nextPage(stats, held);
+        const next = nextPage(stats, held, wire);
         if (next !== null) {
           page = next;
           await wall.sleep(300);
@@ -333,10 +347,10 @@ export class CommaSurface extends ConnectedSurface {
         await Promise.race([moved, closed]);
         moved = new Promise<void>((resolve) => (changed = resolve));
         await wall.sleep(1000);
-        page = nextPage(stats, held) ?? probePage(stats);
+        page = nextPage(stats, held, wire) ?? probePage(stats);
       }
     } catch (error) {
-      log.info("comma", "the statistics were not sent", { connect: this.id, error: (error as Error).message });
+      log.info("comma", "an index was not sent", { connect: this.id, method, error: (error as Error).message });
     } finally {
       stop();
       stats.gone(this.id);
@@ -357,6 +371,18 @@ export class CommaSurface extends ConnectedSurface {
         return this.leave(params);
       case "task.posted_file":
         return this.postedFile(params);
+      case "task.read": {
+        if (this.chats === null) throw new Error("task.read is not something this station does");
+        const after = typeof params?.after === "number" && params.after >= 0 ? params.after : 0;
+        const limit = typeof params?.limit === "number" && params.limit > 0 ? Math.min(params.limit, 100) : 100;
+        return await this.chats.read(text(params, "task"), after, limit);
+      }
+      case "task.say": {
+        if (this.chats === null) throw new Error("task.say is not something this station does");
+        const said = text(params, "text");
+        if (said.trim() === "") throw new Error("text is required");
+        return await this.chats.say(text(params, "task"), said, text(params, "key"), text(params, "requester") || "Router", this.id);
+      }
       default:
         throw new Error(`${method} is not something a still.fail station does`);
     }

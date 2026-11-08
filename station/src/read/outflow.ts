@@ -120,3 +120,25 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
   const last = chats.at(-1);
   return { since, chats, more, next: more && last ? `${last.lastActiveAt}.${last.thread}` : null };
 }
+
+/// A chat's messages after its message `after` (its `n`), at most `limit`, oldest first, as the Router reads a Task
+/// through a Comma connect (`task.read`): each one's `n`, what it is (`message`, `edit`: a later wording of message
+/// `target`), who wrote it (`person`, `agent`, and their reference, a person's name and email as far as known), its words
+/// and when; `last`, the chat's latest `n`, and `more` when there are more after these. Null for a chat that is not the
+/// workspace's.
+export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME): Json {
+  if (store.getThread(s, thread) === null || !store.seesThread(s, of, thread)) return null;
+  const entries = store.entriesAfter(s, thread, BigInt(after), limit + 1);
+  const page = entries.slice(0, limit);
+  const people = new Map<string, Json>();
+  const named = (ref: string) => (people.has(ref) ? people.get(ref) : people.set(ref, person(s, ref)).get(ref));
+  return {
+    thread,
+    messages: page.map((e) => ({
+      n: e.n, kind: e.kind, target: e.target, authorKind: e.authorKind, author: e.author, text: e.text, at: e.at,
+      ...(e.authorKind === "person" && typeof e.author === "string" ? { person: named(e.author) } : {}),
+    })),
+    last: store.lastEntry(s, thread),
+    more: entries.length > page.length,
+  };
+}

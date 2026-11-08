@@ -8,7 +8,7 @@ import { platform } from "../platform/index.ts";
 import { HttpError } from "./views.ts";
 import { resourceChats, usage } from "./usage.ts";
 import { usageCallsPage } from "./store.ts";
-import { HOME, type Of, outflowChats, outflowUsage } from "./outflow.ts";
+import { HOME, type Of, outflowChats, outflowMessages, outflowUsage } from "./outflow.ts";
 
 /// A whole number from the args (another station's may say anything), else 0.
 const num = (v: unknown): number => (typeof v === "number" && Number.isSafeInteger(v) ? v : 0);
@@ -34,6 +34,8 @@ export const usageOps: Record<string, ReadOp> = {
   // `limit`: a page of them, after `before`; absent, all.
   outflowChats: (store, a) =>
     outflowChats(store, num(a.since), outflowOf(a.ws), typeof a.limit === "number" ? { limit: Math.min(Math.max(num(a.limit), 1), 1000), before: typeof a.before === "string" ? a.before : null } : null),
+  // A chat's messages, as the Router reads it through a Comma connect (`task.read`).
+  outflowMessages: (store, a) => outflowMessages(store, num(a.thread), num(a.after), Math.min(Math.max(num(a.limit), 1), 500), outflowOf(a.ws)),
   machineSessions: (store) => machineSessions(store),
   machineSession: (store, a) => machineSession(store, a.lang, a.runtime, a.id, a.limit),
   memory: (store, a) => {

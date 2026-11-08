@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { WebSocketServer } from "ws";
 import { workspaceRead } from "../src/comma/peer.ts";
-import { CommaStats, PAGE_BYTES, PAGE_ROWS, type StationRows, heldFrom, nextPage, probePage } from "../src/comma/stats.ts";
+import { CommaStats, PAGE_BYTES, PAGE_ROWS, type RevIndex, type StationRows, chatOf, chatRef, heldFrom, nextPage, probePage, taskWire } from "../src/comma/stats.ts";
+import { routerSays } from "../src/comma/chats.ts";
 import { CommaSurface } from "../src/comma/surface.ts";
 import { CommaTasks } from "../src/comma/tasks.ts";
 import { Rig } from "./hub-fakes.ts";
@@ -39,7 +40,7 @@ const here = (rows: Json[], people: Json = {}, chats: Json[] = []): StationRows 
 const nothing = async () => ({ stations: [], unread: [] });
 const quiet = () => () => {};
 
-const rows = (stats: CommaStats) => stats.since(0, 1000).map((r) => ({ kind: r.kind, removed: r.removed, row: r.removed ? null : JSON.parse(r.json) }));
+const rows = (index: RevIndex) => index.since(0, 1000).map((r) => ({ kind: r.kind, removed: r.removed, row: r.removed ? null : JSON.parse(r.json) }));
 
 test("the index keeps each station's rows as they changed: a person by their email, a chat by its thread, a row gone tombstoned, an unread station's kept", () => {
   const stats = CommaStats.at(tempdir(), nothing, quiet);
@@ -49,24 +50,24 @@ test("the index keeps each station's rows as they changed: a person by their ema
       here([usageRow("2026-11-01", "a", "slack:fs:ou_ada"), usageRow("2026-11-02", "a", "slack:fs:ou_bo")], people, [chat(7, "need_human")]),
       { station: "st-there", ...here([usageRow("2026-11-02", "b", "ann@x")]) },
     ];
-    assert.equal(stats.apply(first, [], FROM), 4);
-    const kept = rows(stats);
+    assert.deepEqual(stats.apply(first, [], FROM), { stats: 4, tasks: 1 });
+    const kept = rows(stats.stats);
     assert.deepEqual(kept.filter((r) => r.kind === "usage").map((r) => [r.row.person, r.row.personRef, r.row.station ?? null]), [
       ["ada@x", "slack:fs:ou_ada", null], ["Bo", "slack:fs:ou_bo", null], ["ann@x", "ann@x", "st-there"],
     ]);
     assert.deepEqual(kept.filter((r) => r.kind === "task").map((r) => [r.row.thread, r.row.state, r.row.creator]), [[7, "need_human", "ann@x"]]);
-    const rev = stats.rev();
-    assert.equal(stats.apply(first, [], FROM), 0, "given again unchanged: nothing moves");
-    assert.equal(stats.rev(), rev);
+    const rev = stats.stats.rev();
+    assert.deepEqual(stats.apply(first, [], FROM), { stats: 0, tasks: 0 }, "given again unchanged: nothing moves");
+    assert.equal(stats.stats.rev(), rev);
 
     // Bo's day is another's after all, and the other station could not be read this time.
-    assert.equal(stats.apply([here([usageRow("2026-11-01", "a", "slack:fs:ou_ada")], people, [chat(7, "all_done")])], ["st-there"], FROM), 2);
-    const now = rows(stats);
+    assert.deepEqual(stats.apply([here([usageRow("2026-11-01", "a", "slack:fs:ou_ada")], people, [chat(7, "all_done")])], ["st-there"], FROM), { stats: 2, tasks: 1 });
+    const now = rows(stats.stats);
     assert.equal(now.filter((r) => r.removed).length, 1, "Bo's row is gone");
     assert.ok(now.some((r) => r.row?.station === "st-there"), "the unread station's row stays");
     assert.ok(now.some((r) => r.kind === "task" && r.row.state === "all_done"));
     // A day before the build's span is never tombstoned by it.
-    assert.equal(stats.apply([here([], people, [])], [], FROM + 2 * DAY), 0);
+    assert.equal(stats.apply([here([], people, [])], [], FROM + 2 * DAY).stats, 0);
   } finally { stats.close(); }
 });
 
@@ -75,10 +76,10 @@ test("pages bring Comma from what it holds to the index's rev, at most a page's 
   try {
     const many = Array.from({ length: PAGE_ROWS + 5 }, (_, i) => usageRow("2026-11-02", `s${i}`, "ann@x"));
     stats.apply([here(many)], [], FROM);
-    const probe = probePage(stats);
-    assert.deepEqual([probe.rows.length, probe.since, probe.through], [0, stats.rev(), stats.rev()]);
+    const probe = probePage(stats.stats);
+    assert.deepEqual([probe.rows.length, probe.since, probe.through], [0, stats.stats.rev(), stats.stats.rev()]);
     // A Comma holding nothing of this epoch: all again, from the start, a page within Comma's bounds at a time.
-    const first = nextPage(stats, { epoch: null, through: 0 })!;
+    const first = nextPage(stats.stats, { epoch: null, through: 0 })!;
     assert.deepEqual([first.reset, first.since], [true, 0]);
     let page: ReturnType<typeof nextPage> = first;
     let held = { epoch: first.epoch as string | null, through: 0 };
@@ -88,16 +89,16 @@ test("pages bring Comma from what it holds to the index's rev, at most a page's 
       assert.equal(page.since, held.through);
       sent += page.rows.length;
       held = { epoch: page.epoch, through: page.through };
-      page = nextPage(stats, held);
+      page = nextPage(stats.stats, held);
     }
-    assert.deepEqual([sent, held.through], [many.length, stats.rev()]);
+    assert.deepEqual([sent, held.through], [many.length, stats.stats.rev()]);
     stats.apply([here(many.slice(1))], [], FROM);
-    assert.equal(stats.since(0, 1000).filter((r) => r.removed).length, 1);
-    stats.held("two", 0);
-    stats.held("one", stats.rev());
-    assert.equal(stats.since(0, 1000).filter((r) => r.removed).length, 1, "another connection does not hold it yet");
-    stats.held("two", stats.rev());
-    assert.equal(stats.since(0, 1000).filter((r) => r.removed).length, 0);
+    assert.equal(stats.stats.since(0, 1000).filter((r) => r.removed).length, 1);
+    stats.stats.held("two", 0);
+    stats.stats.held("one", stats.stats.rev());
+    assert.equal(stats.stats.since(0, 1000).filter((r) => r.removed).length, 1, "another connection does not hold it yet");
+    stats.stats.held("two", stats.stats.rev());
+    assert.equal(stats.stats.since(0, 1000).filter((r) => r.removed).length, 0);
     assert.deepEqual(heldFrom({ epoch: "e", through: 3 }), { epoch: "e", through: 3 });
     assert.equal(heldFrom("no"), null);
   } finally { stats.close(); }
@@ -127,17 +128,23 @@ test("a build reads this station's usage and chats of the home workspace and eac
 
 test("connected, the station sends Comma what it lacks of the statistics, and again as they change; a Comma from before ends it", async () => {
   const pages: Json[] = [];
+  const tasks: Json[] = [];
   let refuse = false;
   let held: Json = { epoch: null, through: 0 };
   const wss = new WebSocketServer({ noServer: true });
   const server = createServer((_req, res) => res.writeHead(404).end());
   let metadata: Json = null;
+  let comma: import("ws").WebSocket | null = null;
+  const answers = new Map<string, Json>();
   server.on("upgrade", (req, socket, head) =>
     wss.handleUpgrade(req, socket, head, (ws) => {
+      comma = ws;
       ws.on("message", (data) => {
         const f = JSON.parse(String(data));
+        if (f.type === "response" || f.type === "error") answers.set(f.id, f);
         if (f.type === "metadata") metadata = f;
         if (f.type !== "request") return;
+        if (f.method === "task.index") tasks.push(f.params);
         if (f.method !== "stats.index") return void ws.send(JSON.stringify({ id: f.id, type: "response", result: {} }));
         pages.push(f.params);
         if (refuse) return void ws.send(JSON.stringify({ id: f.id, type: "error", error: "unknown method" }));
@@ -152,8 +159,13 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
   const rig = new Rig();
   const dir = tempdir();
   let builds = 0;
-  const stats = CommaStats.at(dir, async () => (builds++, { stations: [here([usageRow("2026-11-02", "a", "ann@x")])], unread: [] }), quiet);
-  const surface = new CommaSurface({ connect: "cm", server: base, token: "salix_conn_test123", name: "mac", tasks: new CommaTasks(join(dir, "tasks.json")), store: rig.store, models: () => [], stats });
+  const stats = CommaStats.at(dir, async () => (builds++, { stations: [here([usageRow("2026-11-02", "a", "ann@x")], {}, [chat(7, "need_human")])], unread: [] }), quiet);
+  const asked: Json[] = [];
+  const chats = {
+    read: async (ref: string, after: number, limit: number) => (asked.push(["read", ref, after, limit]), { title: "Fix", messages: [], through: 3 }),
+    say: async (ref: string, text: string, key: string, requester: string, connect: string) => (asked.push(["say", ref, text, key, requester, connect]), { seq: 4 }),
+  };
+  const surface = new CommaSurface({ connect: "cm", server: base, token: "salix_conn_test123", name: "mac", tasks: new CommaTasks(join(dir, "tasks.json")), store: rig.store, models: () => [], stats, chats });
   const until = async (f: () => boolean) => {
     for (let i = 0; i < 500 && !f(); i++) await new Promise((r) => setTimeout(r, 10));
     assert.ok(f());
@@ -161,23 +173,37 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
   try {
     await surface.start(async () => {});
     await until(() => metadata !== null && held.through > 0);
-    assert.equal(metadata.capabilities.stats_index, 1);
+    assert.deepEqual([metadata.capabilities.stats_index, metadata.capabilities.task_index], [1, 1]);
     assert.equal(builds, 1, "connected: built once");
     const sent = pages.flatMap((p) => p.rows);
-    assert.deepEqual(sent.map((r: Json) => [r.source, r.kind, r.row.person]), [["stillfail", "usage", "ann@x"]]);
+    assert.deepEqual(sent.map((r: Json) => [r.source, r.kind]), [["stillfail", "usage"], ["stillfail", "task"]]);
+    // The chats go as Comma's Task index too, a Task waiting for its person as needs_review.
+    await until(() => tasks.some((p) => p.rows.length > 0));
+    assert.deepEqual(tasks.flatMap((p) => p.rows).map((r: Json) => [r.thread, r.task, r.status, r.created_by]), [["7", "7", "needs_review", "ann@x"]]);
+
+    // The Router reads a chat of the index and writes in it.
+    const request = async (id: string, method: string, params: Json) => {
+      comma!.send(JSON.stringify({ id, type: "request", method, params }));
+      await until(() => answers.has(id));
+      return answers.get(id);
+    };
+    assert.deepEqual((await request("r1", "task.read", { task: "7", after: 1, limit: 500 })).result, { title: "Fix", messages: [], through: 3 });
+    assert.deepEqual((await request("r2", "task.say", { task: "7", text: "选 main", key: "k1", requester: "Router" })).result, { seq: 4 });
+    assert.match((await request("r3", "task.say", { task: "7", text: " " })).error, /text/);
+    assert.deepEqual(asked, [["read", "7", 1, 100], ["say", "7", "选 main", "k1", "Router", "cm"]]);
 
     // Changed: the next page carries only what changed.
-    stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 2)])], [], FROM);
+    stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 2)], {}, [chat(7, "need_human")])], [], FROM);
     const before = pages.length;
-    await until(() => held.through === stats.rev());
+    await until(() => held.through === stats.stats.rev());
     assert.deepEqual(pages.slice(before).flatMap((p) => p.rows).map((r: Json) => r.row.calls), [2]);
 
     // A Comma that does not take the pages: no more are sent.
     refuse = true;
-    stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 3)])], [], FROM);
-    await until(() => pages.at(-1)?.through === stats.rev());
+    stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 3)], {}, [chat(7, "need_human")])], [], FROM);
+    await until(() => pages.at(-1)?.through === stats.stats.rev());
     const last = pages.length;
-    stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 4)])], [], FROM);
+    stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 4)], {}, [chat(7, "need_human")])], [], FROM);
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal(pages.length, last);
   } finally {
@@ -185,6 +211,42 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
     stats.close();
     wss.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rig.hub.shutdown();
+  }
+});
+
+test("the Task index: a chat of this station by its thread, another station's with it; how it stands as a Task's status; a chat gone tombstoned, an unread station's kept", () => {
+  const stats = CommaStats.at(tempdir(), nothing, quiet);
+  try {
+    stats.apply([here([], {}, [chat(7, "need_human"), chat(8, "working"), { ...chat(9, "all_done"), archived: true }]), { station: "st-there", ...here([], {}, [chat(3, "all_done")]) }], [], FROM);
+    assert.deepEqual(rows(stats.tasks).map((r) => [r.row.task, r.row.status]), [["7", "needs_review"], ["8", "in_progress"], ["9", "archived"], ["3@st-there", "done"]]);
+    assert.deepEqual([chatOf(chatRef(3, "st-there")), chatOf("7"), chatOf("x")], [{ thread: 3, station: "st-there" }, { thread: 7, station: null }, null]);
+    const wire = stats.tasks.since(0, 10).map(taskWire);
+    assert.deepEqual(Object.keys(wire[0]!).sort(), ["created_at", "created_by", "labels", "last_activity_at", "model", "rev", "runtime", "status", "task", "thread", "title"]);
+    stats.apply([here([], {}, [chat(7, "need_human")])], ["st-there"], FROM);
+    assert.deepEqual(rows(stats.tasks).filter((r) => r.removed).length, 2, "8 and 9 are gone, the unread station's stays");
+    assert.ok(rows(stats.tasks).some((r) => r.row?.task === "3@st-there"));
+  } finally { stats.close(); }
+});
+
+test("the Router writes in a chat of the workspace as itself, once per key; a chat of another workspace or a Slack thread is refused", async () => {
+  const rig = new Rig();
+  const stats = CommaStats.at(tempdir(), nothing, quiet);
+  try {
+    rig.store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1, ws: null } as never);
+    const thread = rig.store.openThreadOf("ember", "CHAT", "chat", "A chat", "ann@x", "a");
+    rig.store.joinThread(thread.id, "a", "ember");
+    const home = rig.hub.wsOf("a");
+    const w = { thread: thread.id, text: "选 main", key: "cm:k1", requester: "Router", connect: "cm" };
+    const n = routerSays(rig.hub, stats, home, w);
+    assert.equal(routerSays(rig.hub, stats, home, w), n, "the same key: the same message");
+    const said = rig.store.entriesAfter(thread.id, 0).filter((e) => e.kind === "message");
+    assert.deepEqual(said.map((e) => [e.authorKind, e.author, e.text]), [["person", "slack:cm:Router", "选 main"]]);
+    assert.throws(() => routerSays(rig.hub, stats, "another-ws", { ...w, key: "cm:k2" }), /no such chat/);
+    const slack = rig.store.openThread("slack:ember", "C1", "100.1", null, null);
+    assert.throws(() => routerSays(rig.hub, stats, home, { ...w, thread: slack.id, key: "cm:k3" }));
+  } finally {
+    stats.close();
     await rig.hub.shutdown();
   }
 });
