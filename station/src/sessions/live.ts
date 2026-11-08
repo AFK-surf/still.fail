@@ -87,7 +87,7 @@ type Rate = { buckets: [number, number][]; toldAt: number; told: number };
 /// transcripts stand is read off the main thread (`ready`).
 /// `takeUp`: while the readers are asked where its reading stands, where the process before's stood (carried over as it
 /// was asked): gone on from there at once, whether it was.
-type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean; locating?: AbortController; carried?: TailState[]; announce?: boolean };
+type Watched = { tail: ChainTail | null; ready: Promise<void> | null; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void; takeUp?: (states: TailState[]) => boolean; locating?: AbortController; following?: AbortController; followAgain?: boolean; carried?: TailState[]; announce?: boolean };
 /// A listener of a session: whether it is told the entries in brief, and what is said while it joins (what it lacks of
 /// the transcript read off the main thread first), held until it has joined.
 type Sub = { id: number; listener: Listener; brief: boolean; queue: LiveMessage[] | null };
@@ -419,7 +419,11 @@ export class LiveHub {
   private readNow(key: string) {
     const watched = this.watched.get(key);
     if (!watched || watched.tail === null) return;
-    if (watched.behind) this.follow(watched, key);
+    if (watched.behind) {
+      // A turn's final transcript must be read before its clear, even if a background lookup is still pending.
+      this.stopFollow(watched);
+      this.follow(watched, key);
+    }
     const [start, entries] = watched.tail.read();
     this.noteLength(key, watched.tail);
     this.gained(key, start, entries);
@@ -546,7 +550,9 @@ export class LiveHub {
     this.gained(key, start, entries);
     // The new one is usually not written yet: it is looked for on each read until it is.
     watched.behind = true;
-    this.follow(watched, key);
+    this.stopFollow(watched);
+    if (this.locateAsync === null) this.follow(watched, key);
+    else this.followLater(watched, key);
     this.soon(key);
   }
 
@@ -559,6 +565,49 @@ export class LiveHub {
     const path = watched.tail.path;
     watched.tail.extend(at.paths);
     if (watched.tail.path !== path) watched.arm();
+  }
+
+  private stopFollow(watched: Watched) {
+    const pending = watched.following;
+    watched.following = undefined;
+    watched.followAgain = false;
+    pending?.abort();
+  }
+
+  /// A later read can find a transcript off-thread; a turn ending still reads synchronously before it tells `clear`.
+  private followLater(watched: Watched, key: string) {
+    const locate = this.locateAsync;
+    if (locate === null || watched.tail === null) return;
+    if (watched.following !== undefined) { watched.followAgain = true; return; }
+    const pending = new AbortController();
+    watched.following = pending;
+    const finished = () => {
+      const again = watched.followAgain === true;
+      watched.followAgain = false;
+      watched.following = undefined;
+      // A read came while this lookup held an older snapshot. Honor it once if the current transcript is still missing.
+      if (again && watched.behind) this.followLater(watched, key);
+    };
+    void Promise.resolve().then(() => locate(key, pending.signal)).then((at) => {
+      if (this.watched.get(key) !== watched || watched.following !== pending || watched.tail === null) return;
+      if (at === null) { finished(); return; }
+      const before = watched.tail.snapshot();
+      const changed = before.length !== at.paths.length || before.some((state, i) => {
+        const ref = at.paths[i]!;
+        return state.path !== (typeof ref === "string" ? ref : ref.path) || (state.runtime ?? at.runtime) !== (typeof ref === "string" ? at.runtime : ref.runtime);
+      });
+      const path = watched.tail.path;
+      watched.tail.extend(at.paths);
+      watched.behind = at.current === false;
+      if (watched.tail.path !== path) watched.arm();
+      finished();
+      if (changed) this.soon(key);
+    }).catch((error) => {
+      if (this.watched.get(key) !== watched || watched.following !== pending) return;
+      watched.behind = true;
+      if (!pending.signal.aborted) log.warn("live", "a transcript's new location could not be read", { session: key, error: String(error) });
+      finished();
+    });
   }
 
   unsubscribe(key: string, id: number) {
@@ -819,6 +868,7 @@ export class LiveHub {
     this.watched.delete(key);
     this.told.delete(key);
     watched?.locating?.abort();
+    if (watched !== undefined) this.stopFollow(watched);
     watched?.watcher?.close();
   }
 
@@ -845,7 +895,10 @@ export class LiveHub {
       }
       const announce = now.announce === true;
       now.announce = false;
-      if (now.behind) this.follow(now, key);
+      if (now.behind) {
+        if (this.locateAsync === null) this.follow(now, key);
+        else this.followLater(now, key);
+      }
       const [start, entries] = now.tail.read();
       this.noteLength(key, now.tail);
       if (entries.length > 0) this.gained(key, start, entries);
