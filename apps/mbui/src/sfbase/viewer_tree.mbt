@@ -337,75 +337,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       // on the window, the box it is cut to, its corners round, the picture in it, as Viewer::picture_shown has it, its
       // whole picture judged ready for where it lands (View::image_for: as what draws the picture judged it,
       // Viewer::shown_picture), which of them decided as it is drawn)
-      let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
-        let t = strip_at(n)
-        vw.bytes.get() |> ignore
-        if !vw.flight_node() {
-          return None
-        }
-        let (w, h) = stage()
-        match (vw.flight_from(@ui.current()), vw.marks_rect_on(n)) {
-          (Some(from), Some(to)) => flight_box(from, vw.lifted_at(t), to, vw.flying_at(t), w, h).map(fn(f) { (f, to) })
-          _ => None
-        }
-      }
-      canvas.box(fn(cut) {
-        cut
-        .over(Is(true))
-        .clips(Is(true))
-        .offset(By(fn() {
-          match flight(cut) {
-            Some((f, _)) => (f.cut.0, f.cut.1)
-            None => (0.0, 0.0)
-          }
-        }))
-        .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
-        .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
-        |> ignore
-        cut.box(fn(b) {
-          b
-          .over(Is(true))
-          .clips(Is(true))
-          .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
-          .offset(By(fn() {
-            match flight(b) {
-              Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
-              None => (0.0, 0.0)
-            }
-          }))
-          .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
-          .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
-          |> ignore
-          b.box(fn(p) {
-            p
-            .over(Is(true))
-            .offset(By(fn() {
-              match flight(p) {
-                Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
-                None => (0.0, 0.0)
-              }
-            }))
-            .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
-            .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
-            .image(By(fn() {
-              match flight(p) {
-                Some(_) => vw.picture_shown(src)
-                None => None
-              }
-            }))
-            .image_for(By(fn() {
-              match (flight(p), vw.picture(src)) {
-                (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
-                _ => (0.0, 0.0)
-              }
-            }))
-            |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
+      image_flight(canvas, src, vw, stage, fn(t) { vw.flies_from_page() == 0 || vw.lifted_at(t) >= 1.0 })
       // (the one going while the strip's way goes, drawn from where it was, the stage's width and the gap further out to
       // the side it goes to: it has no place of its own any more (Strip's leaving, its picture as it showed then); none
       // where this one could not be decoded, its words alone)
@@ -2056,4 +1988,148 @@ fn Viewer::words_share(self : Viewer, p : Double) -> Double {
 fn Viewer::asked_now(self : Viewer) -> Bool {
   self.asked_told.get() |> ignore
   self.asked
+}
+
+///|
+/// The picture of viewer `vw` flying in or back, its nodes in `parent`: from the thumbnail as the chat lays it out in
+/// the frame drawn (Viewer::flight_from) to where its zoom has it (on `stage`), as far as its flight has come then
+/// (flight_box): what shows of it on the window (`parent` laid out over all of it), the box it is cut to, its
+/// corners round, the picture in it, as Viewer::picture_shown has it, its whole picture judged ready for where it lands
+/// (View::image_for: as what draws the picture judged it, Viewer::shown_picture), which of them decided as it is
+/// drawn; drawn at the moments `mine` says (its own layer's, or the slot of the page it flies from: viewer_flight_slot).
+fn image_flight(
+  parent : @view.View,
+  src : Source,
+  vw : Viewer,
+  stage : () -> (Double, Double),
+  mine : (Double) -> Bool,
+) -> Unit {
+  let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
+    let t = viewer_flight_at(vw, n)
+    vw.bytes.get() |> ignore
+    if !vw.flight_node() || !mine(t) {
+      return None
+    }
+    let (w, h) = stage()
+    match (vw.flight_from(@ui.current()), vw.marks_rect_on(n)) {
+      (Some(from), Some(to)) =>
+        flight_box(from, vw.lifted_at(t), to, vw.flying_at(t), w, h).map(fn(f) { (f, to) })
+      _ => None
+    }
+  }
+  parent.box(fn(cut) {
+    cut
+    .over(Is(true))
+    .clips(Is(true))
+    .offset(By(fn() {
+      match flight(cut) {
+        Some((f, _)) => (f.cut.0, f.cut.1)
+        None => (0.0, 0.0)
+      }
+    }))
+    .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
+    .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
+    |> ignore
+    cut.box(fn(b) {
+      b
+      .over(Is(true))
+      .clips(Is(true))
+      .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
+      .offset(By(fn() {
+        match flight(b) {
+          Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
+      .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
+      |> ignore
+      b.box(fn(p) {
+        p
+        .over(Is(true))
+        .offset(By(fn() {
+          match flight(p) {
+            Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
+            None => (0.0, 0.0)
+          }
+        }))
+        .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
+        .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
+        .image(By(fn() {
+          match flight(p) {
+            Some(_) => vw.picture_shown(src)
+            None => None
+          }
+        }))
+        .image_for(By(fn() {
+          match (flight(p), vw.picture(src)) {
+            (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
+            _ => (0.0, 0.0)
+          }
+        }))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The moment what draws viewer `vw`'s picture reads the strip and the flight at, in `n`: as each frame draws it while
+/// either goes; where neither goes, the clock read no more.
+fn viewer_flight_at(vw : Viewer, n : @view.View) -> Double {
+  vw.fly.said()
+  pv_strip.way.said()
+  let now = n.logic_at()
+  if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) {
+    n.drawn_at()
+  } else {
+    now
+  }
+}
+
+///|
+/// The viewer whose picture flies from a page's list (viewer_flight_slot), one told from another by the thumbnail it
+/// flies from.
+priv struct FlyingFrom {
+  from : Viewer?
+}
+
+///|
+impl Eq for FlyingFrom with equal(a, b) {
+  a.from.map(fn(v) { v.thumb_id() }) == b.from.map(fn(v) { v.thumb_id() })
+}
+
+///|
+/// What of a picture flying from page `serial`'s chat list is drawn in that page, in its node `slot` (between what the
+/// page shows and its bar: chat_page_made's): the viewer's while it flies from there (Viewer::flies_from_page), its
+/// picture drawn here while it is not out from under the bar (Viewer::lifted_at short of 1), the bar over it as over
+/// the list; in its own layer from then, and once nothing flies from here. `stage` its room. Laid out over the whole
+/// window, as the viewer's layer is: a list's flight is slotted only where its bar is its page's nodes (note_list's
+/// `slot`), the narrow shell's pages, which lie over all of it (what moves them, drawn so, moves this with them).
+pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage : () -> (Double, Double)) -> Unit {
+  slot.over(Is(true)).presses(Is(false)) |> ignore
+  // (the viewer flying from here: the one open, or one going back into it)
+  let flying = fn() -> Viewer? {
+    for v in [viewer.get(), pv_leaving.get()] {
+      match v {
+        Some(vw) => {
+          vw.fly.said()
+          if vw.flies && vw.flies_from_page() == serial {
+            return Some(vw)
+          }
+        }
+        None => ()
+      }
+    }
+    None
+  }
+  // (made again as another flies from here, given the one that does)
+  slot.pick(fn() { { from: flying() } }, fn(f, which) {
+    guard which.from is Some(vw) else { return }
+    f.over(Is(true)).presses(Is(false)) |> ignore
+    image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+  })
 }

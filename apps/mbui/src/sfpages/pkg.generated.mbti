@@ -70,7 +70,7 @@ pub fn chat_find_list(@sfbase.ChatRef) -> FindList
 
 pub fn chat_key(@sfbase.ChatRef) -> String
 
-pub fn chat_list(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, Array[@sfbase.Entry], Double, @settings.Core, top? : Double, lead? : Double, bar? : Double, foot? : Double) -> Unit
+pub fn chat_list(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, Array[@sfbase.Entry], Double, @settings.Core, top? : Double, lead? : Double, bar? : Double, foot? : Double, slotted? : Bool) -> Unit
 
 pub fn chat_mark(@ui.Ctx, String) -> Int32
 

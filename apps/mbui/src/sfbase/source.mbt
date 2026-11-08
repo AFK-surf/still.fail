@@ -146,8 +146,10 @@ pub fn Source::topic(src : Source, name : String, params : Map[String, Json]) ->
     if !held_building.val && src.topic_scope is None {
       return None
     }
-    // An event in a build can read a topic the graph already holds. Use that value without adding a manual hold.
-    if src.topic_scope is None {
+    // An event in a build can read a topic the graph already holds. Use that value without adding a manual hold. So
+    // can an event of a view's (a press on what its page shows, outside any build) through that view's source: as it
+    // is then, held no longer than the graph holds it, not for as long as the view lives (Source::owned_by's raw read).
+    if src.topic_scope is None || !held_building.val {
       match existing_followed_topic(src, name, key) {
         Some(holder) if holder.watched() => return Some(holder.get())
         _ => ()

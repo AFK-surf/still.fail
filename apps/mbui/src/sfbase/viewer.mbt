@@ -536,15 +536,35 @@ let thumbs_said : Map[String, @signals.Signal[String]] = {}
 ///|
 /// What is drawn over each chat's list (by its key, as last built): how much of its top the bar takes, how much of
 /// its foot the composer.
-let pv_lists : Map[String, (Double, Double)] = Map([])
+let pv_lists : Map[String, (Double, Double, Int)] = Map([])
 
 ///|
 /// Chat list `key`, node `node`, built this frame, `bar` of its top under the chat's bar and `room` of its foot under
 /// the composer (both drawn over the viewer's picture as it flies: over_flight): where its thumbnails show with nothing
-/// over them.
-pub fn note_list(c : @ui.Ctx, node : Int, key : String, bar : Double, room : Double) -> Unit {
+/// over them; `slot`, the page (its stack entry) whose bar over it is that page's nodes, a picture flying from it drawn
+/// under that bar in the page's slot (viewer_flight_slot), 0 none: its bar the old view's, lifted over the flight.
+pub fn note_list(c : @ui.Ctx, node : Int, key : String, bar : Double, room : Double, slot? : Int = 0) -> Unit {
   @motion.measure(c, node, "pv-list/" + key)
-  pv_lists[key] = (bar, room)
+  pv_lists[key] = (bar, room, slot)
+}
+
+///|
+/// The page (its stack entry) whose slot draws the flight of viewer `self` while it is under that page's bar: the one
+/// whose chat list holds the thumbnail it flies from, where that list's bar is the page's nodes (note_list's `slot`);
+/// 0 none, its own layer drawing all of it. Read from pv_thumbs and pv_lists, which the graph does not follow: what it
+/// comes to is fixed for as long as the thumbnail's list lives (the page a list is laid out in, and whether its bar is
+/// that page's nodes, never change for it), and is there before any press on the thumbnail can open the viewer (the
+/// list is laid out, noted so, before what it shows is pressed); what the graph follows of the flight is the viewer's
+/// own (Viewer::fly, its `flies`).
+fn Viewer::flies_from_page(self : Viewer) -> Int {
+  match pv_thumbs.get(self.thumb_id()) {
+    Some(l) =>
+      match pv_lists.get(l.list) {
+        Some((_, _, page)) => page
+        None => 0
+      }
+    None => 0
+  }
 }
 
 ///|
@@ -590,7 +610,7 @@ pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
         seen: if l.id != 0 { c.rect_of(l.id) } else { None },
         over: l.over,
         clear: match (pv_lists.get(l.list), @motion.measured_rect(c, "pv-list/" + l.list)) {
-          (Some((bar, room)), Some((_, ly, _, lh))) => Some((ly + bar, ly + lh - room))
+          (Some((bar, room, _)), Some((_, ly, _, lh))) => Some((ly + bar, ly + lh - room))
           _ => None
         },
       })

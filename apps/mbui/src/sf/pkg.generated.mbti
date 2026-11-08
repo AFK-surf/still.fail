@@ -1680,7 +1680,7 @@ pub fn room_of(Double) -> @ui.Space
 
 pub fn round_face() -> @ui.Style
 
-pub fn round_key_node(@view.View, String, () -> String, () -> Unit, side? : Double, icon_size? : Double) -> Unit
+pub fn round_key_node(@view.View, String, () -> String, () -> Unit, side? : Double, icon_size? : Double, ink? : () -> Int64) -> Unit
 
 pub let row_corner : Double
 
