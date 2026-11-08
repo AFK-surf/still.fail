@@ -8,14 +8,15 @@ import type { Connection } from "../connects/connections.ts";
 import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
 import { NAMES_FILE } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
-import type { CommaStats } from "./stats.ts";
-import { type CommaChats, CommaSurface } from "./surface.ts";
+import { log } from "../ops/log.ts";
+import { type CommaChats, type CommaIndexes, CommaSurface } from "./surface.ts";
 import { CommaTasks } from "./tasks.ts";
 
 type Json = any;
 
 /// A Comma connect as config.json has it, as far as its connection goes.
 export type CommaConnect = { id: string; enabled: boolean; server: string; token: string; workspace?: string | null };
+type ScopedConnect = CommaConnect & { scopeHome: string | null; scopeVersion: number };
 
 const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
 
@@ -52,31 +53,70 @@ export const maskToken = (s: string) => (s.length <= 4 ? (s === "" ? "" : "â€¢â€
 export type CommaOptions = ConnectsOptions & {
   /// How a connect's connection is made (tests); default a CommaSurface.
   create?: (connect: CommaConnect, book: NameBook, tasks: CommaTasks) => Connection;
-  /// The workspace's statistics its connections send Comma (stats.ts).
-  stats?: CommaStats | null;
-  /// The chats of its Task index as the Router reads and writes in them (module.ts).
-  chats?: CommaChats | null;
+  /// The home workspace's index and Router. Called only after the previous station has exited.
+  scope: (home: string) => { indexes: CommaIndexes; chats: CommaChats };
+  /// The current index and Router are for the home workspace. Other workspaces receive an empty reset until scoped
+  /// indexes are available, clearing rows older stations may have sent to them.
+  empty: CommaIndexes;
+  home: () => string | null;
+  homeVersion: () => number;
+  onHomeChange: (changed: () => void) => () => void;
+  previousExited: Promise<void>;
 };
 
 export type CommaParts = ReturnType<typeof makeComma>;
 
 export function makeComma(options: CommaOptions) {
   const tasks = new CommaTasks(join(options.data, "comma-tasks.json"));
+  let closing = false;
+  let configured = new Map(commaConnects(options.config.raw()).map((c) => [c.id, c]));
+  // Update the guard before the connect manager begins its asynchronous reconciliation.
+  const stopScope = options.config.listen((raw) => { configured = new Map(commaConnects(raw).map((c) => [c.id, c])); });
+  let previousReady = false;
+  void options.previousExited.then(() => { previousReady = true; }, () => {});
   const create =
     options.create ??
-    ((c: CommaConnect, book: NameBook, t: CommaTasks) =>
-      new CommaSurface({ connect: c.id, server: c.server, token: c.token, name: hostname(), tasks: t, store: options.store, models: () => options.models?.(c.id) ?? [], book, stats: options.stats ?? null, chats: options.chats ?? null }));
-  const connects = makeConnects<CommaConnect>(options, {
+    ((c: ScopedConnect, book: NameBook, t: CommaTasks) => {
+      const home = c.scopeHome, version = c.scopeVersion;
+      const isHome = home !== null && (c.workspace === null || c.workspace === undefined || c.workspace === home);
+      const inScope = () => {
+        if (closing) return false;
+        // Also notice a config edited by another process before sending a page or answering a Router request.
+        options.config.raw();
+        const now = configured.get(c.id);
+        return now !== undefined && now.enabled && now.server === c.server && now.token === c.token &&
+          (now.workspace ?? null) === (c.workspace ?? null) && (options.inWorkspace?.(c.workspace ?? null) ?? true) &&
+          options.home() === home && options.homeVersion() === version;
+      };
+      const scoped = () => {
+        if (!previousReady || home === null || !inScope()) throw new Error("the workspace is handing over; retry");
+        return options.scope(home);
+      };
+      const chats: CommaChats | null = isHome ? {
+        read: (ref, after, limit) => scoped().chats.read(ref, after, limit),
+        say: (ref, text, key, requester, connect) => scoped().chats.say(ref, text, key, requester, connect),
+      } : null;
+      return new CommaSurface({ connect: c.id, server: c.server, token: c.token, name: hostname(), tasks: t, store: options.store,
+        models: () => options.models?.(c.id) ?? [], book, stats: isHome ? () => scoped().indexes : options.empty,
+        chats, inScope, previousExited: options.previousExited });
+    });
+  const connects = makeConnects<ScopedConnect>(options, {
     kind: "comma",
     names: NAMES_FILE.comma,
-    connects: commaConnects,
-    credentials: (c) => (c.server === "" || c.token === "" ? null : `${c.server}\n${c.token}`),
+    connects: (raw) => commaConnects(raw).map((c) => ({ ...c, scopeHome: options.home(), scopeVersion: options.homeVersion() })),
+    // A workspace edit changes what this connection is allowed to see, even if its token is unchanged.
+    credentials: (c) => (c.server === "" || c.token === "" ? null : JSON.stringify([c.server, c.token, c.workspace ?? null, c.scopeHome, c.scopeVersion])),
     create: (c, book) => create(c, book, tasks),
     seen: () => null,
+  });
+  // Reconcile with a new snapshot even when the connection's configured token did not change.
+  const stopHome = options.onHomeChange(() => {
+    void connects.reconcile().catch((error) => log.warn("comma", "connects not brought in line with the workspace", { error: (error as Error).message }));
   });
 
   return {
     ...connects,
+    close: async () => { closing = true; stopHome(); stopScope(); await connects.close(); },
     tasks,
     /// What the overview says of a Comma connect besides what all connects say.
     shown: (raw: Json): Record<string, unknown> => {

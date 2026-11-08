@@ -138,10 +138,16 @@ export type CommaSurfaceOptions = {
   book?: NameBook | null;
   lang?: Lang;
   /// The workspace's statistics and Task index it sends Comma; none, none are sent.
-  stats?: CommaStats | null;
+  stats?: CommaIndexes | (() => CommaIndexes) | null;
   /// The chats of the Task index as the Router reads and writes in them; none, it does neither.
   chats?: CommaChats | null;
+  /// Do not send an index while the previous process can still send its own.
+  previousExited?: Promise<void>;
+  /// The home workspace for this surface has not changed since it was created.
+  inScope?: () => boolean;
 };
+
+export type CommaIndexes = Pick<CommaStats, "stats" | "tasks" | "start">;
 
 /// The chats of the Task index (a ref: stats.ts chatRef), as the Router reads one (`task.read`) and writes in it as
 /// itself (`task.say`, once per key).
@@ -160,8 +166,10 @@ export class CommaSurface extends ConnectedSurface {
   private readonly store: Store;
   private readonly models: () => ModelChoice[];
   private readonly lang: Lang;
-  private readonly stats: CommaStats | null;
+  private readonly stats: CommaIndexes | (() => CommaIndexes) | null;
   private readonly chats: CommaChats | null;
+  private readonly previousExited: Promise<void>;
+  private readonly inScope: () => boolean;
   /// Stays the same across the sockets of one process (Comma tells a process replaced from a socket dialed again).
   private readonly instance = randomUUID();
   /// The socket now, once Comma said it is connected; and the requests to Comma waiting for their answer.
@@ -187,6 +195,8 @@ export class CommaSurface extends ConnectedSurface {
     this.lang = options.lang ?? stationLang();
     this.stats = options.stats ?? null;
     this.chats = options.chats ?? null;
+    this.previousExited = options.previousExited ?? Promise.resolve();
+    this.inScope = options.inScope ?? (() => true);
   }
 
   // ── the connection ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -226,10 +236,9 @@ export class CommaSurface extends ConnectedSurface {
         log.info("comma", "connected to Comma", { connect: this.id, device: frame.device_id, run: frame.connector_run_id });
         this.send({ type: "metadata", capabilities: this.capabilities(), skills: [], system_info: { os: platform(), arch: arch(), hostname: this.name } });
         this.hello();
-        if (this.stats !== null) {
-          this.stats.start();
-          void this.sendIndex(socket, this.stats.stats, "stats.index", statsWire);
-          void this.sendIndex(socket, this.stats.tasks, "task.index", taskWire);
+        if (this.stats !== null && this.inScope()) {
+          void this.sendIndex(socket, "stats.index", statsWire);
+          void this.sendIndex(socket, "task.index", taskWire);
         }
         return;
       case "heartbeat":
@@ -316,13 +325,24 @@ export class CommaSurface extends ConnectedSurface {
   /// Keeps Comma's copy of an index current while `socket` is the connection: asks what Comma holds, sends what it
   /// lacks a page at a time, and again a second after it changed. Comma answers `rate_limited` to more than a few pages
   /// a second; any other refusal ends it until the next connection.
-  private async sendIndex(socket: WebSocket, stats: RevIndex, method: string, wire: (row: IndexRow) => Json | null) {
+  private async sendIndex(socket: WebSocket, method: "stats.index" | "task.index", wire: (row: IndexRow) => Json | null) {
     let changed: () => void = () => {};
     let moved = new Promise<void>((resolve) => (changed = resolve));
-    const stop = stats.listen(() => changed());
-    const live = () => this.socket_ === socket;
-    const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
+    let stats: RevIndex | null = null;
+    let stop = () => {};
+    const holder = randomUUID();
+    let didClose = false;
+    const live = () => !didClose && this.socket_ === socket && this.inScope();
+    const closed = new Promise<void>((resolve) => socket.once("close", () => { didClose = true; resolve(); }));
     try {
+      // An older process may still be sending the unscoped index. Clear or send ours only after it has exited.
+      await Promise.race([this.previousExited, closed]);
+      if (!live() || this.stats === null) return;
+      // A scoped database may still be in use by the previous process; open and build it after handover.
+      const indexes = typeof this.stats === "function" ? this.stats() : this.stats;
+      indexes.start();
+      stats = method === "stats.index" ? indexes.stats : indexes.tasks;
+      stop = stats.listen(() => changed());
       let held: ReturnType<typeof heldFrom> = null;
       let page = probePage(stats);
       while (live()) {
@@ -334,6 +354,7 @@ export class CommaSurface extends ConnectedSurface {
           await wall.sleep(1000);
           continue;
         }
+        if (!live()) return;
         held = heldFrom(answer);
         if (held === null) return;
         const next = nextPage(stats, held, wire);
@@ -342,18 +363,19 @@ export class CommaSurface extends ConnectedSurface {
           await wall.sleep(300);
           continue;
         }
-        stats.held(this.id, held.through);
+        stats.held(holder, held.through);
         // Nothing more to send: until the statistics change, a second's changes together.
         await Promise.race([moved, closed]);
         moved = new Promise<void>((resolve) => (changed = resolve));
         await wall.sleep(1000);
+        if (!live()) return;
         page = nextPage(stats, held, wire) ?? probePage(stats);
       }
     } catch (error) {
       log.info("comma", "an index was not sent", { connect: this.id, method, error: (error as Error).message });
     } finally {
       stop();
-      stats.gone(this.id);
+      stats?.gone(holder);
     }
   }
 
@@ -372,18 +394,22 @@ export class CommaSurface extends ConnectedSurface {
       case "task.posted_file":
         return this.postedFile(params);
       case "task.read": {
-        if (this.chats === null) throw new Error("task.read is not something this station does");
+        if (this.chats === null || !this.inScope()) throw new Error("task.read is not something this station does in this workspace");
         const after = typeof params?.after === "number" && params.after >= 0 ? params.after : 0;
         const limit = typeof params?.limit === "number" && params.limit > 0 ? Math.min(params.limit, 100) : 100;
-        return await this.chats.read(text(params, "task"), after, limit);
+        const result = await this.chats.read(text(params, "task"), after, limit);
+        if (!this.inScope()) throw new Error("the workspace changed while reading");
+        return result;
       }
       case "task.say": {
-        if (this.chats === null) throw new Error("task.say is not something this station does");
+        if (this.chats === null || !this.inScope()) throw new Error("task.say is not something this station does in this workspace");
         const said = text(params, "text");
         if (said.trim() === "") throw new Error("text is required");
         // As people see who writes: its Group (several Comma workspaces and Agent Swarms may write here).
         const who = text(params, "requester_name") || text(params, "requester") || "Router";
-        return await this.chats.say(text(params, "task"), said, text(params, "key"), who, this.id);
+        const result = await this.chats.say(text(params, "task"), said, text(params, "key"), who, this.id);
+        if (!this.inScope()) throw new Error("the workspace changed while writing");
+        return result;
       }
       default:
         throw new Error(`${method} is not something a still.fail station does`);
