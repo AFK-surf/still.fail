@@ -192,10 +192,23 @@ function historyText(e: TimelineEntry): string | null {
 }
 
 /// A session's transcript files, and the runtime that wrote them.
-export function transcriptFiles(s: Store, session: Pick<SessionRow, "key" | "workspace" | "cwd">, profiles: Profiles): { paths: { path: string; runtime: NonNullable<ReturnType<typeof runtimeKind>> }[] } | null {
-  const sources = store.runtimeSessionSources(s, session.key);
-  if (sources.length === 0) return null;
-  return transcriptSources(s.dataDir, profiles, sources, sessionPlaces(session));
+export async function transcriptFiles(s: Store, session: Pick<SessionRow, "key" | "workspace" | "cwd">, profiles: Profiles,
+  keep: () => boolean = () => true, afterYield: () => void = () => {}): Promise<{ paths: { path: string; runtime: NonNullable<ReturnType<typeof runtimeKind>> }[] } | null> {
+  const sources = store.historyRuntimeSources(s, session.key);
+  const paths: { path: string; runtime: NonNullable<ReturnType<typeof runtimeKind>> }[] = [];
+  let visited = 0, any = false;
+  try {
+    for (const source of sources) {
+      if (!keep()) return null;
+      if (source !== null) { any = true; paths.push(...transcriptSources(s.dataDir, profiles, [source], sessionPlaces(session)).paths); }
+      if (++visited % 64 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        if (!keep()) return null;
+        afterYield();
+      }
+    }
+  } finally { sources.close(); }
+  return any ? { paths } : null;
 }
 
 /// A transcript's entries, each given to `each` as it is read: in parts (a file put away decompressed as a stream), never
@@ -372,7 +385,7 @@ export async function historyHits(s: Store, profiles: Profiles, words: string[],
       await new Promise<void>((resolve) => setImmediate(resolve));
       if (!keep()) return partial(session.key);
       checkVisible(session.key);
-      const files = transcriptFiles(s, session, profiles);
+      const files = await transcriptFiles(s, session, profiles, keep, () => checkVisible(session.key));
       if (!keep()) return partial(session.key);
       if (files === null) { looked++; continue; }
       let any = false;

@@ -282,14 +282,16 @@ export function runtimeSessions(s: Store, key: string): string[] {
   return current === null ? ids : [...ids.filter((id) => id !== current), current];
 }
 
+const RUNTIME_SESSION_SOURCES = `SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
+  FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`;
+
 /// The runtime and profile of each transcript, including those from before runtime changes were supported.
 export function runtimeSessionSources(s: Store, key: string): { id: string; runtime: string; profile: string | null }[] {
   const row = getSession(s, key);
   if (!row) return [];
   let sources: { id: string; runtime: string; profile: string | null }[] = [];
   try {
-    sources = all(s, `SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
-      FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
+    sources = all(s, RUNTIME_SESSION_SOURCES, key)
       .map((r) => ({ id: r.id, runtime: r.runtime, profile: r.profile ?? null }));
   } catch {
     try {
@@ -302,6 +304,61 @@ export function runtimeSessionSources(s: Store, key: string): { id: string; runt
   if (row.runtimeSessionId === null) return sources;
   const current = sources.find((x) => x.id === row.runtimeSessionId) ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
   return [...sources.filter((x) => x.id !== row.runtimeSessionId), current];
+}
+
+type RuntimeSource = { id: string; runtime: string; profile: string | null };
+const HISTORY_RUNTIME_BATCH = 128;
+let historyRuntimeSnapshotId = 0;
+
+/// A history's sources in conversation order. A small history stays in one read; a large one keeps its order in a
+/// connection-local snapshot so the reader can resolve its paths in batches without holding a main-database snapshot.
+/// SQLite still sorts the session's recorded sources before either read can return.
+export function historyRuntimeSources(s: Store, key: string): Iterable<RuntimeSource | null> & { close(): void } {
+  const array = (rows: RuntimeSource[]) => ({ [Symbol.iterator]: () => rows[Symbol.iterator](), close() {} });
+  const row = getSession(s, key);
+  if (!row) return array([]);
+  let first: RuntimeSource[];
+  try { first = s.db.prepare(`${RUNTIME_SESSION_SOURCES} LIMIT ${HISTORY_RUNTIME_BATCH + 1}`).all(key) as RuntimeSource[]; }
+  catch { return array(runtimeSessionSources(s, key)); } // An old database uses the original reader's fallbacks.
+  const normalize = (source: RuntimeSource): RuntimeSource => ({ id: source.id, runtime: source.runtime, profile: source.profile ?? null });
+  if (first.length <= HISTORY_RUNTIME_BATCH) {
+    const sources = first.map(normalize);
+    if (row.runtimeSessionId === null) return array(sources);
+    const current = sources.find((source) => source.id === row.runtimeSessionId)
+      ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
+    return array([...sources.filter((source) => source.id !== row.runtimeSessionId), current]);
+  }
+  const ordered = function* (sources: Iterable<RuntimeSource>): Generator<RuntimeSource | null> {
+    let current: RuntimeSource | undefined;
+    for (const raw of sources) {
+      const source = normalize(raw);
+      // Yield a marker for skipped duplicates too: older SQLite readers can decode distinct NUL-suffixed ids alike.
+      if (row.runtimeSessionId !== null && source.id === row.runtimeSessionId) { current ??= source; yield null; continue; }
+      yield source;
+    }
+    if (row.runtimeSessionId !== null)
+      yield current ?? { id: row.runtimeSessionId, runtime: row.runtime, profile: row.profile };
+  };
+  const table = `history_runtime_snapshot_${++historyRuntimeSnapshotId}`;
+  try { s.db.prepare(`CREATE TEMP TABLE ${table} AS ${RUNTIME_SESSION_SOURCES}`).run(key); }
+  catch (error) {
+    const code = (error as { errcode?: number }).errcode;
+    if (code === undefined || (code & 255) !== 8) throw error;
+    return array(runtimeSessionSources(s, key)); // query_only connections cannot create even temporary tables.
+  }
+  try {
+    const page = s.db.prepare(`SELECT rowid AS position, id, runtime, profile FROM temp.${table}
+      WHERE rowid > ? ORDER BY rowid LIMIT ${HISTORY_RUNTIME_BATCH}`);
+    const rows = function* (): Generator<RuntimeSource> {
+      let after = 0;
+      for (;;) {
+        const batch = page.all(after) as (RuntimeSource & { position: number })[];
+        for (const source of batch) { after = source.position; yield source; }
+        if (batch.length < HISTORY_RUNTIME_BATCH) return;
+      }
+    };
+    return { [Symbol.iterator]: () => ordered(rows()), close() { s.db.exec(`DROP TABLE temp.${table}`); } };
+  } catch (error) { s.db.exec(`DROP TABLE temp.${table}`); throw error; }
 }
 
 /// Before per-message runtime was recorded, every message belonged to the session's first runtime.
