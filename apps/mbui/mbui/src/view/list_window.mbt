@@ -14,7 +14,14 @@
 /// not show was is forgotten as the column is laid out at another width or all words are measured anew (what shows is
 /// laid out again as it is, its height told anew). `bar_clear`: the bar's ends kept clear (View::scrolls'). `foot_room`:
 /// room kept under the last block, as it is now (none of the blocks: it is never made or let go as the column scrolls,
-/// so it is laid out as it changes wherever the column is).
+/// so it is laid out as it changes wherever the column is). `holds`: whether a block holds what shows where it is as
+/// what is over it changes (none that does not: the first after it that does; a head that stands over what comes in
+/// under it, which goes on down with what shows). `follows`: while it says so, a column at its foot (made there, or
+/// scrolled back to it) is kept there as what it holds grows, till it is moved off it (a chat's newest end). `centres`:
+/// the block to bring to the middle of where the column shows as this comes to name it (its cause: what asks it, an
+/// entry gone to), its middle there as tall as it is counted then; held there as what is over it is laid out, till the
+/// column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
+/// column moved first for what came or changed over it (how near its top the reader has got).
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -25,6 +32,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   bar? : ScrollBar,
   bar_clear? : () -> (Double, Double) = fn() { (0.0, 0.0) },
   foot_room? : () -> Double = fn() { 0.0 },
+  holds? : (K) -> Bool = fn(_) { true },
+  follows? : () -> Bool = fn() { false },
+  centres? : () -> K? = fn() { None },
+  first_told? : (K) -> Unit = fn(_) {  },
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (its keys worked out once as what they read changes, not again as a block's height is told: what reads them, the
@@ -94,8 +105,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let at = fn() { s.drawn(self.tree) }
   // (those that show: their room met by the column's, as tall as it shows, from the first down to one not laid out yet;
   // none before it is first laid out)
+  // (made at its foot where it follows it: Scroll::to_foot, there however far that comes to be)
+  if @signals.untracked(follows) {
+    s.to_foot()
+  }
   let window = @signals.computed(fn(_) {
     guard self.laid_size_told() is Some((_, vh)) else { return [] }
+    // (to be put at its foot, how far that is not told yet: none, nothing made at its top it never shows)
+    if s.at_foot() && (s.room)() is None {
+      return []
+    }
     let x = at()
     let out = []
     let all = laid.get()
@@ -119,11 +138,33 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // then and where it was among them, the column moved by as far as that moved; as it is scrolled, the first that shows
   // then)
   let anchor : Ref[(K, Double, Int)?] = Ref(None)
+  // (a block brought to the middle (`centres`) holding what shows instead, till the column is moved otherwise than by
+  // what it does itself: where it put it last, as many times as its blocks were worked out then)
+  let held : Ref[K?] = Ref(None)
+  let put_x = Ref(0.0)
+  let put_n = Ref(-1)
+  let first_was : Ref[K?] = Ref(None)
+  // (the first that shows from `i` on that holds what shows: none of them, the first that shows)
+  let holding = fn(all : Array[(K, Double, Double, Bool)], i : Int) {
+    let mut j = i
+    while j < all.length() && !holds(all[j].0) {
+      j = j + 1
+    }
+    if j < all.length() {
+      j
+    } else {
+      i
+    }
+  }
   self.reacts(fn() {
     laid.get() |> ignore
     (laid_n.val, at())
   }, fn(now) {
-    let (_, x) = now
+    let (n, x) = now
+    // (moved since by the hand or the wheel, nothing over it laid out: the block brought holds it no more)
+    if held.val is Some(_) && n == put_n.val && (x - dclamp(put_x.val, 0.0, s.most())).abs() > 0.5 {
+      held.val = None
+    }
     let all = @signals.untracked(fn() { laid.get() })
     let mut d = 0.0
     match anchor.val {
@@ -144,8 +185,71 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if d != 0.0 {
       s.grew_above(d)
     }
-    let i = first_past(all, x + d)
+    put_x.val = x + d
+    put_n.val = n
+    // (the first that shows where it is now: none told before it is laid out, where it is put then not known)
+    let f = first_past(all, x + d)
+    if (s.room)() is Some(_) && f < all.length() && first_was.val != Some(all[f].0) {
+      first_was.val = Some(all[f].0)
+      first_told(all[f].0)
+    }
+    let i = match held.val {
+      Some(k) =>
+        match anchor.val {
+          Some((a, _, i)) if a == k && i < all.length() && all[i].0 == k => i
+          _ => all.search_by(fn(b) { b.0 == k }).unwrap_or(all.length())
+        }
+      None => {
+        let i = first_past(all, x + d)
+        if i < all.length() {
+          holding(all, i)
+        } else {
+          i
+        }
+      }
+    }
     anchor.val = if i < all.length() { Some((all[i].0, all[i].1, i)) } else { None }
+  })
+  // (the block `centres` names brought to the middle of where it shows, once each time it names one: as soon as it is
+  // among them and the column is laid out; held there then)
+  let centred : Ref[K?] = Ref(None)
+  self.reacts(fn() { (centres(), keys(), self.laid_size_told().map(fn(z) { z.1 })) }, fn(now) {
+    let (want, _, vh) = now
+    guard want is Some(k) else {
+      centred.val = None
+      return
+    }
+    guard vh is Some(vh) && centred.val != Some(k) else { return }
+    let all = @signals.untracked(fn() { laid.get() })
+    guard all.search_by(fn(b) { b.0 == k }) is Some(i) else { return }
+    centred.val = Some(k)
+    let to = all[i].1 + all[i].2 / 2.0 - vh / 2.0
+    held.val = Some(k)
+    anchor.val = Some((k, all[i].1, i))
+    put_x.val = to
+    put_n.val = laid_n.val
+    s.put(to)
+  })
+  // (following its foot, scrolled back to it by the hand or the wheel, at rest there: at its foot again, kept there
+  // however far that comes to be as what it holds changes, till it is moved off it. At its foot as its blocks are now,
+  // not only as it was last laid out: moved down for what came in over what shows (Scroll::grew_above), it is as far
+  // from its foot as before, though that is not laid out yet)
+  self.reacts(at, fn(x) {
+    guard @signals.untracked(follows) && !s.at_foot() && x >= s.most() - 0.5 && s.glides_till() is None else {
+      return
+    }
+    let all = @signals.untracked(fn() { laid.get() })
+    let foot = match all.last() {
+      Some(b) => b.1 + b.2
+      None => 0.0
+    }
+    let vh = match @signals.untracked(fn() { self.laid_size_told() }) {
+      Some((_, vh)) => vh
+      None => 0.0
+    }
+    if x >= foot + @signals.untracked(foot_room) - vh - 0.5 {
+      s.to_foot()
+    }
   })
   // (whether each shows, by its key: told only to those that come to show or stop, not each block reading the window,
   // all of them run again each time the column is scrolled)
