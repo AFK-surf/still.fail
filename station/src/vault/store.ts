@@ -4,7 +4,7 @@
 // station from before has none, and one from before opens this one's database as it was).
 import type { DatabaseSync } from "node:sqlite";
 import type { BoxCert, Item, Vault } from "./crypto.ts";
-import { initializeVaultMembers } from "./member-index.ts";
+import { hasInvalidVaultMembers, initializeVaultMembers, vaultMembersComplete } from "./member-index.ts";
 
 const DELETED_WRITE = "vault was deleted during the write";
 
@@ -66,6 +66,10 @@ CREATE TRIGGER IF NOT EXISTS vault_deleted_items_update AFTER UPDATE OF body ON 
 
 const parse = <T>(rows: unknown[]): T[] => rows.map((r) => JSON.parse((r as { body: string }).body) as T);
 
+const MEMBER_VAULTS = `SELECT v.body FROM vault_member_lookup m
+  CROSS JOIN vaults v ON v.ws = m.ws AND v.id = m.vault
+  WHERE m.ws = ? AND m.sub = ? ORDER BY m.vault`;
+
 export class VaultStore {
   readonly #db: DatabaseSync;
 
@@ -78,6 +82,18 @@ export class VaultStore {
   /// Every vault of a workspace held here, latest versions.
   vaults(ws: string): Vault[] {
     return parse(this.#db.prepare("SELECT body FROM vaults WHERE ws = ? ORDER BY id").all(ws));
+  }
+
+  /// Candidate vaults in the same order as the full list. Callers still check membership on the held body.
+  memberVaults(ws: string, sub: string): Vault[] {
+    // The index state, its anomaly markers and the rows must all be read from the same snapshot.
+    this.#db.exec("SAVEPOINT vault_member_read");
+    try {
+      if (!vaultMembersComplete(this.#db, ws) || hasInvalidVaultMembers(this.#db, ws)) return this.vaults(ws);
+      return parse(this.#db.prepare(MEMBER_VAULTS).all(ws, sub));
+    } finally {
+      this.#db.exec("RELEASE vault_member_read");
+    }
   }
 
   /// A short ordered prefix and its database keys, followed by the rest only when a search needs it.
