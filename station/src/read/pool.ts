@@ -174,7 +174,7 @@ export class Readers {
   /// Check statistical coverage without occupying a device reader or writing old history.
   startUsageIndex() {
     if (this.closed) return;
-    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"), this.backfill);
+    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"), this.backfill, this.mbReader);
     this.minutes.start();
   }
 
