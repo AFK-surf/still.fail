@@ -1450,10 +1450,17 @@ fn Ctx::view_picture(self : Ctx, c : @view.Content, x : Double, y : Double, s : 
         _ => ()
       }
     }
-    // (covering it where it says so, as an old view's picture does: View::image_covers; fading in where it says so,
+    // (covering it where it says so, as an old view's picture does: View::image_covers; contained where it says so,
+    // View::image_contains; fading in where it says so,
     // View::image_fades; a GIF that moves going through its frames, each woken for, as an old view's: moving_key)
     None => {
-      let fit = if c.image_cover { FitCover } else { FitFill }
+      let fit = if c.image_cover {
+        FitCover
+      } else if c.image_contain {
+        FitContain
+      } else {
+        FitFill
+      }
       let shown = self.moving_key(shown, w, h, fit)
       self.draw_image(shown, x, y, w, h, fit, c.radius * s, a, fade=c.image_fade, max_px=most)
     }
@@ -2318,6 +2325,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
     tree.went_down(at, x~, y~)
+  } else if kind == 2 || kind == 3 {
+    // (let go or called off: nothing held anywhere)
+    tree.went_up(at)
   }
   // (a press on nothing a tap no more: another press, a second finger, moved past a gesture's slop from where it went
   // down, come back or not)

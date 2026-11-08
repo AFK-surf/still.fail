@@ -402,7 +402,22 @@ pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double
   self.event(at, fn() {
     let (count, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
     self.pressed_anywhere.set((count + 1, x, y))
+    self.held_anywhere.set(true)
   })
+}
+
+///|
+/// What went down in the window let go (or called off) at `at`, wherever it is: nothing held anywhere from then, told to
+/// what follows it (View::window_held).
+pub fn Tree::went_up(self : Tree, at : Double) -> Unit {
+  self.event(at, fn() { self.held_anywhere.set(false) })
+}
+
+///|
+/// Whether a finger or a button is down anywhere in the window now (an old view's `c.press().down`), followed: what
+/// waits for the hand to carry no press (a hover card opens only on a pointer carrying none, from when it was let go).
+pub fn View::window_held(self : View) -> Bool {
+  self.tree.held_anywhere.get()
 }
 
 ///|
