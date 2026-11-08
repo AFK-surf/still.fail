@@ -431,8 +431,24 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   assert_true(drag.iter().filter(fn(j) { kind_of_input(j) == "move" }).count() >= 2)
   assert_eq(kind_of_input(drag[drag.length() - 1]), "up")
   assert_true(close_to(number(Some(drag[drag.length() - 1]), "x"), 0.6))
+  // a drag held still: no move again, however many frames are drawn while it is
+  let was = r.inputs().length()
+  r.t.press_at(ax, ay)
+  r.t.move(bx, by)
+  let moved = r.inputs()[was:].to_array()
+  assert_eq(kind_of_input(moved[0]), "down")
+  assert_eq(kind_of_input(moved[moved.length() - 1]), "move")
+  let still = r.inputs().length()
+  r.t.run_for(held_still_ms)
+  assert_eq(r.inputs().length(), still)
+  r.t.release(bx, by)
+  assert_eq(kind_of_input(r.inputs()[r.inputs().length() - 1]), "up")
   screen_done(r.t)
 }
+
+///|
+/// How long a drag is held still in it: a dozen frames and more at any rate.
+let held_still_ms : Double = 200.0
 
 ///|
 test "turned sideways the same view goes on, the controls down the side" {
