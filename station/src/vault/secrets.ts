@@ -34,7 +34,7 @@ import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } fr
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
 import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
-import { hasInvalidVaultMembers, vaultMembersComplete } from "./member-index.ts";
+import { hasInvalidVaultMembers, vaultMembersComplete, vaultMembersStarted } from "./member-index.ts";
 import { reboxIndexComplete, REBOX_LEGACY, REBOX_READY } from "./rebox-index.ts";
 
 export const CARRIED_SAVE_PENDING = "SELECT body FROM vault_requests WHERE ws = ? AND id = ? AND status = 'pending'";
@@ -234,6 +234,7 @@ export class Secrets {
   /// A held id can also name a pending save outside the scopes that came with it.
   readonly #heldLostScopes = new Map<string, Set<string>>();
   readonly #preparingPending = new Map<string, Promise<void>>();
+  readonly #memberAudits = new Map<string, Promise<void>>();
   #previousExited = false;
   /// Grants whose startup cleanup raced repeatedly with another writer, retried after handover.
   readonly #restorePending = new Map<string, { ws: string; id: string }>();
@@ -854,7 +855,19 @@ export class Secrets {
   async preparePending(ws: string, members = this.#d.lock(ws) !== null): Promise<void> {
     // Do not make a request wait for an earlier process that is still running: the original query remains available.
     if (!this.#previousExited) return;
-    await this.#uses.preparePending(ws, members);
+    // An index begun by an older station may need a second bounded audit. Keep its list available via the original
+    // scan while that happens, and share the audit between concurrent readers.
+    if (members && hasVaultMembers(this.#d.db) && vaultMembersStarted(this.#d.db, ws) && !vaultMembersComplete(this.#d.db, ws)) {
+      if (!this.#memberAudits.has(ws)) {
+        const audit = this.#uses.preparePending(ws, true);
+        this.#memberAudits.set(ws, audit);
+        void audit.then(() => { this.#memberAudits.delete(ws); }, (error) => {
+          this.#memberAudits.delete(ws);
+          if (!this.#restoreClosed) log.warn("vault", "the member index audit could not finish", { error: (error as Error).message });
+        });
+      }
+      await this.#uses.preparePending(ws, false);
+    } else await this.#uses.preparePending(ws, members);
     if (this.#lostSaves.get(ws)?.ready === true) return;
     const already = this.#preparingPending.get(ws);
     if (already !== undefined) return already;
