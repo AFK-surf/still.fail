@@ -230,6 +230,13 @@
       "src/motion/anim.mbt": 2,
       "src/motion/fx.mbt": 1,
       "src/motion/layer.mbt": 2
+    },
+    "ui-current": {
+      "src/kit/toast_node.mbt": 1,
+      "src/kit/zoom.mbt": 4,
+      "src/motion/anim.mbt": 7,
+      "src/motion/fx.mbt": 3,
+      "src/motion/way.mbt": 2
     }
   },
   "excused": {
@@ -286,7 +293,8 @@
     "layout-read-back": {},
     "motion-length": {},
     "tester-branch": {},
-    "frame-number": {}
+    "frame-number": {},
+    "ui-current": {}
   },
   "tester": {
     "names": [

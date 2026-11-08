@@ -94,7 +94,7 @@ pub fn drawable_node(parent : @view.View, name : String, w : Double, tint? : () 
         if tinted {
           // (in one ink, the page's: its shapes in that ink as it is now)
           v
-          .shapes(Is(@ui.vector_shapes(d, w, @ui.current().drawn_scale(), tint=0x000000FFL)))
+          .shapes(Is(@ui.vector_shapes(d, w, v.pixel_scale(), tint=0x000000FFL)))
           .tint(By(fn() {
             match tint {
               Some(f) => f().unwrap_or(0L)

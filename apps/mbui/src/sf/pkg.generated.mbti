@@ -1294,6 +1294,10 @@ pub let no_link_to : LinkTo
 
 pub let no_ring : Double
 
+pub fn node_sp(@view.View, Double) -> Double
+
+pub fn node_sp_of(@view.View, Double) -> Double
+
 pub let note : @ui.TextStyle
 
 pub fn note_link_node(@view.View, () -> String, () -> String, () -> Unit, inline? : Bool) -> Unit

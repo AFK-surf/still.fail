@@ -17,10 +17,10 @@ pub fn avatar_node(
 ) -> Unit {
   let half = size / 2.0
   parent.box(fn(d) {
-    let px = fn() { size * @ui.current().scale }
+    let px = fn() { size * d.pixel_scale() }
     let decoded = fn() {
       let p = picture()
-      p != "" && @ui.current().image_ready(p, px())
+      p != "" && d.image_ready(p, px())
     }
     d
     .width(Is(Some(size)))
@@ -106,7 +106,7 @@ pub fn station_mark_node(
             }
             let color = glyph_color(colour, theme().dark).unwrap_or(tint())
             let drawing : @pixels.Vector = { w: 24.0, h: 24.0, layers }
-            @ui.vector_shapes(drawing, size, @ui.current().drawn_scale(), tint=color)
+            @ui.vector_shapes(drawing, size, g.pixel_scale(), tint=color)
           }
           None => []
         }
@@ -131,7 +131,7 @@ pub fn station_mark_node(
       e
       .width(By(fn() {
         e.words_redone() |> ignore
-        Some(@ui.text_advance(emoji(), size=@ui.current().sp(size * 0.9)))
+        Some(@ui.text_advance(emoji(), size=node_sp(e, size * 0.9)))
       }))
       .words(By(emoji))
       .words_look(Is({ size: size * 0.9, weight: 400, line: size, wrap: false, tracking: @view.letters_own, balance: false }))
@@ -141,8 +141,7 @@ pub fn station_mark_node(
       .offset(By(fn() {
         if @ui.web_lines_on() {
           e.words_redone() |> ignore
-          let c = @ui.current()
-          let (line, words) = (c.sp(size), c.sp(size * 0.9))
+          let (line, words) = (node_sp(e, size), node_sp(e, size * 0.9))
           (0.0, @ui.line_baseline(line, size=words, em=mark_em) - @ui.line_baseline(line, size=words))
         } else {
           (0.0, 0.0)

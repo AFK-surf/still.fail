@@ -219,16 +219,15 @@ fn md_table_body_node(
     }
     // (each cell's extent and the columns' widths, as Md::table works them out: table_widths)
     let widths_for = fn(t : MdTable) {
-      let c = @ui.current()
       let rows = [t.head]
       rows.append(t.rows)
       let extents = rows.mapi(fn(r, row) {
         row.map(fn(cell) {
-          let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { c.sp(x) })
+          let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { node_sp(outer, x) })
           (lo, hi, false)
         })
       })
-      table_widths(extents, room(), false, fn(x) { c.sp(x) })
+      table_widths(extents, room(), false, fn(x) { node_sp(outer, x) })
     }
     let widths = fn() {
       match table() {
@@ -439,7 +438,7 @@ fn table_key_node(
                       |> ignore
                     },
                     fn(png) { if (picture_out_by.val)(@ui.current(), png, !album) && !album { said() } },
-                    scale=dmax(@ui.current().drawn_scale(), table_shot_scale),
+                    scale=dmax(slot.pixel_scale(), table_shot_scale),
                   )
                 }),
               ),

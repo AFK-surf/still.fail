@@ -904,12 +904,18 @@ pub fn row_tile(c : @ui.Ctx) -> @ui.Style {
 
 ///|
 /// A row's lead tile's side as nodes (row_tile_side), in `parent`'s look, for the tile `t`: as the system's size of
-/// words changes.
+/// words changes, in the theme the window's tree is drawn in.
 pub fn row_tile_side_node(parent : @view.View, t : @view.View) -> () -> Double? {
   let look = look_node(parent)
   fn() {
     t.words_redone() |> ignore
-    Some(row_tile_side(@ui.current(), look))
+    match look {
+      Narrow => {
+        let th = @ui.tree_theme()
+        Some(dmax(identity_mark, node_sp(t, th.text_size(Body).1) + node_sp(t, th.text_size(Meta).1)))
+      }
+      Wide => Some(identity_mark)
+    }
   }
 }
 

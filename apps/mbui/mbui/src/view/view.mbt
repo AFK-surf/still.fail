@@ -663,6 +663,8 @@ pub struct Tree {
   mut glides_gone : (Int) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
+  /// what its host tells its nodes of where they are drawn (env.mbt: Tree::drawn_by)
+  env : Env
   /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
   laid_waits : Array[() -> Unit]
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
@@ -892,6 +894,7 @@ pub fn Tree::new(
     glides: fn(_, _) {  },
     glides_gone: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
+    env: Env::new(),
     laid_waits: [],
     pressing: None,
     pointed: None,

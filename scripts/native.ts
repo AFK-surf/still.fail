@@ -35,8 +35,10 @@
 //        (.github/workflows/prebuild.yml, run by hand); its other jobs fetch them, or fail saying to run it.
 //        --release: in the release native-artifacts instead (gh), which native.ts fetches from after the store (the
 //        workflow's, and a machine's without the bucket's token).
-//   node scripts/native.ts store-sync                  CI on main: each prebuilt part (the Windows ones) at its key that the
-//        release has and the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built
+//   node scripts/native.ts store-sync                  CI on main: each prebuilt part at its key that the release has and
+//        the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built. (Every part, not only the
+//        Windows ones: the release's download answered GitHub's runners 504 again and again on 2026-11-08, iroh-wasm's,
+//        failing every branch's bundle, static and check-linux; the store is asked first.)
 //
 // STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
 // builds. Builds go to $CARGO_TARGET_DIR/native/<part> when it is set, else the crate's own target/ (a worktree's own:
@@ -1390,12 +1392,12 @@ async function main(argv: string[]) {
       let any = false;
       try {
         for (const [p, t] of ours()) {
-          if (!onWindows(p, t)) continue;
           const name = asset(p, t, key(p, t));
           if (await inStore(name)) { console.log(`${name}: in the store`); continue; }
           if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: the prebuild workflow, or node scripts/native.ts prebuild ${p}:${t})`); continue; }
           const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
-          if (!r.ok) throw new Error(`${name}: the release answered ${r.status}`);
+          // (one the release does not give now is left for main's next run, as prune leaves one GitHub dropped)
+          if (!r.ok) { console.log(`${name}: the release answered ${r.status}; the next run copies it`); continue; }
           writeFileSync(join(work, "natives", name), Buffer.from(await r.arrayBuffer()));
           console.log(`${name}: from the release, to the store`);
           any = true;

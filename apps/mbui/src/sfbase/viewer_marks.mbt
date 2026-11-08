@@ -385,14 +385,15 @@ pub fn marks_remove(id : Int) -> Unit {
 
 ///|
 /// The words being written, put down (all of them gone: the words they were, removed).
-pub fn marks_put_down(c : @ui.Ctx) -> Unit {
+pub fn marks_put_down() -> Unit {
   let (id, x, y, w, color) = match marking.writing {
     Some(x) => x
     None => return
   }
   let text = marking.write_field.text().trim(chars=" \n\t").to_string()
   marking.writing = None
-  c.blur()
+  // (the keyboard down, what was written in done with: its field lets go of the focus)
+  marking.write_field.let_go()
   if id >= 0 {
     match marking.shapes.iter().find_first(fn(s) { s.id == id }) {
       Some(was) =>
@@ -444,7 +445,7 @@ pub fn marks_drawn() -> Array[Mark] {
 ///|
 /// A finger on the image while marking (move, up): `px`, `py` on the stage, `r` the picture's
 /// place (x, y, w, h) on it, `nw` its natural width; what `phase` is: 0 down, 1 moved, 2 up.
-pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double, Double, Double, Double), nw : Double) -> Unit {
+pub fn marks_finger(phase : Int, px : Double, py : Double, r : (Double, Double, Double, Double), nw : Double) -> Unit {
   let (rx, ry, rw, _) = r
   let k = rw / dmax(1.0, nw)
   let x = (px - rx) / k
@@ -452,7 +453,7 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
   match phase {
     0 => {
       // (what a finger put down does to the marks told, once done: what draws them and the bars follow it)
-      marks_finger_down(c, x, y, k)
+      marks_finger_down(x, y, k)
       marks_changed()
     }
     1 =>
@@ -503,7 +504,7 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
           }
           marks_changed()
           if far && m.numbered() {
-            c.focus_field(marking.note_field)
+            marking.note_field.focus()
           }
         }
         Some(Moving(_, _, _, _, _, before, changed)) => {
@@ -522,10 +523,10 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
 ///|
 /// A finger put down on the picture while marking, at (`x`, `y`) in its pixels (`k` stage points to one): what it
 /// takes up (marks_finger's down).
-fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
+fn marks_finger_down(x : Double, y : Double, k : Double) -> Unit {
   marking.palette = false
   if marking.writing is Some(_) {
-    marks_put_down(c)
+    marks_put_down()
     return
   }
   if marking.note >= 0 {
@@ -564,7 +565,7 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
         if s.kind == "words" && marking.tool == Words {
           marking.writing = Some((s.id, s.pts[0], s.pts[1], s.w, s.color))
           marking.write_field.set(s.text)
-          c.focus_field(marking.write_field)
+          marking.write_field.focus()
           return
         }
         marking.picked = s.id
@@ -577,7 +578,7 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
           let w = mark_text / k
           marking.writing = Some((-1, x, y - w * 0.65, w, marking.color))
           marking.write_field.set("")
-          c.focus_field(marking.write_field)
+          marking.write_field.focus()
         }
     }
     return
@@ -807,11 +808,11 @@ pub fn marks_json(nw : Double, nh : Double) -> String {
 ///|
 /// Back while marking: closes a note, puts down the words being written, closes the colours,
 /// lets go of the picked mark, else stops marking.
-pub fn marks_back(c : @ui.Ctx) -> Unit {
+pub fn marks_back() -> Unit {
   if marking.note >= 0 {
-    marks_note_done(c)
+    marks_note_done()
   } else if marking.writing is Some(_) {
-    marks_put_down(c)
+    marks_put_down()
   } else if marking.palette {
     marking.palette = false
     marks_changed()
@@ -824,14 +825,15 @@ pub fn marks_back(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-pub fn marks_note_done(c : @ui.Ctx) -> Unit {
+pub fn marks_note_done() -> Unit {
   // (all it shows taken, what the input method was composing in it too: Field::take, the note done with it)
   if marking.note >= 0 {
     marking.comments[marking.note] = marking.note_field.take()
   }
   marking.note = -1
   marks_changed()
-  c.blur()
+  // (the keyboard down: the note's field lets go of the focus)
+  marking.note_field.let_go()
 }
 
 ///|
@@ -933,13 +935,13 @@ pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
 
 ///|
 /// The note of the mark `id` opened: what was being written put down, nothing picked.
-pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
-  marks_put_down(c)
+pub fn marks_open_note(id : Int) -> Unit {
+  marks_put_down()
   marking.picked = -1
   marking.note = id
   marking.note_field.set(marking.comments.get(id).unwrap_or(""))
   marks_changed()
-  c.focus_field(marking.note_field)
+  marking.note_field.focus()
 }
 
 ///|

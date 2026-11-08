@@ -102,7 +102,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   .takes_back(fn() {
     if !vw.closing {
       if marking.on {
-        marks_back(@ui.current())
+        marks_back()
       } else {
         vw.shut(@ui.current())
       }
@@ -151,7 +151,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // what it reads asked of the core as what it needs comes (its kind sniffed, its bytes, a read failed)
   // (and as it is asked for: 下载 on one told of, 安装, its whole read first: Viewer::ask_save, ask_install)
   n.reacts(fn() { (vw.sniffed.get(), vw.bytes.get() is Some(_), vw.error.get() is Some(_), vw.fetching.get(), vw.asked_told.get()) }, fn(_) {
-    vw.fetch(@ui.current(), src)
+    vw.fetch(src)
   })
   // Read the neighbours ahead once the open picture has come (or failed). Revisit both when imageNear changes and
   // when this picture finishes, even if no frame was drawn in between.
@@ -191,7 +191,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       let (w, h) = stage()
       // (a film's or a song's picture sized by its player alone, Viewer::video_natural: nothing of a picture's asked
       // for it here, its thumbnail none)
-      ((w, h + @ui.current().ime_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w), marks_foot_over())
+      ((w, h + n.keyboard_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w), marks_foot_over())
     },
     fn(told) {
       let ((bw, bh), (nw, nh), bar, foot) = told
@@ -210,7 +210,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       // moment, the one the lift sets out at)
       marks_said()
       vw.zoom.told()
-      let ime = @ui.current().ime_inset()
+      let ime = n.keyboard_inset()
       let below = match marks_writing_bottom_in(vw.zoom, vw.zoom.rect_at(n.cause_at())) {
         Some(b) => b + marks_keyboard_gap - stage().1
         None => 0.0
@@ -672,7 +672,7 @@ fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
     },
     fn(waiting) {
       if waiting is Some(_) && vw.leaving_grab {
-        vw.left_with_frame(@ui.current(), src)
+        vw.left_with_frame(src, n.cause_at(), n.window())
       }
     },
   )
@@ -790,7 +790,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         v.at_right = rx + rw <= z.bw + 0.5
         if marking.on {
           match v.marks_rect(at) {
-            Some(r) => marks_finger(c, 0, d.x, d.y, r, z.nw)
+            Some(r) => marks_finger(0, d.x, d.y, r, z.nw)
             None => ()
           }
         } else if !@sf.pointer_rests() {
@@ -876,7 +876,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
       v.pinched = false
       if marking.on && !pinched {
         match v.marks_rect(at) {
-          Some(r) => marks_finger(c, 2, d.x, d.y, r, z.nw)
+          Some(r) => marks_finger(2, d.x, d.y, r, z.nw)
           None => ()
         }
         v.held = false
@@ -899,7 +899,7 @@ fn Viewer::one_finger_at(self : Viewer, d : @view.Drag, has_before : Bool, has_a
   let (x, y) = (d.wx, d.wy)
   if marking.on && !v.pinched {
     match v.marks_rect(at) {
-      Some(r) => marks_finger(@ui.current(), 1, d.x, d.y, r, z.nw)
+      Some(r) => marks_finger(1, d.x, d.y, r, z.nw)
       None => ()
     }
   } else if !v.held {
@@ -1110,7 +1110,7 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
   }
   if k.code == @ui.key_escape && k.mods == 0 {
     if marking.on {
-      marks_back(c)
+      marks_back()
     } else {
       v.shut(c)
     }
@@ -1424,12 +1424,11 @@ fn image_tools(
 
 ///|
 /// What viewer `vw` asked the core to download (Viewer::ask_save), told it once, at the moment it was asked
-/// (image_layer's).
+/// (image_layer's: as that change is done).
 fn download_told(src : Source, vw : Viewer) -> Unit {
   if vw.download_asked {
     vw.download_asked = false
-    let (station, key, name, size, from) = (vw.station, vw.key, vw.name, vw.file.size, vw.opened_from())
-    @ui.current().tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
+    download_start(src, vw.station, vw.key, vw.name, vw.file.size, from=vw.opened_from())
   }
 }
 
@@ -1670,7 +1669,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
   n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
     if vw.install_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
       vw.install_after = false
-      vw.ask_install(@ui.current())
+      vw.ask_install()
     }
   })
 }
@@ -1961,7 +1960,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
     })
     |> ignore
     @sf.button_node(r, fn() { @sf.t("web-main.file.cancelDownload") }, fn() {
-      vw.cancel_download(@ui.current(), src, @signals.untracked(dl))
+      vw.cancel_download(src, @signals.untracked(dl))
     }, tone=Ghost)
     |> ignore
   })
@@ -1994,7 +1993,7 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
       }
     }
     if apk {
-      @sf.button_node(r, fn() { label(true, pv("android-chat.file.install")) }, fn() { vw.ask_install(@ui.current()) }, tone=Primary, busy=fn() {
+      @sf.button_node(r, fn() { label(true, pv("android-chat.file.install")) }, fn() { vw.ask_install() }, tone=Primary, busy=fn() {
         reading_for(true)
       }, disabled=fn() { reading_for(false) }, across=true)
       |> ignore

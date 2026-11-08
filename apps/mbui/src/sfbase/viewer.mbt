@@ -623,8 +623,8 @@ let lift_gap : Double = 12.0
 /// share and the growing the rest, on one curve, so that nothing stops between them (the user, 2026-10-29: 「前段避让跟
 /// 后段放大之间…顿一下…应该浑然一体」); its edges no quicker as it goes out than as it then grows (a picture mostly hidden
 /// goes out far, the user, 2026-10-29: 「从上往下的还有问题」); a Move as long as it all is far. `to` not known: as far as
-/// to the middle of the window.
-fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?) -> (Double, Double) {
+/// to the middle of the window, `window` (w, h).
+fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?, window : (Double, Double)) -> (Double, Double) {
   let lift = lift_of(t).abs()
   let lift = if lift < 0.5 { 0.0 } else { lift }
   let y = t.y + (if lift > 0.0 { lift_of(t) } else { 0.0 })
@@ -632,8 +632,8 @@ fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?) -> (Double, Double
     Some((tx, ty, tw, th)) =>
       dmax(dmax((tx - t.x).abs(), (tx + tw - t.x - t.w).abs()), dmax((ty - y).abs(), (ty + th - y - t.h).abs()))
     None => {
-      let c = @ui.current()
-      dmax((c.width / 2.0 - t.x - t.w / 2.0).abs(), (c.height / 2.0 - y - t.h / 2.0).abs())
+      let (ww, wh) = window
+      dmax((ww / 2.0 - t.x - t.w / 2.0).abs(), (wh / 2.0 - y - t.h / 2.0).abs())
     }
   }
   (if lift > 0.0 { lift / (lift + grow) } else { 0.0 }, lift + grow)
@@ -1383,7 +1383,7 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
 ///|
 /// What has to be asked of the core this frame: a file of no known kind's first bytes, the whole of one to show, a
 /// video's player.
-pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
   let v = self
   // (each asked once a viewer, by its file: nothing a build changes)
   if v.kind is None && v.sniffed.get() is None && !v.sniffing.get() {
@@ -1502,7 +1502,6 @@ pub fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       }
     })
   }
-  ignore(c)
 }
 
 ///|
@@ -1542,7 +1541,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
             }
             // (the whole way on one curve, its way out from under the bar or composer first, if any, then the growing:
             // Viewer::flying, Viewer::lifted)
-            let (lift, far) = fly_way(t, Some(to))
+            let (lift, far) = fly_way(t, Some(to), (c.width, c.height))
             v.fly_lift = lift
             v.fly.put(0.0)
             v.fly.go(1.0, @motion.move(points=far), at~)
@@ -1574,7 +1573,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       (Some(t), Some(KImage), Some(r)) => {
         self.fly_from = Some(t)
         self.fly_back = true
-        self.fly_home_from(t, Some(r))
+        self.fly_home_from(t, Some(r), viewer_moment(c), (c.width, c.height))
         pv_hidden.set(self.thumb_id())
       }
       // a video, its thumbnail on the screen: back into it with the frame it shows (grabbed first: the thumbnail keeps
@@ -1591,7 +1590,7 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
             self.left_at = n.position()
             c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
           }
-          _ => self.fly_home("")
+          _ => self.fly_home("", viewer_moment(c), (c.width, c.height))
         }
       }
       // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
@@ -1618,12 +1617,13 @@ fn viewer_moment(c : @ui.Ctx) -> Double {
 }
 
 ///|
-/// A video back into its thumbnail with `picture` (from where a flight in has got to, in as much of its time).
-pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
+/// A video back into its thumbnail with `picture` (from where a flight in has got to, in as much of its time), from the
+/// moment `at`, in a window `window` (w, h).
+pub fn Viewer::fly_home(self : Viewer, picture : String, at : Double, window : (Double, Double)) -> Unit {
   self.fly_pic = picture
   self.fly_back = true
   match self.fly_from {
-    Some(t) => self.fly_home_from(t, self.fly_to)
+    Some(t) => self.fly_home_from(t, self.fly_to, at, window)
     None => ()
   }
   pv_hidden.set(self.thumb_id())
@@ -1634,16 +1634,21 @@ pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
 /// of its time: shrinking, then (if the bar or the composer hides it now) going in under them at its own size. The
 /// way re-shared for where `t` is now, so that it has grown, or gone out, as far as it had. A move of its own, on Move from where it is: quick as it sets out, at
 /// rest as it lands (the way in run backwards would land at its quickest, the thumbnail and the bars come back at
-/// once: a flash).
-fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Double, Double)?) -> Unit {
+/// once: a flash). From the moment `at`, in a window `window` (w, h).
+fn Viewer::fly_home_from(
+  self : Viewer,
+  t : Thumb,
+  from : (Double, Double, Double, Double)?,
+  at : Double,
+  window : (Double, Double),
+) -> Unit {
   if !self.flies {
     self.flies = true
     self.fly_lift = 0.0
     self.fly.put(1.0)
   }
-  let at = viewer_moment(@ui.current())
   let (was, q) = (self.fly_lift, self.fly.value_at(at))
-  let (lift, far) = fly_way(t, from)
+  let (lift, far) = fly_way(t, from, window)
   let q = if q >= was {
     lift + (q - was) / (1.0 - was) * (1.0 - lift)
   } else if was > 0.0 {
@@ -1659,13 +1664,13 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Doubl
 
 ///|
 /// A video closing into its thumbnail, its frame grabbed: once here, kept for the thumbnail (with where it was) and
-/// gone back with; none to be had, back with its still.
-pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
+/// gone back with; none to be had, back with its still: from the moment `at` (the answer's), in a window `window` (w, h).
+pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window : (Double, Double)) -> Unit {
   let n = match self.view() {
     Some(n) => n
     None => {
       self.grab_set(false)
-      self.fly_home(self.still(src))
+      self.fly_home(self.still(src), at, window)
       return
     }
   }
@@ -1677,14 +1682,13 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
         let key = "mem:pv-frame/\{pv_frames_n.val}/\{self.name}"
         @ui.add_image(key, jpeg)
         pv_frames[self.id()] = (key, self.left_at)
-        self.fly_home(key)
+        self.fly_home(key, at, window)
       } else {
-        self.fly_home(self.still(src))
+        self.fly_home(self.still(src), at, window)
       }
     }
     None => ()
   }
-  ignore(c)
 }
 
 ///|
@@ -1740,12 +1744,12 @@ pub fn Viewer::draft_key(self : Viewer) -> String {
 ///|
 /// The marked image asked for: drawn by the host at the picture's own size (marks.mbt), then downloaded or put in the
 /// chat's draft with a quote per numbered mark.
-pub fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
+pub fn Viewer::finish_marks(self : Viewer, to_draft : Bool) -> Unit {
   let bytes = match self.bytes.get() {
     Some(b) => b
     None => return
   }
-  marks_put_down(c)
+  marks_put_down()
   let z = self.zoom
   match @ui.draw_marks(bytes, marks_json(z.nw, z.nh)) {
     Some(j) => {
@@ -1881,14 +1885,11 @@ pub let surface2_dark : Int64 = 0x2C2D31FFL
 /// 安装: an APK handed to the system's installer, which asks the person to confirm, once
 /// its bytes are here (fetched first when it was only told of). What the system says of it comes later (app.mbt
 /// system_said): the leave to install apps asked for (its page opened), 允许 still.fail 安装应用后，再次点击安装; a
-/// failure, 无法安装：….
-pub fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
+/// failure, 无法安装：…. Asked by a node of the window's tree (its press, its bytes come: viewer_tree.mbt), as that is
+/// done, once.
+pub fn Viewer::ask_install(self : Viewer) -> Unit {
   match self.bytes.get() {
-    Some(b) => {
-      let name = self.file.name
-      // (handed to the host once the frame's builds are over: its bytes, given once)
-      c.tell("install/" + name, fn() { @ui.install_package(name, b) })
-    }
+    Some(b) => @ui.install_package(self.file.name, b)
     None => {
       self.error.set(None)
       self.asked = true
@@ -1936,12 +1937,11 @@ pub fn downloading(dl : Json?) -> Bool {
 }
 
 ///|
-/// The core's download of the file this viewer shows called off (✕ under how far it has come).
-pub fn Viewer::cancel_download(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
+/// The core's download of the file this viewer shows called off (✕ under how far it has come: a press on a node of the
+/// window's tree, viewer_tree.mbt), as it is pressed.
+pub fn Viewer::cancel_download(self : Viewer, src : Source, dl : Json?) -> Unit {
   ignore(self)
-  let id = text(dl, "id")
-  // (told once the frame's builds are over, as the tap is the build's that took it)
-  c.tell("download-cancel/" + id, fn() { download_cancel(src, id) })
+  download_cancel(src, text(dl, "id"))
 }
 
 // ── an image ───────────────────────────────────────────────────────────
