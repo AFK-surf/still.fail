@@ -284,8 +284,8 @@ fn ride_node(c : @view.Content, x : Double, y : Double, s : Double, moved_not : 
 }
 
 ///|
-/// Of the row being drawn, something it draws anew each time: `draw` drawn here, where it was among its instances
-/// kept (`clip`: none, one not seen asked for).
+/// Content `c`'s picture drawn here (`seen`), or, one not seen, asked for (Ctx::view_unseen); of the row being drawn,
+/// what it draws anew each time, where it was among its instances kept (no closure made for it: one a node).
 fn Ctx::ride_spot(
   self : Ctx,
   c : @view.Content,
@@ -294,13 +294,12 @@ fn Ctx::ride_spot(
   s : Double,
   a : Double,
   seen : Bool,
-  draw : () -> Unit,
 ) -> Unit {
   match riding.val {
     Some(r) => {
       let at = self.ninst
       let k = clip_top()
-      draw()
+      self.ride_draw(c, x, y, s, a, seen)
       r.spots.push({
         at,
         end: self.ninst,
@@ -314,7 +313,17 @@ fn Ctx::ride_spot(
         window: clip_is_window(k),
       })
     }
-    None => draw()
+    None => self.ride_draw(c, x, y, s, a, seen)
+  }
+}
+
+///|
+/// Content `c`'s picture drawn (`seen`), or asked for where it is not seen.
+fn Ctx::ride_draw(self : Ctx, c : @view.Content, x : Double, y : Double, s : Double, a : Double, seen : Bool) -> Unit {
+  if seen {
+    self.view_picture(c, x, y, s, a)
+  } else {
+    self.view_unseen(c, s)
   }
 }
 

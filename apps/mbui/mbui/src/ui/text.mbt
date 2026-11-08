@@ -228,7 +228,7 @@ fn glyphs_still(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
     let (key, u, v) = k
     match text_cache.glyphs.get(key) {
       Some(g) if g.u == u && g.v == v && !glyph_other_scale(g, sc) =>
-        if g.plot >= 0 { atlas_for(g.in_colour).0.drawn(g.plot) }
+        if g.plot >= 0 { atlas_of(g.in_colour).drawn(g.plot) }
       _ => return false
     }
   }
@@ -932,6 +932,22 @@ fn glyph_keys() -> Map[String, Int] {
 }
 
 ///|
+/// The host's atlas a glyph goes in (atlas_for), without how far across it is said: what marks a glyph drawn asks it for
+/// each glyph drawn, and a pair is an allocation each.
+fn atlas_of(colour : Bool) -> @hostapi.Atlas {
+  if colour {
+    match text_cache.colour_atlas {
+      Some(a) if a.sized() => return a
+      _ => ()
+    }
+  }
+  match text_cache.atlas {
+    Some(a) if !colour => a
+    _ => atlas_for(colour).0
+  }
+}
+
+///|
 /// The host's atlas a glyph goes in as its glyphs are placed in it: colour glyphs' own (`colour`, where the host keeps
 /// one), else the words'; how far across past its place in it the glyph is said (@hostapi.colour_atlas_u).
 fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
@@ -987,7 +1003,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
     }
     Some(g) => {
       if g.plot >= 0 {
-        atlas_for(g.in_colour).0.drawn(g.plot)
+        atlas_of(g.in_colour).drawn(g.plot)
       }
       glyph_kept(key, g)
       g
