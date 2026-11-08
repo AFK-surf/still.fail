@@ -302,7 +302,7 @@ let button_spin : @ui.Style = @ui.style(w=Fixed(button_icon), h=Fixed(button_ico
 let foot_fills : Ref[Bool] = { val: false }
 
 ///|
-/// Whether a button is drawn on the night whatever the theme (a stage's foot: presenters' stage_centred), in its
+/// Whether a button is drawn on the night whatever the theme (a stage's foot: stage_node), in its
 /// colours.
 // kept across runs: set only while a stage's foot is built, and put back
 let on_night : Ref[Bool] = { val: false }

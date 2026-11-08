@@ -1,4 +1,4 @@
-// A long pick of the presenters' (pick_popover's long one: the web's chooser with its search) as nodes of the window's
+// A long pick of the presenters' (the web's chooser with its search) as nodes of the window's
 // tree: a modal layer over the window, nothing under it dimmed, its small panel beside what opened it (as menu_node's:
 // View::beside, grown out of that side as it comes, gone at once as it closes, as the old presenter lets it go), chooser
 // wide. Over its list its search, the library's line (input_node), the keyboard's as it opens; what is typed finds

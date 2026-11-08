@@ -1,8 +1,8 @@
-// A menu of the presenters' (menu_popover's: the library's dropdown, kit's dropdown_menu and menu_panel, in the web's
+// A menu of the presenters' (the library's dropdown, kit's dropdown_menu and menu_panel, in the web's
 // look) as nodes of the window's tree: a modal layer over the window, nothing under it dimmed, its small panel beside
 // what opened it (where it was drawn as it opened: under it, `offset` off, lined up `along` it, over it where there is
 // not the room under: View::beside), grown out of that side as it comes (pop_in), gone at once as it closes (as the
-// presenters let go of a menu the frame it closes: menu_popover); its rows as menu_row draws them (as high as the screen's pick row at least, its icon or a choice's check in
+// presenters let go of a menu the frame it closes); its rows as menu_row draws them (as high as the screen's pick row at least, its icon or a choice's check in
 // a column before its words where one has one, a danger's in red, one not to be chosen faint), headings and lines
 // between parts; what it holds scrolling where it is taller than the window leaves it. Its rows are one roving group, the
 // one with the focus lit: Up and Down move the focus along them (not round), Home and End to the ends, letters typed
@@ -183,7 +183,7 @@ pub fn menu_node(
       |> ignore
       // (what opened it, where it is drawn: what its panel goes beside)
       let at = anchor(layer)
-      // (a column before every item's words where one has an icon or is one of a choice: menu_popover's dropdown)
+      // (a column before every item's words where one has an icon or is one of a choice: the web's dropdown)
       let iconed = fn() { content().iter().any(fn(x) { x is Some(i) && i.chosen is None && i.icon != "" }) }
       let lead = fn() { iconed() || content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) }) }
       let gap = fn() { if lead() && !iconed() { chooser_gap } else { menu_gap } }
@@ -480,7 +480,7 @@ pub(all) struct MenuExtra {
 let menu_no_extra : MenuExtra = { note: "", value: "", mark: None }
 
 ///|
-/// A heading among a menu's items (menu_popover's heading_look): its words (`label()`) as far in as its rows' words
+/// A heading among a menu's items: its words (`label()`) as far in as its rows' words
 /// (`past()`: past the columns before them where there are: a check's or an icon's, a mark's), small and muted, 6 over and
 /// 4 under it.
 fn menu_heading_node(

@@ -48,7 +48,7 @@ fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.
 fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button_at? : @ui.Justify = JStart) -> @ui.Tester {
   presenters_reset()
   let (platform, w, h) = at
-  let t = @ui.Tester::new(presenting_view(open, at=button_at), w~, h~, platform~)
+  let t = @ui.Tester::new(@ui.old_views_here, tree=presented_tree(presenting_view(open, at=button_at)), w~, h~, platform~)
   t.draw()
   t
 }

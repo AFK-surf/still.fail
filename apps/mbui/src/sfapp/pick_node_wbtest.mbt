@@ -2,7 +2,7 @@
 // its choices, the one chosen checked, what each is under its words and its value at its row's end; long, a panel with
 // a search over its list, the words typed finding by label, note and value, Enter picking the first found, none found
 // said so, the list scrolling past its most. On 小屏 a sheet still. What each does, as the old presenter has it
-// (pick_popover), held whatever draws it.
+// (presenters.mbt), held whatever draws it.
 
 ///|
 /// Choices 第1项 … 第n项 (c1 … cn), the first noted 最近用过, the third valued 3 个.

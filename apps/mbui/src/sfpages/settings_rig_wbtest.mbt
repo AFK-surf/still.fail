@@ -42,7 +42,8 @@ fn setting_tester(
   app.nav.push(Setting(route))
   let made = @settings.made_once(route)
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
       guard !made else { return }
       @sf.begin(c) |> ignore
@@ -53,7 +54,7 @@ fn setting_tester(
         }
         @sf.presented(c)
       })
-    },
+    }),
     w~,
     h~,
     platform~,
@@ -75,6 +76,8 @@ fn setting_tester(
             _ => ()
           }
         })
+        // (what of the presented the tree draws, over the page: as the app's tree has it)
+        @sf.presented_nodes(root)
       },
       around=fn(c) {
         @sf.begin(c) |> ignore

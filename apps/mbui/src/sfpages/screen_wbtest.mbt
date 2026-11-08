@@ -132,8 +132,7 @@ fn screen_rig(
     cancel: fn(id) { cancelled.push(id) },
   }
   // the page alone, while it is the stack's top, the presenters over it; left (closed), let go of as the shell lets a
-  // page go (screen_left)
-  let shown : Ref[ScreenAt?] = Ref(None)
+  // page go (screen_left): by a node of the window's tree for each screen on top, which lets it go as it goes
   let t = @ui.Tester::new(
     // (the old frame around the window's tree, its old view put here, in still.fail's theme, as the app's)
     fn(c) {
@@ -142,25 +141,30 @@ fn screen_rig(
     },
     tree=fn(root) {
       @ui.set_tree_theme(@sf.ui_theme_now)
+      root.each(
+        fn() {
+          match app.nav.top() {
+            Screen(at) => [(at.station, at.screen)]
+            _ => []
+          }
+        },
+        fn(k) { k },
+        fn(row, k) {
+          let (station, screen) = @signals.untracked(fn() { k.get() })
+          row.owns(fn() { screen_left(src, station, screen) }) |> ignore
+        },
+      )
       @ui.old(root, fn(c) {
         match app.nav.top() {
-          Screen(at) => {
-            shown.val = Some(at)
-            screen_page(c, src, at, @sf.no_frame)
-          }
-          _ =>
-            match shown.val {
-              Some(at) => {
-                shown.val = None
-                c.after_build("screen-left", fn() { screen_left(src, at.station, at.screen) })
-              }
-              None => ()
-            }
+          Screen(at) => screen_page(c, src, at, @sf.no_frame)
+          _ => ()
         }
         @sf.presented(c)
       })
       .grow(Is(1.0))
       |> ignore
+      // what of the presented the tree draws, over the page (as the app's tree has it)
+      @sf.presented_nodes(root)
       // what the page said, as the shell shows it (sfbase's toasts_node, at the window's foot)
       @sfbase.toasts_node(root, fn() { @sf.toast_bottom }) |> ignore
     },

@@ -254,4 +254,5 @@ using @settings {
 using @sf {
   dmin,
   dmax,
+  dclamp,
 }

@@ -93,17 +93,6 @@ fn sheet_contents(content : (SheetKind) -> Unit) -> Unit {
 // The grabber and a sheet's head (SheetHead) are decide.mbt's `sheet_grab`, `sheet_head`.
 
 ///|
-fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
-  if v < lo {
-    lo
-  } else if v > hi {
-    hi
-  } else {
-    v
-  }
-}
-
-///|
 /// What another app shares, its panel's width with a wide window.
 let share_panel_w : Double = 520.0
 
