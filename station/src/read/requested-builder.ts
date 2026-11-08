@@ -6,8 +6,11 @@ import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, releaseStoppedBackfill, takeBa
 import { MbProcess } from "./mb-reader.ts";
 
 /// A builder in MoonBit (read/mb-reader.ts): its program and arguments. It knows nothing of the backfill permit, which
-/// the builder here takes for it around each batch it asks, and gives back when the batch is answered.
-export type MbBuilder = { binary: string; args: string[] };
+/// the builder here takes for it around each batch it asks, and gives back when the batch is answered; or (`lazy`) it
+/// asks for the permit itself when it is about to write, as a worker that reads without it takes it: a line
+/// `{"take": true}` answered `{"permit": …}`, `{"give": true}` when it is done with it before its answer. A lazy one
+/// is told of what is let go (`cancel`), as a worker is.
+export type MbBuilder = { binary: string; args: string[]; lazy?: boolean };
 /// What stands for a MoonBit builder in the permit (a worker's thread id there): never a thread's.
 let nextOwner = 0x40000000;
 
@@ -49,6 +52,7 @@ export class RequestedBuilder<K extends number | string> {
   /// A batch asked of the MoonBit builder, once it holds the permit (as a worker takes it itself: store/backfill.ts);
   /// without it, the batch is not done, after the pause a worker makes.
   #askMb(process: MbProcess, message: Record<string, unknown>): void {
+    if (this.#mb?.lazy) return void process.postMessage(message);
     if (!takeBackfill(this.#priority(), this.#owner)) {
       this.#timers.after(REQUEST_BACKFILL_PAUSE_MS, () => { if (this.#worker === process) this.#answer({ done: false }); });
       return;
@@ -59,7 +63,15 @@ export class RequestedBuilder<K extends number | string> {
 
   /// The MoonBit builder's answer: the permit given back, and a batch that did not finish everything followed by the
   /// pause a worker makes before it answers.
-  #answeredMb(process: MbProcess, result: { done: boolean; error?: string }): void {
+  #answeredMb(process: MbProcess, result: { done: boolean; error?: string; take?: boolean; give?: boolean }): void {
+    if (result.take === true) {
+      if (!this.#holding) this.#holding = takeBackfill(this.#priority(), this.#owner);
+      return void process.postMessage({ permit: this.#holding });
+    }
+    if (result.give === true) {
+      if (this.#holding) { this.#holding = false; giveBackfill(this.#priority(), this.#owner); }
+      return;
+    }
     if (this.#holding) { this.#holding = false; giveBackfill(this.#priority(), this.#owner); }
     if (!result.done && !result.error) this.#timers.after(REQUEST_BACKFILL_PAUSE_MS, () => { if (this.#worker === process) this.#answer(result); });
     else this.#answer(result);
@@ -112,7 +124,7 @@ export class RequestedBuilder<K extends number | string> {
       else if (waiters) { this.#waiting.delete(item); this.#waiting.set(item, waiters); }
       this.#retryMs = 250;
     }
-    if (!this.#waiting.has(item) && !result.done && !(this.#worker instanceof MbProcess)) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
+    if (!this.#waiting.has(item) && !result.done && (!(this.#worker instanceof MbProcess) || this.#mb?.lazy)) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
     this.#pump();
   }
 
