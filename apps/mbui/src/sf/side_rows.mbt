@@ -4,23 +4,7 @@
 // is the shell's.
 
 ///|
-/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
-/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
-/// changes.
-pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
-  let t = theme()
-  let lit = lit.unwrap_or(t.p.selected)
-  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
-  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
-  if h <= 0.0 && o <= 0.0 {
-    0L
-  } else {
-    over(alpha(t.p.hover, h * (1.0 - o)), alpha(lit, o))
-  }
-}
-
-///|
-/// Node `i`'s ground as nav_ground has it, worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
+/// Node `i`'s ground as the web moves a row's or a place's (nav_ground_by), worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
 /// ground and to the selected one read as it is drawn, so the row is not built again each frame it eases
 /// (motion in what is made once).
 pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool, lit? : Int64) -> Unit {
@@ -28,15 +12,16 @@ pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool
 }
 
 ///|
-/// nav_ground worked out where it is read (as what reads it is painted: @ui.Ctx::bg_by), its easing told as it is built
-/// without reading the clock (@motion.told).
+/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
+/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
+/// changes. What the caller paints its ground with (@ui.Ctx::bg_by, list_row's `ground_by`): worked out where it is
+/// read, its easing told as it is built without reading the clock (@motion.told).
 pub fn nav_ground_by(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> () -> Int64 {
   let t = theme()
   let lit = lit.unwrap_or(t.p.selected)
   let hover_ink = t.p.hover
-  // (the same numbers animate kept them as: @kit.animate's keys)
-  let h = @motion.told(c, "\u{2}animate/" + key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
-  let o = @motion.told(c, "\u{2}animate/" + key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
+  let h = @motion.told(c, key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
+  let o = @motion.told(c, key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
   fn() {
     let h = h.get()
     let o = o.get()
@@ -250,13 +235,14 @@ pub fn nav_item(
   foot_capsule? : Double,
 ) -> Bool {
   let id = c.id(key)
-  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
+  let ground = nav_ground_by(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
     list_row(
       c,
       id,
       Side,
-      ground,
+      0L,
+      ground_by=ground,
       mark~,
       fn() {
         title()

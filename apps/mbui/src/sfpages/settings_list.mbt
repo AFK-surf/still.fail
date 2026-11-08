@@ -570,12 +570,12 @@ pub fn settings_side_rows(
       let key = "settings-nav/" + row.key
       let id = c.id(key)
       let selected = if row.key.has_prefix("find/") { lit == Some(row.route) } else { lit.map(settings_row_of) == Some(row.route) }
-      let ground = @sf.nav_ground(c, key, c.lit(id) || c.pressed(id), selected)
+      let ground = @sf.nav_ground_by(c, key, c.lit(id) || c.pressed(id), selected)
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
       // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {
         let look = t.chat_list.side_row.then(settings_side_across).then(@sf.row_least_h())
-        c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
+        let n = c.box(style=look, id~, fn() {
           settings_lead(c, core, here, row, true)
           c.box(style=settings_side_words, keep=true, fn() {
             c.text(row.title, style=t.chat_list.title.then(settings_side_title), keep=true) |> ignore
@@ -592,6 +592,9 @@ pub fn settings_side_rows(
             |> ignore
           }
         })
+        // (its ground eased as it is painted)
+        c.bg_by(n, ground)
+        n
       }
       let b = if i + 1 < part.rows.length() {
         let mut b = 0

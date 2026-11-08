@@ -313,7 +313,8 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
       c,
       id,
       Side,
-      nav_ground(c, "side/archived/" + key, c.lit(id) || c.pressed(id), on),
+      0L,
+      ground_by=nav_ground_by(c, "side/archived/" + key, c.lit(id) || c.pressed(id), on),
       high=true,
       // (恢复 and 删除 over its first line's end)
       end_room=if over { @sf.row_keys_room(if flag(v, "deletable") { 2 } else { 1 }) } else { 0.0 },

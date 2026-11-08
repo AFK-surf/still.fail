@@ -1986,6 +1986,7 @@ pub(all) enum Orientation {
 pub(all) struct Overlay {
   id : Int32
   node : Int32
+  scrim : Int32
   dismissed : Dismiss?
 }
 

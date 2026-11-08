@@ -1180,8 +1180,6 @@ pub let nav_fade : @motion.Spec
 
 pub fn nav_bar_node(@view.View, () -> String, () -> String, () -> Unit, top? : () -> Double, trailing? : (@view.View) -> Unit) -> Unit
 
-pub fn nav_ground(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> Int64
-
 pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
 
 pub fn nav_ground_node(@view.View, () -> Bool, lit? : Int64) -> Unit

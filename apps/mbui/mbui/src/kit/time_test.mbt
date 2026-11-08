@@ -40,21 +40,22 @@ test "after: true once its condition has held so long by the tester's clock; off
 ///|
 test "presence: shown comes in; not shown, built until its exit has played, then gone" {
   let shown = Ref(false)
-  let p : Ref[Presence] = Ref({ built: false, shown: false, t: 0.0 })
+  let p : Ref[Presence] = Ref({ built: false, shown: false, t: @motion.Anim::new(0.0) })
   let t = @ui.Tester::new(fn(c) { p.val = presence(c, "x", shown.val) })
   assert_false(p.val.built)
   shown.val = true
   t.draw()
   assert_true(p.val.built && p.val.shown)
   t.run_for(presence_in_ms)
-  assert_eq(p.val.t, 1.0)
+  // (how far in, read at the frame's moment as its look reads it)
+  assert_eq(p.val.t.get(), 1.0)
   shown.val = false
   t.draw()
   // half its exit's time
   let mid_way = presence_out_ms / 2.0
   t.run_for(mid_way)
   assert_true(p.val.leaving())
-  assert_true(p.val.t < 1.0)
+  assert_true(p.val.t.get() < 1.0)
   t.run_for(presence_out_ms - mid_way)
   assert_false(p.val.built)
   t.assert_idle()

@@ -13,7 +13,7 @@ fn[T] either(a : T?, b : T?) -> T? {
 }
 
 ///|
-/// Node `v`'s ground as nav_ground has it: the pointer's ground in and out (lit_node), the selected one's (`lit`, the
+/// Node `v`'s ground as nav_ground_by has it: the pointer's ground in and out (lit_node), the selected one's (`lit`, the
 /// selected grey by default) while `on()`, each over nav_fade from the moment it changes.
 pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
   let hover = EdgeWay::new(0.0)
@@ -38,7 +38,7 @@ pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
 ///|
 /// An action in a sidebar's band over its list as a node (band_row's: 返回对话 beside the update): not one of the
 /// list's rows but the band's, its height and its words' room the theme's band's, its corner a sidebar row's; its ground
-/// as nav_ground has it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`. What it
+/// as nav_ground_by has it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`. What it
 /// holds `body` makes.
 pub fn band_row_node(
   parent : @view.View,

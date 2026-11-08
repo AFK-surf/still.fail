@@ -148,7 +148,7 @@ pub fn chat_row_node(
     let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
     let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() }
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the
-    // pointer's eased in and out, the selected one's while its chat is in view (nav_ground's)
+    // pointer's eased in and out, the selected one's while its chat is in view (nav_ground_by's)
     // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
     // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view; in a side column,
     // beside the chat, it fades as a mouse's does (dur_ms), and the row pressed goes from its press's ground to the

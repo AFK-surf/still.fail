@@ -21,11 +21,14 @@ pub fn toast(id : String, title : String, description? : String = "", action? : 
 }
 
 ///|
-/// What a toast's look is given: the toast, how far in it is (0 … 1), how far it is swiped (to the right), pointed at.
+/// What a toast's look is given: the toast, how far in it is (0 … 1, read where it is drawn: Anim::get in
+/// Ctx::look_by), how far it is swiped (to the right, as the finger has it), how far it slides to the right as it goes
+/// (all the way out; 0 while it is shown), pointed at.
 pub(all) struct ToastState {
   toast : Toast
-  t : Double
+  t : @motion.Anim
   dx : Double
+  away : Double
   hovered : Bool
 }
 
@@ -148,12 +151,7 @@ pub fn toaster(
           continue
         }
         drawn.push(to)
-        let st = {
-          toast: to,
-          t: p.t,
-          dx: if live { dx } else { (1.0 - p.t) * width * 0.5 },
-          hovered: c.lit(tid),
-        }
+        let st = { toast: to, t: p.t, dx, away: if live { 0.0 } else { width * 0.5 }, hovered: c.lit(tid) }
         let i = c.drag_area(if live { tid } else { 0 }, axis=Horizontal, fn() {
           look(
             c,
@@ -202,11 +200,10 @@ fn focus_in(c : @ui.Ctx, key : String, id : String) -> Bool {
 ///|
 /// A toast's default look (still.fail's): the primary ink, a corner of 20; its title over its description (fainter)
 /// over what `action` builds (its action), what `close` builds (its close button) in its top right corner; it fades
-/// and rises as it comes in, slides away as it goes out and is swiped.
+/// and rises as it comes in, slides away as it goes out (as it is drawn) and is swiped.
 pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -> Unit) -> Unit {
   let t = c.theme()
-  let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
-  c.box(
+  let b = c.box(
     // a small panel's: 6 in, its words 10 further (16), its buttons at the 6 in its corners, concentric
     dir=Row,
     pad=6.0,
@@ -219,8 +216,6 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
     shadow_color=t.shadow,
     shadow_y=8.0,
     tx=s.dx,
-    ty=(1.0 - k) * 12.0,
-    opacity=k,
     fn() {
       // the first line of words on the close button's middle
       c.box(fn() {
@@ -239,7 +234,11 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
       close()
     },
   )
-  |> ignore
+  // (coming in, faded and risen; going, slid away: as it is drawn, nothing built for it)
+  c.look_by(b, fn() {
+    let k = dmax(0.0, dmin(1.0, s.t.get()))
+    @ui.look(alpha=k, dx=(1.0 - k) * s.away, dy=(1.0 - k) * 12.0)
+  })
 }
 
 ///|

@@ -64,35 +64,25 @@ fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Uni
   }
   let copied = c.within(id, copied_ms)
   let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(shot) || copied
-  let seen = @kit.animate(
-    c,
-    key + "/copy-seen",
-    if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 },
-    transition=nav_fade,
-  )
+  // (built while it is seen or fading, till its fade's declared end; faded as it is drawn)
+  let to = if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 }
+  let seen = @motion.told(c, key + "/copy-seen", to, spec=nav_fade)
   let label = if copied { t("common.copied") } else { t("web-main.prose.copyTable") }
   c.box(style=@ui.style(px=room_of(table_key_gap), pt=room_of(y)), fn() {
-    if seen == 0.0 {
+    if to == 0.0 && seen.over() {
       // (its room, nothing in it to press)
       c.box(style=@ui.style(w=Fixed(table_key_size), h=Fixed(table_key_size)), fn() {  }) |> ignore
       return
     }
-    // (faded as its icon's ink: the button's own colours, so far on)
-    let th = theme()
+    // (faded whole, its ink and the ground it tints with it, as it is drawn)
     let icon = if copied { "check" } else { "copy" }
-    icon_button(
-      c,
-      icon,
-      key=key + "/copy",
-      size=table_key_size,
-      round=true,
-      label~,
-      ink=alpha(th.p.text, seen),
-      quiet=alpha(th.p.muted, seen),
-      on_press=fn() {
+    let b = c.box(fn() {
+      icon_button(c, icon, key=key + "/copy", size=table_key_size, round=true, label~, on_press=fn() {
         self.table_menu(shot, table, id)
-      },
-    ) |> ignore
+      })
+      |> ignore
+    })
+    c.look_by(b, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, seen.get()))) })
   })
   |> ignore
 }

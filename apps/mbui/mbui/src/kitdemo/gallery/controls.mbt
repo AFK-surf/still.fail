@@ -36,7 +36,7 @@ fn controls(c : @ui.Ctx) -> Unit {
       c.box(fn() {
         @kit.switch_look(c, {
           on: false,
-          t: 0.0,
+          t: @kit.switch_knob(c, "sw-look", false),
           hovered: false,
           pressed: false,
           held: 0.0,
