@@ -38,6 +38,17 @@ test "emission waits for an explicit chat place report, not incidental frame rep
 }
 
 ///|
+test "emission waits for an explicit drive place report, not periodic player reports" {
+  let lines : Array[String] = []
+  script.val = Some(lines)
+  emit_answered(["drive.place", "drive.read", "drive.place"])
+  assert_eq(lines, ["answered drive.read"])
+  emit_answered_to("drive.place", 1)
+  assert_eq(lines, ["answered drive.read", "answered drive.place"])
+  script.val = None
+}
+
+///|
 test "a recording script is complete only after the flow ends" {
   let lines : Array[String] = []
   script.val = Some(lines)

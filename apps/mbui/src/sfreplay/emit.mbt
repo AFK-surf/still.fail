@@ -162,14 +162,15 @@ fn emit_answered(names : Array[String]) -> Unit {
 ///|
 /// Calls a scripted run does not wait for after a step: their timing or presence is not determined by the step
 /// (session.warm: once a minute while typing, composer.mbt; draft.put: a moment after the words last changed;
-/// client.focus and chat.place: as the list glides after rows that came and its visible position changes;
+/// client.focus and chat.place: as the list glides after rows that came and its visible position changes; drive.place:
+/// as a player periodically saves where it was left;
 /// composer.text and composer.comment: as what is typed lands in the field the run focused, its answer read by nothing;
 /// picture and machineSessions.list: an avatar or a station’s session offer may already be cached), so a
 /// trace's run at another pace made them where this one does not (a run re-recorded from a trace whose replies came
 /// slower: its second message warmed again, the live one's a second later does not). A flow that needs one waits for
 /// it by name (Flow::answered).
 // kept across runs: a value (nothing is added to it)
-let unawaited : Array[String] = ["session.warm", "draft.put", "client.focus", "chat.place", "composer.text", "composer.comment", "picture", "machineSessions.list"]
+let unawaited : Array[String] = ["session.warm", "draft.put", "client.focus", "chat.place", "drive.place", "composer.text", "composer.comment", "picture", "machineSessions.list"]
 
 ///|
 /// Calls the host may make an incidental number of times while these steps run. This changes script emission only;
