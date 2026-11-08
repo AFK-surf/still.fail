@@ -47,11 +47,11 @@ test "a legacy jobs recording is shared by the bar and the opened sheet" {
   let src = @sfreplay.source()
   let full : Map[String, Json] = { "station": "w/s", "session": "k" }
   let summary : Map[String, Json] = { "station": "w/s", "session": "k", "summary": true }
-  @sfbase.held_build(1)
+  @sfbase.held_build()
   src.topic("chatJobs", summary).get().snapshot() |> ignore
   @sfbase.held_end()
   assert_eq(r.deliver(), 1)
-  @sfbase.held_build(2)
+  @sfbase.held_build()
   let shown = src.topic("chatJobs", full).get().value
   assert_eq(shown.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
   @sfbase.held_end()
@@ -76,15 +76,15 @@ test "a newer jobs recording keeps the summary and sheet separate" {
   let src = @sfreplay.source()
   let full : Map[String, Json] = { "station": "w/s", "session": "k" }
   let summary : Map[String, Json] = { "station": "w/s", "session": "k", "summary": true }
-  @sfbase.held_build(1)
+  @sfbase.held_build()
   src.topic("chatJobs", summary).get().snapshot() |> ignore
   @sfbase.held_end()
   assert_eq(r.deliver(), 1)
-  @sfbase.held_build(2)
+  @sfbase.held_build()
   src.topic("chatJobs", full).get().snapshot() |> ignore
   @sfbase.held_end()
   assert_eq(r.deliver(), 1)
-  @sfbase.held_build(3)
+  @sfbase.held_build()
   assert_eq(src.topic("chatJobs", summary).get().value.unwrap().stringify(), "{\"jobs\":[],\"hasJobs\":true}")
   assert_eq(src.topic("chatJobs", full).get().value.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
   assert_eq(r.diverged(), [])

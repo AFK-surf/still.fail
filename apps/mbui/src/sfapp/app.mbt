@@ -321,7 +321,7 @@ let page_whole : @ui.Style = @ui.css("w=Full h=Full")
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // (the made-up core, where one is linked, on this frame's runtime)
   (@sfbase.made_frame.val)(c)
-  @sfbase.held_build(c.build_number())
+  @sfbase.held_build()
   c.after_build("held/end", fn() { @sfbase.held_end() })
   shell.val = pages_shell(src)
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the

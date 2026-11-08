@@ -3900,9 +3900,10 @@ let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.css("h=S12"))
 let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.css("bg=FieldHover"))
 
 ///|
-/// The edges whose tip is put away, by their keys, and the last frame each was pressed in: pressed since the pointer
-/// came onto them (the web's tip.hide() as the pointer goes down: back only once it has left and come again).
-let edge_tips_away : Map[String, Int] = {}
+/// The edges whose tip is put away, by their keys: pressed since the pointer came onto them (the web's tip.hide() as the
+/// pointer goes down: back only once it has left and come again). None while in hand; once let go, where the pointer
+/// was let go (on the edge, which followed it, wherever the edge was last drawn).
+let edge_tips_away : Map[String, (Double, Double)?] = {}
 
 ///|
 /// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer
@@ -3915,15 +3916,15 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
   }
   let (px, py, down) = c.pointer()
   let on = c.lit(id)
-  let frame = c.frame_number()
   // (a drag area's in hand from the press on: pressed no more once it is dragged, Ctx::drag_on)
   if c.watch_press(id) || c.drag_of(id) is Some({ down: true, .. }) {
-    edge_tips_away[key] = frame
-  } else if !on && !down {
+    edge_tips_away[key] = None
+  } else {
     match edge_tips_away.get(key) {
-      // (the frame it is let go in: the pointer may be past where the edge was last drawn, as it followed it)
-      Some(at) if at == frame || at == frame - 1 => ()
-      _ => edge_tips_away.remove(key)
+      // let go: where (the pointer may be past where the edge was last drawn, as it followed it: not left till it moves)
+      Some(None) => edge_tips_away[key] = Some((px, py))
+      Some(Some((x, y))) if !on && !down && (x != px || y != py) => edge_tips_away.remove(key)
+      _ => ()
     }
   }
   // (put away, it is not drawn at all; its delay starts anew once the pointer is back on it. The press itself is told

@@ -22,9 +22,8 @@ priv struct StepsOwn {
   focus : @sf.LiveMap[String, Int]
   marked : @signals.Signal[(String, String)]
   went : Map[String, Bool]
-  /// each history's first item as its list was last built, by the list's key, and the frame the pages before last came
-  /// in above it
-  tops : Map[String, (String, Int)]
+  /// each history's first item as its list was last built, by the list's key
+  tops : Map[String, String]
   /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
   only_io : @signals.Signal[Bool]
 }
@@ -149,20 +148,21 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
   // the page before come in above the first item: rows came before it (the edge's row the list's first), what is in
   // view stays where it is (sfbase chat_list's older_came); kept by its index, the reader is left at the top of the
   // page come in, near its top again, and the page before that is asked for, and so on to the history's start
-  let (was, came_at) = steps_own.tops.get(lkey).unwrap_or(("", -1))
-  let mut came_at = came_at
+  // (came in this build: the list's layout read back below is the one before them, each build of a frame laid out
+  // before the next is built)
+  let was = steps_own.tops.get(lkey).unwrap_or("")
+  let mut came = false
   if was != "" && was != first {
     let (all, _) = steps_rows_of_topic(src, params, lkey)
     match all.search_by(fn(i) { text(Some(i), "key") == was }) {
       Some(at) if at > 0 => {
         c.list_moved(lkey, 1, at)
-        came_at = c.frame_number()
+        came = true
       }
       _ => ()
     }
   }
-  steps_own.tops[lkey] = (first, came_at)
-  let came = came_at == c.frame_number()
+  steps_own.tops[lkey] = first
   // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once each (read back
   // by that alone: not built again as it scrolls)
   // (where it stood as last laid out, not yet with the rows just come above: not near for them)
