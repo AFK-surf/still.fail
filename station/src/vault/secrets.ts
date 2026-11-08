@@ -33,7 +33,7 @@ import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
-import { hasVaultMembers, initializePendingIndex, pendingIndexComplete, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
+import { hasVaultMembers, initializePendingIndex, pendingAuditComplete, pendingIndexComplete, pendingIndexStarted, PENDING_BODIES, PENDING_DUE, PENDING_DUPLICATES, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "./pending-index.ts";
 import { hasInvalidVaultMembers, vaultMembersComplete, vaultMembersStarted } from "./member-index.ts";
 import { reboxIndexComplete, REBOX_LEGACY, REBOX_READY } from "./rebox-index.ts";
 
@@ -235,6 +235,7 @@ export class Secrets {
   readonly #heldLostScopes = new Map<string, Set<string>>();
   readonly #preparingPending = new Map<string, Promise<void>>();
   readonly #memberAudits = new Map<string, Promise<void>>();
+  readonly #pendingAudits = new Map<string, Promise<void>>();
   #previousExited = false;
   /// Grants whose startup cleanup raced repeatedly with another writer, retried after handover.
   readonly #restorePending = new Map<string, { ws: string; id: string }>();
@@ -855,6 +856,16 @@ export class Secrets {
   async preparePending(ws: string, members = this.#d.lock(ws) !== null): Promise<void> {
     // Do not make a request wait for an earlier process that is still running: the original query remains available.
     if (!this.#previousExited) return;
+    // An older pending index can be used for the full pending scan immediately while its decision fields are
+    // checked in the worker. Fresh indexes perform this check with their first backfill instead.
+    if (pendingIndexStarted(this.#d.db, ws) && !pendingAuditComplete(this.#d.db, ws) && !this.#pendingAudits.has(ws)) {
+      const audit = this.#uses.preparePending(ws, false, true);
+      this.#pendingAudits.set(ws, audit);
+      void audit.then(() => { this.#pendingAudits.delete(ws); }, (error) => {
+        this.#pendingAudits.delete(ws);
+        if (!this.#restoreClosed) log.warn("vault", "the pending index audit could not finish", { error: (error as Error).message });
+      });
+    }
     // An index begun by an older station may need a second bounded audit. Keep its list available via the original
     // scan while that happens, and share the audit between concurrent readers.
     if (members && hasVaultMembers(this.#d.db) && vaultMembersStarted(this.#d.db, ws) && !vaultMembersComplete(this.#d.db, ws)) {
@@ -913,7 +924,7 @@ export class Secrets {
     try {
       // JSON-extracted SQL text and a bound JavaScript string do not compare alike for isolated surrogate code units.
       const ready = viewer.email.isWellFormed() && (lock === null || viewer.sub.isWellFormed())
-        && lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
+        && lost?.ready === true && pendingIndexComplete(this.#d.db, ws) && pendingAuditComplete(this.#d.db, ws)
         && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws) && !hasInvalidVaultMembers(this.#d.db, ws)));
       if (!ready) {
         const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
@@ -926,6 +937,7 @@ export class Secrets {
         add(this.#d.db.prepare(PENDING_DUE).all(ws, now - PENDING_SECS));
         add(this.#d.db.prepare(PENDING_NO_TIME).all(ws));
         add(this.#d.db.prepare(PENDING_OTHER_TIME).all(ws));
+        add(this.#d.db.prepare(PENDING_DUPLICATES).all(ws));
         if (this.#d.coming?.() !== true) for (const id of lost!.ids) {
           const kept = this.#kept(ws, id);
           if (kept?.request.status === "pending") selected.set(id, JSON.stringify(kept.request));

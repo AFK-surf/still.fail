@@ -22,6 +22,12 @@ const changed = `OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id OR OLD.status IS N
   OR (${decisionTarget("OLD.body")}) IS NOT (${decisionTarget("NEW.body")})
   OR json_extract(OLD.body, '$.at') IS NOT json_extract(NEW.body, '$.at')`;
 
+// JSON.parse keeps the last duplicate key; SQLite's JSON paths use the first. Include those requests separately
+// until they are rewritten, so indexed candidate selection and expiration retain the original JS behavior.
+const duplicateDecisionFields = (body: string) => `CASE WHEN json_valid(${body}) THEN EXISTS
+  (SELECT 1 FROM json_each(${body}) WHERE key IN ('vault', 'owner', 'save', 'at') GROUP BY key HAVING count(*) > 1)
+  ELSE 0 END`;
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_pending_lookup (
   ws TEXT NOT NULL, id TEXT NOT NULL, owner_decides INTEGER NOT NULL, decider TEXT, at,
@@ -30,6 +36,12 @@ CREATE TABLE IF NOT EXISTS vault_pending_lookup (
 CREATE INDEX IF NOT EXISTS vault_pending_decider ON vault_pending_lookup (ws, owner_decides, decider, id);
 CREATE INDEX IF NOT EXISTS vault_pending_at ON vault_pending_lookup (ws, at, id);
 CREATE TABLE IF NOT EXISTS vault_pending_backfill (
+  ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_pending_duplicates_v2 (
+  ws TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (ws, id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_pending_audit_v2 (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE TRIGGER IF NOT EXISTS vault_pending_add AFTER INSERT ON vault_requests
@@ -47,6 +59,25 @@ END;
 CREATE TRIGGER IF NOT EXISTS vault_pending_drop AFTER DELETE ON vault_requests
   WHEN OLD.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_backfill WHERE ws = OLD.ws) BEGIN
   DELETE FROM vault_pending_lookup WHERE ws = OLD.ws AND id = OLD.id;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_pending_duplicate_add_v2 AFTER INSERT ON vault_requests
+  WHEN EXISTS (SELECT 1 FROM vault_pending_audit_v2 WHERE ws = NEW.ws) BEGIN
+  DELETE FROM vault_pending_duplicates_v2 WHERE ws = NEW.ws AND id = NEW.id;
+  INSERT OR IGNORE INTO vault_pending_duplicates_v2 SELECT NEW.ws, NEW.id
+    WHERE NEW.status = 'pending' AND (${duplicateDecisionFields("NEW.body")}) = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_pending_duplicate_change_v2 AFTER UPDATE ON vault_requests
+  WHEN (OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id OR OLD.status IS NOT NEW.status OR OLD.body IS NOT NEW.body)
+    AND (EXISTS (SELECT 1 FROM vault_pending_audit_v2 WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_pending_audit_v2 WHERE ws = NEW.ws)) BEGIN
+  DELETE FROM vault_pending_duplicates_v2 WHERE ws = OLD.ws AND id = OLD.id;
+  DELETE FROM vault_pending_duplicates_v2 WHERE ws = NEW.ws AND id = NEW.id;
+  INSERT OR IGNORE INTO vault_pending_duplicates_v2 SELECT NEW.ws, NEW.id
+    WHERE NEW.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_audit_v2 WHERE ws = NEW.ws)
+      AND (${duplicateDecisionFields("NEW.body")}) = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_pending_duplicate_drop_v2 AFTER DELETE ON vault_requests BEGIN
+  DELETE FROM vault_pending_duplicates_v2 WHERE ws = OLD.ws AND id = OLD.id;
 END;
 `;
 
@@ -67,6 +98,10 @@ export const PENDING_NO_TIME = `SELECT r.id, r.body FROM vault_pending_lookup p 
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.at IS NULL`;
 export const PENDING_OTHER_TIME = `SELECT r.id, r.body FROM vault_pending_lookup p INDEXED BY vault_pending_at
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? AND p.at >= ''`;
+// Starting at the markers avoids scanning ordinary requests. A rowid replacement may leave an orphan marker when
+// recursive triggers are off, so only include a request that still exists and is pending.
+export const PENDING_DUPLICATES = `SELECT r.id, r.body FROM vault_pending_duplicates_v2 d
+  CROSS JOIN vault_requests r ON r.ws = d.ws AND r.id = d.id WHERE d.ws = ? AND r.status = 'pending'`;
 export const PENDING_SEED_FIRST = `SELECT r.id, r.body FROM vault_pending_lookup p
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? ORDER BY p.id LIMIT ?`;
 export const PENDING_SEED = `SELECT r.id, r.body FROM vault_pending_lookup p
@@ -88,22 +123,61 @@ export function pendingIndexComplete(db: DatabaseSync, ws: string): boolean {
   return (db.prepare("SELECT done FROM vault_pending_backfill WHERE ws = ?").get(ws) as { done: number } | undefined)?.done === 1;
 }
 
+export function pendingIndexStarted(db: DatabaseSync, ws: string): boolean {
+  return db.prepare("SELECT 1 FROM vault_pending_backfill WHERE ws = ?").get(ws) !== undefined;
+}
+
+export function pendingAuditComplete(db: DatabaseSync, ws: string): boolean {
+  return (db.prepare("SELECT done FROM vault_pending_audit_v2 WHERE ws = ?").get(ws) as { done: number } | undefined)?.done === 1;
+}
+
 // Test and embedded stores can use Secrets without a VaultStore. A real VaultStore creates this lookup with vaults.
 export function hasVaultMembers(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'vault_member_backfill'").get() !== undefined;
 }
 
-export function pendingPreparationComplete(db: DatabaseSync, ws: string, members: boolean): boolean {
-  return pendingIndexComplete(db, ws) && (!members || !hasVaultMembers(db) || vaultMembersComplete(db, ws));
+export function pendingPreparationComplete(db: DatabaseSync, ws: string, members: boolean, audit = false): boolean {
+  return pendingIndexComplete(db, ws) && (!audit || pendingAuditComplete(db, ws))
+    && (!members || !hasVaultMembers(db) || vaultMembersComplete(db, ws));
 }
 
 /// At most one request or vault batch per turn, so both share the worker fairly with foreground writes.
-export function backfillPendingPreparation(db: DatabaseSync, ws: string, members: boolean): boolean {
+export function backfillPendingPreparation(db: DatabaseSync, ws: string, members: boolean, audit = false): boolean {
   if (!pendingIndexComplete(db, ws)) {
     if (!backfillPendingIndex(db, ws)) return false;
-    return !members || !hasVaultMembers(db) || vaultMembersComplete(db, ws);
+    return pendingPreparationComplete(db, ws, members, audit);
   }
+  if (audit && !pendingAuditComplete(db, ws)) return backfillPendingAudit(db, ws) && pendingPreparationComplete(db, ws, members, audit);
   return !members || !hasVaultMembers(db) || vaultMembersComplete(db, ws) || backfillVaultMembers(db, ws);
+}
+
+/// Recheck an old pending index in bounded transactions, while triggers cover concurrent inserts and updates.
+export function backfillPendingAudit(db: DatabaseSync, ws: string, limit = 32): boolean {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("INSERT OR IGNORE INTO vault_pending_audit_v2 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    const audit = db.prepare("SELECT after_id, done FROM vault_pending_audit_v2 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
+    if (audit.done) { db.exec("COMMIT"); return true; }
+    const rows = (audit.after_id === null
+      ? db.prepare("SELECT id FROM vault_pending_lookup WHERE ws = ? ORDER BY id LIMIT ?").all(ws, limit)
+      : db.prepare("SELECT id FROM vault_pending_lookup WHERE ws = ? AND id > ? ORDER BY id LIMIT ?").all(ws, audit.after_id, limit)) as { id: string }[];
+    auditPendingRows(db, ws, rows);
+    const done = rows.length < limit;
+    db.prepare("UPDATE vault_pending_audit_v2 SET after_id = ?, done = ? WHERE ws = ?")
+      .run(rows.at(-1)?.id ?? audit.after_id, done ? 1 : 0, ws);
+    db.exec("COMMIT");
+    return done;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function auditPendingRows(db: DatabaseSync, ws: string, rows: { id: string }[]): void {
+  const clear = db.prepare("DELETE FROM vault_pending_duplicates_v2 WHERE ws = ? AND id = ?");
+  const add = db.prepare(`INSERT OR IGNORE INTO vault_pending_duplicates_v2 SELECT r.ws, r.id FROM vault_requests r
+    WHERE r.ws = ? AND r.id = ? AND r.status = 'pending' AND (${duplicateDecisionFields("r.body")}) = 1`);
+  for (const row of rows) { clear.run(ws, row.id); add.run(ws, row.id); }
 }
 
 /// One transaction reads at most `limit` old request ids. The triggers keep writes ahead of and behind its cursor.
@@ -111,7 +185,9 @@ export function backfillPendingIndex(db: DatabaseSync, ws: string, limit = 32): 
   db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare("INSERT OR IGNORE INTO vault_pending_backfill (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    db.prepare("INSERT OR IGNORE INTO vault_pending_audit_v2 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     const state = db.prepare("SELECT after_id, done FROM vault_pending_backfill WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
+    const audit = db.prepare("SELECT after_id, done FROM vault_pending_audit_v2 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     if (state.done) {
       db.exec("COMMIT");
       return true;
@@ -123,6 +199,13 @@ export function backfillPendingIndex(db: DatabaseSync, ws: string, limit = 32): 
       SELECT ${values("r")} FROM vault_requests r WHERE r.ws = ? AND r.id = ? AND r.status = 'pending'`);
     for (const row of rows) add.run(ws, row.id);
     const done = rows.length < limit;
+    // New workspaces can audit along with their first backfill. A partially prepared old workspace starts its audit
+    // from the beginning once the original index is complete.
+    if (!audit.done && audit.after_id === state.after_id) {
+      auditPendingRows(db, ws, rows);
+      db.prepare("UPDATE vault_pending_audit_v2 SET after_id = ?, done = ? WHERE ws = ?")
+        .run(rows.at(-1)?.id ?? audit.after_id, done ? 1 : 0, ws);
+    }
     db.prepare("UPDATE vault_pending_backfill SET after_id = ?, done = ? WHERE ws = ?")
       .run(rows.at(-1)?.id ?? state.after_id, done ? 1 : 0, ws);
     db.exec("COMMIT");
