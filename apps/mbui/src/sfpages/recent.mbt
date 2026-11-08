@@ -266,10 +266,10 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
     }
     None => ()
   }
-  let off = a.get()
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=recent_strip_row.then(@ui.style(pl=@sf.room_of(side), pr=@sf.room_of(side), pt=@sf.room_of(top))), fn() {
-      c.box(style=recent_tiles, tx=off, fn() {
+      // (across by where the strip is, as it is painted: drawn and tapped there, nothing built as it glides)
+      let tiles_at = c.box(style=recent_tiles, fn() {
         recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
           let n = match recent.chosen.search(p.src) {
@@ -312,7 +312,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
           None => ()
         }
       })
-      |> ignore
+      c.moved_by(tiles_at, fn(_, _) { (a.get(), 0.0) })
     })
     |> ignore
   })

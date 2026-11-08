@@ -631,17 +631,15 @@ fn page_view(
 ) -> Unit {
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side); the
   // page at the stack's root is so with a page sliding in over it or back off it too (where it stands, not how deep
-  // the stack is: Nav::under), its place's top bar kept
+  // the stack is: Nav::under), its place's top bar kept. How far it has come is read as it is painted (moved there,
+  // tapped there too, and faded), not as it is built: nothing built as it comes in
   let root = app.nav.under() is None
-  let e = if root { place_switch.get() } else { 1.0 }
   if root {
     bar_built(c, page)
   }
-  c.box(
+  let at = c.box(
     w=Fill(1.0),
     h=Fill(1.0),
-    tx=app.switch_way.to_double() * switch_slide * (1.0 - e),
-    opacity=e,
     fn() {
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
@@ -692,7 +690,10 @@ fn page_view(
       }
     },
   )
-  |> ignore
+  if root {
+    c.moved_by(at, fn(_, _) { (app.switch_way.to_double() * switch_slide * (1.0 - place_switch.get()), 0.0) })
+    c.look_by(at, fn() { @ui.look(alpha=place_switch.get()) })
+  }
 }
 
 ///|

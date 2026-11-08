@@ -445,7 +445,6 @@
       "src/sf/marked.mbt": 1,
       "src/sf/parts.mbt": 4,
       "src/sf/presenters.mbt": 4,
-      "src/sf/reader.mbt": 1,
       "src/sf/waiting.mbt": 1,
       "src/sfapp/chat.mbt": 1,
       "src/sfbase/chat_list.mbt": 4,
@@ -455,7 +454,6 @@
       "src/sfbase/under_post.mbt": 1,
       "src/sfbase/viewer.mbt": 1,
       "src/sfbase/viz_page.mbt": 2,
-      "src/sfdesk/drive_narrow.mbt": 1,
       "src/sfdesk/pane_view.mbt": 1,
       "src/sfdesk/tape_view.mbt": 1,
       "src/sfpages/chat_mark.mbt": 1,
@@ -466,7 +464,7 @@
       "src/sfpages/message.mbt": 3,
       "src/sfpages/message_files.mbt": 2,
       "src/sfpages/publish.mbt": 1,
-      "src/sfpages/recent.mbt": 5,
+      "src/sfpages/recent.mbt": 4,
       "src/sfpages/search.mbt": 1
     },
     "old-list": {
