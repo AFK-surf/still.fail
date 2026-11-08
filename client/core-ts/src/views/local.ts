@@ -478,6 +478,19 @@ export class Local {
     });
   }
 
+  /// A station's chats with a message that failed to go, each with the first such (`unsent` of each of its chats).
+  failedOutboxes(station: string): Map<number, J> {
+    this.#seen.outbox.read();
+    const out = new Map<number, J>();
+    for (const [k, list] of this.#outbox) {
+      const at = k.indexOf(SEP);
+      if (k.slice(0, at) !== station) continue;
+      const failed = list.find((m) => m.state === "failed");
+      if (failed !== undefined) out.set(Number(k.slice(at + 1)), failed);
+    }
+    return out;
+  }
+
   /// Puts back a chat's outbox as its view found it (what arrived goes).
   outboxSettle(station: string, thread: number, list: J[]): void {
     if (equal(list, this.outbox(station, thread))) return;

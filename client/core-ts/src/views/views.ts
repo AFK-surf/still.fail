@@ -573,6 +573,9 @@ export class Views implements Owner {
   readonly #rowsMade = new WeakMap<object, { sig: string; row: J }>();
   /// A chat's messages as shown (`#shown`), by the message each was made of, and what else it was made with.
   readonly #shownMade = new WeakMap<object, { by: unknown; waiting: boolean; out: J }>();
+  /// A row's local day by its time (`#days`), while the zone's offset now is `#daysZone`.
+  #dayOf = new WeakMap<object, [number, number]>();
+  #daysZone: number | null = null;
   /// What parts of a view were last made with, by the view (`#steady`).
   readonly #steadied = new Map<string, unknown>();
   readonly #core: ViewsEnv;
@@ -1438,6 +1441,9 @@ export class Views implements Owner {
         this.local.settle(s.address, data.rowsRev(s.address));
         const listed = arr(read.ok);
         const asked = this.local.pendingRows(s.address);
+        // What failed to go in the station's chats, once for the list (looked up for each row, 1400 of them, on every
+        // change of one: 2026-11-08).
+        const failed = this.local.failedOutboxes(s.address);
         // What a row is made with besides its record: a row whose record and these are as they were is the one made
         // before (rule 7: the list redoes only the rows that changed). Not its station's link: what that makes of a row
         // goes once for the station (`stations`, stationOn), not on each of its rows.
@@ -1464,7 +1470,7 @@ export class Views implements Owner {
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
           }
-          if (row !== null) rows.push(this.#unsentRow(s.address, row));
+          if (row !== null) rows.push(this.#unsentRow(s.address, row, failed));
         }
       }
       let state: string;
@@ -1748,9 +1754,10 @@ export class Views implements Owner {
   /// A row whose chat has a message sent here that did not go: marked red, its second line saying which (`unsent`: drawn
   /// in red), before
   /// anything its agents do (the message waits in the chat to be sent again or dropped).
-  #unsentRow(station: string, row: J): J {
+  #unsentRow(station: string, row: J, failed?: Map<number, J>): J {
     const thread = typeof row.thread === "number" ? row.thread : null;
-    const unsent = this.local.unsent(station, thread, row.pending === true && typeof row.clientKey === "string" ? row.clientKey : null);
+    const key = row.pending === true && typeof row.clientKey === "string" ? row.clientKey : null;
+    const unsent = failed !== undefined && thread !== null && key === null ? failed.get(thread) : this.local.unsent(station, thread, key);
     if (unsent === undefined) return row;
     const text = format.cleanText(format.plainText(str(unsent.text) ?? ""));
     const { stateAbout: _stateAbout, stateLead: _stateLead, stateLeadText: _stateLeadText, stateRest: _stateRest, ...rest } = row;
@@ -1768,14 +1775,27 @@ export class Views implements Owner {
     const pinned = rows.filter((row) => pinnedAt.has(row));
     const when = (row: J) => pinnedAt.get(row) ?? 0;
     pinned.sort((a, b) => when(b) - when(a) || at(b) - at(a));
-    const day = (ms: number) => Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
-    const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => {
-      const time = at(row);
-      return { row, time, day: day(time) };
-    });
-    rest.sort((a, b) => b.day - a.day || b.time - a.time);
     const now = host.nowMs();
     const offset = host.utcOffsetMin(now);
+    // Each row's local day, kept with it while the zone is as it was (the zone's offset at each row's time was asked
+    // of the host for each of 1400 rows on every change of one, 2026-11-08).
+    if (this.#daysZone !== offset) {
+      this.#daysZone = offset;
+      this.#dayOf = new WeakMap();
+    }
+    const dayOf = this.#dayOf;
+    const day = (row: J, ms: number) => {
+      const kept = dayOf.get(row);
+      if (kept !== undefined && kept[0] === ms) return kept[1];
+      const d = Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
+      dayOf.set(row, [ms, d]);
+      return d;
+    };
+    const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => {
+      const time = at(row);
+      return { row, time, day: day(row, time) };
+    });
+    rest.sort((a, b) => b.day - a.day || b.time - a.time);
     const today = Math.floor((now + offset * 60_000) / DAY_MS);
     const days: [number, number, J[]][] = [];
     for (const { row, time, day: d } of rest) {

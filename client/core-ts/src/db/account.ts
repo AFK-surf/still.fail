@@ -143,48 +143,91 @@ function longestRun(values: (number | null)[]): Set<number> {
 }
 
 /// A list loaded: its rows by id and where each sorts.
-class Collection {
+export class Collection {
   readonly items = new Map<string, J>();
   readonly sort = new Map<string, number[]>();
+  /// The rows in order, and their ids: made once, then each change put in its place on copies of them (one row of 1400
+  /// changed sorted all of them again, as each chat's new message did, 2026-11-08).
   #array: J[] | null = null;
+  #ids: string[] | null = null;
   readonly descending: boolean;
   constructor(descending: boolean) {
     this.descending = descending;
   }
 
+  #before(x: number[], a: string, y: number[], b: string): number {
+    const d = this.descending ? -1 : 1;
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return (x[i]! - y[i]!) * d;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  /// Where id with `sort` is, or goes, in the ids in order.
+  #at(ids: string[], id: string, sort: number[]): number {
+    let lo = 0;
+    let hi = ids.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.#before(this.sort.get(ids[mid]!)!, ids[mid]!, sort, id) < 0) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  #out(id: string): { ids: string[]; rows: J[] } | null {
+    if (!this.#ids || !this.#array) return null;
+    const ids = this.#ids.slice();
+    const rows = this.#array.slice();
+    const was = this.sort.get(id);
+    if (was !== undefined) {
+      const at = this.#at(ids, id, was);
+      if (ids[at] === id) {
+        ids.splice(at, 1);
+        rows.splice(at, 1);
+      } else return null;
+    }
+    return { ids, rows };
+  }
+
   set(id: string, row: J, sort: number[]): void {
+    const kept = this.#out(id);
     this.items.set(id, row);
     this.sort.set(id, sort);
-    this.#array = null;
+    if (kept === null) {
+      this.#array = null;
+      this.#ids = null;
+      return;
+    }
+    const at = this.#at(kept.ids, id, sort);
+    kept.ids.splice(at, 0, id);
+    kept.rows.splice(at, 0, row);
+    this.#ids = kept.ids;
+    this.#array = kept.rows;
   }
 
   delete(id: string): void {
-    if (this.items.delete(id)) {
-      this.sort.delete(id);
-      this.#array = null;
-    }
+    if (!this.items.has(id)) return;
+    const kept = this.#out(id);
+    this.items.delete(id);
+    this.sort.delete(id);
+    this.#ids = kept?.ids ?? null;
+    this.#array = kept?.rows ?? null;
   }
 
   /// The rows in order (the same array while nothing changed).
   array(): J[] {
     if (this.#array) return this.#array;
     const ids = [...this.items.keys()];
-    const d = this.descending ? -1 : 1;
-    ids.sort((a, b) => {
-      const x = this.sort.get(a)!;
-      const y = this.sort.get(b)!;
-      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return (x[i] - y[i]) * d;
-      return a < b ? -1 : a > b ? 1 : 0;
-    });
+    ids.sort((a, b) => this.#before(this.sort.get(a)!, a, this.sort.get(b)!, b));
+    this.#ids = ids;
     this.#array = ids.map((id) => this.items.get(id));
     return this.#array;
   }
 }
 
-/// Rows read by key, kept until written; the oldest go past `cap`.
 /// How many items of a log a read takes from SQLite one by one, beside those parsed already; more, it reads the range.
 const LOG_READ_ALONE = 16;
 
+/// Rows read by key, kept until written; the oldest go past `cap`.
 class Cache {
   readonly #map = new Map<string, J>();
   readonly cap: number;
