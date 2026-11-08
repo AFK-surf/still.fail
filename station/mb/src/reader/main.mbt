@@ -415,6 +415,10 @@ fn main {
         { "kind": "awake", .. } => Some(@activity.awake_step(db))
         { "kind": "legacy-said", .. } => Some(@legacy.said_maintenance(db))
         { "kind": "legacy-edits", .. } => Some(@legacy.edits_maintenance(db))
+        { "kind": "legacy-policy", .. } => Some(@legacy.policy_step(db))
+        { "kind": "legacy-decision-time", .. } => Some(@legacy.decision_time_step(db))
+        { "kind": "legacy-decision-session", .. } => Some(@legacy.decision_session_step(db))
+        { "kind": "legacy-decision-session-repair", .. } => Some(@legacy.decision_session_repair_step(db))
         { "kind": String(_), .. } => raise @legacy.Fallback
         _ => Some(@activity.activity_step(db))
       }))
