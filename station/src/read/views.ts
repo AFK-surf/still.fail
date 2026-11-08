@@ -370,6 +370,8 @@ export function scopeOfJobNames(s: Store, keys: string[]): Scope {
   const rows = new Set(keys), agents = new Set(keys), origins = new Set<string>(), hasChat = new Set<string>();
   const target = new Map(keys.map((key) => [key, store.getSession(s, key)]));
   const chats = store.threadsOfSessionsOnSurface(s, keys, true);
+  const checked = new Map<string, boolean>();
+  let probe: ((session: string) => boolean) | null = null;
   for (const id of chats) {
     const thread = store.getThread(s, id);
     if (thread === null) continue;
@@ -379,7 +381,15 @@ export function scopeOfJobNames(s: Store, keys: string[]): Scope {
       agents.add(member.session);
       const session = target.get(member.session);
       if (session && (thread.hiddenAt !== null) === (session.archivedAt !== null)) hasChat.add(member.session);
-      if (given(thread) === null) origins.add(member.session);
+    }
+    if (given(thread) === null) for (const member of members) {
+      let found = checked.get(member.session);
+      if (found === undefined) {
+        probe ??= store.namingOriginProbe(s);
+        found = probe(member.session);
+        checked.set(member.session, found);
+      }
+      if (found) { origins.add(member.session); break; }
     }
   }
   for (const [key, session] of target) {
