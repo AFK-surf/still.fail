@@ -906,27 +906,32 @@ export class Secrets {
   pending(ws: string, lock: LockState | null, viewer: { sub: string; email: string }): Request[] {
     const now = Math.floor(this.#d.now() / 1000);
     const lost = this.#lostSaves.get(ws);
-    const ready = lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
-      && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws) && !hasInvalidVaultMembers(this.#d.db, ws)));
     let rows: { body: string }[];
-    if (!ready) {
-      const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
-      rows = this.#d.db.prepare(sql).all(ws) as { body: string }[];
-    } else {
-      const selected = new Map<string, string>();
-      const add = (found: unknown[]) => { for (const row of found as { id: string; body: string }[]) selected.set(row.id, row.body); };
-      add(this.#d.db.prepare(PENDING_OWN).all(ws, viewer.email.toLowerCase()));
-      if (lock !== null) add(this.#d.db.prepare(PENDING_MEMBER).all(ws, viewer.sub));
-      add(this.#d.db.prepare(PENDING_DUE).all(ws, now - PENDING_SECS));
-      add(this.#d.db.prepare(PENDING_NO_TIME).all(ws));
-      add(this.#d.db.prepare(PENDING_OTHER_TIME).all(ws));
-      if (this.#d.coming?.() !== true) for (const id of lost!.ids) {
-        const kept = this.#kept(ws, id);
-        if (kept?.request.status === "pending") selected.set(id, JSON.stringify(kept.request));
-        else this.#markLost(ws, id, false);
+    // The readiness and anomaly checks must describe the same snapshot as the indexed candidates. A writer on
+    // another connection can change a vault, its markers and its lookup between any two statements.
+    this.#d.db.exec("SAVEPOINT vault_pending_read");
+    try {
+      const ready = lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
+        && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws) && !hasInvalidVaultMembers(this.#d.db, ws)));
+      if (!ready) {
+        const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
+        rows = this.#d.db.prepare(sql).all(ws) as { body: string }[];
+      } else {
+        const selected = new Map<string, string>();
+        const add = (found: unknown[]) => { for (const row of found as { id: string; body: string }[]) selected.set(row.id, row.body); };
+        add(this.#d.db.prepare(PENDING_OWN).all(ws, viewer.email.toLowerCase()));
+        if (lock !== null) add(this.#d.db.prepare(PENDING_MEMBER).all(ws, viewer.sub));
+        add(this.#d.db.prepare(PENDING_DUE).all(ws, now - PENDING_SECS));
+        add(this.#d.db.prepare(PENDING_NO_TIME).all(ws));
+        add(this.#d.db.prepare(PENDING_OTHER_TIME).all(ws));
+        if (this.#d.coming?.() !== true) for (const id of lost!.ids) {
+          const kept = this.#kept(ws, id);
+          if (kept?.request.status === "pending") selected.set(id, JSON.stringify(kept.request));
+          else this.#markLost(ws, id, false);
+        }
+        rows = [...selected].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, body]) => ({ body }));
       }
-      rows = [...selected].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, body]) => ({ body }));
-    }
+    } finally { this.#d.db.exec("RELEASE vault_pending_read"); }
     const vaultDecisions = new Map<string, boolean>();
     return rows
       .map((r) => JSON.parse(r.body) as Request)

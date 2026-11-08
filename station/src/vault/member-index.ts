@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS vault_member_duplicates_v2 (
 CREATE TABLE IF NOT EXISTS vault_member_audit_v2 (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
+-- Older change triggers compared only json_extract's SQL value. An array and a string containing the array's JSON
+-- can have the same value, so repair old lookups and invalid markers before trusting them.
+CREATE TABLE IF NOT EXISTS vault_member_type_audit_v3 (
+  ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
+) WITHOUT ROWID;
 CREATE TRIGGER IF NOT EXISTS vault_member_add AFTER INSERT ON vaults
   WHEN EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws) BEGIN
   INSERT INTO vault_member_invalid SELECT NEW.ws, NEW.id WHERE (${validMembers("NEW.body")}) = 0
@@ -61,6 +66,24 @@ CREATE TRIGGER IF NOT EXISTS vault_member_drop AFTER DELETE ON vaults
   DELETE FROM vault_member_invalid WHERE ws = OLD.ws AND vault = OLD.id;
   DELETE FROM vault_member_lookup WHERE ws = OLD.ws AND vault = OLD.id AND sub IN
     (SELECT value FROM json_each(${membersBody("OLD.body")}, '$.members') WHERE type = 'text');
+END;
+CREATE TRIGGER IF NOT EXISTS vault_member_type_add_v3 AFTER INSERT ON vaults
+  WHEN EXISTS (SELECT 1 FROM vault_member_invalid WHERE ws = NEW.ws AND vault = NEW.id)
+    AND (${validMembers("NEW.body")}) = 1 BEGIN
+  DELETE FROM vault_member_invalid WHERE ws = NEW.ws AND vault = NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_member_type_change_v3 AFTER UPDATE ON vaults
+  WHEN OLD.body IS NOT NEW.body AND (${validMembers("OLD.body")}) IS NOT (${validMembers("NEW.body")})
+    AND (EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws)) BEGIN
+  DELETE FROM vault_member_invalid WHERE ws = OLD.ws AND vault = OLD.id;
+  INSERT OR IGNORE INTO vault_member_invalid SELECT NEW.ws, NEW.id WHERE (${validMembers("NEW.body")}) = 0
+    AND EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws);
+  DELETE FROM vault_member_lookup WHERE ws = OLD.ws AND vault = OLD.id AND sub IN
+    (SELECT value FROM json_each(${membersBody("OLD.body")}, '$.members') WHERE type = 'text');
+  INSERT OR IGNORE INTO vault_member_lookup
+    SELECT NEW.ws, m.value, NEW.id FROM json_each(${membersBody("NEW.body")}, '$.members') m WHERE m.type = 'text'
+      AND EXISTS (SELECT 1 FROM vault_member_backfill WHERE ws = NEW.ws);
 END;
 CREATE TRIGGER IF NOT EXISTS vault_member_duplicate_add_v2 AFTER INSERT ON vaults
   WHEN EXISTS (SELECT 1 FROM vault_member_audit_v2 WHERE ws = NEW.ws) BEGIN
@@ -95,9 +118,10 @@ export function initializeVaultMembers(db: DatabaseSync): void {
 }
 
 export function vaultMembersComplete(db: DatabaseSync, ws: string): boolean {
-  const state = db.prepare(`SELECT b.done, a.done AS audited FROM vault_member_backfill b
-    LEFT JOIN vault_member_audit_v2 a ON a.ws = b.ws WHERE b.ws = ?`).get(ws) as { done: number; audited: number | null } | undefined;
-  return state?.done === 1 && state.audited === 1;
+  const state = db.prepare(`SELECT b.done, a.done AS audited, t.done AS type_audited FROM vault_member_backfill b
+    LEFT JOIN vault_member_audit_v2 a ON a.ws = b.ws LEFT JOIN vault_member_type_audit_v3 t ON t.ws = b.ws
+    WHERE b.ws = ?`).get(ws) as { done: number; audited: number | null; type_audited: number | null } | undefined;
+  return state?.done === 1 && state.audited === 1 && state.type_audited === 1;
 }
 
 /// An index begun by an older station can still be scanned around while its audit is prepared in the background.
@@ -107,7 +131,7 @@ export function vaultMembersStarted(db: DatabaseSync, ws: string): boolean {
 
 // A rowid replacement can leave a marker for a removed vault when recursive triggers are off. Check only marked
 // vaults, and keep that table on the outside so a normal workspace does not scan all of its vaults.
-export const VAULT_MEMBERS_INVALID = `SELECT 1 FROM vault_member_invalid WHERE ws = ?
+export const VAULT_MEMBERS_INVALID = `SELECT 1 FROM vault_member_invalid i CROSS JOIN vaults v ON v.ws = i.ws AND v.id = i.vault WHERE i.ws = ?
   UNION ALL SELECT 1 FROM vault_member_duplicates_v2 d CROSS JOIN vaults v ON v.ws = d.ws AND v.id = d.vault
     WHERE d.ws = ? LIMIT 1`;
 
@@ -121,15 +145,18 @@ export function backfillVaultMembers(db: DatabaseSync, ws: string, limit = 32): 
   try {
     db.prepare("INSERT OR IGNORE INTO vault_member_backfill (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     db.prepare("INSERT OR IGNORE INTO vault_member_audit_v2 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    db.prepare("INSERT OR IGNORE INTO vault_member_type_audit_v3 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     const state = db.prepare("SELECT after_id, done FROM vault_member_backfill WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     const audit = db.prepare("SELECT after_id, done FROM vault_member_audit_v2 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
-    if (state.done && audit.done) {
+    const types = db.prepare("SELECT after_id, done FROM vault_member_type_audit_v3 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
+    if (state.done && audit.done && types.done) {
       db.exec("COMMIT");
       return true;
     }
     // A new lookup and its audit advance together. An existing lookup with a different cursor is audited afterwards.
     const auditBatch = !audit.done && (state.done !== 0 || state.after_id === audit.after_id);
-    const after = state.done ? audit.after_id : state.after_id;
+    const after = !state.done ? state.after_id : !audit.done ? audit.after_id : types.after_id;
+    const typeBatch = !types.done && types.after_id === after;
     const rows = (after === null
       ? db.prepare("SELECT id FROM vaults WHERE ws = ? ORDER BY id LIMIT ?").all(ws, limit)
       : db.prepare("SELECT id FROM vaults WHERE ws = ? AND id > ? ORDER BY id LIMIT ?").all(ws, after, limit)) as { id: string }[];
@@ -152,8 +179,27 @@ export function backfillVaultMembers(db: DatabaseSync, ws: string, limit = 32): 
       db.prepare("UPDATE vault_member_audit_v2 SET after_id = ?, done = ? WHERE ws = ?")
         .run(rows.at(-1)?.id ?? audit.after_id, done ? 1 : 0, ws);
     }
+    if (typeBatch) {
+      // The first preparation already inserted these members and marked invalid bodies. An older completed lookup
+      // needs both repaired; a stale invalid marker can occur in either case.
+      const clear = db.prepare(`DELETE FROM vault_member_invalid WHERE ws = ? AND vault = ? AND EXISTS
+        (SELECT 1 FROM vaults v WHERE v.ws = ? AND v.id = ? AND (${validMembers("v.body")}) = 1)`);
+      if (!state.done) {
+        for (const row of rows) clear.run(ws, row.id, ws, row.id);
+      } else {
+        const add = db.prepare(`INSERT OR IGNORE INTO vault_member_lookup
+          SELECT v.ws, m.value, v.id FROM vaults v JOIN json_each(${membersBody("v.body")}, '$.members') m
+          WHERE v.ws = ? AND v.id = ? AND m.type = 'text'`);
+        const invalid = db.prepare(`INSERT OR IGNORE INTO vault_member_invalid SELECT v.ws, v.id FROM vaults v
+          WHERE v.ws = ? AND v.id = ? AND (${validMembers("v.body")}) = 0`);
+        for (const row of rows) { add.run(ws, row.id); clear.run(ws, row.id, ws, row.id); invalid.run(ws, row.id); }
+      }
+      db.prepare("UPDATE vault_member_type_audit_v3 SET after_id = ?, done = ? WHERE ws = ?")
+        .run(rows.at(-1)?.id ?? types.after_id, done ? 1 : 0, ws);
+    }
     db.exec("COMMIT");
-    return (state.done !== 0 || done) && (audit.done !== 0 || (auditBatch && done));
+    return (state.done !== 0 || done) && (audit.done !== 0 || (auditBatch && done))
+      && (types.done !== 0 || (typeBatch && done));
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
