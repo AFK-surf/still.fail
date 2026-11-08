@@ -290,8 +290,12 @@ export class Readers {
   /// Share the bounded old-edit preparation between notices, and leave a cancelled request unattended.
   prepareLegacyEdits(signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    this.legacyEdits ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
-      "legacy edits", (thread, cancel) => ({ thread, legacyEdits: true, cancel }));
+    // (by the MoonBit builder, station/mb's src/legacy, where its program is there; else, and for a store whose merged
+    // view must be switched first, by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.legacyEdits ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "legacy edits", (thread, cancel) => ({ thread, legacyEdits: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "legacy-edits", "--db", path] });
     return this.covered(this.legacyEdits.ready([0], signal), signal);
   }
 
@@ -307,8 +311,11 @@ export class Readers {
   /// Share the initial old-message scan between pages waiting for it.
   prepareLegacySaid(signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    this.legacySaid ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
-      "legacy said", (thread, cancel) => ({ thread, legacySaid: true, cancel }));
+    // (by the MoonBit builder, station/mb's src/legacy, where its program is there; else by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.legacySaid ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "legacy said", (thread, cancel) => ({ thread, legacySaid: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "legacy-said", "--db", path] });
     return this.covered(this.legacySaid.ready([0], signal), signal);
   }
 
