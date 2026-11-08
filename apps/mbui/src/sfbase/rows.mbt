@@ -6,7 +6,7 @@
 /// The chats of workspace `scope` in list `filter` (all, mine, watching) as the core's view says them, worked out once
 /// for each version of it; what went wrong reading it.
 pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, String?) {
-  let (read, topic) = chats_read.read(src, chats_params(scope, filter))
+  let (read, topic) = chats_read.read(src, chats_shown(src, scope, filter))
   let error = match topic.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -25,6 +25,12 @@ pub let chats_page : Int = 50
 let chat_limits : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
+// kept across runs: let go of by reset (pages.mbt)
+/// The limit each list was asked with before a page more, by workspace and filter, while the core has not answered
+/// the page more yet.
+let chat_limits_was : Map[String, Int] = {}
+
+///|
 /// The chats of workspace `scope` in list `filter` as they are asked of the core: as many of them as are asked now.
 fn chats_params(scope : String, filter : String) -> Map[String, Json] {
   let params : Map[String, Json] = {
@@ -40,6 +46,24 @@ fn chats_params(scope : String, filter : String) -> Map[String, Json] {
   let limit = chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
   params["limit"] = Json::number(limit.to_double())
   params
+}
+
+///|
+/// The list `filter` of workspace `scope` as it is shown: as asked now once the core answered it, till then as it was
+/// asked before a page more (its rows staying, not its skeleton for the core's round trip), let go of as it comes.
+fn chats_shown(src : Source, scope : String, filter : String) -> Map[String, Json] {
+  let key = scope + "\u{1}" + filter
+  let now = chats_params(scope, filter)
+  guard chat_limits_was.get(key) is Some(was) else { return now }
+  let before = now.copy()
+  before["limit"] = Json::number(was.to_double())
+  let asked = (src.topic)("chats", now)
+  if asked.value is None && asked.error is None {
+    return before
+  }
+  chat_limits_was.remove(key)
+  (src.leave)("chats", before)
+  now
 }
 
 ///|
@@ -62,13 +86,17 @@ pub fn chats_more(src : Source, scope : String, filter : String) -> Int {
 
 ///|
 /// A page more of list `filter`'s rows asked for, where `limit` is still how many are asked (asked once for it), the
-/// list as it was asked let go of.
+/// list as it was asked shown till the core answers it (chats_shown).
 pub fn chats_ask_more(src : Source, scope : String, filter : String, limit : Int) -> Unit {
   let key = scope + "\u{1}" + filter
   if chat_limits.get(key).unwrap_or(chats_page) == limit {
-    let was = chats_params(scope, filter)
+    // (a page more asked again before the last came: the one shown still the first's)
+    if !chat_limits_was.contains(key) {
+      chat_limits_was[key] = limit
+    } else {
+      (src.leave)("chats", chats_params(scope, filter))
+    }
     chat_limits[key] = limit + chats_page
-    (src.leave)("chats", was)
   }
 }
 
@@ -82,13 +110,14 @@ pub fn chats_limit(scope : String, filter : String) -> Int {
 /// The chats' list of workspace `scope` as it is asked (all of its chats, its first rows: chats_params), for what is
 /// read of it beside its rows (its stations' trouble, its glyph).
 pub fn chats_topic(src : Source, scope : String) -> Topic {
-  (src.topic)("chats", chats_params(scope, "all"))
+  (src.topic)("chats", chats_shown(src, scope, "all"))
 }
 
 ///|
 /// As at the start: each list asked a page of at first.
 pub fn chat_limits_reset() -> Unit {
   chat_limits.clear()
+  chat_limits_was.clear()
 }
 
 ///|
