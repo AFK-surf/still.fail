@@ -31,7 +31,7 @@ function person(s: Store, ref: string): Json {
 /// account and model, with what they cost at list prices (null for a model without one); `people` the rows' persons.
 export function outflowUsage(s: Store, lang: Lang, from: number, to: number, tz: number, of: Of = HOME): Json {
   // The export has no remote-task field, so it need not wait for or read those statistics.
-  const read = usage(s, lang, BigInt(from), BigInt(to), BigInt(tz), false, of, false, { remoteRuns: false }) as Json;
+  const read = usage(s, lang, BigInt(from), BigInt(to), BigInt(tz), false, of, false, { remoteRuns: false, metadata: false }) as Json;
   const rows = (read.rows as Json[]).map((r) => ({
     day: r.day, thread: r.thread, session: r.session, person: r.person, account: r.profile, runtime: r.runtime, model: r.model,
     calls: r.calls, input: r.input, cacheRead: r.cacheRead, cacheWrite: r.cacheWrite, output: r.output, cost: r.cost,
