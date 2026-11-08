@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Clock, Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { GRACE, PORTS, RETRY, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
+import { GRACE, PORTS, RETRY, SETTLE, SILENT_MS, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
@@ -229,6 +229,32 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   // (the try due once the offer ended is not made)
   await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 5);
   assert.equal(adb.calls().filter((c) => c[0] === "connect").length, 2);
+  await time.close();
+});
+
+test("a phone whose connection answers nothing for SILENT_MS is let go; one that answers is kept", async () => {
+  const time = testClock();
+  const shares = new Shares({ adb: () => null, clock: time.clock });
+  let answering = true;
+  const quiet = { ...nowhere, isClosed: () => false, answers: async () => answering } as unknown as Connection;
+  const stream = new Memory();
+  const offered = answerAdb(shares, quiet, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
+  await until(() => stream.lines().find((l) => l.adb === "missing"));
+  const beat = async () => {
+    await time.asleep(SILENT_MS / 3);
+    await time.adjust(SILENT_MS / 3);
+    await turn();
+  };
+  for (let i = 0; i < 3; i++) await beat();
+  answering = false;
+  await beat();
+  await beat();
+  assert.equal(shares.list().length, 1, "not before SILENT_MS");
+  await beat();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
+  await offered;
+  assert.deepEqual(shares.list(), []);
   await time.close();
 });
 
