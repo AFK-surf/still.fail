@@ -53,8 +53,10 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
     let (x, y, _, sh) = t.get(Switch, label="震动").rect
     assert_true(x >= titles[0].x + titles[0].w, msg="\{at}: switch follows its title")
     if !laid_wide(w) {
-      let title_mid = titles[0].y + titles[0].h / 2.0
-      assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line: title \{(titles[0].y, titles[0].h)}, switch \{(y, sh)}")
+      // (the title's words as they are drawn: their line's middle)
+      guard t.rect_of("震动") is Some((_, ty, _, th)) else { fail("\{at}: no 震动 drawn") }
+      let title_mid = ty + th / 2.0
+      assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line: title \{(ty, th)}, switch \{(y, sh)}")
     }
     assert_eq(t.get(Switch, label="震动").check, Some(On), msg=at)
     t.tap_text("震动")
