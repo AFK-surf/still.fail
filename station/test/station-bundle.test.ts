@@ -18,7 +18,7 @@ test("a station release includes every worker built, including workers in new di
     cpSync(fileURLToPath(new URL("../../scripts/station-bundle.sh", import.meta.url)), join(root, "scripts/station-bundle.sh"));
     for (const path of ["bin/stillfail", "bin/stillfail.cmd", "bin/stillfail.ps1", ".node-version", "natives/stillfail-station",
       "natives/stillfail-station-w.exe", "natives/mesh.node", "natives/stillfail-runner", "natives/stillfail-screen.exe",
-      "natives/agent-desktop.exe", "natives/still.fail Helper.app/Contents/MacOS/helper"]) file(path);
+      "natives/agent-desktop.exe", "natives/stillfail-reader", "natives/still.fail Helper.app/Contents/MacOS/helper"]) file(path);
     // A release may run after a different build in the same checkout; its files must not leak into this one.
     file("station/dist/stale/old-worker.js");
     file("mock-bin/node", `#!/bin/sh
@@ -27,7 +27,7 @@ case "$1" in
   */posthog-key.ts) mkdir -p "$BUNDLE_TEST_ROOT/dist/admin"; printf '{}' > "$BUNDLE_TEST_ROOT/dist/admin/posthog.json" ;;
   */native.ts) case "$3" in
     launcher) name=stillfail-station ;; mesh) name=mesh.node ;; runner) name=stillfail-runner ;;
-    helper) name='still.fail Helper.app' ;; screen) name=stillfail-screen.exe ;; agent-desktop) name=agent-desktop.exe ;;
+    helper) name='still.fail Helper.app' ;; reader) name=stillfail-reader ;; screen) name=stillfail-screen.exe ;; agent-desktop) name=agent-desktop.exe ;;
     *) exit 1 ;;
   esac; printf '%s/natives/%s\\n' "$BUNDLE_TEST_ROOT" "$name" ;;
   */installers.ts) : ;;
@@ -56,6 +56,8 @@ done
       }
       assert.equal(existsSync(join(station, "stale/old-worker.js")), false, `${platform}: nothing left from an earlier build`);
       assert.equal(existsSync(join(station, "linux-portal.py")), platform.startsWith("linux-"));
+      // the reader in MoonBit, the Mac's so far (scripts/native.ts `reader`)
+      assert.equal(existsSync(join(station, "stillfail-reader")), platform === "darwin-arm64", `${platform}: the MoonBit reader`);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

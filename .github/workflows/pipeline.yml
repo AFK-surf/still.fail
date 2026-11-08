@@ -30,7 +30,7 @@ env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
   # Linux check's mesh addon is built on a branch that changed it). The Apple shell (shell-apple), the macOS one, on a
   # branch that changed it (#1365 went to main untried and failed there).
-  BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell shell-apple:darwin-arm64 engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 screen:win32-x64 helper:darwin-arm64
+  BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 reader:darwin-arm64 iroh-wasm shell shell-apple:darwin-arm64 engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 screen:win32-x64 helper:darwin-arm64
 jobs:
   # What can runs on macos-ci; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
   # changelog, timing) on GitHub's own runners, free for a public repository, not on Blacksmith's (2026-10-15, as asked).
@@ -101,6 +101,8 @@ jobs:
           for tool in brew rustup cargo node python3; do command -v "$tool" || true; done
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
+      # (the station's reader is MoonBit: scripts/native.ts `reader`)
+      - uses: ./.github/actions/mbui-moonbit
       - name: Get or build the native parts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -128,6 +130,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/mbui-moonbit
       - name: Build what main builds besides the branch's (into macos-ci's cache)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -243,6 +246,8 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup-mac
+      # (the station's programs in MoonBit: station/mb)
+      - uses: ./.github/actions/mbui-moonbit
       - name: Full check (station, core)
         run: |
           range='${{ needs.plan.outputs.range }}'

@@ -376,8 +376,10 @@ if [ $full = 1 ]; then
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
-  if part station && touches '^station/|^vendor/|^client/i18n/|^rules/js/|^scripts/native\.ts$'; then
+  if part station && touches '^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'; then
     prep station deps station
+    # Its programs in MoonBit (station/mb): what of them runs without a host (src/wire).
+    remembered "tests: station's MoonBit" "station/mb apps/mbui/mbui/src/effect apps/mbui/mbui/moon.mod" sh -c 'cd station/mb && moon test --target native src/wire'
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
     # The station's time is its Clock's (写法): the machine's only through ops/fibers.ts' wall. Cursor's
     # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
@@ -385,7 +387,7 @@ if [ $full = 1 ]; then
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
     # (STILLFAIL_NODE_TEST_JOBS, on a machine CI's runners share: station/package.json's `test`, that many files at a
     # time, .github/actions/setup-mac)
-    remembered "tests: station" "station client/i18n vendor rules/js scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
+    remembered "tests: station" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
   fi
   # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
   # typecheck and prepare both sides before checking and running it, including on a fresh checkout.
