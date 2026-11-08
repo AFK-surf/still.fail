@@ -123,8 +123,9 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     while self.fake.time < end - 1.0e-9 {
       self.clock_frame()
     }
-    // (asked on by a hair, less than the same moment summed another way: on to the frame that is at or past it)
-    if ms > 0.0 && end > self.fake.time {
+    // (asked on by a hair, less than the same moment summed another way: on to the frame that is at or past it; not
+    // past a frame a hair short of the end, that frame the end's, as the loop above has it)
+    if ms > 0.0 && end > self.fake.time + 1.0e-9 {
       self.clock_frame()
     }
     return
