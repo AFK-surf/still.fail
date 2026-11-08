@@ -225,6 +225,22 @@ fn lint_mbt(
       add("build-clock", k, f.line_text(k))
     }
   }
+  // a click read by a build (`c.clicked(id)`, `clicked_on`, `double_clicked`: a Bool the frame after it) outside mbui's
+  // ui and kit, which take presses, and outside the tests: what a press does is its handler's (Ctx::on_press, a part's
+  // on_press / on_pick / on_change)
+  if !f.rel.has_prefix("src/ui/") && !f.rel.has_prefix("src/kit/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "clicked" || tk.text == "clicked_on" || tk.text == "double_clicked") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("click-read", k, f.line_text(k))
+      }
+    }
+  }
   // a page reading the shell's own state by its fields (`wide.tape`): the shell's files alone do (not in a page's tests)
   if under(f.rel, cfg.pages) && !under(f.rel, cfg.shell) && cfg.shell_state.length() > 0 {
     for k, tk in toks {

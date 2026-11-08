@@ -1243,15 +1243,22 @@ let in_words : Ref[Int] = Ref(0)
 ///|
 /// A choice of a few (`segmented`: narrow, as wide as the page less 12 each side; wide, at the column's start, each
 /// option `item_w` wide at least). Answers the one chosen (a press's, this frame).
-pub fn page_choice(c : @ui.Ctx, key : String, labels : Array[String], at : Int, item_w? : Double = 0.0) -> Int {
+pub fn page_choice(
+  c : @ui.Ctx,
+  key : String,
+  labels : Array[String],
+  at : Int,
+  item_w? : Double = 0.0,
+  on_pick? : (Int) -> Unit,
+) -> Int {
   // (a wide setting's control: at its row's end, as wide as its options)
   if settings_in.val > 0 {
-    return segmented(c, key, labels, at, item_w~)
+    return segmented(c, key, labels, at, item_w~, on_pick?)
   }
   let mut picked = at
   let choice = fn() {
     c.box(style=if look() is Narrow { pg_choice_box } else { desk_choice_row }, fn() {
-      picked = segmented(c, key, labels, at, item_w~)
+      picked = segmented(c, key, labels, at, item_w~, on_pick?)
     })
     |> ignore
   }
@@ -1333,6 +1340,7 @@ pub fn link_row(
   title_cut? : Bool = false,
   value_cut? : Bool = false,
   tile? : Bool = false,
+  on_press? : () -> Unit,
 ) -> Bool {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
@@ -1617,6 +1625,7 @@ pub fn link_row(
   if goes {
     c.semantics(b, Link, id~, label=title, expanded?=folds)
   }
+  press_does(c, id, goes, on_press)
   goes && c.clicked(id)
 }
 
@@ -1805,10 +1814,12 @@ pub fn choice_row(
   ink? : Int64,
   disabled? : Bool = false,
   busy? : Bool = false,
+  on_press? : () -> Unit,
 ) -> Bool {
   let th = theme()
   let id = c.id(key)
   let goes = !disabled && !busy
+  press_does(c, id, goes, on_press)
   let narrow = look() is Narrow
   let end = fn(size : Double) {
     match trail {
@@ -1969,11 +1980,12 @@ pub fn switch_row(
   disabled? : Bool = false,
   busy? : Bool = false,
   lead? : (@ui.Ctx) -> Unit,
+  on_change? : (Bool) -> Unit,
 ) -> Bool {
   match look() {
     // (on a narrow page in the words of its narrow rows)
     Narrow if in_words.val > 0 && in_card.val == 0 =>
-      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?)
+      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?, on_change?)
     Wide =>
       // (on a settings card holding its rows the ladder's inset in (rows_held) as in a list: its words a row's padding in,
       // its switch out of the card's corner)
@@ -1981,12 +1993,12 @@ pub fn switch_row(
         // (its title as strong as its list's other rows' titles: link_row's, a setting's)
         let mut now = on
         c.box(style=wide_in_list(), fn() {
-          now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?)
+          now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?, on_change?)
         })
         |> ignore
         now
       } else {
-        wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?)
+        wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?, on_change?)
       }
     Narrow => {
       // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
@@ -2002,7 +2014,7 @@ pub fn switch_row(
           }
         })
         |> ignore
-        now = switch(c, key, on, label=title, disabled~, busy~)
+        now = switch(c, key, on, label=title, disabled~, busy~, on_change?)
       })
       |> ignore
       now

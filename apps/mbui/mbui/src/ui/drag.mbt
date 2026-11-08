@@ -316,10 +316,11 @@ pub fn Ctx::on_back(self : Ctx, f : () -> Unit) -> Unit {
 }
 
 ///|
-/// A press followed as it goes (Ctx::follow_press): gone down at (x, y), moved to (x, y), let go at (x, y), or called
-/// off (the host's word, a layer come over it).
+/// A press followed as it goes (Ctx::follow_press): gone down at (x, y) on the box that took it (where that box was hit
+/// then: x, y, w, h; none, no box), moved to (x, y), let go at (x, y), or called off (the host's word, a layer come over
+/// it).
 pub(all) enum PressStep {
-  Down(Double, Double)
+  Down(Double, Double, (Double, Double, Double, Double)?)
   Moving(Double, Double)
   Up(Double, Double)
   Off
@@ -354,7 +355,7 @@ pub fn Ctx::follow_press(self : Ctx, id : Int, f : (PressStep) -> Unit) -> Unit 
 fn press_follow_down(target : Int, x : Double, y : Double) -> Unit {
   press_following.val = press_followers.get(target)
   match press_following.val {
-    Some(f) => f(Down(x, y))
+    Some(f) => f(Down(x, y, if target != 0 { g().rect_of(target) } else { None }))
     None => ()
   }
 }

@@ -263,7 +263,8 @@
       "src/ui/shot.mbt": 1,
       "src/ui/sideways.mbt": 2,
       "src/ui/tree_field.mbt": 1
-    }
+    },
+    "click-read": {}
   },
   "excused": {
     "frame-request": {},
@@ -321,7 +322,8 @@
     "tester-branch": {},
     "frame-number": {},
     "ui-current": {},
-    "build-clock": {}
+    "build-clock": {},
+    "click-read": {}
   },
   "tester": {
     "names": [

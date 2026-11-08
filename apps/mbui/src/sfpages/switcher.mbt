@@ -534,9 +534,7 @@ pub fn finder_list(
         return
       }
       let id = c.id(lk)
-      if c.clicked(id) {
-        finder_go(line, close)
-      }
+      c.on_press(id, fn() { finder_go(line, close) })
       // (the pointer over a line chooses it, as the keys do)
       if f.keys && c.hand_on(id) {
         finder.chosen.set(k)

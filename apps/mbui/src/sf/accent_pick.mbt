@@ -8,8 +8,23 @@
 /// (@ui.room_least: 36, 44 with touch; what each reaches, overlapping none). 自定义 last: chosen, a dot in its hue's
 /// accent and a slider of hues under the dots, as wide as they are (`hue`: what a screen reader calls it), its track
 /// every hue's accent, its knob the one's; not chosen, a ＋ in an outline, which takes the hue it had last
-/// (custom_hue_kept). Answers the key chosen (a press's, a drag's, this frame).
-pub fn accent_pick(c : @ui.Ctx, key : String, names : Array[String], custom : String, hue : String, chosen : String) -> String {
+/// (custom_hue_kept). `on_pick`: what choosing another does, given its key, as it is chosen (a dot pressed, the hue
+/// moved), outside any build. Answers the key chosen (a press's, a drag's, this frame).
+pub fn accent_pick(
+  c : @ui.Ctx,
+  key : String,
+  names : Array[String],
+  custom : String,
+  hue : String,
+  chosen : String,
+  on_pick? : (String) -> Unit,
+) -> String {
+  let told = fn(k : String) {
+    match on_pick {
+      Some(f) if k != chosen => f(k)
+      _ => ()
+    }
+  }
   let t = theme()
   // (a dot 24 across with keyboard and mouse, 28 with touch, the gap between the rest of a press's least room)
   let (dot, row_gap) = if t.touch { (accent_dot_touch, accent_row_touch) } else { (accent_dot_mouse, accent_row_mouse) }
@@ -20,8 +35,9 @@ pub fn accent_pick(c : @ui.Ctx, key : String, names : Array[String], custom : St
     None => ()
   }
   // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; true on the frame it is pressed
-  let a_dot = fn(n : Int, ink : Int64?, on : Bool, name : String) -> Bool {
+  let a_dot = fn(n : Int, ink : Int64?, on : Bool, name : String, picks : () -> String) -> Bool {
     let id = c.id(key + "/" + n.to_string())
+    c.on_press(id, fn() { told(picks()) })
     let lit = c.lit(id)
     let ring = if ink is None { alpha(t.p.text, accent_open_line) } else if lit && !on { alpha(t.p.text, accent_lit_line) } else { accent_no_ring }
     let b = c.box(style=dot.then(@ui.style(bg=Data(ink.unwrap_or(accent_no_ring)), border_color=Data(ring))), id~, fn() {
@@ -40,7 +56,7 @@ pub fn accent_pick(c : @ui.Ctx, key : String, names : Array[String], custom : St
   c.box(style=column, fn() {
     let row = c.box(style=row_gap, fn() {
       for i, a in accents {
-        if a_dot(i, Some(if t.dark { a.dark } else { a.light }), chosen == a.key, names.get(i).unwrap_or(a.key)) {
+        if a_dot(i, Some(if t.dark { a.dark } else { a.light }), chosen == a.key, names.get(i).unwrap_or(a.key), fn() { a.key }) {
           picked = a.key
         }
       }
@@ -52,7 +68,9 @@ pub fn accent_pick(c : @ui.Ctx, key : String, names : Array[String], custom : St
           a.light
         }
       })
-      if a_dot(accents.length(), ink, own is Some(_), custom) && own is None {
+      // (pressed while chosen: it stays as it is)
+      let mine = fn() { if own is None { "custom:" + custom_hue_kept.val.to_string() } else { chosen } }
+      if a_dot(accents.length(), ink, own is Some(_), custom, mine) && own is None {
         picked = "custom:" + custom_hue_kept.val.to_string()
       }
     })
@@ -73,6 +91,7 @@ pub fn accent_pick(c : @ui.Ctx, key : String, names : Array[String], custom : St
             w=Fill(1.0),
             label=hue,
             look=hue_look,
+            on_change=fn(v) { told("custom:" + v.to_int().to_string()) },
           ).value.to_int()
           if now != h {
             picked = "custom:" + now.to_string()

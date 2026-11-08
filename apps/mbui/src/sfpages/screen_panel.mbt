@@ -346,8 +346,11 @@ let diag_said_ms : Double = 1500.0
 /// 控制中心 as a round button (the bar's, the rail's, the folded tools'): pressed, its panel.
 fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
-  if round_button(c, key, "sliders", @sf.t("web-pages.screen.panel")) || center_asked(u) {
-    center_open(c, s, u, key, close)
+  let id = c.id(key)
+  round_button(c, key, "sliders", @sf.t("web-pages.screen.panel"), does=fn() { center_open(s, u, id, close) })
+  // (a fixture's, asked as it is built)
+  if center_asked(u) {
+    center_open(s, u, id, close)
   }
 }
 
@@ -358,11 +361,11 @@ fn center_asked(u : ScreenUi) -> Bool {
 }
 
 ///|
-/// 控制中心's panel, beside what opened it (`key`).
-fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : () -> Unit) -> Unit {
+/// 控制中心's panel, beside what opened it (`id`).
+fn center_open(s : ScreenSess, u : ScreenUi, id : Int, close : () -> Unit) -> Unit {
   let asked = u.asked_panel
   u.asked_panel = ""
-  let from : @sf.Anchor = Of(c.id(key))
+  let from : @sf.Anchor = Of(id)
   if asked == "logs" {
     debug_logs_open(s, u, from)
     return
@@ -380,7 +383,7 @@ fn center_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) ->
   let key = "screen-center"
   if @sf.viewer_tool(c, key, "sliders", @sf.t("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
     center_asked(u) {
-    center_open(c, s, u, key, close)
+    center_open(s, u, c.id(key), close)
   }
 }
 
@@ -394,7 +397,9 @@ fn net_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     c.text(seen_for(u), style=screen_time_words) |> ignore
   })
   c.semantics(b, Button, id~, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
-  if c.clicked(id) || u.asked_panel == "net" {
+  c.on_press(id, fn() { net_panel_open(s, u, Of(id)) })
+  // (asked from elsewhere, the native bar's: opened as this is built)
+  if u.asked_panel == "net" {
     u.asked_panel = ""
     net_panel_open(s, u, Of(id))
   }
@@ -450,39 +455,39 @@ fn center_panel(
   if s.phase() == "live" {
     @sf.panel_group(c, fn() {
       let rtt = text(field(screen_net(s), "rtt"), "text")
-      if @sf.menu_item(
-          c,
-          @sf.t("web-pages.screen.stats"),
-          key="screen-center-net",
-          panel=true,
-          icon="chart",
-          note=if rtt == "" { seen_for(u) } else { rtt + " · " + seen_for(u) },
-          end="chevron-right",
-        ) {
-        done()
-        net_panel_open(s, u, from)
-      }
+      @sf.menu_item(
+        c,
+        @sf.t("web-pages.screen.stats"),
+        key="screen-center-net",
+        panel=true,
+        icon="chart",
+        note=if rtt == "" { seen_for(u) } else { rtt + " · " + seen_for(u) },
+        end="chevron-right",
+        on_press=fn() {
+          done()
+          net_panel_open(s, u, from)
+        },
+      )
+      |> ignore
     })
   }
   if s.audio_ready {
-    if @sf.menu_item(c, @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
-        key="screen-sound", panel=true, icon=if s.audio_muted { "volume-x" } else { "volume" }) {
-      s.toggle_audio()
-    }
+    @sf.menu_item(c, @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+        key="screen-sound", panel=true, icon=if s.audio_muted { "volume-x" } else { "volume" }, on_press=fn() { s.toggle_audio() })
+    |> ignore
   }
   let quality = screen_quality(src)
   @sf.panel_group(c, label=@sf.t("web-pages.screen.quality"), fn() {
     let now = screen_qualities.search_by(fn(q) { q.0 == quality }).unwrap_or(0)
     c.box(style=center_choice, fn() {
-      let chosen = @sf.segmented(
+      @sf.segmented(
         c,
         "screen-quality",
         screen_qualities.map(fn(q) { @sf.t("web-pages.screen.quality." + q.1) }),
         now,
+        on_pick=fn(chosen) { prefs_chosen(c, s, "screenQuality", screen_qualities[chosen].0) },
       )
-      if chosen != now {
-        prefs_chosen(c, s, "screenQuality", screen_qualities[chosen].0)
-      }
+      |> ignore
     })
     |> ignore
     @sf.panel_note(c, @sf.t("web-pages.screen.qualityHint." + screen_qualities[now].1))
@@ -492,16 +497,17 @@ fn center_panel(
   @sf.panel_group(c, label=@sf.t("web-pages.screen.fps"), fn() {
     let now = screen_fps_choices.search(fps).unwrap_or(0)
     c.box(style=center_choice, fn() {
-      let chosen = @sf.segmented(
+      @sf.segmented(
         c,
         "screen-fps",
         screen_fps_choices.map(fn(f) { if f == 0 { @sf.t("web-pages.screen.fps.auto") } else { "\{f}" } }),
         now,
+        on_pick=fn(chosen) {
+          let f = screen_fps_choices[chosen]
+          prefs_set(c, s, "screenFps", "\{f}", if f == 0 { Json::null() } else { Json::number(f.to_double()) })
+        },
       )
-      if chosen != now {
-        let f = screen_fps_choices[chosen]
-        prefs_set(c, s, "screenFps", "\{f}", if f == 0 { Json::null() } else { Json::number(f.to_double()) })
-      }
+      |> ignore
     })
     |> ignore
     @sf.panel_note(c, fps_note(fps))
@@ -511,17 +517,11 @@ fn center_panel(
       @sf.panel_group(c, label=@sf.t("web-pages.screen.scale"), fn() {
         let now = steps.search(percent).unwrap_or(-1)
         c.box(style=center_choice, fn() {
-          let chosen = @sf.segmented(c, "screen-scale", steps.map(fn(p) { "\{p}%" }), now)
-          if percent == u.scale_asked || chosen == now {
-            u.scale_asked = 0
-          }
-          if chosen != now && chosen >= 0 && steps[chosen] != u.scale_asked {
-            let p = steps[chosen]
-            u.scale_asked = p
-            c.tell("screen-scale/" + s.view, fn() {
-              s.input(src, Json::object({ "t": Json::string("scale"), "percent": Json::number(p.to_double()) }))
-            })
-          }
+          // (asked of the station as it is chosen)
+          @sf.segmented(c, "screen-scale", steps.map(fn(p) { "\{p}%" }), now, on_pick=fn(chosen) {
+            s.input(src, Json::object({ "t": Json::string("scale"), "percent": Json::number(steps[chosen].to_double()) }))
+          })
+          |> ignore
         })
         |> ignore
         @sf.panel_note(c, @sf.t("web-pages.screen.scaleRecommended", args=[("percent", "\{recommended}")]))
@@ -545,21 +545,16 @@ fn center_panel(
               size
             }
           })
-          let chosen = @sf.segmented(c, "screen-resolution", labels, now)
-          if size == u.size_asked || chosen == now {
-            u.size_asked = (0, 0)
-          }
-          if chosen != now && chosen >= 0 && modes[chosen] != u.size_asked {
+          // (asked of the station as it is chosen)
+          @sf.segmented(c, "screen-resolution", labels, now, on_pick=fn(chosen) {
             let (w, h) = modes[chosen]
-            u.size_asked = (w, h)
-            c.tell("screen-resolution/" + s.view, fn() {
-              s.input(src, {
-                "t": Json::string("resolution"),
-                "width": Json::number(w.to_double()),
-                "height": Json::number(h.to_double()),
-              })
+            s.input(src, {
+              "t": Json::string("resolution"),
+              "width": Json::number(w.to_double()),
+              "height": Json::number(h.to_double()),
             })
-          }
+          })
+          |> ignore
         })
         |> ignore
         if fitting >= 0 {
@@ -570,42 +565,50 @@ fn center_panel(
     None => ()
   }
   @sf.panel_group(c, fn() {
-    if s.drops_to() is Some(_) &&
-      @sf.menu_item(c, @sf.t("android-misc.screen.sendFile"), key="screen-center-send", panel=true, icon="upload") {
-      done()
-      send_asked(c, s, u)
+    if s.drops_to() is Some(_) {
+      @sf.menu_item(c, @sf.t("android-misc.screen.sendFile"), key="screen-center-send", panel=true, icon="upload", on_press=fn() {
+        done()
+        send_asked(c, s, u)
+      })
+      |> ignore
     }
     // in a window of its own (a desktop's), as the web's ScreenPage: it leaves this one, so it is not open twice
     let alone : @sfbase.Page = Screen({ station: s.station, screen: s.screen, title: "", until_gone: false })
-    if @sfbase.window_opens_for(alone) &&
-      @sf.menu_item(c, @sf.t("web-pages.screen.window"), key="screen-center-window", panel=true, icon="external") {
-      done()
-      if @sfbase.open_window(alone) {
-        close()
-      }
+    if @sfbase.window_opens_for(alone) {
+      @sf.menu_item(c, @sf.t("web-pages.screen.window"), key="screen-center-window", panel=true, icon="external", on_press=fn() {
+        done()
+        if @sfbase.open_window(alone) {
+          close()
+        }
+      })
+      |> ignore
     }
     if s.open_now() {
       let full = full_now(u)
       let label = @sf.t(if full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-      if @sf.menu_item(c, label, key="screen-center-full", panel=true, icon=if full { "shrink" } else { "expand" }) {
+      @sf.menu_item(c, label, key="screen-center-full", panel=true, icon=if full { "shrink" } else { "expand" }, on_press=fn() {
         full_asked(c, u)
         done()
-      }
+      })
+      |> ignore
     }
     // Its other views, this person's on other devices and others' alike.
     let others = items(s.state, "otherViews")
-    if others.length() > 0 &&
-      @sf.menu_item(c, @sf.t("web-pages.screen.endOthers", args=[("count", others.length().to_string())]), key="screen-end-others", panel=true, icon="close") {
-      for v in others {
-        let params = Map::of([("station", Json::string(s.station)), ("screen", Json::string(s.screen)), ("view", Json::string(text(Some(v), "id")))])
-        (src.call)("screen.endView", Json::object(params), fn(_) {  })
-      }
-      done()
+    if others.length() > 0 {
+      @sf.menu_item(c, @sf.t("web-pages.screen.endOthers", args=[("count", others.length().to_string())]), key="screen-end-others", panel=true, icon="close", on_press=fn() {
+        for v in others {
+          let params = Map::of([("station", Json::string(s.station)), ("screen", Json::string(s.screen)), ("view", Json::string(text(Some(v), "id")))])
+          (src.call)("screen.endView", Json::object(params), fn(_) {  })
+        }
+        done()
+      })
+      |> ignore
     }
-    if @sf.menu_item(c, @sf.t("web-pages.screen.leave"), key="screen-leave", panel=true, icon="close", danger=true) {
+    @sf.menu_item(c, @sf.t("web-pages.screen.leave"), key="screen-leave", panel=true, icon="close", danger=true, on_press=fn() {
       done()
       close()
-    }
+    })
+    |> ignore
   })
 }
 
@@ -630,10 +633,10 @@ fn combo_tiles(c : @ui.Ctx, s : ScreenSess, combos : Array[Combo], done : () -> 
             c.text(k.name, style=tile_words) |> ignore
           })
           c.semantics(t, Button, id~, label=k.name, actions=[Activate])
-          if c.clicked(id) {
-            c.tell("screen-combo/" + s.view + "/" + k.keys, fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
+          c.on_press(id, fn() {
+            stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods)
             done()
-          }
+          })
         }
       })
       |> ignore
@@ -684,10 +687,10 @@ fn key_tiles(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
           let id = c.id("screen-panel-key/" + key)
           let t = c.box(style=key_tile_box, id~, fn() { c.text(label, style=key_tile_words) |> ignore })
           c.semantics(t, Button, id~, label~, actions=[Activate])
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             let mods = u.held.take()
-            c.tell("screen-panel-key/" + s.view + "/" + key, fn() { stroke(fn(j) { s.input(s.src, j) }, key, key, mods) })
-          }
+            stroke(fn(j) { s.input(s.src, j) }, key, key, mods)
+          })
         }
       })
       |> ignore

@@ -49,7 +49,7 @@ fn link_menu_at(href : String, x : Double, top : Double, bottom : Double) -> Uni
   menu_under([(tr("common.link.open"), "external"), (tr("common.link.copy"), "copy")], x, top, bottom, fn(c, i) {
     if i == 0 {
       // as a tap on it: a chat's link opens it here, any other in the browser
-      c.after_build("link-menu-open", fn() { open_link(href) })
+      open_link(href)
     } else {
       c.copy_text(href)
       say(c, tr("common.link.copied"))
@@ -101,18 +101,18 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
     exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=Leave), ground_first=true),
     look=menu_panel_look,
     item_look=fn(c, s) { menu_row_look(c, s, link_icon(s.entry.value)) },
-  )
-  if link_menu.open && !m.open {
-    link_menu.open = false
-  }
-  match m.chosen {
-    Some(v) =>
+    // (what an item does, as it is chosen)
+    on_pick=fn(v) {
+      link_menu.open = false
       for i, _ in link_menu.items {
         if i.to_string() == v {
           (link_menu.pick)(c, i)
         }
       }
-    None => ()
+    },
+  )
+  if link_menu.open && !m.open {
+    link_menu.open = false
   }
 }
 

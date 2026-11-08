@@ -206,6 +206,12 @@ struct EditorState {
   mut ox : Double
   mut oy : Double
   mut submitted : String?
+  /// what giving its words up does (Ctx::editor's `on_submit`), as Enter is taken: said by its last build, none where
+  /// it said none (its words then the build's to read, `submitted`)
+  mut on_submit : ((String) -> Unit)?
+  /// what typing in it does (Ctx::editor's `on_change`), as its words change by the person's edit (a key, the input
+  /// method's text, a paste, an undo): said by its last build
+  mut on_change : ((String) -> Unit)?
   mut pref_x : Double
   /// the caret, where one line wraps into the next at it, shows at the end of the line before (a move to a line's end
   /// or the pointer past it put it there), not at the next one's start: while the caret is at this offset; -1 none
@@ -2477,14 +2483,18 @@ fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
 }
 
 ///|
-/// The moment now: the frame's time in a frame (Ctx::now), else the clock's as it stands between frames (an input's
-/// handler, a fiber, a test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt):
-/// for a stamp, or a moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
+/// The moment now: the frame's time in a frame (Ctx::now); in an event's handler (a press's, a key's: Ctx::on_press),
+/// the event's, as the window's tree took it (Tree::moment); else the clock's as it stands between frames (a fiber, a
+/// test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt): for a stamp, or a
+/// moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
 pub fn Ctx::moment(self : Ctx) -> Double {
   if self.in_frame() {
     self.clock
   } else {
-    h_now()
+    match tree_cause() {
+      Some(m) => m
+      None => h_now()
+    }
   }
 }
 

@@ -222,9 +222,10 @@ fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if @sf.panel_icon_button(c, "keeping/stop/" + kid, "close", @sf.t("web-pages.files.stopKeeping")) {
-        c.tell("keeping/stop/" + kid, fn() { keeping_stop(src, kid) })
-      }
+      @sf.panel_icon_button(c, "keeping/stop/" + kid, "close", @sf.t("web-pages.files.stopKeeping"), on_press=fn() {
+        keeping_stop(src, kid)
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -368,11 +369,17 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") && @sf.panel_icon_button(c, "files/download/cancel/" + did, "close", @sf.t("web-main.file.cancelDownload")) {
-        c.tell("files/download/cancel/" + did, fn() { download_cancel(src, did) })
+      if flag(j, "active") {
+        @sf.panel_icon_button(c, "files/download/cancel/" + did, "close", @sf.t("web-main.file.cancelDownload"), on_press=fn() {
+          download_cancel(src, did)
+        })
+        |> ignore
       }
-      if failed && @sf.panel_icon_button(c, "files/download/retry/" + did, "retry", @sf.t("web-main.file.retryDownload")) {
-        c.tell("files/download/retry/" + did, fn() { download_retry(src, did) })
+      if failed {
+        @sf.panel_icon_button(c, "files/download/retry/" + did, "retry", @sf.t("web-main.file.retryDownload"), on_press=fn() {
+          download_retry(src, did)
+        })
+        |> ignore
       }
     })
     |> ignore
