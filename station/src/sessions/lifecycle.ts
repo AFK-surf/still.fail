@@ -112,12 +112,19 @@ export function addToThread(hub: Hub, thread: number, session: string) {
 
 /// A person's message in a chat on the station's pages: recorded with its quotes and files and delivered to every
 /// session in the chat, like a Slack message. `client`: the app it was sent from, as it said. Its entry number.
-export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null): number {
-  stillfailChat(hub, thread);
-  if (hub.store.manuallyArchived(thread)) throw new Error(tr(stationLang(), "station.chat.archived"));
-  const [n] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client });
-  const sessions = hub.store.threadSessions(thread).map((m) => m.session);
-  hub.deliver(thread, n, sessions, text);
+export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null,
+  once?: { before: () => void; inserted: (n: number) => void; targets: () => string[]; workspace: string | null }): number {
+  const checkChat = () => {
+    stillfailChat(hub, thread);
+    if (hub.store.manuallyArchived(thread)) throw new Error(tr(stationLang(), "station.chat.archived"));
+  };
+  checkChat();
+  const before = once === undefined ? undefined : () => { once.before(); checkChat(); };
+  const [n, fresh] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client }, before, once?.inserted);
+  // A different process may have used the same timestamp. It is not this keyed write and must not be delivered as it.
+  if (once !== undefined && !fresh) throw new Error("message timestamp already used; retry the write");
+  const sessions = once?.targets() ?? hub.store.threadSessions(thread).map((m) => m.session);
+  hub.deliver(thread, n, sessions, text, once === undefined ? undefined : { workspace: once.workspace });
   return n;
 }
 

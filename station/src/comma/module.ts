@@ -7,11 +7,11 @@ import { commaEntry, commaRoutes } from "../api/routes/comma.ts";
 import { connectsPart } from "../connects/part.ts";
 import { stationLang } from "../ops/i18n.ts";
 import { Agents } from "../sessions/agents.ts";
-import { ControlPlane, Parts, Paths, Peers, Readers, StationConfig, Store } from "../services.ts";
+import { ControlPlane, Parts, Paths, Peers, Previous, Readers, StationConfig, Store } from "../services.ts";
 import { makeComma } from "./index.ts";
 import type { CommaChats } from "./surface.ts";
 import { READ, SAY, type WorkspaceReads, answerText, peerRead, workspaceRead } from "./peer.ts";
-import { routerReads, routerSays } from "./chats.ts";
+import { routerReads, routerSaysAfter } from "./chats.ts";
 import { CommaStats, chatOf } from "./stats.ts";
 
 type Json = any;
@@ -25,6 +25,7 @@ export const CommaLive = Layer.effectDiscard(
     const readers = yield* Readers;
     const bus = yield* Peers;
     const store = yield* Store;
+    const previous = yield* Previous;
     const cloud = (yield* ControlPlane).state;
     // Another station of the workspace reading this one's statistics, for the Comma connect there.
     bus.on(READ, peerRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home(), stationLang));
@@ -46,7 +47,8 @@ export const CommaLive = Layer.effectDiscard(
       Effect.sync(() => CommaStats.at(data, read, usage)),
       (s) => Effect.sync(() => s.close()),
     );
-    const said = (w: { thread: number; text: string; key: string; requester: string; connect: string }) => routerSays(agents.hub, stats, cloud.home(), w);
+    // The general handover timeout can take sessions up before the older process really exits.
+    const said = routerSaysAfter(agents.hub, stats, () => cloud.home(), previous.exited);
     // Another station of the workspace writing in one of this one's chats, for the Router of the Comma connect there.
     bus.on(SAY, async (_peer: string, request: Json, workspace?: string) => {
       if (typeof workspace !== "string" || workspace !== cloud.home()) throw new Error("not this workspace");
