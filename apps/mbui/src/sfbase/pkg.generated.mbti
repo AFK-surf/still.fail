@@ -3145,7 +3145,6 @@ pub(all) struct SendFlight {
   files : Array[FlyingFile]
   mut key : String
   mut placed : Bool
-  mut placed_frame : Int32
   way : @motion.Anim
   gone : @motion.Anim
   carried : Bool
