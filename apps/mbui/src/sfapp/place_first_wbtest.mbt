@@ -48,7 +48,7 @@ fn first_open_islands() -> Array[(Double, Double, Double, Double)] {
 ///|
 test "the pages of the stack come in the same way the first time and again" {
   for mode in [
-    "chat", "history", "files", "archived", "drive", "reader", "player-video", "service", "newchat", "screen-full",
+    "chat", "history", "files", "archived", "drive", "reader", "player-video", "service", "newchat", "screen-live", "screen-full",
     "direct-preview", "direct-words", "direct-profile-account", "direct-kept-chat", "direct-station-archiving",
     "settings-home", "settings-appearance", "settings-fonts", "settings-me", "settings-workspace", "settings-security",
     "settings-security-open", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station",
@@ -76,8 +76,16 @@ test "the pages of the stack come in the same way the first time and again" {
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
     t.run_for(first_page_ms + @ui.move_most_ms)
     let tree = @ui.view_tree().unwrap()
+    // Leaving a screen clears its fullscreen state; enter the same fixture state on both visits.
+    let enter = fn() {
+      if mode.has_prefix("screen-") {
+        @sfpages.open_screen_fixture(mode)
+      } else {
+        @sfbase.stack_open(page)
+      }
+    }
     let start = t.time()
-    tree.event(start, fn() { @sfbase.stack_open(page) })
+    tree.event(start, enter)
     t.frame_at(start + @ui.move_most_ms / 4.0)
     let first = first_open_islands()
     assert_true(first.iter().any(fn(p) { p.0.abs() > 1.0 || p.1.abs() > 1.0 }), msg="\{mode}: no page moving: \{first}")
@@ -85,9 +93,9 @@ test "the pages of the stack come in the same way the first time and again" {
     tree.event(t.time(), fn() { app.nav.pop() |> ignore })
     t.run_for(@ui.move_most_ms)
     let again_at = t.time()
-    tree.event(again_at, fn() { @sfbase.stack_open(page) })
+    tree.event(again_at, enter)
     t.frame_at(again_at + @ui.move_most_ms / 4.0)
-    assert_eq(first_open_islands(), first, msg=mode)
+    assert_eq(first_open_islands(), first, msg="\{mode}: first=\{first}, again=\{first_open_islands()}")
   }
 }
 
