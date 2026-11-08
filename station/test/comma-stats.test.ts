@@ -7,6 +7,7 @@ import type { AddressInfo } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { WebSocketServer } from "ws";
 import { workspaceRead } from "../src/comma/peer.ts";
@@ -159,7 +160,14 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
   const rig = new Rig();
   const dir = tempdir();
   let builds = 0;
-  const stats = CommaStats.at(dir, async () => (builds++, { stations: [here([usageRow("2026-11-02", "a", "ann@x")], {}, [chat(7, "need_human")])], unread: [] }), quiet);
+  let previousExited!: () => void;
+  const previous = new Promise<void>((resolve) => { previousExited = resolve; });
+  const stats = CommaStats.at(dir, async () => (builds++, { stations: [here([usageRow("2026-11-02", "a", "ann@x")], {}, [chat(7, "need_human")])], unread: [] }), quiet, previous);
+  const old = new DatabaseSync(join(dir, "comma-stats.db"));
+  let locked = false;
+  let guardAttempts = 0;
+  const following = stats.stats.following.bind(stats.stats);
+  stats.stats.following = () => { guardAttempts++; return following(); };
   const asked: Json[] = [];
   const chats = {
     read: async (ref: string, after: number, limit: number) => (asked.push(["read", ref, after, limit]), { title: "Fix", messages: [], through: 3 }),
@@ -172,6 +180,14 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
   };
   try {
     await surface.start(async () => {});
+    await until(() => metadata !== null);
+    assert.deepEqual([pages.length, tasks.length], [0, 0], "the old process may still send its own epoch");
+    await stats.settled();
+    old.exec("BEGIN IMMEDIATE"); locked = true;
+    previousExited();
+    await until(() => guardAttempts > 0);
+    assert.deepEqual([pages.length, tasks.length], [0, 0], "a locked index is retried before it is sent");
+    old.exec("ROLLBACK"); locked = false;
     await until(() => metadata !== null && held.through > 0);
     assert.deepEqual([metadata.capabilities.stats_index, metadata.capabilities.task_index], [1, 1]);
     assert.equal(builds, 1, "connected: built once");
@@ -207,6 +223,62 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal(pages.length, last);
   } finally {
+    if (locked) old.exec("ROLLBACK");
+    old.close();
+    await surface.stop();
+    stats.close();
+    wss.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rig.hub.shutdown();
+  }
+});
+
+test("closing a Comma connection stops retrying a locked index guard", async () => {
+  const wss = new WebSocketServer({ noServer: true });
+  const server = createServer((_req, res) => res.writeHead(404).end());
+  let metadata = false, closed = false, indexRequests = 0;
+  server.on("upgrade", (req, socket, head) => wss.handleUpgrade(req, socket, head, (ws) => {
+    ws.on("close", () => { closed = true; });
+    ws.on("message", (data) => {
+      const frame = JSON.parse(String(data));
+      if (frame.type === "metadata") metadata = true;
+      if (frame.type !== "request") return;
+      if (frame.method === "stats.index" || frame.method === "task.index") indexRequests++;
+      ws.send(JSON.stringify({ id: frame.id, type: "response", result: {} }));
+    });
+    ws.send(JSON.stringify({ type: "connected", connector_run_id: "run_1", device_id: "dev_1" }));
+  }));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const rig = new Rig(), dir = tempdir();
+  let previousExited!: () => void;
+  const previous = new Promise<void>((resolve) => { previousExited = resolve; });
+  const stats = CommaStats.at(dir, nothing, quiet, previous);
+  const old = new DatabaseSync(join(dir, "comma-stats.db"));
+  let locked = false, attempts = 0;
+  const following = stats.stats.following.bind(stats.stats);
+  stats.stats.following = () => { attempts++; return following(); };
+  const surface = new CommaSurface({ connect: "cm", server: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, token: "salix_conn_test123", name: "mac", tasks: new CommaTasks(join(dir, "tasks.json")), store: rig.store, models: () => [], stats });
+  const until = async (f: () => boolean) => {
+    for (let i = 0; i < 500 && !f(); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.ok(f());
+  };
+  try {
+    await surface.start(async () => {});
+    await until(() => metadata);
+    await stats.settled();
+    old.exec("BEGIN IMMEDIATE"); locked = true;
+    previousExited();
+    await until(() => attempts > 0);
+    await surface.stop();
+    await until(() => closed);
+    const stoppedAt = attempts;
+    old.exec("ROLLBACK"); locked = false;
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(attempts, stoppedAt);
+    assert.equal(indexRequests, 0);
+  } finally {
+    if (locked) old.exec("ROLLBACK");
+    old.close();
     await surface.stop();
     stats.close();
     wss.close();

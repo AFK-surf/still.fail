@@ -35,7 +35,8 @@ test("an existing statistics index resets Comma with distinct safe keys and late
     stats = CommaStats.at(dir, nothing, quiet);
     const reset = nextPage(stats.stats, { epoch: "legacy-epoch", through: 2 });
     assert.ok(reset?.reset, "a receiver that held the old keys must clear and rebuild its copy");
-    assert.equal(stats.tasks.epoch(), "task-epoch", "the independent task index does not need a reset");
+    assert.equal(stats.tasks.epoch(), "task-epoch.gc1", "the task index also resets for earlier pruned tombstones");
+    assert.equal(nextPage(stats.tasks, { epoch: "task-epoch", through: 0 })?.reset, true);
     const sent = reset.rows as { key: string; row: { session: string } }[];
     assert.equal(sent.length, 2);
     assert.equal(new Set(sent.map((row) => row.key)).size, 2);

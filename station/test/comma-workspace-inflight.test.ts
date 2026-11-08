@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { WebSocketServer, type WebSocket } from "ws";
 import { CommaSurface } from "../src/comma/surface.ts";
@@ -52,6 +53,49 @@ test("a workspace change while Comma answers a probe does not send the old index
     assert.equal(pages.some((page) => JSON.stringify(page.rows).includes("old workspace title")), false);
   } finally {
     await surface.stop(); stats.close(); wss.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rig.close();
+  }
+});
+
+test("a workspace change while an index guard is locked stops its retry before sending", async () => {
+  const server = createServer((_req, res) => res.writeHead(404).end());
+  const wss = new WebSocketServer({ noServer: true });
+  const pages: Json[] = [];
+  server.on("upgrade", (req, raw, head) => wss.handleUpgrade(req, raw, head, (ws) => {
+    ws.on("message", (data) => {
+      const f = JSON.parse(String(data));
+      if (f.type !== "request") return;
+      if (f.method === "stats.index" || f.method === "task.index") pages.push(f.params);
+      ws.send(JSON.stringify({ id: f.id, type: "response", result: {} }));
+    });
+    ws.send(JSON.stringify({ type: "connected", connector_run_id: "one", device_id: "one" }));
+  }));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const rig = new Rig();
+  const path = join(rig.dir, "index.db");
+  const stats = new CommaStats(path, async () => ({ stations: [], unread: [] }), () => () => {});
+  const blocker = new DatabaseSync(path);
+  blocker.exec("BEGIN IMMEDIATE");
+  let attempts = 0, allowed = true;
+  for (const index of [stats.stats, stats.tasks]) {
+    const follow = index.following.bind(index);
+    index.following = () => { attempts++; return follow(); };
+  }
+  const indexes = { stats: stats.stats, tasks: stats.tasks, start: () => {} };
+  const surface = new CommaSurface({ connect: "one", server: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    token: "one_token_123", name: "one", tasks: new CommaTasks(join(rig.dir, "comma-tasks.json")), store: rig.store,
+    models: () => [], stats: indexes, inScope: () => allowed });
+  try {
+    await surface.start(async () => {});
+    await until(() => attempts > 0);
+    allowed = false;
+    blocker.exec("ROLLBACK");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.deepEqual(pages, []);
+  } finally {
+    if (blocker.isTransaction) blocker.exec("ROLLBACK");
+    blocker.close(); await surface.stop(); stats.close(); wss.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rig.close();
   }
