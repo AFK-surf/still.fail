@@ -158,6 +158,68 @@ async fn turn_builder(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The builder of the sidebar's said state (said-worker.ts's `thread` asks without a flag): a search kept going between
+/// asks; one let go (`cancel`) has its guard removed, under the permit, if it is not ready. A store read through the
+/// legacy lookup is the worker's: answered `{"fallback": true}`, the pool asks the worker instead.
+async fn said_builder(host : @host.Host, db_path : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=250)
+  db.exec("PRAGMA synchronous = NORMAL")
+  let permit = { host, holding: false }
+  let scans : Map[Int64, @said.Scan] = Map([])
+  let tokens = Ref(0)
+  let token = () => {
+    tokens.val += 1
+    "\{@host.now()}-\{tokens.val}-\{@host.pid()}"
+  }
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask : Json = @json.parse(line) catch { _ => Json::null() }
+    guard ask is { "thread": Number(n, ..), .. } else {
+      let invalid : Json = { "done": false, "error": "invalid sidebar said state preparation request" }
+      host.say(invalid.stringify())
+      continue
+    }
+    let thread = n.to_int64()
+    if ask is { "cancel": True, .. } {
+      if scans.get(thread) is Some(scan) {
+        scans.remove(thread)
+        if permit.take() {
+          // (a later request or a write replaces the guard: a failure here is nothing)
+          ignore(
+            db.run("DELETE FROM said_state_guard WHERE thread=? AND token=? AND ready=0", [
+              Json::number(thread.to_double()),
+              Json::string(scan.token()),
+            ]),
+          ) catch {
+            _ => ()
+          }
+          permit.give()
+        }
+      }
+      continue
+    }
+    let answer : Json = try {
+      if @said.legacy(db) {
+        { "fallback": true }
+      } else {
+        let (done, scan) = @said.step(db, thread, scans.get(thread), token~, may_write=() => permit.take())
+        match scan {
+          Some(scan) => scans[thread] = scan
+          None => scans.remove(thread)
+        }
+        { "done": Json::boolean(done) }
+      }
+    } catch {
+      e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
+    }
+    permit.holding = false
+    host.say(answer.stringify())
+  }
+}
+
+///|
 /// A step of what is built whole (`{"scope": "all"}`).
 fn all(step : (@sql.Db) -> Bool raise) -> (@sql.Db, Json) -> Bool? raise {
   (db, ask) => if ask is { "scope": "all", .. } { Some(step(db)) } else { None }
@@ -246,6 +308,7 @@ fn main {
         }
         _ => None
       }))
+    (Some("said"), Some(db), _) => @host.run(shell_dir=beside(db, "shell"), host => said_builder(host, db))
     (Some("turn-counts"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => turn_builder(host, db))
     (Some("session-list"), Some(db), _) =>
@@ -267,7 +330,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said --db <file>")
       2
     }
   }
