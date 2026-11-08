@@ -151,6 +151,14 @@ fn main {
         { "thread": Number(thread, ..), .. } => Some(@cards.step(db, thread.to_int64()))
         _ => None
       }))
+    (Some("outflow-chats"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
+        { "scope": String(scope), .. } => {
+          @outflow.install(db)
+          Some(@outflow.step(db, scope))
+        }
+        _ => None
+      }))
     (Some("session-list"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session list", (db, ask) => match ask {
         // (the list, and for search the list visited again: each batch takes a step of the list, then of the audit)
@@ -170,7 +178,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats --db <file>")
       2
     }
   }

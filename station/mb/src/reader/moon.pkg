@@ -8,6 +8,7 @@ import {
   "station/widgets",
   "station/cards",
   "station/sessions",
+  "station/outflow",
   "moonbitlang/core/json",
 }
 
