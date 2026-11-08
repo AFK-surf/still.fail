@@ -1194,8 +1194,27 @@ export class Secrets {
   /// while they have none (the app that approves makes one).
   #vaultFor(lock: LockState, sub: string): string {
     const devices = new Set(this.#certsOf(lock, sub).map((c) => c.device));
-    const theirs = this.#d.vaults.vaults(lock.ws).filter((v) => v.members.includes(sub) && v.keys.some((k) => devices.has(k.cert.device)));
-    return (theirs.find((v) => v.owner === sub) ?? theirs[0])?.id ?? "";
+    // Without a certificate there cannot be a vault keyed to one of this person's devices.
+    if (devices.size === 0) return "";
+    // A personal vault wins over an earlier shared one. Keep both portions in one snapshot and use the stored key as
+    // the boundary: older data can have a different id in the body.
+    this.#d.db.exec("SAVEPOINT vault_choose_owner");
+    try {
+      let first: Vault | undefined;
+      const personal = (vaults: Vault[]) => {
+        for (const vault of vaults) {
+          if (!vault.members.includes(sub) || !vault.keys.some((k) => devices.has(k.cert.device))) continue;
+          first ??= vault;
+          if (vault.owner === sub) return vault;
+        }
+        return undefined;
+      };
+      const prefix = this.#d.vaults.firstVaults(lock.ws, LISTING_PREFIX);
+      let owned = personal(prefix.map((entry) => entry.value));
+      if (owned !== undefined) return owned.id ?? "";
+      if (prefix.length === LISTING_PREFIX) owned = personal(this.#d.vaults.vaultsAfter(lock.ws, prefix.at(-1)!.id));
+      return (owned ?? first)?.id ?? "";
+    } finally { this.#d.db.exec("RELEASE vault_choose_owner"); }
   }
 
   #sealTo(cert: BoxCert, ws: string, request: string, fields: Record<string, string>) {
