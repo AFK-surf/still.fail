@@ -47,7 +47,7 @@ fn pane_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   guard now is Some(w) else { return }
   let (r, target) = fold_target(src, w, c.window_size().0)
   let f = fold_built(c, target)
-  fold_bars(f)
+  fold_bars(c, f)
   // (the page shown in the pane, whether the one on top or the one kept while that waits: the one page built here)
   let page_id = c.id("main-page")
   // (said by this build: image_item, video_item)
@@ -101,7 +101,7 @@ fn pane_gate_built(c : @ui.Ctx, src : Source) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
   let (_, target) = fold_target(src, w, c.window_size().0)
-  fold_bars(fold_built(c, target))
+  fold_bars(c, fold_built(c, target))
   if @ui.window_inset() {
     title_row(c, "page-title-row", @sf.wide_bar_h)
   }

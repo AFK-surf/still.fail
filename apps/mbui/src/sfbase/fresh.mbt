@@ -74,8 +74,7 @@ pub fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 /// The new chat's first words sent, or the new chat left for a chat: its scene leaves, from now, and its choices fade
 /// (on a phone as Android's LeaveFade), over the chat it became (new_chat_leaving_of): as the words go, not once the
 /// core has made the chat and taken them in.
-pub fn became_starts(wide~ : Bool) -> Unit {
-  let c = @ui.current()
+pub fn became_starts(c : @ui.Ctx, wide~ : Bool) -> Unit {
   let leave = new_leave(c)
   leave.snap(0.0)
   leave.animate(1.0, @motion.tween(new_leave_ms, ease=Leave))

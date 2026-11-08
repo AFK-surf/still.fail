@@ -168,7 +168,7 @@ fn back_where(src : Source) -> (() -> Unit)? {
   if app.nav.depth() > 1 {
     Some(@sfbase.back_pop)
   } else if app.nav.top() != Home {
-    Some(fn() { go_place(c, "chats", [], -1) })
+    Some(fn() { go_place(c.moment(), "chats", [], -1) })
   } else {
     None
   }
@@ -329,7 +329,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   menu_bar(c, src)
   c.after_build("menu-asked", fn() { @settings.action_asked_done() })
   @sfdesk.window_zoom_keys(c, src)
-  appearance(src, page_dark(src))
+  appearance(c, src, page_dark(src))
   faces(src, @sfdesk.is_wide(c))
   // pictures put up by their address come as the core gives them (a GIF among them moves)
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
@@ -387,11 +387,11 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
       (Starting | Failed) as state => splash_said(src, state)
       // (signed out, or signed in at the landing: the ways in's nodes, entry_tree.mbt)
       SignedOut => entry_said()
-      SignedIn if shell_is(src, @ui.current().window_size().0) is Landing => entry_said()
+      SignedIn if shell_is(src, c.window_size().0) is Landing => entry_said()
       // (signed in, its workspaces still read or failing to be: the splash's nodes)
-      SignedIn if shell_is(src, @ui.current().window_size().0) is Reading => reading_said(src)
+      SignedIn if shell_is(src, c.window_size().0) is Reading => reading_said(src)
       // (a window of its own: its page, an old view the tree hosts, says nothing of the first page or the splash)
-      SignedIn if shell_is(src, @ui.current().window_size().0) is Lone => entry_said()
+      SignedIn if shell_is(src, c.window_size().0) is Lone => entry_said()
       _ => ()
     }
     @ui.old_views_here(c)
@@ -858,7 +858,7 @@ fn page_view(
 /// A place from the bottom bar (AppState.place): its page takes the stack's root, in place (nothing to go back to),
 /// coming in from the side the ball goes to; the same place again changes nothing. `sets`, `cur`:
 /// the bar it is chosen in (none: from no side).
-fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
+fn go_place(at : Double, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
   let from = match place_of(app.nav.top()) {
     Some(p) => p
     None => ""
@@ -884,7 +884,7 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
   place_switch.go(
     1.0,
     if way == 0 { @motion.tween(switch_fade_ms, ease=Out) } else { @motion.move(points=switch_slide) },
-    at=c.moment(),
+    at~,
   )
 }
 

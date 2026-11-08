@@ -393,7 +393,7 @@ pub fn composer(
     } else if multiline {
       composer_box_open()
     } else {
-      composer_box.then(capsule_place(place))
+      composer_box.then(capsule_place(c, place))
     },
     // (the raised ground's glass, the accent's over it while dragged over)
     glass=@sf.glass_floating(tint?=if dragging { Some(@sf.alpha(p.accent, drag_tint)) } else { None }),
@@ -1426,9 +1426,9 @@ let capsule_pad_alone : Double = 8.0
 /// stand concentric in them, as high as does (@sf.foot_capsule_h: a finger's 52 in the tape's 28, 48), so it stands
 /// where its ends are concentric with them as high as it is (the user, 2026-10-26: a finger's, 52 high, stood where a 48
 /// would, its ends not on the page's corners).
-fn capsule_h() -> Double {
+fn capsule_h(c : @ui.Ctx) -> Double {
   let side = @sf.theme().round.side
-  @sf.foot_capsule_h(side + 2.0 * (capsule_pad_alone + capsule_extra()), side)
+  @sf.foot_capsule_h(side + 2.0 * (capsule_pad_alone + capsule_extra(c)), side)
 }
 
 ///|
@@ -1436,8 +1436,7 @@ fn capsule_h() -> Double {
 /// what its text's line is taller than they are, the system's size of words as the user's (text_shut: as high as
 /// they are, else as its line), so that they stand as far in at their ends as over and under them, concentric with it;
 /// none while its line is no taller than they are.
-fn capsule_extra() -> Double {
-  let c = @ui.current()
+fn capsule_extra(c : @ui.Ctx) -> Double {
   let (_, line) = c.style_size(@sf.theme().t.words)
   dmax(0.0, (c.sp(line) - @sf.theme().round.side) / 2.0)
 }
@@ -1445,7 +1444,7 @@ fn capsule_extra() -> Double {
 ///|
 /// The capsule further in than the box by `place`'s capsule_in (composer's), from its left, its right and its foot, its
 /// round buttons its capsule_pad in.
-fn capsule_place(place : ComposerPlace) -> @ui.Style {
+fn capsule_place(c : @ui.Ctx, place : ComposerPlace) -> @ui.Style {
   let (l, r, b) = place.capsule_in
   // (over and under, its padding: its text's room, as high as its line, stands its buttons in its middle that much
   // further in, capsule_extra; at its ends that much more, so they stand as far in every way)
@@ -1454,7 +1453,7 @@ fn capsule_place(place : ComposerPlace) -> @ui.Style {
     ml=@sf.room_of(l),
     mr=@sf.room_of(r),
     mb=@sf.room_of(b),
-    px=@sf.room_of(pad + capsule_extra()),
+    px=@sf.room_of(pad + capsule_extra(c)),
     py=@sf.room_of(pad),
   )
 }
@@ -1484,16 +1483,16 @@ pub let composer_alone : ComposerPlace = {
 /// it reaches (as wide as the panel leaves it: composer_width), its capsule's ends each as far in as makes it
 /// concentric with the corner it is in, an end that cannot the ladder's inset in, as it stands alone
 /// (@sf.foot_capsule); else as it stands alone (composer_alone).
-pub fn composer_place(pane : Double) -> ComposerPlace {
+pub fn composer_place(c : @ui.Ctx, pane : Double) -> ComposerPlace {
   let d = composer_side()
   if !@sf.in_pane() || composer_width(pane) < pane - 2.0 * d - 0.5 {
     return composer_alone
   }
-  let h = capsule_h()
+  let h = capsule_h(c)
   let (l, r, b) = @sf.foot_capsule(h, d, d)
   {
     capsule_in: (l - d, r - d, b - d),
-    capsule_pad: (h - @sf.theme().round.side) / 2.0 - capsule_extra(),
+    capsule_pad: (h - @sf.theme().round.side) / 2.0 - capsule_extra(c),
     corner: @sf.pane_composer_corner(),
   }
 }
@@ -1731,8 +1730,7 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
           paint: None,
           // as the composer drew it (composer_file), but its ✕: a new chat's picture waiting for its message not going
           // up, no spinner over it; a card on the composer's ground, as wide as there
-          face: fn() {
-            let c = @ui.current()
+          face: fn(c) {
             match picture {
               Some(p) => picture_tile(c, local_media(p, file_kind(text(v, "name"))), going_now(v), gone_up(v), text(v, "error")) |> ignore
               None => {
@@ -1875,8 +1873,8 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
           match c.field_words("composer/quote/" + id) {
             Some((_, (lx, ly, lw, lh))) if lw > 0.0 && lh > 0.0 => {
               let hint_field = @ui.Field::new()
-              Some(((lx + dx, ly + dy, lw, lh), fn() {
-                quote_comment_field(@ui.current(), "flying/quote-hint/" + id, hint_field) |> ignore
+              Some(((lx + dx, ly + dy, lw, lh), fn(c) {
+                quote_comment_field(c, "flying/quote-hint/" + id, hint_field) |> ignore
               }))
             }
             _ => None
@@ -1890,8 +1888,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
           shown: Some(shown),
           picture: None,
           paint: None,
-          face: fn() {
-            let c = @ui.current()
+          face: fn(c) {
             c.box(style=@ui.style(w=Fixed(wide)), fn() {
               @sf.quote_card(
                 c,
@@ -1930,8 +1927,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
           shown: Some(shown),
           picture: Some(picture.key),
           paint: None,
-          face: fn() {
-            let c = @ui.current()
+          face: fn(c) {
             // The row may still be on its way. Follow the same source as the quote, including a cover that arrives
             // while it waits; a picture already shown does not go back to an empty source when the draft is taken.
             let latest = quote_picture(c, src, w, station, v).map(fn(p) { p.0 }).unwrap_or(picture)
@@ -1969,7 +1965,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(w.key, words)
   let runs = @sfbase.refs_sent_runs(w.key, words)
-  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
+  let row = sent_local(c, rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
   // tall as it shows till they let go of it, as the list's foot over it is: sent on its way to a line more or less,
   // where it is drawn then, not where that way ends (the rows over it went there at once, in the frame it was sent, or
@@ -1987,7 +1983,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     room,
     flying,
     field=composer_field_key,
-    hold=fn(ms) { composer_hold(w.key, room, box, ms) },
+    hold=fn(c, ms) { composer_hold(c, w.key, room, box, ms) },
     desk=true,
     marks~,
     runs~,
@@ -2039,8 +2035,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
 /// `ms`: the words are in it till then, and it comes down as they let go of it, not from under them as they set out
 /// . Then its box is laid
 /// out as it is, its ground going down to that (composer's reshape, for this), and its room down on the same curve.
-fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Unit {
-  let c = @ui.current()
+fn composer_hold(c : @ui.Ctx, draft : String, room : Double, box : Double, ms : Double) -> Unit {
   @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
   a.snap(1.0)
@@ -2057,10 +2052,10 @@ fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Un
 /// (its box that tall, what is round it as it is), draft `draft`'s with its own corner (a card's till it is first built).
 fn composer_least(c : @ui.Ctx, draft : String) -> Double {
   let corner = composing.corners.get(draft).unwrap_or(@sf.card_corner)
-  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
+  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c, c.width))
   match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box(corner~)
-    None => composer_open_room(c.width, corner~)
+    Some(box) => foot - box + composer_open_box(c, corner~)
+    None => composer_open_room(c, c.width, corner~)
   }
 }
 
@@ -2132,7 +2127,7 @@ fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
 /// ground's curve (not `held`: where it comes to stand once let go, whatever was typed in it meanwhile).
 pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held? : Bool = true) -> Double {
   // (not laid out yet: a capsule's)
-  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
+  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c, c.width))
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
@@ -2183,10 +2178,10 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     warm_agent: !v.map(fn(v) { v.archived }).unwrap_or(false),
   }
   let width = composer_width(c.width)
-  let place = if apart { composer_place(c.width) } else { composer_alone }
+  let place = if apart { composer_place(c, c.width) } else { composer_alone }
   let mut notices = -1
   let mut shaped = None
-  let foot = c.box(style=chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_foot_in(c.width)))), fn() {
+  let foot = c.box(style=chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_foot_in(c, c.width)))), fn() {
     match v {
       Some(v) => notices = c.box(style=chat_notices_box, fn() { chat_notices(c, src, r, v, width) })
       None => ()
@@ -2491,7 +2486,7 @@ fn composer_notice(
   let text_line = if choices.is_empty() { t.t.meta_line } else { c.sp(t.t.meta_line) }
   let inline_high = dmax(text_line, @ui.Space::S7.px())
   let inline_side = inline_high + 2.0 * composer_notice_pad
-  let inline_inset = capsule_pad_alone + capsule_extra() + (t.round.side + 1.0) / 2.0 - inline_side / 2.0
+  let inline_inset = capsule_pad_alone + capsule_extra(c) + (t.round.side + 1.0) / 2.0 - inline_side / 2.0
   // The 28-high chooser's capsule is concentric with the notice when its end is this far from the edge.
   let inline_end = (inline_side - @ui.Space::S7.px()) / 2.0
   let beside = if choices.is_empty() {
@@ -2510,7 +2505,7 @@ fn composer_notice(
   let side = line_high + 2.0 * composer_notice_pad
   // (the ＋'s middle as the composer draws it: its round control's, a point wider for the capsule's edge line, its
   // capsule_pad_alone in; measured, 24.5 in from the composer's edge)
-  let inset = capsule_pad_alone + capsule_extra() + (t.round.side + 1.0) / 2.0 - side / 2.0
+  let inset = capsule_pad_alone + capsule_extra(c) + (t.round.side + 1.0) / 2.0 - side / 2.0
   let drawn_in = width - 2.0 * inset
   // round as a line of it is high: a capsule while its words fit one line; wrapped, its corners still that round start,
   // its mark in it on its first line (round all its height, 3 lines made it a blob, its mark halfway down)
@@ -2692,16 +2687,16 @@ let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Dan
 ///|
 /// A chat's composer's place while it is a capsule at the foot of a pane `pane` wide: its buttons (the theme's round
 /// controls) 8 in, 12 over it and its foot's room under it (composer_foot_in).
-fn capsule_room(pane : Double) -> Double {
-  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + composer_foot_in(pane)
+fn capsule_room(c : @ui.Ctx, pane : Double) -> Double {
+  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + composer_foot_in(c, pane)
 }
 
 ///|
 /// The room a chat's composer takes opened with one line at the foot of a pane `pane` wide (its box, composer_open_box;
 /// 12 over it and its foot's room under it, composer_foot_in): what a list that keeps its words in place as the
 /// composer closes keeps clear at least.
-pub fn composer_open_room(pane : Double, corner? : Double = @sf.composer_corner()) -> Double {
-  composer_open_box(corner~) + 12.0 + composer_foot_in(pane)
+pub fn composer_open_room(c : @ui.Ctx, pane : Double, corner? : Double = @sf.composer_corner()) -> Double {
+  composer_open_box(c, corner~) + 12.0 + composer_foot_in(c, pane)
 }
 
 ///|
@@ -2715,7 +2710,7 @@ pub fn composer_open_room(pane : Double, corner? : Double = @sf.composer_corner(
 /// moment it is there (page_way's `ends`, whichever frame finds it so), not at once: what it holds under it and the
 /// chat's rows standing over its room (composer_room) going with it, not stepped 8 in one frame (rows_steady.mbt). The
 /// window taking the pane across with no way going: there at once.
-pub fn composer_foot_in(pane : Double) -> Double {
+pub fn composer_foot_in(c : @ui.Ctx, pane : Double) -> Double {
   let way = @sfbase.page_way
   let w = if way.id == "" {
     pane
@@ -2750,7 +2745,7 @@ pub fn composer_foot_in(pane : Double) -> Double {
     // (the way there: on from the moment it is, whichever frame sees it)
     Some((a, last, ends)) if way.id == "" && last != "" => {
       if to != a.target() {
-        a.animate(to, @sf.move_spring, start_at=dmin(ends, @ui.current().moment()))
+        a.animate(to, @sf.move_spring, start_at=dmin(ends, c.moment()))
       }
       composer_foot_way.val = Some((a, "", 0.0))
       a.get()
@@ -2796,9 +2791,9 @@ let composer_foot_wide : Double = 16.0
 /// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
 /// out, its padding over the line (text_open: 8 over it), its parts 10 apart, its buttons' row as far from its foot as
 /// makes them concentric with its corners (tools_row).
-fn composer_open_box(corner? : Double = @sf.composer_corner()) -> Double {
+fn composer_open_box(c : @ui.Ctx, corner? : Double = @sf.composer_corner()) -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
+  @sf.composer_pad + (8.0 + c.style_size(t.t.words).1) + 10.0 + t.round.side + @ui.capsule_in(corner, t.round.side)
 }
 
 ///|

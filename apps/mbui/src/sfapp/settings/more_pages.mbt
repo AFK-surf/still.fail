@@ -101,27 +101,39 @@ let kept : Kept = { chats: @signals.signal(None), drive: @signals.signal(0.0, sa
 ///|
 /// The chats' kept data asked of the core again.
 fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
+  if kept_unread() {
+    // (asked once the frame's builds are over: the build that first comes to it alone)
+    c.tell("cache.usage", fn() { kept_usage(core) })
+  }
+}
+
+///|
+/// Whether what is kept is not read as last asked; said read as it is asked now.
+fn kept_unread() -> Bool {
   if kept.read.get() == kept.asked.get() {
-    return
+    return false
   }
   kept.read.set(kept.asked.get())
-  // (asked once the frame's builds are over: the build that first comes to it alone)
-  c.tell("cache.usage", fn() {
-    (core.call)("cache.usage", obj([]), fn(r) {
-      kept.chats.set(Some(
-        match r {
-          Ok(v) => items(Some(v), "chats")
-          Err(_) => []
-        },
-      ))
-      kept.drive.set(match r {
-        Ok(v) => number(Some(v), "drive")
-        Err(_) => 0.0
-      })
-      kept.loose.set(match r {
-        Ok(v) => items(Some(v), "loose")
+  true
+}
+
+///|
+/// The chats' kept data asked of the core now.
+fn kept_usage(core : Core) -> Unit {
+  (core.call)("cache.usage", obj([]), fn(r) {
+    kept.chats.set(Some(
+      match r {
+        Ok(v) => items(Some(v), "chats")
         Err(_) => []
-      })
+      },
+    ))
+    kept.drive.set(match r {
+      Ok(v) => number(Some(v), "drive")
+      Err(_) => 0.0
+    })
+    kept.loose.set(match r {
+      Ok(v) => items(Some(v), "loose")
+      Err(_) => []
     })
   })
 }
@@ -152,9 +164,11 @@ pub fn kept_asked() -> Int {
 
 ///|
 /// What is kept asked of the core where it is not read as last asked (kept_said's ask, at the moment of what reads it:
-/// a node's reaction to kept_asked).
-pub fn kept_ask(c : @ui.Ctx, core : Core) -> Unit {
-  kept_read(c, core)
+/// a node's reaction to kept_asked, outside a build: asked at once, as kept_read's told ask is there).
+pub fn kept_ask(core : Core) -> Unit {
+  if kept_unread() {
+    kept_usage(core)
+  }
 }
 
 ///|

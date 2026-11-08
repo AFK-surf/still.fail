@@ -147,7 +147,7 @@ fn login_step(
   solid : Bool,
   busy? : Bool = false,
   external? : Bool = false,
-  more? : Array[(String, () -> Unit)] = [],
+  more? : Array[@sf.MenuItem] = [],
   last? : Bool = true,
 ) -> Bool {
   let p = @sf.theme().p
@@ -178,7 +178,7 @@ fn login_step(
       let b = c.box(style=lc_more, id=mid, fn() { @sf.icon(c, "more", size=lc_icon, color=p.text) |> ignore })
       c.semantics(b, Button, id=mid, label=what)
       if c.clicked(mid) {
-        @sf.menu(more.map(fn(w) { Some(@sf.menu_item_of(w.0, w.1)) }), from=Of(mid), along=End)
+        @sf.menu(more.map(fn(i) { Some(i) }), from=Of(mid), along=End)
       }
     })
     |> ignore
@@ -222,7 +222,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=login_page_ways(page, elsewhere)) {
         @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
           logins_here.pressed[id] = true
-          @ui.current().copy_text(code)
+          @sfbase.copy_out(code)
           login_open(core, page)
         })
       }
@@ -239,14 +239,16 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.browser"], [("station", station), ("id", id)])
       let again = if relay {
-        [(@sf.t("web-main.logins.signIn"), fn() {
-          @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
-        })]
+        [
+          @sf.menu_item_of(@sf.t("web-main.logins.signIn"), fn() {
+            @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay_now(core, station, id, text(l, "title")) })
+          }),
+        ]
       } else {
         []
       }
       if login_step(c, "login-station/" + id, text(l, "browserText"), true, busy~, more=again) {
-        (elsewhere[0].1)()
+        login_station_pressed(c, core, station, l)
       }
     }
     "loopback" if !relay => {
@@ -270,7 +272,12 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
       if login_step(c, "login-main/" + id, label, !opened, busy~, more=elsewhere) {
-        @settings.confirm_claude_auth(text(l, "name") == "claude", fn() { login_relay(@ui.current(), core, station, id, text(l, "title")) })
+        // (confirmed first for Claude: done as it is confirmed; else told once the frame's builds are over)
+        if text(l, "name") == "claude" {
+          @settings.confirm_claude_auth(true, fn() { login_relay_now(core, station, id, text(l, "title")) })
+        } else {
+          login_relay(c, core, station, id, text(l, "title"))
+        }
       }
     }
     "open" if url != "" => {
@@ -293,32 +300,48 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
 /// 浏览器中打开, or 回到 … 的浏览器 while its tab is open) and what does it: its page opened in a tab there (the one open,
 /// if it is), whose view opens here and goes back by itself once the login ends; a loopback's callback comes back to the
 /// command there, nothing relayed or pasted.
-fn login_station_way(core : Core, station : String, l : Json?) -> (String, () -> Unit)? {
+fn login_station_way(core : Core, station : String, l : Json?) -> @sf.MenuItem? {
   if !flag(l, "browser") || text(l, "browserText") == "" {
     return None
   }
-  let id = text(l, "id")
-  let label = text(l, "browserText")
+  // (a ⋯'s item chosen, outside a build: done as it is chosen, or as it is confirmed)
   Some(
-    (
-      label,
-      fn() {
-        @settings.confirm_claude_auth(text(l, "name") == "claude" && text(l, "screen") == "", fn() {
-          @ui.current().tell("login-station/" + id, fn() {
-            @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(id) }, then=fn(v) {
-              (core.open_screen)(station, text(Some(v), "screen"))
-            })
-          })
-        })
-      },
-    ),
+    @sf.menu_item_of(text(l, "browserText"), fn() {
+      @settings.confirm_claude_auth(login_station_asks(l), fn() { login_station_go(core, station, l) })
+    }),
   )
 }
 
 ///|
+/// The step in the station's own browser pressed as the card is built (login_station_way's): confirmed first where it
+/// asks to be, done as it is confirmed; else told once the frame's builds are over.
+fn login_station_pressed(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
+  if login_station_asks(l) {
+    @settings.confirm_claude_auth(true, fn() { login_station_go(core, station, l) })
+  } else {
+    c.tell("login-station/" + text(l, "id"), fn() { login_station_go(core, station, l) })
+  }
+}
+
+///|
+/// Whether the station's own browser is asked for a login only once confirmed: Claude's, no tab of it open yet.
+fn login_station_asks(l : Json?) -> Bool {
+  text(l, "name") == "claude" && text(l, "screen") == ""
+}
+
+///|
+/// The login's page opened in the station's own browser (`machineLogin.browser`), its view opened here.
+fn login_station_go(core : Core, station : String, l : Json?) -> Unit {
+  let label = text(l, "browserText")
+  @settings.act(core, label, "machineLogin.browser", { "station": Json::string(station), "id": Json::string(text(l, "id")) }, then=fn(v) {
+    (core.open_screen)(station, text(Some(v), "screen"))
+  })
+}
+
+///|
 /// What a ⋯ beside a login page's button offers: its address copied (for a browser elsewhere), then `elsewhere`.
-fn login_page_ways(url : String, elsewhere : Array[(String, () -> Unit)]) -> Array[(String, () -> Unit)] {
-  [(@sf.t("common.link.copy"), fn() { copy_link(@ui.current(), url) }), ..elsewhere]
+fn login_page_ways(url : String, elsewhere : Array[@sf.MenuItem]) -> Array[@sf.MenuItem] {
+  [@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(url, said=@sf.t("common.link.copied")) }), ..elsewhere]
 }
 
 ///|
@@ -334,33 +357,38 @@ fn login_open(core : Core, url : String) -> Unit {
 /// station's own machine: the browser comes back there by itself), then answers the page to open; this device's port
 /// taken is said on the card (the core's `relayText`), nothing opened.
 fn login_relay(c : @ui.Ctx, core : Core, station : String, id : String, title : String) -> Unit {
+  c.tell("login-open/" + id, fn() { login_relay_now(core, station, id, title) })
+}
+
+///|
+/// The loopback login's browser asked for now (login_relay's, as it is told; a confirm's or a ⋯'s item's, as it is
+/// chosen).
+fn login_relay_now(core : Core, station : String, id : String, title : String) -> Unit {
   let here = this_machine() == station
-  c.tell("login-open/" + id, fn() {
-    // the app held up while the core waits for the browser, by a notice saying which login (LoginRelay.kt: its title;
-    // where the system keeps nothing up, nothing)
-    @ui.hold_words(
-      channel=@sf.t("web-main.logins.title"),
-      title=if title == "" { @sf.t("web-main.logins.title") } else { title },
-      body=@sf.t("web-main.logins.waitingBrowser"),
-    )
-    (core.call)(
-      "machineLogin.open",
-      { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(here) },
-      fn(r) {
-        match r {
-          Ok(v) => login_open(core, text(Some(v), "url"))
-          Err(e) if text(Some(e), "code") == "port_taken" => ()
-          Err(e) =>
-            (core.say)(
-              @sf.t("android-misc.act.failed", args=[
-                ("what", @sf.t("web-main.logins.openWhat")),
-                ("error", error_words(e)),
-              ]),
-            )
-        }
-      },
-    )
-  })
+  // the app held up while the core waits for the browser, by a notice saying which login (LoginRelay.kt: its title;
+  // where the system keeps nothing up, nothing)
+  @ui.hold_words(
+    channel=@sf.t("web-main.logins.title"),
+    title=if title == "" { @sf.t("web-main.logins.title") } else { title },
+    body=@sf.t("web-main.logins.waitingBrowser"),
+  )
+  (core.call)(
+    "machineLogin.open",
+    { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(here) },
+    fn(r) {
+      match r {
+        Ok(v) => login_open(core, text(Some(v), "url"))
+        Err(e) if text(Some(e), "code") == "port_taken" => ()
+        Err(e) =>
+          (core.say)(
+            @sf.t("android-misc.act.failed", args=[
+              ("what", @sf.t("web-main.logins.openWhat")),
+              ("error", error_words(e)),
+            ]),
+          )
+      }
+    },
+  )
 }
 
 ///|

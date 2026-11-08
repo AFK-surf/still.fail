@@ -1893,7 +1893,7 @@ test "viewer on the tree, a wide window, a mouse, motion reduced: a click on the
   // (as the settings set it: this device's motion reduced, read by the app each frame)
   (preview_src.val.unwrap().call)("prefs.set", { "motion": "reduce" }, fn(_) {  })
   t.draw()
-  assert_true(@ui.current().still(), msg="motion reduced")
+  assert_true(t.ctx().still(), msg="motion reduced")
   let v = viewer.get().unwrap()
   assert_eq(wide_bar_top(t), Some(0.0), msg="there")
   let (x, y, w, h) = v.zoom.rect().unwrap()

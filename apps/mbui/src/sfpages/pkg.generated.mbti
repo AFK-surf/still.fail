@@ -112,13 +112,13 @@ pub fn composer_cc_open() -> Bool
 
 pub let composer_field_key : String
 
-pub fn composer_foot_in(Double) -> Double
+pub fn composer_foot_in(@ui.Ctx, Double) -> Double
 
 pub fn composer_foot_room(@ui.Ctx, String, Double, let_go~ : Bool) -> Double
 
-pub fn composer_open_room(Double, corner? : Double) -> Double
+pub fn composer_open_room(@ui.Ctx, Double, corner? : Double) -> Double
 
-pub fn composer_place(Double) -> ComposerPlace
+pub fn composer_place(@ui.Ctx, Double) -> ComposerPlace
 
 pub fn composer_room(@ui.Ctx, String, settled? : Bool, held? : Bool) -> Double
 
@@ -598,7 +598,7 @@ pub fn settings_blocks(@ui.Ctx, @settings.Core, @settings.Here, (@settings.Route
 
 pub fn settings_home_node(@view.View, @settings.Core, () -> @settings.Here, (@settings.Route) -> Unit, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, bars~ : () -> Bool, stint~ : () -> Int32) -> Unit
 
-pub fn settings_parts(@ui.Ctx, @settings.Core, @settings.Here, bars? : Bool, asks? : Bool) -> Array[SettingsPart]
+pub fn settings_parts(@ui.Ctx, @settings.Core, @settings.Here) -> Array[SettingsPart]
 
 pub fn settings_row_of(@settings.Route) -> @settings.Route
 
@@ -818,7 +818,7 @@ pub(all) struct MessageHere {
 
 pub(all) struct NewChatFrame {
   core : @settings.Core
-  bar : () -> Unit
+  bar : (@ui.Ctx) -> Unit
   foot : Double
   in_place : Bool
   sent : (@sfbase.ChatRef) -> Unit

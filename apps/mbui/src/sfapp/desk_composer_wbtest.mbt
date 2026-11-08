@@ -476,7 +476,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
   assert_eq(flying.map(fn(ff) { ff.key }), ["upload:" + id, "upload:" + clip])
   let picture = flying[0].picture.unwrap()
   assert_true(picture != "")
-  let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
+  let face = @ui.Tester::new(fn(c) { (flying[0].face)(c) }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)
   @ui.add_image(picture, png_head())
   face.draw()
@@ -536,7 +536,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   assert_eq(flying.length(), 1)
   let (x, y, fw, fh) = flying[0].from
   let tile = lines.iter().any(fn(l) { l.0 >= x && l.0 <= x + fw && l.1 >= y && l.1 <= y + fh })
-  let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
+  let face = @ui.Tester::new(fn(c) { (flying[0].face)(c) }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)
   @ui.add_image(flying[0].picture.unwrap(), png_head())
   face.draw()
@@ -829,7 +829,7 @@ test "the room a list keeps for the composer opened with one line is as tall as 
     let pane = t.ctx().width
     assert_eq(
       @motion.measured(t.ctx(), "composer/content"),
-      Some(@sfpages.composer_open_room(pane) - 12.0 - @sfpages.composer_foot_in(pane)),
+      Some(@sfpages.composer_open_room(t.ctx(), pane) - 12.0 - @sfpages.composer_foot_in(t.ctx(), pane)),
     )
   }
 }

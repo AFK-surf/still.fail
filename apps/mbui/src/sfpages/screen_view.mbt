@@ -462,7 +462,7 @@ pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
   }
   match screen_uis.get(key) {
     Some(u) => {
-      if u.fulled && @ui.full_screen() { @ui.current().set_full_screen(false) }
+      if u.fulled && @ui.full_screen() { @hostapi.set_full_screen(false) }
       if u.sideways_told {
         @hostapi.set_sideways(false)
       }
