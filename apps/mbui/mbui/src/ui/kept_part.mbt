@@ -12,13 +12,11 @@
 ///|
 priv struct PartsRun {
   mut ctx : Ctx?
-  /// the runtime's steps as the last frame began (an event of its own since then is one from outside)
-  mut steps : Int
 }
 
 ///|
 // kept across runs: the run it holds is compared with the frame's as each frame begins (parts_frame_start)
-let parts_run : PartsRun = { ctx: None, steps: -1 }
+let parts_run : PartsRun = { ctx: None }
 
 /// How many events have come from outside the hand: an input other than a pointer
 /// moved or a wheel turned, a message, a host's answer, a step of the runtime's fibers or timers, a test's draw.
@@ -53,8 +51,8 @@ pub fn Tester::set_rows_on_pixels(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
-/// A frame begins: what is kept of another run forgotten; the runtime's steps since the last frame an event from
-/// outside.
+/// A frame begins: what is kept of another run forgotten. (A fiber's step is no event from outside: what it changes
+/// it says by the signals it sets, and only what reads them is built again.)
 fn parts_frame_start(c : Ctx) -> Unit {
   match parts_run.ctx {
     Some(was) if physical_equal(was, c) => ()
@@ -62,11 +60,6 @@ fn parts_frame_start(c : Ctx) -> Unit {
       parts_forget()
       parts_run.ctx = Some(c)
     }
-  }
-  let steps = fx.val.steps
-  if steps != parts_run.steps {
-    parts_run.steps = steps
-    outside_came()
   }
 }
 
