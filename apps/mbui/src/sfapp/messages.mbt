@@ -65,36 +65,6 @@ let opened_notices : Map[String, Bool] = {}
 let image_quoted_at : Ref[Int] = { val: -1 }
 
 ///|
-/// The kind of a file by its name: image, video, or anything else.
-fn kind_of(name : String) -> String {
-  let lower = @sf.lower(name)
-  let ext = match lower.rev_find(".") {
-    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_string()
-    _ => ""
-  }
-  match ext {
-    "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "avif" | "bmp" | "ico" => "image"
-    "mp4" | "m4v" | "webm" | "mov" | "ogv" => "video"
-    _ => ""
-  }
-}
-
-
-
-///|
-/// The session whose workspace keeps a file: as the core says it, else the chat's first agent's.
-fn owner_of(here : Here, a : Attachment) -> String {
-  if a.owner != "" {
-    a.owner
-  } else {
-    match here.view.agents.get(0) {
-      Some(ag) => ag.key
-      None => here.session
-    }
-  }
-}
-
-///|
 /// What an activity shows, steadied: another thing replaces the shown one once it has stayed 700 ms
 /// (a passing 请求中 does not flicker by); the same thing's new words show at once. Per row: what shows (its key, its
 /// words), what showed before it, and when it came (the frames' clock).
@@ -107,25 +77,3 @@ priv struct Steady {
 
 ///|
 let steadies : Map[String, Steady] = {}
-
-///|
-/// How far an activity's ring reaches round its avatar (its ring 3dp round it).
-let ring_room : Double = 3.0
-
-///|
-/// An agent's ring round its avatar: at work, eight arcs in the accent, the brightest a step further
-/// round every 100 ms; waiting on work it started, a still, quiet whole ring.
-fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
-  let t = @sf.theme()
-  if waiting {
-    c.box(w=Px(24.0), h=Px(24.0), radius=12.0, border=1.5, border_color=t.p.line, fn() {  }) |> ignore
-  } else {
-    @sf.segments(c, 24.0, 1.5, ink().accent, t.p.bg) |> ignore
-  }
-}
-
-///|
-/// The chat a row is of.
-fn ref_of(here : Here) -> ChatRef {
-  { station: here.station, session: here.session, title: here.view.title, station_name: "" }
-}

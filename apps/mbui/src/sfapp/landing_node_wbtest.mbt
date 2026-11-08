@@ -1,87 +1,38 @@
-// Signed in with no workspace yet as nodes (@sfpages.no_workspace_node) drawn as the old pages (@sfpages.no_workspace)
-// are, over the fixture's modes: none yet, asked for a code (its field the old view's, hosted), an invitation
-// waiting, an account not let in.
+// Signed in with no workspace yet as nodes (@sfpages.no_workspace_node), over the fixture's modes: none yet, asked for
+// a code (its field the old view's, hosted), an invitation waiting, an account not let in.
 
 ///|
-/// What a page draws: its rects (where, how big, their colour), its glyphs' places and its shapes.
-fn landing_drawn(
-  t : @ui.Tester,
-) -> (
-  Array[(Double, Double, Double, Double, Int64)],
-  Array[(Double, Double)],
-  Array[(Double, Double, Double, Double, Double, Int64)],
-) {
-  (t.drawn_rects(), t.drawn_glyphs().map(fn(g) { (g.0, g.1) }), t.drawn_shapes())
-}
-
-///|
-/// The fixture's `mode` without a workspace, a code asked for where `asked`, 390 by 844 to touch: the old pages' or the
-/// nodes' (no_workspace_node). What it draws.
-fn landing_case(
-  node : Bool,
-  mode : String,
-  asked : Bool,
-) -> (
-  Array[(Double, Double, Double, Double, Int64)],
-  Array[(Double, Double)],
-  Array[(Double, Double, Double, Double, Double, Int64)],
-) {
+/// The fixture's `mode` without a workspace, a code asked for where `asked`, 390 by 844 to touch, as nodes
+/// (no_workspace_node). The Tester.
+fn landing_case(mode : String, asked : Bool) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
   @sfpages.landing_reset()
   let ws = fn() { src.topic("workspaces", {}).get().value }
-  let t = @ui.Tester::new(
-    fn(c) {
-      if !node {
-        @sfpages.no_workspace(c, src, ws(), fn() {  })
-      }
-    },
-    w=390.0,
-    h=844.0,
-    platform=2,
-  )
+  let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0, platform=2)
   t.check_looks(false)
-  if node {
-    @ui.set_view_app(fn(root) { @sfpages.no_workspace_node(root, src, ws, fn() {  }) |> ignore })
-  }
+  @ui.set_view_app(fn(root) { @sfpages.no_workspace_node(root, src, ws, fn() {  }) |> ignore })
   t.draw()
   if asked {
     @sfpages.landing_asked()
     t.draw()
   }
-  landing_drawn(t)
+  t
 }
 
 ///|
-fn landing_near(
-  a : (Array[(Double, Double, Double, Double, Int64)], Array[(Double, Double)], Array[(Double, Double, Double, Double, Double, Int64)]),
-  b : (Array[(Double, Double, Double, Double, Int64)], Array[(Double, Double)], Array[(Double, Double, Double, Double, Double, Int64)]),
-) -> Bool {
-  let n = fn(x : Double, y : Double) { (x - y).abs() <= 1.0e-9 }
-  a.0.length() == b.0.length() &&
-  a.0.iter().zip(b.0.iter()).all(fn(p) { n(p.0.0, p.1.0) && n(p.0.1, p.1.1) && n(p.0.2, p.1.2) && n(p.0.3, p.1.3) && p.0.4 == p.1.4 }) &&
-  a.1.length() == b.1.length() &&
-  a.1.iter().zip(b.1.iter()).all(fn(p) { n(p.0.0, p.1.0) && n(p.0.1, p.1.1) }) &&
-  a.2.length() == b.2.length() &&
-  a.2.iter().zip(b.2.iter()).all(fn(p) { n(p.0.0, p.1.0) && n(p.0.1, p.1.1) && n(p.0.2, p.1.2) && n(p.0.3, p.1.3) && n(p.0.4, p.1.4) && p.0.5 == p.1.5 })
-}
-
-///|
-test "no workspace yet as nodes: none yet, asked for a code, an invitation waiting, an account not let in, each drawn as the old page is" {
-  let cases = [("landing", false), ("landing", true), ("landing-invited", false), ("blocked", false)]
-  let seen = []
-  let same = cases.map(fn(k) {
-    let (old, new) = (landing_case(false, k.0, k.1), landing_case(true, k.0, k.1))
-    let near = landing_near(old, new)
-    if !near {
-      // (the first rect, glyph and shape apart)
-      seen.push(
-        "\{k}: rects \{old.0.length()}/\{new.0.length()} \{landing_first_apart(old.0, new.0)}; glyphs \{old.1.length()}/\{new.1.length()} \{landing_first_apart(old.1, new.1)}; shapes \{old.2.length()}/\{new.2.length()} \{landing_first_apart(old.2, new.2)}",
-      )
-    }
-    near
+test "no workspace yet as nodes: none yet, asked for a code, an invitation waiting, an account not let in, each its title" {
+  let cases = [
+    ("landing", false, @sf.t("android-misc.workspace.none")),
+    ("landing", true, @sf.t("android-misc.invite.onlyInvited", args=[("app", "still.fail")])),
+    ("landing-invited", false, @sf.t("android-misc.invite.received")),
+    ("blocked", false, "此账号暂未开放测试版"),
+  ]
+  let seen = cases.map(fn(k) {
+    let t = landing_case(k.0, k.1)
+    (k.0, k.1, t.find(k.2) is Some(_) && t.drawn_glyphs().length() > 0)
   })
-  assert_eq(same, Array::make(cases.length(), true), msg="\{seen}")
+  assert_eq(seen, cases.map(fn(k) { (k.0, k.1, true) }))
 }
 
 ///|
@@ -174,16 +125,5 @@ test "no workspace yet as nodes, asked for a code: a code the input method commi
   t.touch(0, bx, by)
   t.touch(2, bx, by)
   assert_eq((made, calls.length()), (["ABCD-EFGH-IJKL"], 1))
-}
-
-///|
-/// The first of two lists where they differ, both of it there.
-fn[T : Eq + Show] landing_first_apart(a : Array[T], b : Array[T]) -> String {
-  for k in 0..<@cmp.minimum(a.length(), b.length()) {
-    if a[k] != b[k] {
-      return "at \{k}: old \{a[k]} node \{b[k]}"
-    }
-  }
-  "none apart"
 }
 

@@ -59,27 +59,12 @@ pub let pick_raised : Raised = raised(8.0)
 pub let pin_raised : Raised = raised(3.0)
 
 ///|
-/// A round button over a picture (FilePreview.kt: shadow(1)).
-pub let button_raised : Raised = raised(1.0)
-
-///|
 /// A document's page in the viewer (FilePreview.kt: shadow(2)).
 pub let page_raised : Raised = raised(2.0)
 
 ///|
-/// The viewer's bars over a page (FilePreview.kt pageGlass: shadow(6), black at 12% both).
-pub let viewer_bar_raised : Raised = raised(6.0, ambient=0.12, spot=0.12)
-
-///|
 /// A note said over a service's page (Preview.kt: shadow(6)), its strip (shadow(4), black at 12% both).
 pub let bubble_raised : Raised = raised(6.0)
-
-///|
-pub let strip_raised : Raised = raised(4.0, ambient=0.12, spot=0.12)
-
-///|
-/// A station's update card (StationUpdate.kt: shadow(12), black at 8% both).
-pub let update_raised : Raised = raised(12.0, ambient=0.08, spot=0.08)
 
 ///|
 /// A shadow as a style says it (@ui.style's `shadow`).

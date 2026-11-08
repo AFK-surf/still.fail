@@ -1545,7 +1545,7 @@ test "actual page-leave callbacks hand over and release a held topic in the same
     } else if phase.val == 1 {
       @sfbase.hold(src, @sfbase.chat_scope(second.station, second.session), "held-check", {}).get().snapshot() |> ignore
     }
-  }, w=390.0, h=844.0, platform=2)
+  }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.frame()
   client.receive_json({ "id": 1, "value": { "title": "kept" } })
   phase.val = 1

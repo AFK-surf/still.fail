@@ -60,10 +60,6 @@ pub fn columns_view(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, String, Shown, Dou
 
 pub let context : ContextMenu
 
-pub fn context_image(@ui.Ctx, Int32, String) -> Unit
-
-pub fn context_link(@ui.Ctx, String) -> Unit
-
 pub fn context_menu(@ui.Ctx) -> Unit
 
 pub fn context_node(@view.View) -> Unit
@@ -148,10 +144,6 @@ pub fn keep_files_page(String, @sfbase.DriveAt) -> Unit
 
 pub fn keep_opened(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, String) -> Unit
 
-pub fn keep_tab(String, @sfbase.DriveAt?) -> Unit
-
-pub fn kept_tab(String) -> @sfbase.DriveAt??
-
 pub fn keys(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn keys_dialog(@ui.Ctx, @sfbase.Source) -> Unit
@@ -183,8 +175,6 @@ pub fn new_chat() -> Unit
 pub fn new_chat_after(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef) -> Unit
 
 pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
-
-pub fn on_cards() -> Bool
 
 pub fn open_attention() -> Unit
 
@@ -426,11 +416,7 @@ pub fn toggle_jobs_pop() -> Unit
 
 pub fn transfers_key(@ui.Ctx, @sfbase.Source, String, Double, Double) -> Unit
 
-pub fn transfers_key_shown(@sfbase.Source, String) -> Bool
-
 pub fn transfers_open() -> Unit
-
-pub fn transfers_shown(@sfbase.Source, String) -> Bool
 
 pub let update_closed_in : Double
 

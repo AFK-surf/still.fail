@@ -135,9 +135,14 @@ fn screen_rig(
   // page go (screen_left)
   let shown : Ref[ScreenAt?] = Ref(None)
   let t = @ui.Tester::new(
+    // (the old frame around the window's tree, its old view put here, in still.fail's theme, as the app's)
     fn(c) {
       @sf.begin(c) |> ignore
-      c.with_theme(@sf.ui_theme(), fn() {
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
+    tree=fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      @ui.old(root, fn(c) {
         match app.nav.top() {
           Screen(at) => {
             shown.val = Some(at)
@@ -153,9 +158,11 @@ fn screen_rig(
             }
         }
         @sf.presented(c)
-        // what the page said, as the shell shows it (sfbase's toasts, at the window's foot)
-        @sfbase.toasts(c, @sf.toast_bottom)
       })
+      .grow(Is(1.0))
+      |> ignore
+      // what the page said, as the shell shows it (sfbase's toasts_node, at the window's foot)
+      @sfbase.toasts_node(root, fn() { @sf.toast_bottom }) |> ignore
     },
     w~,
     h~,

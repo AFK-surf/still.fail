@@ -873,15 +873,6 @@ pub fn groups(c : @ui.Ctx, body : () -> Unit) -> Unit {
 let groups_wide : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
-/// What is no group among `groups` (a command to copy): as far from what follows as a group is.
-pub fn among_groups(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  match look() {
-    Narrow => c.box(style=pg_card_room, body) |> ignore
-    Wide => body()
-  }
-}
-
-///|
 /// A group's rows while they are read the first time (sf/waiting.mbt: a list's first read, a section's as
 /// well): its card with `rows` in it (its own rows, drawn by what draws them, of made-up words) in their bones,
 /// breathing, `text` what it waits on said to a screen reader. Its card as it will be, its rows where they will be:
@@ -1904,7 +1895,6 @@ fn row_line(narrow : Bool) -> @ui.Style {
   }
 }
 
-
 ///|
 /// A choice's label and what follows it on its line (a model's maker), 6 apart.
 // kept across runs: a value (no field of it changes)
@@ -2592,24 +2582,6 @@ fn pg_card_now() -> @ui.Style {
 let pg_card_pane : @ui.Style = @ui.css("w=Full bg=Card clip").then(@ui.style(p=room(corner_inset), radius=card_radius))
 
 ///|
-/// What reaches a narrow page's sides on purpose: out across the room it leaves there (pg_room); nothing on a wide one.
-pub fn page_bleed() -> @ui.Style {
-  if look() is Narrow {
-    pg_bleed
-  } else {
-    pg_no_bleed
-  }
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let pg_bleed : @ui.Style = @ui.style(mx=room(-pg_room_in))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pg_no_bleed : @ui.Style = @ui.css("")
-
-///|
 /// A card on a narrow page (in its room): 10 under each.
 // kept across runs: a value (no field of it changes)
 pub let pg_card_room : @ui.Style = @ui.css("w=Full pb=S2_5")
@@ -2628,9 +2600,6 @@ let pg_card : @ui.Style = @ui.style(w=Full, p=list_room, radius=list_card_radius
 /// A choice of a few on a narrow page: as far from what follows as a card is (pg_card_room's 10), a page's block.
 // kept across runs: a value (no field of it changes)
 let pg_choice_box : @ui.Style = @ui.css("w=Full pb=S2_5")
-
-///|
-let pg_choice_h : Double = 34.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2970,7 +2939,6 @@ let wide_list_row_bare : @ui.Style = @ui.style(
 /// room, or as far as holds it out of the card's corner where that is more (the card's 26 round, its words 24 in: 2
 /// more; the user's 第 3 版, 2026-11-03: a control stays out of its card's corner, its row's spacing as it was).
 pub let card_control_end : Double = text_in + dmax(0.0, card_corner - panel_words)
-
 
 ///|
 // kept across runs: a value (no field of it changes)

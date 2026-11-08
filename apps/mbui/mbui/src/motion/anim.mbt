@@ -29,9 +29,6 @@ pub struct Anim {
   priv mut stepped_at : Double
   /// kept by its key (anim): whether what asks it is built (until it is not: anim_unbuilt)
   priv mut built : Bool
-  /// asked outside a build only (as a frame is painted: a look worked out as it is drawn), the frame it was last asked
-  /// in (-1: asked in builds): what paints it is no owner ui knows, so it is let go by frames unasked (anims_let_go)
-  priv mut painted : Int
   /// what it is said to move by (Ctx::moving), and what it is said to be: its key, who told it to go
   id : @ui.Mover
   mut name : String
@@ -133,7 +130,6 @@ pub fn Anim::new(v : Double) -> Anim {
     running: false,
     stepped_at: @double.neg_infinity,
     built: false,
-    painted: -1,
     id: @ui.Mover::new(),
     name: "",
     told: "",
@@ -399,23 +395,13 @@ let anims_moving : Array[Int] = []
 
 ///|
 /// Anim `a`, kept by `id`, asked by what is built now: kept while that is built, let go as it is no longer.
+/// Asked outside a build (told by an input's handler, or read as a frame is painted), nothing built owns it: kept as
+/// it was told until a build asks for it (then let go as what built it is) or the run is reset.
 fn anim_built(c : @ui.Ctx, id : Int, a : Anim) -> Unit {
   if c.on_unbuilt(hash_mix(0x616e696d, id), fn() { anim_unbuilt(id) }) {
     a.built = true
-    a.painted = -1
-  } else if !a.built {
-    // (asked as a frame is painted, by nothing built: no owner to be told of; kept by frames, as it was)
-    if a.painted < 0 {
-      anims_painted.push(id)
-    }
-    a.painted = c.frame_number()
   }
 }
-
-///|
-/// The keys of the Anims asked outside builds only (Anim::painted).
-// kept across runs: forgotten as a Tester starts anew (reset)
-let anims_painted : Array[Int] = []
 
 ///|
 /// What asked the Anim kept by `id` is no longer built (a page gone, a row scrolled away: made anew at rest when it comes
@@ -438,24 +424,6 @@ fn anim_unbuilt(id : Int) -> Unit {
 /// The Anims no longer asked that were moving, forgotten once their way is over by `now` (asked again meanwhile: kept).
 fn anims_let_go(c : @ui.Ctx) -> Unit {
   let now = c.moment()
-  if !anims_painted.is_empty() {
-    // (what paints them is no owner ui knows: let go when no frame asked them for a while, still)
-    let frame = c.frame_number()
-    let keep : Array[Int] = []
-    for id in anims_painted {
-      match anims.get(id) {
-        Some(a) if a.painted >= 0 =>
-          if frame - a.painted > 120 && !a.running {
-            anims.remove(id)
-          } else {
-            keep.push(id)
-          }
-        _ => ()
-      }
-    }
-    anims_painted.clear()
-    anims_painted.append(keep)
-  }
   if anims_moving.is_empty() {
     return
   }

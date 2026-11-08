@@ -8,6 +8,7 @@ import {
   "stillfail/sfbase",
   "stillfail/sfkept",
   "mbui/ui",
+  "mbui/view",
   "mbui/kit",
   "mbui/motion",
   "moonbitlang/core/json",

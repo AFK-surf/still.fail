@@ -1545,11 +1545,6 @@ let triple_pick_value : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row gap=
   .then(@ui.style(w=@sf.grow))
 
 ///|
-/// A select's share of their line: its name over it.
-// kept across runs: a value (no field of it changes)
-let triple_select_box : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
-
-///|
 /// A column's rows, 1 apart.
 // kept across runs: a value (no field of it changes)
 let triple_rows : @ui.Style = @ui.css("w=Full gap=SPx")

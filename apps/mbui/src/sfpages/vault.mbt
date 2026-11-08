@@ -740,11 +740,6 @@ let vt_request : @ui.Style = @ui.css("w=Full")
 let vt_requests_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2_5")
 
 ///|
-/// (rowIcon: 16 wide, the muted, at the name's line)
-// kept across runs: a value (no field of it changes)
-let vt_row_icon : @ui.Style = @ui.css("w=S4 pt=S0_5 align=ACenter")
-
-///|
 /// An item agents are told of (listed): a green dot 6 round at its row's end.
 // kept across runs: a value (no field of it changes)
 let vt_listed : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")

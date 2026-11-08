@@ -17,6 +17,7 @@ import {
   "station/usage",
   "station/recent",
   "station/lookups",
+  "station/legacy",
   "moonbitlang/core/json",
 }
 

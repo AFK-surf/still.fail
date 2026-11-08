@@ -70,21 +70,6 @@ pub fn open_search_mode(mode : String) -> Unit {
 }
 
 ///|
-/// The search the app starts with, opened as Home first builds.
-pub fn search_start(c : @ui.Ctx) -> Unit {
-  match search_at_start.val {
-    Some((q, k)) => {
-      search_at_start.val = None
-      search.open = true
-      search_told()
-      finder_start(q, kind=k)
-      search_up(c).snap(1.0)
-    }
-    None => ()
-  }
-}
-
-///|
 fn search_reset() -> Unit {
   search_at_start.val = None
   search.open = false
@@ -113,38 +98,10 @@ fn search_up(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// How far Home is away under the search (0 none).
-pub fn search_away(c : @ui.Ctx) -> Double {
-  search_read() |> ignore
-  if search.open && !search.over {
-    search_up(c).get()
-  } else {
-    0.0
-  }
-}
-
-///|
 /// The bottom bar out of the search's way while it is open: from the tap until it starts back.
 pub fn search_bar_away() -> Bool {
   search_read() |> ignore
   search.open && !search.leaving && !search.over
-}
-
-///|
-/// The field at the list's top tapped: the search opens from it (its top in the window, its width).
-fn search_open(c : @ui.Ctx, from : Double, wide : Double) -> Unit {
-  if search.open {
-    return
-  }
-  search.open = true
-  search.leaving = false
-  search.from = from
-  search.wide = wide
-  search.focus = true
-  search_told()
-  let up = search_up(c)
-  up.snap(0.0)
-  up.animate(1.0, search_way())
 }
 
 ///|
@@ -348,47 +305,6 @@ fn search_field_shorter() -> Array[String] {
 }
 
 ///|
-/// The search at the list's top: a quiet field; tapped, the search opens from it. Not seen
-/// while the search's field is it (one field at a time, flying from and back to here). It stands on the list's line
-/// (`at`: where the list stands, @sf.list_line).
-fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
-  search_read() |> ignore
-  let t = @sf.theme()
-  let id = c.id("home-search")
-  // (a field to look at: the I-beam over it)
-  c.cursor(id, IBeam)
-  if c.clicked(id) {
-    match c.rect_of(id) {
-      Some((_, y, w, _)) => search_open(c, y, w)
-      None => ()
-    }
-  }
-  // (on one line with what stands over the list, 新建对话 beside a rail: the theme's band's room, mark, height, words)
-  let band = t.chat_list
-  // (its ground band_in from the list's edge: a side column's line is already as far in, across the whole screen it
-  // comes in by its own)
-  let line = match at {
-    Side => search_field_line
-    Whole => search_field_line.then(@ui.style(px=@sf.room_of(band.band_in)))
-  }
-  c.box(style=line, fn() {
-    let f = c.box(style=search_field_box.then(search_field_room(band)), id~, fn() {
-      @sf.icon(c, "search", size=band.band_icon, color=t.p.muted) |> ignore
-      c.text(
-        @sf.t("android-chat.search.field"),
-        shorter=search_field_shorter(),
-        style=band.band_words.then(search_field_words),
-      )
-      |> ignore
-    })
-    if search.open {
-      c.look(f, { ..@ui.still_look, alpha: 0.0 })
-    }
-  })
-  |> ignore
-}
-
-///|
 /// The search at the top of a list made once (search_field's) in its line `line`: a quiet field; pressed, the search
 /// opens from it. Not seen while the search's field is it. It stands on the list's line (`at`).
 fn search_field_node(line : @view.View, at : @sf.ListAt) -> @view.View {
@@ -570,7 +486,6 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
   })
   |> ignore
 }
-
 
 ///|
 /// Whether the search is open over the lists (and whether it is going back to its field).

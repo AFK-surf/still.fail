@@ -100,12 +100,6 @@ fn drag_target(c : @ui.Ctx, src : Source, id : Int, key : String, into : DriveAt
 }
 
 ///|
-/// Whether the row `name` of the folder `at` is what is being dragged.
-fn drag_carried(at : DriveAt, name : String) -> Bool {
-  fdrag_carried(at.station, at.root.unwrap_or(""), dv_join(at.path, name))
-}
-
-///|
 /// How `place` (page or tab) shows a folder, as last chosen there. The files page starts with the detailed list; a
 /// chat's narrower files tab starts with columns where they fit.
 pub fn drive_view(src : Source, place : String) -> String {
@@ -726,7 +720,6 @@ let tree_note_in : Double = 46.0
 
 ///|
 let tree_step : Double = 18.0
-
 
 ///|
 // kept across runs: a value (no field of it changes)

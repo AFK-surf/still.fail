@@ -50,8 +50,6 @@ pub let attach_w : Double
 
 pub let bar_foot : Double
 
-pub fn bare_lists(Double, Double, Double, Int64, Int32, @sf.ListAt) -> ListsFrame
-
 pub fn bars_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn block_waiting(@ui.Ctx, () -> Unit, error? : String, wait? : @json.Json?) -> Unit
@@ -88,13 +86,7 @@ pub fn chat_row(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, on? : Bool, l
 
 pub fn chat_row_node(@view.View, @sfbase.Source, @sf.TipLayer, () -> @sfbase.ChatItem, String, () -> Bool, @sf.ListAt, () -> Int32, list_ground? : () -> Int64, more? : Bool) -> @view.View
 
-pub fn chat_rows_sample(@ui.Ctx, Int32, @sf.ListAt) -> Unit
-
-pub fn chats_lists(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, ListsFrame) -> Unit
-
 pub fn chats_lists_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, ListsNodeFrame, @sf.TipLayer, () -> Int32) -> Unit
-
-pub fn chats_search(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Double, @sf.ListAt) -> Unit
 
 pub let code_field : @ui.Style
 
@@ -151,10 +143,6 @@ pub let desk_note : @ui.TextStyle
 pub let desk_said_line : @ui.Style
 
 pub let dismissed : @signals.Keyed[String]
-
-pub fn dmax(Double, Double) -> Double
-
-pub fn dmin(Double, Double) -> Double
 
 pub fn dropped_of(@sfbase.Dragged) -> @json.Json
 
@@ -304,21 +292,15 @@ pub let lines_ms : Double
 
 pub fn link_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, agent? : String, chats? : Array[@sfbase.LinkedChat], link_to? : (String) -> @sf.LinkTo) -> Unit
 
-pub let link_size : Double
-
 pub let list_filters : Array[String]
 
 pub fn list_key(@sfbase.ChatRef) -> String
 
 pub fn lists_top() -> Unit
 
-pub let lists_top_in : Double
-
 pub fn local_menu_open() -> Bool
 
 pub let local_open : @ref.Ref[Bool]
-
-pub fn local_picture(@ui.Ctx, String, String, Double, Double) -> Unit
 
 pub fn local_station_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
@@ -371,8 +353,6 @@ pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, NewChatFrame) -
 pub fn new_connect_dialog(@sfbase.Source, @settings.Core, @settings.Here, String, resume? : String) -> Unit
 
 pub fn news_of(@sfbase.Source) -> @json.Json?
-
-pub fn no_workspace(@ui.Ctx, @sfbase.Source, @json.Json?, () -> Unit) -> Unit
 
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> @json.Json?, () -> Unit) -> @view.View
 
@@ -528,8 +508,6 @@ pub let row_last : @ui.Style
 
 pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
-pub let row_more : @ui.Style
-
 pub fn rows_rest() -> Double
 
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
@@ -550,8 +528,6 @@ pub fn screen_value_quiet(@json.Json) -> Bool
 
 pub fn screens_perf(Double) -> String
 
-pub fn search_away(@ui.Ctx) -> Double
-
 pub fn search_away_node(@view.View) -> () -> Double
 
 pub fn search_bar_away() -> Bool
@@ -567,8 +543,6 @@ pub fn search_opened() -> Bool
 pub fn search_over(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Double) -> Unit
 
 pub fn search_page_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, () -> Double, @sf.ListAt) -> Unit
-
-pub fn search_start(@ui.Ctx) -> Unit
 
 pub fn search_start_now() -> Unit
 
@@ -615,8 +589,6 @@ pub fn share_look_keys() -> Array[String]
 pub fn shortcuts_node(@view.View, @settings.Core, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, active~ : () -> Bool, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn sign_in_node(@view.View, @sfbase.Source) -> @view.View
-
-pub fn sign_in_page(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn state_line(@ui.Ctx, String, Int32, String, lead? : String, lead_text? : String, rest? : String, alert? : Bool) -> Unit
 
@@ -774,20 +746,6 @@ pub(all) struct ListPart {
   key : String
   draw : () -> Unit
   tucked : Bool
-}
-
-pub(all) struct ListsFrame {
-  top : Double
-  under : Double
-  foot : Double
-  inset : Double
-  ground : Int64
-  before : (String, @sfbase.ChatsView?) -> Array[ListPart]
-  after : (String, @sfbase.ChatsView?) -> Array[ListPart]
-  others : Array[() -> Unit]
-  shown : Int32
-  at : @sf.ListAt
-  kept : Bool
 }
 
 pub(all) struct ListsNodeFrame {

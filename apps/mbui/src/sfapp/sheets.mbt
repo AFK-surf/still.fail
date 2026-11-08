@@ -599,7 +599,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let a = agent_json(chat, key)
   let card = src.topic("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).get().value
   let jobs = items(a, "jobs")
-  let stations = station_marks(src, workspace_of(r.station))
+  let stations = station_marks(src, @sfbase.workspace_of(r.station))
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let s = field(a, "session")
   let status = text(a, "status")

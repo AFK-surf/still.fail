@@ -143,6 +143,7 @@ fn lint_mbt(
   out : Array[Finding],
   returns : Map[String, String],
   readers : Map[String, String],
+  painted : Map[String, Unit],
 ) -> Unit {
   let app = !under(f.rel, cfg.framework)
   let frame_core = under(f.rel, cfg.frame_core)
@@ -214,14 +215,18 @@ fn lint_mbt(
       }
     }
   }
-  // the frames' clock read followed by its own signal (`frame_clock.get()`), outside the tests (build-clock)
+  // the frames' clock read followed by its own signal (`frame_clock.get()`), outside the tests and what paints
+  // (build-clock)
+  let paint_at = paint_args(f)
+  let painting = fn(k : Int) { in_paint(f, k, paint_at, painted) }
   for k, tk in toks {
     if tk.kind == "ident" &&
       tk.text == "frame_clock" &&
       k + 2 < toks.length() &&
       toks[k + 1].text == "." &&
       toks[k + 2].text == "get" &&
-      !f.in_test(k) {
+      !f.in_test(k) &&
+      !painting(k) {
       add("build-clock", k, f.line_text(k))
     }
   }
@@ -477,7 +482,7 @@ fn lint_mbt(
     // the frames' clock read followed (build-clock): a Ctx's (`now` and `cycle` on a Ctx, or on `c`/`ctx` whose type
     // is not told), a motion's (`now_before`, `now_of`, `shows_motion`), ui's own (clock_read, clock_read_here); not
     // in the tests
-    if !in_t && build_clock_read(f, c, returns) {
+    if !in_t && build_clock_read(f, c, returns) && !painting(c.at) {
       add("build-clock", c.at, f.line_text(c.at))
     }
     // 5. the app reads the clock
@@ -1714,3 +1719,108 @@ fn build_clock_read(f : MbtFile, c : Call, returns : Map[String, String]) -> Boo
 ///|
 /// A motion's reads of the frames' clock, followed (build-clock)
 let build_clock_methods : Array[String] = ["now_before", "now_of", "shows_motion"]
+
+///|
+/// What a frame's paint is given to read as it paints, a closure each (Ctx::look_by and the rest): what is read in it
+/// is read as the frame is painted, not built (build-clock)
+let paint_takers : Array[String] = [
+  "look_by", "moved_by", "bg_by", "notch_by", "cut_across_by", "glyphs_by", "cycle_look",
+]
+
+///|
+/// Where a frame's paint begins (mbui's ui: frame_paint, and Ctx::paint, which it and what keeps a row's drawing
+/// call): what only they call, and only what that calls, is read as the frame is painted (build-clock)
+let paint_roots : Array[String] = ["frame_paint", "paint"]
+
+///|
+/// The package paint's roots are in (paint_roots)
+let paint_root_pkg : String = "src/ui"
+
+///|
+/// The tokens of `f` given to a paint taker as what it reads as it paints (paint_takers' arguments)
+fn paint_args(f : MbtFile) -> Map[Int, Unit] {
+  let out : Map[Int, Unit] = Map::new()
+  for c in f.calls {
+    if c.kind == "method" && !c.is_def && paint_takers.contains(c.name) {
+      for a in c.args {
+        for i in a.1 {
+          out[i] = ()
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether token `k` of `f` is read as a frame is painted: in what a paint taker is given, or in a function only
+/// paint calls (paint_fns)
+fn in_paint(f : MbtFile, k : Int, paint_at : Map[Int, Unit], painted : Map[String, Unit]) -> Bool {
+  if paint_at.contains(k) {
+    return true
+  }
+  let it = f.item_of[k]
+  it >= 0 &&
+  f.items[it].kind == "fn" &&
+  painted.contains(pkg_of(f.rel) + "|" + last_name(f.items[it].name))
+}
+
+///|
+/// The functions of each package called only as a frame is painted (by its name, package by package: `pkg|name`):
+/// paint's roots, and those every call of which (outside the tests) is in what a paint taker is given or in a function
+/// so called
+fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
+  // each function's calls in its package: where (the file, the token)
+  let sites : Map[String, Array[(MbtFile, Int)]] = Map::new()
+  let defined : Map[String, Unit] = Map::new()
+  let args : Map[String, Map[Int, Unit]] = Map::new()
+  for f in files {
+    if f.test_file {
+      continue
+    }
+    let pkg = pkg_of(f.rel)
+    args[f.rel] = paint_args(f)
+    for it in f.items {
+      if it.kind == "fn" && it.name != "" {
+        defined[pkg + "|" + last_name(it.name)] = ()
+      }
+    }
+    for c in f.calls {
+      if c.is_def || f.in_test(c.at) {
+        continue
+      }
+      let key = pkg + "|" + c.name
+      match sites.get(key) {
+        Some(a) => a.push((f, c.at))
+        None => sites[key] = [(f, c.at)]
+      }
+    }
+  }
+  let painted : Map[String, Unit] = Map::new()
+  for name in paint_roots {
+    if defined.contains(paint_root_pkg + "|" + name) {
+      painted[paint_root_pkg + "|" + name] = ()
+    }
+  }
+  let mut changed = true
+  while changed {
+    changed = false
+    for key, _ in defined {
+      if painted.contains(key) {
+        continue
+      }
+      match sites.get(key) {
+        Some(a) if a.length() > 0 &&
+          a.iter().all(fn(s) {
+            let (f, k) = s
+            in_paint(f, k, args.get(f.rel).unwrap_or(Map::new()), painted)
+          }) => {
+          painted[key] = ()
+          changed = true
+        }
+        _ => ()
+      }
+    }
+  }
+  painted
+}

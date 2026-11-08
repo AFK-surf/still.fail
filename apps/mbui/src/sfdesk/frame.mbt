@@ -904,27 +904,11 @@ fn tape_words(p : TapePane) -> String {
   }
 }
 
-
-
-///|
-/// On the tape what keeps the sidebar's panel apart: 6 from the window's edge before it, 8 from the page's panel after
-/// it (the closed bar's: bar_in_now(), bar_gap_now()).
-let tape_apart : Double = closed_bar_in + closed_bar_gap
-
 ///|
 /// The page's panel on the tape: the page's ground, its corners the tape's (tape_pane_corners), a line round it,
 /// what goes past its edges cut.
 // kept across runs: a value (no field of it changes)
 let page_apart : @ui.Style = @ui.css("bg=Bg border=B1 border_color=Line clip")
-
-///|
-/// The frame's row: the page's ground under all of it.
-// kept across runs: a value (no field of it changes)
-let frame_row : @ui.Style = @ui.css("row w=Full h=Full bg=Bg")
-
-///|
-// kept across runs: a value (no field of it changes)
-let frame_col : @ui.Style = @ui.css("h=Full")
 
 ///|
 /// The pane: its page laid out as wide as the column leaves, what goes past the window cut.

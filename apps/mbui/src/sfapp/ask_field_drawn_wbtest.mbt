@@ -61,14 +61,14 @@ test "中屏 and 大屏, touch and keyboard and mouse: a question, its line give
   for c in [(1280.0, 0), (1280.0, 2), (900.0, 0), (900.0, 2)] {
     let t = ask_field_tester(c.0, c.1)
     let (line, bx, held0, n0, shown0, said0) = ask_field_drawn(t)
-    let tall = bx.map(fn(b) { b.3 >= @sf.input_height() - 0.5 }).unwrap_or(false)
+    let tall = bx.map(fn(b) { b.3 >= @sf.theme().control_h - 0.5 }).unwrap_or(false)
     t.type_text("好")
     t.run_for(@ui.move_most_ms)
     let (_, _, held1, n1, shown1, _) = ask_field_drawn(t)
     assert_eq(
       (tall, held0, n0 >= 4, shown0, held1, n1 > n0, shown1),
       (true, true, true, true, true, true, true),
-      msg="\{c} line \{line} box \{bx} (one-line \{@sf.input_height()}) held \{held0} glyphs \{n0} shown \{shown0} → typed held \{held1} glyphs \{n1} shown \{shown1};\{said0}",
+      msg="\{c} line \{line} box \{bx} (one-line \{@sf.theme().control_h}) held \{held0} glyphs \{n0} shown \{shown0} → typed held \{held1} glyphs \{n1} shown \{shown1};\{said0}",
     )
   }
 }

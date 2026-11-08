@@ -80,28 +80,6 @@ fn pointer_shape_of(name : String) -> PointerShape {
 }
 
 ///|
-/// The shape's name in its image's key.
-fn pointer_name(shape : PointerShape) -> String {
-  match shape {
-    Arrow => "arrow"
-    Text => "text"
-    VerticalText => "vertical-text"
-    Hand => "hand"
-    ResizeEW => "ew"
-    ResizeNS => "ns"
-    ResizeNWSE => "nwse"
-    ResizeNESW => "nesw"
-    Move => "move"
-    Grab => "grab"
-    Grabbing => "grabbing"
-    Crosshair => "crosshair"
-    NotAllowed => "not-allowed"
-    Wait => "wait"
-    Progress => "progress"
-  }
-}
-
-///|
 /// Where the point the pointer of shape `name` points with is in its image, from its left and its top (dp).
 pub fn pointer_hotspot(name : String) -> (Double, Double) {
   match pointer_shape_of(name) {
@@ -442,3 +420,26 @@ pub fn pointer_png(c : @ui.Ctx, shape? : String = "default") -> (String, () -> B
 /// The pointers' PNGs made, by their keys (pointer_png).
 // kept across runs: each a function of its key alone
 let pointer_pngs : Map[String, Bytes] = {}
+
+///|
+/// The shape's name in its image's key.
+fn pointer_name(shape : PointerShape) -> String {
+  match shape {
+    Arrow => "arrow"
+    Text => "text"
+    VerticalText => "vertical-text"
+    Hand => "hand"
+    ResizeEW => "ew"
+    ResizeNS => "ns"
+    ResizeNWSE => "nwse"
+    ResizeNESW => "nesw"
+    Move => "move"
+    Grab => "grab"
+    Grabbing => "grabbing"
+    Crosshair => "crosshair"
+    NotAllowed => "not-allowed"
+    Wait => "wait"
+    Progress => "progress"
+  }
+}
+

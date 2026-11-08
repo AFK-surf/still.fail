@@ -23,7 +23,6 @@ using @sf {
   desk_note_bad,
 }
 
-
 ///|
 // kept across runs: a value (no field of it changes)
 pub let desk_note : @ui.TextStyle = @sf.wide_list_note
@@ -33,11 +32,6 @@ pub let desk_note : @ui.TextStyle = @sf.wide_list_note
 pub fn desk_column(c : @ui.Ctx) -> Double {
   dmin(desk_column_most, dmin(c.width - 2.0 * desk_lane_in, desk_lane_most) - 2.0 * desk_column_in)
 }
-
-///|
-/// A hint and its link in a line (8 under what is over it).
-// kept across runs: a value (no field of it changes)
-let desk_hint_line : @ui.Style = @ui.css("w=Full pt=S2 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -51,24 +45,7 @@ pub fn look_of(c : @ui.Ctx) -> @sf.Look {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_note_box : @ui.Style = @sf.pg_note_box
-
-///|
-// kept across runs: a value (no field of it changes)
 pub let narrow_note : @ui.TextStyle = @sf.pg_note
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_note_bad : @ui.TextStyle = @sf.pg_note_bad
-
-///|
-/// A note's words in a line, as wide as they are (a link after them).
-// kept across runs: a value (no field of it changes)
-let narrow_note_inline : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_hint_inline : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// A finger's press rippling over a row (ListRow's, its corner concentric with its card's).
@@ -83,9 +60,6 @@ pub let narrow_row : @ui.Style = @sf.pg_row
 ///|
 // kept across runs: a value (no field of it changes)
 pub let narrow_row_title : @ui.TextStyle = @sf.pg_row_title
-
-///|
-let narrow_chevron : Double = @sf.pg_chevron
 
 ///|
 /// What a page shows while it is read the first time (the library's Waiting): `sample`, what it will show of made-up

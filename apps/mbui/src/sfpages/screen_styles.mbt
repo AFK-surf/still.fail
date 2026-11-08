@@ -613,10 +613,6 @@ let debug_pane_head : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBet
 
 ///|
 // kept across runs: a value (no field of it changes)
-let debug_pane_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, weight=Semibold)
-
-///|
-// kept across runs: a value (no field of it changes)
 let net_panel_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S2_5")
 
 ///|

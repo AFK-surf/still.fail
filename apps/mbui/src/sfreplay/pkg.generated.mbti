@@ -3,6 +3,7 @@ package "stillfail/sfreplay"
 
 import {
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/json",
   "stillfail/core",
   "stillfail/sfbase",
@@ -10,6 +11,8 @@ import {
 
 // Values
 pub fn app(@ui.Ctx) -> Unit
+
+pub fn app_tree(@view.View) -> Unit
 
 pub fn e2e_data() -> Bytes
 

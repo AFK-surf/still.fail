@@ -94,6 +94,8 @@ pub fn failed_of(Core, Array[String], Array[(String, String)]) -> String?
 
 pub fn failing_of(@json.Json?) -> Array[String]
 
+pub fn field(@json.Json?, String) -> @json.Json?
+
 pub fn field_of(String) -> @ui.Field
 
 pub let file_most : Int32
@@ -134,6 +136,8 @@ pub let fonts_at : @signals.Signal[Int32]
 
 pub let foot_across : @ui.Style
 
+pub fn flag(@json.Json?, String) -> Bool
+
 pub fn frame(Core, Here, root? : Bool, top? : Double) -> Unit
 
 pub fn group_mark(@ui.Ctx, String) -> Unit
@@ -149,6 +153,8 @@ pub fn install_step(@ui.Ctx, Core, String, @json.Json?) -> Unit
 pub fn is_doing(Core, Array[String], Array[(String, String)]) -> Bool
 
 pub fn item_opening(String) -> Bool
+
+pub fn items(@json.Json?, String) -> Array[@json.Json]
 
 pub fn join(Array[String], String) -> String
 
@@ -217,6 +223,8 @@ pub let nav_foot : @ref.Ref[Double]
 pub fn new_profile_of(String) -> NewProfile
 
 pub let notify_switched : @signals.Signal[Bool?]
+
+pub fn number(@json.Json?, String) -> Double
 
 pub fn obj(Array[(String, @json.Json)]) -> @json.Json
 
@@ -332,6 +340,8 @@ pub fn take_picked_file(Core, @ui.Pick, (String, String) -> Unit) -> Bool
 
 pub fn tap_text(@ui.Ctx, String, String, color? : Int64, size? : Double, said? : String, room? : Bool) -> Bool
 
+pub fn text(@json.Json?, String) -> String
+
 pub fn typed_of(@json.Json?) -> Typed?
 
 pub fn use_notify(Core, Bool) -> Unit
@@ -389,6 +399,8 @@ pub let wide_deep : @ref.Ref[Bool]
 pub fn wide_head(@ui.Ctx, Core, String, String, trailing? : () -> Unit, inside? : Bool, on_back? : () -> Unit, about? : String, lead? : String, deep? : Bool) -> Unit
 
 pub fn workspace_keys(@json.Json?) -> (String, String)
+
+pub fn workspace_of(String) -> String
 
 pub fn workspace_view(Core, Here) -> Read
 

@@ -522,17 +522,6 @@ pub fn opened_icon(o : @sfbase.OpenedChat) -> String {
 }
 
 ///|
-/// Chats' rows to come while their list is read the first time (the library's Waiting, in its bones): under a day's
-/// heading, `count` rows as chat_row draws them where their list stands (`at`), of made-up words: each a title and the
-/// line under it, an agent's mark at its end.
-pub fn chat_rows_sample(c : @ui.Ctx, count : Int, at : @sf.ListAt) -> Unit {
-  @sf.list_heading(c, @sf.sample_words(2), at)
-  for i in 0..<count {
-    chat_row(c, @sfbase.sample_source, sample_chat(i), "agents", at~, more=i + 1 < count, found=true) |> ignore
-  }
-}
-
-///|
 /// The made-up chat of row `i` of a chats' list in its bones (chat_rows_sample): its title and line as long as a chat's
 /// are, an agent in it.
 pub fn sample_chat(i : Int) -> ChatItem {
@@ -598,12 +587,6 @@ let lift_ms : Double = 480.0
 ///|
 /// A finger's row's height.
 pub let touch_row_h : Double = @sf.touch_list_row_h
-
-///|
-/// A row in its list with another under it, 2 over it (Sidebar.css.ts navSessionWrap + navSessionWrap: the computer's
-/// lists', ChatList::more).
-// kept across runs: a value (no field of it changes)
-pub let row_more : @ui.Style = @sf.mouse_chat_list.more
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1250,7 +1233,6 @@ pub fn rename_escape(c : @ui.Ctx) -> Bool {
   c.blur()
   true
 }
-
 
 ///|
 /// The chat in view's "…" (a menu from `from`): its items (chat_menu_of) shown.

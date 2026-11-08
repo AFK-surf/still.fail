@@ -179,8 +179,6 @@ pub fn chats_of(Source, String, String) -> (ChatsView?, String?)
 
 pub let chats_page : Int
 
-pub fn chats_scrolled(@ui.Ctx, Source, String, String, Int, Int) -> Unit
-
 pub fn chats_topic(Source, String) -> Topic
 
 pub fn chats_view_made(@json.Json) -> ChatsView
@@ -483,8 +481,6 @@ pub fn feel_needed(@ui.Ctx, ChatRef, ChatView) -> Unit
 
 pub fn felt_change(@ui.Ctx, String, Bool, @ui.Haptic) -> Unit
 
-pub fn field(@json.Json?, String) -> @json.Json?
-
 pub fn file_image_id(String, String, String) -> String
 
 pub fn file_key(Attachment) -> String
@@ -530,8 +526,6 @@ pub fn first_line(String) -> String
 pub let first_page_waits : @signals.Signal[Bool]
 
 pub fn fitted_rect(Double, Double, Double, Double, bar? : Double) -> (Double, Double, Double, Double)?
-
-pub fn flag(@json.Json?, String) -> Bool
 
 pub let flash_held : @ref.Ref[Bool]
 
@@ -741,8 +735,6 @@ pub fn install_of(@json.Json?, String) -> Install?
 
 pub fn is_viz(String) -> Bool
 
-pub fn items(@json.Json?, String) -> Array[@json.Json]
-
 pub fn java_hash(String) -> Int32
 
 pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
@@ -762,8 +754,6 @@ pub fn keep_words(@hostapi.KeepWay) -> (String, String)
 pub fn keeping_of(Source, String, String, String) -> @json.Json?
 
 pub fn keeping_stop(Source, String) -> Unit
-
-pub fn keeping_stop_all(Source) -> Unit
 
 pub fn keeps_frame(@ui.Ctx) -> Unit
 
@@ -788,8 +778,6 @@ pub let left_pages : Array[Page]
 pub let left_said : @signals.Signal[Int32]
 
 pub fn let_go(Source, String) -> Unit
-
-pub fn let_go_all(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
@@ -1045,8 +1033,6 @@ pub let notice_state : NoticeState
 
 pub fn notices_frame(Source, Workspace) -> Unit
 
-pub fn number(@json.Json?, String) -> Double
-
 pub fn open_chat(ChatRef) -> Unit
 
 pub fn open_chat_found(ChatRef, Double, Array[String]) -> Unit
@@ -1090,8 +1076,6 @@ pub fn opened_of(@json.Json?) -> Array[OpenedChat]
 pub fn opener_of(@json.Json?) -> Opener?
 
 pub fn opt_number(@json.Json?, String) -> Double?
-
-pub fn opt_text(@json.Json?, String) -> String?
 
 pub let options_ease : @ui.Ease
 
@@ -1623,8 +1607,6 @@ pub fn term_color(String, Bool) -> Int64
 
 pub fn term_lines(Array[@json.Json], Int64, Bool) -> Array[Array[@text.Run]]
 
-pub fn text(@json.Json?, String) -> String
-
 pub fn this_machine() -> String
 
 pub fn thumb_occurrence(String, String, String) -> String
@@ -1642,8 +1624,6 @@ pub fn toast_later(String, action? : String, run? : () -> Unit) -> Unit
 pub let toast_none : ToastSaid
 
 pub fn toast_words() -> String
-
-pub fn toasts(@ui.Ctx, Double) -> Unit
 
 pub fn toasts_node(@view.View, () -> Double) -> @view.View
 
@@ -1886,8 +1866,6 @@ pub fn words_runs(Array[@json.Json], Int64, chat_title? : (String) -> String?) -
 pub let working_turn_ms : Double
 
 pub fn workspace_in_view(Source) -> (Workspace?, Array[Workspace], Bool, Bool)
-
-pub fn workspace_of(String) -> String
 
 pub fn workspaces_of(@json.Json?) -> (Array[Workspace], Bool, Bool)
 
@@ -3438,7 +3416,6 @@ pub(all) struct Turns {
   mover : @ui.Mover
 }
 pub fn Turns::admit(Self, @ui.Ctx, String, Double, after? : Bool) -> Unit
-pub fn Turns::after_sent(Self, TurnAsk) -> Double
 pub fn Turns::ask(Self, @ui.Ctx, TurnFor, Double, after? : Bool) -> Unit
 pub fn Turns::emits(Self, @ui.Ctx) -> Unit
 pub fn Turns::emitting(Self) -> Bool
@@ -3731,5 +3708,13 @@ pub(all) struct Writing {
 
 // Type aliases
 pub using @sf {type PageFrame}
+
+pub using @settings {field}
+pub using @settings {flag}
+pub using @settings {items}
+pub using @settings {number}
+pub using @settings {opt_text}
+pub using @settings {text}
+pub using @settings {workspace_of}
 
 // Traits

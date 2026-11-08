@@ -5,8 +5,8 @@
 // sheets, the library's presenters (and the toasts, signed in), as the old frame built them over the page.
 
 ///|
-/// What the frame is told of the app at a way in drawn by the window's tree's nodes, as the frame begins (view_in's,
-/// as the old view's build of the state said it: app_state_island): no first page waiting nor its pictures, the frame
+/// What the frame is told of the app at a way in drawn by the window's tree's nodes, as the frame begins (view_in's):
+/// no first page waiting nor its pictures, the frame
 /// not drawing the ground alone.
 fn entry_said() -> Unit {
   first_waiting.val = false
@@ -15,8 +15,8 @@ fn entry_said() -> Unit {
 }
 
 ///|
-/// Whether the app signed in is at its landing: no workspace in view, every account answered with none (signed_in's;
-/// not in a window of its own).
+/// Whether the app signed in is at its landing: no workspace in view, every account answered with none
+/// (not in a window of its own).
 fn landing_now(src : Source) -> Bool {
   if @sfbase.lone_page.val is Some(_) {
     return false
@@ -63,7 +63,6 @@ fn landing_tree(v : @view.View, src : Source) -> Unit {
     fn(c) {
       sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
       @sf.presented(c)
-      toast(c)
       finger_loupe(c)
     },
   )
