@@ -250,6 +250,8 @@ function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void,
   } else if (kind === "system" && subtype === "status" && turn.compacting === true && frame.compact_result === "failed") {
     // `/compact` that compacted nothing still ends in a result of success: only this says so (2.1.289).
     turn.compactError = typeof frame.compact_error === "string" && frame.compact_error !== "" ? frame.compact_error : "compaction failed";
+  } else if (kind === "system" && subtype === "compact_boundary") {
+    emit({ type: "compacted" });
   } else if (kind === "result") {
     const text = typeof frame.result === "string" ? frame.result : subtype;
     let outcome: TurnOutcome;

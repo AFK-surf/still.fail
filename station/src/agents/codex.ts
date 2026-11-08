@@ -1168,6 +1168,10 @@ export function codexToolsLost(method: string, params: Json): string | null {
   return unreachable(error) ? chars(error, 300) : null;
 }
 
+/// Whether a thread's notification says it compacted its context, on its own as it filled or by thread/compact/start:
+/// a contextCompaction item done.
+export const codexCompacted = (method: string, params: Json) => method === "item/completed" && params?.item?.type === "contextCompaction";
+
 export class CodexSession implements AgentSession {
   private driver: CodexDriver;
   private threadId: string;
@@ -1215,6 +1219,7 @@ export class CodexSession implements AgentSession {
       for (const event of this.live.feed(method, params)) this.events({ type: "live", event });
       const lost = codexToolsLost(method, params);
       if (lost !== null) this.events({ type: "toolsLost", why: lost });
+      if (codexCompacted(method, params)) this.events({ type: "compacted" });
       if (method === "turn/started") {
         const id = params?.turn?.id;
         if (typeof id === "string") this.state.turnId = id;

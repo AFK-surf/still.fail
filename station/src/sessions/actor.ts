@@ -164,6 +164,9 @@ export type SessionDeps = {
   /// What a session whose runtime session could not be resumed is told with its next prompt (sessions/afresh.ts
   /// `toldResumeLost`).
   resumeLost?(key: string): string;
+  /// What a session compacted or gone on in a new conversation is told when its chats are long (sessions/afresh.ts
+  /// `toldLongChat`): to read back what people said in them. Null when they are not.
+  longChat?(key: string): string | null;
   /// Its subagents `ids` of runtime session `from`, stopped with its process, taken to runtime session `to` begun on
   /// `on`, so that they are taken up there (sessions/afresh.ts): the ids taken.
   carrySubagents?(from: string, to: string, on: Profile, ids: string[]): string[];
@@ -299,6 +302,8 @@ export class SessionActor {
   private resumeLost = false;
   /// Started afresh: what it is told of it with its next prompt.
   private afresh: string | null = null;
+  /// Its context compacted with no turn to tell it in: its next prompt tells it, the chat long (`onCompacted`).
+  private compactedUntold = false;
   /// Its context is being compacted by hand (compact): what it is told meanwhile waits for the end, as does a wait over
   /// meanwhile (`overWhileCompacting`).
   private compacting = false;
@@ -903,6 +908,7 @@ export class SessionActor {
     this.stoppedNote = null;
     this.resumeLost = false;
     this.afresh = null;
+    this.compactedUntold = false;
     this.nudges = 0;
     this.toolsRestarts = 0;
     this.deps.ranIn?.(this.key, row.runtimeSessionId, null);
@@ -1281,6 +1287,11 @@ export class SessionActor {
       if (stopped !== null) prompt = `${stopped}\n\n${prompt}`;
       const afresh = this.afresh;
       this.afresh = null;
+      const compacted = this.compactedUntold;
+      this.compactedUntold = false;
+      // Gone on in a new conversation, or compacted: in a long chat, told to read back what people said in it.
+      const long = lost || afresh !== null || compacted ? (this.deps.longChat?.(this.key) ?? null) : null;
+      if (long !== null) prompt = `${long}\n\n${prompt}`;
       if (afresh !== null) prompt = `${afresh}\n\n${prompt}`;
       if (continued !== null) prompt = `${continued}\n\n${prompt}`;
       // What changed in how it works since it was last told (migrations): once, before what it is handed.
@@ -1515,6 +1526,9 @@ export class SessionActor {
           this.toolsLost = event.why;
         });
         break;
+      case "compacted":
+        void this.enqueue(() => this.onCompacted(generation));
+        break;
       case "closed":
         void this.enqueue(async () => {
           if (!this.isCurrent(generation)) return;
@@ -1536,6 +1550,20 @@ export class SessionActor {
         });
         break;
     }
+  }
+
+  /// Its context compacted: in a long chat, told to read back what people said in it. Compacted on its own in the
+  /// middle of a turn, the turn is told at once; compacted by hand (a turn of its own) or with the turn over, its next
+  /// prompt tells it.
+  private async onCompacted(generation: number) {
+    if (!this.isCurrent(generation)) return;
+    const agent = this.agent?.session;
+    if (!this.compacting && agent?.busy()) {
+      const long = this.deps.longChat?.(this.key) ?? null;
+      // As a notice is (takeNotices): a message from the station, not from the people of the chat.
+      if (long === null || (await agent.steer(`<message via="station" from="station" ts="${this.deps.nextTs()}">\n${long}\n</message>`))) return;
+    }
+    this.compactedUntold = true;
   }
 
   /// The agent's own words as they come (not a subagent's, not its thinking).
