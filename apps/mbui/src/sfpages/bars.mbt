@@ -72,12 +72,12 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   blocks.push(fn() {
     @sf.group(c, fn() {
       let id = c.id("bar-new")
-      if @sf.link_row(c, "bar-new", @sf.t("android-misc.bar.new"), chevron=false, lead=fn() {
-          @sf.icon(c, "plus", size=bar_new_mark, color=@sf.link_ink()) |> ignore
-        }) {
+      @sf.link_row(c, "bar-new", @sf.t("android-misc.bar.new"), chevron=false, lead=fn() {
+        @sf.icon(c, "plus", size=bar_new_mark, color=@sf.link_ink()) |> ignore
+      }, on_press=fn() {
         @settings.bar_adding.set(true)
         pick_for(made.length(), Of(id))
-      }
+      }) |> ignore
     })
   })
   blocks.push(fn() {

@@ -625,8 +625,10 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let owner = owner_of(here, a)
   // (still going up: no station has it to play or ask its still of yet)
   let going_up = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
-  if c.clicked(open) && !going_up {
-    open_file(here, a, at~)
+  if !going_up {
+    c.on_press(open, fn() {
+      open_file(here, a, at~)
+    })
   }
   let name = stored_name(a.path)
   let saving = download_of(src, here.station, owner, name)
@@ -914,7 +916,6 @@ fn message_reset() -> Unit {
   named_open_serial.val += 1
   reveals.clear()
   notices_open.clear()
-  notices_copied.clear()
 }
 
 ///|

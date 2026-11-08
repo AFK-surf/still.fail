@@ -19,9 +19,9 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
   {
     core: settings_core(src, w),
     bar: fn(c) {
-      if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top()) {
+      @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg, top=status_top(), on_press=fn() {
         @sfbase.close_page(NewChat) |> ignore
-      }
+      })
     },
     foot: nav_foot(),
     in_place: true,

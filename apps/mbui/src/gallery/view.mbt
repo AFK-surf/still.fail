@@ -385,17 +385,18 @@ fn viewer(c : @ui.Ctx, src : Source, days : Array[Day], index : Int) -> Unit {
           radius=16.0,
           fn() {
             c.box(dir=Row, w=Px(84.0), fn() {
-              if @sf.icon_button(
-                  c,
-                  "chevron-left",
-                  key="viewer-back",
-                  size=36.0,
-                  icon_size=20.0,
-                  ink=0xECECEDFFL,
-                  quiet=0xECECEDFFL,
-                ) {
-                state.open = None
-              }
+              @sf.icon_button(
+                c,
+                "chevron-left",
+                key="viewer-back",
+                size=36.0,
+                icon_size=20.0,
+                ink=0xECECEDFFL,
+                quiet=0xECECEDFFL,
+                on_press=fn() {
+                  state.open = None
+                },
+              ) |> ignore
             })
             |> ignore
             c.box(w=Fill(1.0), align=ACenter, fn() {

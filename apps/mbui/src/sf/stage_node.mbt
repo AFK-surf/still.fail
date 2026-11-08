@@ -121,9 +121,9 @@ fn stage_node(
               None => ()
             }
             c.box(style=stage_foot, fn() {
-              if button(c, t("common.close"), key=key + "/stage-close") {
+              button(c, t("common.close"), key=key + "/stage-close", on_press=fn() {
                 cancel()
-              }
+              }) |> ignore
               match x.foot {
                 Some(f) => f(c, close)
                 None => ()

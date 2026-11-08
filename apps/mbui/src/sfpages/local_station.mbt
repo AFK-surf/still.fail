@@ -30,9 +30,9 @@ pub fn local_station_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         if adds {
           c.box(style=vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
             @sf.card_foot_words(fn() {
-              if @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary) {
+              @sf.button(c, @sf.t(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="local/install", tone=Primary, on_press=fn() {
                 (core.local_install)(true)
-              }
+              }) |> ignore
             })
           })
           |> ignore
@@ -108,9 +108,9 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       // (words alone, on its name's line: the line as high as with none, its ⋯ concentric in the card's corner)
       if !running && !working && startable {
         @sf.line_end(c, fn() {
-          if @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
+          @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost, on_press=fn() {
             act("start")
-          }
+          }) |> ignore
         })
       }
       // its menu (⋯)

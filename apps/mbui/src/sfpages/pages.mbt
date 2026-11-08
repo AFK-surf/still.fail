@@ -15,8 +15,10 @@ fn init {
   @ui.old_fault_shown.val = fn(c, _) {
     @sf.empty(c, fn() {
       c.text(@sf.t("android-misc.fault.shown"), style=fault_words) |> ignore
-      if @sfbase.back_step() is Some(_) && @sf.button(c, @sf.t("common.back"), key="fault-back") {
-        @sfbase.go_back() |> ignore
+      if @sfbase.back_step() is Some(_) {
+        @sf.button(c, @sf.t("common.back"), key="fault-back", on_press=fn() {
+          @sfbase.go_back() |> ignore
+        }) |> ignore
       }
     })
   }

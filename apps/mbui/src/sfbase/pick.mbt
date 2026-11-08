@@ -245,8 +245,13 @@ pub fn pickable(
   // Its ground takes presses for picking; a finger's tap does not leave the field being written in.
   c.cursor(id, Arrow)
   let press = c.press()
-  if mouse && c.clicked(id) && !press.long {
-    c.blur()
+  if mouse {
+    // (a click, not a hold: the field written in let go)
+    c.on_press(id, fn() {
+      if !press.long {
+        c.blur()
+      }
+    })
   } else {
     c.takes_presses(id)
   }
@@ -406,36 +411,35 @@ pub fn pick_layer(
   let link = c.id("pick/link")
   let ends = [c.id("pick/start"), c.id("pick/end")]
   // the bar's buttons
-  if c.clicked(quote_id) {
+  c.on_press(quote_id, fn() {
     let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_string()
     if text != "" {
       quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
     pick_clear()
-    return
-  }
-  if c.clicked(copy) {
+  })
+  c.on_press(copy, fn() {
     c.copy_text(words.slice(pk.sel.a, pk.sel.b))
     say(c, @sf.t("android-chat.annotate.copied"))
     pick_clear()
-    return
-  }
+  })
   c.on_press(all, fn() {
     pk.sel.all(words)
   })
   match pk.share {
-    Some(go) if c.clicked(share) => {
-      pick_clear()
-      go()
-      return
-    }
-    _ => ()
+    Some(go) =>
+      c.on_press(share, fn() {
+        pick_clear()
+        go()
+      })
+    None => ()
   }
-  if pk.link != "" && c.clicked(link) {
-    c.copy_text(pk.link)
-    say(c, @sf.t("common.link.copied"))
-    pick_clear()
-    return
+  if pk.link != "" {
+    c.on_press(link, fn() {
+      c.copy_text(pk.link)
+      say(c, @sf.t("common.link.copied"))
+      pick_clear()
+    })
   }
   let first = lines[0]
   let last = lines[lines.length() - 1]
@@ -569,7 +573,7 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
     }
   }
   let pop = c.id("pick/pop")
-  if c.clicked(pop) {
+  c.on_press(pop, fn() {
     let text = c.selected_text().trim(chars=" \n\t").to_string()
     if text != "" {
       quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
@@ -577,8 +581,7 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
     c.selection_clear()
     pk.ts = ""
     pick_told_gone()
-    return
-  }
+  })
   // (pressed, what is picked stays picked: it is what is quoted)
   c.keeps_selection(pop)
   // (where the layer it is in starts in the window, as this frame lays it out: what is picked is said in the window's)

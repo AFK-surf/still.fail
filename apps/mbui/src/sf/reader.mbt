@@ -141,6 +141,8 @@ pub(all) struct Reading {
   mut contents_put : Bool
   mut closing : ReaderPanel
   mut query : String
+  /// what the search is typed into (its editor's Field: given the focus as the search's panel opens)
+  search : @ui.Field
   mut searched : String
   /// each change typed into the search: the search waits reader_search_ms after the last
   mut typed_n : Int
@@ -188,6 +190,7 @@ pub fn reading_for(key : String) -> Reading {
         contents_put: false,
         closing: NoPanel,
         query: "",
+        search: @ui.Field::new(),
         searched: "",
         typed_n: 0,
         matches: [],
@@ -772,7 +775,7 @@ pub fn reader_open_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit 
   r.panel = panel
   r.contents_put = panel == Contents
   if panel == Find {
-    c.focus_editor("reader-search")
+    c.focus_field(r.search)
   }
 }
 
@@ -970,22 +973,22 @@ fn desk_reader_chrome(
   }
   let ink = paper_viewer_ink(p)
   c.layer(fn() {
-    if viewer_bar(c, "reader/bar", back_label, file.name, meta, r.bar.hidden && r.panel == NoPanel, ink, title=file.title, fn() {
-        if viewer_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), ink, on=r.panel == Contents) {
-          desk_toggle_panel(c, r, Contents)
-        }
-        if viewer_tool(c, "reader/find", "search", t("web-pages.drive.reader.find"), ink, on=r.panel == Find) {
-          desk_toggle_panel(c, r, Find)
-        }
-        if viewer_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), ink, on=r.panel == Layout) {
-          desk_toggle_panel(c, r, Layout)
-        }
-        if viewer_download(c, "reader/download", ink) {
-          (file.save)()
-        }
-      }) {
+    viewer_bar(c, "reader/bar", back_label, file.name, meta, r.bar.hidden && r.panel == NoPanel, ink, title=file.title, fn() {
+      viewer_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), ink, on=r.panel == Contents, on_press=fn() {
+        desk_toggle_panel(c, r, Contents)
+      })
+      viewer_tool(c, "reader/find", "search", t("web-pages.drive.reader.find"), ink, on=r.panel == Find, on_press=fn() {
+        desk_toggle_panel(c, r, Find)
+      })
+      viewer_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), ink, on=r.panel == Layout, on_press=fn() {
+        desk_toggle_panel(c, r, Layout)
+      })
+      viewer_download(c, "reader/download", ink, on_press=fn() {
+        (file.save)()
+      })
+    }, on_back=fn() {
       on_back()
-    }
+    })
     // what was found, under the bar (10 below it) over the text's middle, clear of the panel
     if r.hit >= 0 && r.matches.length() > 0 {
       let panel = if r.panel == NoPanel { desk_none } else { desk_panel_w }
@@ -1055,15 +1058,15 @@ fn desk_found(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
       style=desk_found_words.then(@ui.text_style(color=Data(p.ink))),
     )
     |> ignore
-    if chip(c, "", key="reader/found-prev", icon="chevron-left", ink=p.ink, disabled=r.hit <= 0, said=t("android-misc.drive.reader.prevHit")) {
+    chip(c, "", key="reader/found-prev", icon="chevron-left", ink=p.ink, disabled=r.hit <= 0, said=t("android-misc.drive.reader.prevHit"), on_press=fn() {
       step(-1)
-    }
-    if chip(c, "", key="reader/found-next", icon="chevron-right", ink=p.ink, disabled=r.hit >= r.matches.length() - 1, said=t("android-misc.drive.reader.nextHit")) {
+    }) |> ignore
+    chip(c, "", key="reader/found-next", icon="chevron-right", ink=p.ink, disabled=r.hit >= r.matches.length() - 1, said=t("android-misc.drive.reader.nextHit"), on_press=fn() {
       step(1)
-    }
-    if chip(c, "", key="reader/found-close", icon="close", ink=p.ink, said=t("common.close")) {
+    }) |> ignore
+    chip(c, "", key="reader/found-close", icon="close", ink=p.ink, said=t("common.close"), on_press=fn() {
       r.hit = -1
-    }
+    }) |> ignore
   })
   |> ignore
 }
@@ -1109,9 +1112,9 @@ fn desk_panel(
               |> ignore
             _ => ()
           }
-          if chip(c, "", key="reader/panel-close", icon="close", ink=p.ink, said=t("common.close")) {
+          chip(c, "", key="reader/panel-close", icon="close", ink=p.ink, said=t("common.close"), on_press=fn() {
             reader_close_panel(c, r)
-          }
+          }) |> ignore
         })
         |> ignore
         match r.panel {
@@ -1140,9 +1143,9 @@ fn desk_contents(
   done? : () -> Unit = fn() {  },
 ) -> Unit {
   let find = c.id("reader/contents-find")
-  if c.clicked(find) {
+  c.on_press(find, fn() {
     reader_open_panel(c, r, Find)
-  }
+  })
   c.box(style=desk_panel_list_top, fn() {
     c.box(style=desk_row, id=find, fn() {
       icon(c, "search", size=desk_row_icon, color=p.muted) |> ignore
@@ -1216,6 +1219,7 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
         color=p.ink,
         placeholder_color=p.muted,
         caret_color=p.accent,
+        field=r.search,
       )
       if res.text != r.query {
         r.query = res.text
@@ -1290,9 +1294,9 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
       c.box(style=desk_papers, fn() {
         let shown = if theme().dark { "night" } else { day_paper_key(style.paper) }
         for key in ["white", "green", "grey"] {
-          if desk_swatch(c, key, shown == key, p, swatch) {
+          desk_swatch(c, key, shown == key, p, swatch, on_press=fn() {
             set(Paper(key))
-          }
+          })
         }
       })
       |> ignore
@@ -1303,16 +1307,16 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
       c.box(style=desk_size_row.then(@ui.style(bg=Data(alpha(p.ink, desk_size_ground)))), fn() {
         let (least, most) = reader_sizes
         let size_word = t("web-pages.drive.reader.size")
-        if desk_size_key(c, "reader/size-less", "A−", style.size > least, p, said=t("web-pages.drive.reader.less", args=[("what", size_word)])) {
+        desk_size_key(c, "reader/size-less", "A−", style.size > least, p, said=t("web-pages.drive.reader.less", args=[("what", size_word)]), on_press=fn() {
           set(Size(style.size - 1))
-        }
+        })
         c.box(style=desk_grow_middle, fn() {
           c.text("\{style.size}", style=desk_size_value.then(@ui.text_style(color=Data(p.ink)))) |> ignore
         })
         |> ignore
-        if desk_size_key(c, "reader/size-more", "A+", style.size < most, p, said=t("web-pages.drive.reader.more", args=[("what", size_word)])) {
+        desk_size_key(c, "reader/size-more", "A+", style.size < most, p, said=t("web-pages.drive.reader.more", args=[("what", size_word)]), on_press=fn() {
           set(Size(style.size + 1))
-        }
+        })
       })
       |> ignore
     })
@@ -1370,8 +1374,8 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
 
 ///|
 /// One paper, drawn in itself: 文 on its ground, ringed in the accent when it is the one,
-/// its name under it. True on the frame after it was pressed.
-fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double) -> Bool {
+/// its name under it. `on_press` as it is pressed.
+fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double, on_press? : () -> Unit) -> Unit {
   let id = c.id("reader/paper/" + key)
   // (each as it is by day, whatever the app's theme)
   let paper = paper_by_key(key)
@@ -1389,18 +1393,24 @@ fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double
     c.text(t("web-pages.drive.reader.paper." + key), style=desk_swatch_name.then(@ui.text_style(color=Data(p.muted)))) |> ignore
   })
   |> ignore
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
 /// A size's key: A− or A+, 32 high, 44 wide at least, quiet where it can go no further.
-fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : ReaderPaper, said~ : String) -> Bool {
+fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : ReaderPaper, said~ : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=desk_size_key_box, disabled=!on, id=if on { id } else { 0 }, fn() {
     c.text(words, style=desk_size_key_words.then(@ui.text_style(color=Data(p.ink)))) |> ignore
   })
   c.semantics(b, Button, id~, label=said, disabled=!on)
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -1547,12 +1557,14 @@ fn narrow_reader_chrome(
             // 搜索
             c.box(style=narrow_top_end.then(@ui.style(justify=JEnd, gap=keys_gap(size=narrow_key_side))), fn() {
               let id = c.id("reader/find")
-              if live && c.clicked(id) {
-                if r.panel == Find {
-                  reader_close_panel(c, r)
-                } else {
-                  reader_open_panel(c, r, Find)
-                }
+              if live {
+                c.on_press(id, fn() {
+                  if r.panel == Find {
+                    reader_close_panel(c, r)
+                  } else {
+                    reader_open_panel(c, r, Find)
+                  }
+                })
               }
               let b = c.box(style=narrow_top_button, selected=r.panel == Find, id=if live { id } else { 0 }, fn() {
                 icon(c, "search", size=viewer_back_icon, color=p.ink) |> ignore
@@ -1599,12 +1611,12 @@ fn narrow_reader_chrome(
           let n = c.box(style=narrow_foot_box.then(@ui.style(w=Fixed(w))), glass~, id=if live { c.id("reader-bottom") } else { 0 }, fn() {
             if chapters.length() > 0 {
               c.box(style=narrow_chapter_row, fn() {
-                if chip(c, t("web-pages.drive.reader.prevChapter"), key="reader/prev", ink=p.ink, disabled=!live || chapter <= 0, inner=true) {
+                chip(c, t("web-pages.drive.reader.prevChapter"), key="reader/prev", ink=p.ink, disabled=!live || chapter <= 0, inner=true, on_press=fn() {
                   match chapters.get(chapter - 1) {
                     Some((_, ck, co)) => reader_jump(r, ck, co)
                     None => ()
                   }
-                }
+                }) |> ignore
                 c.box(style=desk_grow_middle.then(@ui.style(clip=true)), fn() {
                   c.text(
                     if chapter >= 0 { chapters[chapter].0 } else { chapters[0].0 },
@@ -1613,12 +1625,12 @@ fn narrow_reader_chrome(
                   |> ignore
                 })
                 |> ignore
-                if chip(c, t("web-pages.drive.reader.nextChapter"), key="reader/next", ink=p.ink, disabled=!live || chapter >= chapters.length() - 1, inner=true) {
+                chip(c, t("web-pages.drive.reader.nextChapter"), key="reader/next", ink=p.ink, disabled=!live || chapter >= chapters.length() - 1, inner=true, on_press=fn() {
                   match chapters.get(chapter + 1) {
                     Some((_, ck, co)) => reader_jump(r, ck, co)
                     None => ()
                   }
-                }
+                }) |> ignore
               })
               |> ignore
             }
@@ -1638,12 +1650,12 @@ fn narrow_reader_chrome(
             |> ignore
             c.box(style=narrow_tools, fn() {
               let third = (w - 2.0 * narrow_foot_in - 2.0 * narrow_tools_gap) / 3.0
-              if narrow_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), r.panel == Contents, p, live, third) {
+              narrow_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), r.panel == Contents, p, live, third, on_press=fn() {
                 reader_open_panel(c, r, Contents)
-              }
-              if narrow_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), r.panel == Layout, p, live, third) {
+              })
+              narrow_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), r.panel == Layout, p, live, third, on_press=fn() {
                 reader_open_panel(c, r, Layout)
-              }
+              })
             })
             |> ignore
           })
@@ -1690,8 +1702,8 @@ fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : B
 
 ///|
 /// A tool of the foot: its icon over its name, a third of the row, 50 high; its ground the ink at
-/// 7% while what it opens is open. True on the frame after it was pressed.
-fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on : Bool, p : ReaderPaper, live : Bool, w : Double) -> Bool {
+/// 7% while what it opens is open. `on_press` as it is pressed.
+fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on : Bool, p : ReaderPaper, live : Bool, w : Double, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(
     style=narrow_tool_box.then(@ui.style(w=Fixed(w), bg=Data(if on { alpha(p.ink, narrow_tool_on) } else { no_ground }))),
@@ -1702,7 +1714,10 @@ fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on
     },
   )
   c.semantics(b, Button, id~, label~, pressed=on)
-  live && c.clicked(id)
+  match on_press {
+    Some(f) if live => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|

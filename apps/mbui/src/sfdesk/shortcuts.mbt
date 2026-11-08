@@ -6,12 +6,15 @@
 /// not changed here), quiet words beside each; the way to change them at its foot (the desktop app's).
 pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let prefs = src.topic("prefs", {}).get().value
-  let change = Ref(false)
+  // (whether it is open: the shell's, kept across builds; its close button and 更改 let it go as they are pressed)
+  let shown = wide.keys_open
   let footer : (() -> Unit)? = if @settings.keys_changeable(prefs) {
     Some(fn() {
-      if @sf.button(c, @sf.t("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost) {
-        change.val = true
-      }
+      // (the shortcuts' own page in its place)
+      @sf.button(c, @sf.t("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost, on_press=fn() {
+        shown.set(false)
+        open_settings_at(@settings.Route::Shortcuts)
+      }) |> ignore
     })
   } else {
     None
@@ -19,9 +22,10 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let d = @sf.dialog(
     c,
     "keys-dialog",
-    wide.keys_open.get(),
+    shown.get(),
     @sf.t("web-main.shortcuts.title"),
     close_label=@sf.t("common.close"),
+    on_close=fn() { shown.set(false) },
     footer?,
     fn() {
       c.box(style=keys_sheet, fn() {
@@ -42,10 +46,7 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
       |> ignore
     },
   )
-  wide.keys_open.set(d && !change.val)
-  if change.val {
-    open_settings_at(@settings.Route::Shortcuts)
-  }
+  shown.set(d)
 }
 
 ///|

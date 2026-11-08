@@ -704,26 +704,26 @@ fn update_dialog_body(c : @ui.Ctx) -> Unit {
 fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
   match update_dialog_now() {
     Quiet | Checking =>
-      if @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
+      }) |> ignore
     Latest =>
-      if @sf.button(c, @sf.t("common.confirm"), key="update/ok", tone=Primary) {
+      @sf.button(c, @sf.t("common.confirm"), key="update/ok", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     CouldNot(_) => {
-      if @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
-      if @sf.button(c, @sf.t("common.retry"), key="update/retry", tone=Primary) {
+      }) |> ignore
+      @sf.button(c, @sf.t("common.retry"), key="update/retry", tone=Primary, on_press=fn() {
         update_ask_now(src)
-      }
+      }) |> ignore
     }
     now => {
       let going = now is (Coming(_, _) | Installing(_))
-      if @sf.button(c, @sf.t(if going { "common.close" } else { "desktop.update.later" }), key="update/later", tone=Ghost) {
+      @sf.button(c, @sf.t(if going { "common.close" } else { "desktop.update.later" }), key="update/later", tone=Ghost, on_press=fn() {
         close()
-      }
+      }) |> ignore
       let label = match now {
         Offered(_, ..) => @sf.t("desktop.update.download")
         Allow(_) => @sf.t("android-misc.updates.allow")
@@ -731,9 +731,9 @@ fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
         _ => @sf.t("desktop.update.restart")
       }
       // (the person's check under way: the key turning, as it does while the build comes)
-      if @sf.button(c, label, key="update/go", tone=Primary, busy=going || update.checking.get()) {
+      @sf.button(c, label, key="update/go", tone=Primary, busy=going || update.checking.get(), on_press=fn() {
         update_go(src)
-      }
+      }) |> ignore
     }
   }
 }

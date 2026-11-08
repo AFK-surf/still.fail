@@ -60,8 +60,6 @@ priv struct ScreenUi {
   mut reading : @ui.ClipboardRead?
   /// the modifiers held from the keys row as each key went down (by its code), for it to go up with them too
   down_with : Map[String, Int]
-  /// the press (by the frame it went down in) a mouse button last buzzed for, so it buzzes once as it goes down
-  mut buzzed : Int
   /// the copies made on the screen put on the device's clipboard
   mut copies : Int
   /// the device kept awake, the window sideways, a phone let turn as held: as last told to the host
@@ -125,7 +123,6 @@ fn screen_ui(key : String) -> ScreenUi {
         drop_to: None,
         reading: None,
         down_with: {},
-        buzzed: -1,
         copies: 0,
         awake: false,
         sideways_told: false,
@@ -719,15 +716,15 @@ fn keyboard_toggled(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
 
 ///|
 /// A round button with an icon (40, its icon 20), its name for those who cannot see it and as its tip; `on`: pressed
-/// (the keyboard up, 控制); tapped, `does` (as it is let go: Ctx::on_press).
-fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false, does~ : () -> Unit) -> Unit {
+/// (the keyboard up, 控制); tapped, `on_press` (as it is let go: Ctx::on_press).
+fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=round_button_box, selected=on, id~, fn() {
     @sf.icon(c, icon, size=round_icon, color=c.color(Fg)) |> ignore
   })
   c.semantics(i, Button, id~, label~, pressed=on, actions=[Activate])
   @sf.tip(c, key, id, label)
-  c.on_press(id, does)
+  c.on_press(id, on_press)
 }
 
 ///|
@@ -737,7 +734,7 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   c.box(style=match u.own_bar { Some(own) => own; None => if u.in_tab { screen_bar_in_tabs } else { screen_bar } }, fn() {
     if !u.in_tab {
-      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), does=fn() {
+      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), on_press=fn() {
         close()
       })
     }
@@ -771,16 +768,18 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     })
     if live {
       c.semantics(w, Button, id=words, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
-      if c.clicked(words) || u.asked_panel == "net" {
+      let go = fn() {
         u.asked_panel = ""
         net_panel_open(s, u, Of(words))
       }
+      c.on_press(words, go)
+      // (asked from elsewhere: done as it is seen)
+      if u.asked_panel == "net" {
+        go()
+      }
     }
     if s.choosable() {
-      let now = control_seg(c, "screen-mode/" + s.view, s.controlling())
-      if now != s.controlling() {
-        control_chosen(c, s, now)
-      }
+      control_seg(c, "screen-mode/" + s.view, s.controlling(), fn(now) { control_chosen(c, s, now) })
     }
     paste_button(c, s, u)
     // (全屏 in 控制中心: the title keeps its room)
@@ -790,7 +789,7 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     // (a panel's bar of its own: the panel's close at its end, beside what it closes, where the system has bars too:
     // among the chat's actions in them it read as another thing's; the user, 2026-11-06)
     if u.own_bar is Some(_) {
-      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), does=fn() {
+      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), on_press=fn() {
         close()
       })
     }
@@ -810,7 +809,7 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
   }
   let line = if s.open_now() && !s.can_take_over() { text(s.state, "line") } else { "" }
   let ink = @sf.page_viewer_ink()
-  let back = @sf.viewer_bar(c, "screen-bar", @sf.t("common.back"), said, line, false, ink, fn() {
+  @sf.viewer_bar(c, "screen-bar", @sf.t("common.back"), said, line, false, ink, fn() {
     if s.can_take_over() {
       take_over(c, s, in_bar=true)
       return
@@ -822,29 +821,23 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
       center_chip(c, s, u, close)
     }
     if s.choosable() {
-      let now = control_seg(c, "screen-mode/" + s.view, s.controlling())
-      if now != s.controlling() {
-        control_chosen(c, s, now)
-      }
+      control_seg(c, "screen-mode/" + s.view, s.controlling(), fn(now) { control_chosen(c, s, now) })
     }
-  }, capsule_end=true)
-  if back {
-    close()
-  }
+  }, capsule_end=true, on_back=close)
 }
 
 ///|
-/// 只看 / 控制: a segmented choice among the bar's buttons, as tapped.
-fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
+/// 只看 / 控制: a segmented choice among the bar's buttons; `chosen` (whether it is 控制) as another is tapped.
+fn control_seg(c : @ui.Ctx, key : String, controlling : Bool, chosen : (Bool) -> Unit) -> Unit {
   let labels = [@sf.t("android-misc.screen.look"), @sf.t("android-misc.screen.drive")]
-  @sf.segmented(c, key, labels, if controlling { 1 } else { 0 }, bar=true) == 1
+  @sf.segmented(c, key, labels, if controlling { 1 } else { 0 }, bar=true, on_pick=fn(i) { chosen(i == 1) }) |> ignore
 }
 
 ///|
 /// Pasting the device's clipboard (where the station carries text or pictures), while driving it.
 fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   if s.pastes() {
-    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting, does=fn() { paste_asked(c, s, u) })
+    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting, on_press=fn() { paste_asked(c, s, u) })
   }
 }
 
@@ -852,7 +845,7 @@ fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// 全屏 (on) or not.
 fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
   let label = @sf.t(if u.full.get() { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-  round_button(c, "screen-full", "landscape", label, on=u.full.get(), does=fn() {
+  round_button(c, "screen-full", "landscape", label, on=u.full.get(), on_press=fn() {
     u.full.set(!u.full.get())
   })
 }
@@ -864,7 +857,7 @@ fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
     return
   }
   let on = s.pad(s.src)
-  round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~, does=fn() {
+  round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~, on_press=fn() {
     pad_chosen(c, s, !on)
   })
 }
@@ -878,14 +871,14 @@ fn mode_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
   } else {
     ("eye", @sf.t("android-misc.screen.look"))
   }
-  round_button(c, "screen-mode-btn", icon, label, on~, does=fn() {
+  round_button(c, "screen-mode-btn", icon, label, on~, on_press=fn() {
     control_chosen(c, s, !on)
   })
 }
 
 ///|
 fn keyboard_button(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
-  round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing, does=fn() {
+  round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing, on_press=fn() {
     keyboard_toggled(c, catcher, typing)
   })
 }
@@ -914,7 +907,7 @@ fn full_tools(
     }
     let id = c.id("screen-tools")
     afloat_dragged(c, u.tools_moved, id)
-    round_button(c, "screen-tools", icon, label, on=u.tools_open, does=fn() {
+    round_button(c, "screen-tools", icon, label, on=u.tools_open, on_press=fn() {
       u.tools_open = !u.tools_open
     })
     if u.tools_open {
@@ -954,7 +947,7 @@ fn screen_rail(
   c.box(fn() {
     c.box(style=rail_box, fn() {
       if !u.in_tab {
-        round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), does=fn() {
+        round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), on_press=fn() {
           close()
         })
       }
@@ -962,7 +955,7 @@ fn screen_rail(
       if s.state is Some(_) && line != "" && s.open_now() {
         let others = items(s.state, "others").length()
         c.box(style=rail_people, fn() {
-          round_button(c, "screen-people", "users", line, on=u.saying, does=fn() {
+          round_button(c, "screen-people", "users", line, on=u.saying, on_press=fn() {
             u.saying = !u.saying
             u.sayings += 1
           })
@@ -1092,13 +1085,13 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     })
     c.semantics(i, Button, id~, label=k.name, pressed=on, actions=[Activate])
     if k.button != 0 {
-      button_felt(c, u, id, k.button, c.clicked(id))
+      button_felt(c, id, k.button)
     }
     c.on_press(id, fn() {
       if k.mod_ != 0 {
         u.held.toggle(k.mod_)
       } else if k.button != 0 {
-        button_clicked(c, s, u, k.button)
+        button_clicked(s, u, k.button)
       } else {
         let mods = u.held.take()
         stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods)
@@ -1130,26 +1123,22 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// Mouse button `button` clicked where the pointer is (the trackpad's, else the screen's own), the modifiers the keys
 /// row holds round it.
-fn button_clicked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, button : Int) -> Unit {
+fn button_clicked(s : ScreenSess, u : ScreenUi, button : Int) -> Unit {
   let mods = u.held.take()
   let at = pointer_now(s, u).unwrap_or(u.pad.at())
-  c.tell("screen-click/" + s.view + "/\{button}", fn() { click(fn(j) { s.input(s.src, j) }, at, button, mods) })
+  click(fn(j) { s.input(s.src, j) }, at, button, mods)
 }
 
 ///|
-/// A mouse button `id` felt as it goes down (the click itself goes as it is let go; a tap down and up between two
-/// frames, felt as it is clicked): once a press, the right button as a context click, the left as a key.
-fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool) -> Unit {
-  let p = c.press()
-  if !clicked && !(p.down && c.press_within(id)) {
-    return
-  }
-  let at = p.frame
-  if u.buzzed != at {
-    u.buzzed = at
-    let kind : @ui.Haptic = if button == btn_secondary { ContextClick } else { KeyboardTap }
-    c.after_build("screen-felt/\{at}", fn() { @ui.haptic(kind) })
-  }
+/// A mouse button `id` felt as a press goes down on it (the click itself goes as it is let go): the right button as a
+/// context click, the left as a key.
+fn button_felt(c : @ui.Ctx, id : Int, button : Int) -> Unit {
+  let kind : @ui.Haptic = if button == btn_secondary { ContextClick } else { KeyboardTap }
+  c.follow_press(id, fn(step) {
+    if step is Down(_, _, _) {
+      @ui.haptic(kind)
+    }
+  })
 }
 
 ///|
@@ -1184,11 +1173,8 @@ fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
           @sf.icon(c, b.1, size=round_icon, color=c.color(Fg)) |> ignore
         })
         c.semantics(i, Button, id~, label~, actions=[Activate])
-        let clicked = c.clicked(id)
-        button_felt(c, u, id, b.3, clicked)
-        if clicked {
-          button_clicked(c, s, u, b.3)
-        }
+        button_felt(c, id, b.3)
+        c.on_press(id, fn() { button_clicked(s, u, b.3) })
       }
     })
     |> ignore

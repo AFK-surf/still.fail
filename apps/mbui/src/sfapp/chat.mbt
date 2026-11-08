@@ -230,9 +230,9 @@ fn bar_frame(
   // under the status bar (Chat.kt BarFrame: windowInsetsPadding(statusBars), then TopBarHeight, as Home's bar)
   c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), align=ACenter, fn() {
     let back = c.id("chat-back")
-    if c.clicked(back) {
+    c.on_press(back, fn() {
       @sfbase.go_back() |> ignore
-    }
+    })
     c.box(
       w=Px(40.0),
       h=Px(40.0),
@@ -260,15 +260,14 @@ fn bar_frame(
     if more {
       // what it is (its info's sheet), then what is done with it ("…": the menu a row of the list has)
       c.box(style=bar_key_apart(), fn() {
-        if nav_button(c, "info", 20.0, key="chat-info", said=tr("android-chat.info.title")) {
+        nav_button(c, "info", 20.0, key="chat-info", said=tr("android-chat.info.title"), on_press=fn() {
           on_info()
-        }
+        })
       })
       |> ignore
       c.box(style=bar_key_apart(), fn() {
-        if nav_button(c, "more", 18.0, key="chat-more", said=tr("common.more")) {
-          on_more(c.id("chat-more"))
-        }
+        let from = c.id("chat-more")
+        nav_button(c, "more", 18.0, key="chat-more", said=tr("common.more"), on_press=fn() { on_more(from) })
       })
       |> ignore
     }
@@ -317,9 +316,9 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
         for i, a in v.agents {
           // each opens its card
           let id = c.id("bar-agent/" + a.key)
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             open_agent(src, r, a.key)
-          }
+          })
           c.box(id~, fn() {
             if i == 0 {
               agent_station_mark(c, a, station)
@@ -341,8 +340,12 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
                     @sf.spinner(c) |> ignore
                   })
                   |> ignore
-                } else if nav_button(c, "archive", 20.0, key="chat-archive", said=tr("android-chat.archive")) && archive {
-                  archive_chat(src, r, v)
+                } else {
+                  nav_button(c, "archive", 20.0, key="chat-archive", said=tr("android-chat.archive"), on_press=fn() {
+                    if archive {
+                      archive_chat(src, r, v)
+                    }
+                  })
                 }
               })
               c.look(b, look)
@@ -355,9 +358,9 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           // a dot when one died lately (red) or a service is started again (amber)
           let alarm = text(jobs.value, "alarm")
           c.box(style=bar_key_apart(), fn() {
-            if nav_button(c, "web", 20.0, key="chat-jobs") {
+            nav_button(c, "web", 20.0, key="chat-jobs", on_press=fn() {
               open_chat_jobs(src, r)
-            }
+            })
             if alarm == "fail" || alarm == "restart" {
               c.layer(align=AEnd, fn() {
                 c.box(pt=6.0, pr=6.0, fn() {
@@ -446,9 +449,9 @@ let via_dot_side : Double = 7.0
 /// .
 fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
   let id = c.id("bar-station")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @settings.open_station_peek(address, from=Of(id))
-  }
+  })
   c.box(id~, fn() { station_tag(c, s) }) |> ignore
 }
 

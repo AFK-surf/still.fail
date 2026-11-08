@@ -350,8 +350,6 @@ fn case_button_press(
   c.semantics(i, Button, id~, label=word, actions=[Activate])
   @sf.tip(c, "screen-case-tip/" + b.name, id, word)
   let held = u.logs.buttons_held
-  let was = held.contains(b.name)
-  let now = c.pressed(id)
   let tell = fn(down : Bool) {
     s.input(s.src, Json::object({
       "t": Json::string("button"),
@@ -360,17 +358,32 @@ fn case_button_press(
       "down": Json::boolean(down),
     }))
   }
-  if now && !was {
-    held[b.name] = true
-    c.tell("screen-case-down/" + s.view + "/" + b.name, fn() { tell(true) })
-  } else if !now && was {
-    held.remove(b.name)
-    c.tell("screen-case-up/" + s.view + "/" + b.name, fn() { tell(false) })
-  } else if !now && c.clicked(id) {
-    // (down and up between two frames)
-    c.tell("screen-case-tap/" + s.view + "/" + b.name, fn() {
+  // the hand's press on it: down as it goes down (true), up as it is let go (false: the press it ends comes next) or
+  // called off; (pressed with no hand's press on it: a key's, a screen reader's Activate) down and up at once
+  c.follow_press(id, fn(step) {
+    match step {
+      Down(_, _, _) => {
+        held[b.name] = true
+        tell(true)
+      }
+      Up(_, _) =>
+        if held.get(b.name) == Some(true) {
+          held[b.name] = false
+          tell(false)
+        }
+      Off =>
+        if held.get(b.name) == Some(true) {
+          held.remove(b.name)
+          tell(false)
+        }
+      Moving(_, _) => ()
+    }
+  })
+  c.on_press(id, fn() {
+    if held.get(b.name) is None {
       tell(true)
       tell(false)
-    })
-  }
+    }
+    held.remove(b.name)
+  })
 }

@@ -37,8 +37,8 @@ let page_bar_box : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 align=ACenter")
 
 ///|
 /// A key of the bar (PreviewBar's iconBtn): round, its icon in the ink, faint when it cannot be
-/// pressed, the hover grey under the hand; its name told a screen reader and shown on hover. Whether it was pressed.
-pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled? : Bool = true) -> Bool {
+/// pressed, the hover grey under the hand; its name told a screen reader and shown on hover. `on_press` as it is pressed.
+pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled? : Bool = true, on_press? : () -> Unit) -> Unit {
   let t = theme()
   let b = t.bars
   let id = c.id(key)
@@ -53,7 +53,10 @@ pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled
   if enabled {
     tip(c, key + "/tip", id, label)
   }
-  enabled && c.clicked(id)
+  match on_press {
+    Some(f) if enabled => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|

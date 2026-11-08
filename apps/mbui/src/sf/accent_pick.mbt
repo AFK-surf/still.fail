@@ -9,7 +9,7 @@
 /// accent and a slider of hues under the dots, as wide as they are (`hue`: what a screen reader calls it), its track
 /// every hue's accent, its knob the one's; not chosen, a ＋ in an outline, which takes the hue it had last
 /// (custom_hue_kept). `on_pick`: what choosing another does, given its key, as it is chosen (a dot pressed, the hue
-/// moved), outside any build. Answers the key chosen (a press's, a drag's, this frame).
+/// moved), outside any build.
 pub fn accent_pick(
   c : @ui.Ctx,
   key : String,
@@ -18,7 +18,7 @@ pub fn accent_pick(
   hue : String,
   chosen : String,
   on_pick? : (String) -> Unit,
-) -> String {
+) -> Unit {
   let told = fn(k : String) {
     match on_pick {
       Some(f) if k != chosen => f(k)
@@ -28,14 +28,13 @@ pub fn accent_pick(
   let t = theme()
   // (a dot 24 across with keyboard and mouse, 28 with touch, the gap between the rest of a press's least room)
   let (dot, row_gap) = if t.touch { (accent_dot_touch, accent_row_touch) } else { (accent_dot_mouse, accent_row_mouse) }
-  let mut picked = chosen
   let own = custom_hue(chosen)
   match own {
     Some(h) => custom_hue_kept.val = h
     None => ()
   }
-  // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; true on the frame it is pressed
-  let a_dot = fn(n : Int, ink : Int64?, on : Bool, name : String, picks : () -> String) -> Bool {
+  // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; pressed, what `picks` chosen
+  let a_dot = fn(n : Int, ink : Int64?, on : Bool, name : String, picks : () -> String) {
     let id = c.id(key + "/" + n.to_string())
     c.on_press(id, fn() { told(picks()) })
     let lit = c.lit(id)
@@ -49,16 +48,13 @@ pub fn accent_pick(
       }
     })
     c.semantics(b, Radio, id~, label=name, selected=on)
-    c.clicked(id)
   }
   // (narrow, a section's own: in from the page's edge as far as its heading's words, as its note is)
   let column = if look() is Narrow && in_card.val == 0 { accent_column.then(accent_row_narrow) } else { accent_column }
   c.box(style=column, fn() {
     let row = c.box(style=row_gap, fn() {
       for i, a in accents {
-        if a_dot(i, Some(if t.dark { a.dark } else { a.light }), chosen == a.key, names.get(i).unwrap_or(a.key), fn() { a.key }) {
-          picked = a.key
-        }
+        a_dot(i, Some(if t.dark { a.dark } else { a.light }), chosen == a.key, names.get(i).unwrap_or(a.key), fn() { a.key })
       }
       let ink = own.map(fn(h) {
         let a = custom_tone(h)
@@ -70,9 +66,7 @@ pub fn accent_pick(
       })
       // (pressed while chosen: it stays as it is)
       let mine = fn() { if own is None { "custom:" + custom_hue_kept.val.to_string() } else { chosen } }
-      if a_dot(accents.length(), ink, own is Some(_), custom, mine) && own is None {
-        picked = "custom:" + custom_hue_kept.val.to_string()
-      }
+      a_dot(accents.length(), ink, own is Some(_), custom, mine)
     })
     c.semantics(row, RadioGroup)
     // 自定义's hues, as wide as the dots
@@ -81,7 +75,7 @@ pub fn accent_pick(
         let n = (accents.length() + 1).to_double()
         let wide = n * dot_side(t) + (n - 1.0) * (@ui.room_least() - dot_side(t))
         c.box(style=@ui.style(w=Fixed(wide)), fn() {
-          let now = @kit.slider(
+          @kit.slider(
             c,
             key + "/hue",
             h.to_double(),
@@ -92,10 +86,8 @@ pub fn accent_pick(
             label=hue,
             look=hue_look,
             on_change=fn(v) { told("custom:" + v.to_int().to_string()) },
-          ).value.to_int()
-          if now != h {
-            picked = "custom:" + now.to_string()
-          }
+          )
+          |> ignore
         })
         |> ignore
       }
@@ -103,7 +95,6 @@ pub fn accent_pick(
     }
   })
   |> ignore
-  picked
 }
 
 ///|

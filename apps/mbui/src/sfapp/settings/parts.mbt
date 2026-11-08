@@ -308,9 +308,9 @@ fn gap(c : @ui.Ctx, h : Double) -> Unit {
 }
 
 ///|
-/// Back, a chevron in the accent and where it goes back to in a link's ink. True on the frame after a tap.
-fn nav_back(c : @ui.Ctx, label : String) -> Bool {
-  @sf.nav_back(c, "settings-back", label)
+/// Back, a chevron in the accent and where it goes back to in a link's ink. `on_press` as it is pressed.
+fn nav_back(c : @ui.Ctx, label : String, on_press~ : () -> Unit) -> Unit {
+  @sf.nav_back(c, "settings-back", label, on_press~)
 }
 
 ///|
@@ -329,12 +329,12 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on
     gap(c, status_top.val)
   }
   c.box(style=top_back_line, fn() {
-    if nav_back(c, label) {
+    nav_back(c, label, on_press=fn() {
       match on_back {
         Some(f) => f()
         None => (core.pop)()
       }
-    }
+    })
     match trailing {
       Some(f) => f()
       None => ()
@@ -379,12 +379,12 @@ fn nav_bar(
     wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back, about~)
     return
   }
-  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
+  @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val, on_press=fn() {
     match on_back {
       Some(f) => f()
       None => (core.pop)()
     }
-  }
+  })
 }
 
 ///|

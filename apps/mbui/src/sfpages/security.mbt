@@ -231,18 +231,25 @@ fn sec_line(
 }
 
 ///|
-/// What a row does at its end: narrow, words in the link's ink; wide, the web's quiet button (`primary`: its main one).
-/// True on the frame it is pressed.
-fn sec_do(c : @ui.Ctx, look : Look, key : String, words : String, busy? : Bool = false, primary? : Bool = false) -> Bool {
+/// What a row does at its end: narrow, words in the link's ink; wide, the web's quiet button (`primary`: its main one);
+/// `on_press` as it is pressed.
+fn sec_do(
+  c : @ui.Ctx,
+  look : Look,
+  key : String,
+  words : String,
+  busy? : Bool = false,
+  primary? : Bool = false,
+  on_press~ : () -> Unit,
+) -> Unit {
   match look {
     Narrow =>
       if busy {
         @settings.spinner(c)
-        false
-      } else {
-        tap_text(c, key, words, color=@sf.link_ink())
+      } else if tap_text(c, key, words, color=@sf.link_ink()) {
+        on_press()
       }
-    Wide => @sf.button(c, words, key~, tone=if primary { Primary } else { Ghost }, busy~)
+    Wide => @sf.button(c, words, key~, tone=if primary { Primary } else { Ghost }, busy~, on_press=on_press) |> ignore
   }
 }
 
@@ -453,11 +460,15 @@ fn sec_device_row(
     },
     acts?=if renews || removes {
       Some(fn() {
-        if renews && sec_do(c, look, "renew/" + id, @sf.t("web-pages.security.renew"), busy=renewing) {
-          lock_call(core, ws, "renew", @sf.t("web-pages.security.renew"), [("device", id)], done=@sf.t("web-pages.security.renewed"))
+        if renews {
+          sec_do(c, look, "renew/" + id, @sf.t("web-pages.security.renew"), busy=renewing, on_press=fn() {
+            lock_call(core, ws, "renew", @sf.t("web-pages.security.renew"), [("device", id)], done=@sf.t("web-pages.security.renewed"))
+          })
         }
-        if removes && sec_do(c, look, "remove/" + id, @sf.t("web-pages.security.remove"), busy=removing) {
-          remove_dialog(core, ws, id, text(dv, "fullText"))
+        if removes {
+          sec_do(c, look, "remove/" + id, @sf.t("web-pages.security.remove"), busy=removing, on_press=fn() {
+            remove_dialog(core, ws, id, text(dv, "fullText"))
+          })
         }
       })
     } else {
@@ -626,23 +637,24 @@ fn open_blocks(c : @ui.Ctx, core : Core, look : Look, ws : String, draft : Json?
           (core.pop)()
         }) |> ignore
         let opening = is_doing(core, ["lock.open"], [("workspace", ws)])
-        if @sf.button(
-            c,
-            @sf.t("web-pages.security.signAndTurnOn"),
-            key="lock-open",
-            tone=Primary,
-            busy=opening,
-            disabled=!(flag(draft, "ready") && flag(draft, "owner") && flag(draft, "canSign")),
-          ) {
-          @settings.act(
-            core,
-            @sf.t("web-pages.security.turnOn"),
-            "lock.open",
-            obj([("workspace", str(ws))]),
-            done=@sf.t("web-pages.security.turnedOn"),
-            then=fn(_) { (core.pop)() },
-          )
-        }
+        @sf.button(
+          c,
+          @sf.t("web-pages.security.signAndTurnOn"),
+          key="lock-open",
+          tone=Primary,
+          busy=opening,
+          disabled=!(flag(draft, "ready") && flag(draft, "owner") && flag(draft, "canSign")),
+          on_press=fn() {
+            @settings.act(
+              core,
+              @sf.t("web-pages.security.turnOn"),
+              "lock.open",
+              obj([("workspace", str(ws))]),
+              done=@sf.t("web-pages.security.turnedOn"),
+              then=fn(_) { (core.pop)() },
+            )
+          },
+        ) |> ignore
       })
       |> ignore
     })

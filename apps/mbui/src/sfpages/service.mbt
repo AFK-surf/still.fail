@@ -172,8 +172,10 @@ fn bar_now(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView, fixed : Bool) ->
   if !fixed {
     c.cursor(pill, IBeam)
   }
-  if !editing && !fixed && c.clicked(pill) {
-    c.focus_editor(field_key)
+  if !editing && !fixed {
+    c.on_press(pill, fn() {
+      c.focus_field(p.address)
+    })
   }
   { at, can_back, can_forward, field_key, editing, pill }
 }
@@ -238,9 +240,9 @@ fn service_page_bar(
     mark_key_of(c, p, site)
     // what left it, in its ⋯ at its end (there only while something did)
     c.box(more=true, fn() {
-      if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
+      @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more"), on_press=fn() {
         @sf.menu(gone, from=Of(more))
-      }
+      })
     })
     |> ignore
     panel_close_key(c, close)
@@ -253,9 +255,9 @@ fn service_page_bar(
 fn panel_close_key(c : @ui.Ctx, close : (() -> Unit)?) -> Unit {
   match close {
     Some(f) =>
-      if @sf.bar_key(c, "service/panel-close", "close", @sf.t("web-pages.chat.closePanel")) {
+      @sf.bar_key(c, "service/panel-close", "close", @sf.t("web-pages.chat.closePanel"), on_press=fn() {
         f()
-      }
+      })
     None => ()
   }
 }
@@ -329,7 +331,7 @@ fn load_part(load : Json?) -> (Double, @ui.Color)? {
 /// The foot bar's ⋯: its size (its choices in the presenters' sheet), how far each of its resources came (a sheet).
 fn foot_more(c : @ui.Ctx, src : Source, p : ServicePage, station : String, port : Int, load : Json?) -> Unit {
   let more = c.id("service/more")
-  if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
+  @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more"), on_press=fn() {
     let lines : Array[@sf.MenuItem?] = [
       Some(bar_line(size_said(p), "devices", disabled=false, on_press=fn() {
         service_sizes_panel(service_key(p.station, p.job), Of(more))
@@ -339,7 +341,7 @@ fn foot_more(c : @ui.Ctx, src : Source, p : ServicePage, station : String, port 
       lines.push(Some(bar_line(load_label(load), "", disabled=false, on_press=fn() { service_load_panel(src, station, port, Of(more)) })))
     }
     @sf.menu(lines, from=Of(more))
-  }
+  })
 }
 
 ///|
@@ -358,19 +360,19 @@ let foot_keys_in : Double = 8.0
 ///|
 /// Back and forward in the page's own history.
 fn back_forward(c : @ui.Ctx, site : @ui.NativeView, n : BarNow) -> Unit {
-  if @sf.bar_key(c, "service/go-back", "arrow-left", @sf.t("web-main.keymap.nav.back"), enabled=n.can_back) {
+  @sf.bar_key(c, "service/go-back", "arrow-left", @sf.t("web-main.keymap.nav.back"), enabled=n.can_back, on_press=fn() {
     site.go_back()
-  }
-  if @sf.bar_key(c, "service/go-forward", "arrow-right", @sf.t("web-main.keymap.nav.forward"), enabled=n.can_forward) {
+  })
+  @sf.bar_key(c, "service/go-forward", "arrow-right", @sf.t("web-main.keymap.nav.forward"), enabled=n.can_forward, on_press=fn() {
     site.go_forward()
-  }
+  })
 }
 
 ///|
 fn reload_key(c : @ui.Ctx, site : @ui.NativeView) -> Unit {
-  if @sf.bar_key(c, "service/reload", "refresh", @sf.t("web-main.preview.reload")) {
+  @sf.bar_key(c, "service/reload", "refresh", @sf.t("web-main.preview.reload"), on_press=fn() {
     site.reload()
-  }
+  })
 }
 
 ///|
@@ -497,8 +499,10 @@ fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
 /// Marking the page for the chat's agent (a page with no chat to put it in has none).
 fn mark_key_of(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView) -> Unit {
   // (none yet in a frame of the browser's: marking is page.js's, which it does not run)
-  if p.session != "" && !site.framed() && page_mark_key(c, p.marks.marking) {
-    page_marks_toggle(p, site)
+  if p.session != "" && !site.framed() {
+    page_mark_key(c, p.marks.marking, on_press=fn() {
+      page_marks_toggle(p, site)
+    })
   }
 }
 
@@ -562,14 +566,7 @@ fn dims(w : Int, h : Int?) -> String {
 }
 
 ///|
-/// A double tap on the ground: each tap shorter than this, moving less than `stage_tap_slop`, the
-/// second this soon after the first.
-let stage_tap_ms : Double = 300.0
-
-///|
-let stage_double_ms : Double = 350.0
-
-///|
+/// A double tap on the ground: the second of two taps (Ctx::on_double_press), the one let go moving less than this.
 let stage_tap_slop : Double = 12.0
 
 ///|
@@ -735,6 +732,19 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       return
     }
   }
+  // a double tap on the ground fits it again
+  c.on_double_press(stage, fn() {
+    let dx = c.press_x - sx
+    let dy = c.press_y - sy
+    let on_page = dx >= pl.x && dx <= pl.x + pl.w * pl.scale && dy >= pl.y && dy <= pl.y + pl.h * pl.scale
+    let travelled = match p.hold {
+      Some(h) => h.travelled
+      None => 0.0
+    }
+    if !on_page && travelled < stage_tap_slop {
+      p.view.fit_now()
+    }
+  })
   let (px, py, _) = c.pointer()
   if c.pressed(stage) {
     let at = match c.second_pointer() {
@@ -749,7 +759,6 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
         p.hold = Some({
           was: if at.length() == 1 { [(dx, dy)] } else { at },
           travelled: 0.0,
-          down_at: c.pointer_at(),
           on_page,
         })
         if at.length() == 1 && (at[0].0 != dx || at[0].1 != dy) {
@@ -759,27 +768,7 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       Some(_) => stage_moved(p, at)
     }
   } else {
-    // let go (down and up between two frames: a tap the frames never saw held, taken all the same)
-    let (on_page, travelled, down_at) = match p.hold {
-      Some(h) => (h.on_page, h.travelled, h.down_at)
-      None if c.clicked(stage) => {
-        let dx = c.press_x - sx
-        let dy = c.press_y - sy
-        (dx >= pl.x && dx <= pl.x + pl.w * pl.scale && dy >= pl.y && dy <= pl.y + pl.h * pl.scale, 0.0, c.press_at)
-      }
-      None => return
-    }
     p.hold = None
-    // a double tap on the ground fits it again
-    let now = c.pointer_at()
-    if !on_page && travelled < stage_tap_slop && now - down_at < stage_tap_ms {
-      if now - p.tapped_at < stage_double_ms {
-        p.view.fit_now()
-        p.tapped_at = -1.0e9
-      } else {
-        p.tapped_at = now
-      }
-    }
   }
 }
 
@@ -946,11 +935,12 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
                 close()
               }
             }
-            if !x.view.fitted &&
-              @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0)) {
-              x.view.fit_now()
-              x.moving = false
-              close()
+            if !x.view.fitted {
+              @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0), on_press=fn() {
+                x.view.fit_now()
+                x.moving = false
+                close()
+              }) |> ignore
             }
           })
           |> ignore

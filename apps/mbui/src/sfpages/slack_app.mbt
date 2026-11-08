@@ -138,16 +138,17 @@ fn slack_app_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> 
 /// The Slack app's fold: its row, and open, what it holds.
 fn slack_app_fold(c : @ui.Ctx, core : Core, station : String, id : String, me : String, open : Bool) -> Unit {
   @sf.group(c, fn() {
-    if @sf.link_row(
-        c,
-        "slack-app-fold/" + me,
-        "Slack app",
-        note=@sf.t("web-pages.slackApp.foldNote"),
-        value=if open { @sf.t("web-pages.profiles.collapse") } else { "" },
-        chevron=!open,
-      ) {
-      sa_open[me] = !open
-    }
+    @sf.link_row(
+      c,
+      "slack-app-fold/" + me,
+      "Slack app",
+      note=@sf.t("web-pages.slackApp.foldNote"),
+      value=if open { @sf.t("web-pages.profiles.collapse") } else { "" },
+      chevron=!open,
+      on_press=fn() {
+        sa_open[me] = !open
+      },
+    ) |> ignore
   })
   if !open {
     return
@@ -179,9 +180,9 @@ fn slack_app_fold(c : @ui.Ctx, core : Core, station : String, id : String, me : 
   match opt_text(links, "settings") {
     Some(url) if url != "" =>
       @sf.group(c, fn() {
-        if @sf.link_row(c, "slack-app-open/" + me, @sf.t("web-pages.slackApp.openInSlack"), out=true) {
+        @sf.link_row(c, "slack-app-open/" + me, @sf.t("web-pages.slackApp.openInSlack"), out=true, on_press=fn() {
           (core.open_link)(url)
-        }
+        }) |> ignore
       })
     _ => ()
   }
@@ -194,9 +195,9 @@ fn sa_token_card(c : @ui.Ctx, core : Core, station : String, me : String, words 
   @sf.page_card(c, footed=true, fn() {
     @sf.card_lines(c, "", words=if bad { "" } else { words }, note~, bad=if bad { words } else { "" })
     @sf.card_foot(c, fn() {
-      if @sf.button(c, action, key="slack-app-token/" + me) {
+      @sf.button(c, action, key="slack-app-token/" + me, on_press=fn() {
         config_token_dialog(core, station)
-      }
+      }) |> ignore
     })
   })
 }
@@ -270,25 +271,26 @@ fn config_token_form(
   }
   c.box(style=sa_guide, fn() {
     sa_guide_step(c, 1, @sf.t("web-pages.slackApp.step1"), @sf.t("web-pages.slackApp.step1Note"), fn() {
-      if @sf.button(c, @sf.t("web-pages.slackApp.openApps"), key=key + "/apps", tone=Primary, icon="external") {
+      @sf.button(c, @sf.t("web-pages.slackApp.openApps"), key=key + "/apps", tone=Primary, icon="external", on_press=fn() {
         (core.open_link)("https://api.slack.com/apps")
-      }
+      }) |> ignore
     })
     sa_guide_step(c, 2, @sf.t("web-pages.slackApp.step2"), @sf.t("web-pages.slackApp.step2Note"), fn() {  })
     sa_guide_step(c, 3, @sf.t("web-pages.slackApp.step3"), @sf.t("web-pages.slackApp.step3Note", args=[("name", "still.fail")]), fn() {
       c.box(style=sa_input_row, fn() {
         c.box(style=sa_input_grow, fn() { @sf.input(c, key + "/token-input", placeholder="xoxe-1-…", secret=true, field=tf) |> ignore })
         |> ignore
-        if @sf.button(
-            c,
-            @sf.t(if replacing { "web-pages.slackApp.useThis" } else { "web-pages.slackApp.add" }),
-            key=key + "/add",
-            tone=Primary,
-            busy~,
-            disabled=!ready,
-          ) {
-          add()
-        }
+        @sf.button(
+          c,
+          @sf.t(if replacing { "web-pages.slackApp.useThis" } else { "web-pages.slackApp.add" }),
+          key=key + "/add",
+          tone=Primary,
+          busy~,
+          disabled=!ready,
+          on_press=fn() {
+            add()
+          },
+        ) |> ignore
       })
       |> ignore
       if wrong != "" {
@@ -343,10 +345,10 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
           @sf.icon(c, "shield-check", size=cd_icon, color=@sf.theme().p.blue) |> ignore
           c.box(style=cd_effect_words, fn() { c.text(@sf.t("web-pages.slackApp.approveNote"), style=sa_blue_words) |> ignore })
           |> ignore
-          if @sf.button(c, @sf.t("web-pages.slackApp.approve"), key=key + "/approve", tone=Primary) {
+          @sf.button(c, @sf.t("web-pages.slackApp.approve"), key=key + "/approve", tone=Primary, on_press=fn() {
             sa_approve.remove(me)
             (core.open_link)(install)
-          }
+          }) |> ignore
         })
         |> ignore
       None => ()
@@ -359,10 +361,12 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
     let changed = now != sa_settings(sa_draft(key, settings), settings)
     let dirty = changed || d.icon.get() != ""
     @sf.card_foot(c, at_end=true, fn() {
-      if dirty && @sf.button(c, @sf.t("web-pages.slackApp.revert"), key=key + "/revert", tone=Ghost) {
-        sa_drafts.remove(key)
+      if dirty {
+        @sf.button(c, @sf.t("web-pages.slackApp.revert"), key=key + "/revert", tone=Ghost, on_press=fn() {
+          sa_drafts.remove(key)
+        }) |> ignore
       }
-      if @sf.button(c, @sf.t("web-pages.slackApp.apply"), key=key + "/apply", tone=Primary, busy~, disabled=!dirty) {
+      @sf.button(c, @sf.t("web-pages.slackApp.apply"), key=key + "/apply", tone=Primary, busy~, disabled=!dirty, on_press=fn() {
         let input = match now {
           Object(m) => {
             let m2 = Map::from_iter(m.iter())
@@ -395,7 +399,7 @@ fn sa_form(c : @ui.Ctx, core : Core, station : String, id : String, settings : J
             }
           },
         )
-      }
+      }) |> ignore
     })
   })
 }

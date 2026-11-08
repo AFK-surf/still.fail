@@ -858,19 +858,12 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
 /// What failed said of a notice, copied (复制, 已复制 a moment once copied, as a link's address is: link_copy).
 fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
   let key = "notice-copy/" + m.ts
-  let said = notices_copied.contains(m.ts) &&
-    (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-      notices_copied.remove(m.ts)
-      false
-    } else {
-      true
-    })
   let id = c.id(key)
-  if c.clicked(id) {
+  let said = c.within(id, @sf.copied_ms)
+  c.on_press(id, fn() {
     c.copy_text(m.notice_detail)
-    @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-    notices_copied.add(m.ts)
-  }
+    c.mark(id)
+  })
   c.box(style=notice_copy_room, id~, fn() {
     c.rich([@ui.span(@sf.t(if said { "common.copied" } else { "common.copy" }), underline=true)], style=if ink == Danger {
       notice_act_failed
@@ -881,10 +874,6 @@ fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
   })
   |> ignore
 }
-
-///|
-/// Notices whose detail was copied a moment ago, by message.
-let notices_copied : Set[String] = Set::new()
 
 ///|
 /// Notices opened (all their words and their time), by message.

@@ -92,14 +92,14 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       let label = if zoom == "" { "100%" } else { zoom + "%" }
       let id = c.id("appearance/window-zoom")
       @sf.setting(c, @sf.t("desktop.menu.zoom"), fn() {
-        if @sf.button(c, label, key="appearance/window-zoom") {
+        @sf.button(c, label, key="appearance/window-zoom", on_press=fn() {
           let choices = @sfbase.window_zoom_levels.map(fn(z) {
             @sf.choice(z.0, (if z.0 == "" { "100" } else { z.0 }) + "%")
           })
           @sf.pick(@sf.t("desktop.menu.zoom"), choices, zoom, fn(value) {
             @settings.set_pref(core, "windowZoom", value)
           }, from=Of(id), search=false)
-        }
+        }) |> ignore
       })
     })
   }
@@ -116,9 +116,9 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   if look == Wide {
     settings.push(fn() {
       @sf.setting(c, @sf.t("web-main.rail.title"), note=@sf.t("web-main.rail.lead"), fn() {
-        if @sf.button(c, @sf.t("web-main.rail.customize"), key="appearance/rail") {
+        @sf.button(c, @sf.t("web-main.rail.customize"), key="appearance/rail", on_press=fn() {
           @sfbase.edit_rail()
-        }
+        }) |> ignore
       })
     })
   }

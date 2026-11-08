@@ -149,7 +149,13 @@ pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
 pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (String) -> Unit, ways? : Array[String] = views_all) -> Unit {
   let shown = view_icons.filter(fn(w) { ways.contains(w.0) })
   let at = shown.search_by(fn(w) { w.0 == value }).unwrap_or(0)
-  let k = @sf.segmented(
+  let pick = fn(k : Int) {
+    match shown.get(k) {
+      Some((v, _)) => on_change(v)
+      None => ()
+    }
+  }
+  @sf.segmented(
     c,
     key,
     shown.map(fn(w) { @sf.t("web-pages.drive.view." + w.0) }),
@@ -157,13 +163,12 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
     icons=shown.map(fn(w) { w.1 }),
     bar=true,
     said=@sf.t("web-pages.drive.view.label"),
+    on_pick=pick,
   )
-  // (the one shown chosen again is kept as chosen: shown where the room has not what was chosen before)
-  if k != at || c.clicked(@kit.part_id(c.id(key), at)) {
-    match shown.get(k) {
-      Some((v, _)) => on_change(v)
-      None => ()
-    }
+  |> ignore
+  // (the one shown where the room has not what was chosen before, chosen again: kept as chosen)
+  if !shown.iter().any(fn(w) { w.0 == value }) {
+    c.on_press(@kit.part_id(c.id(key), at), fn() { pick(at) })
   }
 }
 
@@ -629,9 +634,11 @@ fn column(
       }
     }
     // a press in it where there is no row: nothing chosen
-    if c.clicked(cid) && !row_took(c) {
-      (s.clear)()
-    }
+    c.on_press(cid, fn() {
+      if !row_took(c) {
+        (s.clear)()
+      }
+    })
   })
   |> ignore
   if halves {
@@ -655,7 +662,13 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
   let (px, py, _) = c.pointer()
   c.cursor(id, ResizeX)
   let every = (@ui.mods_held() & @ui.mod_alt) != 0
-  match @sf.handle_drag(c, id, width, min=column_least, max=column_most) {
+  let twice = fn() {
+    let need = names.fold(init=0.0, fn(m, n) { dmax(m, @ui.text_advance(n, size=@sf.theme().t.ui)) })
+    if need > 0.0 {
+      s.b.keep_width(c, src, path, clamp_column(need + column_row_room))
+    }
+  }
+  match @sf.handle_drag(c, id, width, min=column_least, max=column_most, twice~) {
     Dragging(w) => cols.drag = Some((s.b.key, if every { None } else { Some(path) }, w))
     Dropped(w) => {
       let was_every = match cols.drag {
@@ -673,13 +686,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
         s.b.keep_width(c, src, path, w)
       }
     }
-    Twice => {
-      let need = names.fold(init=0.0, fn(m, n) { dmax(m, @ui.text_advance(n, size=@sf.theme().t.ui)) })
-      if need > 0.0 {
-        s.b.keep_width(c, src, path, clamp_column(need + column_row_room))
-      }
-    }
-    Untouched | Pressed => ()
+    Untouched | Pressed | Twice => ()
   }
   // in hand: this edge, or with ⌥ every one, while one is dragged
   let dragged = match cols.drag {

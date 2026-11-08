@@ -106,9 +106,9 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
       ws_label(c, @sf.t("android-misc.workspace.current"))
       c.box(style=ws_current.then(@sf.panel_card_out()), fn() {
         c.box(style=ws_card.then(@ui.style(bg=Data(@sf.theme().p.chip))), fn() {
-          if workspace_row(c, "ws/" + w.id, w.name, w.email, true, Some(w), "", Json::null(), on_card=true) {
+          workspace_row(c, "ws/" + w.id, w.name, w.email, true, Some(w), "", Json::null(), on_card=true, on_press=fn() {
             close()
-          }
+          })
         })
         |> ignore
       })
@@ -123,10 +123,10 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
   for o in others {
     let mark = field(by_ws, o.id).unwrap_or(Json::null())
     rows.push(fn() {
-      if workspace_row(c, "ws/" + o.id, o.name, o.email, false, Some(o), "", mark) {
+      workspace_row(c, "ws/" + o.id, o.name, o.email, false, Some(o), "", mark, on_press=fn() {
         close()
         switch_workspace(src, o.id)
-      }
+      })
     })
   }
   if compact {
@@ -142,24 +142,25 @@ fn workspaces_list(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
     |> ignore
   }
   c.box(style=ws_foot, fn() {
-    if workspace_row(
-        c,
-        "ws-sign-in",
-        @sf.t("android-misc.workspace.addAccount"),
-        @sf.t("android-misc.workspace.addAccount.sub"),
-        false,
-        None,
-        "log-in",
-        Json::null(),
-      ) {
-      close()
-      (src.sign_in)()
-    }
+    workspace_row(
+      c,
+      "ws-sign-in",
+      @sf.t("android-misc.workspace.addAccount"),
+      @sf.t("android-misc.workspace.addAccount.sub"),
+      false,
+      None,
+      "log-in",
+      Json::null(),
+      on_press=fn() {
+        close()
+        (src.sign_in)()
+      },
+    )
     // (in place of the list: one over another is not stacked)
-    if workspace_row(c, "ws-new", @sf.t("android-misc.workspace.new"), "", false, None, "plus", Json::null()) {
+    workspace_row(c, "ws-new", @sf.t("android-misc.workspace.new"), "", false, None, "plus", Json::null(), on_press=fn() {
       close()
       open_new_workspace(src)
-    }
+    })
   })
   |> ignore
 }
@@ -209,8 +210,8 @@ let ws_label_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap
 
 ///|
 /// A row: what, a line under it, a check on the chosen one; before
-/// it a workspace's mark (or its letter) or an icon; after it what a workspace has waiting (`mark`: its marks). True
-/// on the frame after it was pressed.
+/// it a workspace's mark (or its letter) or an icon; after it what a workspace has waiting (`mark`: its marks). `on_press`
+/// as it is pressed.
 fn workspace_row(
   c : @ui.Ctx,
   key : String,
@@ -221,7 +222,8 @@ fn workspace_row(
   icon : String,
   mark : Json,
   on_card? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   // (in a panel: on its card (the one in use), or a row of the panel's own `panel_card_in` from its sides; either way
@@ -258,7 +260,10 @@ fn workspace_row(
     |> ignore
   })
   |> ignore
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -400,14 +405,18 @@ fn invitations(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
       })
       |> ignore
       let busy = new_ws.responding.get() != ""
-      if @sf.button(c, @sf.t("android-misc.invite.join"), key="invite/join/" + id, tone=Primary, busy=new_ws.responding.get() == "+" + id) &&
-        !busy {
-        answer_invitation(src, account, id, true, name, close)
-      }
-      if @sf.button(c, @sf.t("android-misc.invite.ignore"), key="invite/ignore/" + id, busy=new_ws.responding.get() == "-" + id) &&
-        !busy {
-        answer_invitation(src, account, id, false, name, fn() {  })
-      }
+      @sf.button(c, @sf.t("android-misc.invite.join"), key="invite/join/" + id, tone=Primary, busy=new_ws.responding.get() == "+" + id, on_press=fn() {
+        if !busy {
+          answer_invitation(src, account, id, true, name, close)
+        }
+      })
+      |> ignore
+      @sf.button(c, @sf.t("android-misc.invite.ignore"), key="invite/ignore/" + id, busy=new_ws.responding.get() == "-" + id, on_press=fn() {
+        if !busy {
+          answer_invitation(src, account, id, false, name, fn() {  })
+        }
+      })
+      |> ignore
     })
     |> ignore
   }
@@ -569,16 +578,17 @@ fn new_workspace_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
     close()
     new_ws_cleared()
   }) |> ignore
-  if @sf.button(
-      c,
-      @sf.t("web-pages.workspace.createAction"),
-      key="new-ws/create",
-      tone=Primary,
-      busy=new_ws.creating.get(),
-      disabled=name == "",
-    ) {
-    new_ws_create(src, close)
-  }
+  @sf.button(
+    c,
+    @sf.t("web-pages.workspace.createAction"),
+    key="new-ws/create",
+    tone=Primary,
+    busy=new_ws.creating.get(),
+    disabled=name == "",
+    on_press=fn() {
+      new_ws_create(src, close)
+    },
+  ) |> ignore
 }
 
 ///|

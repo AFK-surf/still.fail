@@ -195,9 +195,10 @@ pub fn drive_pane(
             @sf.button(c, @sf.t("web-pages.drive.open"), key="files/preview/open", on_press=fn() {
               on_open()
             }) |> ignore
-            if !e.dir &&
-              @sf.button(c, @sf.t("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download") {
-              on_save()
+            if !e.dir {
+              @sf.button(c, @sf.t("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download", on_press=fn() {
+                on_save()
+              }) |> ignore
             }
             @sf.button(c, @sf.t("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy", on_press=fn() {
               on_copy_path(abs)

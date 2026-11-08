@@ -154,7 +154,7 @@ pub fn media_head(c : @ui.Ctx, part : Double, color : Int64, small? : Bool = fal
 /// One of the controls' buttons (page.css.ts iconBtn in vvBar: 32, round, as the speed by them is: the first and the
 /// last in the bar's corners, 10 in, concentric with its 26): a 20 icon (18
 /// `small`), in the quieter ink until pointed at, a bright one's (play) in the words'; `lit` while what it turns on is.
-/// Named on hover. True on the frame after it was pressed.
+/// Named on hover. `on_press` as it is pressed.
 pub fn media_key(
   c : @ui.Ctx,
   key : String,
@@ -165,7 +165,8 @@ pub fn media_key(
   bright? : Bool = false,
   lit? : Bool = false,
   ink? : MediaInk,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let ink = ink.unwrap_or(media_ink(false))
   let id = c.id(key)
   let hot = on && (c.lit(id) || c.pressed(id))
@@ -178,13 +179,16 @@ pub fn media_key(
   if on {
     tip(c, key + "/tip", id, label)
   }
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
-/// The speed as a figure (vvRate): 28 high, 46 wide at least, 8 in, a capsule concentric in the bar's corner, on the words at 10%. True on the
-/// frame after it was pressed.
-pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on : Bool, ink? : MediaInk) -> Bool {
+/// The speed as a figure (vvRate): 28 high, 46 wide at least, 8 in, a capsule concentric in the bar's corner, on the words at 10%. `on_press` as it
+/// is pressed.
+pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on : Bool, ink? : MediaInk, on_press? : () -> Unit) -> Unit {
   let ink = ink.unwrap_or(media_ink(false))
   let id = c.id(key)
   let b = c.box(style=media_rate_box.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id=if on { id } else { 0 }, fn() {
@@ -195,7 +199,10 @@ pub fn media_rate(c : @ui.Ctx, key : String, words : String, label : String, on 
   if on {
     tip(c, key + "/tip", id, label)
   }
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|

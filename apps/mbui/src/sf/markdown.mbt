@@ -1172,12 +1172,12 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   let w = web()
   let id = c.id("sf-code/" + code)
   let copy_key = "sf-copied/\{id}"
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     c.copy_text(code)
     // pressed again while it says so: its time starts again
     @kit.after(c, copy_key, false, copied_ms) |> ignore
     copied_at[id] = true
-  }
+  })
   let copied = copied_at.contains(id) &&
     (if @kit.after(c, copy_key, true, copied_ms) {
       copied_at.remove(id)

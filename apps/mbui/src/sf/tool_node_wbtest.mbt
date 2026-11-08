@@ -35,9 +35,9 @@ fn tools_tester(
       h.width(Is(Some(100.0))).height(Is(Some(100.0))) |> ignore
       @ui.old(h, fn(c) {
         let s = said.get()
-        if viewer_tool(c, "old", s.icon, s.label + " old", ink.get(), on=s.on, disabled=s.disabled) {
+        viewer_tool(c, "old", s.icon, s.label + " old", ink.get(), on=s.on, disabled=s.disabled, on_press=fn() {
           count("old")
-        }
+        })
       }).grow(Is(1.0))
       |> ignore
     })

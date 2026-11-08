@@ -498,9 +498,9 @@ fn nc_team(c : @ui.Ctx, core : Core, f : NcFlow, v : Json?, close : () -> Unit) 
     nc_edit(core, f, obj([("team", str(picked))]))
   }
   c.box(style=nc_team_more, flow=true, line_gap=@ui.Space::px(S1), fn() {
-    if @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus", reach=@sf.button_start_reach()) {
+    @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus", reach=@sf.button_start_reach(), on_press=fn() {
       nc_edit(core, f, obj([("adding", Json::boolean(true))]))
-    }
+    }) |> ignore
     if cd_text_button(c, "nc-manual-short/" + f.form, @sf.t("web-pages.connect.manualShort")) {
       nc_go(core, f, "manual", close)
     }
@@ -560,26 +560,26 @@ fn nc_made_steps(c : @ui.Ctx, core : Core, f : NcFlow, made : Json?) -> Unit {
             )
           } else {
             c.text(@sf.t("web-pages.connect.made.oauth"), style=@sf.step_words) |> ignore
-            if @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external") {
+            @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external", on_press=fn() {
               (core.open_link)(url)
-            }
+            }) |> ignore
           }
         None => {
           c.text(@sf.t("web-pages.connect.made.manual"), style=@sf.step_words) |> ignore
-          if @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external") {
+          @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external", on_press=fn() {
             (core.open_link)(text(links, "install"))
-          }
-          if @sf.button(c, @sf.t("web-pages.connect.made.openOauth"), key="nc-oauth/" + f.form) {
+          }) |> ignore
+          @sf.button(c, @sf.t("web-pages.connect.made.openOauth"), key="nc-oauth/" + f.form, on_press=fn() {
             (core.open_link)(text(links, "oauth"))
-          }
+          }) |> ignore
         }
       }
     },
     fn() {
       c.text(@sf.t("web-pages.connect.made.appToken"), style=@sf.step_words) |> ignore
-      if @sf.button(c, @sf.t("web-pages.connect.made.openSocket"), key="nc-socket/" + f.form, icon="external") {
+      @sf.button(c, @sf.t("web-pages.connect.made.openSocket"), key="nc-socket/" + f.form, icon="external", on_press=fn() {
         (core.open_link)(text(links, "appToken"))
-      }
+      }) |> ignore
     },
     fn() {
       c.text(@sf.t(if oauth is Some(_) { "web-pages.connect.made.fillOne" } else { "web-pages.connect.made.fillBoth" }), style=@sf.step_words)
@@ -626,9 +626,9 @@ fn nc_scan(c : @ui.Ctx, core : Core, fe : Json?) -> Unit {
     }
     if waiting {
       c.text(@sf.t("web-pages.connect.feishu.scanHint"), style=desk_muted) |> ignore
-      if @sf.button(c, @sf.t("web-pages.connect.feishu.openInFeishu"), key="nc-feishu-open", icon="external") {
+      @sf.button(c, @sf.t("web-pages.connect.feishu.openInFeishu"), key="nc-feishu-open", icon="external", on_press=fn() {
         (core.open_link)(text(r, "url"))
-      }
+      }) |> ignore
     }
   })
 }
@@ -726,22 +726,24 @@ fn nc_foot(
 ) -> Unit {
   ignore(here)
   guard v is Some(Object(_)) else {
-    if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost) {
+    @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost, on_press=fn() {
       close()
-    }
+    }) |> ignore
   }
   let step = if step == "" { text(v, "step") } else { step }
   let fe = field(v, "feishu")
   let busy = nc_busy(core, f)
   let cancel = fn() {
-    if text(v, "back") == "close" && @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost) {
-      close()
+    if text(v, "back") == "close" {
+      @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost, on_press=fn() {
+        close()
+      }) |> ignore
     }
   }
   let next = fn(label : String, disabled : Bool, busy : Bool, run : () -> Unit) {
-    if @sf.button(c, label, key="nc-next/" + f.form + "/" + step, tone=Primary, disabled~, busy~) {
+    @sf.button(c, label, key="nc-next/" + f.form + "/" + step, tone=Primary, disabled~, busy~, on_press=fn() {
       run()
-    }
+    }) |> ignore
   }
   match step {
     "platform" => {
@@ -792,9 +794,9 @@ fn nc_foot(
       let adding = flag(v, "adding")
       let teams = items(v, "teams")
       if adding && teams.length() > 0 {
-        if @sf.button(c, @sf.t("common.back"), key="nc-back/" + f.form + "/" + step, tone=Ghost) {
+        @sf.button(c, @sf.t("common.back"), key="nc-back/" + f.form + "/" + step, tone=Ghost, on_press=fn() {
           nc_edit(core, f, obj([("adding", Json::boolean(false))]))
-        }
+        }) |> ignore
       } else {
         cancel()
       }
@@ -826,13 +828,13 @@ fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, cancel : () ->
   ignore(close)
   cancel()
   if flag(fe, "failed") {
-    if @sf.button(c, @sf.t("web-pages.connect.feishu.newQr"), key="nc-qr/" + f.form + "/scan", tone=Primary, icon="refresh", busy~) {
+    @sf.button(c, @sf.t("web-pages.connect.feishu.newQr"), key="nc-qr/" + f.form + "/scan", tone=Primary, icon="refresh", busy~, on_press=fn() {
       nc_act(core, f, "register")
-    }
+    }) |> ignore
   } else if opt_text(fe, "error") is Some(_) {
-    if @sf.button(c, @sf.t("web-pages.connect.feishu.retry"), key="nc-retry/" + f.form + "/scan", tone=Primary, busy=busy || flag(fe, "creating")) {
+    @sf.button(c, @sf.t("web-pages.connect.feishu.retry"), key="nc-retry/" + f.form + "/scan", tone=Primary, busy=busy || flag(fe, "creating"), on_press=fn() {
       nc_act(core, f, "create")
-    }
+    }) |> ignore
   }
 }
 

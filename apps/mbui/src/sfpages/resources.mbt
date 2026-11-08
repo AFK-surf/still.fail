@@ -585,37 +585,38 @@ fn rs_end(c : @ui.Ctx, core : Core, address : String, pv : Json?, gv : Json?, ro
     let seen = @sf.pointed_or_finger(c, c.hovered(row) || c.lit(c.id(key)))
     if flag(pv, "endable") && seen {
       let name = text(pv, "name")
-      if @sf.icon_button(
-          c,
-          "stop",
-          key~,
-          size=rs_end_size,
-          label=@sf.t("web-main.resources.endLabel", args=[("name", name)]),
-        ) {
-        let pid = number(pv, "pid")
-        @sf.confirm(
-          @sf.t("web-main.resources.endTitle", args=[("name", name), ("pid", pid.to_int().to_string())]),
-          @sf.t("web-main.resources.endBody", args=[("chat", text(gv, "title"))]),
-          @sf.t("web-main.resources.end"),
-          danger=true,
-          fn() {
-            let session = text(gv, "session")
-            if session == "" {
-              return
-            }
-            (core.call)(
-              "process.end",
-              obj([("station", str(text(gv, "station"))), ("pid", Json::number(pid)), ("session", str(session))]),
-              fn(r) {
-                match r {
-                  Ok(_) => (core.say)(@sf.t("web-main.resources.ended", args=[("name", name)]))
-                  Err(e) => (core.say)(@sf.t("web-main.resources.endFailed", args=[("name", name), ("error", error_text(e))]))
-                }
-              },
-            )
-          },
-        )
-      }
+      @sf.icon_button(
+        c,
+        "stop",
+        key~,
+        size=rs_end_size,
+        label=@sf.t("web-main.resources.endLabel", args=[("name", name)]),
+        on_press=fn() {
+          let pid = number(pv, "pid")
+          @sf.confirm(
+            @sf.t("web-main.resources.endTitle", args=[("name", name), ("pid", pid.to_int().to_string())]),
+            @sf.t("web-main.resources.endBody", args=[("chat", text(gv, "title"))]),
+            @sf.t("web-main.resources.end"),
+            danger=true,
+            fn() {
+              let session = text(gv, "session")
+              if session == "" {
+                return
+              }
+              (core.call)(
+                "process.end",
+                obj([("station", str(text(gv, "station"))), ("pid", Json::number(pid)), ("session", str(session))]),
+                fn(r) {
+                  match r {
+                    Ok(_) => (core.say)(@sf.t("web-main.resources.ended", args=[("name", name)]))
+                    Err(e) => (core.say)(@sf.t("web-main.resources.endFailed", args=[("name", name), ("error", error_text(e))]))
+                  }
+                },
+              )
+            },
+          )
+        },
+      ) |> ignore
     }
   })
   |> ignore

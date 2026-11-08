@@ -694,7 +694,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
         })
         |> ignore
         if !native {
-          let (closed, _) = @sf.viewer_frame_bar(
+          @sf.viewer_frame_bar(
             c,
             "viz/full",
             @sf.t("common.back"),
@@ -706,10 +706,9 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
             1.0,
             @sf.page_viewer_ink(),
             fn() {  },
+            on_close=viz_close_full,
           )
-          if closed {
-            c.tell("viz/full-close", fn() { viz_close_full() })
-          }
+          |> ignore
         }
       })
       |> ignore

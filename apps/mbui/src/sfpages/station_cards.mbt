@@ -385,23 +385,24 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = t
           let said = join([text(tv, "summaryText"), chat].filter(fn(w) { w != "" }), " · ")
           // (none went through and the latest failed: said in red)
           let failed = flag(tv, "failed")
-          if @sf.link_row(
-              c,
-              "login-tool/" + station + "/" + name,
-              name,
-              note=if failed { "" } else { said },
-              trouble=if failed { said } else { "" },
-              folds=open,
-              // (its maker's mark, bare, in its colours; else a terminal's: one key for all told them apart by nothing)
-              lead=fn() {
-                c.box(style=lg_mark, fn() { @sf.tool_mark(c, text(tv, "mark"), 20.0) })
-                |> ignore
-              },
-              // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
-              tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
-            ) {
-            st_logins_open[station] = if open { "" } else { name }
-          }
+          @sf.link_row(
+            c,
+            "login-tool/" + station + "/" + name,
+            name,
+            note=if failed { "" } else { said },
+            trouble=if failed { said } else { "" },
+            folds=open,
+            // (its maker's mark, bare, in its colours; else a terminal's: one key for all told them apart by nothing)
+            lead=fn() {
+              c.box(style=lg_mark, fn() { @sf.tool_mark(c, text(tv, "mark"), 20.0) })
+              |> ignore
+            },
+            // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
+            tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
+            on_press=fn() {
+              st_logins_open[station] = if open { "" } else { name }
+            },
+          ) |> ignore
           if open {
             for l in items(tv, "tries") {
               let lv = Some(l)

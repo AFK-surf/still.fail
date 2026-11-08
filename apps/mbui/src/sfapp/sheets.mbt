@@ -134,8 +134,8 @@ let job_dot_side : Double = 8.0
 let job_dot_over : Double = 7.0
 
 ///|
-/// Its ground rounded INFO_ROW, pressed a shade. True on the frame after it was tapped (never when `key` is "": a row
-/// that leads nowhere).
+/// Its ground rounded INFO_ROW, pressed a shade; `on_press` as it is tapped (never when `key` is "": a row that leads
+/// nowhere).
 fn info_row(
   c : @ui.Ctx,
   key : String,
@@ -143,7 +143,8 @@ fn info_row(
   align? : @ui.Align = ACenter,
   tile? : Bool = false,
   dot? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
   let look = if tile {
@@ -161,7 +162,10 @@ fn info_row(
     }
   })
   |> ignore
-  id != 0 && c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -346,38 +350,40 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
           let av = Some(a)
           let s = field(av, "session")
           let key = text(s, "key")
-          if info_row(c, "info/agent/" + key, fn() {
-              // (as tall as its two lines: in the card's corners as far from its top as from its foot)
-              model_mark_big(
-                c,
-                text(field(s, "maker"), "id"),
-                text(s, "runtime"),
-                info_tile,
-                state_of_badge(text(av, "badge")),
-                @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
-              )
-              // its name, how it is, and its allowance under them, each a line of its own (beside its name the
-              // allowance took the name's room, or left the row where it had not the room: the allowance gone)
-              c.box(w=Fill(1.0), keep=true, fn() {
-                c.text(text(s, "agentText"), style=info_agent_name, keep=true) |> ignore
-                let since = agent_since(c, src, av)
-                let line = if since == "" {
-                  text(s, "statusText")
-                } else {
-                  text(s, "statusText") + " · " + since
-                }
-                c.text(line, style=info_agent_line, keep=true) |> ignore
-                allowance_line(c, match field(field(av, "account"), "quota") {
-                  Some(_) as q => q
-                  None => field(field(av, "profile"), "quota")
-                })
+          info_row(c, "info/agent/" + key, fn() {
+            // (as tall as its two lines: in the card's corners as far from its top as from its foot)
+            model_mark_big(
+              c,
+              text(field(s, "maker"), "id"),
+              text(s, "runtime"),
+              info_tile,
+              state_of_badge(text(av, "badge")),
+              @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
+            )
+            // its name, how it is, and its allowance under them, each a line of its own (beside its name the
+            // allowance took the name's room, or left the row where it had not the room: the allowance gone)
+            c.box(w=Fill(1.0), keep=true, fn() {
+              c.text(text(s, "agentText"), style=info_agent_name, keep=true) |> ignore
+              let since = agent_since(c, src, av)
+              let line = if since == "" {
+                text(s, "statusText")
+              } else {
+                text(s, "statusText") + " · " + since
+              }
+              c.text(line, style=info_agent_line, keep=true) |> ignore
+              allowance_line(c, match field(field(av, "account"), "quota") {
+                Some(_) as q => q
+                None => field(field(av, "profile"), "quota")
               })
-              |> ignore
-              chevron(c)
-            }, tile=true) {
-            close()
-            open_agent(src, r, key)
-          }
+            })
+            |> ignore
+            chevron(c)
+          }, tile=true,
+            on_press=fn() {
+              close()
+              open_agent(src, r, key)
+            },
+          )
         }
       })
       c.box(style=info_lists_gap, fn() {  }) |> ignore
@@ -387,14 +393,14 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
       Some({ opened: [_, ..] as opened, opened_text, .. }) => {
         info_list(c, fn() {
           let key = "info/opened"
-          let pressed = info_row(c, key, fn() {
+          let from = c.id(key)
+          info_row(c, key, fn() {
             @sf.icon(c, "spawned", size=16.0, color=t.p.muted) |> ignore
             c.text(opened_text, style=info_opened_title) |> ignore
             chevron(c)
+          }, on_press=fn() {
+            @sf.menu(@sfpages.opened_items(opened, then=close), from=Of(from), title=opened_text)
           })
-          if pressed {
-            @sf.menu(@sfpages.opened_items(opened, then=close), from=Of(c.id(key)), title=opened_text)
-          }
         })
         c.box(style=info_lists_gap, fn() {  }) |> ignore
       }
@@ -417,59 +423,67 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             go_to(r, seq)
           })
           @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left, peek=text(pv, "peek"))
-          if info_row(c, "info/pull/" + text(pv, "key"), fn() {
-              @sfpages.pull_mark(c, pv, 16.0)
-              c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore
-              c.text("#" + count(pv, "number").to_string(), style=letters_meta) |> ignore
-            }) {
-            close()
-            @sfbase.open_link_in(src, text(pv, "url"))
-          }
+          info_row(c, "info/pull/" + text(pv, "key"), fn() {
+            @sfpages.pull_mark(c, pv, 16.0)
+            c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore
+            c.text("#" + count(pv, "number").to_string(), style=letters_meta) |> ignore
+          },
+            on_press=fn() {
+              close()
+              @sfbase.open_link_in(src, text(pv, "url"))
+            },
+          )
         }
         match opt_number(thread, "id") {
           Some(th) if pulls.length() > info_pulls_most =>
-            if info_row(c, "info/pulls", fn() {
-                @sf.icon(c, "list", size=16.0, color=t.p.text) |> ignore
-                c.box(style=@sf.full_width, fn() {
-                  c.text(fill("web-main.things.pullsAll", [("n", pulls.length().to_string())]), style=info_words) |> ignore
-                })
-                |> ignore
-                chevron(c)
-              }) {
-              close()
-              @sfpages.things_choose(r, "pulls")
-              open_things(src, r, th)
-            }
+            info_row(c, "info/pulls", fn() {
+              @sf.icon(c, "list", size=16.0, color=t.p.text) |> ignore
+              c.box(style=@sf.full_width, fn() {
+                c.text(fill("web-main.things.pullsAll", [("n", pulls.length().to_string())]), style=info_words) |> ignore
+              })
+              |> ignore
+              chevron(c)
+            },
+              on_press=fn() {
+                close()
+                @sfpages.things_choose(r, "pulls")
+                open_things(src, r, th)
+              },
+            )
           _ => ()
         }
         // what was said in it besides words: a sheet of their own (sfpages things.mbt)
         match opt_number(thread, "id") {
           Some(th) if said > 0 =>
-            if info_row(c, "info/things", fn() {
-                @sf.icon(c, "photo", size=16.0, color=t.p.text) |> ignore
-                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.things.title"), style=info_words) |> ignore })
-                |> ignore
-                c.text(said.to_string(), style=letters_meta) |> ignore
-                chevron(c)
-              }) {
-              close()
-              open_things(src, r, th)
-            }
+            info_row(c, "info/things", fn() {
+              @sf.icon(c, "photo", size=16.0, color=t.p.text) |> ignore
+              c.box(style=@sf.full_width, fn() { c.text(tr("web-main.things.title"), style=info_words) |> ignore })
+              |> ignore
+              c.text(said.to_string(), style=letters_meta) |> ignore
+              chevron(c)
+            },
+              on_press=fn() {
+                close()
+                open_things(src, r, th)
+              },
+            )
           _ => ()
         }
         // what its agents and other chats' wrote each other, not in the chat: their own sheet
         match opt_number(thread, "id") {
           Some(th) if letters > 0.0 =>
-            if info_row(c, "info/letters", fn() {
-                @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
-                c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
-                |> ignore
-                c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
-                chevron(c)
-              }) {
-              close()
-              open_letters(src, r, th)
-            }
+            info_row(c, "info/letters", fn() {
+              @sf.icon(c, "chats", size=16.0, color=t.p.text) |> ignore
+              c.box(style=@sf.full_width, fn() { c.text(tr("web-main.letters.title"), style=info_words) |> ignore })
+              |> ignore
+              c.text(fill("web-main.letters.count", [("n", letters.to_int().to_string())]), style=letters_meta) |> ignore
+              chevron(c)
+            },
+              on_press=fn() {
+                close()
+                open_letters(src, r, th)
+              },
+            )
           _ => ()
         }
       })
@@ -632,21 +646,23 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
     info_list(c, fn() {
       match station {
         Some(st) =>
-          if info_row(c, "agent/station", fn() {
-              agent_label(c, tr("android-chat.agent.station"), label_w)
-              c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-                if @sf.has_station_mark(st.emoji, st.icon) {
-                  @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
-                }
-                c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false, w=Cut) |> ignore
-              })
-              |> ignore
-              chevron(c)
-            }) {
-            // the station's card in place of this one
-            close()
-            @settings.open_station_peek(r.station, from=Unanchored)
-          }
+          info_row(c, "agent/station", fn() {
+            agent_label(c, tr("android-chat.agent.station"), label_w)
+            c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
+              if @sf.has_station_mark(st.emoji, st.icon) {
+                @sf.station_mark(c, st.emoji, st.icon, 15.0, t.p.text)
+              }
+              c.text(st.name, size=t.t.ui, color=t.p.text, wrap=false, w=Cut) |> ignore
+            })
+            |> ignore
+            chevron(c)
+          },
+            on_press=fn() {
+              // the station's card in place of this one
+              close()
+              @settings.open_station_peek(r.station, from=Unanchored)
+            },
+          )
         None => ()
       }
       // the screens of that station a tap away (chat_screens.mbt): its own display named, or that an agent drives one;
@@ -657,10 +673,11 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
         } else {
           screens[0].title
         }
-        if agent_row(c, "agent/screen", tr("android-chat.agent.screen"), value, label_w, fn() {  }) {
+        let from = c.id("agent/screen")
+        agent_row(c, "agent/screen", tr("android-chat.agent.screen"), value, label_w, fn() {  }, on_press=fn() {
           close()
-          chat_screens_open(r, screens, from=Of(c.id("agent/screen")))
-        }
+          chat_screens_open(r, screens, from=Of(from))
+        })
       }
       let account = match field(a, "account") {
         Some(Object(_)) as acc => acc
@@ -675,42 +692,44 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
         fill("android-chat.agent.account.auto", [("name", name)])
       }
       // The same model picker as the chat's history and a new chat: every way to the run offers the same choices.
-      if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
-          allowance_line(c, field(account, "quota"))
-        }) {
+      agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
+        allowance_line(c, field(account, "quota"))
+      }, on_press=fn() {
         close()
         @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
-      }
-      if agent_row(
-          c,
-          "agent/history",
-          tr("android-chat.agent.history"),
-          match text(card, "work") {
-            "" => tr("android-chat.agent.history.none")
-            w => w
-          },
-          label_w,
-          fn() {  },
-        ) {
-        close()
-        @sfbase.history_push()
-        app.nav.push(History(r, key, None))
-      }
+      })
+      agent_row(
+        c,
+        "agent/history",
+        tr("android-chat.agent.history"),
+        match text(card, "work") {
+          "" => tr("android-chat.agent.history.none")
+          w => w
+        },
+        label_w,
+        fn() {  },
+        on_press=fn() {
+          close()
+          @sfbase.history_push()
+          app.nav.push(History(r, key, None))
+        },
+      )
       // what can be done to its context, where no figure of it is known to be its tile (a station from before tells
       // none of an agent at rest)
       match entry {
         Some(e) if !(field(card, "context") is Some(Object(_))) =>
-          if agent_row(c, "agent/context", tr("android-chat.agent.context"), "", label_w, fn() {
-              if e.busy || e.failed {
-                @settings.doing_mark(c, e.busy, if e.failed { Some("") } else { None })
-              }
-            }) &&
-            !e.busy {
-            (e.open)()
-          }
+          agent_row(c, "agent/context", tr("android-chat.agent.context"), "", label_w, fn() {
+            if e.busy || e.failed {
+              @settings.doing_mark(c, e.busy, if e.failed { Some("") } else { None })
+            }
+          }, on_press=fn() {
+            if !e.busy {
+              (e.open)()
+            }
+          })
         _ => ()
       }
-      if (jobs.length() > 0 || flag(a, "hasJobs")) &&
+      if jobs.length() > 0 || flag(a, "hasJobs") {
         agent_row(
           c,
           "agent/jobs",
@@ -721,9 +740,11 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           },
           label_w,
           fn() {  },
-        ) {
-        close()
-        open_chat_jobs(src, r)
+          on_press=fn() {
+            close()
+            open_chat_jobs(src, r)
+          },
+        )
       }
     })
     // (its last card at a dialog's foot, as far from it as from its sides)
@@ -788,7 +809,8 @@ fn agent_row(
   label_w : Double,
   trailing : () -> Unit,
   under? : () -> Unit,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   info_row(c, key, fn() {
     agent_label(c, label, label_w)
     c.box(w=Fill(1.0), keep=true, fn() {
@@ -801,7 +823,7 @@ fn agent_row(
     |> ignore
     trailing()
     chevron(c)
-  })
+  }, on_press?)
 }
 
 ///|
@@ -950,7 +972,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
     )
     |> ignore
     match open {
-      Some(o) => if !o.busy && c.clicked(id) { (o.open)() }
+      Some(o) => if !o.busy { c.on_press(id, fn() { (o.open)() }) }
       None => ()
     }
   }
@@ -1056,7 +1078,7 @@ fn job_meta(c : @ui.Ctx, job : Json?, size : Double) -> Unit {
 ///|
 /// A job's row (JobInfoRow): its dot on its name's line, what it is up to under it; an over one's name stepped back to
 /// the muted grey, not faded (at 55% its words were 2.3 to 1: mbui ui/contrast.mbt).
-fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
+fn job_row(c : @ui.Ctx, key : String, job : Json?, on_press~ : () -> Unit) -> Unit {
   let t = @sf.theme()
   let off = job_tint(text(job, "tone")) is None
   info_row(
@@ -1074,6 +1096,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
     },
     align=AStart,
     dot=true,
+    on_press~,
   )
 }
 
@@ -1108,7 +1131,7 @@ fn job_groups(
     info_list(c, fn() {
       for j in services {
         let id = text(Some(j), "id")
-        if job_row(c, "job/" + id, Some(j)) {
+        job_row(c, "job/" + id, Some(j), on_press=fn() {
           // up or being started again: its page; else what it said and its output (picked where it is
           // shown beside the list: the wide frame's 任务 tab)
           let tone = text(Some(j), "tone")
@@ -1123,7 +1146,7 @@ fn job_groups(
             close()
             open_job(src, r, id)
           }
-        }
+        })
       }
     })
   }
@@ -1132,7 +1155,7 @@ fn job_groups(
     info_list(c, fn() {
       for j in plain {
         let id = text(Some(j), "id")
-        if job_row(c, "job/" + id, Some(j)) {
+        job_row(c, "job/" + id, Some(j), on_press=fn() {
           dui.job_tab = 0
           match pick {
             Some(f) => f(id)
@@ -1141,7 +1164,7 @@ fn job_groups(
               open_job(src, r, id)
             }
           }
-        }
+        })
       }
     })
   }

@@ -33,30 +33,36 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   if take_asked("preset-new-browse") {
     preset_dialog(src, w, address, "", items(v, "stations"), browsing=true)
   }
-  if (new_capsule(c, "new/preset", label, floating, fn() {
-      // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
-      let marks = items(v, "presetMarks")
-      if name != "" && marks.length() > 0 {
-        c.box(style=preset_marks_row, fn() {
-          for m in marks {
-            repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
-          }
-        })
-        |> ignore
-      } else {
-        @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
-      }
-      // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
-      c.box(style=new_station_name, drop=preset_drop_words, fn() {
-        c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
+  let from = c.id("new/preset")
+  let open = fn() { preset_menu(src, w, address, v, picked, @sf.Of(from)) }
+  new_capsule(c, "new/preset", label, floating, fn() {
+    // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
+    let marks = items(v, "presetMarks")
+    if name != "" && marks.length() > 0 {
+      c.box(style=preset_marks_row, fn() {
+        for m in marks {
+          repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
+        }
       })
       |> ignore
-      // (its chevron last, after the station's name: its mark alone, a round, on the narrowest)
-      c.box(drop=preset_drop_chevron, fn() { @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore }) |> ignore
-    }) &&
-    !going) ||
-    asked {
-    preset_menu(src, w, address, v, picked, @sf.Of(c.id("new/preset")))
+    } else {
+      @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
+    }
+    // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
+    c.box(style=new_station_name, drop=preset_drop_words, fn() {
+      c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
+    })
+    |> ignore
+    // (its chevron last, after the station's name: its mark alone, a round, on the narrowest)
+    c.box(drop=preset_drop_chevron, fn() { @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore }) |> ignore
+  }, on_press=fn() {
+    if !going {
+      open()
+    }
+  })
+  // (asked from elsewhere: opened as it is seen)
+  if asked {
+    open()
   }
 }
 
@@ -216,13 +222,18 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
               |> ignore
             }
           }
-          if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
+          let add = fn() {
             e.adding = false
             field_of(key("q")).set("")
             // (a step in, in the dialog: back from it to the fields)
             @sf.panel_go(@sf.t("web-main.preset.add"), fn(c, _) {
               preset_add_step(c, src, address, stations, offered_dirs(src, address, stations), e, key)
             })
+          }
+          @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus", on_press=add) |> ignore
+          // (asked as the fields were filled in: added as it is seen)
+          if e.adding && e.filled {
+            add()
           }
         })
         |> ignore
@@ -351,9 +362,14 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
       c.text(@sf.t("web-main.preset.browse"), style=preset_dir_name) |> ignore
     })
     c.semantics(b, Button, id~, label=@sf.t("web-main.preset.browse"))
-    if c.clicked(id) || e.browsing {
+    let go = fn() {
       e.browsing = false
       preset_browse(src, address, stations, e, key)
+    }
+    c.on_press(id, go)
+    // (asked from elsewhere: done as it is seen)
+    if e.browsing {
+      go()
     }
   })
   |> ignore

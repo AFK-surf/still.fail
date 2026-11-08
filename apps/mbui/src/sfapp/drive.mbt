@@ -15,14 +15,15 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
         Some(Home) => tr("android-misc.bar.place.chats")
         _ => tr("android-settings.title")
       }
-      if dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
-          if lenders.length() > 0 &&
-            dv_nav_button(c, "files-lend", "plus", size=20.0, said=@sf.t("web-pages.files.addFavorite")) {
+      dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
+        if lenders.length() > 0 {
+          dv_nav_button(c, "files-lend", "plus", size=20.0, said=@sf.t("web-pages.files.addFavorite"), on_press=fn() {
             @sfdesk.add_favorite_folder(src, w.id, lenders)
-          }
-        }) {
+          })
+        }
+      }, on_press=fn() {
         @sfbase.go_back() |> ignore
-      }
+      })
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       // under the top bar (and the status bar); at the foot 30 over the navigation bar, and the bottom bar's room at a
@@ -65,9 +66,9 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
       })
       |> ignore
       // settings at the right edge, as at Home's
-      if nav_button(c, "settings", 22.0, key="files-settings", said=tr("android-chat.home.settings")) {
+      nav_button(c, "settings", 22.0, key="files-settings", said=tr("android-chat.home.settings"), on_press=fn() {
         open_page(Settings)
-      }
+      })
     })
     |> ignore
   })

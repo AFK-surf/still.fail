@@ -105,8 +105,8 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
       @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, keys~, lead=sub, actions=fn() {
         if editing_busy {
           @sf.spinner(c, size=pf_spin) |> ignore
-        } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {
-          edit_pressed()
+        } else {
+          @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit"), on_press=edit_pressed) |> ignore
         }
       })
   }
@@ -182,9 +182,12 @@ fn item_blocks(
                   c.rich([@ui.span(text(fv, "value"), mono=true)], style=vi_value) |> ignore
                   if opening {
                     @sf.spinner(c, size=pf_spin) |> ignore
-                  } else if @sf.icon_button(c, "eye", key=key + "/show/" + fk, corner=vi_key_corner, label=@sf.t("web-pages.vault.show")) {
-                    vi_reveal[item] = fk
-                    open(fn(_) {  })
+                  } else {
+                    @sf.icon_button(c, "eye", key=key + "/show/" + fk, corner=vi_key_corner, label=@sf.t("web-pages.vault.show"), on_press=fn() {
+                      vi_reveal[item] = fk
+                      open(fn(_) {  })
+                    })
+                    |> ignore
                   }
                 })
                 |> ignore
@@ -318,9 +321,10 @@ fn secret_field(c : @ui.Ctx, key : String, label : String, value : String, secre
     c.box(style=vi_secret_line, fn() {
       let words = if shown { value } else { "•".repeat(@cmp.minimum(@cmp.maximum(value.length(), 8), 20)) }
       c.rich([@ui.span(words, mono~)], style=if shown && value.contains("\n") { vi_value_lines } else { vi_value }) |> ignore
-      if secret &&
-        @sf.icon_button(c, "eye", key=key + "/eye", corner=vi_key_corner, label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown) {
-        vi_shown[key] = !shown
+      if secret {
+        @sf.icon_button(c, "eye", key=key + "/eye", corner=vi_key_corner, label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown, on_press=fn() {
+          vi_shown[key] = !shown
+        }) |> ignore
       }
       @sf.icon_button(c, "copy", key=key + "/copy", corner=vi_key_corner, label=@sf.t("common.copy"), on_press=fn() {
         if secret {

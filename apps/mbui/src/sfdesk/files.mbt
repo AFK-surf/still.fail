@@ -171,18 +171,19 @@ pub fn files_shell(
       let lit = @sf.theme().p.accent
       // (as a bar's buttons are: round on the tape, the last in the panel's corner concentric with it; at the window's
       // corner the corner they share, following it: @sf.bar_keys_link)
-      if @sf.icon_button(
-          c,
-          "view-columns",
-          key="files/split",
-          on=split_on,
-          round=true,
-          linked?=@sf.bar_keys_link(),
-          ink?=if split_on { Some(lit) } else { None },
-          label=@sf.t(if split_on { "web-pages.files.unsplit" } else { "web-pages.files.split" }),
-        ) {
-        show("split", None, None, None)
-      }
+      @sf.icon_button(
+        c,
+        "view-columns",
+        key="files/split",
+        on=split_on,
+        round=true,
+        linked?=@sf.bar_keys_link(),
+        ink?=if split_on { Some(lit) } else { None },
+        label=@sf.t(if split_on { "web-pages.files.unsplit" } else { "web-pages.files.split" }),
+        on_press=fn() {
+          show("split", None, None, None)
+        },
+      ) |> ignore
       @sf.icon_button(c, "plus", key="files/new-tab", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.files.newTab"), on_press=fn() {
         show("open", Some(here), None, None)
       }) |> ignore
@@ -227,10 +228,11 @@ fn tab_row(
       let on = x.id == tabs.current
       let id = c.id("files/tab/" + x.id)
       let cid = c.id("files/tab-close/" + x.id)
-      if c.clicked(cid) {
-        show("close", x.id)
-      } else if !on && c.clicked(id) {
-        show("show", x.id)
+      c.on_press(cid, fn() { show("close", x.id) })
+      if !on {
+        c.on_press(id, fn() {
+          show("show", x.id)
+        })
       }
       // (its ✕ always to a finger, which hovers over nothing)
       let hot = @sf.pointed_or_finger(c, c.lit(id) || c.lit(cid))

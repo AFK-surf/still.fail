@@ -398,32 +398,34 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
       }
       @sf.card_foot(c, fn() {
         let starting = is_doing(core, ["profile.login"], on)
-        if @sf.button(
-            c,
-            if state == "done" || !needed {
-              @sf.t("web-pages.signIn.again")
-            } else {
-              @sf.t("web-pages.profiles.signIn")
-            },
-            key="profile-login/" + key,
-            tone=Primary,
-            icon="log-in",
-            busy=starting,
-          ) {
-          @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))]))
-        }
+        @sf.button(
+          c,
+          if state == "done" || !needed {
+            @sf.t("web-pages.signIn.again")
+          } else {
+            @sf.t("web-pages.profiles.signIn")
+          },
+          key="profile-login/" + key,
+          tone=Primary,
+          icon="log-in",
+          busy=starting,
+          on_press=fn() {
+            @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))]))
+          },
+        ) |> ignore
         if command != "" {
           let shown = profile_edit.command == key
-          if @sf.button(
-              c,
-              // (the short words, the phone's: beside 登录 on a card's foot they fit a phone, the long ones ran past
-              // its edge)
-              if shown { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.login.manualShort") },
-              key="profile-manual/" + key,
-              tone=Ghost,
-            ) {
-            profile_edit.command = if shown { "" } else { key }
-          }
+          @sf.button(
+            c,
+            // (the short words, the phone's: beside 登录 on a card's foot they fit a phone, the long ones ran past
+            // its edge)
+            if shown { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.login.manualShort") },
+            key="profile-manual/" + key,
+            tone=Ghost,
+            on_press=fn() {
+              profile_edit.command = if shown { "" } else { key }
+            },
+          ) |> ignore
         }
       })
       return
@@ -453,9 +455,9 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
     )
     @sf.card_foot(c, fn() {
       let cancelling = is_doing(core, ["profile.cancelLogin"], on)
-      if @sf.button(c, @sf.t("common.cancel"), key="profile-login-cancel/" + key, tone=Ghost, busy=cancelling) {
+      @sf.button(c, @sf.t("common.cancel"), key="profile-login-cancel/" + key, tone=Ghost, busy=cancelling, on_press=fn() {
         @settings.act(core, @sf.t("common.cancel"), "profile.cancelLogin", obj([("station", str(address)), ("id", str(id))]))
-      }
+      }) |> ignore
     })
   })
 }
@@ -485,7 +487,8 @@ pub fn login_steps(
   // same page in the station's browser (回到 … while its tab is open)
   let page_more = fn() {
     let mkey = "profile-more/" + key
-    if @sf.icon_button(c, "more", key=mkey, label=@sf.t("common.login.otherWays")) {
+    let from = c.id(mkey)
+    @sf.icon_button(c, "more", key=mkey, label=@sf.t("common.login.otherWays"), on_press=fn() {
       let items = [Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { @sfbase.copy_out(url, said=@sf.t("common.link.copied")) }))]
       match in_station {
         Some((name, busy, open)) if flag(job, "browser") => {
@@ -496,8 +499,8 @@ pub fn login_steps(
         }
         _ => ()
       }
-      @sf.menu(items, from=Of(c.id(mkey)))
-    }
+      @sf.menu(items, from=Of(from))
+    }) |> ignore
   }
   let waiting = fn(words : String) {
     c.box(style=pf_wait_line, fn() {
@@ -519,9 +522,9 @@ pub fn login_steps(
         )
         |> ignore
         c.box(style=pf_step_buttons, fn() {
-          if @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external") {
+          @sf.button(c, @sf.t("web-pages.profiles.openAuth"), key="profile-auth/" + key, tone=Primary, icon="external", on_press=fn() {
             @settings.confirm_claude_auth(provider == "Claude", fn() { (core.open_link)(url) })
-          }
+          }) |> ignore
           page_more()
         })
         |> ignore
@@ -545,16 +548,17 @@ pub fn login_steps(
             }
           })
           |> ignore
-          if @sf.button(
-              c,
-              @sf.t("web-pages.profiles.finish"),
-              key="profile-code-send/" + key,
-              tone=Primary,
-              busy=sending,
-              disabled=f.text().trim(chars=" \t\n").is_empty(),
-            ) {
-            send()
-          }
+          @sf.button(
+            c,
+            @sf.t("web-pages.profiles.finish"),
+            key="profile-code-send/" + key,
+            tone=Primary,
+            busy=sending,
+            disabled=f.text().trim(chars=" \t\n").is_empty(),
+            on_press=fn() {
+              send()
+            },
+          ) |> ignore
         })
         |> ignore
       })
@@ -571,27 +575,28 @@ pub fn login_steps(
         }
         let copied = profile_edit.command == "copied/" + key
         c.box(style=pf_step_buttons, fn() {
-          if @sf.button(
-              c,
-              if filled {
-                @sf.t("web-pages.profiles.openAuth")
-              } else if copied {
-                @sf.t("web-pages.profiles.copiedReopen")
-              } else {
-                @sf.t("web-pages.profiles.copyOpen")
-              },
-              key="profile-device/" + key,
-              tone=Primary,
-              icon="external",
-            ) {
-            @settings.confirm_claude_auth(provider == "Claude", fn() {
-              if !filled {
-                @ui.clipboard_set(code)
-                profile_edit.command = "copied/" + key
-              }
-              (core.open_link)(url)
-            })
-          }
+          @sf.button(
+            c,
+            if filled {
+              @sf.t("web-pages.profiles.openAuth")
+            } else if copied {
+              @sf.t("web-pages.profiles.copiedReopen")
+            } else {
+              @sf.t("web-pages.profiles.copyOpen")
+            },
+            key="profile-device/" + key,
+            tone=Primary,
+            icon="external",
+            on_press=fn() {
+              @settings.confirm_claude_auth(provider == "Claude", fn() {
+                if !filled {
+                  @ui.clipboard_set(code)
+                  profile_edit.command = "copied/" + key
+                }
+                (core.open_link)(url)
+              })
+            },
+          ) |> ignore
           page_more()
         })
         |> ignore
@@ -649,7 +654,7 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
     let checking = is_doing(core, ["profile.check"], on)
     let refreshing = is_doing(core, ["profile.quota"], on)
     @sf.card_foot(c, fn() {
-      if @sf.button(c, text(issue, "label"), key="recover-go/" + station + "/" + id, tone=Primary, busy=checking || refreshing, disabled=!online) {
+      @sf.button(c, text(issue, "label"), key="recover-go/" + station + "/" + id, tone=Primary, busy=checking || refreshing, disabled=!online, on_press=fn() {
         match action {
           "key" => ask_key(core, station, p)
           "env" => profile_edit.env_open = station + "/" + id
@@ -657,10 +662,10 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
             @settings.act(core, @sf.t("android-settings.quota.checkWhat"), "profile.quota", obj([("station", str(station)), ("id", str(id))]), done=@sf.t("android-settings.quota.updated"))
           _ => check()
         }
-      }
-      if (action == "key" || action == "env") &&
-        @sf.button(c, @sf.t("android-settings.profile.recheck"), key="recover-check/" + station + "/" + id, tone=Ghost, busy=checking, disabled=!online) {
-        check()
+      }) |> ignore
+      if action == "key" || action == "env" {
+        @sf.button(c, @sf.t("android-settings.profile.recheck"), key="recover-check/" + station + "/" + id, tone=Ghost, busy=checking, disabled=!online, on_press=check)
+        |> ignore
       }
     })
   })
@@ -716,32 +721,33 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
         if has(quota, "resetCount") {
           let busy = is_doing(core, ["profile.resetQuota"], on)
           let left = count(quota, "resetCount")
-          if @sf.link_row(
-              c,
-              "profile-reset/" + address + "/" + id,
-              @sf.t("android-settings.quota.resets"),
-              note=text(quota, "resetText"),
-              value=@sf.t("web-pages.profiles.reset"),
-              value_lit=left > 0,
-              chevron=false,
-              goes=left > 0 && !busy,
-              tail=fn() { doing_mark(c, busy, failed_of(core, ["profile.resetQuota"], on)) },
-            ) {
-            confirm(
-              @sf.t("web-pages.profiles.resetConfirm"),
-              @sf.t("web-pages.profiles.resetBody", args=[("name", text(p, "name")), ("n", left.to_string())]),
-              @sf.t("web-pages.profiles.resetAction"),
-              fn() {
-                @settings.act(
-                  core,
-                  @sf.t("web-pages.profiles.resetAction"),
-                  "profile.resetQuota",
-                  obj([("station", str(address)), ("id", str(id))]),
-                  done=@sf.t("web-pages.profiles.quotaReset"),
-                )
-              },
-            )
-          }
+          @sf.link_row(
+            c,
+            "profile-reset/" + address + "/" + id,
+            @sf.t("android-settings.quota.resets"),
+            note=text(quota, "resetText"),
+            value=@sf.t("web-pages.profiles.reset"),
+            value_lit=left > 0,
+            chevron=false,
+            goes=left > 0 && !busy,
+            tail=fn() { doing_mark(c, busy, failed_of(core, ["profile.resetQuota"], on)) },
+            on_press=fn() {
+              confirm(
+                @sf.t("web-pages.profiles.resetConfirm"),
+                @sf.t("web-pages.profiles.resetBody", args=[("name", text(p, "name")), ("n", left.to_string())]),
+                @sf.t("web-pages.profiles.resetAction"),
+                fn() {
+                  @settings.act(
+                    core,
+                    @sf.t("web-pages.profiles.resetAction"),
+                    "profile.resetQuota",
+                    obj([("station", str(address)), ("id", str(id))]),
+                    done=@sf.t("web-pages.profiles.quotaReset"),
+                  )
+                },
+              )
+            },
+          ) |> ignore
         }
       })
     },
@@ -824,17 +830,18 @@ fn profile_used_by(c : @ui.Ctx, core : Core, address : String, o : Json?, p : Js
               None => @sf.t("web-pages.profiles.defaultModel")
             }
         }
-        if @sf.link_row(
-            c,
-            "profile-user/" + address + "/" + text(cv, "id"),
-            text(cv, "name"),
-            value=model,
-            title_cut=true,
-            value_cut=true,
-            lead=fn() { @sf.avatar(c, text(cv, "id"), text(cv, "name"), "", pf_user_avatar) },
-          ) {
-          (core.push)(Connect(address, text(cv, "id")))
-        }
+        @sf.link_row(
+          c,
+          "profile-user/" + address + "/" + text(cv, "id"),
+          text(cv, "name"),
+          value=model,
+          title_cut=true,
+          value_cut=true,
+          lead=fn() { @sf.avatar(c, text(cv, "id"), text(cv, "name"), "", pf_user_avatar) },
+          on_press=fn() {
+            (core.push)(Connect(address, text(cv, "id")))
+          },
+        ) |> ignore
       }
     })
   })
@@ -852,30 +859,31 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
         let state = field(mv, "state")
         let current = station == here_station
         let opens = !current && pid != ""
-        if @sf.link_row(
-            c,
-            "profile-station/" + station,
-            text(mv, "stationName"),
-            goes=opens,
-            chevron_room=true,
-            title_after=fn() {
-              if current { @sf.pill(c, @sf.t("web-pages.connect.current")) }
-            },
-            tail=fn() {
-              if !flag(mv, "online") {
-                @sf.pill(c, @sf.t("web-pages.stations.offline"))
-              } else if pid == "" && text(state, "text") != "" {
-                @sf.pill(c, text(state, "text"), tone=pill_tone(text(state, "tone")))
-              } else if !flag(mv, "usable") {
-                @sf.pill(c, @sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(mv, "sourceName"))]), tone=Red)
-              } else if text(state, "text") != "" {
-                @sf.pill(c, text(state, "text"), tone=pill_tone(text(state, "tone")))
-              }
-            },
-          ) {
-          place_pick[place_key(workspace_of(station), "profiles")] = Profile(station, pid)
-          (core.push)(Profile(station, pid))
-        }
+        @sf.link_row(
+          c,
+          "profile-station/" + station,
+          text(mv, "stationName"),
+          goes=opens,
+          chevron_room=true,
+          title_after=fn() {
+            if current { @sf.pill(c, @sf.t("web-pages.connect.current")) }
+          },
+          tail=fn() {
+            if !flag(mv, "online") {
+              @sf.pill(c, @sf.t("web-pages.stations.offline"))
+            } else if pid == "" && text(state, "text") != "" {
+              @sf.pill(c, text(state, "text"), tone=pill_tone(text(state, "tone")))
+            } else if !flag(mv, "usable") {
+              @sf.pill(c, @sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(mv, "sourceName"))]), tone=Red)
+            } else if text(state, "text") != "" {
+              @sf.pill(c, text(state, "text"), tone=pill_tone(text(state, "tone")))
+            }
+          },
+          on_press=fn() {
+            place_pick[place_key(workspace_of(station), "profiles")] = Profile(station, pid)
+            (core.push)(Profile(station, pid))
+          },
+        ) |> ignore
       }
     })
   })
@@ -917,27 +925,28 @@ fn profile_models(c : @ui.Ctx, core : Core, here : Here, address : String, p : J
     fn() {
       @sf.group(c, fn() {
         let row = "profile-models/" + key
-        if @sf.link_row(
-            c,
-            row,
-            @sf.t("web-main.model.allModels"),
-            value=if all.length() == 0 { @sf.t("web-pages.profiles.noModels") } else { text(p, "modelsText") },
-          ) {
-          @sf.panel(
-            @sf.t("web-pages.profiles.models"),
-            fn(c, _) {
-              // (the profile as its station says it now, as its page reads it: a model added or taken off shown)
-              let now = match items(field(@settings.station_of(core, here, address), "overview"), "profiles").search_by(fn(x) { text(Some(x), "id") == id }) {
-                Some(i) => Some(items(field(@settings.station_of(core, here, address), "overview"), "profiles")[i])
-                None => p
-              }
-              profile_models_panel(c, core, address, now)
-            },
-            // (a dialog of its own, not beside its row: 2026-11-02 用户「用弹窗」)
-            from=Unanchored,
-            lists=true,
-          )
-        }
+        @sf.link_row(
+          c,
+          row,
+          @sf.t("web-main.model.allModels"),
+          value=if all.length() == 0 { @sf.t("web-pages.profiles.noModels") } else { text(p, "modelsText") },
+          on_press=fn() {
+            @sf.panel(
+              @sf.t("web-pages.profiles.models"),
+              fn(c, _) {
+                // (the profile as its station says it now, as its page reads it: a model added or taken off shown)
+                let now = match items(field(@settings.station_of(core, here, address), "overview"), "profiles").search_by(fn(x) { text(Some(x), "id") == id }) {
+                  Some(i) => Some(items(field(@settings.station_of(core, here, address), "overview"), "profiles")[i])
+                  None => p
+                }
+                profile_models_panel(c, core, address, now)
+              },
+              // (a dialog of its own, not beside its row: 2026-11-02 用户「用弹窗」)
+              from=Unanchored,
+              lists=true,
+            )
+          },
+        ) |> ignore
       })
     },
   )
@@ -991,7 +1000,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
           }
           @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
           c.text(name(m), style=pf_model_words) |> ignore
-          if added.contains(m) &&
+          if added.contains(m) {
             @sf.icon_button(
               c,
               "close",
@@ -1001,13 +1010,15 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
               round=true,
               disabled=busy,
               label=@sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
-            ) {
-            @settings.act(
-              core,
-              @sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
-              "profile.put",
-              obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(named.filter(fn(x) { x != m }).map(str)))]))]),
-            )
+              on_press=fn() {
+                @settings.act(
+                  core,
+                  @sf.t("web-pages.profiles.removeModel", args=[("model", name(m))]),
+                  "profile.put",
+                  obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(named.filter(fn(x) { x != m }).map(str)))]))]),
+                )
+              },
+            ) |> ignore
           }
         })
         |> ignore
@@ -1100,18 +1111,19 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           None => None
         }
         let away = subscription && field(share, "reachable") is Some(False)
-        if @sf.link_row(
-            c,
-            "profile-host/" + address + "/" + id,
-            @sf.t("web-pages.profiles.share.copy", args=[("station", host)]),
-            note=if away { @sf.t("web-pages.profiles.share.hostAway", args=[("station", host)]) } else { @sf.t("web-pages.profiles.share.changeThere") },
-            goes=lender is Some(_),
-          ) {
-          match lender {
-            Some(m) => (core.push)(Profile(text(Some(m), "station"), text(Some(m), "profileId")))
-            None => ()
-          }
-        }
+        @sf.link_row(
+          c,
+          "profile-host/" + address + "/" + id,
+          @sf.t("web-pages.profiles.share.copy", args=[("station", host)]),
+          note=if away { @sf.t("web-pages.profiles.share.hostAway", args=[("station", host)]) } else { @sf.t("web-pages.profiles.share.changeThere") },
+          goes=lender is Some(_),
+          on_press=fn() {
+            match lender {
+              Some(m) => (core.push)(Profile(text(Some(m), "station"), text(Some(m), "profileId")))
+              None => ()
+            }
+          },
+        ) |> ignore
         return
       }
       let shared = share is Some(Object(_))
@@ -1164,7 +1176,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
         return
       }
       let targets = stations.filter(fn(x) { text(Some(x), "id") != sid })
-      if subscription && !flag(p, "machine") &&
+      if subscription && !flag(p, "machine") {
         @sf.link_row(
           c,
           "profile-move/" + address + "/" + id,
@@ -1172,8 +1184,10 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           value=text(s, "name"),
           goes=!moving && targets.length() > 0,
           tail=fn() { doing_mark(c, moving, failed_of(core, ["profile.move"], on)) },
-        ) {
-        move_dialog(core, s, p, targets)
+          on_press=fn() {
+            move_dialog(core, s, p, targets)
+          },
+        ) |> ignore
       }
       let allowed = match field(share, "allow") {
         Some(Array(a)) => Some(a.filter_map(fn(x) { if x is String(v) { Some(v) } else { None } }))
@@ -1188,20 +1202,21 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           .map(fn(x) { text(Some(x), "name") })
           .join(@sf.t("web-main.list.separator"))
       }
-      if @sf.link_row(
-          c,
-          "profile-share-pick/" + address + "/" + id,
-          @sf.t("web-pages.profiles.share.stations"),
-          note=if users.length() > 0 {
-            @sf.t("web-pages.profiles.share.users", args=[("stations", users.join(@sf.t("web-main.list.separator")))])
-          } else {
-            ""
-          },
-          value=names,
-          goes=!sharing,
-        ) {
-        pick_stations(core, address, id, stations, sid, allowed)
-      }
+      @sf.link_row(
+        c,
+        "profile-share-pick/" + address + "/" + id,
+        @sf.t("web-pages.profiles.share.stations"),
+        note=if users.length() > 0 {
+          @sf.t("web-pages.profiles.share.users", args=[("stations", users.join(@sf.t("web-main.list.separator")))])
+        } else {
+          ""
+        },
+        value=names,
+        goes=!sharing,
+        on_press=fn() {
+          pick_stations(core, address, id, stations, sid, allowed)
+        },
+      ) |> ignore
     })
   })
 }
@@ -1220,24 +1235,25 @@ fn move_dialog(core : Core, s : Json?, p : Json?, targets : Array[Json]) -> Unit
         for x in targets {
           let xv = Some(x)
           let online = flag(xv, "online")
-          if @sf.link_row(
-              c,
-              "profile-move-to/" + text(xv, "id"),
-              text(xv, "name"),
-              value=if online { "" } else { @sf.t("web-pages.stations.offline") },
-              chevron=false,
-              goes=online,
-              lead=fn() { @sf.status_dot(c, if online { "online" } else { "offline" }) },
-            ) {
-            shut()
-            @settings.act(
-              core,
-              @sf.t("web-pages.profiles.share.move"),
-              "profile.move",
-              obj([("station", str(address)), ("id", str(id)), ("to", str(text(xv, "id")))]),
-              done=@sf.t("web-pages.profiles.share.moved", args=[("station", text(xv, "name"))]),
-            )
-          }
+          @sf.link_row(
+            c,
+            "profile-move-to/" + text(xv, "id"),
+            text(xv, "name"),
+            value=if online { "" } else { @sf.t("web-pages.stations.offline") },
+            chevron=false,
+            goes=online,
+            lead=fn() { @sf.status_dot(c, if online { "online" } else { "offline" }) },
+            on_press=fn() {
+              shut()
+              @settings.act(
+                core,
+                @sf.t("web-pages.profiles.share.move"),
+                "profile.move",
+                obj([("station", str(address)), ("id", str(id)), ("to", str(text(xv, "id")))]),
+                done=@sf.t("web-pages.profiles.share.moved", args=[("station", text(xv, "name"))]),
+              )
+            },
+          ) |> ignore
         }
       })
     },
@@ -1283,7 +1299,7 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
       })
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("web-pages.profiles.share.done"), key="profile-pick-done/" + address + "/" + id, tone=Primary) {
+      @sf.button(c, @sf.t("web-pages.profiles.share.done"), key="profile-pick-done/" + address + "/" + id, tone=Primary, on_press=fn() {
         shut()
         let params = [("station", str(address)), ("id", str(id)), ("on", Json::boolean(true))]
         if !all() {
@@ -1297,7 +1313,7 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
           params.push(("allow", Json::array(allow)))
         }
         @settings.act(core, @sf.t("web-pages.profiles.share.stations"), "profile.share", obj(params))
-      }
+      }) |> ignore
     },
   )
 }
@@ -1387,69 +1403,74 @@ fn profile_account(c : @ui.Ctx, core : Core, s : Json?, p : Json?, signed_in : B
         )
       } else if keyed {
         let saving = is_doing(core, ["profile.put"], on)
-        if @sf.link_row(
+        @sf.link_row(
+          c,
+          "profile-key/" + address + "/" + id,
+          if kind == "opencode-go" {
+            "OpenCode Go key"
+          } else if text(p, "providerName") != "" {
+            text(p, "providerName") + " key"
+          } else {
+            "API key"
+          },
+          note=if text(access, "key") != "" { text(access, "key") } else { @sf.t("web-pages.profiles.notSaved") },
+          value=@sf.t("web-pages.profiles.replace"),
+          value_lit=true,
+          chevron=false,
+          goes=!saving,
+          tail=fn() { doing_mark(c, saving, failed_of(core, ["profile.put"], on)) },
+          on_press=fn() {
+            ask_key(core, address, p)
+          },
+        ) |> ignore
+        if has(access, "endpoint") {
+          let endpoint = text(access, "endpoint")
+          @sf.link_row(
             c,
-            "profile-key/" + address + "/" + id,
-            if kind == "opencode-go" {
-              "OpenCode Go key"
-            } else if text(p, "providerName") != "" {
-              text(p, "providerName") + " key"
-            } else {
-              "API key"
-            },
-            note=if text(access, "key") != "" { text(access, "key") } else { @sf.t("web-pages.profiles.notSaved") },
+            "profile-endpoint/" + address + "/" + id,
+            @sf.t("common.provider.endpoint"),
+            note=endpoint,
             value=@sf.t("web-pages.profiles.replace"),
             value_lit=true,
             chevron=false,
             goes=!saving,
-            tail=fn() { doing_mark(c, saving, failed_of(core, ["profile.put"], on)) },
-          ) {
-          ask_key(core, address, p)
-        }
-        if has(access, "endpoint") {
-          let endpoint = text(access, "endpoint")
-          if @sf.link_row(
-              c,
-              "profile-endpoint/" + address + "/" + id,
-              @sf.t("common.provider.endpoint"),
-              note=endpoint,
-              value=@sf.t("web-pages.profiles.replace"),
-              value_lit=true,
-              chevron=false,
-              goes=!saving,
-            ) {
-            ask(@sf.t("common.provider.endpoint"), endpoint, "https://", @sf.t("common.save"), fn(value) {
-              @settings.act(
-                core,
-                @sf.t("web-pages.profiles.replace"),
-                "profile.put",
-                obj([("station", str(address)), ("id", str(id)), ("input", obj([("access", obj([("kind", str(kind)), ("endpoint", str(value.trim(chars=" \t\n").to_owned()))]))]))]),
-                done=@sf.t("web-pages.profiles.savedChecking"),
-              )
-            })
-          }
+            on_press=fn() {
+              ask(@sf.t("common.provider.endpoint"), endpoint, "https://", @sf.t("common.save"), fn(value) {
+                @settings.act(
+                  core,
+                  @sf.t("web-pages.profiles.replace"),
+                  "profile.put",
+                  obj([("station", str(address)), ("id", str(id)), ("input", obj([("access", obj([("kind", str(kind)), ("endpoint", str(value.trim(chars=" \t\n").to_owned()))]))]))]),
+                  done=@sf.t("web-pages.profiles.savedChecking"),
+                )
+              })
+            },
+          ) |> ignore
         }
       } else {
         // signed in and well: signing in again, or by hand on the machine (OpenCode's has no command to run)
         let starting = is_doing(core, ["profile.login"], on)
-        if @sf.link_row(
-            c,
-            "profile-login/" + address + "/" + id,
-            @sf.t("web-pages.signIn.again"),
-            note=@sf.t("web-pages.profiles.subscriptionSignIn", args=[("provider", text(p, "signInProvider"))]),
-            chevron=false,
-            goes=!starting,
-            tail=fn() { doing_mark(c, starting, failed_of(core, ["profile.login"], on)) },
-          ) {
-          @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))]))
-        }
+        @sf.link_row(
+          c,
+          "profile-login/" + address + "/" + id,
+          @sf.t("web-pages.signIn.again"),
+          note=@sf.t("web-pages.profiles.subscriptionSignIn", args=[("provider", text(p, "signInProvider"))]),
+          chevron=false,
+          goes=!starting,
+          tail=fn() { doing_mark(c, starting, failed_of(core, ["profile.login"], on)) },
+          on_press=fn() {
+            @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))]))
+          },
+        ) |> ignore
         let command = text(p, "loginCommand")
-        if command != "" && @sf.link_row(c, "profile-manual/" + address + "/" + id, @sf.t("web-pages.profiles.manual"), chevron=false) {
-          @sf.panel(
-            @sf.t("web-pages.profiles.manual"),
-            fn(c, _) { @sf.copy_command(c, "profile-command/" + address + "/" + id, command, copy=@sf.t("common.copy"), copied=@sf.t("common.copied")) },
-            from=Unanchored,
-          )
+        if command != "" {
+          @sf.link_row(c, "profile-manual/" + address + "/" + id, @sf.t("web-pages.profiles.manual"), chevron=false, on_press=fn() {
+            @sf.panel(
+              @sf.t("web-pages.profiles.manual"),
+              fn(c, _) { @sf.copy_command(c, "profile-command/" + address + "/" + id, command, copy=@sf.t("common.copy"), copied=@sf.t("common.copied")) },
+              from=Unanchored,
+            )
+          }) |> ignore
         }
       }
     })
@@ -1496,15 +1517,16 @@ fn profile_env(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
       for e in env {
         @sf.link_row(c, "", text(Some(e), "key"), note=text(Some(e), "value"), goes=false) |> ignore
       }
-      if @sf.link_row(
-          c,
-          "profile-env-edit/" + key,
-          if open { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.env.edit") },
-          chevron=false,
-          tail=fn() { doing_mark(c, busy, failed_of(core, ["profile.put"], [("station", address), ("id", id)])) },
-        ) {
-        profile_edit.env_open = if open { "" } else { key }
-      }
+      @sf.link_row(
+        c,
+        "profile-env-edit/" + key,
+        if open { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.env.edit") },
+        chevron=false,
+        tail=fn() { doing_mark(c, busy, failed_of(core, ["profile.put"], [("station", address), ("id", id)])) },
+        on_press=fn() {
+          profile_edit.env_open = if open { "" } else { key }
+        },
+      ) |> ignore
     })
     if open {
       @sf.page_card(c, footed=true, fn() { env_editor(c, core, address, id, key, env, busy) })
@@ -1556,9 +1578,9 @@ fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : Str
           |> ignore
         })
         |> ignore
-        if @sf.button(c, @sf.t("common.delete"), key="profile-env-del/" + key + "/" + r.row.to_string(), tone=Ghost) {
+        @sf.button(c, @sf.t("common.delete"), key="profile-env-del/" + key + "/" + r.row.to_string(), tone=Ghost, on_press=fn() {
           gone.push(r.row)
-        }
+        }) |> ignore
       })
       |> ignore
     }
@@ -1567,14 +1589,14 @@ fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : Str
       profile_edit.env_rows.clear()
       profile_edit.env_rows.append(keep)
     }
-    if @sf.button(c, @sf.t("web-pages.profiles.envAdd"), key="profile-env-add/" + key, tone=Ghost, icon="plus") {
+    @sf.button(c, @sf.t("web-pages.profiles.envAdd"), key="profile-env-add/" + key, tone=Ghost, icon="plus", on_press=fn() {
       profile_edit.env_made += 1
       profile_edit.env_rows.push({ row: profile_edit.env_made, key: @ui.Field::new(), value: @ui.Field::new(), original: "", masked: "" })
-    }
+    }) |> ignore
   })
   |> ignore
   @sf.card_foot(c, at_end=true, fn() {
-    if @sf.button(c, @sf.t("common.save"), key="profile-env-save/" + key, tone=Primary, busy~) {
+    @sf.button(c, @sf.t("common.save"), key="profile-env-save/" + key, tone=Primary, busy~, on_press=fn() {
       // what changed: a name gone or renamed null, a secret left blank kept as it is
       let patch : Map[String, Json] = {}
       let kept = profile_edit.env_rows.map(fn(r) { r.key.text().trim(chars=" \t\n").to_owned() })
@@ -1603,7 +1625,7 @@ fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : Str
         obj([("station", str(address)), ("id", str(id)), ("input", obj([("env", Json::object(patch))]))]),
         done=@sf.t("web-pages.profiles.saved"),
       )
-    }
+    }) |> ignore
   })
 }
 
@@ -1632,9 +1654,9 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String) -> Unit {
       }
     })
     |> ignore
-    if @sf.button(c, @sf.t("web-pages.profiles.addModel"), key="profile-add-model-go/" + address + "/" + id, busy=adding, disabled=f.text().trim(chars=" \t\n").is_empty()) {
+    @sf.button(c, @sf.t("web-pages.profiles.addModel"), key="profile-add-model-go/" + address + "/" + id, busy=adding, disabled=f.text().trim(chars=" \t\n").is_empty(), on_press=fn() {
       add()
-    }
+    }) |> ignore
   })
   |> ignore
 }

@@ -6,7 +6,7 @@
 /// The bar's edit key (Preview.kt BarIcon(Icons.Edit, pressed)): 28 round, a 14 icon; picking, the accent's 14% under
 /// it and its icon in the accent's ink. Named 标注 for a screen reader, what it does said on hover (Marks.tsx: 停止点选
 /// while picking).
-fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
+fn page_mark_key(c : @ui.Ctx, on : Bool, on_press? : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id("service/mark")
   let b = c.box(style=if on { mark_key_on } else { mark_key }, id~, fn() {
@@ -16,7 +16,10 @@ fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.annotate.mark"))
   @sf.tip(c, "service/mark/tip", id, @sf.t(if on { "web-main.annotate.stopPicking" } else { "web-main.annotate.pageTip" }))
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -267,13 +270,13 @@ fn page_marks_over(
       let pin_x = dmax(pin_edge, x)
       let pin_y = dmax(pin_top, y)
       let pin = c.id("service/pin/\{mark.n}")
-      if c.clicked(pin) {
+      c.on_press(pin, fn() {
         m.editing = if open { None } else { Some(mark.n) }
         if !open {
           m.note.set(mark.comment)
-          c.focus_editor("service/note")
+          c.focus_field(m.note)
         }
-      }
+      })
       c.box(style=mark_pin, tx=pin_x - pin_edge, ty=pin_y - pin_rise, id=pin, fn() {
         c.box(style=mark_pin_in, fn() { c.text("\{mark.n}", style=mark_pin_words) |> ignore }) |> ignore
       })
@@ -285,11 +288,11 @@ fn page_marks_over(
         let right = stage_w - pin_x - said_from >= dmin(said_room, pin_x - said_left)
         let max_w = dmax(said_least, if right { stage_w - pin_x - said_from } else { pin_x - said_left })
         let said = c.id("service/said/\{mark.n}")
-        if c.clicked(said) {
+        c.on_press(said, fn() {
           m.editing = Some(mark.n)
           m.note.set(mark.comment)
-          c.focus_editor("service/note")
-        }
+          c.focus_field(m.note)
+        })
         let row = @ui.style(row=true, w=Fixed(if right { max_w } else { pin_x - said_beside }), justify=if right {
           JStart
         } else {

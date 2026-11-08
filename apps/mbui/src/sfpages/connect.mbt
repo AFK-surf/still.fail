@@ -324,20 +324,21 @@ fn cd_slack_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> U
       create_app_steps(c, core, station, text(cv, "name"))
       token_fields(c, core, tk)
       @sf.card_foot(c, at_end=true, fn() {
-        if @sf.button(
-            c,
-            @sf.t("web-pages.connect.saveConnect"),
-            key="connect-save-tokens/" + id,
-            tone=Primary,
-            busy=tokens_busy(core, tk) || saving,
-            disabled=!tokens_ready(core, tk),
-          ) {
-          tokens_check(core, tk, fn() {
-            let input = obj([("slack", tokens_input(tk))])
-            tokens_clear(core, tk)
-            cd_put(core, station, id, input, done=@sf.t("web-pages.connect.tokenSavedConnecting"))
-          })
-        }
+        @sf.button(
+          c,
+          @sf.t("web-pages.connect.saveConnect"),
+          key="connect-save-tokens/" + id,
+          tone=Primary,
+          busy=tokens_busy(core, tk) || saving,
+          disabled=!tokens_ready(core, tk),
+          on_press=fn() {
+            tokens_check(core, tk, fn() {
+              let input = obj([("slack", tokens_input(tk))])
+              tokens_clear(core, tk)
+              cd_put(core, station, id, input, done=@sf.t("web-pages.connect.tokenSavedConnecting"))
+            })
+          },
+        ) |> ignore
       })
     })
   })
@@ -359,25 +360,26 @@ fn cd_token_dialog(core : Core, station : String, cv : Json?) -> Unit {
     },
     fn(c, shut) {
       let tk = slack_tokens(c, core, station, key, connect=id)
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
         tokens_drop(core, key)
-      }
+      }) |> ignore
       let saving = is_doing(core, ["connect.put"], [("station", station), ("id", id)])
-      if @sf.button(
-          c,
-          @sf.t("web-pages.connect.saveReconnect"),
-          key=key + "/save",
-          tone=Primary,
-          busy=tokens_busy(core, tk) || saving,
-          disabled=!tokens_ready(core, tk),
-        ) {
-        tokens_check(core, tk, fn() {
-          cd_put(core, station, id, obj([("slack", tokens_input(tk))]), done=@sf.t("web-pages.connect.tokenSavedReconnecting"))
-          shut()
-          tokens_drop(core, key)
-        })
-      }
+      @sf.button(
+        c,
+        @sf.t("web-pages.connect.saveReconnect"),
+        key=key + "/save",
+        tone=Primary,
+        busy=tokens_busy(core, tk) || saving,
+        disabled=!tokens_ready(core, tk),
+        on_press=fn() {
+          tokens_check(core, tk, fn() {
+            cd_put(core, station, id, obj([("slack", tokens_input(tk))]), done=@sf.t("web-pages.connect.tokenSavedReconnecting"))
+            shut()
+            tokens_drop(core, key)
+          })
+        },
+      ) |> ignore
     },
   )
 }
@@ -458,51 +460,55 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
     @sf.group(c, fn() {
       // its model: picked here, or none its station runs for its runtime (to the station's profiles)
       if models.length() == 0 {
-        if @sf.link_row(
-            c,
-            "connect-no-models/" + id,
-            @sf.t("web-pages.profiles.models"),
-            note=@sf.t("web-pages.connect.noModelsFor", args=[("runtime", text(cv, "runtimeText"))]),
-          ) {
-          (core.push)(Profiles(station))
-        }
+        @sf.link_row(
+          c,
+          "connect-no-models/" + id,
+          @sf.t("web-pages.profiles.models"),
+          note=@sf.t("web-pages.connect.noModelsFor", args=[("runtime", text(cv, "runtimeText"))]),
+          on_press=fn() {
+            (core.push)(Profiles(station))
+          },
+        ) |> ignore
       } else {
         @sf.said_row(c, @sf.t("web-pages.profiles.models"), "", value=fn() {
           model_triple(c, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
         })
       }
       // how its conversations become sessions, switched in a dialog
-      if @sf.link_row(
-          c,
-          "connect-mode/" + id,
-          @sf.t("web-pages.connect.session"),
-          value=text(cv, "modeLabel"),
-          note=text(cv, "modeSentence"),
-        ) {
-        cd_mode_dialog(core, station, item)
-      }
+      @sf.link_row(
+        c,
+        "connect-mode/" + id,
+        @sf.t("web-pages.connect.session"),
+        value=text(cv, "modeLabel"),
+        note=text(cv, "modeSentence"),
+        on_press=fn() {
+          cd_mode_dialog(core, station, item)
+        },
+      ) |> ignore
       // the one they all go into: its chat, another chosen
       if single {
         let bound = field(item, "bound")
-        if @sf.link_row(
-            c,
-            "connect-bound/" + id,
-            @sf.t("web-pages.connect.current"),
-            value=if bound is Some(Object(_)) { text(bound, "titleText") } else { @sf.t("web-pages.connect.noSession") },
-            goes=bound is Some(Object(_)),
-          ) {
-          (core.open_chat)(station, text(bound, "key"), text(bound, "titleText"))
-        }
-        if @sf.link_row(
-            c,
-            "connect-switch/" + id,
-            @sf.t("web-pages.connect.switch"),
-            chevron=false,
-            goes=!binding,
-            tail=fn() { doing_mark(c, binding, failed_of(core, ["connect.bindSession"], bind_on), inline=true) },
-          ) {
-          cd_choose_dialog(core, station, item)
-        }
+        @sf.link_row(
+          c,
+          "connect-bound/" + id,
+          @sf.t("web-pages.connect.current"),
+          value=if bound is Some(Object(_)) { text(bound, "titleText") } else { @sf.t("web-pages.connect.noSession") },
+          goes=bound is Some(Object(_)),
+          on_press=fn() {
+            (core.open_chat)(station, text(bound, "key"), text(bound, "titleText"))
+          },
+        ) |> ignore
+        @sf.link_row(
+          c,
+          "connect-switch/" + id,
+          @sf.t("web-pages.connect.switch"),
+          chevron=false,
+          goes=!binding,
+          tail=fn() { doing_mark(c, binding, failed_of(core, ["connect.bindSession"], bind_on), inline=true) },
+          on_press=fn() {
+            cd_choose_dialog(core, station, item)
+          },
+        ) |> ignore
       }
     })
     @sf.page_note(c, @sf.t(if changes { "web-pages.connect.runtimeChanges" } else { "web-pages.connect.runtimeNote" }, args=[("runtime", text(cv, "runtimeText"))]))
@@ -572,11 +578,11 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
       }
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let ch = change()
-      if @sf.button(c, text(ch, "action"), key=key + "/save", tone=Primary, disabled=!flag(ch, "changed")) {
+      @sf.button(c, text(ch, "action"), key=key + "/save", tone=Primary, disabled=!flag(ch, "changed"), on_press=fn() {
         let (mode, mention, threads) = next.val
         let input = [("mode", str(mode)), ("requireMention", Json::boolean(mention))]
         if text(cv, "kind") == "feishu" {
@@ -590,7 +596,7 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
           done=@sf.t("web-pages.connect.modeChanged"),
         )
         shut()
-      }
+      }) |> ignore
     },
   )
 }
@@ -636,31 +642,32 @@ fn cd_choose_dialog(core : Core, station : String, item : Json?) -> Unit {
       |> ignore
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let fresh = choice.val == "new"
-      if @sf.button(
-          c,
-          @sf.t(if fresh { "web-pages.connect.createUse" } else { "web-pages.connect.useThis" }),
-          key=key + "/use",
-          tone=Primary,
-          disabled=opt_text(cv, "session") == Some(choice.val),
-        ) {
-        @settings.act(
-          core,
-          @sf.t("web-pages.connect.switch"),
-          "connect.bindSession",
-          obj([
-            ("station", str(station)),
-            ("connect", str(id)),
-            ("session", if fresh { Json::null() } else { str(choice.val) }),
-            ("title", str(title.text())),
-          ]),
-          done=@sf.t(if fresh { "web-pages.connect.sessionCreated" } else { "web-pages.connect.sessionSwitched" }),
-        )
-        shut()
-      }
+      @sf.button(
+        c,
+        @sf.t(if fresh { "web-pages.connect.createUse" } else { "web-pages.connect.useThis" }),
+        key=key + "/use",
+        tone=Primary,
+        disabled=opt_text(cv, "session") == Some(choice.val),
+        on_press=fn() {
+          @settings.act(
+            core,
+            @sf.t("web-pages.connect.switch"),
+            "connect.bindSession",
+            obj([
+              ("station", str(station)),
+              ("connect", str(id)),
+              ("session", if fresh { Json::null() } else { str(choice.val) }),
+              ("title", str(title.text())),
+            ]),
+            done=@sf.t(if fresh { "web-pages.connect.sessionCreated" } else { "web-pages.connect.sessionSwitched" }),
+          )
+          shut()
+        },
+      ) |> ignore
     },
   )
 }
@@ -693,7 +700,7 @@ fn cd_sessions(c : @ui.Ctx, core : Core, station : String, item : Json?) -> Unit
         }
         cd_session_row(c, core, station, Some(s))
       }
-      if sessions.length() > cd_sessions_shown &&
+      if sessions.length() > cd_sessions_shown {
         @sf.link_row(
           c,
           "connect-sessions-all/" + me,
@@ -703,8 +710,10 @@ fn cd_sessions(c : @ui.Ctx, core : Core, station : String, item : Json?) -> Unit
             @sf.t("web-pages.connect.showAll", args=[("n", sessions.length().to_string())])
           },
           chevron=false,
-        ) {
-        cd_all_sessions[me] = !all
+          on_press=fn() {
+            cd_all_sessions[me] = !all
+          },
+        ) |> ignore
       }
     })
   })
@@ -723,24 +732,25 @@ fn cd_session_row(c : @ui.Ctx, core : Core, station : String, s : Json?) -> Unit
     "accent" => Accented
     _ => Neutral
   }
-  if @sf.link_row(
-      c,
-      "connect-session-row/" + key,
-      text(s, "titleText"),
-      value=text(field(field(s, "time"), "lastActiveAt"), "ago"),
-      title_cut=true,
-      value_cut=true,
-      chevron=false,
-      tail=fn() {
-        match text(s, "statusLead") {
-          "done" => @sf.pill(c, text(s, "statusRest"), tone~, icon="check")
-          "wait" => @sf.pill(c, text(s, "statusRest"), tone~, icon="wait")
-          _ => @sf.pill(c, text(s, "statusText"), tone~)
-        }
-      },
-    ) {
-    (core.open_chat)(station, key, text(s, "titleText"))
-  }
+  @sf.link_row(
+    c,
+    "connect-session-row/" + key,
+    text(s, "titleText"),
+    value=text(field(field(s, "time"), "lastActiveAt"), "ago"),
+    title_cut=true,
+    value_cut=true,
+    chevron=false,
+    tail=fn() {
+      match text(s, "statusLead") {
+        "done" => @sf.pill(c, text(s, "statusRest"), tone~, icon="check")
+        "wait" => @sf.pill(c, text(s, "statusRest"), tone~, icon="wait")
+        _ => @sf.pill(c, text(s, "statusText"), tone~)
+      }
+    },
+    on_press=fn() {
+      (core.open_chat)(station, key, text(s, "titleText"))
+    },
+  ) |> ignore
 }
 
 ///|
@@ -793,11 +803,11 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
       }
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let to = owner.val.trim(chars=" \t\n").to_owned()
-      if @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, disabled=to == "" || owner.val == current) {
+      @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, disabled=to == "" || owner.val == current, on_press=fn() {
         let people = items(workspace_view(core, here).value, "members")
         let chosen = people.iter().find_first(fn(p) { text(Some(p), "email").to_lower() == to.to_lower() })
         let name = match chosen {
@@ -806,7 +816,7 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
         }
         cd_put(core, station, id, obj([("owner", obj([("id", str(to)), ("name", str(name))]))]), done=@sf.t("web-pages.connect.ownerChanged"))
         shut()
-      }
+      }) |> ignore
     },
   )
 }
@@ -821,22 +831,23 @@ fn cd_feishu_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> 
     @sf.group(c, fn() {
       match opt_text(app, "console") {
         Some(url) if url != "" =>
-          if @sf.link_row(c, "feishu-console/" + id, "App ID", note=text(app, "appId"), value=@sf.t("web-pages.connect.feishu.openConsole"), out=true) {
+          @sf.link_row(c, "feishu-console/" + id, "App ID", note=text(app, "appId"), value=@sf.t("web-pages.connect.feishu.openConsole"), out=true, on_press=fn() {
             (core.open_link)(url)
-          }
+          }) |> ignore
         _ => @sf.said_row(c, "App ID", text(app, "appId"))
       }
-      if @sf.link_row(
-          c,
-          "feishu-replace/" + id,
-          "App Secret",
-          note=if text(app, "appSecret") == "" { "••••••••" } else { text(app, "appSecret") },
-          value=@sf.t("web-pages.connect.feishu.replace"),
-          value_lit=true,
-          chevron=false,
-        ) {
-        cd_secret_dialog(core, station, cv)
-      }
+      @sf.link_row(
+        c,
+        "feishu-replace/" + id,
+        "App Secret",
+        note=if text(app, "appSecret") == "" { "••••••••" } else { text(app, "appSecret") },
+        value=@sf.t("web-pages.connect.feishu.replace"),
+        value_lit=true,
+        chevron=false,
+        on_press=fn() {
+          cd_secret_dialog(core, station, cv)
+        },
+      ) |> ignore
       @sf.link_row(
         c,
         "",
@@ -867,12 +878,12 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
       })
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let typed = secret.text().trim(chars=" \t\n").to_owned()
       let saving = is_doing(core, ["feishu.putSecret"], [("station", station), ("id", id)])
-      if @sf.button(c, @sf.t("web-pages.connect.saveReconnect"), key=key + "/save", tone=Primary, busy=saving, disabled=typed == "") {
+      @sf.button(c, @sf.t("web-pages.connect.saveReconnect"), key=key + "/save", tone=Primary, busy=saving, disabled=typed == "", on_press=fn() {
         error.set("")
         (core.call)("feishu.putSecret", obj([("station", str(station)), ("id", str(id)), ("appSecret", str(typed))]), fn(r) {
           match r {
@@ -883,7 +894,7 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
             Err(e) => error.set(error_text(e))
           }
         })
-      }
+      }) |> ignore
     },
   )
 }
