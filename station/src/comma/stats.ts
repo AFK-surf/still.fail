@@ -25,6 +25,9 @@ export const BUILD_DAYS = 31;
 const DAY_MS = 24 * 60 * 60_000;
 const SETTLE_MS = 60_000;
 const EVERY_MS = 60 * 60_000;
+// A writer that keeps committing while the old rows are classified can keep dirtying them indefinitely. After
+// several such turns, apply the still-dirty rows with the original predicate instead of never finishing the build.
+const ACTIVE_REPAIR_TURNS = 4;
 /// The source the rows are of, as Comma's analysis names it.
 export const SOURCE = "stillfail";
 const SEP = "\u0000";
@@ -321,11 +324,23 @@ export class CommaStats {
   async #applyBuild(stations: StationRows[], unread: string[], from: number): Promise<void> {
     let installed = false;
     let retryMs = 25;
+    let version: number | null = null;
+    let activeTurns = 0;
     while (!this.#closed) {
       try {
         if (!installed) { installStatsAge(this.#db); installed = true; }
-        if (!statsAgeReady(this.#db, 0)) statsAgeStep(this.#db);
-        else if (this.#apply(stations, unread, from, true) !== null) return;
+        const ready = statsAgeReady(this.#db, 0) || statsAgeStep(this.#db).done;
+        // Apply as soon as a batch has caught up. Yielding here would let a steady older writer dirty one row on
+        // every turn and keep the build waiting even though each batch had finished all of its work.
+        let dirtyLimit: number | null = 0;
+        if (!ready && statsAgeReady(this.#db, null)) {
+          const current = (this.#db.prepare("PRAGMA data_version").get() as { data_version: number }).data_version;
+          activeTurns = version !== null && current !== version ? activeTurns + 1 : 0;
+          version = current;
+          // Unchanged old rows still use the index; a sustained writer's remaining dirty rows are read as before.
+          if (activeTurns >= ACTIVE_REPAIR_TURNS) dirtyLimit = null;
+        } else if (!ready) { version = null; activeTurns = 0; }
+        if ((ready || dirtyLimit === null) && this.#apply(stations, unread, from, true, dirtyLimit) !== null) return;
         retryMs = 25;
         await new Promise<void>((resolve) => setImmediate(resolve));
       } catch (error) {
@@ -350,7 +365,7 @@ export class CommaStats {
     return this.#apply(stations, unread, from, false)!;
   }
 
-  #apply(stations: StationRows[], unread: string[], from: number, indexed: boolean): { stats: number; tasks: number } | null {
+  #apply(stations: StationRows[], unread: string[], from: number, indexed: boolean, dirtyLimit: number | null = 0): { stats: number; tasks: number } | null {
     const fromDay = new Date(Math.floor(from / DAY_MS) * DAY_MS).toISOString().slice(0, 10);
     const stats = new Map<string, { kind: string; json: string }>();
     const tasks = new Map<string, { kind: string; json: string }>();
@@ -363,9 +378,9 @@ export class CommaStats {
     let changed = { stats: 0, tasks: 0 };
     this.#db.exec("BEGIN");
     try {
-      // The other writer may have changed rows after preparation. Check this transaction's snapshot before using
-      // the index; classify any changed rows in another batch without writing a partial build.
-      if (indexed && !statsAgeReady(this.#db, 0)) {
+      // Recheck in this transaction's snapshot. If preparation is no longer usable, classify again without writing a
+      // partial build; any dirty rows allowed here are included and checked by the original predicate.
+      if (indexed && !statsAgeReady(this.#db, dirtyLimit)) {
         this.#db.exec("ROLLBACK");
         return null;
       }
