@@ -11,6 +11,7 @@ import {
   "station/outflow",
   "station/turns",
   "station/said",
+  "station/archivelast",
   "moonbitlang/core/json",
 }
 
