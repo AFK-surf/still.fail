@@ -481,11 +481,33 @@ let nav_back_icon : Double = 22.0
 let nav_back_ripple : Double = 8.0
 
 ///|
-/// A heading over a group (heading's, narrow: SectionHeader, 12 in, its words strong, 14 over it and 6 under).
-pub fn heading_node(parent : @view.View, title : () -> String) -> Unit {
+/// A heading over a group (heading's, narrow: SectionHeader, 12 in, its words strong, 14 over it and 6 under). `ends`:
+/// what is done on its title's line, at its end, 8 apart across the line's middle and no taller than it (heading's
+/// `actions`: their room for a finger past it into the heading's own over and under it).
+pub fn heading_node(parent : @view.View, title : () -> String, ends? : (@view.View) -> Unit) -> Unit {
   parent.box(fn(l) {
     l.row(Is(true)).padding(Is((12.0, 14.0, 8.0, title_card_narrow))).gap(Is(8.0)).lines_up(Is(Some(End))) |> ignore
-    l.box(fn(w) { styled_words(w, title, fn() { pg_heading }) |> ignore }) |> ignore
+    l.box(fn(w) {
+      if ends is Some(_) {
+        w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      }
+      styled_words(w, title, fn() { pg_heading }) |> ignore
+    })
+    |> ignore
+    match ends {
+      Some(make) =>
+        l.box(fn(e) {
+          e
+          .row(Is(true))
+          .gap(Is(8.0))
+          .lines_up(Is(Some(Middle)))
+          .height(By(fn() { Some(node_sp(e, @ui.tree_theme().text_size(Body).1)) }))
+          |> ignore
+          make(e)
+        })
+        |> ignore
+      None => ()
+    }
   })
   |> ignore
 }
@@ -552,7 +574,8 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// the room for both. `folds`: it
 /// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `tail` after what it
 /// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). One that `adds` one more to the list
-/// it ends (添加): one that acts, after a ＋ in the link's ink. Its words as they are said.
+/// it ends (添加): one that acts, after a ＋ in the link's ink. `wide_title`: its title's look on a wide page (a
+/// setting's: setting_link_node). Its words as they are said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -578,6 +601,7 @@ pub fn link_row_node(
   tail? : (@view.View) -> Unit,
   tail_shown? : () -> Bool = fn() { true },
   adds? : Bool = false,
+  wide_title? : () -> @ui.TextStyle,
 ) -> Unit {
   // (one that adds: one that acts, after a ＋ in the link's ink, link_row's `adds`)
   let acts = acts || adds
@@ -604,7 +628,7 @@ pub fn link_row_node(
     }
     wide_link_row_node(
       parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, lead_ink, goes, ends, mark, acts, below,
-      below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown,
+      below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown, wide_title,
     )
     return
   }
@@ -923,7 +947,7 @@ let switch_disabled_alpha : Double = 0.5
 
 ///|
 /// A row on a group's card that turns something on or off (switch_row's; narrow, in a card: its title, `note` quieter
-/// under it, its switch at its end across their middle; wide: wide_switch_row_node's); the switch alone answers. `on`,
+/// under it, its switch at its end across their middle; wide: wide_control_row_node's); the switch alone answers. `on`,
 /// `turn`: switch_node's. `in_words`: on a page's card of words (page_card_node), where narrow it is a row of its words
 /// (16 between them and the switch), not a group's row.
 pub fn switch_row_node(
@@ -936,23 +960,20 @@ pub fn switch_row_node(
   lead? : (@view.View) -> Unit,
   in_words? : Bool = false,
 ) -> Unit {
+  let control = fn(r : @view.View) { switch_node(r, on, turn, title, disabled~) }
   if look_node(parent) is Wide {
     // (among a card's words, its title as strong as a setting's: switch_row's wide)
     if in_words {
-      wide_switch_row_node(parent, title, on, turn, note, disabled, lead, looks=(fn() { setting_title() }, fn() {
-        theme().rows.note
-      }))
+      wide_control_row_node(parent, title, note, lead, control, looks=(fn() { setting_title() }, fn() { theme().rows.note }))
     } else {
-      wide_switch_row_node(parent, title, on, turn, note, disabled, lead)
+      wide_control_row_node(parent, title, note, lead, control)
     }
     return
   }
   // (narrow, among a card's words: a row of words with its switch, no row's ground or room of its own, switch_row's
   // in_words)
   if in_words {
-    wide_switch_row_node(parent, title, on, turn, note, disabled, lead, looks=(fn() { pg_switch_title }, fn() {
-      meta.then(full_words)
-    }))
+    wide_control_row_node(parent, title, note, lead, control, looks=(fn() { pg_switch_title }, fn() { meta.then(full_words) }))
     return
   }
   parent.box(fn(r) {
@@ -971,7 +992,7 @@ pub fn switch_row_node(
       words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { meta.then(full_words) }) |> ignore })
     })
     |> ignore
-    switch_node(r, on, turn, title, disabled~)
+    control(r)
   })
   |> ignore
 }

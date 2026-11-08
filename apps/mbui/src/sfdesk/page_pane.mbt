@@ -286,6 +286,8 @@ fn pane_made(
       made("auto-policy/" + st, fn(a, core, here, _stint, frame, width) {
         @sfpages.policy_node(a, core, here, st, on_back=core.pop, frame~, width~)
       })
+    Setting(Appearance) =>
+      made("appearance", fn(a, core, _here, _stint, frame, width) { @sfpages.appearance_node(a, core, on_back=core.pop, frame~, width~) })
     Setting(Permissions) =>
       made("permissions", fn(a, core, _here, _stint, frame, width) {
         @sfpages.permissions_node(a, core, on_back=core.pop, frame~, width~)

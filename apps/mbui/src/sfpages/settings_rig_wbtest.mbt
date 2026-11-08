@@ -117,6 +117,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     }
     Notifications => notify_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     AutoPolicy(st) => policy_node(p, core, here, st, on_back=core.pop, frame~, width~)
+    Appearance => appearance_node(p, core, on_back=core.pop, frame~, width~)
     Permissions => permissions_node(p, core, on_back=core.pop, frame~, width~)
     MemoryDoc(a, skill, at) => memory_doc_node(p, core, here, a, skill, at, on_back=core.pop, frame~, width~)
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
@@ -139,7 +140,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
   @settings.frame(core, here)
   let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
   match route {
-    Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
     BarSettings => bars_page(c, core, frame)
     Me => me_page(c, core, here, frame)

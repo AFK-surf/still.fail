@@ -395,6 +395,10 @@ fn tape_made(
       made("auto-policy/" + st, fn(p, core, here, _stint, told, _acts) {
         @sfpages.policy_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    Setting(Appearance) if pane_makes.val =>
+      made("appearance", fn(p, core, _here, _stint, told, _acts) {
+        @sfpages.appearance_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
     Setting(Permissions) if pane_makes.val =>
       made("permissions", fn(p, core, _here, _stint, told, _acts) {
         context_node(p)

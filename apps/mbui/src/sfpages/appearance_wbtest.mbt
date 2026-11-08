@@ -48,8 +48,8 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
         } }
     })
     let at = "\{w} platform \{platform}"
-    let titles = t.boxes().filter(fn(b) { b.text == "震动" })
-    assert_eq(titles.length(), 1, msg=at)
+    let titles = t.boxes_held().filter(fn(b) { b.text == "震动" })
+    assert_eq(titles.length(), 1, msg="\{at}: \{titles.map(fn(b) { (b.x, b.y, b.w, b.h, b.weight) })}")
     let (x, y, _, sh) = t.get(Switch, label="震动").rect
     assert_true(x >= titles[0].x + titles[0].w, msg="\{at}: switch follows its title")
     if !laid_wide(w) {
@@ -90,12 +90,12 @@ test "外观: wide setting titles have the same weight as the rows in 自动决�
     }, w=900.0, platform~)
     plain.draw()
     assert_eq(plain.census().weight, weight)
-    let link = @ui.Tester::new(fn(c) {
-      @sf.begin(c) |> ignore
-      @sf.setting_link(c, "fonts", "字体", "") |> ignore
-    }, w=900.0, platform~)
-    link.draw()
-    assert_eq(link.census().weight, weight)
+    // 外观's settings laid out wide (主题's choice, 字体's row going to its page): their titles as strong
+    let page = setting_tester(Appearance, 1280.0, platform~)
+    for title in ["主题", "字体", "震动"] {
+      let found = page.boxes_held().filter(fn(b) { b.text == title })
+      assert_eq(found.map(fn(b) { b.weight }), [500], msg="\{platform}: \{title} \{found.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
+    }
     // a switch's row in a group (分享给其他 station over 可用的 station): its title no lighter than the rows by it
     let switch = @ui.Tester::new(fn(c) {
       @sf.begin(c) |> ignore
