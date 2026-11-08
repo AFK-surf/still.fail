@@ -114,6 +114,29 @@ fn NodeWay::put_at(self : NodeWay, n : @view.View, from : Double, to : Double, s
 }
 
 ///|
+/// On a way from `from` (put there, still) to `to` as `spec` says from the moment `at` (a cause's), its end a moment
+/// of `n`'s: set off anew from its start (a shape's ground from the shape it showed).
+fn NodeWay::go_from(self : NodeWay, n : @view.View, from : Double, to : Double, spec : Spec, at : Double) -> Unit {
+  (self.due)()
+  self.way.put(from)
+  self.way.go(to, spec, at~)
+  self.due = if self.way.ends_at() >= 0.0 {
+    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+  } else {
+    fn() {  }
+  }
+}
+
+///|
+/// Whether it goes at `n`'s logic's moment, followed: told as a way is said and as it ends (its declared end, a moment
+/// of `n`'s).
+fn NodeWay::goes(self : NodeWay, n : @view.View) -> Bool {
+  self.way.said()
+  self.ended.get() |> ignore
+  self.way.goes_at(n.logic_at())
+}
+
+///|
 /// Where it is as `n` is drawn: at the moment it is drawn at while it goes, where it went once it is there.
 fn NodeWay::shown(self : NodeWay, n : @view.View) -> Double {
   self.way.said()

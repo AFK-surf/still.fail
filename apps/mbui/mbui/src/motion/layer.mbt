@@ -245,23 +245,6 @@ priv struct Rec {
 }
 
 ///|
-/// Corners `r` (top left, then round it) as a box `w` by `h` draws them: each no more than half its shorter side.
-fn corners_in(r : (Double, Double, Double, Double), w : Double, h : Double) -> (Double, Double, Double, Double) {
-  let half = dmin(w, h) / 2.0
-  (dmin(r.0, half), dmin(r.1, half), dmin(r.2, half), dmin(r.3, half))
-}
-
-///|
-/// Corners `a` gone `p` of the way to `b`, each its own.
-fn corners_mix(
-  a : (Double, Double, Double, Double),
-  b : (Double, Double, Double, Double),
-  p : Double,
-) -> (Double, Double, Double, Double) {
-  (a.0 + (b.0 - a.0) * p, a.1 + (b.1 - a.1) * p, a.2 + (b.2 - a.2) * p, a.3 + (b.3 - a.3) * p)
-}
-
-///|
 fn Rec::new() -> Rec {
   {
     x: 0.0,
@@ -784,7 +767,7 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
     Some(r) if r.alive && !r.g_carry => {
       let p = r.gp.get()
       if p < 1.0 {
-        (r.y - r.gy + r.g_carried_y) * (1.0 - p)
+        ground_over(r.y, r.gy, r.g_carried_y, p)
       } else {
         0.0
       }
@@ -1817,19 +1800,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.was_y - ry - pinned
         }) +
           foot_moved_in(e.by, frame)
-        let p0 = r.was_gp
-        let gx = r.was_gx + (r.was_x - r.was_gx) * p0
+        let was = (r.was_x, r.was_y, r.was_w, r.was_h)
+        let (gx, gy, gw, gh) = shape_mix((r.was_gx, r.was_gy, r.was_gw, r.was_gh), was, r.was_gp)
         // (from its foot: as its ground sets off, below)
-        let gy = r.was_gy + (r.was_y - r.was_gy) * p0 +
-          (if e.reshape && e.foot && !e.carry { ry + nh - (r.was_y + r.was_h) } else { 0.0 })
-        let gw = r.was_gw + (r.was_w - r.was_gw) * p0
-        let gh = r.was_gh + (r.was_h - r.was_gh) * p0
-        let ground = if e.reshape {
-          dmax(dmax((gx - rx).abs(), (gy - ry).abs()), dmax((gx + gw - rx - nw).abs(), (gy + gh - ry - nh).abs()))
-        } else {
-          0.0
-        }
-        dmax(dmax(dx.abs(), dy.abs()), dmax(dmax((nh - r.was_h).abs(), (nw - r.was_w).abs()), ground))
+        let gy = gy + (if e.reshape && e.foot && !e.carry { foot_moved_by(was, (rx, ry, nw, nh)) } else { 0.0 })
+        let ground = if e.reshape { shape_far((gx, gy, gw, gh), (rx, ry, nw, nh)) } else { 0.0 }
+        way_far(dx, dy, nw - r.was_w, nh - r.was_h, ground)
       }
       // (one whose way is said for it, as long as that: what moves on another's clock)
       let spec = if e.spec.way_said() { e.spec } else { e.spec.over(far) }
@@ -1969,10 +1945,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       if e.reshape {
         let to_r = corners_in(c.node_radii(e.node), nw, nh)
         let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
-        let changed_shape = (r.was_x - rx).abs() > 0.5 ||
-          (r.was_y - ry).abs() > 0.5 ||
-          (r.was_w - nw).abs() > 0.5 ||
-          (r.was_h - nh).abs() > 0.5
+        let was = (r.was_x, r.was_y, r.was_w, r.was_h)
+        let laid = (rx, ry, nw, nh)
+        let was_g = (r.was_gx, r.was_gy, r.was_gw, r.was_gh)
+        let changed_shape = shape_changed(was, laid)
         let p0 = r.was_gp
         if still || !was_seen {
           r.gp.snap(1.0)
@@ -1982,16 +1958,17 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         } else if caused && changed_shape {
           // from the shape it showed as the frame began (on its way, or as it was laid out)
           let wr = corners_in(r.was_rad, r.was_w, r.was_h)
-          r.gx = r.was_gx + (r.was_x - r.was_gx) * p0
-          r.gy = r.was_gy + (r.was_y - r.was_gy) * p0
+          let (gx, gy, gw, gh) = shape_mix(was_g, was, p0)
+          r.gx = gx
+          r.gy = gy
           // A carry moves the ground to another place. If a resize interrupts it, preserve that visible position for
           // drawing while keeping the carried translation out of the room reported to what stands on the shape.
-          r.g_carried_y = if r.was_g_carry { r.gy - r.was_y } else { r.was_g_carried_y * (1.0 - p0) }
-          r.gw = r.was_gw + (r.was_w - r.was_gw) * p0
-          r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
+          r.g_carried_y = carried_y_from(r.was_g_carry, r.gy, r.was_y, r.was_g_carried_y, p0)
+          r.gw = gw
+          r.gh = gh
           // (from its foot: its foot moved this frame by what holds it there at once, its ground set off from there)
           if e.foot && !e.carry {
-            let moved = ry + nh - (r.was_y + r.was_h)
+            let moved = foot_moved_by(was, laid)
             r.gy = r.gy + moved
             foot_moved[e.by] = (frame, moved)
           }
@@ -2003,11 +1980,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         } else {
           // what holds it moved or resized it: where it set out from as far off its new shape as it was off its old,
           // its way going on as it was (a build before this one set it off anew: back as the frame began)
-          r.gx = r.was_gx + (rx - r.was_x)
-          r.gy = r.was_gy + (ry - r.was_y)
+          let (gx, gy, gw, gh) = shape_held(was_g, was, laid)
+          r.gx = gx
+          r.gy = gy
           r.g_carried_y = r.was_g_carried_y
-          r.gw = r.was_gw + (nw - r.was_w)
-          r.gh = r.was_gh + (nh - r.was_h)
+          r.gw = gw
+          r.gh = gh
           r.gr = r.was_gr
           if r.g_now {
             r.g_now = false
@@ -2019,16 +1997,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         }
         let p = r.gp.get()
         if p < 1.0 {
-          let ox = nx - rx
-          let oy = ny - ry
-          c.draw_ground(
-            e.node,
-            ox + r.gx + (rx - r.gx) * p,
-            oy + r.gy + (ry - r.gy) * p,
-            r.gw + (nw - r.gw) * p,
-            r.gh + (nh - r.gh) * p,
-            corners_mix(r.gr, to_r, p),
-          )
+          let (x, y, w, h) = ground_drawn_at((nx - rx, ny - ry), (r.gx, r.gy, r.gw, r.gh), laid, p)
+          c.draw_ground(e.node, x, y, w, h, corners_mix(r.gr, to_r, p))
         }
       }
       r.rad = c.node_radii(e.node)
@@ -2055,10 +2025,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       if r.on == 0 && !was_seen && !still && !e.reshape {
         match carrier(c, e.node) {
           Some((a, ar)) if ar.g_carry && ar.gp.get() < 1.0 => {
-            let (ax, ay, aw, ah) = c.node_rect(a.node)
             r.on = a.key
-            r.on_edges = (if nx + nw / 2.0 > ax + aw / 2.0 { 1 } else { 0 }) +
-              (if ny + nh / 2.0 > ay + ah / 2.0 { 2 } else { 0 })
+            r.on_edges = carried_edges((nx, ny, nw, nh), c.node_rect(a.node))
           }
           _ => ()
         }
@@ -2066,18 +2034,11 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       let (cx, cy) = match mo.recs.get(r.on) {
         Some(ar) if r.on != 0 && ar.seen == frame && ar.gp.get() < 1.0 => {
           let p = ar.gp.get()
-          let gx = ar.gx + (ar.x - ar.gx) * p
-          let gy = ar.gy + (ar.y - ar.gy) * p
-          let gw = ar.gw + (ar.w - ar.gw) * p
-          let gh = ar.gh + (ar.h - ar.gh) * p
           // (its own moves none meanwhile: where it is drawn is the ground's)
           r.ox.snap(0.0)
           r.oy.snap(0.0)
           r.driven = false
-          (
-            if r.on_edges % 2 == 1 { gx + gw - ar.x - ar.w } else { gx - ar.x },
-            if r.on_edges >= 2 { gy + gh - ar.y - ar.h } else { gy - ar.y },
-          )
+          carried_off((ar.gx, ar.gy, ar.gw, ar.gh), (ar.x, ar.y, ar.w, ar.h), p, r.on_edges)
         }
         _ => {
           r.on = 0

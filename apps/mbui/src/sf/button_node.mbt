@@ -2,7 +2,7 @@
 // page or the hover's where the hand is on it (dur_ms, eased out, from the moment that changed); faded while it cannot
 // be pressed; at work, a spinner's room opening before its words (a Move as far as that room) and the spinner turning
 // in it, coming in as it opens; its words changed, its ground and its words going together to where they are laid out
-// (moves_together: the same cause, one length); read out a button, pressed where it is laid out.
+// (moves_for: the same cause, one length); read out a button, pressed where it is laid out.
 
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
@@ -142,8 +142,8 @@ pub fn button_node(
     v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
     // (its words changed: its ground from the shape it had, its words from where they were, together: reshape and
     // layout by its words)
-    let g = @motion.moves_together(v, label, spec=button_reshape)
-    g.add(v, reshapes=true)
-    g.add(words)
+    let m = @motion.moves_for(v, label, spec=button_reshape)
+    m.reshapes(v)
+    m.moves_with(words)
   })
 }

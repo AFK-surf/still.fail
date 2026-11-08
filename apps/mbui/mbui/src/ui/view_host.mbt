@@ -1231,10 +1231,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     } else if (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) &&
       stretching.length() == 0 &&
       turn == 0.0 &&
-      ground_drawn.0 == 0.0 &&
-      ground_drawn.1 == 0.0 &&
-      ground_drawn.2 == 0.0 &&
-      ground_drawn.3 == 0.0 &&
+      !ground_drawn.reshaped() &&
       (c.shadow.2 & 0xFFL) == 0L {
       // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own
       // drawn or made, no glyph of its words asked of the host, as the old frame paints nothing of what lies outside its
@@ -1339,7 +1336,7 @@ fn Ctx::view_drawn(
   ux : Double,
   uy : Double,
   turn : Double,
-  ground_drawn : (Double, Double, Double, Double),
+  ground_drawn : @view.GroundShape,
 ) -> Int {
   // (its edge after what it holds, where it holds something drawn: border_over's, a clear one too: its ground inside
   // it, its band left clear, as an old view's box with a border of no colour)
@@ -1984,7 +1981,7 @@ fn Ctx::view_blit(
   a : Double,
   lx : Double,
   ly : Double,
-  ground? : (Double, Double, Double, Double) = (0.0, 0.0, 0.0, 0.0),
+  ground? : @view.GroundShape = @view.ground_as_laid,
 ) -> Unit {
   let block = made.inst
   let n = block.length() / inst_size
@@ -2050,9 +2047,9 @@ fn Ctx::view_blit(
     s.unsafe_set(b, if lx == x { on_pixels(x + gx, sc) } else { x + on_pixels(lx + gx, sc) - lx })
     s.unsafe_set(b + 1, if ly == y { on_glyph_row(y + base, goy, sc) } else { y + on_glyph_row(ly + base, goy, sc) - ly })
   }
-  // (its own ground drawn off where it is laid out and bigger, as it says (View::ground_drawn): before its glass's
-  // capture is told where it is)
-  let (gx, gy, gw, gh) = ground
+  // (its own ground drawn off where it is laid out, bigger and as round as it says (View::ground_drawn): before its
+  // glass's capture is told where it is)
+  let { dx: gx, dy: gy, dw: gw, dh: gh, corners } = ground
   if gx != 0.0 || gy != 0.0 || gw != 0.0 || gh != 0.0 {
     for i in 0..<made.ground_n {
       let b = at + i * inst_size
@@ -2061,6 +2058,14 @@ fn Ctx::view_blit(
       s[b + 2] = s[b + 2] + gw
       s[b + 3] = s[b + 3] + gh
     }
+  }
+  match corners {
+    // (each corner of each of its ground's instances, as corners_each writes them as they are emitted)
+    Some((r0, r1, r2, r3)) =>
+      for i in 0..<made.ground_n {
+        self.corners_each(self.ninst + i, r0, r1, r2, r3)
+      }
+    None => ()
   }
   // (its glass's capture, as the frame is composed here: what was drawn under it before it, wherever that is now)
   if made.glass_at >= 0 {
