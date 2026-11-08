@@ -376,13 +376,20 @@ fn form_rows_node(
 
 ///|
 /// Where what someone set going shows how it is (doing_mark's) as nodes: a spinner while it is under way, a small red
-/// mark while it failed a moment ago, why said under the pointer (in `tips`, where given).
-fn doing_mark_node(v : @view.View, running : () -> Bool, failed : () -> String?, tips? : @sf.TipLayer) -> Unit {
+/// mark while it failed a moment ago, why said under the pointer (in `tips`, where given). `size`: its spinner's and its mark's
+/// (doing_mark's: 12 beside a row's words, inline; 14 otherwise).
+fn doing_mark_node(
+  v : @view.View,
+  running : () -> Bool,
+  failed : () -> String?,
+  tips? : @sf.TipLayer,
+  size? : Double = doing_mark_inline,
+) -> Unit {
   v.pick(fn() { if running() { 1 } else if failed() is Some(_) { 2 } else { 0 } }, fn(p, what) {
     match what {
-      1 => @sf.spinner_node(p, size=@sf.spinner_inline) |> ignore
+      1 => @sf.spinner_node(p, size~) |> ignore
       2 => {
-        let mark = @sf.icon_node(p, "info", doing_mark_inline, By(fn() { @sf.theme().p.red }))
+        let mark = @sf.icon_node(p, "info", size, By(fn() { @sf.theme().p.red }))
         match tips {
           Some(t) =>
             @sf.tip_node(t, mark, fn() {

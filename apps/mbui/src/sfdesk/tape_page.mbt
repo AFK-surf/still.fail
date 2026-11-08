@@ -419,6 +419,11 @@ fn tape_made(
         context_node(p)
         @sfpages.security_open_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    Setting(Workspace) if pane_makes.val =>
+      made("workspace", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.workspace_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~, tips~)
+      })
     Setting(AutoCompletion) if pane_makes.val =>
       made("auto-completion", fn(p, core, here, _stint, told, acts) {
         context_node(p)
