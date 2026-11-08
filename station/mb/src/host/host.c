@@ -250,3 +250,12 @@ moonbit_bytes_t sfh_args(void) {
   free(all);
   return out;
 }
+
+/// This process's id.
+int32_t sfh_pid(void) {
+#ifdef _WIN32
+  return (int32_t)GetCurrentProcessId();
+#else
+  return (int32_t)getpid();
+#endif
+}

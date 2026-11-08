@@ -71,6 +71,93 @@ fn message(e : Error) -> String {
 }
 
 ///|
+/// The backfill permit as a builder that takes it only for its writes asks the pool for it (read/requested-builder.ts
+/// `lazy`): a line `{"take": true}` answered `{"permit": …}`, and `{"give": true}` when it is done with it before
+/// answering (an answer gives it back as well).
+struct Permit {
+  host : @host.Host
+  mut holding : Bool
+}
+
+///|
+async fn Permit::take(self : Permit) -> Bool {
+  if self.holding {
+    return true
+  }
+  let ask : Json = { "take": true }
+  self.host.say(ask.stringify())
+  guard self.host.line() is Some(line) else { return false }
+  let reply : Json = @json.parse(line) catch { _ => Json::null() }
+  self.holding = reply is { "permit": True, .. }
+  self.holding
+}
+
+///|
+fn Permit::give(self : Permit) -> Unit {
+  if self.holding {
+    let given : Json = { "give": true }
+    self.host.say(given.stringify())
+    self.holding = false
+  }
+}
+
+///|
+/// The builder of the sessions' turn counts (said-worker.ts's `session` asks): a count kept going between asks; one
+/// let go (`cancel`) has its guard removed, under the permit.
+async fn turn_builder(host : @host.Host, db_path : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=250)
+  db.exec("PRAGMA synchronous = NORMAL")
+  let permit = { host, holding: false }
+  let counts : Map[String, @turns.Scan] = Map([])
+  let tokens = Ref(0)
+  let token = () => {
+    tokens.val += 1
+    "\{@host.now()}-\{tokens.val}-\{@host.pid()}"
+  }
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask : Json = @json.parse(line) catch { _ => Json::null() }
+    guard ask is { "session": String(session), .. } else {
+      let invalid : Json = { "done": false, "error": "invalid old turn counts preparation request" }
+      host.say(invalid.stringify())
+      continue
+    }
+    if ask is { "cancel": True, .. } {
+      if counts.get(session) is Some(scan) {
+        counts.remove(session)
+        if permit.take() {
+          // (a later request or a write replaces the guard: a failure here is nothing)
+          ignore(
+            db.run("DELETE FROM session_turns_guard WHERE session=? AND token=?", [
+              Json::string(session),
+              Json::string(scan.token()),
+            ]),
+          ) catch {
+            _ => ()
+          }
+          permit.give()
+        }
+      }
+      continue
+    }
+    let answer : Json = try {
+      let (done, scan) = @turns.step(db, session, counts.get(session), token~, may_write=() => permit.take())
+      match scan {
+        Some(scan) => counts[session] = scan
+        None => counts.remove(session)
+      }
+      { "done": Json::boolean(done) }
+    } catch {
+      e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
+    }
+    permit.holding = false
+    host.say(answer.stringify())
+  }
+}
+
+///|
 /// A step of what is built whole (`{"scope": "all"}`).
 fn all(step : (@sql.Db) -> Bool raise) -> (@sql.Db, Json) -> Bool? raise {
   (db, ask) => if ask is { "scope": "all", .. } { Some(step(db)) } else { None }
@@ -159,6 +246,8 @@ fn main {
         }
         _ => None
       }))
+    (Some("turn-counts"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => turn_builder(host, db))
     (Some("session-list"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session list", (db, ask) => match ask {
         // (the list, and for search the list visited again: each batch takes a step of the list, then of the audit)
@@ -178,7 +267,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts --db <file>")
       2
     }
   }
