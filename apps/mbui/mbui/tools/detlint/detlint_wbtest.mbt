@@ -2066,3 +2066,23 @@ test "frame-number" {
   )
   |> ignore
 }
+
+///|
+test "ui-current" {
+  // the frame's context reached through the global outside mbui's ui: counted (a call each); in ui, in a test, a
+  // method or a name of its own called `current`, and @ui.current not called, not
+  let fs = found(
+    [
+      (
+        "src/sfbase/viewer_tree.mbt",
+        "fn v(n : @view.View) -> Unit {\n  n.on_press(fn() { @ui.current().blur() })\n  let c = @ui.current()\n  let k = @ui.current\n}\n",
+      ),
+      ("src/ui/draw.mbt", "pub fn current() -> Ctx {\n  g()\n}\nfn h() -> Unit {\n  current().blur()\n}\n"),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  @ui.current().blur()\n}\n"),
+      ("src/kit/y.mbt", "fn y(s : Scroll) -> Unit {\n  s.current()\n  current()\n  @view.current()\n}\n"),
+    ],
+    "ui-current",
+    2,
+  )
+  assert_eq(lines(fs), [2, 3])
+}

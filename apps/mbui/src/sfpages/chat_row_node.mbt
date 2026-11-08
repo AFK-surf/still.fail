@@ -211,7 +211,7 @@ pub fn chat_row_node(
         None
       },
       corner_shown=cornered,
-      corner_w=fn() { row_aside_w_node(item(), lead) },
+      corner_w=fn() { row_aside_w_node(row, item(), lead) },
       slotted=swipes,
       end_slot=kind_slot_w,
       corner_end=fn() { row_aside_end_w(item(), lead) },
@@ -658,13 +658,14 @@ fn swiped_key(item : ChatItem) -> String {
 let row_key_side : Double = 24.0
 
 ///|
-/// How wide what row_aside_node shows is (row_aside_w's), by its parts' sizes as the theme says them now.
-fn row_aside_w_node(item : ChatItem, lead : String) -> Double {
+/// How wide what row_aside_node shows is (row_aside_w's), by its parts' sizes as the theme says them now, its words at
+/// the system's size of words where row `v` is drawn.
+fn row_aside_w_node(v : @view.View, item : ChatItem, lead : String) -> Double {
   let l = @sf.theme().chat_list
   let groups = @sfbase.row_agent_groups(item)
   let people = item.people
   let th = @ui.tree_theme()
-  let more_w = fn(n : Int) { @ui.text_advance("+\{n}", size=@ui.current().sp(th.text_size(Meta).0)) }
+  let more_w = fn(n : Int) { @ui.text_advance("+\{n}", size=@sf.node_sp(v, th.text_size(Meta).0)) }
   let parts : Array[Double] = []
   if groups.length() > 0 {
     let shown = if groups.length() > aside_most { aside_most } else { groups.length() }
@@ -726,7 +727,7 @@ fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
         let (x, y) = b.window_down_point()
         let (left, top, w, h) = b.placed_window_now()
         if x < left || x >= left + w || y < top || y >= top + h {
-          @ui.current().blur()
+          b.focus_let_go()
           done()
         }
       }

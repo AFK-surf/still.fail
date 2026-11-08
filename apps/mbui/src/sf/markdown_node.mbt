@@ -595,7 +595,7 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
   let marker_w = fn() {
     match list() {
       Some(l) if l.ordered =>
-        dmax(md_marker_w, @ui.text_advance("\{l.start + l.items.length() - 1}.", size=@ui.current().sp(s())) + md_marker_gap)
+        dmax(md_marker_w, @ui.text_advance("\{l.start + l.items.length() - 1}.", size=node_sp(p, s())) + md_marker_gap)
       _ => md_marker_w
     }
   }
@@ -630,7 +630,7 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
     |> ignore
     let line = fn() {
       row.words_redone() |> ignore
-      @ui.current().sp(md_line(md, s()))
+      node_sp(row, md_line(md, s()))
     }
     row.pick(ordered, fn(m, numbered) {
       if numbered {
@@ -730,7 +730,7 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
   .row(Is(true))
   .width(By(fn() {
     t.words_redone() |> ignore
-    Some(@ui.current().sp(task_room))
+    Some(node_sp(t, task_room))
   }))
   .height(By(fn() { Some(line()) }))
   .padding(Is((4.0, 0.0, 8.0, 0.0)))

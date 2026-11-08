@@ -330,6 +330,10 @@ fn lint_mbt(
     if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
       add("page-hand", c.at, f.line_text(c.at))
     }
+    // the frame's context reached from anywhere (`@ui.current()`): outside mbui's ui, which keeps it, and the tests
+    if c.name == "current" && c.kind == "pkg" && c.qual == "@ui" && !in_t && !f.rel.has_prefix("src/ui/") {
+      add("ui-current", c.at, f.line_text(c.at))
+    }
     // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
     if c.name == "native_input" &&
       c.kind == "pkg" &&

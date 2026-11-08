@@ -64,6 +64,9 @@ fn transport() -> QuicTransportConfig {
         .congestion_controller_factory(Arc::new(cubic))
         .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
         .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
+        // A link kept 10 minutes in silence, as the station's (its CONNECTION_IDLE_MS): a phone's browser freezes a tab
+        // in the background.
+        .max_idle_timeout(Some(iroh::endpoint::VarInt::from_u32(10 * 60_000).into()))
         .build()
 }
 

@@ -1518,6 +1518,7 @@ pub fn Field::composing(Self) -> Bool
 pub fn Field::focus(Self) -> Unit
 pub fn Field::follow(Self, String, generation? : Int32) -> Unit
 pub fn Field::laid(Self, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, trim? : Bool) -> FieldLaid
+pub fn Field::let_go(Self) -> Unit
 pub fn Field::new(text? : String) -> Self
 pub fn Field::pick(Self, Int32, Int32) -> Unit
 pub fn Field::selection(Self) -> (Int32, Int32)
