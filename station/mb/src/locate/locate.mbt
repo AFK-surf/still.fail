@@ -154,10 +154,7 @@ fn Locator::start(self : Locator, id : Json, message : Json) -> Unit raise {
     let row = found.get(0)
     let rows = match row {
       Some(r) if text(r.get("runtime")) is Some(runtime) && runtime_kind(runtime) =>
-        self.db.all(
-          "SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid",
-          [Json::string(key)],
-        )
+        self.db.all(sources_sql, [Json::string(key)])
       _ => []
     }
     self.db.exec("COMMIT")
@@ -189,35 +186,7 @@ fn Locator::start(self : Locator, id : Json, message : Json) -> Unit raise {
     self.say({ "type": "done", "id": id, "identity": identity, "runtime": runtime, "current": false })
     return
   }
-  let current_id = text(r.get("runtime_session_id"))
-  let source = (s : Map[String, Json]) => Source::{
-    id: text(s.get("id")).unwrap_or(""),
-    runtime: text(s.get("runtime")).unwrap_or(""),
-    profile: text(s.get("profile")),
-  }
-  let profile = text(r.get("profile"))
-  let sources : Array[Source?] = []
-  match current_id {
-    None => for s in rows { sources.push(Some(source(s))) }
-    Some(cid) => {
-      let mut current : Source? = None
-      let marked = rows.length() > history_batch
-      for s in rows {
-        let s = source(s)
-        if s.id == cid {
-          if current is None {
-            current = Some(s)
-          }
-          if marked {
-            sources.push(None)
-          }
-        } else {
-          sources.push(Some(s))
-        }
-      }
-      sources.push(Some(current.unwrap_or({ id: cid, runtime, profile })))
-    }
-  }
+  let sources = ordered_sources(r, rows)
   let cwd = text(r.get("cwd"))
   let workspace = text(r.get("workspace")).unwrap_or("")
   let places = match cwd {
@@ -279,4 +248,49 @@ fn Locator::ask_hints(self : Locator, l : Locating) -> Unit {
     "profile": match s.profile { Some(p) => Json::string(p); None => Json::null() },
   })
   self.say({ "type": "hints", "id": l.id, "sources": Json::array(sources) })
+}
+
+///|
+let sources_sql : String = "SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid"
+
+///|
+/// A session's runtime sessions in the order a history reads them (store.ts `historyRuntimeSources`): the current one
+/// last, a duplicate of it past a page counted where it was (None).
+fn ordered_sources(r : Map[String, Json], rows : Array[Map[String, Json]]) -> Array[Source?] {
+  let current_id = text(r.get("runtime_session_id"))
+  let source = (s : Map[String, Json]) => Source::{
+    id: text(s.get("id")).unwrap_or(""),
+    runtime: text(s.get("runtime")).unwrap_or(""),
+    profile: text(s.get("profile")),
+  }
+  let sources : Array[Source?] = []
+  match current_id {
+    None => for s in rows { sources.push(Some(source(s))) }
+    Some(cid) => {
+      let mut current : Source? = None
+      let marked = rows.length() > history_batch
+      for s in rows {
+        let s = source(s)
+        if s.id == cid {
+          if current is None {
+            current = Some(s)
+          }
+          if marked {
+            sources.push(None)
+          }
+        } else {
+          sources.push(Some(s))
+        }
+      }
+      sources.push(Some(current.unwrap_or({ id: cid, runtime: text(r.get("runtime")).unwrap_or(""), profile: text(r.get("profile")) })))
+    }
+  }
+  sources
+}
+
+///|
+/// A session's runtime sessions (`historyRuntimeSources`), none when the session is not there.
+pub fn history_sources(db : @sql.Db, key : Json) -> Array[Source?] raise {
+  guard db.all("SELECT * FROM sessions WHERE key = ?", [key]).get(0) is Some(r) else { return [] }
+  ordered_sources(r, db.all(sources_sql, [key]))
 }

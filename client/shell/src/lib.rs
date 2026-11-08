@@ -96,6 +96,76 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// A file being read a part at a time (`text.open`).
+struct TextReader {
+    source: Box<dyn std::io::Read + Send>,
+    /// Read and not given yet.
+    held: Vec<u8>,
+    lines: bool,
+    done: bool,
+}
+
+/// How much of a file a part holds at most, past a line's end (counter.ts CHUNK).
+const TEXT_PART: usize = 8 << 20;
+
+impl TextReader {
+    fn fill(&mut self, want: usize) {
+        while !self.done && self.held.len() < want {
+            let mut buf = vec![0u8; (want - self.held.len()).max(64 << 10)];
+            match self.source.read(&mut buf) {
+                Ok(0) | Err(_) => self.done = true,
+                Ok(n) => self.held.extend_from_slice(&buf[..n]),
+            }
+        }
+    }
+
+    fn next(&mut self) -> Option<String> {
+        self.fill(TEXT_PART);
+        if self.lines {
+            // (a part ends at the last line end in its window, else at the first after it, as counter.ts `partsOf`)
+            let window = self.held.len().min(TEXT_PART);
+            let cut = match self.held[..window].iter().rposition(|&b| b == b'\n') {
+                Some(i) => i,
+                None => loop {
+                    if let Some(i) = self.held.iter().position(|&b| b == b'\n') {
+                        break i;
+                    }
+                    if self.done {
+                        return None;
+                    }
+                    let more = self.held.len() + TEXT_PART;
+                    self.fill(more);
+                },
+            };
+            let part: Vec<u8> = self.held.drain(..=cut).collect();
+            return Some(String::from_utf8_lossy(&part).into_owned());
+        }
+        if self.held.is_empty() {
+            return None;
+        }
+        // (a piece ends where a character does, but at the end)
+        let mut end = self.held.len().min(TEXT_PART);
+        if end < self.held.len() || !self.done {
+            let mut back = 0;
+            while back < 3 && end > back && (self.held[end - 1 - back] & 0xc0) == 0x80 {
+                back += 1;
+            }
+            if end > back && self.held[end - 1 - back] >= 0xc0 {
+                let lead = self.held[end - 1 - back];
+                let len = if lead >= 0xf0 { 4 } else if lead >= 0xe0 { 3 } else { 2 };
+                if back + 1 < len {
+                    end -= back + 1;
+                }
+            }
+        }
+        if end == 0 {
+            end = self.held.len();
+        }
+        let piece: Vec<u8> = self.held.drain(..end).collect();
+        Some(String::from_utf8_lossy(&piece).into_owned())
+    }
+}
+
 /// `path` made absolute and its `.` and `..` taken out by their names alone, as Node's path.resolve does.
 fn lexical(path: &std::path::Path) -> PathBuf {
     use std::path::Component;
@@ -419,6 +489,8 @@ struct Inner {
     next: AtomicU64,
     /// The accounts' databases open, by id, with their files.
     sqls: Mutex<HashMap<u64, (Option<PathBuf>, rusqlite::Connection)>>,
+    /// Files being read a part at a time (`text.open`), by id.
+    texts: Mutex<HashMap<u64, TextReader>>,
     /// How long an account's database is waited for as it is opened, while another process holds it (`open_wait`).
     open_wait: std::time::Duration,
     /// Where a message for the app goes straight from here (`sf_shell_set_say`): none, nothing is tapped.
@@ -1377,6 +1449,42 @@ impl Inner {
         // A file's text: `strict` as a TextDecoder with `fatal` reads it (a leading byte order mark dropped, none when it
         // is not UTF-8), else as Node's readFileSync(path, "utf8") does (what is not UTF-8 replaced); null when it does
         // not read.
+        // A transcript read a part at a time (station/src/usage/counter.ts `readFrom`, search/sources.ts `mentions`): the
+        // file as long as it was when opened, or its `.zst` (every frame, the seek table passed over) when the file is
+        // not there. Each `text.next` is the next part, decoded as Buffer.toString("utf8") does: `lines` whole lines of
+        // at most about 8 MB (a last line without its end left out, as readFrom leaves it), else every byte, in pieces
+        // cut where a character ends. Null at the end; `text.close` lets it go.
+        if op == "text.open" {
+            let path = PathBuf::from(str_of(a, "path")?);
+            let lines = a.get("lines").and_then(Value::as_bool).unwrap_or(false);
+            let packed = PathBuf::from(format!("{}.zst", path.display()));
+            let source: Box<dyn std::io::Read + Send> = match std::fs::File::open(&path) {
+                Ok(file) => {
+                    let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+                    Box::new(std::io::Read::take(file, size))
+                }
+                Err(_) => match std::fs::File::open(&packed) {
+                    Ok(file) => match zstd::stream::read::Decoder::new(file) {
+                        Ok(d) => Box::new(d),
+                        Err(_) => return Ok(Value::Null),
+                    },
+                    Err(_) => return Ok(Value::Null),
+                },
+            };
+            let id = self.next.fetch_add(1, Ordering::Relaxed);
+            self.texts.lock().map_err(|_| "the readers are gone".to_string())?.insert(id, TextReader { source, held: Vec::new(), lines, done: false });
+            return Ok(json!({ "id": id }));
+        }
+        if op == "text.next" {
+            let id = id_of(a)?;
+            let mut texts = self.texts.lock().map_err(|_| "the readers are gone".to_string())?;
+            let reader = texts.get_mut(&id).ok_or_else(|| format!("no reader {id}"))?;
+            return Ok(reader.next().map_or(Value::Null, Value::String));
+        }
+        if op == "text.close" {
+            self.texts.lock().map_err(|_| "the readers are gone".to_string())?.remove(&id_of(a)?);
+            return Ok(Value::Null);
+        }
         if op == "fs.read" {
             let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
             if a.get("strict").and_then(Value::as_bool).unwrap_or(false) {
@@ -1500,7 +1608,7 @@ impl Shell {
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
         let adb = adb::Adb::new(dir.clone());
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), texts: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }

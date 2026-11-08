@@ -412,9 +412,10 @@ async fn live_locator(host : @host.Host, db_path : String, data : String, sep : 
 ///|
 /// The search (search/worker.ts): each `{"type": "query"}` looked for in a fiber of its own, the searches taking turns
 /// where the worker let others through, answered `{id, groups}` or `{id, error}`; `{"type": "cancel", id}` stops one.
-/// The execution histories are not looked through here (the station asks the worker for them).
+/// Where transcripts were found is kept between searches, as the worker keeps it.
 async fn search_program(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
   let db = @sql.Db::attach(host, db_path, wait=5000)
+  let finder = @locate.Finder::new(host, sep)
   let cancelled : Set[String] = Set([])
   while host.line() is Some(line) {
     let told : Json = @json.parse(line) catch { _ => continue }
@@ -426,7 +427,7 @@ async fn search_program(host : @host.Host, db_path : String, data : String, sep 
         ignore(
           host.rt.fork(() => {
             let answer : Json = try {
-              { "id": id, "groups": Json::array(@search.answer(db, host, data, sep, told, () => cancelled.contains(key))) }
+              { "id": id, "groups": Json::array(@history.answer(db, host, data, sep, finder, told, () => cancelled.contains(key))) }
             } catch {
               e => { "id": id, "error": Json::string(@search.describe(e)) }
             }

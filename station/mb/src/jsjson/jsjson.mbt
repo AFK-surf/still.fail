@@ -404,3 +404,67 @@ pub fn stringify(v : JValue) -> String {
   write(out, v)
   out.to_string()
 }
+
+///|
+fn ordered(entries : Array[(Array[Int], JValue)]) -> Array[(Array[Int], JValue)] {
+  let indexed = entries.filter(e => index_of(e.0) is Some(_))
+  indexed.sort_by((a, b) => index_of(a.0).unwrap().compare(index_of(b.0).unwrap()))
+  indexed + entries.filter(e => index_of(e.0) is None)
+}
+
+///|
+fn write_pretty(out : StringBuilder, v : JValue, depth : Int) -> Unit {
+  let pad = (d : Int) => {
+    out.write_char('\n')
+    for _ in 0..<(d * 2) {
+      out.write_char(' ')
+    }
+  }
+  match v {
+    Arr(items) if items.length() > 0 => {
+      out.write_char('[')
+      for i, item in items {
+        if i > 0 {
+          out.write_char(',')
+        }
+        pad(depth + 1)
+        write_pretty(out, item, depth + 1)
+      }
+      pad(depth)
+      out.write_char(']')
+    }
+    Obj(entries) if entries.length() > 0 => {
+      out.write_char('{')
+      for i, e in ordered(entries) {
+        if i > 0 {
+          out.write_char(',')
+        }
+        pad(depth + 1)
+        quote(out, e.0)
+        out.write_string(": ")
+        write_pretty(out, e.1, depth + 1)
+      }
+      pad(depth)
+      out.write_char('}')
+    }
+    v => write(out, v)
+  }
+}
+
+///|
+/// The value as JSON.stringify(v, null, 2) writes it.
+pub fn stringify_pretty(v : JValue) -> String {
+  let out = StringBuilder::new()
+  write_pretty(out, v, 0)
+  out.to_string()
+}
+
+///|
+/// A string's UTF-16 code units as text, lone surrogates kept (a MoonBit string holds them as JavaScript's does).
+pub fn raw_text(s : Array[Int]) -> String {
+  let out = StringBuilder::new()
+  for c in s {
+    out.write_char(c.unsafe_to_char())
+  }
+  out.to_string()
+}
