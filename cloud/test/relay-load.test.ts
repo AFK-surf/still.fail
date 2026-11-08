@@ -5,6 +5,10 @@ import { LIMITS } from "../src/limits.ts";
 import { relayConns, relayLoad, type Load } from "../src/relay-metrics.ts";
 import { relayLoadView, type Sample } from "../src/relay-load-view.ts";
 
+// A cron at a minute that is only the every-minute one's (not the hourly models' at :07, not a probe's): the real
+// clock's minute made the hourly catalog's fetch of models.dev run in the test at :07 (2026-11-08, run 42469996303).
+const EVERY_MINUTE_ONLY = new Date(Date.UTC(2026, 0, 1, 0, 1));
+
 const METRICS = [
   "# HELP relayserver_bytes_sent_total x",
   "relayserver_bytes_sent_total 1000",
@@ -173,8 +177,8 @@ test("the cron reads still.fail's own relay's counters, and says in Axiom how ne
   const got: any[] = [];
   const h = await harness({ axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
   try {
-    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string }): Promise<{ outcome: string }> };
-    assert.equal((await api.scheduled({ cron: "* * * * *" })).outcome, "ok");
+    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string; scheduledTime: Date }): Promise<{ outcome: string }> };
+    assert.equal((await api.scheduled({ cron: "* * * * *", scheduledTime: EVERY_MINUTE_ONLY })).outcome, "ok");
     const admin = h.as(await h.login("alice"), "admin");
     const answer = await (await admin("GET", "/v1/admin/relays")).json() as { relays: { at: number | null; open: number | null }[] };
     assert.equal(answer.relays[0]!.at, h.now());
