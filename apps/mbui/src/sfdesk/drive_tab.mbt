@@ -13,12 +13,12 @@
 
 ///|
 /// The tab: whether it is being built, where it is by workspace (None: the places; none kept: where it starts), what
-/// was asked put into a chat's message (the chat, what), and a row let go off it (what, where, the frame).
+/// was asked put into a chat's message (the chat, what), and a row let go off it not taken yet (what, where).
 priv struct FChatTab {
   mut building : Bool
   places : Map[String, DriveAt?]
   mut scope : String
-  mut let_go : (Dragged, Double, Double, Int)?
+  mut let_go : (Dragged, Double, Double)?
   mut chat : String
   /// what is picked to go into the chat's message, in the order picked
   picked : Array[Dragged]
@@ -139,16 +139,17 @@ pub fn tab_go(at : DriveAt) -> Unit {
 }
 
 ///|
-/// A row let go off the tab, where (x, y in the window), taken once, in the frame it was let go or the next: for the
-/// chat's composer, when let go over it, to put it into the message.
+/// A row let go off the tab, where (x, y in the window), taken once, by the first that asks once it is let go: for the
+/// chat's composer, when let go over it, to put it into the message. What asks follows the drag, so it is built again
+/// as the row is let go, whether it is built before the tab or after it.
 pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
-  match ftab.let_go {
-    Some((item, x, y, frame)) if c.frame_number() - frame <= 1 => {
-      ftab.let_go = None
-      Some((item, x, y))
-    }
-    _ => None
+  ignore(c)
+  if dragged() is Some(_) {
+    return None
   }
+  let taken = ftab.let_go
+  ftab.let_go = None
+  taken
 }
 
 ///|
@@ -165,11 +166,13 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
   // a row let go off the tab (the desk's drag_frame lets the carried go where nothing here takes it)
   let carried = dragged()
   drag_frame(c, src, ws, outside=false)
-  match carried {
-    Some(i) if dragged() is None => {
+  match (carried, dragged()) {
+    (Some(i), None) => {
       let (px, py, _) = c.pointer()
-      ftab.let_go = Some((i, px, py, c.frame_number()))
+      ftab.let_go = Some((i, px, py))
     }
+    // (another carried: what was let go before and not taken is not for it)
+    (None, Some(_)) => ftab.let_go = None
     _ => ()
   }
   let (list, _) = dv_stations(src, ws)

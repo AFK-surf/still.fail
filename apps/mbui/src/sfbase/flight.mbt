@@ -71,11 +71,10 @@ pub(all) struct SendFlight {
   /// the files sent with them, from their tiles, and their quotes, from their cards
   files : Array[FlyingFile]
   /// its row's key (what was sent from here, then the core's row it became: chat.mbt row_keys), whether it is laid
-  /// out and from which frame; how far it has come (0 … 1, linear,
-  /// told to go as its row is first laid out: as Compose's animation, it sets off the frame after)
+  /// out (from the moment `set_out`); how far it has come (0 … 1, linear,
+  /// told to go as its row is first laid out: at that moment still where it was, on its way from any after: flight_going)
   mut key : String
   mut placed : Bool
-  mut placed_frame : Int
   way : @motion.Anim
   /// what was the composer's alone (a quote's ✕ and empty comment hint) leaving as they set out (@sf.leave)
   gone : @motion.Anim
@@ -84,7 +83,8 @@ pub(all) struct SendFlight {
   carried : Bool
   from_top : Double
   /// how long their way takes (flight_way_ms: as long as it is far, from where they were typed to where their row has
-  /// them), said as they set out and again once their row is laid out (`timed`); when they set out, after how long
+  /// them), said as they set out and again once their row is laid out (`timed`); when they set out (the moment their
+  /// row was first in the list: flight_placed), after how long
   mut ms : Double
   mut timed : Bool
   mut set_out : Double
@@ -202,7 +202,6 @@ pub fn flight_start(
         files,
         key,
         placed: false,
-        placed_frame: -1,
         way: @motion.Anim::new(0.0),
         gone: leaving(),
         carried: false,
@@ -279,7 +278,6 @@ pub fn flight_carry_start(
         files,
         key: "",
         placed: false,
-        placed_frame: -1,
         way: @motion.Anim::new(0.0),
         gone: leaving(),
         carried: true,
@@ -396,7 +394,7 @@ pub fn flight_of(chat : String) -> SendFlight? {
 }
 
 ///|
-/// How far it has come (0 … 1, linear), from the frame after its row was first laid out.
+/// How far it has come (0 … 1, linear), from the moment its row was first laid out.
 pub fn flight_p(c : @ui.Ctx, f : SendFlight) -> Double {
   ignore(c)
   f.way.get()
@@ -539,7 +537,6 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
     // the message sent is in the list, its row by its key (its outbox entry's id, or the message's): what a run waits
     // for (`said`), not the words' way there
     c.say("sent row in the list \{f.key}")
-    f.placed_frame = c.frame_number()
     f.set_out = c.moment()
     if f.carried {
       // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to); in the wide frame at
@@ -556,13 +553,22 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
 }
 
 ///|
-/// Once their row is laid out (the frame after it was placed), their way timed as long as it is far: from where they
+/// Whether words sent are on their way: their row was first in the list at a moment before this one (flight_placed's
+/// `set_out`), so it has been laid out and where it is known. At the moment it is placed (in every frame drawn then,
+/// however many) they are still where they were, its row not seen: what is drawn at a moment is what that moment
+/// is, not how many frames came before it.
+fn flight_going(c : @ui.Ctx, f : SendFlight) -> Bool {
+  f.placed && c.moment() > f.set_out
+}
+
+///|
+/// Once their row is laid out (from a moment after it was placed), their way timed as long as it is far: from where they
 /// were typed to where their row has them (their words' box, or the first file's place), the furthest of across and
 /// up. Told again from when they set out, its row's room and the composer's letting go with it.
 fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
   // (a new chat's first words go with their page's change, the composer going to the chat's foot on their clock,
   // told as the page changed: as long as any, flight_carry_ms)
-  if !f.placed || f.timed || f.carried || c.frame_number() <= f.placed_frame {
+  if !flight_going(c, f) || f.timed || f.carried {
     return
   }
   let to = if f.text != "" {
@@ -578,6 +584,8 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
       let ms = flight_way_ms(flies_desk(f), dmax((x - f.from_x).abs(), (y - f.from_y).abs()))
       if ms != f.ms {
         f.ms = ms
+        // (from the start of their way, as at the moment they set out: wherever the way said first has them by now)
+        f.way.snap(0.0)
         f.way.animate(1.0, @motion.tween(ms, ease=Linear, delay=f.after), start_at=f.set_out)
         if !f.carried {
           (f.hold)(dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
@@ -620,15 +628,15 @@ pub let flight_carry_ms : Double = flight_desk_ms
 pub let flight_carry_after_ms : Double = 90.0
 
 ///|
-/// The words sent (`chat`'s), as they were typed, over the field, until their row is in the list (and the build it is
-/// first laid out in: flight_bubble does not draw them then), their bubble flying whole after; none once their message
+/// The words sent (`chat`'s), as they were typed, over the field, until their row is in the list (and at the moment it is
+/// first laid out: flight_bubble does not draw them then), their bubble flying whole after; none once their message
 /// has them as they were typed, which draws them in pieces from then (flight_pieces_in).
 pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
   let t = @sf.theme()
   match flight_of(chat) {
     // (in pieces: drawn in their bubble, flight_pieces_in)
     Some(f) if flight_pieces(c, f) is Some(_) => ()
-    Some(f) if !f.placed || f.placed_frame == c.frame_number() => {
+    Some(f) if !flight_going(c, f) => {
       let l = c.layer(fn() {
         // the field's room where it was in the window, what is in it moved from its corner: moved from where it is
         // laid out (its layer's corner, wherever the page is in the window: a pane beside the sidebar)
@@ -885,7 +893,7 @@ fn flight_pieces_drawn(
   bubble : Ref[Int],
 ) -> Unit {
   let t = @sf.theme()
-  let flying = f.placed && f.placed_frame != c.frame_number()
+  let flying = flight_going(c, f)
   let across = if flying { flight_across_of(c, f) } else { 0.0 }
   let up = if flying { flight_up_of(c, f) } else { 0.0 }
   let runs = person_runs(f.text, f.runs, t.p.accent)
@@ -957,14 +965,14 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
   if f.carried {
     // up with the list (flight_carry_shift), across on its own, over the composer
     @motion.measure(c, i, flight_carry_anchor(f))
-    if !f.placed || f.placed_frame == c.frame_number() {
+    if !flight_going(c, f) {
       c.look(i, @ui.look(alpha=0.0))
     }
     @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=flight_across_of(c, f), py=1.0)
     return
   }
-  if !f.placed || f.placed_frame == c.frame_number() {
-    // its first frame: not seen while the words are still drawn as typed, over the field; in pieces, they are its
+  if !flight_going(c, f) {
+    // the moment it is placed: not seen while the words are still drawn as typed, over the field; in pieces, they are its
     // own from it on (its ground not come in yet)
     if flight_pieces(c, f) is None {
       c.look(i, @ui.look(alpha=0.0))
@@ -996,13 +1004,13 @@ pub fn flight_file_of(f : SendFlight, key : String) -> FlyingFile? {
 
 ///|
 /// A quote's words start with their composer's line breaks and change width with the card toward their message's.
-/// The message's natural width is measured while its first frame is hidden, before the width starts following the way.
+/// The message's natural width is measured at the moment it is placed, while it is hidden, before the width starts following the way.
 pub fn flight_quote_words(c : @ui.Ctx, f : SendFlight, key : String) -> (String, Double?) {
   match flight_file_of(f, key) {
     Some(ff) =>
       match ff.quote_words {
         Some((word_key, from)) => {
-          if ff.quote_to is None && f.placed && f.placed_frame != c.frame_number() {
+          if ff.quote_to is None && flight_going(c, f) {
             match c.words_shape_of(word_key) {
               Some(words) if words.pieces.length() == 1 => ff.quote_to = Some(words.pieces[0].w)
               _ => ()
@@ -1054,7 +1062,9 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
   let l = c.layer(fn() {
     for ff in f.files {
       let (fx, fy, fw, fh) = ff.from
-      let landing = if f.placed && f.placed_frame != c.frame_number() {
+      // (where it lands, once its message is laid out: a picture's from the moment it is placed, drawn at its tile all
+      // that moment; a card's, the message's own, once it is on its way: flight_landing)
+      let landing = if flight_going(c, f) || (f.placed && ff.picture is Some(_)) {
         @motion.measured_rect(c, "flight/to/" + ff.key)
       } else {
         None
@@ -1121,7 +1131,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
   if gone < 1.0 && f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) {
     let across = flight_across_of(c, f)
     let up = flight_up_of(c, f)
-    let flying = f.placed && f.placed_frame != c.frame_number()
+    let flying = flight_going(c, f)
     let reach = @sf.corner_remove_reach(@sf.composer_inner())
     c.layer(fn() {
       for ff in f.files {
@@ -1197,8 +1207,8 @@ pub fn flight_landing(
   @motion.measure(c, i, "flight/to/" + key)
   landing_shares["flight/to/" + key] = (share.0, share.1, top_crop)
   let (fx, fy, fw, fh) = ff.from
-  if ff.picture is Some(_) || !f.placed || f.placed_frame == c.frame_number() {
-    // its first frame (and a picture all the way): not seen here
+  if ff.picture is Some(_) || !flight_going(c, f) {
+    // the moment it is placed (and a picture all the way): not seen here
     c.look(i, @ui.look(alpha=0.0))
     return
   }
@@ -1222,7 +1232,7 @@ pub fn flight_landing(
 /// composer flies there: what it holds from where it was there (its words `shift` further in there than here:
 /// @sf.quote_sent_shift) to where it is laid out, across and up on the words' way, over everything; its ground from
 /// the composer's card to its own, its edges across and its top and bottom up, its colour from that card's as it goes
-/// up (as seen over anything: the composer's may be see-through). Where each is this frame laid out (@motion.placed), not a frame behind; its first frame not seen here (drawn
+/// up (as seen over anything: the composer's may be see-through). Where each is this frame laid out (@motion.placed), not a frame behind; not seen at the moment it is placed (drawn
 /// where it was by flight_files).
 pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : String, shift : (Double, Double)) -> Unit {
   let ff = match flight_file_of(f, key) {
@@ -1230,7 +1240,7 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
     None => return
   }
   @motion.measure(c, card, "flight/to/" + key)
-  if !f.placed || f.placed_frame == c.frame_number() {
+  if !flight_going(c, f) {
     c.look(card, @ui.look(alpha=0.0))
     return
   }

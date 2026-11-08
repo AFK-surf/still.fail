@@ -194,7 +194,6 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), shown: None, picture: Some("strip"), paint: None, face: fn() {  }, ground: 0L, leaving: None, quote_words: None, quote_to: None }],
     key: "o:1",
     placed: false,
-    placed_frame: -1,
     way: @motion.Anim::new(0.0),
     gone: @motion.Anim::new(1.0),
     carried: false,
@@ -217,8 +216,10 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     },
     w=390.0,
     h=844.0,
+    // (the picture sent is there from the start, as the composer's tile had it: the flight paints it at its tile from
+    // the moment its row is placed, in the Tester's first frames)
+    images=[("strip", 2000, 40)],
   )
-  t.add_image("strip", 2000, 40)
   t.draw()
   t.draw()
   // flown all the way (the phone's: over its first part, then settling)
@@ -255,7 +256,6 @@ test "a tall sent picture moves its crop to the top as it lands" {
     files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), shown: None, picture: Some("tall"), paint: None, face: fn() {  }, ground: 0L, leaving: None, quote_words: None, quote_to: None }],
     key: "o:1",
     placed: false,
-    placed_frame: -1,
     way: @motion.Anim::new(0.0),
     gone: @motion.Anim::new(1.0),
     carried: false,
@@ -332,7 +332,6 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     files: [{ key: @sfbase.upload_path("u1"), from: (16.0, 640.0, 56.0, 56.0), shown: None, picture: Some("shot"), paint: None, face: fn() { faced.val += 1 }, ground: 0L, leaving: None, quote_words: None, quote_to: None }],
     key: "o:1",
     placed: false,
-    placed_frame: -1,
     way: @motion.Anim::new(0.0),
     gone: @motion.Anim::new(1.0),
     carried: false,
@@ -354,8 +353,10 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     },
     w=390.0,
     h=844.0,
+    // (the picture sent is there from the start, as the composer's tile had it: the flight paints it at its tile from
+    // the moment its row is placed, in the Tester's first frames)
+    images=[("shot", 1200, 800)],
   )
-  t.add_image("shot", 1200, 800)
   t.draw()
   t.draw()
   // a fifth of its way: up now, at the station's path; on to more than half of it

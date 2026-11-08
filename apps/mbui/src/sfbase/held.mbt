@@ -10,7 +10,8 @@ priv struct HeldTopic {
   source : Source
   state : @signals.Computed[TopicState]
   watch : @signals.Watch
-  mut read : Int
+  /// read in the build going on (held_build to held_end)
+  mut read : Bool
 }
 
 ///|
@@ -18,12 +19,14 @@ priv struct HeldTopic {
 let held_topics : Map[String, Map[String, HeldTopic]] = {}
 
 ///|
-/// The build each topic was last read in, and the build going on (held_build): what is read in the build its thing
-/// ended in is still shown by another (a chat that took a new one's place, its agent's line the same), and stays.
-let held_deferred : Ref[Array[(Int, HeldTopic)]] = Ref([])
+/// What was let go of in the build going on though that build read it (held_build): what is read in the build its
+/// thing ended in is still shown by another (a chat that took a new one's place, its agent's line the same), and
+/// stays till that build ends (held_end).
+let held_deferred : Ref[Array[HeldTopic]] = Ref([])
 
 ///|
-let held_now : Ref[Int] = Ref::new(0)
+/// The topics read in the build going on, their `read` set: cleared as it ends.
+let held_read_now : Ref[Array[HeldTopic]] = Ref([])
 
 ///|
 let held_building : Ref[Bool] = Ref::new(false)
@@ -39,34 +42,25 @@ fn held_watch() -> @signals.Watch {
 
 ///|
 /// A build begins (the app's view, each frame it builds).
-pub fn held_build(n : Int) -> Unit {
-  held_now.val = n
+pub fn held_build() -> Unit {
+  // (one before that did not end: ended now)
+  held_end()
   held_building.val = true
-  let previous = held_deferred.val
-  held_deferred.val = []
-  for t in previous {
-    if t.0 == n {
-      held_deferred.val.push(t)
-    }
-  }
-  let mut i = previous.length() - 1
-  while i >= 0 {
-    if previous[i].0 != n {
-      previous[i].1.watch.stop()
-    }
-    i -= 1
-  }
 }
 
 ///|
 /// Finish a frame's scope handovers now, even if no later frame is drawn.
 pub fn held_end() -> Unit {
   held_building.val = false
+  for t in held_read_now.val {
+    t.read = false
+  }
+  held_read_now.val = []
   // Drop the old backing array as well as its logical contents, so stopped watches no longer retain their sources.
   let deferred = held_deferred.val
   held_deferred.val = []
   for t in deferred {
-    t.1.watch.stop()
+    t.watch.stop()
   }
 }
 
@@ -85,7 +79,7 @@ pub fn hold(src : Source, scope : String, name : String, params : Map[String, Js
   let held = match topics.get(key) {
     Some(t) if physical_equal(t.source, src) => t
     old => {
-      let t = { source: src, state: scoped_topic(src, name, params), watch: held_watch(), read: held_now.val }
+      let t = { source: src, state: scoped_topic(src, name, params), watch: held_watch(), read: false }
       topics[key] = t
       t.watch.read(fn() { t.state.get() }) |> ignore
       match old {
@@ -95,7 +89,10 @@ pub fn hold(src : Source, scope : String, name : String, params : Map[String, Js
       t
     }
   }
-  held.read = held_now.val
+  if held_building.val && !held.read {
+    held.read = true
+    held_read_now.val.push(held)
+  }
   held.watch.read(fn() { held.state.get() }) |> ignore
   held.state
 }
@@ -107,8 +104,8 @@ pub fn let_go(src : Source, scope : String) -> Unit {
     Some(m) => {
       held_topics.remove(scope)
       for _, t in m {
-        if held_building.val && t.read == held_now.val {
-          held_deferred.val.push((held_now.val, t))
+        if held_building.val && t.read {
+          held_deferred.val.push(t)
         } else {
           t.watch.stop()
         }
@@ -137,10 +134,10 @@ fn held_reset() -> Unit {
   let deferred = held_deferred.val
   held_deferred.val = []
   for t in deferred {
-    t.1.watch.stop()
+    t.watch.stop()
   }
+  held_read_now.val = []
   held_topics.clear()
-  held_now.val = 0
   held_building.val = false
 }
 
