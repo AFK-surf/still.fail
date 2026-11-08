@@ -49,3 +49,27 @@ fn screen_picture_node(parent : @view.View, read : () -> ScreenPicture) -> @view
     })
   })
 }
+
+///|
+fn screen_stage_node(parent : @view.View, s : ScreenSess, u : ScreenUi, key : String) -> @view.View {
+  let picture : @signals.Signal[ScreenPicture?] = @signals.signal(None, same=fn(a, b) {
+    match (a, b) {
+      (None, None) => true
+      (Some(a), Some(b)) => a.rect == b.rect && a.faded == b.faded && a.layer == b.layer &&
+        a.whole.map(fn(s) { s.id() }) == b.whole.map(fn(s) { s.id() }) &&
+        a.part.map(fn(p) { (p.0.id(), p.1) }) == b.part.map(fn(p) { (p.0.id(), p.1) })
+      _ => false
+    }
+  })
+  parent.box(fn(v) {
+    v.grow(Is(1.0)).basis(Is(Some(0.0))).clips(Is(true)) |> ignore
+    v.pick(fn() { picture.get() is Some(_) }, fn(p, ready) {
+      p.over(Is(true)) |> ignore
+      if ready { screen_picture_node(p, fn() { picture.get().unwrap() }) |> ignore }
+    })
+    @ui.old(v, fn(c) {
+      s.said.get() |> ignore
+      screen_stage(c, s, u, key, picture=fn(value) { picture.set(value) })
+    }).over(Is(true)) |> ignore
+  })
+}

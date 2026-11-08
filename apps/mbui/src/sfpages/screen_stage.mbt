@@ -156,7 +156,7 @@ fn screen_stage_room(s : ScreenSess, u : ScreenUi, size : (Int, Int)?, over : Bo
 
 ///|
 /// The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it.
-fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
+fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, picture? : (ScreenPicture?) -> Unit) -> Unit {
   let phase = s.phase()
   let over = phase_over(phase)
   // over, the screen's place kept, gone dark (its last size, or a desktop's when none came)
@@ -213,48 +213,60 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   if u.mouse.over {
     c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
   }
+  match picture {
+    Some(publish) => publish(if size is Some(_) && fit.w > 0.0 {
+      Some({whole:s.stream, part:match (s.part, s.part_shown()) {
+        (Some(st), Some(part)) => Some((st, part))
+        _ => None
+      }, rect:u.shown(), faded:phase != "live" && s.shown_any && !over,
+      layer:!(phase != "live" && s.shown_any) && !over})
+    } else { None })
+    None => ()
+  }
   let in_body = s.simulator() && !u.zoom.zoomed()
   c.box(style=if in_body { stage_box_body } else if u.in_tab { stage_box_in_panel } else { stage_box }, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
       let shown = u.shown()
       // on its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to
       let still = phase != "live" && s.shown_any
-      c.layer(fn() {
-        c.box(
-          style=@ui.style(w=Fixed(shown.w), h=Fixed(shown.h)).then(
-            if still && !over {
-              frame_faded
-            } else {
-              frame_clear
-            },
-          ),
-          tx=shown.x,
-          ty=shown.y,
-          fn() {
-            match s.stream {
-              // (live: on the system's video layer where it has one; faded or under the dark, drawn here)
-              Some(st) => c.stream(st, w=Fill(1.0), h=Fill(1.0), layer=!still && !over) |> ignore
-              None => ()
-            }
-            // zoomed in, the part of the screen the station sends alone, sharper, over the whole where it is
-            match (s.part, s.part_shown()) {
-              (Some(pst), Some(p)) =>
-                c.layer(fn() {
-                  c.stream(
-                    pst,
-                    at=Some((p.x * shown.w, p.y * shown.h, p.w * shown.w, p.h * shown.h)),
-                    layer=!still && !over,
-                  )
+      if picture is None {
+        c.layer(fn() {
+          c.box(
+            style=@ui.style(w=Fixed(shown.w), h=Fixed(shown.h)).then(
+              if still && !over {
+                frame_faded
+              } else {
+                frame_clear
+              },
+            ),
+            tx=shown.x,
+            ty=shown.y,
+            fn() {
+              match s.stream {
+                // (live: on the system's video layer where it has one; faded or under the dark, drawn here)
+                Some(st) => c.stream(st, w=Fill(1.0), h=Fill(1.0), layer=!still && !over) |> ignore
+                None => ()
+              }
+              // zoomed in, the part of the screen the station sends alone, sharper, over the whole where it is
+              match (s.part, s.part_shown()) {
+                (Some(pst), Some(p)) =>
+                  c.layer(fn() {
+                    c.stream(
+                      pst,
+                      at=Some((p.x * shown.w, p.y * shown.h, p.w * shown.w, p.h * shown.h)),
+                      layer=!still && !over,
+                    )
+                    |> ignore
+                  })
                   |> ignore
-                })
-                |> ignore
-              _ => ()
-            }
-          },
-        )
+                _ => ()
+              }
+            },
+          )
+          |> ignore
+        })
         |> ignore
-      })
-      |> ignore
+      }
       match cased {
         Some(k) => if !u.zoom.zoomed() { device_cased(c, s, u, k, shown) }
         None => device_round(c, s, u, shown)

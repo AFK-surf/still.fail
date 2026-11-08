@@ -30,3 +30,55 @@ test "retained screen frame enters full screen and restores the upright controls
   assert_true(r.labelled("控制中心") is Some(_))
   screen_done(r.t)
 }
+
+///|
+test "retained screen stage keeps the mouse viewport and acknowledges its picture" {
+  let r = screen_rig(retained=true, platform=0, w=1280.0, h=800.0)
+  r.live()
+  assert_true(r.acked(1000.0))
+  assert_true(r.t.find("still.fail — Chrome") is Some(_))
+  assert_eq(r.ui().box_w, 1280.0)
+  assert_true(r.ui().stage_y >= @sf.viewer_bar_h)
+  assert_eq(r.t.squeeze_faults(), [])
+  r.tap_at(0.25, 0.75)
+  assert_true(r.inputs().length() > 0)
+  mouse_done(r)
+}
+
+///|
+test "retained mouse stage enters and leaves full screen without reopening the session" {
+  let r = screen_rig(retained=true, platform=0, w=1280.0, h=800.0)
+  r.live()
+  r.ui().full.set(true)
+  r.t.draw()
+  assert_eq((r.ui().box_w, r.ui().box_h), (1280.0, 800.0))
+  r.ui().full.set(false)
+  r.t.draw()
+  assert_true(r.ui().stage_y >= @sf.viewer_bar_h)
+  assert_eq(r.told("screen.view").length(), 1)
+  r.tap_label(tr("common.back"))
+  nav_rested(r.t)
+  assert_false(app.nav.top() is Screen(_))
+  mouse_done(r)
+}
+
+///|
+fn screen_stage_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, platform=0, w=1280.0, h=800.0)
+  r.live()
+  let frames = []
+  for phase in ["live", "reconnecting", "ended"] {
+    r.state(phase)
+    r.t.draw()
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+  }
+  mouse_done(r)
+  frames
+}
+
+///|
+test "retained screen stage keeps live reconnecting and ended picture geometry and opacity" {
+  assert_eq(screen_stage_frames(true), screen_stage_frames(false))
+}

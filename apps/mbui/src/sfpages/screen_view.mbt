@@ -421,10 +421,27 @@ pub fn screen_page_node(
       let f = frame()
       if u.full.get() { (0.0, 0.0, 0.0, 0.0) } else { (0.0, f.top, 0.0, f.foot) }
     })) |> ignore
-    @ui.old(v, fn(c) {
+    let session = screen_sess(src, at.station, at.screen)
+    let context = fn(c : @ui.Ctx) {
       let close = on_close.map(fn(f) { fn() { c.after_build("screen-window-close", f) } })
-      screen_page_inside(c, screen_page_context(c, src, at, close, false, None))
-    }).grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+      screen_page_context(c, src, at, close, false, None)
+    }
+    v.pick(fn() {
+      session.said.get() |> ignore
+      !@sf.soft_keyboard() && !@sf.native_able() && !u.full.get() && !session.simulator()
+    }, fn(body, stage) {
+      body.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+      if stage {
+        @ui.old(body, natural=true, unlaid=fn() { @sf.viewer_bar_h }, fn(c) {
+          let p = context(c)
+          screen_viewer_bar(c, p.session, p.ui, p.title, p.close)
+        }) |> ignore
+        screen_stage_node(body, session, u, screen_key(at.station, at.screen)) |> ignore
+      } else {
+        @ui.old(body, fn(c) { screen_page_inside(c, context(c)) })
+          .grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+      }
+    })
   })
 }
 
