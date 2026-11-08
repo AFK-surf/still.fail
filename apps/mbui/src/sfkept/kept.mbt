@@ -463,6 +463,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.at\",\"text\":\"看 @首页 后文\",\"caret\":8}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"看 @首页\",\"caret\":5}",{"at":{"start":2,"query":"首页"}}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"看 @首页[\",\"caret\":6}",{"at":null}]
+  #|["words","{\"call\":\"ref.at\",\"text\":\"看 @首页的\",\"caret\":6}",{"at":{"start":2,"query":"首页的"}}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"看一下列表\",\"caret\":5}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"看看怎么回事\",\"caret\":6}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"看看文档 083209 steps:文档目录看过了 083209\",\"caret\":32}",{"at":null}]

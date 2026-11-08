@@ -1335,13 +1335,15 @@ pub fn refs_at(String) -> (Int32, String)?
 
 pub fn refs_close(String) -> Unit
 
-pub fn refs_edits(@ui.Ctx, Source, String, @ui.Field, String, Bool) -> Unit
+pub fn refs_closed(String, Int32) -> Bool
+
+pub fn refs_edited(Source, String, @ui.Field, String, Bool, @ui.FieldEdit) -> Unit
 
 pub fn refs_look(String, Int64) -> (String) -> (String, Array[(Int32, Int32, Int64)])
 
 pub fn refs_marked(String) -> Bool?
 
-pub fn refs_pick(@ui.Ctx, Source, String, @ui.Field, String, String, String, String, (String) -> Unit) -> Unit
+pub fn refs_pick(@ui.Ctx, Source, String, @ui.Field, Int32, String, String, String, String, (String) -> Unit) -> Unit
 
 pub fn refs_put(String, @ui.Field, String, caret? : Int32) -> Unit
 

@@ -45,10 +45,14 @@ fn ref_menu(
           ""
         }
       }
-      // whether what the menu offers is still this `@`'s: neither closed nor picked since (refs_at), the field still
-      // holding it as it was where it was, the caret where what was after it then begins
+      // whether what the menu offers is still this `@`'s, as it was shown (what the core reads of the words typed
+      // since, not drawn yet, none of it): neither closed nor picked since, the field still holding it as it was
+      // where it was, the caret where what was after it then begins
       let offered = fn() {
-        @sfbase.refs_at(w.key) == at_then && @sfbase.refs_still_at(w.field, at_then, before_then, after_then)
+        match at_then {
+          Some((start, _)) => !@sfbase.refs_closed(w.key, start) && @sfbase.refs_still_at(w.field, at_then, before_then, after_then)
+          None => false
+        }
       }
       // the one chosen put in for this `@`, while it is offered (a press's and a key's alike). Whether it was.
       let pick = fn(x : Json) -> Bool {
@@ -56,7 +60,8 @@ fn ref_menu(
           return false
         }
         let item = @sfbase.chat_item(x)
-        @sfbase.refs_pick(c, src, w.key, w.field, into, item.station, item.id, item.title, fn(why) {
+        guard at_then is Some((start, _)) else { return false }
+        @sfbase.refs_pick(c, src, w.key, w.field, start, into, item.station, item.id, item.title, fn(why) {
           toast_later(@sf.t("web-main.composer.refFailed", args=[("title", item.title), ("error", why)]))
         })
         // (the menu's opening over as it is picked in: its keys, presses and Escape no longer its, leaving as it is

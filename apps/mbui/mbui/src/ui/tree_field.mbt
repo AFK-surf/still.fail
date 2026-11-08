@@ -359,7 +359,7 @@ fn tree_field_down(id : @view.NodeId, x : Double, y : Double, at : Double) -> Bo
   let st = tf.st
   if h_feel() == 2 {
     // (held still long_press_ms where it went down: at that moment, on the tree's timeline, whatever frames come)
-    tf.hold_off = tf.view.at_moment(at + long_press_ms, fn() { tree_field_held(id) })
+    tf.hold_off = tf.view.at_moment(at + long_press_ms, fn() { pointed_edits(fn() { tree_field_held(id) }) })
     return false
   }
   // (how many presses in a row: one soon after the last and near it counts on from it, as the old frame counts)

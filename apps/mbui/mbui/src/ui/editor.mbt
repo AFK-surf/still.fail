@@ -541,25 +541,83 @@ fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
-  let before = self.text
+  let (before, anchor, caret) = (self.text, self.anchor, self.caret)
   self.key_edit(code, mods, now)
   self.words_told()
-  self.typed_told(before)
+  self.typed_told(before, anchor, caret, Typed)
 }
 
 ///|
-/// Its words changed from `before` by the person's edit just made: told what its last build said that does
-/// (Ctx::editor's `on_change`), at once, outside any build.
-fn EditorState::typed_told(self : EditorState, before : String) -> Unit {
-  match self.on_change {
-    Some(f) if self.text != before => {
-      let words = self.text
-      @signals.start_batch()
-      @signals.untracked(fn() { f(words) })
-      @signals.end_batch()
-    }
-    _ => ()
+/// The person's edit just made, from words `before` and the selection from `anchor` to `caret` (`by`: typed, pasted,
+/// undone, the pointer's): told what its last build said that does, at once, outside any build: its words where they
+/// changed (Ctx::editor's `on_change`), its words or its selection where either did (`on_edit`).
+fn EditorState::typed_told(self : EditorState, before : String, anchor : Int, caret : Int, by : FieldEditBy) -> Unit {
+  let changed = self.text != before
+  guard changed || self.anchor != anchor || self.caret != caret else { return }
+  let words = self.text
+  let edit : FieldEdit = {
+    was: before,
+    was_selection: (anchor, caret),
+    now: words,
+    selection: (self.anchor, self.caret),
+    by,
   }
+  @signals.start_batch()
+  @signals.untracked(fn() {
+    match self.on_change {
+      Some(f) if changed => f(words)
+      _ => ()
+    }
+    match self.on_edit {
+      Some(f) => f(edit)
+      None => ()
+    }
+  })
+  @signals.end_batch()
+}
+
+///|
+/// An edit of a field's words or selection by the person (EditorState::typed_told): its words and selection before it
+/// and after it, and what made it.
+pub(all) struct FieldEdit {
+  was : String
+  was_selection : (Int, Int)
+  now : String
+  selection : (Int, Int)
+  by : FieldEditBy
+} derive(Eq, Show, Debug)
+
+///|
+/// What made an edit of a field: keys typed (a key, the input method's text), a paste (and words let go on it), an undo
+/// or a redo, the pointer (its caret put or words picked with it).
+pub(all) enum FieldEditBy {
+  Typed
+  Pasted
+  Undone
+  Pointed
+} derive(Eq, Show, Debug)
+
+///|
+/// What the edit changed of its words (words_changed).
+pub fn FieldEdit::span(self : FieldEdit) -> (Int, Int, Int) {
+  words_changed(self.was, self.now)
+}
+
+///|
+/// What changed words `was` into `now`: the same in both up to `start`, then the end in `was` of what was taken and the
+/// end in `now` of what was put in (after them the same again in both).
+pub fn words_changed(was : String, now : String) -> (Int, Int, Int) {
+  let most = if was.length() < now.length() { was.length() } else { now.length() }
+  let mut start = 0
+  while start < most && was.unsafe_charcode_at(start) == now.unsafe_charcode_at(start) {
+    start += 1
+  }
+  let mut end = 0
+  while end < most - start &&
+        was.unsafe_charcode_at(was.length() - 1 - end) == now.unsafe_charcode_at(now.length() - 1 - end) {
+    end += 1
+  }
+  (start, was.length() - end, now.length() - end)
 }
 
 ///|
@@ -655,7 +713,7 @@ fn EditorState::text_input(
   self.put_text(kind, s, a, b, now)
   self.edited(text, anchor, caret, kind != text_paste)
   self.words_told()
-  self.typed_told(text)
+  self.typed_told(text, anchor, caret, if kind == text_paste { Pasted } else { Typed })
 }
 
 ///|
@@ -763,7 +821,8 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// where none does, as Ctx::text's words (Node::hint_shown). `on_submit`: what giving its words up does, given them, as
 /// Enter is taken, outside any build (the result's `submitted` then none); `on_change`: what the person's edit of its
 /// words does (a key, the input method's text, a paste, an undo), given them, as it is made, outside any build (not
-/// what the app puts in it: Field::set).
+/// what the app puts in it: Field::set); `on_edit`: what the person's edit of its words or its selection does (the
+/// pointer's too: its caret put, words picked), given the edit (FieldEdit), likewise.
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
@@ -790,6 +849,7 @@ pub fn Ctx::editor(
   files? : Bool = false,
   on_submit? : (String) -> Unit,
   on_change? : (String) -> Unit,
+  on_edit? : (FieldEdit) -> Unit,
 ) -> EditorResult {
   let id = self.id(key)
   // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while a press on it drags
@@ -847,6 +907,7 @@ pub fn Ctx::editor(
   st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
   st.on_submit = on_submit
   st.on_change = on_change
+  st.on_edit = on_edit
   st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret
@@ -1770,6 +1831,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     submitted: None,
     on_submit: None,
     on_change: None,
+    on_edit: None,
     pref_x: -1.0,
     upstream: -1,
     floating: None,

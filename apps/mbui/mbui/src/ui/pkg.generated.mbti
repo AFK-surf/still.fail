@@ -724,6 +724,8 @@ pub fn window_zoomed() -> Bool
 
 pub fn word_at(String, Int32) -> (Int32, Int32)
 
+pub fn words_changed(String, String) -> (Int32, Int32, Int32)
+
 pub fn words_into(@view.View, Field) -> @view.View
 
 pub fn words_over_closing_expected(Array[(String, String, String)]) -> Unit
@@ -1140,7 +1142,7 @@ pub fn Ctx::drawn_pixels(Self, Int32, inset? : Double) -> ImagePixels
 pub fn Ctx::drawn_rect(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::drawn_scale(Self) -> Double
 pub fn Ctx::drawn_state(Self, Int32) -> DrawnState
-pub fn Ctx::editor(Self, String, placeholder? : String, shorter? : Array[String], w? : Size, font_size? : Double, min_lines? : Int32, max_lines? : Int32, plain? : Bool, line? : Double, trim? : Bool, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), field? : Field, files? : Bool, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> EditorResult
+pub fn Ctx::editor(Self, String, placeholder? : String, shorter? : Array[String], w? : Size, font_size? : Double, min_lines? : Int32, max_lines? : Int32, plain? : Bool, line? : Double, trim? : Bool, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), field? : Field, files? : Bool, on_submit? : (String) -> Unit, on_change? : (String) -> Unit, on_edit? : (FieldEdit) -> Unit) -> EditorResult
 pub fn Ctx::editor_field(Self, String) -> Field
 pub fn Ctx::editor_focused(Self, String) -> Bool
 pub fn Ctx::effect(Self, String, async (@effect.Scope) -> Unit) -> Unit
@@ -1523,6 +1525,22 @@ pub fn Field::set(Self, String, caret? : Int32) -> Unit
 pub fn Field::take(Self) -> String
 pub fn Field::text(Self) -> String
 pub fn Field::words_at(Self) -> ((Double, Double), (Double, Double, Double, Double))?
+
+pub(all) struct FieldEdit {
+  was : String
+  was_selection : (Int32, Int32)
+  now : String
+  selection : (Int32, Int32)
+  by : FieldEditBy
+} derive(Eq, Show, @debug.Debug)
+pub fn FieldEdit::span(Self) -> (Int32, Int32, Int32)
+
+pub(all) enum FieldEditBy {
+  Typed
+  Pasted
+  Undone
+  Pointed
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct FieldLaid {
   words : String

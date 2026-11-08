@@ -175,6 +175,8 @@ fn writing_cached(src : Source, key : String) -> Writing {
       }
       let topic = src.topic("composer", { "key": Json::string(key) })
       let following = @signals.computed(fn(_) {
+        // (what the core reads of its field's words: its marks, its `@` words, refs.mbt)
+        refs_follow(src, key, state.field)
         @signals.effect(fn() {
           let t = topic.get()
           state.pending.get() |> ignore

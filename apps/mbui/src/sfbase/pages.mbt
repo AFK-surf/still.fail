@@ -729,7 +729,7 @@ pub fn reset() -> Unit {
   viz_pages_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
-  // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
+  // what the core said of the composers' fields, their marks and `@` words (refs.mbt)
   refs_reset()
   // a send asking about what it refers to (outside.mbt)
   outside_reset()

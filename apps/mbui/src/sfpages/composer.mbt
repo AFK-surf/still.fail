@@ -659,8 +659,6 @@ fn composer_text(
   let hint = space_hint(c, prefs, spec.locked)
   let away = @sfbase.flight_hint_away(c, w.key)
   let no_files = spec.locked || spec.offline
-  // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
-  @sfbase.refs_edits(c, src, w.key, w.field, spec.station, spec.locked)
   // what it says while empty changed (the cursor gone from it: the key that brings it back; back in it: what to write)
   // fades out, then the other in where it was, never one put for the other at once
   let wanted = if hint != "" { hint } else { spec.placeholder }
@@ -707,6 +705,9 @@ fn composer_text(
         paste_limit=if no_files || w.starting.get() { 0 } else { @sfbase.paste_threshold(c, src) },
         look=@sfbase.refs_look(w.key, p.accent),
         field=w.field,
+        // (each edit of it by the person, as the core reads it, at its moment: a mark taken whole, a chat's link
+        // pasted, the `@` words at its caret)
+        on_edit=fn(e) { @sfbase.refs_edited(src, w.key, w.field, spec.station, spec.locked, e) },
       )
       match res.pasted {
         Some(words) => @sfbase.writing_paste(src, w, spec.station, words)
