@@ -62,12 +62,28 @@ export type WorkspaceReads = {
 /// One station's usage and chats of the home workspace from `from` until `to`, by `ask`.
 async function stationRows(ask: (op: string, args: Json) => Promise<string>, from: number, to: number): Promise<{ usage: Json; chats: Json[] }> {
   const usage = JSON.parse(await ask("outflowUsage", { from, to, tz: 0 }));
+  // A partial answer must not make this station's previously indexed rows look absent.
+  const nullableText = (value: unknown) => value === null || typeof value === "string";
+  if (!Array.isArray(usage?.rows) || usage.rows.some((row: Json) =>
+    typeof row?.day !== "string" || typeof row?.session !== "string" || typeof row?.runtime !== "string" ||
+    !nullableText(row?.person) || !nullableText(row?.account) || !nullableText(row?.model))) {
+    throw new Error("that station's usage answer is incomplete");
+  }
   const chats: Json[] = [];
   let before: string | null = null;
+  const cursors = new Set<string>();
   for (;;) {
     const page = JSON.parse(await ask("outflowChats", { since: from, limit: CHATS_PAGE, ...(before === null ? {} : { before }) }));
-    chats.push(...(Array.isArray(page?.chats) ? page.chats : []));
-    if (page?.more !== true || typeof page?.next !== "string") break;
+    if (!Array.isArray(page?.chats) || page.chats.some((chat: Json) => typeof chat?.thread !== "number")) {
+      throw new Error("that station's chat answer is incomplete");
+    }
+    chats.push(...page.chats);
+    // Older stations returned all chats without pagination fields.
+    if (page.more === undefined || page.more === false) break;
+    if (page.more !== true || typeof page.next !== "string" || page.next === "" || cursors.has(page.next)) {
+      throw new Error("that station's chat cursor does not continue");
+    }
+    cursors.add(page.next);
     before = page.next;
   }
   return { usage, chats };
