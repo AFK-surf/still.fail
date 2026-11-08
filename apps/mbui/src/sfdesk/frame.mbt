@@ -623,7 +623,7 @@ fn pane_finger() -> Bool {
 ///|
 /// The sidebar's top row's height (Sidebar.css.ts brand: none in the closed bar), the bars `top` high: beside the
 /// window's buttons where they are the system's at its left (macOS's), from the window's top where it is as high as the
-/// window beside the system's tabs (rail_native.mbt).
+/// window beside the system's tabs (rail_native.mbt); else beside the rail's first place (rail_top_corner).
 fn side_brand_h(bar : Bool, top : Double) -> Double {
   if bar {
     0.0
@@ -632,10 +632,18 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
     dmax(side_top_inset, @ui.window_points_to_content_now(side_top_inset))
   } else if side_full_height(bar) {
     side_top_web + top
-  } else {
+  } else if wide.tape {
     side_top_web
+  } else {
+    // (beside the rail's first place, in the window's corner: its row as far over that place's 38 as ever, the bell and
+    // 新建对话 on one line, pengxiao, 2026-10-25)
+    rail_top_corner() - side_over_rail
   }
 }
+
+///|
+/// How far the sidebar's top row stands over the rail's first place (its 38) beside it, off the tape.
+let side_over_rail : Double = 3.0
 
 ///|
 /// Back on the wide frame (the tiers' table): what is over the whole window (a screen, a file

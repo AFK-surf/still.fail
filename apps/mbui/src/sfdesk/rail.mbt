@@ -173,8 +173,16 @@ fn rail_top_h(bar : Bool) -> Double {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
-    rail_top_web + rail_gap
+    rail_top_corner()
   }
+}
+
+///|
+/// The open rail's top row where nothing stands over its first place (no window buttons at its left, off the tape): as
+/// tall as its places are in from the window's side (rail_window_in), so its first place's ground stands as far under
+/// the window's top as it is in from its side, concentric with the window's corner (the user, 2026-11-09: 新建对话往上挪一点).
+fn rail_top_corner() -> Double {
+  rail_window_in()
 }
 
 ///|
@@ -249,14 +257,11 @@ let rail_places_col : @ui.Style = @ui.css("gap=S1_5 align=AStart")
 let lit_in_bar : Double = 0.12
 
 ///|
-/// The rail's places 6 apart; its top row 41 under the window's buttons, else 5.
+/// The rail's places 6 apart; its top row 41 under the window's buttons (else rail_top_corner).
 let rail_gap : Double = 6.0
 
 ///|
 let rail_top_inset : Double = 41.0
-
-///|
-let rail_top_web : Double = 5.0
 
 ///|
 /// A place's icon (20).
