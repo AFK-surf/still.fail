@@ -48,7 +48,7 @@ export const PLAIN_USES = `SELECT r.body FROM vault_use_lookup u INDEXED BY vaul
 export const USE_BACKFILL_AFTER = "SELECT id FROM vault_requests WHERE ws = ? AND id > ? ORDER BY id LIMIT ?";
 
 export type UseRead = { id: number; ws: string; vault: string; owner: string | null; limit: number };
-export type PendingPrepare = { kind: "pending"; id: number; ws: string; members: boolean };
+export type PendingPrepare = { kind: "pending"; id: number; ws: string; members: boolean; audit: boolean };
 export type UseAnswer = { id: number; bodies?: string[]; ready?: true; error?: string };
 
 export function initializeUseIndex(db: DatabaseSync): void {
@@ -186,17 +186,17 @@ export class UseIndex {
   }
 
   /// Prepare one workspace's pending lookup in bounded transactions on the same worker as use-history preparation.
-  async preparePending(ws: string, members: boolean): Promise<void> {
+  async preparePending(ws: string, members: boolean, audit = false): Promise<void> {
     if (this.#closed) throw new Error("station stopping");
-    if (pendingPreparationComplete(this.#db, ws, members)) return;
+    if (pendingPreparationComplete(this.#db, ws, members, audit)) return;
     if (this.#path === null) {
       for (;;) {
         if (this.#closed) throw new Error("station stopping");
-        if (pendingPreparationComplete(this.#db, ws, members) || backfillPendingPreparation(this.#db, ws, members)) return;
+        if (pendingPreparationComplete(this.#db, ws, members, audit) || backfillPendingPreparation(this.#db, ws, members, audit)) return;
         await new Promise<void>((resolve) => setImmediate(resolve));
       }
     }
-    const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws, members });
+    const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws, members, audit });
     if (answer.ready !== true) throw new Error("the vault reader did not prepare pending requests");
   }
 
