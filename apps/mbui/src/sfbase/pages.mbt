@@ -247,9 +247,55 @@ pub fn handoff_chat_open(r : ChatRef, reader : TopicLease) -> Unit {
 }
 
 ///|
+/// The readers a page handed over as it opened another in its place (open_handing), by the entry opened's serial:
+/// each the entry's as its view is made (page_entry_source), let go once its first build has read what it reads
+/// (page_entry_read).
+let handed_readers : Map[Int, Array[TopicLease]] = {}
+
+///|
+/// `open` run (a page opening the next in its place: a folder the folder it goes into), with this page's reader of
+/// topic `name` handed over to the entry it opened: kept past this page as it leaves (as a row's early reader is,
+/// prepare_chat_handoff), taken by that entry as its view is made and let go as its first build ends. So a next page
+/// that reads it as it is first built reads the subscription this one read, never one made again after this one let
+/// it go (a press opens the next at once, outside any build: the old entry leaves before the new one is built); one
+/// that does not read it then lets it go then, as it would have been had the open come in a build. Only a topic this
+/// page holds is handed over: one nothing reads is not asked for here (a lease of it would be a subscription of its
+/// own).
+pub fn open_handing(src : Source, name : String, params : Map[String, Json], open : () -> Unit) -> Unit {
+  if !topic_held(name, params) {
+    open()
+    return
+  }
+  let reader = match prepare_chat_handoff(src.lease_topic(name, params)) {
+    Some(reader) => reader
+    None => {
+      open()
+      return
+    }
+  }
+  let (before, _) = @signals.untracked(fn() { app.nav.top_stay() })
+  open()
+  let (serial, _) = @signals.untracked(fn() { app.nav.top_stay() })
+  // (nothing opened in its place: no one to hand it to)
+  if serial == before {
+    reader.release()
+    return
+  }
+  match handed_readers.get(serial) {
+    Some(readers) => readers.push(reader)
+    None => handed_readers[serial] = [reader]
+  }
+}
+
+///|
 /// The source for one actual navigation entry. Keep its identity until the entry leaves so its final events can
-/// use the same projection that the page read, rather than the surrounding window's source.
+/// use the same projection that the page read, rather than the surrounding window's source. What the page before it
+/// handed over as it opened it (open_handing) is the entry's from here, till its first build (page_entry_read).
 pub fn page_entry_source(src : Source, entry : @view.View, serial : Int) -> Source {
+  match handed_readers.get(serial) {
+    Some(readers) => for reader in readers { reader.bind_to(entry) }
+    None => ()
+  }
   let source = src.owned_by(entry)
   let current : PageSource = { source, page: None, seen: 0, chat_ready: "", chat_view: None, active: true }
   let sources = match page_sources.get(serial) {
@@ -317,6 +363,15 @@ fn entry_last_source(serial : Int, page : Page) -> PageSource? {
 
 ///|
 pub fn page_entry_read(serial : Int, source : Source, page : Page) -> Unit {
+  // (what the page before handed over, open_handing: let go once this build has read what it reads, at its frame's
+  // end; what it read is its own reader's by then)
+  match handed_readers.get(serial) {
+    Some(readers) => {
+      handed_readers.remove(serial)
+      @ui.after_frame(fn() { for reader in readers { reader.release() } })
+    }
+    None => ()
+  }
   match page_sources.get(serial) {
     Some(sources) => for current in sources {
       if !physical_equal(current.source, source) { continue }
@@ -632,6 +687,13 @@ pub fn reset() -> Unit {
   let pending = pending_chat_readers.values().collect()
   pending_chat_readers.clear()
   for reader in pending { stop_pending_chat(reader) }
+  let handed = handed_readers.values().collect()
+  handed_readers.clear()
+  for readers in handed {
+    for reader in readers {
+      reader.release()
+    }
+  }
   page_sources.clear()
   left_page_sources.clear()
   page_source_seen.val = 0

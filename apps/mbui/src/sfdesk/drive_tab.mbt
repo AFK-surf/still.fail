@@ -217,11 +217,11 @@ fn ftab_places(c : @ui.Ctx, stations : Array[DvStation]) -> Unit {
       @sf.section(c, s.name, note=if s.online { "" } else { @sf.t("web-pages.stations.offline") }, fn() {
         @sf.group(c, fn() {
           let row = fn(key : String, icon : String, name : String, where_ : String, trouble : String, root : String) {
-            if @sf.link_row(c, "files-tab/place/" + s.station + "/" + key, name, note=where_, trouble~, lead=fn() {
-                @sf.icon(c, icon, size=tab_icon, color=t.p.muted) |> ignore
-              }) {
+            @sf.link_row(c, "files-tab/place/" + s.station + "/" + key, name, note=where_, trouble~, lead=fn() {
+              @sf.icon(c, icon, size=tab_icon, color=t.p.muted) |> ignore
+            }, on_press=fn() {
               ftab_go(s.station, root, "")
-            }
+            }) |> ignore
           }
           if s.anywhere && s.home != "" {
             row("home", "server", @sf.t("web-pages.drive.home"), s.home, "", s.home)
@@ -329,22 +329,23 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     })
     |> ignore
     c.box(style=ftab_actions, fn() {
-      if lit_button(c, "files-tab/favorite", "star", @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", folder_name(st, at))]), kept) {
+      lit_button(c, "files-tab/favorite", "star", @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", folder_name(st, at))]), kept, on_press=fn() {
         if kept {
           favorite_remove(src, ws, at.station, root, at.path)
         } else {
           favorite_add(src, ws, { station: at.station, root, path: at.path, name: folder_name(st, at) })
         }
-      }
-      if lit_button(
-          c,
-          "files-tab/preview",
-          if previewing { "panel-close" } else { "panel-open" },
-          @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
-          previewing,
-        ) {
-        set_preview_shown(src, "tab", !previewing)
-      }
+      })
+      lit_button(
+        c,
+        "files-tab/preview",
+        if previewing { "panel-close" } else { "panel-open" },
+        @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
+        previewing,
+        on_press=fn() {
+          set_preview_shown(src, "tab", !previewing)
+        },
+      )
       @sf.icon_button(c, "copy", key="files-tab/copy", label=@sf.t("web-pages.drive.copyPath"), on_press=fn() {
         copy_path(c, here)
       }) |> ignore
@@ -467,19 +468,21 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
                     dir: true,
                   }
                   // (the folder as a whole, where it is under it: the library's row of choices, as the places' rows)
-                  if @sf.choice_row(c, "files-tab/whole", ftab_picked(whole), @sf.t("web-mobile.files.wholeFolder"), note=here, lead=fn() {
-                      @sf.icon(c, "folder", size=tab_icon, color=t.p.muted) |> ignore
-                    }) {
+                  @sf.choice_row(c, "files-tab/whole", ftab_picked(whole), @sf.t("web-mobile.files.wholeFolder"), note=here, lead=fn() {
+                    @sf.icon(c, "folder", size=tab_icon, color=t.p.muted) |> ignore
+                  }, on_press=fn() {
                     ftab_pick(whole)
-                  }
+                  }) |> ignore
                 })
             }
         }
     }
     // a press where there is no row: nothing chosen
-    if c.clicked(lid) && !row_took(c) {
-      b.clear(c, src)
-    }
+    c.on_press(lid, fn() {
+      if !row_took(c) {
+        b.clear(c, src)
+      }
+    })
   })
   |> ignore
   if previewing {
@@ -580,10 +583,11 @@ fn ftab_child(folder : String, name : String) -> String {
 }
 
 ///|
-/// A button of the tab's head lit while what it says is so (pin, the preview): the accent's ink then.
-fn lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool) -> Bool {
+/// A button of the tab's head lit while what it says is so (pin, the preview): the accent's ink then; `on_press` as it is
+/// pressed.
+fn lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool, on_press~ : () -> Unit) -> Unit {
   let lit = @sf.theme().p.accent
-  @sf.icon_button(c, icon, key~, on~, ink?=if on { Some(lit) } else { None }, label~)
+  @sf.icon_button(c, icon, key~, on~, ink?=if on { Some(lit) } else { None }, label~, on_press=on_press) |> ignore
 }
 
 ///|

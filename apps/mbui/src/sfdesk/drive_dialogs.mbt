@@ -156,20 +156,21 @@ fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) 
         close()
         picker_close()
       }) |> ignore
-      if @sf.button(
-          c,
-          @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
-          key="drive/picker/pick",
-          tone=Primary,
-          disabled=v is None || taken || dialogs.denied.get(),
-        ) {
-        let name = dv_root_label([], path)
-        close()
-        picker_close()
-        let f : Favorite = { station, root: path, path: "", name }
-        favorite_add(src, ws, f)
-        picked(f)
-      }
+      @sf.button(
+        c,
+        @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
+        key="drive/picker/pick",
+        tone=Primary,
+        disabled=v is None || taken || dialogs.denied.get(),
+        on_press=fn() {
+          let name = dv_root_label([], path)
+          close()
+          picker_close()
+          let f : Favorite = { station, root: path, path: "", name }
+          favorite_add(src, ws, f)
+          picked(f)
+        },
+      ) |> ignore
     },
     gone=picker_close,
   )

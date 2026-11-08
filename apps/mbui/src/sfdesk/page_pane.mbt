@@ -308,6 +308,10 @@ fn pane_made(
       made("workspace", fn(a, core, here, stint, frame, width) {
         @sfpages.workspace_node(a, core, here, on_back=core.pop, frame~, stint~, width~, tips~)
       })
+    Setting(VaultItems) =>
+      made("vault-items", fn(a, core, here, _stint, frame, width) {
+        @sfpages.vault_items_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
+      })
     Setting(AutoCompletion) =>
       made("auto-completion", fn(a, core, here, _stint, frame, width) {
         @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
