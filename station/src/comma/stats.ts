@@ -10,7 +10,7 @@
 //
 // Built as Comma first connects, a minute after the agents' spending was recorded, as a chat moves (a minute after
 // too), and every hour (another station's changes reach it so); one build at a time.
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -134,11 +134,14 @@ export class RevIndex {
   }
 
   epoch(): string {
-    const had = this.#meta("epoch");
-    if (had !== null) return had;
-    const epoch = randomBytes(16).toString("hex");
-    this.#setMeta("epoch", epoch);
-    return epoch;
+    let epoch = this.#meta("epoch");
+    if (epoch === null) {
+      epoch = randomBytes(16).toString("hex");
+      this.#setMeta("epoch", epoch);
+    }
+    // Earlier senders truncated the NUL-delimited stats keys. A new wire epoch makes Comma rebuild its copy, while
+    // an older process still handing over continues to see its own epoch in the shared database.
+    return this.#name === "stats_index" ? `${epoch}.keys1` : epoch;
   }
 
   rev(): number {
@@ -146,8 +149,8 @@ export class RevIndex {
   }
 
   since(since: number, limit: number): IndexRow[] {
-    return (this.#db.prepare(`SELECT key, source, kind, rev, removed, json FROM ${this.#name} WHERE rev > ? ORDER BY rev LIMIT ?`).all(since, limit) as Json[]).map((r) => ({
-      key: r.key, source: r.source, kind: r.kind, rev: r.rev, removed: r.removed !== 0, json: r.json,
+    return (this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, source, kind, rev, removed, json FROM ${this.#name} WHERE rev > ? ORDER BY rev LIMIT ?`).all(since, limit) as Json[]).map((r) => ({
+      key: Buffer.from(r.key).toString("utf8"), source: r.source, kind: r.kind, rev: r.rev, removed: r.removed !== 0, json: r.json,
     }));
   }
 
@@ -182,10 +185,12 @@ export class RevIndex {
       put.run(key, SOURCE, row.kind, ++rev, row.json);
       changed++;
     }
-    const kept = this.#db.prepare(`SELECT key, json FROM ${this.#name} WHERE removed = 0`).all() as { key: string; json: string }[];
-    const tombstone = this.#db.prepare(`UPDATE ${this.#name} SET removed = 1, rev = ? WHERE key = ?`);
+    // Node's SQLite text reader stops at NUL. Compare and update using the actual stored UTF-8 bytes instead.
+    const keys = new Set([...given.keys()].map((key) => Buffer.from(key).toString("hex")));
+    const kept = this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, json FROM ${this.#name} WHERE removed = 0`).all() as { key: Uint8Array; json: string }[];
+    const tombstone = this.#db.prepare(`UPDATE ${this.#name} SET removed = 1, rev = ? WHERE key = CAST(? AS TEXT)`);
     for (const k of kept) {
-      if (given.has(k.key) || !drop(JSON.parse(k.json))) continue;
+      if (keys.has(Buffer.from(k.key).toString("hex")) || !drop(JSON.parse(k.json))) continue;
       tombstone.run(++rev, k.key);
       changed++;
     }
@@ -347,9 +352,11 @@ export function probePage(index: RevIndex): Page {
 
 /// A Stats index row as `stats.index` carries it.
 export function statsWire(row: IndexRow): Json | null {
-  if (row.removed) return { key: row.key, source: row.source, kind: row.kind, rev: row.rev, removed: true };
+  // Keys are opaque to Comma; PostgreSQL text cannot contain NUL and its key is limited to 512 bytes.
+  const key = `sf1:${createHash("sha256").update(row.key).digest("hex")}`;
+  if (row.removed) return { key, source: row.source, kind: row.kind, rev: row.rev, removed: true };
   try {
-    return { key: row.key, source: row.source, kind: row.kind, rev: row.rev, row: JSON.parse(row.json) };
+    return { key, source: row.source, kind: row.kind, rev: row.rev, row: JSON.parse(row.json) };
   } catch {
     return null;
   }
