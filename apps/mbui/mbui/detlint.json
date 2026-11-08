@@ -225,7 +225,16 @@
       "src/kit/toast.mbt": 1
     },
     "motion-length": {},
-    "tester-branch": {}
+    "tester-branch": {},
+    "frame-number": {
+      "src/kit/popover.mbt": 5,
+      "src/kit/sheet.mbt": 2,
+      "src/kit/time.mbt": 2,
+      "src/kit/toast.mbt": 2,
+      "src/motion/anim.mbt": 9,
+      "src/motion/fx.mbt": 10,
+      "src/motion/layer.mbt": 13
+    }
   },
   "excused": {
     "frame-request": {},
@@ -280,7 +289,8 @@
     "built-by-hand": {},
     "layout-read-back": {},
     "motion-length": {},
-    "tester-branch": {}
+    "tester-branch": {},
+    "frame-number": {}
   },
   "tester": {
     "names": [
