@@ -111,42 +111,60 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
     None => None
   }
   let blocks : Array[() -> Unit] = []
+  // (each block by what it is and what it shows: one come or gone opens or closes where it is, one showing another
+  // thing goes to its height, @sf.page's `keys`: its usage read the first time no step under it)
+  let keys : Array[(String, String)] = []
+  let sign = json_sign(p)
   // what to do first: a subscription to sign in (or signing in, or its last sign-in failed), else what its trouble
   // says to do
   let needed = text(check, "state") == "login" || signing_in
   let asked = needed || text(login, "state") == "failed"
   if !copy && signs_in && !machine && asked {
     blocks.push(fn() { profile_sign_in(c, core, address, text(s, "name"), p, needed) })
+    keys.push(("sign-in", sign))
   } else if field(p, "trouble") is Some(Object(_)) && text(field(p, "trouble"), "action") != "login" {
     blocks.push(fn() { profile_trouble(c, core, s, p) })
+    keys.push(("trouble", sign))
   }
   blocks.push(fn() { profile_quota(c, core, address, p) })
+  keys.push(("quota", sign))
   blocks.push(fn() { profile_usage(c, core, here, s, p, entry) })
+  let usage = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(7.0) }).get().value
+  keys.push(("usage", sign + json_sign(usage) + json_sign(entry)))
   blocks.push(fn() { profile_used_by(c, core, address, o, p) })
+  keys.push(("used-by", sign + json_sign(field(o, "connects"))))
   if entry is Some(_) && !items(entry, "places").is_empty() {
     blocks.push(fn() { profile_stations(c, core, address, entry) })
+    keys.push(("stations", json_sign(entry)))
   }
   if !copy {
     blocks.push(fn() { profile_models(c, core, here, address, p) })
+    keys.push(("models", sign))
     // how it runs, in one section (the web's two of the same title: fast mode, and the background on a message)
     let fast = has(p, "fast") && !(field(p, "fast") is Some(Null))
     let background = items(p, "runtimes").iter().any(fn(r) { r == "claude" }) && has(p, "backgroundOnMessage")
     if fast || background {
       blocks.push(fn() { profile_run(c, core, address, p, fast, background) })
+      keys.push(("run", sign))
     }
   }
   if has(o, "sharing") && !(field(o, "sharing") is Some(Null)) {
     blocks.push(fn() { profile_share(c, core, s, p, entry) })
+    keys.push(("share", sign + json_sign(entry)))
   }
   if !copy {
     blocks.push(fn() { profile_workspaces(c, core, address, p) })
+    // (not what it reads of the station's workspaces: read here, it would be asked for before its block is in view)
+    keys.push(("workspaces", sign))
     blocks.push(fn() { profile_account(c, core, s, p, !asked) })
+    keys.push(("account", sign))
     if kind == "env" {
       blocks.push(fn() { profile_env(c, core, address, p) })
+      keys.push(("env", sign))
     }
   }
   // its head says who it is: no title over it
-  @sf.page(c, on_back=core.pop, frame~, "profile/" + address + "/" + id, text(p, "name"), blocks, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
+  @sf.page(c, on_back=core.pop, frame~, "profile/" + address + "/" + id, text(p, "name"), blocks, keys~, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
     profile_head(c, core, here, address, text(s, "name"), p, entry)
   })
 }
