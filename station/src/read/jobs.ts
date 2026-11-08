@@ -6,7 +6,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import { setLang } from "./spoken.ts";
 import * as store from "./store.ts";
 import type { Json, JobRow, Store } from "./store.ts";
-import { HttpError, chats, scopeOf } from "./views.ts";
+import { HttpError, chats, scopeOfJobNames } from "./views.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 
@@ -116,9 +116,9 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
   }
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
   // each, as the sidebar lists them): of the items its session and the chats it takes part in make (views.ts
-  // `scopeOf`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
+  // `scopeOfJobNames`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
   const keys = new Set(open.map((j) => j.sessionKey));
-  const scope = scopeOf(s, [...keys], store.threadsOfSessions(s, [...keys]));
+  const scope = scopeOfJobNames(s, [...keys]);
   const scan = (archived: boolean) => {
     const own = new Map<string, Json>();
     const any = new Map<string, Json>();
