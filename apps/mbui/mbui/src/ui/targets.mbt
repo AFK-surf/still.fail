@@ -285,12 +285,13 @@ fn scrolls(n : Node) -> Bool {
 
 ///|
 /// What the frame's targets were last found from (Ctx::view_targets): the old frame's builds and layout as committed,
-/// what of it was moved by what moves it, what of the tree's is where (Tree::hits_said), whether the one old view is the
-/// whole window, the hand; and whether what finding them read (a bar's showing, its clock) was told changed since
+/// what of it was moved by what moves it, which old views the tree draws and in what order (old_drawn_said: where it
+/// draws them is no part of it, their targets placed there as an input comes, old_hits_place), whether the one old view
+/// is the whole window, the hand; and whether what finding them read (a bar's showing, its clock) was told changed since
 /// (`stale`, by their `watch`). Where the layers' begin among them.
 priv struct TargetsKept {
   mut found : Bool
-  mut key : (Int, Int, Int, Int, Bool, Bool)
+  mut key : (Int, Int, Int, Array[Int], Bool, Bool)
   mut stale : Bool
   mut watch : @signals.Watch?
   mut layers_from : Int
@@ -300,10 +301,25 @@ priv struct TargetsKept {
 // kept across runs: put back as a run begins (targets_forget)
 let targets_kept : TargetsKept = {
   found: false,
-  key: (0, 0, 0, 0, false, false),
+  key: (0, 0, 0, [], false, false),
   stale: true,
   watch: None,
   layers_from: 0,
+}
+
+///|
+/// The old views the tree draws now, as targets are found from it (Ctx::targets_found, old_drawn): each one's node, its
+/// place in the tree's order, and whether it shows; where it is drawn not, a scrolled list moving it or what is round it.
+fn old_drawn_said(tree : @view.Tree) -> Array[Int] {
+  let out = []
+  for d in old_drawn(tree) {
+    let (c, _, _, a, _, _, _, at) = d
+    out.push(c.id.at)
+    out.push(c.id.gen)
+    out.push(at)
+    out.push(if a <= 0.002 { 0 } else { 1 })
+  }
+  out
 }
 
 ///|
@@ -321,12 +337,12 @@ fn targets_forget() -> Unit {
 
 ///|
 /// What the frame's targets are found from, as of now (TargetsKept's `key`).
-fn Ctx::targets_key(self : Ctx, tree : @view.Tree) -> (Int, Int, Int, Int, Bool, Bool) {
+fn Ctx::targets_key(self : Ctx, tree : @view.Tree) -> (Int, Int, Int, Array[Int], Bool, Bool) {
   (
     self.build_no,
     commit_counts[0] + commit_counts[1] + commit_counts[2],
     moves_said.val,
-    tree.hits_said(),
+    old_drawn_said(tree),
     old_whole.val,
     pointing() is Mouse,
   )
