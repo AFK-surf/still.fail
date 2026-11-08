@@ -9,6 +9,7 @@ import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 import { isStationAuthor } from "./titles.ts";
+import { closeCut } from "./tool-step.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -86,7 +87,9 @@ const CHAT_ENDS: Record<string, [string, boolean]> = {
   "was stopped by a person": ["stopped", false],
 };
 
-export function readNotice(text: string): Notice | null {
+export function readNotice(text: string, stations?: ReadonlyMap<string, string>): Notice | null {
+  const remote = /^Remote task (\S+) on (\S+): ([\s\S]*)$/.exec(text);
+  if (remote) return remoteNotice(remote[1], stations?.get(remote[2]) ?? remote[2].slice(0, 8), remote[3]);
   const chat = /^The chat you opened, "(.+?)"(?: \(\S+\))?, (ended its turn all_done|needs a person|stopped with an error|was stopped by a person)(?:: ([\s\S]*?))?(?:\. They are asked there; help if you can, or wait)?\. Read it with chat_read; write to its agent with session_send to its link\.$/.exec(text);
   if (chat) {
     const [how, failed] = CHAT_ENDS[chat[2]];
@@ -112,6 +115,39 @@ export function readNotice(text: string): Notice | null {
     return code !== null ? event(`exited${again}`, code !== 0, ended[3] ?? null, true, { code }) : event(`signaled${again}`, true, ended[3] ?? null, true);
   }
   return null;
+}
+
+/// What another station said of a task it runs for this session (remote.ts `settle`: its `task.get` answer as JSON, cut
+/// short when long, or why it is no longer followed): its end in a line with its last lines, or what it said.
+function remoteNotice(key: string, station: string, rest: string): Notice | null {
+  const what = t("core-logic.history.notice.remote");
+  const event = (k: string, failed: boolean, name: string, more: string | null = null, args: Record<string, string | number> = {}): Notice =>
+    ({ kind: "event", line: t(`core-logic.history.notice.${k}`, { what, name: `${name} · ${station}`, ...args }), failed, chat: false, more, output: more !== null });
+  if (!rest.startsWith("{")) return / is no longer followed\./.test(rest) ? event("lost", true, key) : null;
+  let got: J;
+  try {
+    got = JSON.parse(rest);
+  } catch {
+    const cut = CLIPPED.exec(rest);
+    if (!cut) return null;
+    try {
+      got = JSON.parse(closeCut(rest.slice(0, cut.index)));
+    } catch {
+      return null;
+    }
+  }
+  const job = got?.job;
+  const name = typeof job?.name === "string" && job.name !== "" ? job.name : key;
+  const log = typeof got?.log === "string" && got.log.trim() !== "" ? got.log.replace(/\n+$/, "") : null;
+  const state = typeof job?.state === "string" ? job.state : "";
+  if (state === "" || state === "running") {
+    // Its notices, newest first; cut short before its state, what it told is not known.
+    const said = Array.isArray(got?.notices) ? got.notices.find((n: J) => typeof n?.text === "string")?.text : undefined;
+    return said !== undefined ? { kind: "said", name, said } : event("remoteNews", false, name);
+  }
+  if (state === "stopped") return event("remoteStopped", false, name, log);
+  const code = typeof job.exitCode === "number" ? job.exitCode : null;
+  return code !== null ? event("exited", code !== 0, name, log, { code }) : event("signaled", true, name, log);
 }
 
 function attr(attrs: string, name: string): string | null {
@@ -359,7 +395,7 @@ export function presentHistory(live: J, cx: Context): J {
         const [messages, said] = parsePrompt(s(timeline[item.i], "text"));
         const [tasks, note] = parseTasks(said);
         // The station's own notices: an event of a job's or of a chat it opened, in a line as background work's end is.
-        const notices = messages.map((m) => (m.station ? readNotice(m.text) : null));
+        const notices = messages.map((m) => (m.station ? readNotice(m.text, cx.stations) : null));
         const events = notices.flatMap((n) => (n?.kind === "event" ? [n] : []));
         v = {
           kind: "received",
