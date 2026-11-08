@@ -274,8 +274,97 @@ fn shape_band_of(
 }
 
 ///|
+/// Pieces of shapes put among the frame's as one run, the same each frame (a row drawn again as kept, an old view's
+/// block): its instances of kind 12 as packed where its first piece is the `p`th of an instance, at `p` (made as
+/// first needed: what comes before it changes, rows come and go), only those it fills whole.
+priv struct SegPack {
+  by_phase : FixedArray[FixedArray[Double]?]
+}
+
+///|
+fn SegPack::new() -> SegPack {
+  { by_phase: FixedArray::make(6, None) }
+}
+
+///|
+/// The runs among the frame's pieces put as they were before (Ctx::segs_put): where each begins, its pieces and their
+/// packs, in the order put.
+// kept across runs: emptied with the frame's pieces (Ctx::segs_cut)
+let seg_runs : Array[(Int, Array[Double], SegPack)] = []
+
+///|
+/// Pieces `segs`, the same as the last time `pack` went with them, put after the frame's: packed as they were, each
+/// frame only copied (Ctx::emit_segs).
+fn Ctx::segs_put(self : Ctx, segs : Array[Double], pack : SegPack) -> Unit {
+  let at = self.segs.length() / 4
+  self.segs.append(segs)
+  if segs.length() >= 4 * 6 {
+    seg_runs.push((at, segs, pack))
+  }
+}
+
+///|
+/// The frame's pieces cut to the first `len` numbers, and the runs among those cut off forgotten.
+fn Ctx::segs_cut(self : Ctx, len : Int) -> Unit {
+  self.segs.truncate(len)
+  while seg_runs.length() > 0 {
+    let (at, segs, _) = seg_runs[seg_runs.length() - 1]
+    if 4 * at + segs.length() <= len {
+      break
+    }
+    seg_runs.unsafe_pop() |> ignore
+  }
+}
+
+///|
+/// Instance `j` of the frame's kind 12 written at `b` in `a` from the frame's pieces (`n` of them).
+fn seg_inst_put(a : FixedArray[Double], b : Int, segs : Array[Double], j : Int, n : Int) -> Unit {
+  seg_inst.blit_to(a, len=inst_size, dst_offset=b)
+  let first = j * 6
+  let last = if first + 6 < n { first + 6 } else { n }
+  // (each read and written unchecked: the room for the instance there, `4 * n` numbers in the pieces, six slots in
+  // an instance)
+  for i in first..<last {
+    let o = b + seg_slots.unsafe_get(i - first) * 4
+    let p = 4 * i
+    a.unsafe_set(o, segs.unsafe_get(p))
+    a.unsafe_set(o + 1, segs.unsafe_get(p + 1))
+    a.unsafe_set(o + 2, segs.unsafe_get(p + 2))
+    a.unsafe_set(o + 3, segs.unsafe_get(p + 3))
+  }
+}
+
+///|
+/// The instances pieces `segs` begun as the `phase`th of an instance fill whole, as packed (made the first time).
+fn SegPack::at(self : SegPack, segs : Array[Double], phase : Int) -> FixedArray[Double] {
+  match self.by_phase[phase] {
+    Some(a) => return a
+    None => ()
+  }
+  let n = segs.length() / 4
+  let t0 = if phase == 0 { 0 } else { 1 }
+  let t1 = (phase + n) / 6
+  let a = FixedArray::make((t1 - t0) * inst_size, 0.0)
+  for t in t0..<t1 {
+    let b = (t - t0) * inst_size
+    seg_inst.blit_to(a, len=inst_size, dst_offset=b)
+    for s in 0..<6 {
+      let o = b + seg_slots[s] * 4
+      let p = 4 * (t * 6 + s - phase)
+      a[o] = segs[p]
+      a[o + 1] = segs[p + 1]
+      a[o + 2] = segs[p + 2]
+      a[o + 3] = segs[p + 3]
+    }
+  }
+  self.by_phase[phase] = Some(a)
+  a
+}
+
+///|
 /// The frame's pieces of shapes, after every instance it draws (app.mbt, once all is painted): six to an instance of
-/// kind 12, which the renderers draw nothing of.
+/// kind 12, which the renderers draw nothing of. Those of a run put as before (Ctx::segs_put) that fill instances
+/// whole are copied as packed then.
 fn Ctx::emit_segs(self : Ctx) -> Unit {
   let n = self.segs.length() / 4
   if n == 0 {
@@ -287,23 +376,29 @@ fn Ctx::emit_segs(self : Ctx) -> Unit {
   }
   let a = self.inst
   let segs = self.segs
-  // (each read and written unchecked, every piece of the frame's packed each frame: the room for `k` more instances
-  // grown above, `4 * n` numbers in the pieces, six slots in an instance)
-  for j in 0..<k {
-    let b = (self.ninst + j) * inst_size
-    seg_inst.blit_to(a, len=inst_size, dst_offset=b)
-    let first = j * 6
-    let last = if first + 6 < n { first + 6 } else { n }
-    for i in first..<last {
-      let o = b + seg_slots.unsafe_get(i - first) * 4
-      let p = 4 * i
-      a.unsafe_set(o, segs.unsafe_get(p))
-      a.unsafe_set(o + 1, segs.unsafe_get(p + 1))
-      a.unsafe_set(o + 2, segs.unsafe_get(p + 2))
-      a.unsafe_set(o + 3, segs.unsafe_get(p + 3))
+  let base = self.ninst
+  let mut j = 0
+  let mut r = 0
+  while j < k {
+    if r < seg_runs.length() {
+      let (at, run, pack) = seg_runs[r]
+      let f0 = (at + 5) / 6
+      let f1 = (at + run.length() / 4) / 6
+      if f1 <= f0 || j >= f1 {
+        r = r + 1
+        continue
+      }
+      if j == f0 {
+        pack.at(run, at % 6).blit_to(a, len=(f1 - f0) * inst_size, dst_offset=(base + j) * inst_size)
+        j = f1
+        r = r + 1
+        continue
+      }
     }
+    seg_inst_put(a, (base + j) * inst_size, segs, j, n)
+    j = j + 1
   }
-  self.ninst = self.ninst + k
+  self.ninst = base + k
 }
 
 ///|

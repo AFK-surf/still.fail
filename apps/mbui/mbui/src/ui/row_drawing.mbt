@@ -669,7 +669,7 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
     // as it is)
     self.ninst = start
     self.spans_cut()
-    self.segs.truncate(segs)
+    self.segs_cut(segs)
     self.paint_cut(marks)
     if !(d.valid && self.row_replay(d, i, 0.0, 0.0, k)) {
       d.valid = false

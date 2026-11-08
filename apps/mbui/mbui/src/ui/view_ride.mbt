@@ -46,6 +46,8 @@ priv struct RideKept {
   /// its shapes' pieces, and where among the frame's they began
   segs : Array[Double]
   seg0 : Int
+  /// its pieces as packed among the frame's (Ctx::segs_put)
+  pack : SegPack
   spots : Array[RideSpot]
   /// who drew each, as kept (inst_owners)
   owners : Array[(Int, (Double, Double), @view.NodeId?, Int)]
@@ -422,6 +424,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     moves,
     segs,
     seg0: r.seg0,
+    pack: SegPack::new(),
     spots: r.spots.map(fn(s) { { ..s, at: s.at - r.k0, end: s.end - r.k0 } }),
     owners,
     reach: (r.x0, r.y0, r.x1, r.y1),
@@ -561,7 +564,7 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
   ride_drawn.val = ride_drawn.val + 1
   ride_caps.clear()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
-  self.segs.append(k.segs)
+  self.segs_put(k.segs, k.pack)
   let mut from = 0
   for sp in k.spots {
     self.ride_copy(k, from, sp.at, dx, dy, seg_by)
