@@ -358,9 +358,9 @@ fn rs_heads(
     }
     for k, col in columns {
       let id = c.id("resources-by/" + address + "/" + col.0)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         shown.by = col.0
-      }
+      })
       let on = col.0 == shown.by
       let name = @sf.t("web-main.resources.column." + col.0)
       let words = if on { name + " ↓" } else { name }
@@ -420,9 +420,9 @@ fn rs_title(c : @ui.Ctx, core : Core, key : String, g : Json?, style : @ui.TextS
   let session = if thread != "" { thread } else { text(chat, "session") }
   if chat is Some(Object(_)) && session != "" {
     let id = c.id("resources-chat/" + key)
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       (core.open_chat)(text(chat, "station"), session, text(g, "title"))
-    }
+    })
     // (underlined under the pointer: chatLink)
     c.box(style=rs_title_box, id~, fn() {
       c.rich([@ui.span(text(g, "title"), underline=c.hovered(id))], style~) |> ignore
@@ -465,13 +465,13 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
       let key = text(gv, "key")
       let on = shown.open.get(key).unwrap_or(false)
       let id = c.id("resources-group/" + address + "/" + key)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         if on {
           shown.open.remove(key)
         } else {
           shown.open[key] = true
         }
-      }
+      })
       let b = rs_table_row(
         c,
         lay,
@@ -650,9 +650,9 @@ fn station_uses(c : @ui.Ctx, address : String, uv : Json?) -> Unit {
   let t = @sf.theme()
   let u = field(uv, "use")
   let id = c.id("station-uses/" + address)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @settings.station_parts[address] = "processes"
-  }
+  })
   let lit = c.hovered(id)
   let words = if lit { rs_uses_lit } else { rs_uses_words }
   let name = @sf.t("web-pages.stations.uses", args=[("name", "still.fail")])

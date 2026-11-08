@@ -94,9 +94,9 @@ pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
   c.box(style=news_room.then(@ui.style(px=@sf.room_of(t.chat_list.band_in))), fn() {
     c.box(style=news_card, fn() {
       let open = c.id("changelog-news")
-      if c.clicked(open) {
+      c.on_press(open, fn() {
         open_page(Setting(@settings.Route::Changelog))
-      }
+      })
       c.box(style=news_words, id=open, fn() {
         c.box(style=news_head, fn() {
           @sf.icon(c, "sparks", size=16.0, color=t.p.text) |> ignore
@@ -128,10 +128,10 @@ pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
       c.layer(fn() {
         c.box(style=news_close_place, fn() {
           let close = c.id("changelog-news/close")
-          if c.clicked(close) {
+          c.on_press(close, fn() {
             news_gone.val = news
             (src.call)("changelog.seen", Json::object({}), fn(_) {  })
-          }
+          })
           c.box(style=news_close, id=close, label=@sf.t("android-settings.changelog.dismiss"), fn() {
             @sf.icon(c, "close", size=16.0, color=t.p.muted) |> ignore
             @motion.ripple(c, close, 16.0)
@@ -169,9 +169,9 @@ pub fn update_card(c : @ui.Ctx, src : Source) -> Unit {
   c.box(style=news_room.then(@ui.style(px=@sf.room_of(t.chat_list.band_in))), fn() {
     c.box(style=news_card, fn() {
       let open = c.id("update-card")
-      if c.clicked(open) {
+      c.on_press(open, fn() {
         @sfbase.update_go(src)
-      }
+      })
       c.box(style=update_card_words, id=open, label=@sf.t("android-misc.updates.allow"), fn() {
         c.box(style=news_head, fn() {
           @sf.icon(c, "download", size=16.0, color=t.p.text) |> ignore

@@ -415,9 +415,9 @@ pub fn pick_layer(
     pick_clear()
     return
   }
-  if c.clicked(all) {
+  c.on_press(all, fn() {
     pk.sel.all(words)
-  }
+  })
   match pk.share {
     Some(go) if c.clicked(share) => {
       pick_clear()

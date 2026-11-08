@@ -46,12 +46,12 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
         Some(row) => @sf.t("web-main.relay.goTo", args=[("place", text(Some(row), "name"))])
         None => @sf.t("web-main.relay.go")
       }
-      if @sf.button(c, @sf.t("common.cancel"), key="relay/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="relay/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
-      if @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy.get(), disabled=!ready) {
+      }) |> ignore
+      @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy.get(), disabled=!ready, on_press=fn() {
         relay_go(src, view, done=close)
-      }
+      }) |> ignore
     },
     gone=fn() {
       if !relaying.busy.get() {
@@ -165,9 +165,9 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     let total = number(view, "total").to_int()
     if recent && total > rows.length() {
       let id = c.id("relay/all")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         relaying.all.set(true)
-      }
+      })
       let label = @sf.t("web-main.relay.showAll", args=[("count", total.to_string())])
       let b = c.box(style=relay_more, id~, fn() { c.text(label, style=relay_more_words) |> ignore })
       c.semantics(b, Button, id~, label~)

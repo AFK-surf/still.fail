@@ -43,9 +43,9 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
-          if c.clicked(go) {
+          c.on_press(go, fn() {
             @sfbase.go_place("stations") |> ignore
-          }
+          })
           c.box(style=foot_trouble, id=go, fn() {
             @sf.station_glyph(c, stations_at_glance(src, w.id).0, foot_glyph, t.p.text, t.p.red) |> ignore
             c.text(
@@ -289,10 +289,10 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   let id = c.id("side/archived/" + key)
   let back = c.id("side/archived-back/" + key)
   let drop = c.id("side/archived-drop/" + key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     archive_open(it)
     @sfbase.show_chosen()
-  }
+  })
   let on = match app.nav.top() {
     Chat(r) => r.station == station && r.session == session
     _ => false
@@ -378,9 +378,11 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   let session = text(v, "session")
   let title = text(v, "title")
   let key = station + "/" + session
-  if !busy && c.clicked(back) {
-    archive_restore(src, it)
-  }
+  c.on_press(back, fn() {
+    if !busy {
+      archive_restore(src, it)
+    }
+  })
   let b = c.box(style=@sf.row_key_box, id=back, fn() {
     if busy {
       @sf.spinner(c, size=arch_spin) |> ignore
@@ -391,9 +393,11 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   c.semantics(b, Button, id=back, label=@sf.t("web-pages.archive.restoreNamed", args=[("title", title)]))
   @sf.tip(c, "side/archived-back-tip/" + key, back, @sf.t("web-pages.archive.restore"))
   if flag(v, "deletable") {
-    if !busy && c.clicked(drop) {
-      archive_delete(src, it)
-    }
+    c.on_press(drop, fn() {
+      if !busy {
+        archive_delete(src, it)
+      }
+    })
     let d = c.box(style=@sf.row_key_box, id=drop, fn() {
       @sf.icon(c, "trash", size=arch_icon, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
     })

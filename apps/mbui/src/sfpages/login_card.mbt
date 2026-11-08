@@ -86,9 +86,9 @@ pub fn login_card(
 /// card with a solid button was 「明显有点过大了，而且好像不是很搭风格」).
 pub fn step_card(c : @ui.Ctx, key : String, title : String, line : String, go : () -> Unit) -> Unit {
   let x = c.id(key)
-  if c.clicked(x) {
+  c.on_press(x, fn() {
     go()
-  }
+  })
   c.box(style=lc_room, fn() {
     let b = c.box(style=lc_card_step, id=x, fn() {
       c.box(style=lc_head, fn() {
@@ -175,9 +175,9 @@ fn login_step(
       let what = @sf.t("common.login.otherWays")
       let b = c.box(style=lc_more, id=mid, fn() { @sf.icon(c, "more", size=lc_icon, color=p.text) |> ignore })
       c.semantics(b, Button, id=mid, label=what)
-      if c.clicked(mid) {
+      c.on_press(mid, fn() {
         @sf.menu(more.map(fn(i) { Some(i) }), from=Of(mid), along=End)
-      }
+      })
     })
     |> ignore
   }
@@ -393,10 +393,10 @@ fn login_relay_now(core : Core, station : String, id : String, title : String) -
 /// The device code, large enough to read and copy by eye (CardCode): pressed, it is copied (nothing opened), said so.
 fn login_code(c : @ui.Ctx, core : Core, code : String) -> Unit {
   let id = c.id("login-code/" + code)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     c.copy_text(code)
     (core.say)(@sf.t("web-main.logins.codeCopied"))
-  }
+  })
   c.box(style=lc_code_room, id~, label=@sf.t("web-main.logins.copyCode") + " " + code, fn() {
     c.rich([@ui.span(code, mono=true)], style=lc_code) |> ignore
   })
@@ -486,9 +486,11 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : St
     |> ignore
     if words != "" || busy {
       let go = if busy { 0 } else { c.id("login-paste-go/" + id) }
-      if go != 0 && c.clicked(go) {
-        send(words)
-      }
+      c.on_press(go, fn() {
+        if go != 0 {
+          send(words)
+        }
+      })
       c.box(style=lc_done, id=go, fn() {
         // busy: a spinner over its word, as wide as before
         let w = c.text(@sf.t("web-main.logins.finish"), style=lc_done_words)

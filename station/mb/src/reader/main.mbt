@@ -409,12 +409,67 @@ fn main {
     (Some("session-backfill"), Some(db), _) =>
       // (the backfills sessions/workspace-activity-worker.ts makes by `kind`, none: the activity; those not here yet
       // are left to it)
-      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session backfill", (db, ask) => match ask {
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let letters : Ref[@letters.Letters?] = Ref(None)
+        builder(host, db, "session backfill", (db, ask) => match ask {
         { "kind": "activity", .. } => Some(@activity.activity_step(db))
         { "kind": "recovery", .. } => Some(@activity.recovery_step(db))
         { "kind": "awake", .. } => Some(@activity.awake_step(db))
+        { "kind": "legacy-said", .. } => Some(@legacy.said_maintenance(db))
+        { "kind": "legacy-edits", .. } => Some(@legacy.edits_maintenance(db))
+        { "kind": "legacy-policy", .. } => Some(@legacy.policy_step(db))
+        { "kind": "directory", .. } => {
+          @activity.directory_install(db)
+          Some(@activity.directory_step(db))
+        }
+        { "kind": "chat-share", .. } => {
+          @activity.share_install(db)
+          Some(@activity.share_step(db))
+        }
+        { "kind": "sandbox", .. } => {
+          @activity.sandbox_enable(db)
+          Some(@activity.sandbox_step(db))
+        }
+        { "kind": "sandbox-off", .. } => {
+          @activity.sandbox_disable(db)
+          Some(true)
+        }
+        { "kind": "active-jobs", .. } => Some(@jobs.active_step(db))
+        { "kind": "process-jobs", .. } => {
+          @jobs.install(db)
+          Some(@jobs.step(db))
+        }
+        { "kind": "legacy-agent", .. } => Some(@legacy.agent_maintenance(db))
+        { "kind": "legacy-login", .. } => Some(@legacy.login_cards_maintenance(db))
+        { "kind": "page-letter-gc", .. } => {
+          let l = match letters.val {
+            Some(l) => l
+            None => {
+              let l = @letters.Letters::new(db)
+              letters.val = Some(l)
+              l
+            }
+          }
+          Some(l.gc_step())
+        }
+        { "kind": "legacy-decision-time", .. } => Some(@legacy.decision_time_step(db))
+        { "kind": "legacy-decision-session", .. } => Some(@legacy.decision_session_step(db))
+        { "kind": "legacy-decision-session-repair", .. } => Some(@legacy.decision_session_repair_step(db))
         { "kind": String(_), .. } => raise @legacy.Fallback
         _ => Some(@activity.activity_step(db))
+      })
+      })
+    (Some("post-blocks"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "post block", (db, ask) => match ask {
+        { "thread": Number(thread, ..), "after": Number(after, ..), .. } =>
+          Some(@posts.step(db, thread.to_int64(), after.to_int64()))
+        _ => None
+      }))
+    (Some("usage-retire"), Some(db), _) =>
+      // (asked a step at a time: `{"drop": true}` the retired indexes, else the fill; each answers whether it is done)
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "usage retirement", (db, ask) => match ask {
+        { "drop": True, .. } => Some(@usagefill.drop_step(db))
+        _ => Some(@usagefill.fill_step(db))
       }))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
@@ -509,7 +564,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire --db <file>")
       2
     }
   }

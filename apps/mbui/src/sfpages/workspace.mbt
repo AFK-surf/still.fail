@@ -565,10 +565,10 @@ fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
 /// Its foot: 取消 and 新建.
 fn new_workspace_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
   let name = new_ws.name.text().trim(chars=" \n\t").to_string()
-  if @sf.button(c, @sf.t("common.cancel"), key="new-ws/cancel", tone=Ghost) {
+  @sf.button(c, @sf.t("common.cancel"), key="new-ws/cancel", tone=Ghost, on_press=fn() {
     close()
     new_ws_cleared()
-  }
+  }) |> ignore
   if @sf.button(
       c,
       @sf.t("web-pages.workspace.createAction"),
@@ -684,9 +684,11 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
     @sf.tip(c, "rail/ws-add-tip", add, @sf.t("web-main.rail.addWorkspace"), side=Right)
     for x in all {
       let id = c.id("rail/ws/" + x.id)
-      if x.id != w.id && c.clicked(id) {
-        switch_to(x)
-      }
+      c.on_press(id, fn() {
+        if x.id != w.id {
+          switch_to(x)
+        }
+      })
       let on = x.id == w.id
       let hot = c.lit(id)
       let marked = workspace_marked(x)

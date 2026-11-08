@@ -64,9 +64,9 @@ fn narrow_retry(c : @ui.Ctx, words : String, look : @ui.TextStyle, retry : () ->
   c.box(style=narrow_problem, fn() {
     c.box(style=narrow_problem_words, fn() { c.text(words, style=look) |> ignore }) |> ignore
     let id = c.id("files/narrow/retry")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       retry()
-    }
+    })
     c.box(style=narrow_link, id~, fn() { c.text(@sf.t("web-pages.drive.retry"), style=narrow_link_words) |> ignore }) |> ignore
   })
   |> ignore

@@ -1840,9 +1840,9 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
 ///|
 /// Taps on the stage (not on what is over it) show or hide the bars.
 pub fn tap_stage(c : @ui.Ctx, v : Viewer, stage : Int) -> Unit {
-  if c.clicked(stage) {
+  c.on_press(stage, fn() {
     v.toggle()
-  }
+  })
 }
 
 ///|

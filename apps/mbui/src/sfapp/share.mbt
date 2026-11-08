@@ -139,9 +139,9 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
       head()
       share_note(c, sh("android-misc.shareIn.signIn"), share_narrow)
       let id = c.id("share-in/open-app")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         @ui.over_done(open_app=true)
-      }
+      })
       c.box(style=open_app_box, id~, fn() {
         // (in still.fail's own theme: its size and the link's ink as Android's C.link, not mbui's own blue)
         c.with_theme(@sf.ui_theme(), fn() {
@@ -449,13 +449,13 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
     c.box(style=share_whole, fn() { c.text(sh("android-misc.shareIn.to"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore }) |> ignore
     if share_in.searching.get() || rows.length() >= searched_from {
       let id = c.id("share-in/search")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         share_in.searching.set(!share_in.searching.get())
         if !share_in.searching.get() {
           share_in.query.set("")
           share_in.find.set("")
         }
-      }
+      })
       c.box(id~, fn() {
         c.text(
           if share_in.searching.get() { sh("common.cancel") } else { sh("android-misc.shareIn.search") },

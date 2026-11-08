@@ -476,9 +476,9 @@ pub fn reader_column(
   // a tap on the text: a phone's bars come, or go (a ground: the pointer over it the text's)
   let tap = c.id("reader-tap")
   c.cursor(tap, Arrow)
-  if c.clicked(tap) {
+  c.on_press(tap, fn() {
     reader_toggle(c, r)
-  }
+  })
   let cut_row = if cut && book.truncated { 1 } else { 0 }
   c.box(style=reader_fill, id=tap, fn() {
     c.list(list_key, n + 2 + cut_row, est, fn(i) {
@@ -578,9 +578,9 @@ fn reader_chunk(
   let id = c.id("chunk/\{k}")
   // (a ground, as the text's round it: reader_column)
   c.cursor(id, Arrow)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     reader_toggle(c, r)
-  }
+  })
   // (the margins either side of the words: room of their own, the words between)
   c.box(style=reader_chunk_row, id~, fn() {
     c.box(style=@ui.style(w=Fixed(left)), fn() {  }) |> ignore
@@ -1173,10 +1173,10 @@ fn desk_contents(
     c.list(key, b.chapters.length(), desk_row_h, fn(i) {
       let (title, k, o) = b.chapters[i]
       let id = c.id("reader/chapter/\{i}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         reader_jump(r, k, o)
         done()
-      }
+      })
       let now = i == chapter
       c.box(style=desk_row, id~, fn() {
         c.box(style=desk_chapter_number, fn() {
@@ -1254,11 +1254,11 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
     c.list("reader/hits/" + r.key, shown, desk_hit_h, fn(i) {
       let m = r.matches[i]
       let id = c.id("reader/hit/\{i}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         r.hit = i
         reader_jump(r, m.chunk, m.start)
         done()
-      }
+      })
       c.box(style=desk_hit_row, id~, fn() {
         c.rich(reader_snippet(b.chunks[m.chunk], m, p.accent), style=desk_hit_words.then(@ui.text_style(color=Data(p.ink))))
         |> ignore
@@ -1522,9 +1522,11 @@ fn narrow_reader_chrome(
             // the way back (its words only on a wide screen)
             c.box(style=narrow_top_end, fn() {
               let id = c.id("reader/back")
-              if live && c.clicked(id) {
-                on_back()
-              }
+              c.on_press(id, fn() {
+                if live {
+                  on_back()
+                }
+              })
               let b = c.box(style=narrow_back_box, id=if live { id } else { 0 }, fn() {
                 icon(c, "chevron-left", size=viewer_back_icon, color=p.ink) |> ignore
               })
@@ -1558,9 +1560,11 @@ fn narrow_reader_chrome(
               c.semantics(b, Button, id~, label=t("web-pages.drive.reader.find"), pressed=r.panel == Find)
               // 下载, as every file opened has it (the desktop's bar's last)
               let did = c.id("reader/download")
-              if live && c.clicked(did) {
-                (file.save)()
-              }
+              c.on_press(did, fn() {
+                if live {
+                  (file.save)()
+                }
+              })
               let d = c.box(style=narrow_top_button, id=if live { did } else { 0 }, fn() {
                 icon(c, "download", size=viewer_back_icon, color=p.ink) |> ignore
               })

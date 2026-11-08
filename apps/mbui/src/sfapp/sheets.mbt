@@ -269,10 +269,10 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
     match view {
       Some({ opener: Some(o), .. }) => {
         let id = c.id("info/opener")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           close()
           open_page(Chat(o.chat))
-        }
+        })
         let said = if o.archived { o.text + " · " + o.note } else { o.text }
         let b = c.box(style=info_opener, id~, fn() {
           @sf.icon(c, "spawned", size=16.0, color=t.p.accent_text) |> ignore
@@ -515,9 +515,9 @@ fn info_title_row(c : @ui.Ctx, src : Source, r : ChatRef, title : String, open :
     |> ignore
     if open {
       let id = c.id("info/rename")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         open_rename(src, r, opt_number(thread, "id"), title, from=Of(id))
-      }
+      })
       c.box(
         w=Px(32.0),
         h=Px(32.0),
@@ -848,16 +848,18 @@ fn stop_button(c : @ui.Ctx, src : Source, station : String, key : String) -> Uni
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
   let id = c.id("agent/stop")
-  if !busy && c.clicked(id) {
-    act(
-      src,
-      tr("android-chat.agent.stop"),
-      skey,
-      "session.stop",
-      { "station": Json::string(station), "key": Json::string(key) },
-      done=tr("android-chat.history.stopped"),
-    )
-  }
+  c.on_press(id, fn() {
+    if !busy {
+      act(
+        src,
+        tr("android-chat.agent.stop"),
+        skey,
+        "session.stop",
+        { "station": Json::string(station), "key": Json::string(key) },
+        done=tr("android-chat.history.stopped"),
+      )
+    }
+  })
   c.box(
     dir=Row,
     h=Px(32.0),
@@ -1369,16 +1371,18 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       let skey = "job-stop/" + r.station + "/" + id
       let busy = doing(skey)
       let sid = c.id("job/stop")
-      if !busy && c.clicked(sid) {
-        @ui.haptic(Confirm)
-        act(
-          src,
-          fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
-          skey,
-          "job.stop",
-          { "station": Json::string(r.station), "id": Json::string(id) },
-        )
-      }
+      c.on_press(sid, fn() {
+        if !busy {
+          @ui.haptic(Confirm)
+          act(
+            src,
+            fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
+            skey,
+            "job.stop",
+            { "station": Json::string(r.station), "id": Json::string(id) },
+          )
+        }
+      })
       c.box(
         dir=Row,
         w=Fill(1.0),
@@ -1437,9 +1441,9 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         if shown.length() < list.length() {
           let id = c.id(gkey + "/more")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             dui.opened[gkey] = true
-          }
+          })
           c.box(padx=10.0, pady=3.0, radius=8.0, id~, fn() {
             c.text(
               fill("android-misc.openJobs.more", [("n", (list.length() - shown.length()).to_string())]),
@@ -1470,22 +1474,26 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let id = text(job, "id")
   let chat = field(job, "chat")
   let row = c.id("open-job/" + station + "/" + id)
-  if chat is Some(Object(_)) && c.clicked(row) {
-    @sfbase.history_push()
-    app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
-    // a service: its page over its chat
-    if flag(job, "service") {
-      app.nav.push(Service(station, id))
+  c.on_press(row, fn() {
+    if chat is Some(Object(_)) {
+      @sfbase.history_push()
+      app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
+      // a service: its page over its chat
+      if flag(job, "service") {
+        app.nav.push(Service(station, id))
+      }
     }
-  }
+  })
   let skey = "job-stop/" + station + "/" + id
   let stop = c.id("open-job-stop/" + station + "/" + id)
-  if !doing(skey) && c.clicked(stop) {
-    @ui.haptic(Confirm)
-    // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
-    let (call, params, _) = long_stop(station, job)
-    act(src, fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]), skey, call, params)
-  }
+  c.on_press(stop, fn() {
+    if !doing(skey) {
+      @ui.haptic(Confirm)
+      // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
+      let (call, params, _) = long_stop(station, job)
+      act(src, fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]), skey, call, params)
+    }
+  })
   c.box(
     dir=Row,
     w=Fill(1.0),
@@ -1646,9 +1654,9 @@ let letters_more : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 /// opened.
 fn letter_row(c : @ui.Ctx, key : String, ch : Json?) -> Unit {
   let id = c.id("letters/row/" + key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     dui.letters_open = key
-  }
+  })
   c.box(style=letters_row.then(@sf.panel_row_reach()), id~, fn() {
     c.box(style=letters_row_head, fn() {
       c.box(style=letters_grow, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
@@ -1719,17 +1727,19 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
         // back to the list, and its title (which opens that chat)
         c.box(style=letters_head.then(@sf.panel_words_out_by(letters_back_in)), fn() {
           let back = c.id("letters/back")
-          if c.clicked(back) {
+          c.on_press(back, fn() {
             dui.letters_open = ""
-          }
+          })
           c.box(style=letters_back, id=back, fn() {
             @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent_text) |> ignore
           })
           |> ignore
           let name = c.id("letters/chat")
-          if link != "" && c.clicked(name) {
-            open_link(link)
-          }
+          c.on_press(name, fn() {
+            if link != "" {
+              open_link(link)
+            }
+          })
           c.box(id=name, fn() { c.text(text(ch, "title"), style=letters_title) |> ignore }) |> ignore
         })
         |> ignore

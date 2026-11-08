@@ -45,9 +45,9 @@ pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame 
     blocks.push(fn() {
       gutter(fn() {
         @sf.first_one(c, @sf.t("web-pages.connects.profileFirst"), lead=@sf.t("web-pages.connects.profileFirstLead"), fn() {
-          if @sf.button(c, @sf.t("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary) {
+          @sf.button(c, @sf.t("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary, on_press=fn() {
             (core.push)(Profiles(""))
-          }
+          }) |> ignore
         })
       })
     })
@@ -487,9 +487,9 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
         // dropped from under ⋯ (its menu), asked again first; it stays in Slack
         if !dropping {
           let mid = c.id("waiting-more/" + app_id)
-          if c.clicked(mid) {
+          c.on_press(mid, fn() {
             @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.connects.removeHere"), drop, danger=true))], from=Of(mid), along=End)
-          }
+          })
           let b = c.box(style=cn_more, id=mid, fn() {
             @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
           })

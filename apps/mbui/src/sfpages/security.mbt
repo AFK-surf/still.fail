@@ -39,9 +39,9 @@ pub fn security_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -
   if @ui.platform() != 4 {
     blocks.insert(0, fn() {
       @sf.group(c, fn() {
-        if @sf.link_row(c, "personal-lock", @sf.t("android-misc.personal.heading"), note=@sf.t("android-misc.personal.note")) {
+        @sf.link_row(c, "personal-lock", @sf.t("android-misc.personal.heading"), note=@sf.t("android-misc.personal.note"), on_press=fn() {
           (core.push)(PersonalLock)
-        }
+        }) |> ignore
       })
     })
   }
@@ -70,9 +70,9 @@ fn lock_off(c : @ui.Ctx, core : Core, look : Look, lock : Json?) -> Array[() -> 
           c.text(@sf.t("web-pages.security.ownerOnly"), style=sec_note) |> ignore
         } else if flag(lock, "canSign") {
           c.box(style=sec_actions, flow=true, fn() {
-            if @sf.button(c, @sf.t("web-pages.security.turnOn"), key="lock-turn-on", tone=Primary) {
+            @sf.button(c, @sf.t("web-pages.security.turnOn"), key="lock-turn-on", tone=Primary, on_press=fn() {
               (core.push)(SecurityOpen)
-            }
+            }) |> ignore
             c.text(@sf.t("web-pages.security.signsHere"), style=sec_note_line) |> ignore
           })
           |> ignore
@@ -364,9 +364,9 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
       match look {
         Wide =>
           c.box(style=sec_actions, fn() {
-            if @sf.button(c, @sf.t("web-pages.security.turnOff"), key="lock-off", tone=Danger, busy=off) {
+            @sf.button(c, @sf.t("web-pages.security.turnOff"), key="lock-off", tone=Danger, busy=off, on_press=fn() {
               turn_off_dialog(core, ws, here.name)
-            }
+            }) |> ignore
           })
           |> ignore
         // at the foot, in red, on a card of its own
@@ -382,9 +382,11 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
                 finger_ripple(c, id)
               })
               c.semantics(b, Button, id~, label=@sf.t("web-pages.security.turnOff"), disabled=off)
-              if !off && c.clicked(id) {
-                turn_off_dialog(core, ws, here.name)
-              }
+              c.on_press(id, fn() {
+                if !off {
+                  turn_off_dialog(core, ws, here.name)
+                }
+              })
             })
           })
           |> ignore
@@ -515,9 +517,9 @@ fn sec_station_row(c : @ui.Ctx, core : Core, look : Look, ws : String, sv : Json
         sec_end_words(c, look, @sf.t("web-pages.security.protected"))
       } else if can {
         // Keep the action recognisable as a button while its spinner is turning, at either page width.
-        if @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining, reach~) {
+        @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining, reach~, on_press=fn() {
           join_dialog(core, ws, id, text(sv, "name"))
-        }
+        }) |> ignore
       } else {
         sec_end_words(c, look, @sf.t("web-pages.security.unprotected"), warn=true)
       }
@@ -620,9 +622,9 @@ fn open_blocks(c : @ui.Ctx, core : Core, look : Look, ws : String, draft : Json?
       )
       |> ignore
       c.box(style=sec_actions, fn() {
-        if @sf.button(c, @sf.t("common.cancel"), key="lock-open-cancel", tone=Ghost) {
+        @sf.button(c, @sf.t("common.cancel"), key="lock-open-cancel", tone=Ghost, on_press=fn() {
           (core.pop)()
-        }
+        }) |> ignore
         let opening = is_doing(core, ["lock.open"], [("workspace", ws)])
         if @sf.button(
             c,
@@ -726,9 +728,7 @@ pub fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
       })
       |> ignore
       @sf.field(c, @sf.t("web-pages.security.turnOffType", args=[("name", name)]), fn() {
-        if @sf.input(c, key, field=field_of(key)).submitted && named() {
-          go(c, shut)
-        }
+        @sf.input(c, key, field=field_of(key), on_submit=fn(_) { if named() { go(c, shut) } }) |> ignore
       })
       if !typed_in.val {
         typed_in.val = true
@@ -736,13 +736,13 @@ pub fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
       }
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key="off-cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="off-cancel", tone=Ghost, on_press=fn() {
         c.blur()
         shut()
-      }
-      if @sf.button(c, @sf.t("web-pages.security.turnOff"), key="off-go", tone=DangerSolid, disabled=!named()) {
+      }) |> ignore
+      @sf.button(c, @sf.t("web-pages.security.turnOff"), key="off-go", tone=DangerSolid, disabled=!named(), on_press=fn() {
         go(c, shut)
-      }
+      }) |> ignore
     },
   )
 }

@@ -49,16 +49,16 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let photos = c.id("attach/photos")
   let files = c.id("attach/files")
   let station = c.id("attach/station")
-  if c.clicked(photos) {
+  c.on_press(photos, fn() {
     ask(Photos)
-  }
-  if c.clicked(files) {
+  })
+  c.on_press(files, fn() {
     ask(Files)
-  }
-  if c.clicked(station) {
+  })
+  c.on_press(station, fn() {
     close()
     (@sfbase.station_files_asked.val)(src, key)
-  }
+  })
   recent_strip(c, tapped)
   // photos chosen in the strip: 添加 n 个 where the tiles were
   let adding = recent_adding(c, fn(pick) {

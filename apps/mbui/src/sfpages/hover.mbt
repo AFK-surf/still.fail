@@ -223,9 +223,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
     // what it runs as, one thing: its mark (28), its label (its model) on its line and under it the account it runs
     // on, what is left of it at that line's end; to how it runs (its model and its account are of that)
     let who = c.id("agent-card/runs")
-    if c.clicked(who) {
+    c.on_press(who, fn() {
       runs(who)
-    }
+    })
     let w = c.box(style=agent_card_head, id=who, fn() {
       agent_mark(
         c,
@@ -285,9 +285,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
     }
     // what it has going in the background and its checklist, in a line: to its execution history
     let work = c.id("agent-card/work")
-    if c.clicked(work) {
+    c.on_press(work, fn() {
       history(None)
-    }
+    })
     agent_work_line(c, card, work, inset=true)
     if card is Some(Object(_)) {
       let compacts = flag(s, "canCompact")
@@ -316,9 +316,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
       c.box(style=agent_card_notes, fn() {
         if text(card, "jobs") != "" {
           let id = c.id("agent-card/jobs")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             (@sfbase.chat_jobs_asked.val)(c, src, r)
-          }
+          })
           agent_card_link(c, id, text(card, "jobs"), agent_card_line)
         }
         for i, x in attention {
@@ -333,9 +333,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
           // an account that cannot run: to how it runs, to move it to another
           if text(Some(x), "kind") == "account" {
             let id = c.id("agent-card/attention/" + i.to_string())
-            if c.clicked(id) {
+            c.on_press(id, fn() {
               runs(id)
-            }
+            })
             agent_card_link(c, id, text(Some(x), "text"), style, hot=style)
           } else {
             c.text(text(Some(x), "text"), style~) |> ignore
@@ -456,9 +456,9 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
       ran.words[k] = (text(Some(l), "text"), now)
       let id = c.id("agent-card/line/" + k)
       // each to where its history has it (what it does now: its newest), in the words' colour on hover
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         history(line_entry(k))
-      }
+      })
       let n = c.box(style=agent_card_line_box, id~, fn() {
         c.text(text(Some(l), "text"), style=if now || c.lit(id) { agent_card_now } else { agent_card_line }) |> ignore
       })
@@ -572,16 +572,18 @@ fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) ->
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
   let id = c.id("agent-card/stop")
-  if !busy && c.clicked(id) {
-    act(
-      src,
-      @sf.t("web-pages.chat.stop"),
-      skey,
-      "session.stop",
-      { "station": Json::string(station), "key": Json::string(key) },
-      done=@sf.t("web-pages.chat.stopAsked"),
-    )
-  }
+  c.on_press(id, fn() {
+    if !busy {
+      act(
+        src,
+        @sf.t("web-pages.chat.stop"),
+        skey,
+        "session.stop",
+        { "station": Json::string(station), "key": Json::string(key) },
+        done=@sf.t("web-pages.chat.stopAsked"),
+      )
+    }
+  })
   let label = @sf.t("web-pages.chat.stopTurn")
   @sf.tip(c, "agent-card/stop", id, label)
   let b = c.box(style=agent_card_stop_box, id~, fn() {
@@ -725,9 +727,11 @@ pub fn usage_tiles(c : @ui.Ctx, card : Json?, entry? : ContextEntry) -> Unit {
         match entry {
           Some(e) => {
             let id = context_tile_id(c)
-            if !e.busy && c.clicked(id) {
-              (e.open)()
-            }
+            c.on_press(id, fn() {
+              if !e.busy {
+                (e.open)()
+              }
+            })
             let filling = e.compacts && (level == "amber" || level == "red")
             let b = tile(
               id,

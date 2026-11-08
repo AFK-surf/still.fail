@@ -857,9 +857,9 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
       |> ignore
     }
     let cancel = c.id("marks/cancel")
-    if c.clicked(cancel) {
+    c.on_press(cancel, fn() {
       marks_leave()
-    }
+    })
     let cancel_box = c.box(h=Px(32.0), padx=10.0, radius=picture_key, justify=JCenter, id=cancel, fn() {
       c.text(pv("common.cancel"), size=@sf.theme().t.meta, color=ink, wrap=false) |> ignore
     })
@@ -869,9 +869,11 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
     }
     if can_draft {
       let put = c.id("marks/put")
-      if ready && c.clicked(put) {
-        go(true)
-      }
+      c.on_press(put, fn() {
+        if ready {
+          go(true)
+        }
+      })
       // 4 further from the rest (ImageMarks.kt: padding(start = 4) outside its ground)
       c.box(style=marks_put_room, fn() {
         c.box(

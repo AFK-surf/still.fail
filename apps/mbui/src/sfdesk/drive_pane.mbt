@@ -192,16 +192,16 @@ pub fn drive_pane(
           })
           |> ignore
           c.box(style=fpane_actions, fn() {
-            if @sf.button(c, @sf.t("web-pages.drive.open"), key="files/preview/open") {
+            @sf.button(c, @sf.t("web-pages.drive.open"), key="files/preview/open", on_press=fn() {
               on_open()
-            }
+            }) |> ignore
             if !e.dir &&
               @sf.button(c, @sf.t("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download") {
               on_save()
             }
-            if @sf.button(c, @sf.t("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy") {
+            @sf.button(c, @sf.t("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy", on_press=fn() {
               on_copy_path(abs)
-            }
+            }) |> ignore
           })
           |> ignore
         })
@@ -274,9 +274,9 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
       }
     _ => {
       let id = c.id("files/preview/mark")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         open()
-      }
+      })
       let words = if e.kind == "video" || e.kind == "audio" {
         @sf.t("web-pages.files.previewPlay")
       } else if e.dir {

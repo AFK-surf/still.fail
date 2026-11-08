@@ -136,16 +136,18 @@ fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
     let dkey = call + "/" + r.station + "/" + key
     let busy = doing(dkey)
     let id = c.id("history/" + call)
-    if !busy && c.clicked(id) {
-      act(
-        src,
-        done,
-        dkey,
-        call,
-        { "station": Json::string(r.station), "key": Json::string(key) },
-        done~,
-      )
-    }
+    c.on_press(id, fn() {
+      if !busy {
+        act(
+          src,
+          done,
+          dkey,
+          call,
+          { "station": Json::string(r.station), "key": Json::string(key) },
+          done~,
+        )
+      }
+    })
     c.box(
       w=Px(28.0),
       h=Px(28.0),

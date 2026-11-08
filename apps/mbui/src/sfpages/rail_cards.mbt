@@ -40,9 +40,9 @@ pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Un
     }
     if flag(card, "share") {
       let id = c.id("rail/share")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         share_card_open(src, w)
-      }
+      })
       c.box(style=rc_share, id~, label=@sf.t("web-main.stations.shareCard"), fn() {
         @sf.icon(c, "share", size=16.0, color=@sf.theme().p.text) |> ignore
         c.text(@sf.t("web-main.stations.shareCard"), style=rc_share_words) |> ignore

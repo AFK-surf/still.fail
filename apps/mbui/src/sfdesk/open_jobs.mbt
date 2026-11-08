@@ -43,9 +43,9 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         if shown.length() < list.length() {
           let id = c.id("open-jobs/more/" + key)
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             open_jobs_all[key] = true
-          }
+          })
           let label = @sf.t("web-main.jobs.more", args=[("n", (list.length() - shown.length()).to_string())])
           let b = c.box(style=open_jobs_more, id~, fn() {
             c.text(label, style=if c.lit(id) { open_jobs_more_lit } else { open_jobs_more_words }) |> ignore
@@ -72,14 +72,16 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     _ => station
   }
   let leads = chat is Some(Object(_)) && chat_station != ""
-  if leads && c.clicked(row) {
-    let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
-    open_chat_ref(r)
-    if flag(job, "service") {
-      pick_job(id)
-      side_change(src, r, "open", Some("jobs"))
+  c.on_press(row, fn() {
+    if leads {
+      let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
+      open_chat_ref(r)
+      if flag(job, "service") {
+        pick_job(id)
+        side_change(src, r, "open", Some("jobs"))
+      }
     }
-  }
+  })
   let stop = c.id("open-job-stop/" + station + "/" + id)
   // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
   let (call, params, on) = long_stop(station, job)
@@ -103,9 +105,11 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     if over {
       c.layer(fn() {
         c.box(style=open_job_stop_at, fn() {
-          if !stopping && c.clicked(stop) {
-            act(src, @sf.t("web-main.jobs.stopWhat", args=[("name", text(job, "name"))]), "", call, params)
-          }
+          c.on_press(stop, fn() {
+            if !stopping {
+              act(src, @sf.t("web-main.jobs.stopWhat", args=[("name", text(job, "name"))]), "", call, params)
+            }
+          })
           let word = text(field(job, "stop"), "word")
           let label = if word != "" {
             word + " " + text(job, "name")

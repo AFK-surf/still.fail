@@ -94,9 +94,9 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
             c.text(sub, style=pf_sub) |> ignore
           })
           |> ignore
-          if @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy) {
+          @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy, on_press=fn() {
             edit_pressed()
-          }
+          }) |> ignore
         })
         |> ignore
       })
@@ -148,9 +148,9 @@ fn item_blocks(
         // (its button in its foot corner, concentric with it)
         c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
           @sf.card_foot_words(fn() {
-            if @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary) {
+            @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary, on_press=fn() {
               (core.push)(Security)
-            }
+            }) |> ignore
           })
         })
         |> ignore
@@ -253,9 +253,9 @@ fn item_uses(c : @ui.Ctx, core : Core, ws : String, key : String, uses : Array[J
             let station = text(uv, "station")
             if station != "" {
               let id = c.id(key + "/use/" + i.to_string())
-              if c.clicked(id) {
+              c.on_press(id, fn() {
                 (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
-              }
+              })
               // (underlined under the pointer, or a finger's press: words in the words' colour, lit)
               c.box(id~, fn() {
                 c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat, allow_ellipsis=true) |> ignore
@@ -322,13 +322,13 @@ fn secret_field(c : @ui.Ctx, key : String, label : String, value : String, secre
         @sf.icon_button(c, "eye", key=key + "/eye", corner=vi_key_corner, label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown) {
         vi_shown[key] = !shown
       }
-      if @sf.icon_button(c, "copy", key=key + "/copy", corner=vi_key_corner, label=@sf.t("common.copy")) {
+      @sf.icon_button(c, "copy", key=key + "/copy", corner=vi_key_corner, label=@sf.t("common.copy"), on_press=fn() {
         if secret {
           c.copy_secret(value, clear_ms=vi_copied_life)
         } else {
           c.copy_text(value)
         }
-      }
+      }) |> ignore
     })
     |> ignore
   })

@@ -1538,9 +1538,11 @@ fn desk_play_list(
           c.list(key + "/list", list.length(), desk_row_h, fn(i) {
             let id = c.id(key + "/list/\{i}")
             let now = i == index
-            if !now && c.clicked(id) {
-              go(list[i])
-            }
+            c.on_press(id, fn() {
+              if !now {
+                go(list[i])
+              }
+            })
             let hot = c.lit(id) || c.pressed(id)
             c.box(style=desk_list_row.then(@ui.style(bg=Data(if now { chosen } else if hot { alpha(words, media_hot_share) } else { no_ground }))), id~, fn() {
               c.box(style=desk_chapter_number, fn() {
@@ -2034,12 +2036,12 @@ fn phone_list_sheet(c : @ui.Ctx, v : PlayerView, p : @kit.Media, list : Array[St
         c.list(p.key() + "/sheet-list", list.length(), desk_row_h, fn(i) {
           let id = c.id(p.key() + "/sheet-list/\{i}")
           let now = i == index
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             close()
             if !now {
               go(list[i])
             }
-          }
+          })
           c.box(style=desk_list_row.then(@ui.style(bg=Data(if now { pal.selected } else { no_ground }))), id~, fn() {
             c.box(style=desk_chapter_number, fn() {
               c.text("\{i + 1}", style=desk_chapter_n_words.then(@ui.text_style(color=Data(pal.muted)))) |> ignore

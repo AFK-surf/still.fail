@@ -171,13 +171,13 @@ pub fn recent_adding(c : @ui.Ctx, add : (@ui.Pick) -> Unit) -> Bool {
     return false
   }
   let id = c.id("attach/add")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     match @ui.pick_photos(recent.chosen.copy()) {
       Some(pick) => add(pick)
       None => ()
     }
     recent.chosen.clear()
-  }
+  })
   let words = @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   let corner = attach_block_corner()
   c.box(style=recent_add_row.then(@ui.style(pb=@sf.room_of(attach_foot()))), fn() {

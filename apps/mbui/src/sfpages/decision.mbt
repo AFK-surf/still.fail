@@ -202,7 +202,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 /// card's content rather than its now-inactive actions. Only a press: no hover card as well, two boxes of the same
 /// (the user, 2026-11-03: 「改成只允许点击吧」).
 fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.panel(
       @sf.t("web-main.history.details"),
       fn(p, _) {
@@ -214,7 +214,7 @@ fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body
       },
       from=Of(id),
     )
-  }
+  })
 }
 
 ///|
@@ -495,9 +495,9 @@ fn ask_dismiss(
   let live = shown && !resolved && !dismissed.has(k)
   let at = if !asking { asked_at } else { own_at }
   let id = c.id("ask-dismiss/" + k)
-  if live && c.clicked(id) {
-    dismissed.add(k)
-    c.tell("ask-dismiss/" + k, fn() {
+  c.on_press(id, fn() {
+    if live {
+      dismissed.add(k)
       // let go, felt as an answer picked is
       @ui.haptic(Confirm)
       act(
@@ -508,8 +508,8 @@ fn ask_dismiss(
         { "station": Json::string(here.station), "thread": Json::number(thread), "seq": Json::number(seq) },
         failed=fn() { dismissed.remove(k) },
       )
-    })
-  }
+    }
+  })
   // (at the end of the card: there until the card goes, as the core says it let go; pressed once)
   if at_end {
     if asking {

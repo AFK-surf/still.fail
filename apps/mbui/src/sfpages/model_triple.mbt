@@ -854,9 +854,9 @@ fn triple_runtime(c : @ui.Ctx, src : Source, station : String, of : String, v : 
     if r is String(r) { Some(@sf.choice(r, @settings.runtime_label(r), icon="runtime:" + r)) } else { None }
   })
   let id = c.id("triple/runtime")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(head, choices, now, fn(r) { pick_save(src, station, of, { "runtime": Json::string(r) }) }, from=Of(id), search=false)
-  }
+  })
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
     @sf.maker_mark(c, "", now, triple_pick_mark) |> ignore
@@ -882,7 +882,7 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
     @sf.choice("fast", "Fast", note=@sf.t("web-main.model.fastNote"), icon="zap"),
   ]
   let id = c.id("triple/fast")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(
       head,
       choices,
@@ -893,7 +893,7 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
       from=Of(id),
       search=false,
     )
-  }
+  })
   let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
@@ -911,7 +911,7 @@ fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : 
   let now = text(v, "contextNow")
   let choices = items(v, "contexts").map(fn(o) { @sf.choice(text(Some(o), "id"), text(Some(o), "text")) })
   let id = c.id("triple/context")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(
       head,
       choices,
@@ -920,7 +920,7 @@ fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : 
       from=Of(id),
       search=false,
     )
-  }
+  })
   let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
@@ -1136,9 +1136,9 @@ fn triple_pick_row(
     @sf.icon(c, "chevron-down", size=triple_pick_chevron, color=t.p.muted) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(head, choices, now, pick, from=Of(id), search=false)
-  }
+  })
 }
 
 ///|
@@ -1180,9 +1180,9 @@ fn triple_choices(
       |> ignore
     })
     c.semantics(b, Radio, id~, label=words, check=if on { On } else { Off })
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       pick(value)
-    }
+    })
   }
 }
 

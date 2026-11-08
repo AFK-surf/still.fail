@@ -156,9 +156,11 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
     |> ignore
     // ×: marking left
     let close = c.id("service/mark-close")
-    if !busy && c.clicked(close) {
-      page_marks_leave(p, site)
-    }
+    c.on_press(close, fn() {
+      if !busy {
+        page_marks_leave(p, site)
+      }
+    })
     c.box(style=mark_close, id=if busy { 0 } else { close }, fn() {
       @sf.icon(c, "close", size=mark_small_icon, color=t.p.muted) |> ignore
     })
@@ -166,9 +168,11 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
     // 添加到对话 (正在截图 while it is)
     let able = !busy && n > 0
     let put = c.id("service/mark-put")
-    if able && c.clicked(put) {
-      page_marks_put(p, site, src)
-    }
+    c.on_press(put, fn() {
+      if able {
+        page_marks_put(p, site, src)
+      }
+    })
     let ink = if t.dark { t.p.bg } else { 0xFFFFFFFFL }
     c.box(style=if able { mark_put_pill } else { mark_put_off }, id=if able { put } else { 0 }, fn() {
       @sf.icon(c, "send", size=mark_small_icon, color=ink) |> ignore
@@ -416,10 +420,10 @@ fn page_mark_note(
     })
     |> ignore
     let remove = c.id("service/note-remove")
-    if c.clicked(remove) {
+    c.on_press(remove, fn() {
       page_marks_remove(p, site, mark.n)
       c.blur()
-    }
+    })
     c.box(style=mark_note_remove, id=remove, fn() {
       @sf.icon(c, "trash", size=note_icon, color=t.p.muted) |> ignore
     })

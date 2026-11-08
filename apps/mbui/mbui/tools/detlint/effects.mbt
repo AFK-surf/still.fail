@@ -183,6 +183,14 @@ fn Eff::later(self : Eff, f : MbtFile, o : Int) -> Bool {
   if callee.kind == "ident" && later_calls.contains(callee.text) {
     return true
   }
+  // given to the Ctx's own handler (c.on_press(id, fn() { … })): run as its input comes, outside any build
+  if callee.kind == "ident" &&
+    handler_methods.contains(callee.text) &&
+    p >= 2 &&
+    toks[p - 2].kind == "op" &&
+    toks[p - 2].text == "." {
+    return true
+  }
   // given to what runs it later (build_effect.later: an app's presenters)
   match self.calls_at.get(at_key(f.rel, p - 1)) {
     Some(call) if call.kind == "pkg" && self.cfg.effect_later.contains("\{call.qual}.\{call.name}") => return true

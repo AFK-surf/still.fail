@@ -460,9 +460,11 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
         })
         |> ignore
         let cancel = c.id("search/cancel")
-        if !search.leaving && c.clicked(cancel) {
-          search_close(c)
-        }
+        c.on_press(cancel, fn() {
+          if !search.leaving {
+            search_close(c)
+          }
+        })
         let cw = match c.laid_rect(cancel) {
           Some((_, _, cw, _)) => cw
           None => 0.0

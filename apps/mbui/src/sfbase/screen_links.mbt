@@ -237,9 +237,9 @@ pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) 
 pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, words : String?) -> Unit {
   let (name, line, down) = service_card_of(src, to)
   let open = c.id("service-link/" + href)
-  if c.clicked(open) {
+  c.on_press(open, fn() {
     open_link(href)
-  }
+  })
   let title = match words {
     Some(w) => w
     None => name
@@ -298,9 +298,9 @@ pub fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, 
 pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, to : @sf.LinkTo, words : String?) -> Unit {
   let card = screen_card_of(src, to)
   let open = c.id("screen-link/" + href)
-  if c.clicked(open) {
+  c.on_press(open, fn() {
     open_link(href)
-  }
+  })
   let gone = match card {
     Some(k) => k.gone
     None => false
@@ -375,12 +375,12 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, 
       if sharing {
         @sf.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
         @sf.ask_buttons(c, fn() {
-          if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary) {
+          @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary, on_press=fn() {
             open_adb(src, station)
-          }
-          if @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping)) {
+          }) |> ignore
+          @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping), on_press=fn() {
             act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
-          }
+          }) |> ignore
         })
         return
       }
@@ -390,9 +390,9 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, 
         @settings.AdbLacks(step) => {
           @sf.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
           @sf.ask_buttons(c, fn() {
-            if @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary) {
+            @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary, on_press=fn() {
               open_adb(src, station)
-            }
+            }) |> ignore
           })
         }
         @settings.AdbLends => {
@@ -401,12 +401,12 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, 
           let elsewhere = flag(now, "sharing") && text(now, "station") != station
           @sf.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
           @sf.ask_buttons(c, fn() {
-            if @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking()) {
+            @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking(), on_press=fn() {
               @settings.adb_lend(station, name)
-            }
-            if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost) {
+            }) |> ignore
+            @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost, on_press=fn() {
               open_adb(src, station)
-            }
+            }) |> ignore
           })
         }
         // (not known yet what the phone has: the question alone, its answer as it comes)

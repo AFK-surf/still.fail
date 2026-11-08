@@ -1074,11 +1074,11 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let slot = fn(k : RowKey) { c.id("screen-key-slot/" + s.view + "/" + k.name) }
   let more = c.id("screen-keys-more/" + s.view)
   let on_face = fn(k : RowKey) { u.keys_turned.is_empty() || u.keys_turned.contains(k.name) }
-  if c.clicked(more) {
+  c.on_press(more, fn() {
     // (turned to those this face left out as last laid out, read back, the frame built again where that changes: from
     // the first face its others, and from them, where they too have not the room, the rest; none left out, back)
     u.keys_turned = keys.filter(fn(k) { on_face(k) && leaves(k) > 0 && c.left_out(slot(k)) }).map(fn(k) { k.name })
-  }
+  })
   let turned = !u.keys_turned.is_empty()
   let key = fn(k : RowKey) {
     let on = held(k)
@@ -1094,16 +1094,16 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     if k.button != 0 {
       button_felt(c, u, id, k.button, c.clicked(id))
     }
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       if k.mod_ != 0 {
         u.held.toggle(k.mod_)
       } else if k.button != 0 {
         button_clicked(c, s, u, k.button)
       } else {
         let mods = u.held.take()
-        c.tell("screen-row-key/" + s.view + "/" + k.name, fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods) })
+        stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods)
       }
-    }
+    })
   }
   let more_key = fn() {
     let i = c.box(style=row_key_box, selected=turned, id=more, fn() {
@@ -1310,9 +1310,9 @@ fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
     // what it does: their input waits while this person drives
     let names = if who.is_empty() { @sf.t("web-pages.screen.someone") } else { who.join(@sf.t("web-pages.screen.and")) }
     @sf.tip(c, "screen-take-over-tip", id, @sf.t("web-pages.screen.takeOverTip", args=[("names", names)]))
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       control_chosen(c, s, true)
-    }
+    })
   })
   |> ignore
 }

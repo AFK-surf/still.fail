@@ -60,9 +60,9 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
     |> ignore
     c.box(style=@sf.keys_row(), fn() {
       let io = c.id("history/only-io")
-      if c.clicked(io) {
+      c.on_press(io, fn() {
         @sfpages.history_only_io_flip()
-      }
+      })
       let on = @sfpages.history_only_io()
       let b = c.box(style=if on { wh_toggle_on } else { wh_toggle }, id=io, fn() {
         @sf.icon(c, "filter", size=14.0, color=if on || c.lit(io) { t.p.text } else { t.p.muted }) |> ignore
@@ -72,9 +72,9 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       c.semantics(b, Button, id=io, label=@sf.t("web-main.history.onlyIo"))
       @sf.tip(c, "history/only-io-tip", io, @sf.t("web-main.history.onlyIoTip"))
       let more = c.id("history/details")
-      if c.clicked(more) {
+      c.on_press(more, fn() {
         history_own.shut = !history_own.shut
-      }
+      })
       let hot = c.lit(more)
       let d = c.box(style=wh_toggle, id=more, fn() {
         c.text(@sf.t("web-main.history.details"), style=if hot { wh_toggle_hot } else { wh_toggle_words }) |> ignore

@@ -72,9 +72,9 @@ pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook
             chevron()
           }
           let more = c.id(key + "/more")
-          if c.clicked(more) {
+          c.on_press(more, fn() {
             menu(gone, from=Of(more))
-          }
+          })
           let b = c.box(style=look.step, id=more, fn() { c.text(way_more, style=look.words) |> ignore })
           c.semantics(b, Button, id=more, label=t("common.more"))
         })

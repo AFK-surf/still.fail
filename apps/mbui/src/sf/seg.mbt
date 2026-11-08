@@ -394,7 +394,7 @@ fn choice_pick(
       chosen
     }
   }
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     let choices = labels.mapi(fn(i, l) { choice(i.to_string(), l) })
     // (a segmented control's options, short words each: nothing to search them by)
     pick("", choices, now.to_string(), fn(k) {
@@ -406,7 +406,7 @@ fn choice_pick(
       }
     }, from=Of(id), search=false)
     p.serial = last_presented()
-  }
+  })
   let words = labels.get(now).unwrap_or("")
   let b = look(c, id, words)
   c.semantics(b, Button, id~, label=words, expanded=p.serial != 0 && presented_drawn_of(p.serial))

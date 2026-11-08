@@ -106,12 +106,12 @@ fn ftab_add(c : @ui.Ctx, key : String) -> Unit {
   } else {
     @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   }
-  if @sf.button(c, label, key="files-tab/add", tone=Primary, disabled=n == 0) {
+  @sf.button(c, label, key="files-tab/add", tone=Primary, disabled=n == 0, on_press=fn() {
     for d in ftab.picked {
       files_into(key, d)
     }
     ftab.picked.clear()
-  }
+  }) |> ignore
 }
 
 ///|
@@ -308,18 +308,18 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   c.box(style=ftab_head, fn() {
     c.box(style=ftab_trail_box, fn() {
       let sid = c.id("files-tab/places")
-      if c.clicked(sid) {
+      c.on_press(sid, fn() {
         ftab_put(ftab.scope, None)
-      }
+      })
       let sb = c.box(style=ftab_step, id=sid, fn() { c.text(st.name, style=ftab_step_words) |> ignore })
       c.semantics(sb, Button, id=sid, label=st.name)
       for i, step in way {
         let (name, abs) = step
         @sf.icon(c, "chevron-right", size=ftab_chevron, color=t.p.muted) |> ignore
         let id = c.id("files-tab/step/" + abs)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           go_to(abs)
-        }
+        })
         let last = i == way.length() - 1
         let b = c.box(style=ftab_step, id~, fn() {
           c.text(name, style=if last { ftab_step_last } else { ftab_step_words }) |> ignore
@@ -345,12 +345,12 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         ) {
         set_preview_shown(src, "tab", !previewing)
       }
-      if @sf.icon_button(c, "copy", key="files-tab/copy", label=@sf.t("web-pages.drive.copyPath")) {
+      @sf.icon_button(c, "copy", key="files-tab/copy", label=@sf.t("web-pages.drive.copyPath"), on_press=fn() {
         copy_path(c, here)
-      }
-      if @sf.icon_button(c, "refresh", key="files-tab/refresh", label=@sf.t("web-pages.drive.refresh")) {
+      }) |> ignore
+      @sf.icon_button(c, "refresh", key="files-tab/refresh", label=@sf.t("web-pages.drive.refresh"), on_press=fn() {
         refresh_folder(c, src, at)
-      }
+      }) |> ignore
     })
     |> ignore
   })
@@ -443,9 +443,9 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
           (None, Some(e)) =>
             c.box(style=ftab_problem, fn() {
               c.text(e, style=tab_trouble) |> ignore
-              if @sf.button(c, @sf.t("web-pages.drive.retry"), key="files-tab/retry", tone=Ghost, icon="retry") {
+              @sf.button(c, @sf.t("web-pages.drive.retry"), key="files-tab/retry", tone=Ghost, icon="retry", on_press=fn() {
                 refresh_folder(c, src, at)
-              }
+              }) |> ignore
             })
             |> ignore
           (None, None) => @sf.waiting(c, fn() { rows_sample(c, at, shown, 5, compact=true) })
