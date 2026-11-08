@@ -324,7 +324,7 @@ export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
   if (row.runtimeSessionId === null) return { path: null };
-  const source = store.runtimeSessionSources(s, key).find((s) => s.id === row.runtimeSessionId);
+  const source = store.runtimeSessionSource(s, key, row.runtimeSessionId);
   if (!source) return { path: null };
   const { paths, current } = transcriptSources(s.dataDir, configOf(s).profiles, [source], sessionPlaces(row));
   return { path: current ? paths.at(-1)!.path : null };
