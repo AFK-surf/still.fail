@@ -1011,6 +1011,7 @@ fn Ctx::place_list(
   self.list_finds_field(st, order, iy)
   if was_position != (st.anchor, st.anchor_off, st.over_offset()) {
     scroll_paint_uncompared.val = true
+    lists_scrolled.push(n.id)
   }
   // (whether it moves, as laid out: what is built from it told as that changes, Ctx::list_moving)
   st.moving_said.set(st.held || st.moving() || st.glide)

@@ -607,7 +607,9 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
     gg,
     b,
     groups=!ride_spans.is_empty(),
+    known=damage_known,
   )
+  damage_known.clear()
   presented_ms.val = h_now() - t0
   if presented.telling() && presented.why() == 5 {
     h_log("DAMAGE whole, the part more than half: \{presented.told()}")
@@ -631,6 +633,18 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   @hostapi.present(buf, count, r, gg, b)
   ride_groups_told()
 }
+
+///|
+/// What of the frame being painted is known drawn anew, x0 y0 x1 y1 in points: where what scrolled shows (view_paint),
+/// every instance there moved. Told to what works out what a host draws again (h_present), as its parts from the start.
+// kept across runs: emptied as each frame is presented
+let damage_known : Array[(Double, Double, Double, Double)] = []
+
+///|
+/// The old views' lists (their nodes' ids) that scrolled this frame: each, painted, told as known drawn anew where it
+/// shows (Ctx::paint_held, damage_known).
+// kept across runs: emptied as each frame begins
+let lists_scrolled : Array[Int] = []
 
 ///|
 /// The frames presented, the next compared with the last (h_present).

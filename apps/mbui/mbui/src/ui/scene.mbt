@@ -1218,6 +1218,12 @@ fn span_color(spans : Array[(Int, Int, Int64)], off : Int, color : Int64) -> Int
 /// What node `n` holds, painted in turn (what goes over its siblings after them); but what `but` says is painted
 /// apart (the old frame's root, the one old view the window's: its layers, over the window's tree: view_paint).
 fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double, but? : (Int) -> Bool = fn(_) { false }) -> Unit {
+  // (an old view's list that scrolled this frame: all of it where it shows drawn anew, told to what works out what a
+  // host draws again, h_present)
+  if n.kind == kind_list && lists_scrolled.length() > 0 && lists_scrolled.contains(n.id) && !shooting.val {
+    let k = clip_top()
+    damage_known.push((clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3]))
+  }
   let mut c = n.first
   let mut over = false
   while c >= 0 {

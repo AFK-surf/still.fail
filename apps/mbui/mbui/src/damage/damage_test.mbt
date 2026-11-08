@@ -300,3 +300,18 @@ test "a header compared as itself, its room passed over; moved, where its group 
   // (moved 40 down: the group's reach where it was and where it is)
   inspect(next_h(headed(7, 2, 40.0, 5.0)), content="[(98, 48, 24, 74)]")
 }
+
+///|
+test "known drawn anew: a part from the start, past half the window whole with nothing compared" {
+  let a = frame([(10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
+  let d = seen(a)
+  let b = copy(a)
+  inspect(d.next(b, 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 100.0, 50.0)]), content="[(0, 0, 100, 50)]")
+  // (the known part and what changed besides, each its own)
+  b[60 + 8] = 0.5
+  inspect(
+    d.next(b, 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 100.0, 50.0)]),
+    content="[(0, 0, 100, 50), (298, 198, 24, 24)]",
+  )
+  inspect(d.next(copy(b), 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 400.0, 200.0)]), content="[(0, 0, -1, -1)]")
+}
