@@ -493,14 +493,11 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
     }
   }
   let k = clip_top()
-  // (where the list's clip is a plain rect, a row is painted whole and what is outside it left out as it is drawn
-  // again; in another, only a row wholly inside it is kept, painted as it is where it is cut)
+  // (a row the list's clip cuts painted whole and what is outside it left out as it is drawn again, in a plain rect or a
+  // round one, or one with an outer (a pane's corners): what it draws in the list's clip drawn again in it as it is then,
+  // its corners and outer the same, row_drawing_cuts' first kind)
   let cut = n.x < clip_stack[k] || n.y < clip_stack[k + 1] || n.x + n.fw > clip_stack[k + 2] ||
     n.y + n.fh > clip_stack[k + 3]
-  if cut && !band_plain(k) {
-    self.paint(i, alpha)
-    return
-  }
   let unsafe = self.row_drawing_safe(rn, i)
   if unsafe != "" {
     row_drawing_forget(rn)
@@ -521,7 +518,12 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
   // the row was painted, row_reach: a page coming in moves both)
   let mut same_clip = d.clip.length() == clip_n
   if d.whole {
-    same_clip = same_clip && band_plain(k)
+    // (its rect where it is now, its corners and outer as they were)
+    for q in 4..<clip_n {
+      if same_clip && d.clip[q] != clip_stack[k + q] {
+        same_clip = false
+      }
+    }
   } else if same_clip {
     for q in 0..<clip_n {
       if d.clip[q] != clip_stack[k + q] {
