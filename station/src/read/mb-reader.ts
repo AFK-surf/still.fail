@@ -61,8 +61,9 @@ export class MbProcess extends EventEmitter {
     });
   }
 
+  /// (a bigint, as a worker would have been posted it, said as its digits)
   postMessage(message: unknown) {
-    this.#child.stdin!.write(`${JSON.stringify(message)}\n`);
+    this.#child.stdin!.write(`${JSON.stringify(message, (_, v) => typeof v === "bigint" ? v.toString() : v)}\n`);
   }
 
   terminate(): Promise<number> {
