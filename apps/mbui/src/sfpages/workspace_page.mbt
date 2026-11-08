@@ -215,13 +215,13 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
           @sf.t("android-settings.workspace.leave"),
           danger=true,
           fn() {
-            (core.home)()
-            @settings.act(
+            ws_gone(
               core,
+              ws,
               @sf.t("android-settings.workspace.leaveWhat"),
               "workspace.removeMember",
               obj([("workspace", str(ws)), ("member", str(here.sub)), ("account", str(here.sub))]),
-              done=@sf.t("android-settings.workspace.left"),
+              @sf.t("android-settings.workspace.left"),
             )
           },
         )
@@ -233,13 +233,13 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
           @sf.t("android-settings.workspace.delete"),
           danger=true,
           fn() {
-            (core.home)()
-            @settings.act(
+            ws_gone(
               core,
+              ws,
               @sf.t("android-settings.workspace.deleteWhat"),
               "workspace.delete",
               obj([("workspace", str(ws)), ("account", str(here.sub))]),
-              done=@sf.t("android-settings.workspace.deleted"),
+              @sf.t("android-settings.workspace.deleted"),
             )
           },
         )
@@ -247,6 +247,23 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
     })
   })
   blocks
+}
+
+///|
+/// The workspace `ws` left or deleted (`call`): another of the viewer's workspaces in view at once, at its Home, while
+/// still.fail cloud is asked; `done` said once it answers. (Home on `ws` itself read as broken: its chats turned to
+/// 已登录的账号均无法访问此 workspace as the cloud let it go, until the list dropped it.)
+fn ws_gone(core : Core, ws : String, what : String, call : String, params : Json, done : String) -> Unit {
+  let (all, _, _) = @sfbase.workspaces_of((core.topic)("workspaces", {}).value)
+  match all.iter().find_first(fn(w) { w.id != ws }) {
+    Some(o) => {
+      app.picked.set(o.id)
+      (core.call)("prefs.set", { "workspace": Json::string(o.id) }, fn(_) {  })
+    }
+    None => ()
+  }
+  (core.home)()
+  @settings.act(core, what, call, params, done~)
 }
 
 ///|
