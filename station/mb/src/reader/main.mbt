@@ -381,6 +381,16 @@ fn main {
         { "thread": Number(thread, ..), .. } => Some(@cards.step(db, thread.to_int64()))
         _ => None
       }))
+    (Some("closed-cards"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "closed card", (db, ask) => match ask {
+        { "thread": Number(thread, ..), .. } => Some(@lookups.closed_step(db, thread.to_int64()))
+        _ => None
+      }))
+    (Some("people-since"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "people-time", (db, ask) => match ask {
+        { "thread": Number(thread, ..), .. } => Some(@lookups.people_step(db, thread.to_int64()))
+        _ => None
+      }))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {
@@ -474,7 +484,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since --db <file>")
       2
     }
   }
