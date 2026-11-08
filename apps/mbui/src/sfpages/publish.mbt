@@ -618,11 +618,13 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         // between messages over and under it, so that lit one after another they meet
         let side = @sf.theme().rows.check
         let down = centred_in(first_line_h(c, m), side)
+        // (told as it is built, read where it is painted: the band built while it is lit or on its way out, up to its
+        // declared end)
         let lit = if taking {
-          0.0
+          None
         } else {
           let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k)))
-          @motion.animate(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+          Some(@motion.told(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out)))
         }
         let ground = if taking {
           publish_said
@@ -632,9 +634,12 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           publish_said.then(@sf.bleed_start(start)).then(@sf.bleed_end(paper_edge)).then(@sf.bleed_y(half))
         }
         c.box(style=ground, fn() {
-          if lit > 0.0 {
-            let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
-            c.look(g, @ui.look(alpha=lit))
+          match lit {
+            Some(l) if l.target() > 0.0 || !l.over() => {
+              let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
+              c.look_by(g, fn() { @ui.look(alpha=l.get()) })
+            }
+            _ => ()
           }
           // (what it says, faded once out of the picture; its box to tick beside it never is, its edge the muted ink,
           // so that every one shows: 2026-11-06 用户 of the boxes of those not ticked,「看不清」)

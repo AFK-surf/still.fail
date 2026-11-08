@@ -376,10 +376,10 @@ test "a picture under the composer goes out from under it at its own size first,
   let near = out * open_ms / 40.0
   t.run_for(out * open_ms - near)
   assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   // growing: the composer the page's, under the ground and the picture
   assert_true(!composer_over_picture(t))
   // then grown to its place on the stage
@@ -392,11 +392,11 @@ test "a picture under the composer goes out from under it at its own size first,
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift) * close_ms - near)
-  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!composer_over_picture(t))
   t.run_for(near * 2.0)
   assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() < 1.0)
+  assert_true(v.lifted_at(t.ctx().moment()) < 1.0)
   assert_true(composer_over_picture(t))
   t.run_for(back + close_ms - t.time())
   assert_true(pv_leaving.get() is None)
@@ -419,7 +419,7 @@ test "a picture going back in under the composer keeps its corners round: what i
   let lift = v.fly_lift
   t.run_for(way_at(1.0 - lift / 2.0) * fly_ms_of(t, v))
   assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
   assert_true(flying.length() > 0)
@@ -533,7 +533,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   // halfway out from under the bar: at its own size, the bar over it, its corners round
   t.run_for(way_at(lift / 2.0) * open_ms)
   assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
@@ -547,10 +547,10 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   // out: clear of the bar, at its own size (a hair before, on the ms of its time a motion's is read at: its time from
   // its start in whole ms, Spec::value_at)
   t.run_for(start + (way_at(lift) * open_ms - near).ceil() - t.time())
-  assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
-  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted() < 1.0, msg="\{t.drawn_images()}")
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
+  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted_at(t.ctx().moment()) < 1.0, msg="\{t.drawn_images()}")
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!head_over_picture(t))
   t.run_for(start + open_ms - t.time())
   let to = v.zoom.rect().unwrap()
@@ -563,7 +563,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift / 2.0) * close_ms)
   assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })

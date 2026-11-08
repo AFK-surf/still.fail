@@ -447,8 +447,8 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
     }
     ran.keys = keys.copy()
   }
-  // the copies gone out of sight let go
-  ran.gone.retain(fn(g) { gone_faint(c, g.key).get() > 0.0 })
+  // the copies gone out of sight let go, at the end their fading declared
+  ran.gone.retain(fn(g) { !gone_faint(c, g.key).over() })
   c.box(style=agent_card_lines, fn() {
     for l in latest {
       let k = text(Some(l), "key")

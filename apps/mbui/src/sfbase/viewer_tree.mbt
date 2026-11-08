@@ -1467,9 +1467,9 @@ fn Viewer::flying_at(self : Viewer, t : Double) -> Double {
 }
 
 ///|
-/// How far its thumbnail has gone out from under the bar or the composer at `t` (Viewer::lifted's, at a moment of its
-/// own).
-fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
+/// How far its thumbnail has gone out from under the bar or the composer at `t` (0 where the chat lays it out, 1 clear
+/// of them): the first share of the flight's one Move, at a moment of its own; 1 when nothing hid it.
+pub fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
   if !self.flies || self.fly_lift <= 0.0 {
     1.0
   } else {

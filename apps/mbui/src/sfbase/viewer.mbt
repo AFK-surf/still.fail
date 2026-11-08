@@ -1567,7 +1567,7 @@ pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) ->
               v.fly_pic = v.still(src)
             }
             // (the whole way on one curve, its way out from under the bar or composer first, if any, then the growing:
-            // Viewer::flying, Viewer::lifted)
+            // Viewer::flying, Viewer::lifted_at)
             let (lift, far) = fly_way(t, Some(to), (c.width, c.height))
             v.fly_lift = lift
             v.fly.put(0.0)
@@ -1986,16 +1986,6 @@ pub fn Viewer::flying(self : Viewer) -> Double {
   } else {
     (e - self.fly_lift) / (1.0 - self.fly_lift)
   }
-}
-
-///|
-/// How far its thumbnail has gone out from under the bar or the composer (0 where the chat lays it out, 1 clear of
-/// them): the first share of the flight's one Move; 1 when nothing hid it.
-pub fn Viewer::lifted(self : Viewer) -> Double {
-  if !self.flies || self.fly_lift <= 0.0 {
-    return 1.0
-  }
-  dmin(self.fly.get() / self.fly_lift, 1.0)
 }
 
 ///|
