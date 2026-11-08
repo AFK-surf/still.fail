@@ -353,6 +353,43 @@ test "a chat's place: told the core as the list comes to rest (the message at th
 }
 
 ///|
+test "words sent going up into the list tell the core where it is as the message at the top changes, not each frame" {
+  // (each frame of their way up told the core where the chat was, and it wrote it down: 20 calls a send, 2026-11-08)
+  new_run()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let base = fixture("chat")
+  let calls : Array[Made] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("测试一下")
+  tap_send(t)
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
+  t.draw()
+  t.run_for(fix_answer_ms)
+  fix_clock_set(clock, clock.val + fix_answer_ms)
+  t.draw()
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  assert_true(t.find("收到：「测试一下」") is Some(_))
+  // told as the message at the top changed, not as it moved under it
+  let told = named(calls, "chat.place").map(fn(m) { field(Some(m.params), "seq") })
+  assert_true(told.length() > 0)
+  for i in 1..<told.length() {
+    assert_true(told[i] != told[i - 1], msg="told again with the same message at the top: \{told}")
+  }
+  fix_clock.val = None
+}
+
+///|
 /// How far the list is dragged down from its end.
 let place_drag : Double = 300.0
 

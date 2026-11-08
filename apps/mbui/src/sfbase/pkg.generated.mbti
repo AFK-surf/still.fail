@@ -1552,7 +1552,7 @@ pub fn tap_stage(@ui.Ctx, Viewer, Int32) -> Unit
 
 pub fn tell_focus(Source, ChatRef, ChatView, Reading, Bool, Double) -> Unit
 
-pub fn tell_place(Source, ChatRef, ChatView, Reading) -> Unit
+pub fn tell_place(Source, ChatRef, ChatView, Reading, exact? : Bool) -> Unit
 
 pub fn term_color(String, Bool) -> Int64
 
@@ -2879,6 +2879,7 @@ pub(all) struct Reading {
   mut top_off : Double
   mut at_end : Bool
   mut told_place : String
+  mut told_at : String
   mut scale : Double
   mut jump : Bool
   mut jump_at : Double

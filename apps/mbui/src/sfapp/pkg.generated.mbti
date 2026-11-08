@@ -920,7 +920,7 @@ pub fn tape_differences(String, base~ : @sfbase.Source, trace? : Array[String]) 
 
 pub fn tell_focus(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Reading, Bool, Double) -> Unit
 
-pub fn tell_place(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Reading) -> Unit
+pub fn tell_place(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Reading, exact? : Bool) -> Unit
 
 pub fn term_color(String, Bool) -> Int64
 
