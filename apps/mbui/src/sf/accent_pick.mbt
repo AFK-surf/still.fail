@@ -44,7 +44,8 @@ pub fn accent_pick_node(
       d
       .width(Is(Some(side)))
       .height(Is(Some(side)))
-      .radius(Is(side / 2.0))
+      // (round as a pill is said to be, Full: as round as it can be)
+      .radius(Is(1.0e6))
       .lines_up(Is(Some(Middle)))
       .lies_along(Is(Middle))
       .ground(By(fn() { ink().unwrap_or(accent_no_ring) }))
