@@ -1408,53 +1408,62 @@ pub fn menu_item_of(
 }
 
 ///|
-/// The menu open now (one at a time, as Radix's are), by its key, and where a right click opened it.
-let menu_open : Ref[String] = Ref("")
+/// The menu open now (one at a time, as Radix's are), by its key ("" none), and where a right click opened it: what
+/// reads the key whole (menu_open_key) told as it changes.
+// kept across runs: put back by parts_reset
+let menu_open : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// The menu open now, by member: what asks whether its own menu is open (menu_is) told as that one opens or closes, not
+/// as another does.
+// kept across runs: put back by parts_reset
+let menu_open_by : @signals.Keyed[String] = @signals.keyed()
 
 ///|
 let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
-/// The menus closed and still going out (their exit playing), by their keys: what opened one keeps it built till gone.
-let menu_going : Set[String] = Set::new()
-
-///|
-/// Told as the menu open or those going out change: what reads them through menu_shown, menu_is_open, menu_open_key
-/// or a ⋯'s own look (a part built apart: a kept row, an island) built again as they do, not left as it was.
-// kept across runs: a count told, nothing reads what it is (only that it changed)
-let menu_told : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-fn menu_changed() -> Unit {
-  menu_told.set(@signals.untracked(fn() { menu_told.get() }) + 1)
-}
+/// The menus closed and still going out (their exit playing), by their keys, by member: what opened one keeps it built
+/// till gone (menu_shown), told as its own comes or goes.
+// kept across runs: put back by parts_reset
+let menu_going : @signals.Keyed[String] = @signals.keyed()
 
 ///|
 /// The menu open now ("" none), read so its change is told to what read it.
 fn menu_now() -> String {
-  menu_told.get() |> ignore
-  menu_open.val
+  menu_open.get()
+}
+
+///|
+/// Whether the menu `key` is the one open now, read so only its own opening or closing is told to what read it.
+fn menu_is(key : String) -> Bool {
+  menu_open_by.has(key)
+}
+
+///|
+/// The menu open now ("" none), as it is, read by nothing.
+fn menu_open_peek() -> String {
+  @signals.untracked(fn() { menu_open.get() })
 }
 
 ///|
 /// The menu open now: `key` ("" none).
 fn menu_set(key : String) -> Unit {
-  if menu_open.val != key {
-    menu_open.val = key
-    menu_changed()
+  if menu_open_peek() != key {
+    @signals.start_batch()
+    menu_open.set(key)
+    menu_open_by.set(if key == "" { [] } else { [key] })
+    @signals.end_batch()
   }
 }
 
 ///|
 /// The menu `key` going out (its exit playing), or not.
 fn menu_going_set(key : String, going : Bool) -> Unit {
-  if menu_going.contains(key) != going {
-    if going {
-      menu_going.add(key)
-    } else {
-      menu_going.remove(key)
-    }
-    menu_changed()
+  if going {
+    menu_going.add(key)
+  } else {
+    menu_going.remove(key)
   }
 }
 
@@ -1464,11 +1473,10 @@ pub fn parts_reset() -> Unit {
   submenu_hover.val = ""
   held_felt.clear()
   presenters_reset()
-  menu_open.val = ""
+  menu_set("")
   about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
-  menu_going.clear()
-  menu_changed()
+  menu_going.set([])
 }
 
 ///|
@@ -1476,7 +1484,7 @@ pub fn parts_reset() -> Unit {
 /// the one open (unless another is by then), and going out from now, so what shows its button only under the pointer
 /// still builds it as its exit plays.
 fn menu_close(key : String) -> Unit {
-  if menu_open.val == key {
+  if menu_open_peek() == key {
     menu_set("")
   }
   menu_going_set(key, true)
@@ -1485,7 +1493,7 @@ fn menu_close(key : String) -> Unit {
 ///|
 /// The menu `key` opened, or closed where it is the one open: its button pressed.
 fn menu_flip(key : String) -> Unit {
-  if menu_open.val == key {
+  if menu_open_peek() == key {
     menu_close(key)
   } else {
     menu_set(key)
@@ -1506,7 +1514,7 @@ fn menu_items(
   offset? : Double = 6.0,
   at? : (Double, Double, Double, Double),
 ) -> Bool {
-  let open = menu_now() == key
+  let open = menu_is(key)
   let entries : Array[@kit.Entry] = []
   let icons : Map[String, String] = {}
   let danger : Array[String] = []
@@ -1537,7 +1545,7 @@ fn menu_items(
   })
   let m = menu.val.unwrap()
   // (a submenu's Left, its own back, is a key taken as it is built)
-  if submenu && open && !m.open && menu_open.val == key {
+  if submenu && open && !m.open && menu_open_peek() == key {
     menu_set("")
   }
   menu_going_set(key, m.shown && !m.open)
@@ -1559,7 +1567,7 @@ fn menu_items(
 /// A menu behind ⋯ (parts.tsx Menu): an icon button (`label`, the app's word for 更多; shaped as a bar's tools are:
 /// tool_button) that opens `items` under it, along its end, 4 below. Whether it is open.
 pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : String, size? : Double = 32.0) -> Bool {
-  let open = menu_now() == key
+  let open = menu_is(key)
   let id = c.id(key + "/more")
   icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) |> ignore
   // (pressed as it is let go: open or not as it is then)
@@ -1664,7 +1672,7 @@ let tools_line_look : @ui.Style = @ui.css("row align=ACenter")
 /// A right click's menu (Radix's ContextMenu): opened at the pointer by `menu_open_here`, then
 /// drawn there while it is open. Whether it is open.
 pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {
-  if menu_now() != key {
+  if !menu_is(key) {
     return false
   }
   let (x, y) = menu_open_at.val
@@ -1687,7 +1695,7 @@ pub fn menu_open_key() -> String {
 ///|
 /// Whether the menu `key` is open now.
 pub fn menu_is_open(key : String) -> Bool {
-  menu_now() == key
+  menu_is(key)
 }
 
 ///|
@@ -1695,7 +1703,7 @@ pub fn menu_is_open(key : String) -> Bool {
 /// keeps it while this holds, so the menu goes out where it hung (not cut off, nor from the window's corner where
 /// the ⋯ is not drawn the frame it plays in).
 pub fn menu_shown(key : String) -> Bool {
-  menu_now() == key || menu_going.contains(key)
+  menu_is(key) || menu_going.has(key)
 }
 
 ///|

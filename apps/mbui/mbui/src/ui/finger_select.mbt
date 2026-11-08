@@ -306,8 +306,7 @@ let finger_end_half : Double = 18.0
 /// Whether what is picked with the pointer was picked by a finger (held on its words), followed as that changes.
 pub fn Ctx::selection_by_finger(self : Ctx) -> Bool {
   ignore(self)
-  picked_said.get() |> ignore
-  picked.finger
+  picked_finger_said.get()
 }
 
 ///|

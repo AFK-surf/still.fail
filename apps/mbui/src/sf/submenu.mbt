@@ -18,7 +18,7 @@ pub fn submenu_row(
   let row = key + "/row"
   let id = c.id(row)
   if c.rect_of(id) is None {
-    if menu_now() == key { menu_set("") }
+    if menu_is(key) { menu_set("") }
     if submenu_hover.val == key { submenu_hover.val = "" }
   }
   let pressed = menu_item(c, label, key=row, icon~, end=if side == Left { "chevron-left" } else { "chevron-right" })

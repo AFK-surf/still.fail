@@ -41,8 +41,22 @@ fn periods_at(now : Double, from : Double, period : Double) -> (Int, Double) {
 }
 
 ///|
-/// When each thing marked happened (Ctx::mark), by its id.
-let marks_at : Map[Int, Double] = {}
+/// When each thing marked happened (Ctx::mark), by its id, as a signal of its own: what asks of one (Ctx::within) is
+/// told as that one is marked again, none other. One asked of and never marked holds -inf.
+let marks_at : Map[Int, @signals.Signal[Double]] = {}
+
+///|
+/// When what `id` names was last marked (-inf: never), its signal made as it is first asked of or marked.
+fn mark_of(id : Int) -> @signals.Signal[Double] {
+  match marks_at.get(id) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(@double.neg_infinity, same=fn(a, b) { a == b })
+      marks_at[id] = s
+      s
+    }
+  }
+}
 
 ///|
 /// Whether `on` has held for `ms` (a declared length), asked each frame by what waits for it; a wake at the moment it
@@ -160,28 +174,21 @@ fn Ctx::sweep_helds(self : Ctx) -> Unit {
 ///|
 /// What `id` names happened now (letters typed, a tip closed): Ctx::within asks how long ago.
 pub fn Ctx::mark(self : Ctx, id : Int) -> Unit {
-  marks_at[id] = self.clock
-  // (what read it, in this build or kept, told: built again from it)
-  marks_said.set(@signals.untracked(fn() { marks_said.get() }) + 1)
+  // (what read it, in this build or kept, told: built again from it; what read another mark not)
+  mark_of(id).set(self.clock)
 }
-
-///|
-/// Told as anything is marked (Ctx::mark): what asked how long ago (Ctx::within) built again.
-// kept across runs: only counts on
-let marks_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Whether what `id` names was marked (Ctx::mark) less than `ms` (a declared length) ago: woken as that ends, later
 /// (nothing waits on it), so what read it is built again then.
 pub fn Ctx::within(self : Ctx, id : Int, ms : Double) -> Bool {
-  marks_said.get() |> ignore
-  match marks_at.get(id) {
-    Some(at) if self.clock - at < ms => {
-      // (what reads it read so till then: drawn again as it ends)
-      self.wake_at_time(at + ms, later=true)
-      true
-    }
-    _ => false
+  let at = mark_of(id).get()
+  if self.clock - at < ms {
+    // (what reads it read so till then: drawn again as it ends)
+    self.wake_at_time(at + ms, later=true)
+    true
+  } else {
+    false
   }
 }
 

@@ -208,9 +208,40 @@ let presented_now : Array[Presented] = []
 let presented_count : Ref[Int] = Ref(0)
 
 ///|
-/// Told as one is presented or let go: the host (presented) built again for it, wherever it was asked from.
-// kept across runs: only counts on
-let presented_said : @signals.Signal[Int] = @signals.signal(0)
+/// What is presented as it was last told (presented_told): each one's serial, whether it is open, closed whether the
+/// window's tree draws it still going out, the lowest first. What reads what is presented (the host, presented; presenting, the scrim's
+/// owner, what of them the tree draws) built again as that changes, wherever it was asked from, not as what one of
+/// them shows does (presented_items_of).
+// kept across runs: put back by presenters_reset
+let presented_said : @signals.Signal[Array[(Int, Bool, Bool)]] = @signals.signal([], same=fn(a, b) { a == b })
+
+///|
+/// What each menu presented offers, as it was last told (presented_changed), by its serial: its items as they show
+/// (label, icon, danger, disabled, chosen, heading), so that what draws them is built again as they show otherwise.
+// kept across runs: put back by presenters_reset; one let go as it is
+let presented_items_said : Map[Int, @signals.Signal[Array[(String, String, Bool, Bool, Bool?, Bool)?]]] = {}
+
+///|
+/// How `items` show, compared as they are given anew (presented_changed).
+fn items_shown(items : Array[MenuItem?]) -> Array[(String, String, Bool, Bool, Bool?, Bool)?] {
+  items.map(fn(x) { x.map(fn(m) { (m.label, m.icon, m.danger, m.disabled, m.chosen, m.heading) }) })
+}
+
+///|
+/// The items of the menu presented as `serial` (`items`, where it keeps them), read: what reads them built again as
+/// they are given anew showing otherwise (presented_changed).
+fn presented_items_of(serial : Int, items : Array[MenuItem?]) -> Array[MenuItem?] {
+  let s = match presented_items_said.get(serial) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(items_shown(items), same=fn(a, b) { a == b })
+      presented_items_said[serial] = s
+      s
+    }
+  }
+  s.get() |> ignore
+  items
+}
 
 ///|
 /// Which are drawn (open, or going), by their serials: told each as it comes or is gone (presented_drawn_of).
@@ -219,13 +250,20 @@ let presented_drawn_said : @signals.Keyed[Int] = @signals.keyed()
 
 ///|
 fn presented_told() -> Unit {
-  presented_said.set(@signals.untracked(fn() { presented_said.get() }) + 1)
+  // (one closed, whether the tree draws it still going out: what the host lets go of as it is gone)
+  presented_said.set(presented_now.map(fn(p) { (p.serial, p.open, !p.open && tree_presented.contains(p.serial)) }))
 }
 
 ///|
-/// What one presented shows changed where it is kept (a menu's items given anew as they are now): the host told.
+/// What one presented shows changed where it is kept (a menu's items given anew as they are now): what draws it told,
+/// where they show otherwise.
 pub fn presented_changed() -> Unit {
-  presented_told()
+  for p in presented_now {
+    match (p.shows, presented_items_said.get(p.serial)) {
+      (Menu(items, _, _), Some(s)) => s.set(items_shown(items))
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -244,6 +282,8 @@ pub fn presenters_reset() -> Unit {
   presented_now.clear()
   tree_presented.clear()
   presented_drawn_said.set([])
+  presented_items_said.clear()
+  presented_told()
   lists_of.clear()
   presented_count.val = 0
   presented_alone.val = false
@@ -1374,6 +1414,9 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
         _ => ()
       }
     }
+    for serial in gone {
+      presented_items_said.remove(serial)
+    }
     let left = presented_now.filter(fn(p) { !gone.contains(p.serial) })
     presented_now.clear()
     presented_now.append(left)
@@ -1417,7 +1460,7 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
     return present_sheet(c, key, p)
   }
   match p.shows {
-    Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
+    Menu(items, title, along) => menu_popover(c, key, p, presented_items_of(p.serial, items), title, along)
     Pick(title, choices, chosen, choose, along, search) =>
       pick_popover(c, key, p, title, choices, chosen, choose, along, search)
     Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
