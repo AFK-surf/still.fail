@@ -12,7 +12,7 @@ let batch : Int = 64
 
 ///|
 /// The store needs the worker's schema repair before its edits can be prepared.
-pub suberror Fallback
+pub(all) suberror Fallback
 
 ///|
 fn first(db : @sql.Db, sql : String, params : Array[Json]) -> Map[String, Json]? raise {

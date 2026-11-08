@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { MbBackfill, mbReaderBinary } from "../read/mb-reader.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
@@ -11,15 +12,17 @@ import type { Store } from "../store/store.ts";
 type Kind = "activity" | "recovery" | "awake" | "active-jobs";
 
 /// One worker prepares the lookups after handover, in bounded batches. Workspace activity is prepared first so its
-/// existing callers are not held up by restart and awake preparation. Every cursor can resume after interruption.
-export function buildWorkspaceActivity(store: Store, previous: Promise<void>, workerFile?: URL): {
+/// existing callers are not held up by restart and awake preparation. Every cursor can resume after interruption. By
+/// the MoonBit builder (station/mb, src/activity) where its program is there, the worker taking over a kind it leaves
+/// to it (`MbBackfill`); a worker of its own given, by that one.
+export function buildWorkspaceActivity(store: Store, previous: Promise<void>, workerFile?: URL, mb = workerFile === undefined ? mbReaderBinary() : null): {
   ready: Promise<boolean>; activeJobsReady: Promise<boolean>; close: () => Promise<void>;
 } {
   const activity = Promise.withResolvers<boolean>();
   const activeJobs = Promise.withResolvers<boolean>();
   const path = store.db.location();
   const retries = new Fibers("workspace activity", store.clock);
-  let worker: Worker | null = null;
+  let worker: Worker | MbBackfill | null = null;
   let cancel: (() => void) | null = null;
   let closed = false;
   let activityDone = workspaceActivityReady(store.db);
@@ -62,8 +65,9 @@ export function buildWorkspaceActivity(store: Store, previous: Promise<void>, wo
     if (closed || complete() || worker !== null) return;
     if (path === null) { memoryStep(); return; }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./workspace-activity-worker.ts" : "./sessions/workspace-activity-worker.js", import.meta.url);
-    let current: Worker;
-    try { current = new Worker(file, { workerData: { path, priority: store.backfillPriority } }); }
+    let current: Worker | MbBackfill;
+    const thread = () => new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+    try { current = mb !== null ? new MbBackfill(mb, ["--builder", "session-backfill", "--db", path], store.backfillPriority, 20, thread) : thread(); }
     catch (error) {
       log.warn("hub", "the session recovery worker could not start", { error: (error as Error).message });
       retry();
