@@ -458,6 +458,8 @@ pub fn Ctx::pager(
         sn.h = Fill(1.0)
         sn.item = k
         sn.pager = id
+        // (moved by the slide as it is laid out and painted, the clock followed there till it rests: Ctx::moved_by)
+        self.moved_by(slot, fn(_, _) { (st.slide.value(self.now_before(st.slide.end())), 0.0) })
         self.with_parent(slot, fn() { self.scope(k, fn() { page(k) }) })
       }
     }
@@ -505,15 +507,15 @@ fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
 }
 
 ///|
-/// Pager pages sit side by side: each one where its index puts it, moved by
-/// the drag.
+/// Pager pages sit side by side: each one where its index puts it (the slide, a drag's or a turn's, moves them as they
+/// are drawn: Ctx::pager's moved_by).
 fn Ctx::place_pager_slot(self : Ctx, i : Int) -> Unit {
   let n = self.nodes[i]
   match pagers.get(n.pager) {
     Some(st) => {
       let p = self.nodes[n.parent]
       st.width = p.fw
-      n.tx = (n.item - st.index).to_double() * p.fw + st.slide.value(self.now_before(st.slide.end()))
+      n.tx = (n.item - st.index).to_double() * p.fw
     }
     None => ()
   }
@@ -526,8 +528,8 @@ fn Ctx::pager_drag(self : Ctx, id : Int, dx : Double) -> Bool {
   match pagers.get(id) {
     Some(st) => {
       st.dragging = true
-      // resisting past the first and last page
-      let offset = st.slide.value(self.now_before(st.slide.end()))
+      // resisting past the first and last page (where the slide had it at the frame before: the drag's moment)
+      let offset = st.slide.at(self.clock).0
       let at_end = (st.index == 0 && offset + dx > 0.0) ||
         (st.index == st.count - 1 && offset + dx < 0.0)
       st.slide.put(offset + (if at_end { dx * 0.35 } else { dx }))
@@ -545,7 +547,7 @@ fn Ctx::pager_release(self : Ctx, id : Int, vel : Double) -> Unit {
     Some(st) => {
       st.dragging = false
       let w = dmax(st.width, 1.0)
-      let offset = st.slide.value(self.now_before(st.slide.end()))
+      let offset = st.slide.at(self.clock).0
       // past the last or first page, turn() hands it to the app
       if offset < -w / 3.0 || vel < -0.4 {
         self.turn(st, 1)

@@ -185,3 +185,48 @@ test "a turned page slides by the clock: where it is at 120 ms is the same in on
   seven.run_for(rest.val - seven.time())
   seven.assert_idle()
 }
+
+///|
+test "a pager's turn slides its pages as each frame is painted: nothing built or laid out for its slide" {
+  let index = [0]
+  let rest = Ref(0.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      index[0] = c.pager("p", 3, index[0], fn(k) {
+        c.box(w=Fill(1.0), h=Fill(1.0), fn() { c.text("page \{k}") |> ignore }) |> ignore
+      })
+      rest.val = c.pager_rest("p")
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  t.tap(280.0, 100.0)
+  assert_eq(index[0], 1)
+  let x0 = t.rect_of("page 1").unwrap().0
+  let built : Array[String] = []
+  let places : Array[Double] = []
+  // (the tap's frame turned it, laying the pages out again: the frame after it is built once more for that, as the
+  // frame after any build that laid out otherwise is (frame_watch.mbt); none after it)
+  let mut first = true
+  while t.time() < rest.val {
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    let why = t.built_why()
+    if why != "" && !(first && why == "the one before it laid out otherwise") {
+      built.push("\{t.time()}: \{why}")
+    }
+    first = false
+    let x = t.rect_of("page 1").unwrap().0
+    if !places.contains(x) {
+      places.push(x)
+    }
+  }
+  // (it slides: drawn somewhere else most frames, from where it was to its place)
+  assert_true(places.length() > 5 && x0 > 0.0, msg="\{places.length()} places from \{x0}")
+  assert_eq(t.rect_of("page 1").unwrap().0, 0.0)
+  assert_eq(built, [], msg="\{built.length()} frames built: \{built[:3]}")
+}
