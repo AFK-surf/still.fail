@@ -109,11 +109,9 @@ fn login_cancel(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
   let busy = @settings.is_doing(core, ["machineLogin.cancel"], [("station", station), ("id", id)])
   let what = @sf.t("web-main.logins.cancelWhat")
   let x = if busy { 0 } else { c.id("login-cancel/" + station + "/" + id) }
-  if x != 0 && c.clicked(x) {
-    c.tell("login-cancel/" + id, fn() {
-      @settings.act(core, what, "machineLogin.cancel", { "station": Json::string(station), "id": Json::string(id) })
-    })
-  }
+  c.on_press(x, fn() {
+    @settings.act(core, what, "machineLogin.cancel", { "station": Json::string(station), "id": Json::string(id) })
+  })
   let b = c.box(style=lc_cancel, id=x, fn() {
     if busy {
       @sf.spinner(c, size=lc_spin) |> ignore

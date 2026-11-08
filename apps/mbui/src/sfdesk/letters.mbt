@@ -98,9 +98,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
             c.text(title, style=letters_name, allow_ellipsis=true) |> ignore
           } else {
             let nid = c.id("letters/name")
-            if c.clicked(nid) {
-              c.tell("letters/name", fn() { open_link(to) })
-            }
+            c.on_press(nid, fn() { open_link(to) })
             let b = c.box(style=letters_name_box, id=nid, fn() {
               // (underlined on hover)
               c.rich([@ui.span(title, underline=c.lit(nid))], style=letters_name, allow_ellipsis=true) |> ignore

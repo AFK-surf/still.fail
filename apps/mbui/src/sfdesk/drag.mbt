@@ -121,7 +121,7 @@ fn fdrag_follow(c : @ui.Ctx, item : Dragged, tab : Bool, step : @ui.PressStep) -
   match step {
     // (a mouse's: a finger moving on a row moves the list, as the web's rows, which a touch drags nothing of; a file is
     // moved there by its menu)
-    Down(x, y) =>
+    Down(x, y, _) =>
       if @sf.pointer_rests() && fdrag.item.get() is None {
         fdrag.press = Some((item, x, y, tab))
       }

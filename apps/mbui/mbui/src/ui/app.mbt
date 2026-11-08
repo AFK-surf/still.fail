@@ -2058,6 +2058,8 @@ fn key_in(code : Int, mods : Int) -> Unit {
   match c.editors.get(focus) {
     Some(st) => {
       st.key(code, mods, h_now())
+      // (its words given up by it: told what its build said that does, now: Ctx::editor's on_submit)
+      st.submit_told()
       h_request_frame()
     }
     None => {

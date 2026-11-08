@@ -26,6 +26,7 @@ fn seg(
   radius? : Double = 10.0,
   pill? : Bool = false,
   compact? : Bool = false,
+  on_pick? : (Int) -> Unit,
 ) -> Int {
   let t = theme()
   let fill = fill && !pill
@@ -71,7 +72,7 @@ fn seg(
   }
   // (not side by side: the chosen one in its track, as wide; all of them in a pick)
   if fit is Some({ fit: Menu, .. }) {
-    return choice_pick(c, key, track, options, selected, fn(c, _, words) {
+    return choice_pick(c, key, track, options, selected, on_pick?, fn(c, _, words) {
       track_box(fn() {
         c.box(style=seg_menu, fn() {
           c.text(words, style=seg_menu_words) |> ignore
@@ -126,6 +127,7 @@ fn seg(
       lens=glass_knob(),
       // (larger than the track, out over its edges: lifted off it, as iOS 26's)
       lens_grow=seg_lens_grow,
+      on_change?=on_pick.map(fn(f) { fn(now : Array[String]) { picked_of(now, options, selected, f) } }),
       ground=fn(c, _, options) {
         // (in a row, as wide as its options: not stretched to its parent's width)
         if pill {
@@ -374,6 +376,7 @@ fn choice_pick(
   id : Int,
   labels : Array[String],
   chosen : Int,
+  on_pick? : (Int) -> Unit,
   look : (@ui.Ctx, Int, String) -> Int,
 ) -> Int {
   let p = match choice_picks.get(key) {
@@ -394,13 +397,35 @@ fn choice_pick(
   if c.clicked(id) {
     let choices = labels.mapi(fn(i, l) { choice(i.to_string(), l) })
     // (a segmented control's options, short words each: nothing to search them by)
-    pick("", choices, now.to_string(), fn(k) { p.picked = Some(labels_at(labels, k, now)) }, from=Of(id), search=false)
+    pick("", choices, now.to_string(), fn(k) {
+      let i = labels_at(labels, k, now)
+      p.picked = Some(i)
+      match on_pick {
+        Some(f) if i != now => f(i)
+        _ => ()
+      }
+    }, from=Of(id), search=false)
     p.serial = last_presented()
   }
   let words = labels.get(now).unwrap_or("")
   let b = look(c, id, words)
   c.semantics(b, Button, id~, label=words, expanded=p.serial != 0 && presented_drawn_of(p.serial))
   now
+}
+
+///|
+/// What a segmented choice's group (@kit.toggle_group) pressed to (`now`, its options by their places) chooses, told
+/// `f` where it is another than `chosen` (the chosen one pressed again stays chosen).
+fn picked_of(now : Array[String], labels : Array[String], chosen : Int, f : (Int) -> Unit) -> Unit {
+  match now {
+    [v] => {
+      let i = labels_at(labels, v, chosen)
+      if i != chosen {
+        f(i)
+      }
+    }
+    _ => ()
+  }
 }
 
 ///|

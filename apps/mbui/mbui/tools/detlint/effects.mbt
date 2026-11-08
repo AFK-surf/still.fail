@@ -117,8 +117,11 @@ fn Eff::handler_param(self : Eff, key : String, i : Int) -> Bool {
 fn Eff::given_later(self : Eff, f : MbtFile, item : Int, k : Int) -> Bool {
   f.calls.iter().any(fn(c) {
     c.item == item &&
-    c.kind == "pkg" &&
-    self.cfg.effect_later.contains("\{c.qual}.\{c.name}") &&
+    (
+      (c.kind == "pkg" && self.cfg.effect_later.contains("\{c.qual}.\{c.name}")) ||
+      // (what a press on a box does: the Ctx's handler, run as the press is let go, c.on_press(id, run))
+      (c.kind == "method" && handler_methods.contains(c.name))
+    ) &&
     c.args.iter().any(fn(a) { a.1.length() == 1 && a.1[0] == k })
   })
 }

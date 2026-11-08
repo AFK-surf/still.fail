@@ -15,7 +15,9 @@ pub(all) struct RadioState {
 
 ///|
 /// A radio group (see the file's head) of `items`, the one of `value` checked (its id `key`'s), named `label` for
-/// the semantics tree; one under the other unless `orientation` is Horizontal. What is checked now, and what happened.
+/// the semantics tree; one under the other unless `orientation` is Horizontal; `on_pick`: what checking an item does,
+/// given its value, as it is pressed (a tap, Space, Activate), outside any build (the arrows' check, as the focus moves
+/// to it, the build's). What is checked now, and what happened.
 pub fn radio_group(
   c : @ui.Ctx,
   key : String,
@@ -27,6 +29,7 @@ pub fn radio_group(
   label? : String = "",
   gap? : Double = 10.0,
   look? : (@ui.Ctx, RadioState) -> Unit = radio_look,
+  on_pick? : (String) -> Unit,
 ) -> @ui.Changed[String] {
   let id = c.id(key)
   let mut now = value
@@ -41,6 +44,13 @@ pub fn radio_group(
         let iid = part_id(id, k)
         let off = disabled || it.disabled
         let r = c.interact(iid, disabled=off, keys=@ui.press_space)
+        match on_pick {
+          Some(f) if !off => {
+            let v = it.value
+            c.on_press(iid, fn() { f(v) })
+          }
+          _ => ()
+        }
         if r.clicked || (!off && c.focus_roved_to(iid)) {
           any = r
           now = it.value

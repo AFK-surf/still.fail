@@ -13,15 +13,15 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   // a choice of a few (Segmented, Seg), its kept value or the one just chosen while the core takes it
   let choice = fn(key : String, options : Array[(String, String)], now : String) {
     let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(0)
-    let picked = @sf.page_choice(c, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
-    if picked != at {
+    @sf.page_choice(c, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at, on_pick=fn(picked) {
       // another theme picked: it spreads from where it was picked (mbui reveal.mbt)
       if key == "appearance" {
         let (x, y, _) = c.pointer()
-        c.tell("appearance/reveal", fn() { c.reveal_from(x, y, dark=fn() { @sf.theme().dark }) })
+        c.reveal_from(x, y, dark=fn() { @sf.theme().dark })
       }
-      c.after_build("appearance/" + key, fn() { @settings.set_pref(core, key, options[picked].0) })
-    }
+      @settings.set_pref(core, key, options[picked].0)
+    })
+    |> ignore
   }
   let settings : Array[() -> Unit] = [
     fn() {
@@ -38,17 +38,16 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       @sf.setting(c, @sf.t("web-pages.appearance.accent.title"), note=@sf.t("web-pages.appearance.accent.description"), fn() {
         let now = @settings.pref(core, "accent")
         let shown = if @sf.tone_of(now) is Some(_) { now } else { "" }
-        let picked = @sf.accent_pick(
+        @sf.accent_pick(
           c,
           "appearance/accent",
           accent_names.map(fn(k) { @sf.t(k) }),
           @sf.t("web-pages.appearance.accent.custom"),
           @sf.t("web-pages.appearance.accent.hue"),
           shown,
+          on_pick=fn(picked) { @settings.set_pref(core, "accent", picked) },
         )
-        if picked != shown {
-          c.after_build("appearance/accent", fn() { @settings.set_pref(core, "accent", picked) })
-        }
+        |> ignore
       })
     },
     // the faces chosen, opening their page (a chat as they set it and their list are a page's own, on every screen)

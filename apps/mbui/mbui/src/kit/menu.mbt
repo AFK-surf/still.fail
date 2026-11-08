@@ -140,6 +140,7 @@ fn menu_panel(
   item_look : (@ui.Ctx, MenuItemState) -> Unit,
   heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
   rule_look? : (@ui.Ctx) -> Unit = menu_rule_look,
+  on_pick? : (String) -> Unit,
 ) -> PanelOut {
   let pid = c.id(key + "/panel")
   let ids = entries.mapi(fn(k, _) { part_id(pid, k) })
@@ -214,7 +215,19 @@ fn menu_panel(
                     if r.clicked || (c.has_focus(iid) && c.take_key(opens)) {
                       sub = n
                     }
-                  _ => if r.clicked { chosen = Some(e.value) }
+                  _ => {
+                    if r.clicked {
+                      chosen = Some(e.value)
+                    }
+                    // (what choosing it does, as it is chosen: a press let go on it, Enter or Space, Activate)
+                    match on_pick {
+                      Some(f) if !e.disabled => {
+                        let v = e.value
+                        c.on_press(iid, fn() { f(v) })
+                      }
+                      _ => ()
+                    }
+                  }
                 }
                 let on = sub == n && e.kind is Sub(_)
                 let row = c.box(id=if e.disabled { 0 } else { iid }, fn() {
@@ -264,6 +277,7 @@ fn menu_panel(
                         item_look,
                         heading_look~,
                         rule_look~,
+                        on_pick?,
                       )
                     })
                     if out.chosen is Some(_) {
@@ -375,8 +389,9 @@ fn imax(a : Int, b : Int) -> Int {
 /// `key`'s dropdown menu (Radix's DropdownMenu, see the file's head), `open` or not, of `entries`, by the trigger
 /// `trigger` (its id: the view's button, which opens it; `at`: by this rectangle instead); Down on the trigger opens
 /// it too, and the keyboard's opening focuses its first item. `scrim`: the page under it dimmed so (in and out over 200
-/// ms); it comes by `enter` and goes by `exit` (still.fail's small panel's by default: popover.mbt pop_in, pop_out).
-/// Whether it is open now, and what was chosen.
+/// ms); it comes by `enter` and goes by `exit` (still.fail's small panel's by default: popover.mbt pop_in, pop_out);
+/// `on_pick`: what choosing an item does, given its value, as it is chosen, outside any build. Whether it is open now,
+/// and what was chosen.
 pub fn dropdown_menu(
   c : @ui.Ctx,
   key : String,
@@ -397,6 +412,7 @@ pub fn dropdown_menu(
   submenu? : Bool = false,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
+  on_pick? : (String) -> Unit,
 ) -> Menu {
   install()
   let mut now = open
@@ -437,6 +453,7 @@ pub fn dropdown_menu(
         item_look,
         heading_look~,
         rule_look~,
+        on_pick?,
       )
       chosen = out.chosen
       if out.back { now = false }
@@ -466,8 +483,8 @@ fn menu_anchor(c : @ui.Ctx, pid : Int, trigger : Int, open : Bool) -> (Double, D
 
 ///|
 /// `key`'s context menu (Radix's ContextMenu) of `entries`, for what `area` (its id) draws: opened at the pointer by
-/// a right click (Ctrl-click on macOS) or a long press on it; the menu otherwise as a dropdown's. Whether it is open,
-/// and what was chosen.
+/// a right click (Ctrl-click on macOS) or a long press on it; the menu otherwise as a dropdown's (`on_pick` too).
+/// Whether it is open, and what was chosen.
 pub fn context_menu(
   c : @ui.Ctx,
   key : String,
@@ -477,6 +494,7 @@ pub fn context_menu(
   min_w? : Double = 180.0,
   look? : (@ui.Ctx, Double, () -> Unit) -> Unit = menu_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
+  on_pick? : (String) -> Unit,
 ) -> Menu {
   install()
   let id = c.id(key)
@@ -501,7 +519,7 @@ pub fn context_menu(
   if moved is Some(shows) {
     let pid = c.id(key + "/panel")
     let o = c.overlay(key, modal=true, initial_focus=pid, inert=!now, fn() {
-      let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, shows, label, 0, false, min_w, look, item_look)
+      let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, shows, label, 0, false, min_w, look, item_look, on_pick?)
       chosen = out.chosen
     })
     if o.dismissed is Some(_) || chosen is Some(_) {
@@ -516,7 +534,8 @@ pub fn context_menu(
 /// `key`'s menubar (Radix's Menubar): `menus` (each its trigger's words and its entries) side by side, one roving
 /// group. A click opens one (or closes it); while one is open, the pointer coming to another trigger opens that one,
 /// and Left and Right move to the menu beside; Down, Enter and Space on a trigger open its menu at its first item.
-/// The value chosen, if one was.
+/// `on_pick`: what choosing an item does, given its value, as it is chosen, outside any build. The value chosen, if one
+/// was.
 pub fn menubar(
   c : @ui.Ctx,
   key : String,
@@ -526,6 +545,7 @@ pub fn menubar(
   look? : (@ui.Ctx, Double, () -> Unit) -> Unit = menu_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
   trigger_look? : (@ui.Ctx, ToggleState) -> Unit = menubar_trigger_look,
+  on_pick? : (String) -> Unit,
 ) -> String? {
   install()
   let id = c.id(key)
@@ -587,6 +607,7 @@ pub fn menubar(
         min_w,
         look,
         item_look,
+        on_pick?,
       )
       // Left and Right not taken by a submenu: the menu beside, at its first item (read in the menu: its keys while
       // the focus is in it)
