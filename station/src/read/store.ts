@@ -476,6 +476,24 @@ export function namingOriginProbe(s: Store): (session: string) => boolean {
   return (session) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
 }
 
+/// Each session's external origin in the order of threadsForChatNames, excluding missing-only origins as in
+/// sharedChats. Find them together before loading their details rather than loading every older origin's members.
+export const LATEST_NAMING_ORIGIN = `SELECT (SELECT t.id FROM thread_sessions m
+  CROSS JOIN threads t ON t.id = m.thread
+  LEFT JOIN thread_state st ON st.thread = t.id
+  LEFT JOIN entries e ON e.thread = t.id AND e.n = st.said_n AND e.kind = 'message'
+  WHERE m.session = requested.value AND t.surface IS NOT ?2 AND EXISTS (
+    SELECT 1 FROM thread_sessions member CROSS JOIN sessions live ON live.key = member.session
+    WHERE member.thread = t.id
+  ) ORDER BY COALESCE(e.at, 0) DESC, t.created_at DESC, t.id DESC LIMIT 1) AS id
+  FROM json_each(?1) requested`;
+
+export function latestNamingOrigins(s: Store, sessions: string[]): number[] {
+  if (sessions.length === 0) return [];
+  return all(s, LATEST_NAMING_ORIGIN, JSON.stringify(sessions), STILLFAIL_SURFACE)
+    .flatMap((row) => row.id === null ? [] : [row.id as number]);
+}
+
 /// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
 export function threadsActiveSince(s: Store, threads: number[], since: number): number[] {
   if (threads.length === 0 || since <= 0) return threads;

@@ -395,7 +395,7 @@ export function scopeOfJobNames(s: Store, keys: string[]): Scope {
   for (const [key, session] of target) {
     if (session && (session.title === null || trim(session.title) === "") && !hasChat.has(key)) origins.add(key);
   }
-  const external = store.threadsOfSessionsOnSurface(s, [...origins], false);
+  const external = new Set(store.latestNamingOrigins(s, [...origins]));
   // An origin can include a missing member; its other members still make it visible to the shared reader.
   for (const id of external) for (const member of store.threadSessions(s, id)) agents.add(member.session);
   return { rows, sessions: agents, threads: [...chats, ...external] };
