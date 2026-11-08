@@ -954,6 +954,53 @@ test("messages_its_agent_takes_leave_it_at_work_until_its_summary_says_the_turn_
   core.close();
 });
 
+test("a_chats_end_says_nothing_of_its_ended_turn_from_the_viewers_words_sent_until_the_next_turn_ends", async () => {
+  // Words sent to an agent that ended done: its end said 完成 again under them, from the shared row read after the
+  // station took them, the turn they began not in it yet (2026-11-08). The page's own summary says at once.
+  const done = { kind: "input", declared: "final", ending: "all_done", need: "已合进 main", outcome: "completed", startedAt: 1, endedAt: 2 };
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], muted: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: { 7: 3 } };
+  const told = { ...summary("k1", 1), lastTurn: done };
+  const shared = (lastTurn: J, process = "cold") => ({
+    id: "k1", session: "k1", thread: 7, title: "", agents: [{ key: "k1", runtime: "claude", model: null, effort: null, process, pending: 0, lastTurn }],
+    last: { seq: 3, authorKind: "agent", author: "k1", text: "好", createdAt: 3 }, unread: false, mine: true, lastActiveAt: 3, connect: null, origin: null, creator: null,
+    people: [], ws: null, named: { thread: { surface: "ember", title: "部署", autoTitle: null }, firstText: null, channelName: null }, mineOf: [], said: { n: 3, authorKind: "agent", author: "k1", other: 3 }, pinned: null,
+  });
+  const answers: J = { ...base(), "GET /sessions": [told], "GET /sessions/k1": { session: told, threads: [], turns: [], jobs: [] }, "GET /chats?marks=1": marks, "GET /chats?shared=1": [shared(done)] };
+  let accept: (res: ReturnType<typeof jsonResponse>) => void = () => {};
+  const { host, core, push, ui: id, values, read } = await ui(answers, (s) => stationLater(s.host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? new Promise((r) => (accept = r)) : undefined)));
+  push("made", { rows: true, marks: true, shared: true });
+  subscribe(core, id, 1, { topic: "chat", station: ST, thread: 7 });
+  await coalesce(host);
+  await read();
+  const state = () => v(values, 1).stateText ?? null;
+  assert.equal(state(), "已完成：已合进 main");
+  // On its way.
+  call(core, id, 2, "chat.send", { station: ST, thread: 7, text: "继续" });
+  await read();
+  assert.equal(v(values, 1).outbox.length, 1);
+  assert.equal(state(), null);
+  // Had, waiting for its agent, then taken: the shared row still the one before.
+  accept(jsonResponse(200, { n: 4 }));
+  push("thread", { id: 7, entries: [entry(4, "继续")] });
+  push("session-pending", { key: "k1", pending: 1 });
+  await coalesce(host);
+  await read();
+  assert.equal(v(values, 1).outbox.length, 0);
+  assert.equal(state(), null);
+  push("session-pending", { key: "k1", pending: 0 });
+  await coalesce(host);
+  await read();
+  assert.equal(state(), null);
+  // The turn it began ended: said again.
+  const again = { ...done, need: "又合了一个", startedAt: 4, endedAt: 5 };
+  push("session", { ...summary("k1", 2), lastTurn: again });
+  push("chat-shared", shared(again));
+  await coalesce(host);
+  await read();
+  assert.equal(state(), "已完成：又合了一个");
+  core.close();
+});
+
 test("jobs_are_put_in_place_from_their_events_and_from_stopping_them", async () => {
   const job = (id: string, state: string) => ({ id, session: "a", name: id, state, port: 4817, startedAt: 1 });
   const answers: J = {

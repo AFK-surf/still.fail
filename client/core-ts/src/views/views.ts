@@ -2137,8 +2137,16 @@ export class Views implements Owner {
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     // Where it stands, as its row's second line says it (what an agent needs, why it stopped, what it waits on, done):
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
-    // on: its activity under the messages says it, with how long it has waited.
-    const shown = row !== undefined && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : null;
+    // on: its activity under the messages says it, with how long it has waited. An agent this page's summary has at
+    // work (it says at once that it took a message) is at work, whatever the shared row read after says; and nothing
+    // is said while the viewer's words are on their way: the turn it tells of no longer stands.
+    const sending = outbox.some((m) => m.state !== "failed");
+    const held = (a: J) => {
+      const s = agents.find((b) => get(b.session, "key") === a.key)?.session;
+      const status = s !== undefined ? present.shownStatus(s) : null;
+      return status === "queued" || (status === "running" && present.waiting(s) === null) ? s : present.session(a);
+    };
+    const shown = row !== undefined && Array.isArray(row.agents) && !sending ? { ...row, agents: row.agents.map(held) } : null;
     const line = shown !== null ? present.rowStateLine(shown, false, (agent) => {
       const status = present.shownStatus(agent);
       // A stop is already announced in the conversation; its status still remains on the list row.
