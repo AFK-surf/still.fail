@@ -164,6 +164,19 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             gone~,
           )
         }
+        // (what it holds nodes, on 小屏: a sheet from the window's foot, as the host's are there)
+        Panel(x) if x.nodes is Some(_) && @signals.untracked(fn() { layout(root.window().0) is Small }) =>
+          sheet_node(
+            row,
+            open,
+            x,
+            x.nodes.unwrap(),
+            fn() { done(fn() {  }) },
+            fn() { dismissed_now(serial) },
+            p.from,
+            shown~,
+            gone~,
+          )
         Panel(x) if x.stage =>
           stage_node(
             row,
