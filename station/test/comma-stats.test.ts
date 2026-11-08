@@ -188,9 +188,9 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
       return answers.get(id);
     };
     assert.deepEqual((await request("r1", "task.read", { task: "7", after: 1, limit: 500 })).result, { title: "Fix", messages: [], through: 3 });
-    assert.deepEqual((await request("r2", "task.say", { task: "7", text: "选 main", key: "k1", requester: "Router" })).result, { seq: 4 });
+    assert.deepEqual((await request("r2", "task.say", { task: "7", text: "选 main", key: "k1", requester: "Router", requester_name: "Router · 星火工作室" })).result, { seq: 4 });
     assert.match((await request("r3", "task.say", { task: "7", text: " " })).error, /text/);
-    assert.deepEqual(asked, [["read", "7", 1, 100], ["say", "7", "选 main", "k1", "Router", "cm"]]);
+    assert.deepEqual(asked, [["read", "7", 1, 100], ["say", "7", "选 main", "k1", "Router · 星火工作室", "cm"]]);
 
     // Changed: the next page carries only what changed.
     stats.apply([here([usageRow("2026-11-02", "a", "ann@x", 2)], {}, [chat(7, "need_human")])], [], FROM);

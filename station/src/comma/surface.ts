@@ -381,7 +381,9 @@ export class CommaSurface extends ConnectedSurface {
         if (this.chats === null) throw new Error("task.say is not something this station does");
         const said = text(params, "text");
         if (said.trim() === "") throw new Error("text is required");
-        return await this.chats.say(text(params, "task"), said, text(params, "key"), text(params, "requester") || "Router", this.id);
+        // As people see who writes: the Router and its Group (several Comma workspaces and Agent Swarms may write here).
+        const who = text(params, "requester_name") || text(params, "requester") || "Router";
+        return await this.chats.say(text(params, "task"), said, text(params, "key"), who, this.id);
       }
       default:
         throw new Error(`${method} is not something a still.fail station does`);
