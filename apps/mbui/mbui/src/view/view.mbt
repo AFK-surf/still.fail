@@ -449,6 +449,9 @@ struct Node {
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
+  /// as big as what holds it says, whatever it holds (View::lays_out_alone): what changes under it laid out again from
+  /// it alone, nothing above it
+  mut alone : Bool
   /// its boxes to be put again in order as the change being made ends (Tree::boxes_held, View::boxes_again)
   mut boxes_due : Bool
   /// a boundary's (View::boundary): told of a fault under it
@@ -752,6 +755,11 @@ pub struct Tree {
   mut measured_gen : Int
   /// the first compute laid out to be read since things were last placed (-1: none): what a later layout places by too
   mut walk_from : Int
+  /// what lays out alone (View::lays_out_alone) with something under it to be laid out again, nothing above it: laid
+  /// out from it as the rest is (Tree::alone_laid_out)
+  alone_due : Array[Int]
+  /// those laid out so and not yet placed by, each with its compute's number
+  alone_laid : Array[(Int, Int)]
   /// how many device pixels a point what hosts it draws at (0: none said): what is drawn off where it is laid out drawn
   /// off by whole pixels (View::drawn_off), as an old view's look is
   mut pixel_grid : Double
@@ -920,6 +928,8 @@ pub fn Tree::new(
     settle_at: 0.0,
     measured_gen: -1,
     walk_from: -1,
+    alone_due: [],
+    alone_laid: [],
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
@@ -1034,6 +1044,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.parent = parent
       n.allow_ellipsis = false
       n.slot = false
+      n.alone = false
       n.boxes_due = false
       n.fault_to = None
       n.hosted = false
@@ -1188,6 +1199,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         takes_ver: None,
         drag_end: None,
         slot: false,
+        alone: false,
         fault_to: None,
         hosted: false,
         said: None,
@@ -1668,8 +1680,9 @@ fn Tree::marked(self : Tree) -> Unit {
 
 ///|
 /// Its layout to be done again: itself and every node up to the root (one marked before and not laid out since, its
-/// holder's layout reused, is no sign the rest are).
-fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
+/// holder's layout reused, is no sign the rest are). `within`: what it holds changed, not itself (its boxes put again),
+/// so where it lays out alone it is laid out again from itself.
+fn Tree::layout_marked_at(self : Tree, at : Int, within? : Bool = false) -> Unit {
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
   self.measured_gen = -1
@@ -1679,8 +1692,36 @@ fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   while i >= 0 {
     let n = self.nodes[i]
     n.flex.dirty = true
+    // (in what lays out alone, laid out as big as it was asked before: laid out again from it, nothing above it)
+    if (i != at || within) && n.alone && n.flex.laid_given() {
+      self.alone_due.push(i)
+      return
+    }
     i = n.parent
   }
+}
+
+///|
+/// What lays out alone with something under it marked laid out again (Tree::layout_marked_at), laid out from it as it
+/// was asked before (@flex.relayout), to be placed by as the rest is; before the layout of all of it, which keeps it as
+/// it is unless what holds it asks it otherwise now.
+fn Tree::alone_laid_out(self : Tree) -> Unit {
+  for at in self.alone_due {
+    let n = self.nodes[at]
+    if n.live && n.flex.dirty && n.flex.laid_given() {
+      self.work.computes = self.work.computes + 1
+      @flex.relayout(n.flex)
+      self.alone_laid.push((at, @flex.computes()))
+    } else if n.live && n.flex.dirty {
+      // (no longer as it was asked: laid out with what holds it, by the layout of all of it after this)
+      let mut i = n.parent
+      while i >= 0 {
+        self.nodes[i].flex.dirty = true
+        i = self.nodes[i].parent
+      }
+    }
+  }
+  self.alone_due.clear()
 }
 
 ///|
@@ -3013,6 +3054,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
     }
     self.bindings_due.clear()
     if self.layout_due && self.measured_gen < 0 {
+      self.alone_laid_out()
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
       @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
@@ -5034,6 +5076,16 @@ fn View::let_go(self : View) -> Unit {
 }
 
 ///|
+/// It lays out alone: as big as what holds it says it is (its height said, its width what it is given), whatever it
+/// holds, so what changes under it (a row of a list made as it comes to show) is laid out again from it, nothing above
+/// it, as Flutter's relayout boundary. Only while it was last laid out given both, else with what holds it.
+pub fn View::lays_out_alone(self : View) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.alone = true
+  self
+}
+
+///|
 /// A node holding what comes and goes (show, pick, each), with no box of its own.
 fn View::slot(self : View) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
@@ -5119,7 +5171,7 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
   for b in all {
     n.flex.children.push(b)
   }
-  self.layout_marked_at(at)
+  self.layout_marked_at(at, within=true)
   self.order_marked()
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.modals_told()
@@ -6115,6 +6167,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     let gen = if self.measured_gen >= 0 {
       if self.walk_from >= 0 { self.walk_from } else { self.measured_gen }
     } else {
+      self.alone_laid_out()
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
       @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
@@ -6127,6 +6180,13 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.measured_gen = -1
     self.walk_from = -1
     self.walk(0, gen, true)
+    // (what was laid out alone: placed by from it, what holds it laid out or not)
+    for a in self.alone_laid {
+      if self.nodes[a.0].live {
+        self.walk(a.0, a.1, true)
+      }
+    }
+    self.alone_laid.clear()
   }
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {

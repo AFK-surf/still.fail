@@ -18,6 +18,8 @@ pub let counters : FixedArray[Int32]
 
 pub fn measured_height(Node, Double) -> Double
 
+pub fn relayout(Node) -> Unit
+
 // Errors
 
 // Types and methods
@@ -103,6 +105,7 @@ pub(all) struct Node {
 }
 pub fn Node::add(Self, Self) -> Unit
 pub fn Node::laid_out(Self) -> Bool
+pub fn Node::laid_given(Self) -> Bool
 pub fn Node::laid_out_at(Self) -> Int32
 pub fn Node::left_out(Self) -> Bool
 pub fn Node::new() -> Self
