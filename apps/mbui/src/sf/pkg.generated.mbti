@@ -464,6 +464,8 @@ pub let diff_mark_in : @ui.Space
 
 pub fn dclamp(Double, Double, Double) -> Double
 
+pub fn disc_key_node(@view.View, () -> String, () -> Unit, side~ : Double, ground~ : () -> Int64, (@view.View) -> Unit) -> Unit
+
 pub fn dmax(Double, Double) -> Double
 
 pub fn dmin(Double, Double) -> Double
@@ -1176,6 +1178,8 @@ pub fn nav_bar(@ui.Ctx, String, String, String, sub? : () -> Unit, trailing? : (
 
 pub let nav_fade : @motion.Spec
 
+pub fn nav_bar_node(@view.View, () -> String, () -> String, () -> Unit, top? : () -> Double, trailing? : (@view.View) -> Unit) -> Unit
+
 pub fn nav_ground(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> Int64
 
 pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
@@ -1365,6 +1369,8 @@ pub let panel_icon_size : Double
 pub let panel_in : @ui.Radius
 
 pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool, fills? : Bool) -> Int32
+
+pub fn panel_nodes(String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, description? : String, foot? : (@view.View, () -> Unit) -> Unit, wide? : Bool, gone? : () -> Unit, focus? : Bool, ruled? : Bool, form? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
 
 pub fn panel_note(@ui.Ctx, String) -> Unit
 

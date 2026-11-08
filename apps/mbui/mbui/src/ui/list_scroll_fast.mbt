@@ -204,9 +204,12 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
   // (where a layout lays them, before it sets them on the pixels: what it says of where the list stands is said of
   // that, Ctx::place_list, list.mbt's rows_on_pixels after it)
   let laid = want - first.y
-  // The same set of rows must cover the view and every current row must remain visible.
-  if first.y + laid > top + 0.001 || first.y + first.fh + laid <= top + 0.001 ||
-    last.y + last.fh + laid < foot - 0.001 || last.y + laid >= foot - 0.001 {
+  // The same set of rows must cover the view and every current row must remain visible. A row comes in where the
+  // layout would lay one (place_list: one above while the first's top is below the view's, `top > iy`; one below while
+  // the last's foot is above the view's, `bottom < bottom_edge`), by as little as it is: a first row 0.0002 under the
+  // view's top was moved there with nothing built over it, where the layout lays the row before it.
+  if first.y + laid > top || first.y + first.fh + laid <= top + 0.001 ||
+    last.y + last.fh + laid < foot || last.y + laid >= foot - 0.001 {
     return "past an edge"
   }
   // ListInfo may be read through a projection (for example, only whether the list is at its end). Ask exactly those
