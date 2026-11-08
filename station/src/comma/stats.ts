@@ -239,6 +239,13 @@ export class CommaStats {
     return (this.#db.prepare("SELECT n FROM said WHERE key = ?").get(key) as { n: number } | undefined)?.n ?? null;
   }
 
+  /// A Task's current title, if it is in the index. A removed Task has no title for the Router.
+  taskTitle(ref: string): Json {
+    const row = this.#db.prepare("SELECT CAST(key AS BLOB) AS key, json FROM task_index WHERE key = ? AND rev > 0 AND removed = 0").get(ref) as { key: Uint8Array; json: string } | undefined;
+    // The binding of an unpaired surrogate becomes U+FFFD; the ordered reader compared the decoded key to ref.
+    return row === undefined || Buffer.from(row.key).toString("utf8") !== ref ? "" : JSON.parse(row.json).title;
+  }
+
   /// Remembers what `key` made, for BUILD_DAYS (a write asked again later than that is not one Comma retries).
   remember(key: string, n: number): void {
     const now = wall.now();

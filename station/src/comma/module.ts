@@ -11,7 +11,7 @@ import { ControlPlane, Parts, Paths, Peers, Readers, StationConfig, Store } from
 import { makeComma } from "./index.ts";
 import type { CommaChats } from "./surface.ts";
 import { READ, SAY, type WorkspaceReads, answerText, peerRead, workspaceRead } from "./peer.ts";
-import { routerSays } from "./chats.ts";
+import { routerReads, routerSays } from "./chats.ts";
 import { CommaStats, chatOf } from "./stats.ts";
 
 type Json = any;
@@ -55,24 +55,7 @@ export const CommaLive = Layer.effectDiscard(
       return { seq: said({ thread: w.thread, text: w.text, key: String(w.key ?? ""), requester: String(w.requester ?? "Router"), connect: String(w.connect ?? "comma") }) };
     });
     const chats: CommaChats = {
-      read: async (ref, after, limit) => {
-        const chat = chatOf(ref);
-        if (chat === null) throw new Error("no such chat");
-        const args = { thread: chat.thread, after, limit };
-        const home = cloud.home();
-        const got = JSON.parse(chat.station === null
-          ? await reads.here("outflowMessages", home === null ? args : { ...args, ws: { workspace: home, home: true } })
-          : await reads.there(chat.station, "outflowMessages", args));
-        if (got === null) throw new Error("no such chat of the workspace");
-        const title = stats.tasks.since(0, 1_000_000).find((r) => r.key === ref && !r.removed);
-        return {
-          title: title === undefined ? "" : JSON.parse(title.json).title,
-          messages: (got.messages as Json[]).filter((m) => m.kind === "message").map((m) => ({
-            seq: m.n, author_kind: m.authorKind, author: m.person?.name ?? m.person?.email ?? m.author, text: m.text, at: m.at,
-          })),
-          through: got.last,
-        };
-      },
+      read: (ref, after, limit) => routerReads(stats, reads, ref, after, limit),
       say: async (ref, text, key, requester, connect) => {
         const chat = chatOf(ref);
         if (chat === null) throw new Error("no such chat");
