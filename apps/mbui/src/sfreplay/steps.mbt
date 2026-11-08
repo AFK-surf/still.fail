@@ -810,6 +810,24 @@ pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
 }
 
 ///|
+/// Align content using a distance measured on the current frame. In another timing, that distance can change while
+/// the same scroll is needed; match the recorded wheel step in the same direction while applying the measured distance.
+pub fn Flow::wheel_aligned(self : Flow, dy : Double) -> Unit {
+  let actual = "wheel \{dy.to_int()}"
+  let step = if !self.strict {
+    match self.r.next_step() {
+      Some(recorded) if recorded.has_prefix("wheel ") && recorded != "wheel 0" &&
+        ((dy < 0.0 && recorded.has_prefix("wheel -")) || (dy > 0.0 && !recorded.has_prefix("wheel -"))) => recorded
+      _ => actual
+    }
+  } else { actual }
+  emit(step)
+  let (w, h) = self.t.size()
+  self.t.wheel(w / 2.0, h / 2.0, dy)
+  self.core()
+}
+
+///|
 /// The lowest `what` dragged by (dx, dy) in `steps` moves, a frame apart, then let go (a flow's `dragon`).
 pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? : Int = 10) -> Unit {
   // (a host's drag moves a frame a step: as many frames)

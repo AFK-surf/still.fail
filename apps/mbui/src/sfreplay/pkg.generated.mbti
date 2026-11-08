@@ -91,6 +91,7 @@ pub fn Flow::type_text(Self, String) -> Unit
 pub fn Flow::until(Self, () -> Bool) -> Unit
 pub fn Flow::until_moving(Self, String) -> Double
 pub fn Flow::wheel(Self, Double) -> Unit
+pub fn Flow::wheel_aligned(Self, Double) -> Unit
 pub fn Flow::wheel_at(Self, String, Double) -> Unit
 
 // Type aliases
