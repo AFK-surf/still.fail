@@ -5238,7 +5238,9 @@ fn View::box_appended(self : View, child : Int) -> Unit {
   }
   // (one due to be put again in order (Tree::holding_boxes) is put whole as that ends: what is pushed now is redone)
   self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
-  self.tree.layout_marked_at(at)
+  // (what it holds changed, not what it asks of what holds it: where it lays out alone, laid out again from it, as
+  // boxes_put does)
+  self.tree.layout_marked_at(at, within=true)
   self.tree.order_marked()
   self.tree.modals_told()
 }
