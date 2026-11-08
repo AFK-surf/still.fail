@@ -1207,17 +1207,6 @@ let swipe_words_line : @ui.Style = @ui.style(
 let swipe_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, wrap=false)
 
 ///|
-fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
-  if v < lo {
-    lo
-  } else if v > hi {
-    hi
-  } else {
-    v
-  }
-}
-
-///|
 /// Whether a row's title is being written in place (what the frame holds open meanwhile).
 pub fn renaming() -> Bool {
   row_renaming.get() != ""

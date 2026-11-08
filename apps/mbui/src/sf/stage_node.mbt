@@ -1,4 +1,4 @@
-// A panel's stage (stage_centred's: the card to share) as nodes of the window's tree: the presenters' dialog layer
+// A panel's stage (the card to share) as nodes of the window's tree: the presenters' dialog layer
 // (dialog_layer_node: a press beside what it shows closes it, as a dialog's does) dimmed by the stage's own night
 // (stage_scrim); no panel round what it shows, no title drawn (said as its name alone) and no close button over it: a
 // column in the window's middle, stage_margin and the system's bars clear of the window's edges, of what it holds and,

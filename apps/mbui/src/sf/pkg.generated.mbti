@@ -458,6 +458,8 @@ pub let diff_line_in : @ui.Space
 
 pub let diff_mark_in : @ui.Space
 
+pub fn dclamp(Double, Double, Double) -> Double
+
 pub fn dmax(Double, Double) -> Double
 
 pub fn dmin(Double, Double) -> Double
@@ -1535,6 +1537,8 @@ pub fn presented_drawn_of(Int32) -> Bool
 pub fn presented_nodes(@view.View) -> Unit
 
 pub fn presented_open_of(Int32) -> Bool
+
+pub fn presented_tree((@ui.Ctx) -> Unit) -> (@view.View) -> Unit
 
 pub fn presenter_visible() -> Bool
 

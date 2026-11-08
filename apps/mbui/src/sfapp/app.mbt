@@ -1132,4 +1132,5 @@ pub fn host_setup() -> Unit {
 using @sf {
   dmin,
   dmax,
+  dclamp,
 }

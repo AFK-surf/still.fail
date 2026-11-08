@@ -100,6 +100,9 @@ fn dialog_layer_node(
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
       .modal(By(live))
+      // (going, nothing of it read out: as an old layer on its way out, inert, is hidden from what reads the screen, as
+      // panel_node's)
+      .hides(By(fn() { layer.leaving() }))
       // (a back gesture under way as it opens goes on to what it began on, as the old frame's layers let it: chosen as
       // it began; the next its)
       .held_back_goes_on()

@@ -28,7 +28,8 @@ fn desk_composer_tester(
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       // (the library's words as the app's view says them: without, the composer said its keys, and passed only after
       // another test had drawn the app, 2026-10-24)
       @sf.set_words(fill)
@@ -45,7 +46,7 @@ fn desk_composer_tester(
       |> ignore
       // what the presenters show (＋'s sheet with a finger), over it as the shell has it
       @sf.presented(c)
-    },
+    }),
     w=900.0,
     h=500.0,
     platform~,
@@ -734,8 +735,11 @@ test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片和视频 as
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
+  // (this window's ＋ panel beside it, not a sheet: open at its declared moment, its way in over @kit.pop_ms from the
+  // press)
+  let pressed = t.time()
   t.click(Button, label=@sf.t("web-main.composer.attach"))
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(pressed + @kit.pop_ms - t.time())
   assert_true(t.find("照片") is Some(_))
   assert_true(t.find("Station 文件") is Some(_))
   // (what the system's picker answers, said before it is asked; the tile, not the strip's last, which asks for the
@@ -1012,7 +1016,8 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let on = Ref(false)
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       @sf.set_words(fill)
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
@@ -1026,7 +1031,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
       })
       @sfpages.chat_composer(c, src, ws, r, Some(v))
       @sf.presented(c)
-    },
+    }),
     w=900.0,
     h=500.0,
     pointing=Mouse,
@@ -1093,7 +1098,8 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       @sf.set_words(fill)
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
@@ -1107,7 +1113,7 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
       })
       @sfpages.chat_composer(c, src, ws, r, Some(v))
       @sf.presented(c)
-    },
+    }),
     w=900.0,
     h=500.0,
     pointing=Mouse,

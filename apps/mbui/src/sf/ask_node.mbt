@@ -1,4 +1,4 @@
-// A question (ask_centred's: the library's dialog with its line) as nodes of the window's tree: the presenters' dialog
+// A question (the library's dialog with its line) as nodes of the window's tree: the presenters' dialog
 // layer (dialog_layer_node: a press outside it closes it, as a dialog's does), its panel as dialog draws it (dialog_w wide
 // at most, the window less dialog_margin, no taller than it less dialog_room; 24 in, a line round it, dialog_r round,
 // the panel's ground and shadow; its title's row, then what it holds 18 under it, scrolling in itself where the panel
@@ -43,7 +43,7 @@ pub fn ask_node(
   }
   dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
-    // (its field: given the keyboard's focus as it opens, back to what had it as it goes, ask_centred's focus_once)
+    // (its field: given the keyboard's focus as it opens, back to what had it as it goes)
     let field : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
       d
