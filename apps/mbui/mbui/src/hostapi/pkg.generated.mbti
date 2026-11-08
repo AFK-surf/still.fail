@@ -539,6 +539,7 @@ pub fn word_at(String, Int32) -> (Int32, Int32)
 pub struct Atlas {
   // private fields
 }
+pub fn Atlas::before_full(Self, () -> Unit) -> Unit
 pub fn Atlas::clear(Self) -> Unit
 pub fn Atlas::drawn(Self, Int32) -> Unit
 pub fn Atlas::holds(Self, Int32, Int32) -> Bool
