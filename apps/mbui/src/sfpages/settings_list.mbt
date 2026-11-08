@@ -522,6 +522,8 @@ pub fn settings_blocks(c : @ui.Ctx, core : Core, here : @settings.Here, open : (
                 note=row.line,
                 strong=!(row.lead is Icon(_)),
                 lead=fn() { settings_lead(c, core, here, row, false) },
+                tile=row.lead is Space(_, _),
+                note_cut=row.lead is Space(_, _),
               ) {
               open(row.route)
             }
@@ -620,24 +622,7 @@ fn settings_lead(c : @ui.Ctx, core : Core, here : @settings.Here, row : Settings
       // a picture put up fills the square; one of still.fail's icons or an emoji on the chips' ground; else its first
       // letter, muted, as the rail has it
       let picture = icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
-      // (in its row's corner, out from the row's words to the ladder's inset from its start, top and foot, as the list
-      // made once has it: settings_row_node)
-      let out = @sf.corner_inset - @sf.text_in
-      // (held in its corner at any size of words: the row's lead is put in the middle of its first line (row_lead),
-      // which the tile, as tall as that line at least by its foot's margin, fills; the list made once puts it at the
-      // row's top as ever)
-      let line = @sf.row_lead_line(c)
-      let foot = dmax(out, line - @sf.identity_mark - out)
-      c.box(
-        style=@sf.workspace_tile.then(
-          @ui.style(
-            bg=Data(if picture { t.p.card } else { t.p.chip }),
-            ml=@sf.room_of(out),
-            mt=@sf.room_of(out),
-            mb=@sf.room_of(foot),
-          ),
-        ),
-        fn() {
+      c.box(style=@sf.row_tile(c).then(@ui.style(bg=Data(if picture { t.p.card } else { t.p.chip }))), fn() {
         if picture {
           @sf.station_mark(c, emoji, icon, @sf.identity_mark, t.p.text)
         } else {
@@ -789,7 +774,7 @@ fn settings_row_node(
           if p == "" { "" } else { (core.picture)(p, stint()) }
         }, @sf.identity_mark)
       })
-    Some(Space(_, _)) => LeadMade(fn(l) { settings_space_node(l, row, stint) })
+    Some(Space(_, _)) => LeadTile(fn(l) { settings_space_node(l, row, stint) })
     None => NoLead
   }
   @sf.link_row_node(
@@ -806,6 +791,7 @@ fn settings_row_node(
     value_dot=fn() { row().map(fn(r) { r.dot }).unwrap_or(false) },
     note=said(fn(r) { r.line }),
     strong=shown.map(fn(r) { !(r.lead is Icon(_)) }).unwrap_or(false),
+    note_cut=shown.map(fn(r) { r.lead is Space(_, _) }).unwrap_or(false),
     lead~,
   )
 }
@@ -826,13 +812,13 @@ fn settings_space_node(parent : @view.View, row : () -> SettingsRow?, stint : ()
     icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
   }
   parent.box(fn(t) {
+    let side = @sf.row_tile_side_node(parent, t)
     t
-    .width(Is(Some(@sf.identity_mark)))
-    .height(Is(Some(@sf.identity_mark)))
+    .width(By(side))
+    .height(By(side))
     .radius(By(fn() { @ui.tree_theme().corner(@sf.small_radius) }))
-    // (a tile in its row's corner: out from the row's words (text_in) to the ladder's inset (8) from its start, top and
-    // foot, concentric with its corner there, the small block's 10)
-    .margin(Is((@sf.corner_inset - @sf.text_in, @sf.corner_inset - @sf.text_in, 0.0, @sf.corner_inset - @sf.text_in)))
+    // (the row's lead tile (LeadTile): the ladder's inset (8) from its start, top and foot, concentric with its corners
+    // there, the small block's 10)
     .clips(Is(true))
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

@@ -877,6 +877,43 @@ pub let empty_in : @ui.Space = room(30.0)
 pub let identity_mark : Double = 46.0
 
 ///|
+/// A tile leading a row with a note (the workspace's mark on its card atop settings): the account's picture's size, or,
+/// narrow, its words' two lines (each one line, cut short) where the system's size of words makes them taller, so the
+/// ladder's inset over and under it whatever that size (link_row's `tile`, link_row_node's LeadTile).
+fn row_tile_side(c : @ui.Ctx, look : Look) -> Double {
+  match look {
+    Narrow => dmax(identity_mark, c.sp(c.text_size(Body).1) + c.sp(c.text_size(Meta).1))
+    Wide => identity_mark
+  }
+}
+
+///|
+/// A row's lead tile as the old view draws it (row_tile_side): out from the row's words to the ladder's inset from its
+/// start; wide, in its corner at any size of words (the row's lead is put in the middle of its first line, row_lead,
+/// which the tile, as tall as that line at least by its foot's margin, fills).
+pub fn row_tile(c : @ui.Ctx) -> @ui.Style {
+  let look = look()
+  let out = corner_inset - text_in
+  let (top, foot) = match look {
+    Narrow => (0.0, 0.0)
+    Wide => (out, dmax(out, row_lead_line(c) - identity_mark - out))
+  }
+  let side = row_tile_side(c, look)
+  workspace_tile.then(@ui.style(w=Fixed(side), h=Fixed(side), ml=room(out), mt=room(top), mb=room(foot)))
+}
+
+///|
+/// A row's lead tile's side as nodes (row_tile_side), in `parent`'s look, for the tile `t`: as the system's size of
+/// words changes.
+pub fn row_tile_side_node(parent : @view.View, t : @view.View) -> () -> Double? {
+  let look = look_node(parent)
+  fn() {
+    t.words_redone() |> ignore
+    Some(row_tile_side(@ui.current(), look))
+  }
+}
+
+///|
 /// The workspace's mark's square: the account's picture's size beside it, in its row's
 /// corners the ladder's inset in (a row's 18, 10 in), so concentric with them: the small block's 10, all four alike;
 /// what it holds in its middle.
