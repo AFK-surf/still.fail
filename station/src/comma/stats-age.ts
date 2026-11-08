@@ -165,18 +165,17 @@ export function statsAgeReady(db: DatabaseSync, maxDirty: number | null = 64): b
     .get(progress.generation, maxDirty) === undefined;
 }
 
-// Candidates remain in their original rowid order, which keeps tombstone revision order unchanged. Cross joins force
-// the day index to be searched first, even when statistics far outnumber the candidate days.
+// Select and order rowids before fetching the JSON bodies. Sorting whole bodies can dominate a build when nearly all
+// statistics are recent. The day index still finds the candidates, and rowid order keeps tombstone revisions stable.
 const AGE_GENERATION = "(SELECT generation FROM comma_stats_age_progress WHERE id = 1)";
-export const STATS_AGE_CANDIDATES = `SELECT id, key, json FROM (
-  SELECT s.rowid AS id, CAST(s.key AS BLOB) AS key, s.json AS json
-    FROM comma_stats_age a INDEXED BY comma_stats_age_day CROSS JOIN stats_index s ON s.rowid = a.id
-    WHERE a.generation = ${AGE_GENERATION} AND a.kind IN (0, 3) AND s.removed = 0
+export const STATS_AGE_CANDIDATES = `SELECT s.rowid AS id, CAST(s.key AS BLOB) AS key, s.json AS json
+  FROM stats_index s WHERE s.rowid IN (
+  SELECT a.id FROM comma_stats_age a INDEXED BY comma_stats_age_day
+    WHERE a.generation = ${AGE_GENERATION} AND a.kind IN (0, 3)
   UNION ALL
-  SELECT s.rowid AS id, CAST(s.key AS BLOB) AS key, s.json AS json
-    FROM comma_stats_age a INDEXED BY comma_stats_age_day CROSS JOIN stats_index s ON s.rowid = a.id
-    WHERE a.generation = ${AGE_GENERATION} AND a.kind IN (1, 4) AND a.day >= ? AND s.removed = 0
-) ORDER BY id`;
+  SELECT a.id FROM comma_stats_age a INDEXED BY comma_stats_age_day
+    WHERE a.generation = ${AGE_GENERATION} AND a.kind IN (1, 4) AND a.day >= ?
+) AND s.removed = 0 ORDER BY s.rowid`;
 
 // The caller checks readiness in the same transaction: a VACUUM or schema change makes the old rowids unusable.
 export function statsAgeCandidates(db: DatabaseSync, fromDay: string): { key: Uint8Array; json: string }[] {

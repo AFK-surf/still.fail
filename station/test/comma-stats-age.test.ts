@@ -63,6 +63,35 @@ test("the age index only omits rows the original predicate cannot drop or fail o
   } finally { db.close(); }
 });
 
+test("candidates retain rowid order and whole keys across dirty, removed and stale entries", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(schema);
+    const put = db.prepare("INSERT INTO stats_index (rowid, key, source, kind, rev, json, removed) VALUES (?, ?, 'stillfail', 'usage', 1, ?, ?)");
+    put.run(-10, "old", '{"day":"2026-01-01"}', 0);
+    put.run(2, "recent\0whole", '{"day":"2026-11-01"}', 0);
+    put.run(10, "malformed", "not JSON", 0);
+    put.run(20, "removed", '{"day":"2026-12-01"}', 1);
+    put.run(30, "dirty", '{"day":"2026-01-01"}', 0);
+    put.run(31, "stale", '{"day":"2026-12-01"}', 0);
+    put.run(9223372036854775000n, "large-rowid", '{"day":"2026-12-01"}', 0);
+    installStatsAge(db);
+    finish(db);
+    db.prepare("UPDATE stats_index SET json = ? WHERE key = 'dirty'").run('{"day":"2026-12-01"}');
+    db.exec("UPDATE comma_stats_age SET generation = 0 WHERE id = 31");
+    db.exec("INSERT INTO comma_stats_age (id, generation, kind, day) SELECT 999, generation, 0, '' FROM comma_stats_age_progress WHERE id = 1");
+    const query = db.prepare(STATS_AGE_CANDIDATES);
+    query.setReadBigInts(true);
+    const rows = query.all("2026-11-01") as { id: bigint; key: Uint8Array; json: string }[];
+    assert.deepEqual(rows.map((r) => [r.id, byKey(r.key), r.json]), [
+      [2n, "recent\0whole", '{"day":"2026-11-01"}'],
+      [10n, "malformed", "not JSON"],
+      [30n, "dirty", '{"day":"2026-12-01"}'],
+      [9223372036854775000n, "large-rowid", '{"day":"2026-12-01"}'],
+    ]);
+  } finally { db.close(); }
+});
+
 test("a bounded rebuild follows old writers across its cursor and cleans replacement orphans", () => {
   const dir = mkdtempSync(join(tmpdir(), "comma-stats-age-")), path = join(dir, "stats.db");
   const db = new DatabaseSync(path), older = new DatabaseSync(path);
