@@ -1102,7 +1102,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (a change of theme spreading, where the old frame is not the whole window (reveal.mbt): the window as it was under
   // all of it, the tree and its old views over it cut to the circle, as the old frame's layer of it as it is would be
   // (that layer not painted again: what it holds is the old views painted in their places in the tree))
-  let revealing = if old_whole.val { None } else { reveal_layers() }
+  let revealing = if old_whole.val { None } else { reveal_layers(self) }
   match revealing {
     Some((was, now, cx, cy, r)) => {
       painted[was] = true
