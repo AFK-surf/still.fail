@@ -410,6 +410,18 @@ export const HAS_PENDING_LETTER = `SELECT 1 FROM letter_deliveries d INDEXED BY 
   JOIN threads t ON t.id = d.thread
   JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
   WHERE d.session = ? AND d.delivered_at IS NULL LIMIT 1`;
+/// Count what pendingMessages can read, with both kinds in one snapshot and without loading messages or edits.
+export const PENDING_COUNT = `SELECT
+  (SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending
+    JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
+    JOIN threads t ON t.id = d.thread
+    JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+    WHERE d.session = ?1 AND d.delivered_at IS NULL)
+  + (SELECT COUNT(*) FROM letter_deliveries d INDEXED BY letter_deliveries_pending
+    JOIN letters l ON l.thread = d.thread AND l.n = d.n
+    JOIN threads t ON t.id = d.thread
+    JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+    WHERE d.session = ?1 AND d.delivered_at IS NULL) AS n`;
 /// Seek to each next session in the partial indexes, rather than visiting all of a session's pending deliveries.
 export const PENDING_SESSIONS = `WITH RECURSIVE
   said(session) AS (
@@ -2289,6 +2301,11 @@ export class Store {
       JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
       WHERE d.session = ? AND d.delivered_at IS NULL AND d.thread = ? AND d.n < ? ORDER BY d.rowid`, session, thread, n)
       .map((r) => r.ts ?? "");
+  }
+
+  /// How many messages and letters pendingMessages would find, without reading their bodies.
+  pendingCount(session: string): number {
+    return this.#one(PENDING_COUNT, session).n;
   }
 
   /// Whether `pendingMessages` would find anything, stopping at the first message or letter.
