@@ -42,6 +42,7 @@ import { get, isObject } from "../util.ts";
 import { type Checked, checkLock, signerIn } from "../vault/lock-check.ts";
 import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
+import { Marks } from "../reactive.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -105,11 +106,21 @@ export function signerLoading(inner: Inner): Effect.Effect<void> | null {
   return pending === undefined || signers.has(inner) ? null : Deferred.await(pending);
 }
 
+/// What the lock's, the vault's and the pairing's pages read of what this core holds of them beside its records (each
+/// read there is made again as it changes, reactive.ts): `lock <ws>`, a workspace's lock as this device sees it; `draft
+/// <ws>`, its draft; `vault <ws>`, its vaults; `prompts`, the devices waiting on this one; `self`, this device's own keys.
+const seens = new WeakMap<Inner, Marks>();
+export function lockSeen(inner: Inner): Marks {
+  let seen = seens.get(inner);
+  if (!seen) seens.set(inner, (seen = new Marks()));
+  return seen;
+}
+
 /// This device's signing key as known now (loaded, or made as it is put forward): what shows whether it signs told
 /// (the lock's, and the vault's, whose page waits on it).
 export function signerKnown(inner: Inner, id: string | null): void {
   signers.set(inner, id);
-  inner.store.invalidateAll((t) => t.topic === "lock" || t.topic === "lockPrompts" || t.topic === "vaults" || t.topic === "vaultItems");
+  lockSeen(inner).touch("self");
   inner.views?.vaultChanged(null);
 }
 
@@ -192,8 +203,8 @@ const knowBase = (inner: Inner, ws: string, base: string) => {
   part(inner, ws).base = base;
 };
 
-/// A workspace's lock changed as this device sees it: its `lock` topic, and the prompts of every workspace.
-const touch = (inner: Inner, ws: string) => inner.store.invalidateAll((t) => (t.topic === "lock" && t.workspace === ws) || t.topic === "lockPrompts");
+/// A workspace's lock changed as this device sees it: what shows it, and the prompts of every workspace.
+const touch = (inner: Inner, ws: string) => lockSeen(inner).touch(`lock ${ws}`, "prompts");
 
 export const held = (inner: Inner, ws: string): Held | null => {
   const h = inner.data.record("lock", ws);
@@ -276,7 +287,7 @@ export function install(inner: Inner): void {
     if (topic.topic !== "workspace" || inner.provider.kind !== "stillfail") return;
     const ws = topic.workspace as string;
     // The prompts name the workspaces, and follow the person's role in each.
-    inner.store.invalidate({ topic: "lockPrompts" });
+    lockSeen(inner).touch("prompts");
     const says = cloudSays(view(inner, ws));
     if (says === undefined) return;
     let at = readAt.get(inner);
@@ -322,7 +333,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
-    inner.store.invalidateAll((t) => ((t.topic === "lock" || t.topic === "lockDraft" || t.topic === "vaults" || t.topic === "vaultItems") && t.workspace === ws) || t.topic === "lockPrompts");
+    lockSeen(inner).touch(`lock ${ws}`, `draft ${ws}`, "prompts");
     inner.views?.vaultChanged(ws);
     // This device not in the lock: it waits, and asks to be approved only by hand (`lock.pair`, its waiting page):
     // the person who will type the code is the one who asks (2026-10-19).
@@ -434,7 +445,7 @@ function owner(inner: Inner): Owner {
           Effect.map(inner.mesh(), (m) => {
             bases.set(inner, m.deviceId());
             if (t.topic !== "lockPrompts") part(inner, ws).base = m.deviceId();
-            inner.store.invalidate(t);
+            lockSeen(inner).touch("self");
           }),
           { log: "Unhandled", message: "mesh brought up" },
         ),
@@ -447,6 +458,11 @@ function owner(inner: Inner): Owner {
     },
     compute: (t: Topic) => {
       const ws = typeof t.workspace === "string" ? t.workspace : "";
+      const seen = lockSeen(inner);
+      seen.read("self");
+      if (t.topic === "lockPrompts") seen.read("prompts");
+      else seen.read(`lock ${ws}`);
+      if (t.topic === "lockDraft") seen.read(`draft ${ws}`);
       if (inner.provider.kind !== "stillfail") return { ok: t.topic === "lock" ? NONE : t.topic === "lockPrompts" ? NO_PROMPTS : NO_DRAFT };
       return { ok: t.topic === "lock" ? lockView(inner, ws) : t.topic === "lockPrompts" ? promptsView(inner) : draftView(inner, ws) };
     },
@@ -668,14 +684,14 @@ function draft(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     const p = part(inner, ws);
     const answer = yield* Effect.result(inner.provider.request(sub, "GET", `/v1/workspaces/${encodeURIComponent(ws)}/devices`, null));
     p.devices = answer._tag === "Success" ? arr(get(answer.success, "devices")) : [];
-    inner.store.invalidateAll((t) => t.topic === "lockDraft" && t.workspace === ws);
+    lockSeen(inner).touch(`draft ${ws}`);
     yield* Effect.forEach(
       arr(get(view(inner, ws), "stations")),
       (s) =>
         Effect.map(Effect.result(inner.stations.requests.call(new StationAddr(ws, s.id), "GET", "/lock", null, { quiet: true })), (r) => {
           // One that answers with a lock of its own keeps another (turned on before, not off there): reset first.
           p.probes.set(s.id, r._tag === "Success" ? (readHead(get(r.success, "head")) === null ? "ok" : "other") : r.failure.status === 404 || /404|no route/.test(r.failure.message) ? "old" : "offline");
-          inner.store.invalidateAll((t) => t.topic === "lockDraft" && t.workspace === ws);
+          lockSeen(inner).touch(`draft ${ws}`);
         }),
       { concurrency: 4, discard: true },
     );
@@ -753,14 +769,13 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       // The notice that the lock is off, closed for good on this device (prefs `lockNotice`).
       case "dismiss":
         prefs.set(inner.data, { lockNotice: { [c.workspace]: true } }, false, inner.host.nowMs());
-        inner.store.invalidate({ topic: "prefs" });
         touch(inner, c.workspace);
         return null;
       case "toggle": {
         const ex = part(inner, c.workspace).excluded;
         if (ex.has(param("id"))) ex.delete(param("id"));
         else ex.add(param("id"));
-        inner.store.invalidateAll((t) => t.topic === "lockDraft" && t.workspace === c.workspace);
+        lockSeen(inner).touch(`draft ${c.workspace}`);
         return null;
       }
       case "open":

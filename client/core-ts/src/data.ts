@@ -11,7 +11,7 @@ import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
 import { topicKey, type Topic } from "./protocol.ts";
-import { signal, tracking, type Source as ReactiveSource } from "./reactive.ts";
+import { Marks, signal, tracking, untracked, type Source as ReactiveSource } from "./reactive.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
@@ -288,6 +288,8 @@ export class Data {
   /// An older drawable Markdown tree was shown; its current reading is made in the background.
   onOldMd: ((station: string, of: string, text: string) => void) | null = null;
   readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
+  /// What reads what is kept of a thread's or a session's read Markdown (`mdStore`), by `station of`.
+  readonly #mdSeen = new Marks();
   /// Indexed reads can follow changes without loading a whole topic or keeping a network watch open.
   readonly #queryReads = new Map<string, { signal: ReactiveSource<number>; revision: number }>();
   readonly #listReads = new Map<string, { signal: ReactiveSource<boolean>; station: string; kind: ListKind }>();
@@ -530,6 +532,8 @@ export class Data {
     const slackStations = new Set<string>();
     for (const [table, station, id] of changes.logs.values()) {
       this.#tellQuery({ topic: "$log", table, station, id });
+      // (what is found of what was said on the station: a search's)
+      if (table === "entry") this.#tellQuery({ topic: "$said", station });
       if (table === "slack") {
         this.#tellQuery({ topic: "$slack-said", station, session: id });
         slackStations.add(station);
@@ -635,6 +639,8 @@ export class Data {
   /// A held topic's value, kept as it is (frozen: shared, the same object while it does not change); undefined while
   /// nothing is known of it. A list is loaded the first time it is asked for.
   shared(topic: Topic): unknown {
+    // (read in a computed, it is made again as the topic changes: #tell)
+    this.#readQuery(topic);
     const s = (k: string) => String(topic[k]);
     if (topic.topic === "prefs") return this.device.get("prefs", "device");
     if (topic.topic === "drivePlace") return this.device.get("drive_place", placeOf(topic));
@@ -1113,11 +1119,13 @@ export class Data {
 
   /// The messages of one thread that have all of `terms`, oldest first (AccountDb.findInThread).
   findInThread(station: string, thread: number, terms: string[]): ReturnType<AccountDb["findInThread"]> {
+    this.#readQuery({ topic: "$log", table: "entry", station, id: String(thread) });
     return this.of(station)?.findInThread(station, thread, terms) ?? [];
   }
 
   /// The messages of these stations that have all of `terms`, newest first, across their databases (AccountDb.findSaid).
   findSaid(stations: string[], terms: string[], limit: number): ReturnType<AccountDb["findSaid"]> {
+    for (const station of stations) this.#readQuery({ topic: "$said", station });
     const by = new Map<AccountDb, string[]>();
     for (const s of stations) {
       const db = this.of(s);
@@ -1391,15 +1399,25 @@ export class Data {
     this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());
   }
 
+  /// What `of` (a thread's, `t:<id>`; a session's, `s:<key>`) keeps of read Markdown was read again in the background
+  /// (md-ahead.ts): what showed it is made again.
+  mdChanged(station: string, of: string): void {
+    this.#mdSeen.touch(`${station} ${of}`);
+  }
+
   /// Where the trees of the Markdown `station`'s agents said for `of` (a chat, `t:<thread>`; an agent, `s:<session>`) are
   /// kept on the device (AccountDb.keptMd): none without its account's database.
   mdStore(station: string, of: string): MdStore | undefined {
+    // (read again in the background, what it keeps changes: md-ahead.ts `mdChanged`)
+    this.#mdSeen.read(`${station} ${of}`);
     const db = this.of(station);
     if (db === undefined) return undefined;
+    // (when each was last used: no time a reader's words change by)
+    const now = () => untracked(() => this.#host.nowMs());
     return {
       has: (key) => db.hasMd(station, key),
-      get: (key) => db.keptMd(station, key, this.#host.nowMs()),
-      put: (key, json, replaces) => db.keepMd(station, of, key, json, Math.floor(this.#host.nowMs()), replaces),
+      get: (key) => db.keptMd(station, key, now()),
+      put: (key, json, replaces) => db.keepMd(station, of, key, json, Math.floor(now()), replaces),
       ...(this.onOldMd === null ? {} : { refresh: (text: string) => this.onOldMd?.(station, of, text) }),
     };
   }

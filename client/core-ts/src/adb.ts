@@ -3,6 +3,7 @@
 // each link that takes the place of one, and every stream the station opens on that link is a tunnel to the phone's
 // own adbd. The offers kept in memory only: a core started anew offers again as its app asks (the grants it lends
 // for kept on the device: GRANTS_KEY). Only a host with TCP reaches adbd.
+import { Marks } from "./reactive.ts";
 import { Deferred, Effect, Fiber, Scope } from "effect";
 import type { AdbCall, Offer } from "./adb-parse.ts";
 import { CoreError } from "./error.ts";
@@ -44,6 +45,15 @@ export const ON_KEY = "adb-on";
 const RETRY_MAX_MS = 30_000;
 
 type Ended = { changed: true } | { expired: true } | { refused: string } | { lost: string | null; pause: boolean };
+
+/// What reads the lending (the `adbShare` and `adbCard` topics) is made again as it changes (reactive.ts), by the
+/// store its topics are in.
+const seens = new WeakMap<Store, Marks>();
+function seenOf(store: Store): Marks {
+  let seen = seens.get(store);
+  if (!seen) seens.set(store, (seen = new Marks()));
+  return seen;
+}
 
 export type AdbEnv = {
   host: Host;
@@ -196,12 +206,11 @@ class Lend {
 
   /// What the cards say, again: the device said what it is (`client.device`), and with it whether it lends.
   deviceTold(): void {
-    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
+    seenOf(this.#env.store).touch();
   }
 
   #shown(): void {
-    this.#env.store.invalidate({ topic: "adbShare" });
-    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
+    seenOf(this.#env.store).touch();
   }
 
   #tellChanged(): void {
@@ -662,7 +671,7 @@ export class Adb {
       case "lasts": {
         // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
         this.#lasts = call.lasts;
-        this.#env.store.invalidate({ topic: "adbShare" });
+        seenOf(this.#env.store).touch();
         const at = Math.floor(this.#env.host.nowMs());
         return Effect.as(
           Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at }), { log: "Unhandled", message: "debugging lasts told" }), { concurrency: "unbounded", discard: true }),
@@ -869,7 +878,7 @@ export class Adb {
       // (lent for as long as a grant is: the grants end it, not its own clock)
       this.#env.runner.fork(Effect.ignore(lend.run({ kind: "share", offer: { ...this.#ports!, station, minutes: 30 * 24 * 60 } }), { log: "Unhandled", message: "debugging lend shared" }));
     }
-    this.#env.store.invalidate({ topic: "adbShare" });
+    seenOf(this.#env.store).touch();
     this.#wakeAtEnd();
   }
 
@@ -899,6 +908,7 @@ export class Adb {
   /// The `adbShare` topic: the lending as the app's switch made it, or the one a grant made a person has something to do
   /// for (#focus), and every grant and lending.
   value(): J {
+    seenOf(this.#env.store).read();
     const first = this.#legacy.value().sharing ? this.#legacy : (this.#focus() ?? this.#legacy);
     const lends = [...this.#lends.entries()].map(([station, l]) => {
       const v = l.value();
@@ -912,7 +922,13 @@ export class Adb {
   }
 
   card(station: string): J {
+    seenOf(this.#env.store).read();
     return (this.#lends.get(station) ?? this.#legacy).card(station);
+  }
+
+  /// What the lending shows changed elsewhere (a pairing, a personal lock): what shows it is made again.
+  touched(): void {
+    seenOf(this.#env.store).touch();
   }
 
   deviceTold(): void {

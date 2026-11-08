@@ -31,7 +31,7 @@ function overviewOf(store: Store, station: string): J {
 
 // ── an automatic-decision rule ──
 
-type DecisionDraft = { owner: ClientId; value: J; pickedModel: string | null; pending: boolean; watch: Watch };
+type DecisionDraft = { owner: ClientId; value: J; pickedModel: string | null; pending: boolean };
 
 /// The model control, with only verified decision candidates.
 function modelPick(overview: J, value: J, pickedModel: string | null): J {
@@ -76,7 +76,6 @@ export class DecisionForms {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
       this.#drafts.delete(k);
     }
   }
@@ -108,7 +107,6 @@ export class DecisionForms {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.decisionForm.notYours"));
     if (action === "drop") {
-      existing?.watch.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
@@ -117,8 +115,7 @@ export class DecisionForms {
     if (!d) {
       const saved = this.#saved(station);
       const value = { enabled: get(saved, "enabled") === true, model: str(get(saved, "model")), dirty: false, pending: false };
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
-      d = { owner, value, pickedModel: null, pending: false, watch };
+      d = { owner, value, pickedModel: null, pending: false };
       this.#drafts.set(key, d);
     }
     if (action === "edit") {
@@ -169,7 +166,7 @@ export class DecisionForms {
 // ── the archive policy, as one page edits it ──
 
 type PolicyOption = { key: string; id: string | null; name: string; rubric: string; archive: boolean };
-type PolicyDraft = { owner: ClientId; policy: string; options: PolicyOption[]; next: number; dirty: boolean; pending: boolean; watch: Watch };
+type PolicyDraft = { owner: ClientId; policy: string; options: PolicyOption[]; next: number; dirty: boolean; pending: boolean };
 
 /// The station's policy as it is now (its overview's), for a draft to start from and to tell whether it changed.
 function savedPolicy(store: Store, station: string): { policy: string; options: Omit<PolicyOption, "key">[] } | null {
@@ -195,7 +192,6 @@ export class PolicyForms {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
       this.#drafts.delete(k);
     }
   }
@@ -221,15 +217,13 @@ export class PolicyForms {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.policy.notYours"));
     if (action === "drop") {
-      existing?.watch.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
-      d = { owner, policy: "", options: [], next: 0, dirty: false, pending: false, watch };
+      d = { owner, policy: "", options: [], next: 0, dirty: false, pending: false };
       this.#reset(d, station);
       this.#drafts.set(key, d);
     }
@@ -482,9 +476,9 @@ export class ConnectFlows {
     }
     const station = topic.station as string;
     const form = topic.form as string;
+    // (kept up while it is open, the station's tokens with them; what it shows of them is read as it is made, store.ts)
     const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) =>
       this.#store.watch(s, () => {
-        this.#store.invalidate(topic);
         if (s.topic === "overview" || s.topic === "pick") this.#hooks.ready(topic);
       }),
     );
@@ -1007,8 +1001,7 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
   return out;
 }
 
-/// `watch`: the station's overview and its workspace (the viewer's role: whether they may install a runtime).
-type ProfileDraft = { owner: ClientId; value: J; pending: boolean; watch: Watch[] };
+type ProfileDraft = { owner: ClientId; value: J; pending: boolean };
 
 export class ProfileFlows {
   readonly #store: Store;
@@ -1021,7 +1014,6 @@ export class ProfileFlows {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      for (const w of d.watch) w.drop();
       this.#drafts.delete(k);
     }
   }
@@ -1040,15 +1032,13 @@ export class ProfileFlows {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-views.flow.not_yours"));
     if (action === "drop") {
-      for (const w of existing?.watch ?? []) w.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = [{ topic: "overview", station }, { topic: "workspace", workspace: ofAddress(station) }].map((t) => this.#store.watch(t, () => this.#store.invalidate(topic)));
-      d = { owner, value: blank(), pending: false, watch };
+      d = { owner, value: blank(), pending: false };
       this.#drafts.set(key, d);
     }
     if (action === "edit") {

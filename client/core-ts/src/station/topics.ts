@@ -57,6 +57,9 @@ export function placeKey(station: string, thread: number): string {
   return `place/${station}/${thread}`;
 }
 
+/// The station topics made from how its link is (up, down, why): made again as it changes.
+const LINKED = new Set(["link", "live", "screens", "screenCard", "drive", "presets", "memory", "outflowGrants", "linkPreview", "filePeek", "messagePeek"]);
+
 export class StationTopics implements Owner {
   readonly #core: Inner;
   readonly #sync: StationsSync;
@@ -85,16 +88,10 @@ export class StationTopics implements Owner {
     this.#core = core;
     this.#sync = sync;
     sync.wanted = (address) => this.#wanted(address);
-    sync.onChange = (address, what, key) => this.#changed(address, what, key);
+    sync.onTouched = (address, what) => {
+      if (what === "screens") screensChanged(core, address);
+    };
     sync.onTold = (address, id, entries) => this.tell(address, id, entries);
-    // A screen says the chat that opened it as the viewer's chats have it: those read again, it is said again.
-    core.data.onChange((topic) => {
-      if (topic.topic === "chatRows" || topic.topic === "*") core.store.invalidateAll((t) => (t.topic === "screens" || t.topic === "screenCard") && (topic.topic === "*" || t.station === topic.station));
-    });
-    core.data.onLogChange((table, station, id) => {
-      const topics = core.store.liveTopics().filter((t) => t.station === station && ((table === "entry" && (t.topic === "thread" || t.topic === "letters") && String(t.thread) === id) || (table === "letter" && t.topic === "letters" && String(t.thread) === id) || (table === "transcript" && t.topic === "live" && t.key === id)));
-      for (const topic of topics) core.store.changed(topic);
-    });
   }
 
   owns(topic: Topic): boolean {
@@ -110,25 +107,6 @@ export class StationTopics implements Owner {
       logs: topics.filter((t) => t.topic === "jobLog").map((t) => [t.job as string, t.lines as number] as [string, number]),
       logins: [...new Set(topics.filter((t) => t.topic === "machineLoginScreen").map((t) => t.id as string))],
     };
-  }
-
-  #changed(address: string, what: string, key?: string): void {
-    const store = this.#core.store;
-    const of = (pick: (t: Topic) => boolean) => store.invalidateAll((t) => t.station === address && pick(t));
-    if (what === "link") {
-      of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens" || t.topic === "screenCard" || t.topic === "drive");
-      // 添加 station's list says which of another workspace's stations are online, as their links find them.
-      store.invalidateAll((t) => t.topic === "joinable");
-    }
-    else if (what === "live") of((t) => t.topic === "live" && (key === undefined || t.key === key));
-    else if (what === "host") of((t) => t.topic === "host");
-    else if (what === "screens") {
-      of((t) => t.topic === "screens" || t.topic === "screenCard");
-      screensChanged(this.#core, address);
-    }
-    else if (what === "log" || what === "errors") of((t) => key === undefined || topicKey(t) === key);
-    else if (what === "logins") of((t) => t.topic === "machineLogins" || t.topic === "machineLogin");
-    else if (what === "loginScreen") of((t) => t.topic === "machineLoginScreen" && (key === undefined || t.id === key));
   }
 
   /// What a topic shown makes urgent in the sync.
@@ -255,6 +233,10 @@ export class StationTopics implements Owner {
       return { err: e };
     }
     const link = this.#sync.link(station);
+    const seen = this.#sync.seen;
+    // (its log or error as the sync keeps it; and what of the station each reads below: made again as that changes)
+    seen.read(station, "log", topicKey(topic));
+    if (LINKED.has(topic.topic)) seen.read(station, "link");
     const error = link?.errors.get(topicKey(topic));
     switch (topic.topic) {
       case "link":
@@ -264,14 +246,17 @@ export class StationTopics implements Owner {
         if (link.catching === null && !link.archiveReading && link.archiveFailed === null && !link.hostUnreadable) return { ok: link.state };
         return { ok: { ...link.state, ...(link.hostUnreadable ? { hostUnreadable: true } : {}), ...(link.catching === null ? {} : { catching: link.catching.tallied ? link.catching.behind.size : -1 }), ...(link.archiveReading ? { archiveReading: true } : {}), ...(link.archiveFailed !== null ? { archiveFailed: link.archiveFailed } : {}) } };
       case "host": {
+        seen.read(station, "host");
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };
       }
       case "screens":
+        seen.read(station, "screens");
         // As the station said them last (kept: there as the app opens again, while it is reached anew); none while it
         // is down.
         return { ok: screensView(this.#core, station, this.#sync.screens(station), link !== undefined && !down(link.state)) };
       case "screenCard": {
+        seen.read(station, "screens");
         if (typeof topic.screen !== "string" || topic.screen === "") return { err: CoreError.invalid(t("core-misc.params.missing", { field: "screen" })) };
         return { ok: screenCard(this.#core, station, topic.screen, this.#sync.screens(station), link?.state.state === "online") };
       }
@@ -293,11 +278,15 @@ export class StationTopics implements Owner {
       case "way":
         return this.#ways.has(station) ? { ok: this.#ways.get(station) } : undefined;
       case "live":
+        seen.read(station, "live", topic.key as string);
         return this.#live(topic);
       case "machineLogins":
       case "machineLogin":
+        seen.read(station, "logins");
         return this.#logins(topic, link);
       case "machineLoginScreen": {
+        seen.read(station, "logins");
+        seen.read(station, "loginScreen", topic.id as string);
         const held = logins.held(link);
         const screen = link?.memory.get(logins.screenKey(topic.id as string));
         if (screen !== undefined) return { ok: screen };

@@ -37,6 +37,7 @@ import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
+import { Seen } from "./seen.ts";
 import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
@@ -149,8 +150,15 @@ export class StationsSync {
   readonly #usageReading = new Map<string, { link: Link; fiber: Fiber.Fiber<void, never> | null }>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
-  /// Told when what a station holds beyond the records changed (link, live views, host, logs).
-  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
+  /// What a station holds beyond the records (link, live views, host, logs), as its readers see it change.
+  readonly seen = new Seen();
+  /// Told when what a station holds beyond the records changed, after its readers (`seen`).
+  onTouched: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
+
+  onChange(address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string): void {
+    this.seen.touch(address, what === "errors" ? "log" : what, key);
+    this.onTouched(address, what, key);
+  }
   /// The loopback relays of logins this device takes the callback of.
   readonly relays: Relays;
   /// Told of entries that came as they were said (an event): they come in with a motion.

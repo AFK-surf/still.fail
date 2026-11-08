@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, baseOf, deviceText, fold, held, live, nameOf, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -122,7 +122,7 @@ const askingsOf = (inner: Inner) => {
   if (!m) askings.set(inner, (m = new Map()));
   return m;
 };
-const told = (inner: Inner) => inner.store.invalidate({ topic: "lockPrompts" });
+const told = (inner: Inner) => lockSeen(inner).touch("prompts");
 
 /// A new device's connection, as the mesh's endpoint took it: its one stream served, what it said last taken by the
 /// new device (the stream finished and its end acknowledged), then closed. Closed at once, the close would race what is
@@ -446,7 +446,10 @@ function mine(inner: Inner, ws: string): J | null {
   };
 }
 
-const changed = (inner: Inner, y: Trying) => inner.store.invalidateAll((t) => t.topic === "adbShare" || (t.topic === "lock" && y.workspaces.includes(String(t.workspace))) || t.topic === "lockPrompts");
+const changed = (inner: Inner, y: Trying) => {
+  lockSeen(inner).touch(...y.workspaces.map((ws) => `lock ${ws}`), "prompts");
+  inner.adb.touched();
+};
 
 /// All searches ended: keep a code still shown, or explain why the last one went away, or say none was found.
 function finishLooking(inner: Inner, y: Trying): void {

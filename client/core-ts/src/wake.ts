@@ -6,6 +6,7 @@
 // - the host lets its connections go (`Host.resetConnections`).
 // When the network changed, everything under way fails. A person asking to try again (`retry`) is taken as the
 // connections suspect, not gone. WakingHost does the first two for everything that goes through the host.
+import * as clock from "./clock.ts";
 import { Deferred, Effect, Scope } from "effect";
 import { HostError } from "./error.ts";
 import type { Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
@@ -260,7 +261,9 @@ export class WakingHost implements Host {
     return this.inner.storageDelete(key);
   }
 
+  /// Now; read in a computed, by the minute (clock.ts): what it made is made again as the minute moves on.
   nowMs(): number {
+    clock.minute.get();
     return this.inner.nowMs();
   }
   monotonicMs(): number {

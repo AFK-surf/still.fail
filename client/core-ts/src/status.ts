@@ -1,17 +1,19 @@
 // What the core is waiting on, for the one place a UI says so (the `status` topic): requests under way to the
 // stations and to still.fail cloud, connections being opened, still.fail cloud's events sockets that are down, and how
 // fast bytes come in. Only what has taken a while (SLOW_MS) or is down is worth a word. Each workspace has its own
-// waits; the device's are apart. While anything is waited on, the topic is computed again each second.
+// waits; the device's are apart. What is said of them is read in the topic's computed (reactive.ts): it is made again
+// as they change, each second while any is shown, and once the first not shown yet has taken SLOW_MS.
 import { Deferred, Effect } from "effect";
 import * as brand from "./brand.ts";
 import { said } from "./format.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
-import { laterSleep, type Runner } from "./runtime.ts";
+import { Moments } from "./clock.ts";
+import { Marks } from "./reactive.ts";
+import type { Runner } from "./runtime.ts";
 
 export const SLOW_MS = 2_000;
 const RATE_WINDOW_MS = 3_000;
-const TICK_MS = 1_000;
 
 /// Where a wait is: still.fail cloud, the relay, or a station by its address.
 export type Place = { cloud: true } | { relay: true } | { station: string };
@@ -112,7 +114,6 @@ export class Waiting {
 
 export class Status {
   readonly #host: Host;
-  readonly #runner: Runner;
   readonly #waited: Waited | null;
   #next = 0;
   readonly #waits = new Map<number, Wait>();
@@ -120,8 +121,9 @@ export class Status {
   readonly #sockets = new Map<string, Down>();
   /// What each account's database says (data.ts): no room, written by a newer core, held by another process.
   #db = new Map<string, { kind: string; detail: string | null }>();
-  #ticking = false;
-  #changed: (() => void) | null = null;
+  /// What reads these waits (`gather`, `waits`) is made again as they change.
+  readonly #marks = new Marks();
+  readonly #moments: Moments;
   #nameOf: NameOf | null = null;
   /// Added to the host's clock: tests move time on.
   skew = 0;
@@ -129,12 +131,8 @@ export class Status {
   /// `waited`: the device's count its requests are counted in.
   constructor(host: Host, runner: Runner, waited: Waited | null = null) {
     this.#host = host;
-    this.#runner = runner;
     this.#waited = waited;
-  }
-
-  onChange(changed: () => void): void {
-    this.#changed = changed;
+    this.#moments = new Moments(() => this.now(), runner);
   }
 
   setNames(nameOf: NameOf): void {
@@ -151,11 +149,12 @@ export class Status {
   }
 
   changed(): void {
-    this.#changed?.();
+    this.#marks.touch();
   }
 
   /// Whether something at `place` is waited on as `what` now.
   waits(place: Place, what: string): boolean {
+    this.#marks.read();
     for (const w of this.#waits.values()) if (samePlace(w.place, place) && w.what === what) return true;
     return false;
   }
@@ -165,7 +164,8 @@ export class Status {
     const id = ++this.#next;
     this.#waits.set(id, { place, what, connecting, since: this.now(), bytes: 0 });
     if (!connecting) this.#waited?.begin();
-    this.#tick();
+    // (what reads the waits looks again when the first of them is slow: this one's moment, when it is the first)
+    if (this.#waits.size === 1 && this.#sockets.size === 0) this.changed();
     return new Waiting(this, id);
   }
 
@@ -182,9 +182,11 @@ export class Status {
 
   end(id: number): void {
     const w = this.#waits.get(id);
+    const first = this.#waits.keys().next().value === id;
     this.#waits.delete(id);
     if (w && !w.connecting) this.#waited?.end();
-    if (w && this.now() - w.since >= SLOW_MS) this.changed();
+    // (shown, it goes; the first not shown yet, the next one's moment is the one looked again at)
+    if (w && (this.now() - w.since >= SLOW_MS || (first && this.#waits.size > 0))) this.changed();
   }
 
   /// An account's events socket failed to open or dropped; it is tried again at `retryAt`.
@@ -193,7 +195,6 @@ export class Status {
     const was = this.cloudDown();
     this.#sockets.set(account, { since: before?.since ?? this.now(), retryAt, message, tries: (before?.tries ?? 0) + 1 });
     this.changed();
-    this.#tick();
     if (!was) this.onCloud?.();
   }
 
@@ -219,34 +220,6 @@ export class Status {
     if (!this.cloudDown()) this.onCloud?.();
   }
 
-  #tick(): void {
-    if (this.#ticking || (this.#waits.size === 0 && this.#sockets.size === 0)) return;
-    this.#ticking = true;
-    // What is shown of the waits (seconds waited, the rate) computed again each second while any is shown; until one
-    // is, nothing: the next look is when the first wait to be shown has waited SLOW_MS.
-    const after = (): { wait: number; shown: boolean } | null => {
-      const now = this.now();
-      if (this.#sockets.size > 0) return { wait: TICK_MS, shown: true };
-      let first: number | null = null;
-      for (const w of this.#waits.values()) {
-        const left = w.since + SLOW_MS - now;
-        if (left <= 0) return { wait: TICK_MS, shown: true };
-        if (first === null || left < first) first = left;
-      }
-      return first === null ? null : { wait: first, shown: false };
-    };
-    const step = Effect.sync(() => {
-      const next = after();
-      if (next === null) this.#ticking = false;
-      else if (next.shown) this.changed();
-      return next;
-    });
-    // (a shown clock's next second is nothing shown waits for; the first wait shown is)
-    const loop = (next: { wait: number; shown: boolean } | null): Effect.Effect<void> =>
-      next === null ? Effect.void : (next.shown ? laterSleep(next.wait) : Effect.sleep(next.wait)).pipe(Effect.andThen(step), Effect.flatMap(loop));
-    this.#runner.fork(Effect.suspend(() => loop(after())));
-  }
-
   /// `label`: the workspace a station is said with, when waits of several workspaces are said together (a station may
   /// be in several, named the same in each).
   #placeName(place: Place, label: string | null): string | null {
@@ -262,8 +235,35 @@ export class Status {
     return value([[this, "all"]]);
   }
 
+  /// Reads the next moment what is said of the waits changes on its own: a shown wait's next second waited (and the
+  /// rate with it), a down socket's next second to its retry; or, none shown yet, the first to be has waited SLOW_MS.
+  #lookAgain(now: number): void {
+    let next = Number.POSITIVE_INFINITY;
+    let shown = false;
+    for (const d of this.#sockets.values()) {
+      if (now - d.since < SLOW_MS) next = Math.min(next, d.since + SLOW_MS);
+      else {
+        shown = true;
+        next = Math.min(next, d.retryAt > now ? d.retryAt - (Math.ceil((d.retryAt - now) / 1000) - 1) * 1000 : now + 1000);
+      }
+    }
+    // (kept in the order they began: the first is the oldest)
+    const first = this.#waits.values().next().value;
+    if (first !== undefined) {
+      const age = now - first.since;
+      if (age < SLOW_MS) next = Math.min(next, first.since + SLOW_MS);
+      else {
+        shown = true;
+        next = Math.min(next, first.since + (Math.floor(age / 1000) + 1) * 1000);
+      }
+    }
+    if (Number.isFinite(next)) this.#moments.reached(next, shown);
+  }
+
   gather(take: Take, into: Gathered, label: string | null = null): void {
+    this.#marks.read();
     const now = this.now();
+    this.#lookAgain(now);
     const wanted = (sub: string) => take === "all" || take.for.includes(sub);
     for (const sub of [...this.#db.keys()].sort()) {
       const note = this.#db.get(sub)!;

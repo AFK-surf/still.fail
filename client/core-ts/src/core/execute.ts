@@ -138,7 +138,6 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "stationUpdateNotice":
         if (call.action === "dismiss") {
           prefs.dismissStationUpdate(inner.data, call.station, call.version!);
-          inner.store.invalidate({ topic: "prefs" });
         }
         hooks.updateNoticeOpen?.(inner, call.station, call.action === "open");
         return Effect.succeed({});

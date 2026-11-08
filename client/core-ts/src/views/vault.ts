@@ -57,7 +57,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { askPerson, deviceText, fold, held as lockHeld, nameOf as workspaceName, signerOf } from "./lock.ts";
+import { askPerson, deviceText, fold, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf } from "./lock.ts";
 import { workspaceIds } from "./marks.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -152,7 +152,7 @@ function change(inner: Inner, ws: string, f: (h: Held) => void): void {
   const h = structuredClone(held(inner, ws)) as Held;
   f(h);
   inner.data.put("vault", ws, h);
-  invalidate(inner, ws);
+  changed(inner, ws);
 }
 
 function items(inner: Inner, ws: string, vault: string): Record<string, Item> {
@@ -164,11 +164,11 @@ function changeItems(inner: Inner, ws: string, vault: string, f: (items: Record<
   const all = structuredClone(items(inner, ws, vault)) as Record<string, Item>;
   f(all);
   inner.data.put("vaultItems", `${ws}/${vault}`, all);
-  invalidate(inner, ws);
+  changed(inner, ws);
 }
 
-function invalidate(inner: Inner, ws: string): void {
-  inner.store.invalidateAll((t) => ((t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses") && t.workspace === ws) || t.topic === "lockPrompts");
+function changed(inner: Inner, ws: string): void {
+  lockSeen(inner).touch(`vault ${ws}`, "prompts");
   // (the requests' cards in the chats: shown again where how they are answered here changed)
   inner.views?.vaultChanged(ws);
 }
@@ -270,7 +270,7 @@ export function install(inner: Inner): void {
       const m = mem(inner);
       const pub = yield* Effect.orElseSucceed(inner.host.storageGet(BOX_PUB), () => null);
       m.box = pub ? new TextDecoder().decode(pub) : null;
-      inner.store.invalidateAll((t) => t.topic === "vaults" || t.topic === "vaultItems");
+      lockSeen(inner).touch("self");
       inner.views?.vaultChanged(null);
     }),
   );
@@ -640,6 +640,11 @@ function owner(inner: Inner): Owner {
     },
     compute: (t: Topic) => {
       const ws = typeof t.workspace === "string" ? t.workspace : "";
+      // (what this core holds of them beside the records: its keys, the lock, the vaults unsealed here)
+      const seen = lockSeen(inner);
+      seen.read("self");
+      seen.read(`lock ${ws}`);
+      seen.read(`vault ${ws}`);
       return { ok: t.topic === "vaults" ? vaultsView(inner, ws) : t.topic === "vaultUses" ? usesView(inner, ws, String(t.vault), String(t.item)) : itemsView(inner, ws, String(t.vault)) };
     },
   };
@@ -700,7 +705,7 @@ export function vaultCome(inner: Inner, ws: string): void {
   // A device confirmed in the lock whose certificate came first: given the keys unsealed here; the prompts of every
   // workspace follow the lock too.
   giveKept(inner, ws);
-  inner.store.invalidate({ topic: "lockPrompts" });
+  lockSeen(inner).touch("prompts");
 }
 
 /// The keys unsealed here given to the members' devices set up that have none (the vaults of this person's own):
@@ -923,7 +928,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     case "lock":
       return Effect.sync(() => {
         mem(inner).keys.clear();
-        invalidate(inner, c.workspace);
+        changed(inner, c.workspace);
         return null;
       });
     case "setup":
@@ -1178,14 +1183,14 @@ class Vaults {
     const inner = this.#inner;
     const until = inner.host.nowMs() + UNLOCK_MS;
     mem(inner).keys.set(keyOf(v), { key, until });
-    invalidate(inner, this.ws);
+    changed(inner, this.ws);
     inner.runner.fork(
       Effect.andThen(
         Effect.sleep(UNLOCK_MS),
         Effect.sync(() => {
           const k = mem(inner).keys.get(keyOf(v));
           if (k && k.until <= inner.host.nowMs()) mem(inner).keys.delete(keyOf(v));
-          invalidate(inner, this.ws);
+          changed(inner, this.ws);
         }),
       ),
     );
@@ -1335,7 +1340,7 @@ class Vaults {
       yield* self.#putVault(sign({ ...rest, seq: v.seq + 1, epoch: v.epoch + 1, keys: [], deleted: true as const, at: nowS(inner) }, TAG.vault, signer), held(inner, self.ws).at[v.id] ?? "");
       mem(inner).keys.delete(keyOf(v));
       inner.data.forgetRecord("vaultItems", `${self.ws}/${v.id}`);
-      invalidate(inner, self.ws);
+      changed(inner, self.ws);
       return { deleted: v.id };
     });
   }

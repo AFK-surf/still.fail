@@ -18,6 +18,8 @@ const store = () => {
   const host = new FakeHost();
   const s = new Store(host, new Runner(host.time.clock));
   s.setSource({ start: () => {}, stop: () => {} });
+  // (the station's overview kept up, as the form's page keeps it by reading it as the form is made)
+  s.watch({ topic: "overview", station: "ws/st" }, () => {});
   return s;
 };
 const overview: Topic = { topic: "overview", station: "ws/st" };

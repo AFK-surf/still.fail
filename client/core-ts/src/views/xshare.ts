@@ -3,6 +3,7 @@
 // given it is told, through one of its own stations, to trust that station (`PUT /xshare/hosts`). Each workspace's part
 // stays its own: what was asked here and not answered yet is kept in the chat's workspace (workspace.ts `part`), and
 // shown at once over what its station holds (rule 4).
+import { SignalMap } from "../reactive.ts";
 import { Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers } from "../core/execute.ts";
@@ -37,15 +38,16 @@ export type Asked = { to: string[]; write: boolean };
 const PART = "xshare";
 
 /// What was asked of a workspace's chats and not answered yet, by station and session.
-function askedOf(inner: Inner, station: string): Map<string, Asked> {
-  return inner.workspaces.ofStation(station).part(PART, () => new Map<string, Asked>());
+function askedOf(inner: Inner, station: string): SignalMap<string, Asked> {
+  return inner.workspaces.ofStation(station).part(PART, () => new SignalMap<string, Asked>());
 }
 
 const askedKey = (station: string, session: string) => `${station}\t${session}`;
 
 /// A chat's sharing asked here and not answered yet.
 export function asked(inner: Inner, station: string, session: string): Asked | undefined {
-  return inner.workspaces.get(ofAddress(station))?.own.has(PART) ? askedOf(inner, station).get(askedKey(station, session)) : undefined;
+  // (read in a chat's view, it is made again as it is asked or answered: reactive.ts SignalMap)
+  return inner.workspaces.get(ofAddress(station)) !== undefined ? askedOf(inner, station).get(askedKey(station, session)) : undefined;
 }
 
 /// Every workspace the signed-in accounts are in (each once, as the account that reaches it has it).
@@ -120,7 +122,6 @@ type Asking = { station: string; session: string; thread: number | null; to: str
 function share(inner: Inner, a: Asking, ctx: J): Effect.Effect<unknown, CoreError> {
   const station = a.station;
   const key = askedKey(station, a.session);
-  const invalidate = () => inner.store.invalidateAll((topic) => topic.topic === "chat" && topic.station === station);
   return Effect.gen(function* () {
     const addr = yield* Effect.try({ try: () => StationAddr.parse(station), catch: (e) => e as CoreError });
     const all = places(inner);
@@ -148,7 +149,6 @@ function share(inner: Inner, a: Asking, ctx: J): Effect.Effect<unknown, CoreErro
       targets.push({ workspace: id, name: place.name, stations });
     }
     askedOf(inner, station).set(key, { to, write: a.write });
-    invalidate();
     const done = yield* Effect.result(
       Effect.gen(function* () {
         const answer = yield* Effect.mapError(
@@ -182,7 +182,6 @@ function share(inner: Inner, a: Asking, ctx: J): Effect.Effect<unknown, CoreErro
       }),
     );
     askedOf(inner, station).delete(key);
-    invalidate();
     if (done._tag === "Failure") return yield* Effect.fail(done.failure);
     return done.success;
   });
