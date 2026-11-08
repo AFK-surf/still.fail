@@ -1129,3 +1129,46 @@ test "a phone's Home: the bell opens 待处理, 全部已读 reads the unread an
   assert_true(t.find("整理发布清单") is Some(_))
   assert_true(t.find("夜里的备份") is Some(_))
 }
+
+///|
+test "Home asks the core for a page of its chats, and a page more while it has more and is shown near their end" {
+  // (the whole list of 1400 chats went to the app as it opened, a screen of them shown: 2026-11-08)
+  new_run()
+  let base = fixture("home")
+  let limits : Array[Int] = []
+  let left : Array[Int] = []
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
+      let limit = n.to_int()
+      if !limits.contains(limit) {
+        limits.push(limit)
+      }
+      // more past the first page; none past the second
+      match t.value {
+        Some(Object(v)) if limit == @sfbase.chats_page => {
+          let more = v.copy()
+          more["more"] = Json::number(10.0)
+          { ..t, value: Some(Json::object(more)) }
+        }
+        _ => t
+      }
+    },
+    leave: fn(name, params) {
+      if name == "chats" {
+        match params.get("limit") {
+          Some(Number(n, ..)) => left.push(n.to_int())
+          _ => ()
+        }
+      }
+      (base.leave)(name, params)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  // its few rows end within the screen: the page after asked for at once, the first let go of; none after it
+  assert_eq(limits, [@sfbase.chats_page, 2 * @sfbase.chats_page])
+  assert_eq(left, [@sfbase.chats_page])
+}

@@ -118,6 +118,8 @@ pub fn chat_view_made(@json.Json) -> @sfbase.ChatView
 
 pub fn chats_of(@sfbase.Source, String, String) -> (@sfbase.ChatsView?, String?)
 
+pub fn chats_topic(@sfbase.Source, String) -> @sfbase.Topic
+
 pub fn choices_of(@json.Json?, String) -> Array[@sfbase.Choice]?
 
 pub fn chosen_none() -> @sfbase.Chosen
@@ -887,6 +889,8 @@ pub fn stage_zoom() -> @kit.Zoom
 pub fn stamp_of(@json.Json?, String) -> @sfbase.Stamp?
 
 pub let station_files_asked : @ref.Ref[(@sfbase.Source, String) -> Unit]
+
+pub fn station_marks(@sfbase.Source, String) -> Array[@sfbase.Station]
 
 pub fn stations_at_glance(@sfbase.Source, String) -> (@sf.GlyphCounts, String)
 

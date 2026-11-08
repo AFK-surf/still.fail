@@ -242,7 +242,7 @@ fn chat_bar(
   list : FindList,
 ) -> Unit {
   // the workspace's stations, as the bar shows the chat's (its tag, its first agent's tile)
-  let station = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
+  let station = @sfbase.station_marks(src, w.id)
     .iter()
     .find_first(fn(x) { x.address == r.station })
   let bar = c.id("chat-bar")

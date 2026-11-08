@@ -183,7 +183,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
       },
     )
     // the station it runs on, what runs low on it at its end
-    let look = stations_of((src.topic)("stations", { "scope": Json::string(scope_of(station)) }).value)
+    let look = @sfbase.station_marks(src, scope_of(station))
       .iter()
       .find_first(fn(x) { x.address == station })
     wh_line(

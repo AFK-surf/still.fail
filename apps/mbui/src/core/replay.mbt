@@ -34,6 +34,14 @@ pub struct Replay {
   /// a recorded ask's id: the id the app gave the same ask now; and the other way
   priv ids : Map[Int, Int]
   priv back : Map[Int, Int]
+  /// a recorded subscription the app asks twice now (the stations whole and brief, a tape from before the brief ask):
+  /// the other ids what comes for it goes to as well; what came for it so far (its value with its deltas); and what is
+  /// to be given at the next delivery (its value so far, to the one asked after)
+  priv copies : Map[Int, Array[Int]]
+  priv latest : Map[Int, Json]
+  priv owed : Array[Json]
+  /// the recorded subscriptions that may be asked twice so (the stations, a chats' list), whose values are kept so
+  priv twins : Map[Int, Bool]
   /// the first message out not yet sent again (or evs.length())
   priv mut first_out : Int
   /// the first message in not yet given (or evs.length())
@@ -235,6 +243,10 @@ pub fn Replay::parse(log : String) -> Replay {
     evs,
     ids: {},
     back: {},
+    copies: {},
+    latest: {},
+    owed: [],
+    twins: {},
     first_out: 0,
     next_in: 0,
     client: None,
@@ -383,6 +395,21 @@ pub fn Replay::deliver(
   to? : (String, Bytes?) -> Unit,
 ) -> Int {
   let mut n = 0
+  let give = fn(msg : Json, bytes : Bytes?) {
+    match to {
+      Some(post) => post(msg.stringify(), bytes)
+      None =>
+        match self.client {
+          Some(c) => c.receive_json(msg, bytes~)
+          None => ()
+        }
+    }
+  }
+  let owed = self.owed.copy()
+  self.owed.clear()
+  for msg in owed {
+    give(msg, None)
+  }
   while at_most < 0 || n < at_most {
     let i = self.pick(now, host_by)
     if i < 0 {
@@ -412,6 +439,32 @@ pub fn Replay::deliver(
       n += 1
       self.advance()
       continue
+    }
+    // (one asked twice now: what came so far kept, and given to the other too)
+    match e.msg {
+      Object(m) =>
+        match id_of(m) {
+          Some(then) => {
+            if self.twins.contains(then) {
+              match (m.get("value"), m.get("delta"), self.latest.get(then)) {
+                (Some(v), _, _) => self.latest[then] = v
+                (_, Some(Array(ops)), Some(was)) => self.latest[then] = apply_delta(was, ops)
+                _ => ()
+              }
+            }
+            match self.copies.get(then) {
+              Some(more) =>
+                for now in more {
+                  let copy = m.copy()
+                  copy["id"] = Json::number(now.to_double())
+                  give(Json::object(copy), e.bytes)
+                }
+              None => ()
+            }
+          }
+          None => ()
+        }
+      _ => ()
     }
     match self.live(e.msg) {
       Some(msg) => {
@@ -940,6 +993,45 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       }
     }
   }
+  // The stations asked brief (a page that only names them), and a chats' list asked for its first rows (`limit`), can
+  // be answered by the whole list in an older tape.
+  if found < 0 && kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+    let same = sig(m, refers, ignore_brief=true)
+    for i in self.first_out..<self.evs.length() {
+      let e = self.evs[i]
+      if e.out && !e.done && e.msg is Object(r) && sig(r, ref_of(r), ignore_brief=true) == same {
+        found = i
+        break
+      }
+    }
+  }
+  // One asked after another the tape's one went to (the whole list after the brief, or the other way): given what
+  // came for it so far, and what comes for it from now on, as the first is.
+  if found < 0 && kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+    let same = sig(m, refers, ignore_brief=true)
+    for i in 0..<self.evs.length() {
+      let e = self.evs[i]
+      match (e.out && e.done, e.msg, id_of(m)) {
+        (true, Object(r), Some(now)) if kind_of(r) == "subscribe" && sig(r, ref_of(r), ignore_brief=true) == same =>
+          match id_of(r) {
+            Some(then) if self.ids.contains(then) => {
+              match self.copies.get(then) {
+                Some(more) => more.push(now)
+                None => self.copies[then] = [now]
+              }
+              self.back[now] = then
+              match self.latest.get(then) {
+                Some(v) => self.owed.push({ "id": Json::number(now.to_double()), "value": v })
+                None => ()
+              }
+              return
+            }
+            _ => ()
+          }
+        _ => ()
+      }
+    }
+  }
   if found < 0 && (kind == "subscribe" || kind == "call") {
     let name = name_of(m)
     for i in self.first_out..<self.evs.length() {
@@ -988,6 +1080,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       (Some(then), Some(now)) => {
         self.ids[then] = now
         self.back[now] = then
+        if kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+          self.twins[then] = true
+        }
         if kind == "call" && self.answers(then) {
           self.asked.push(name_of(m))
         }
@@ -1083,11 +1178,24 @@ fn name_of(m : Map[String, Json]) -> String {
 ///|
 /// What an ask is, whatever its id: its message without the id, keys in order; an unsubscription or a cancel with the
 /// run's id of what it names (`refers`).
-fn sig(m : Map[String, Json], refers : Int?, ignore_compact? : Bool = false, ignore_summary? : Bool = false) -> String {
+fn sig(
+  m : Map[String, Json],
+  refers : Int?,
+  ignore_compact? : Bool = false,
+  ignore_summary? : Bool = false,
+  ignore_brief? : Bool = false,
+) -> String {
   let copy : Map[String, Json] = {}
   for k, v in m {
     if k != "id" {
       match (k, v) {
+        ("subscribe", Object(t)) if ignore_brief &&
+          (t.get("topic") == Some(Json::string("stations")) || t.get("topic") == Some(Json::string("chats"))) => {
+          let asked = t.copy()
+          asked.remove("brief")
+          asked.remove("limit")
+          copy[k] = Json::object(asked)
+        }
         ("subscribe", Object(t)) if ignore_compact && (t.get("topic") == Some(Json::string("chat")) || t.get("topic") == Some(Json::string("chatJobs"))) => {
           let chat = t.copy()
           chat.remove("compact")

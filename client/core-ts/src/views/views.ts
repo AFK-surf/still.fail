@@ -162,6 +162,39 @@ function stationsOn(chats: J): J {
   return { ...chats, days: arr(get(chats, "days")).map((d) => ({ ...d, items: arr(get(d, "items")).map((row) => stationOn(row, words.get(str(get(row, "station")) ?? ""))) })) };
 }
 
+/// The list with its first `limit` rows, in their days, and how many more it has (`more`): what a page shows of it
+/// first, the rest asked for as it is scrolled to (a list of 1400 chats went whole as the app opened, 2026-11-08). What
+/// the core works out of the list (its marks, its search, its cards) is of the whole of it.
+function firstRows(chats: J, limit: number): J {
+  let left = limit;
+  let more = 0;
+  const days: J[] = [];
+  for (const d of arr(get(chats, "days"))) {
+    const items = arr(get(d, "items"));
+    if (left <= 0) {
+      more += items.length;
+      continue;
+    }
+    if (items.length <= left) days.push(d);
+    else {
+      days.push({ ...d, items: items.slice(0, left) });
+      more += items.length - left;
+    }
+    left -= Math.min(left, items.length);
+  }
+  return more === 0 ? chats : { ...chats, days, more };
+}
+
+/// A station as `stations` `brief` says it (StationBrief): what names it and how it is reached.
+function stationBrief(s: J): J {
+  return {
+    station: s.station, id: s.id, name: s.name,
+    ...(s.emoji ? { emoji: s.emoji } : {}), ...(s.icon ? { icon: s.icon } : {}),
+    online: s.online, reconnecting: s.reconnecting, way: s.way ?? null,
+    running: u64(get(get(s.overview, "counts"), "running")) ?? 0,
+  };
+}
+
 /// Whether a station's versions offer the 测试版 switch.
 export function betaOffered(overview: J, accountInBeta: () => boolean): boolean {
   const station = arr(get(overview, "updates")).find((v) => get(v, "id") === "station");
@@ -1111,8 +1144,10 @@ export class Views implements Owner {
 
   #compute(view: Topic): Value | undefined {
     switch (view.topic) {
-      case "chats":
-        return this.#chats(view.scope as string, view.mine === true, view.watching === true, view.hidden === true ? "hidden" : "visible");
+      case "chats": {
+        const chats = this.#chats(view.scope as string, view.mine === true, view.watching === true, view.hidden === true ? "hidden" : "visible");
+        return typeof view.limit === "number" && chats !== undefined && "ok" in chats ? { ok: firstRows(chats.ok, view.limit) } : chats;
+      }
       case "search": {
         const chats = this.#chats(view.scope as string, false, false, String(view.query ?? "").trim() ? "all" : "visible");
         if (chats === undefined || !("ok" in chats)) return chats;
@@ -1145,6 +1180,9 @@ export class Views implements Owner {
       case "stations": {
         // Asked with `drive`: those with a drive, this machine's (`here`) first (drive-browse.ts withDrive).
         const stations = this.#stationsView(view.scope as string, view);
+        // Asked `brief`: each as a page that only names it shows it (its mark, how it is reached), not its overview
+        // and profiles: a chat's bar had each station's whole overview, and each change of it (2026-11-08).
+        if (view.brief === true && stations !== undefined && "ok" in stations) return { ok: (stations.ok as J[]).map(stationBrief) };
         if (view.drive !== true || stations === undefined || !("ok" in stations)) return stations;
         return { ok: withDrive(stations.ok as J[], typeof view.here === "string" ? view.here : null) };
       }

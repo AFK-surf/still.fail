@@ -510,10 +510,7 @@ pub fn finder_list(
     c.list_scroll_to(key, 0)
   }
   // (several stations: what is found says which it is on)
-  let several = match (src.topic)("stations", { "scope": Json::string(w.id) }).value {
-    Some(Array(a)) => a.length() > 1
-    _ => false
-  }
+  let several = @sfbase.station_marks(src, w.id).length() > 1
   let stacked = found_stacked(c.width)
   let est = lines.fold(init=foot_in, fn(h, l) { h + finder_h(l, f.found, stacked) })
   let h : @ui.Size = match most {

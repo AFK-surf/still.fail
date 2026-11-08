@@ -1138,7 +1138,7 @@ pub let rail_closed_w : Double = 42.0
 /// What the stations' place says on hover (RailStations): what is wrong with them, else what the core waits on, else
 /// how many and who works.
 pub fn rail_stations_label(src : Source, ws : String) -> String {
-  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) }).value
+  let chats = @sfbase.chats_topic(src, ws).value
   let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
   let trouble = text(field(chats, "trouble"), "text")
   let waiting = if text(status, "state") != "" { text(status, "text") } else { "" }
