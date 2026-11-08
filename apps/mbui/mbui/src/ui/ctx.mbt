@@ -2451,8 +2451,11 @@ fn Ctx::owe_next(self : Ctx) -> Unit {
 }
 
 ///|
+/// A frame owed, by the frame scheduler alone: what the view reads changed between frames (Ctx::read_changed), a fiber
+/// ready as a frame ends (fx_frame_end). Not the app's: a frame is due because what it reads changed (a signal, a
+/// part's state) or a motion or a timer said its moment, never because something asks to be drawn again.
 #callsite(autofill(loc))
-pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
+fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true
   part_live()
   // asked between frames (a host's callback, a timer's): the frame's own asking (on_frame's end) is past, so the

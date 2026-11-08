@@ -165,7 +165,6 @@ pub fn feel_as(Int32) -> Unit
 
 pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, shorter? : Array[String], trim? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), submitted? : (String) -> Unit, pasted? : (String) -> Unit, files? : (Array[(String, Bytes)]) -> Unit, size_by? : () -> Double, colors_by? : () -> (Int64, Int64, Int64), placeholder_by? : () -> String) -> @view.View
 
-pub fn files_held() -> (Double, Double)?
 
 pub fn finger_target() -> Double
 
@@ -463,7 +462,6 @@ pub fn redraw_vector_pictures() -> Unit
 
 pub fn reduced_motion() -> Bool
 
-pub fn request_frame() -> Unit
 
 pub fn rest_of(String) -> Double
 
@@ -609,7 +607,6 @@ pub fn system_size_class() -> SystemSizeClass?
 
 pub fn system_tabletop() -> (Double, Double)?
 
-pub fn take_drop(over? : (Double, Double) -> Bool) -> (Double, Double, Pick)?
 
 pub fn take_picture(String, Double, (Ctx) -> Unit, (Bytes?) -> Unit, scale? : Double) -> Unit
 
@@ -1328,7 +1325,6 @@ pub fn Ctx::reads_for(Self, Int32, () -> Unit) -> Unit
 pub fn Ctx::rect_of(Self, Int32, loc~ : SourceLoc) -> (Double, Double, Double, Double)?
 pub fn Ctx::reduced_motion(Self) -> Bool
 #callsite(autofill(loc))
-pub fn Ctx::request_frame(Self, loc~ : SourceLoc) -> Unit
 pub fn Ctx::reveal_from(Self, Double, Double, dark? : () -> Bool) -> Unit
 pub fn Ctx::rich(Self, Array[@text.Run], key? : String, style? : TextStyle, size? : Double, weight? : Int32, color? : Int64, line? : Double, trim? : Bool, wrap? : Bool, w? : Size, link_color? : Int64, pressed_bg? : Int64, code_color? : Int64, code_bg? : Int64, code_scale? : Double, tracking? : Double, max_lines? : Int32, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, words? : Bool, face? : Int32, tabular? : Bool, breaks? : Bool, allow_ellipsis? : Bool) -> Int32
 pub fn Ctx::right_clicked(Self, Int32) -> (Double, Double)?

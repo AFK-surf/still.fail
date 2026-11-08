@@ -313,18 +313,15 @@ test "a scripted run tells each line of its script as it begins, as written, and
 
 ///|
 test "a tap goes where the frame drawn has its words, that frame: no wait for them to hold still" {
-  // the words come down for a while (a sheet rising): the tap acts as they first show, where they are in that frame
-  let y = Ref::new(200.0)
+  // the words come down for a while (a sheet rising: a spring from 200 to 100 as it is first built): the tap acts as
+  // they first show, where they are in that frame
   let t = @ui.Tester::new(fn(c) {
+    let y = c.spring("rise", 100.0, from=200.0)
     c.box(fn() {
-      c.box(h=Px(y.val), fn() {  }) |> ignore
+      c.box(h=Px(y), fn() {  }) |> ignore
       c.box(id=c.id("go"), fn() { c.text("go", wrap=false) |> ignore }) |> ignore
     })
     |> ignore
-    if y.val > 100.0 {
-      y.val = y.val - 25.0
-      c.request_frame()
-    }
   })
   let began = Ref::new(-1.0)
   let acted = Ref::new(-1.0)

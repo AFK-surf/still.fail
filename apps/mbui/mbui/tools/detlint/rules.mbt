@@ -25,7 +25,7 @@ let rule_words : Map[String, String] = {
   "frame-count": "a test runs a fixed number of frames: give the inputs and run_for a declared time",
   "literal-time": "a time given as a bare number: name what it is (an animation's or a timer's declared length)",
   "stable-mode": "the app draws otherwise when it is screenshotted (Ctx::stable): the picture is taken at a time its animations declare, of the app as it runs",
-  "retired-api": "an interface given up (an animation is data, declared once with its start and end): frames_until, animating, animating_until, run_animations; motion_end run to, or read by the app",
+  "retired-api": "an interface given up (an animation is data, declared once with its start and end): frames_until, animating, animating_until, run_animations; take_drop, files_held (a drop asked for each frame: Ctx::on_files is told it); motion_end run to, or read by the app",
   "app-clock": "the app reads the clock to work out an animation or a time passed: motion / wake_at do it from what they declared",
   "wall-clock": "the machine's own clock or randomness, outside the host that provides them",
   "engine-math": "a sine, an exponential, a power from @math: on js the engine's Math.*, whose last bits are the machine's; @dmath's (mbui/dmath) are the same on every machine",
@@ -87,7 +87,7 @@ let frame_ask : Array[String] = [
 
 ///|
 let retired : Array[String] = [
-  "frames_until", "animating", "animating_until", "run_animations",
+  "frames_until", "animating", "animating_until", "run_animations", "take_drop", "files_held",
 ]
 
 ///|

@@ -1398,9 +1398,13 @@ test "given-up interfaces are forbidden" {
         "src/app/view.mbt",
         "fn v(c : @ui.Ctx) -> Unit {\n  c.animating_until(at + d)\n  if c.animating() { () }\n  @ui.run_animations(c)\n}\n",
       ),
+      (
+        "src/app/drop.mbt",
+        "fn v(c : @ui.Ctx) -> Unit {\n  if @ui.files_held() is Some(_) { () }\n  match @ui.take_drop() { _ => () }\n}\n",
+      ),
     ],
     "retired-api",
-    4,
+    6,
   )
   |> ignore
   // motion_end: the framework's own, not a test's nor the app's
