@@ -11,6 +11,10 @@ const membersBody = (body: string) => `CASE WHEN (${validMembers(body)}) = 1 THE
 // rebuilt with those semantics, a workspace containing such a body must use the original request scan.
 const duplicateMembers = (body: string) => `CASE WHEN json_valid(${body}) THEN EXISTS
   (SELECT 1 FROM json_each(${body}) WHERE key = 'members' LIMIT 1 OFFSET 1) ELSE 0 END`;
+// A JSON path matches only the prefix before a NUL in an object key, unlike JavaScript property lookup.
+const nulMembers = (body: string) => `CASE WHEN instr(${body}, '\\u0000') > 0 AND json_valid(${body}) THEN EXISTS
+  (SELECT 1 FROM json_each(${body}) WHERE instr(key, char(0)) > 0
+    AND substr(key, 1, instr(key, char(0)) - 1) = 'members') ELSE 0 END`;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_member_lookup (
@@ -33,6 +37,12 @@ CREATE TABLE IF NOT EXISTS vault_member_audit_v2 (
 -- Older change triggers compared only json_extract's SQL value. An array and a string containing the array's JSON
 -- can have the same value, so repair old lookups and invalid markers before trusting them.
 CREATE TABLE IF NOT EXISTS vault_member_type_audit_v3 (
+  ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_member_nul_v4 (
+  ws TEXT NOT NULL, vault TEXT NOT NULL, PRIMARY KEY (ws, vault)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_member_nul_audit_v4 (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE TRIGGER IF NOT EXISTS vault_member_add AFTER INSERT ON vaults
@@ -103,6 +113,24 @@ CREATE TRIGGER IF NOT EXISTS vault_member_duplicate_drop_v2 AFTER DELETE ON vaul
   WHEN EXISTS (SELECT 1 FROM vault_member_audit_v2 WHERE ws = OLD.ws) BEGIN
   DELETE FROM vault_member_duplicates_v2 WHERE ws = OLD.ws AND vault = OLD.id;
 END;
+CREATE TRIGGER IF NOT EXISTS vault_member_nul_add_v4 AFTER INSERT ON vaults
+  WHEN EXISTS (SELECT 1 FROM vault_member_nul_audit_v4 WHERE ws = NEW.ws) BEGIN
+  DELETE FROM vault_member_nul_v4 WHERE ws = NEW.ws AND vault = NEW.id;
+  INSERT OR IGNORE INTO vault_member_nul_v4 SELECT NEW.ws, NEW.id WHERE (${nulMembers("NEW.body")}) = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_member_nul_change_v4 AFTER UPDATE ON vaults
+  WHEN (OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id OR OLD.body IS NOT NEW.body)
+    AND (EXISTS (SELECT 1 FROM vault_member_nul_audit_v4 WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_member_nul_audit_v4 WHERE ws = NEW.ws)) BEGIN
+  DELETE FROM vault_member_nul_v4 WHERE ws = OLD.ws AND vault = OLD.id;
+  DELETE FROM vault_member_nul_v4 WHERE ws = NEW.ws AND vault = NEW.id;
+  INSERT OR IGNORE INTO vault_member_nul_v4 SELECT NEW.ws, NEW.id
+    WHERE EXISTS (SELECT 1 FROM vault_member_nul_audit_v4 WHERE ws = NEW.ws) AND (${nulMembers("NEW.body")}) = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_member_nul_drop_v4 AFTER DELETE ON vaults
+  WHEN EXISTS (SELECT 1 FROM vault_member_nul_audit_v4 WHERE ws = OLD.ws) BEGIN
+  DELETE FROM vault_member_nul_v4 WHERE ws = OLD.ws AND vault = OLD.id;
+END;
 `;
 
 export function initializeVaultMembers(db: DatabaseSync): void {
@@ -118,10 +146,11 @@ export function initializeVaultMembers(db: DatabaseSync): void {
 }
 
 export function vaultMembersComplete(db: DatabaseSync, ws: string): boolean {
-  const state = db.prepare(`SELECT b.done, a.done AS audited, t.done AS type_audited FROM vault_member_backfill b
+  const state = db.prepare(`SELECT b.done, a.done AS audited, t.done AS type_audited, n.done AS nul_audited FROM vault_member_backfill b
     LEFT JOIN vault_member_audit_v2 a ON a.ws = b.ws LEFT JOIN vault_member_type_audit_v3 t ON t.ws = b.ws
-    WHERE b.ws = ?`).get(ws) as { done: number; audited: number | null; type_audited: number | null } | undefined;
-  return state?.done === 1 && state.audited === 1 && state.type_audited === 1;
+    LEFT JOIN vault_member_nul_audit_v4 n ON n.ws = b.ws
+    WHERE b.ws = ?`).get(ws) as { done: number; audited: number | null; type_audited: number | null; nul_audited: number | null } | undefined;
+  return state?.done === 1 && state.audited === 1 && state.type_audited === 1 && state.nul_audited === 1;
 }
 
 /// An index begun by an older station can still be scanned around while its audit is prepared in the background.
@@ -133,10 +162,12 @@ export function vaultMembersStarted(db: DatabaseSync, ws: string): boolean {
 // vaults, and keep that table on the outside so a normal workspace does not scan all of its vaults.
 export const VAULT_MEMBERS_INVALID = `SELECT 1 FROM vault_member_invalid i CROSS JOIN vaults v ON v.ws = i.ws AND v.id = i.vault WHERE i.ws = ?
   UNION ALL SELECT 1 FROM vault_member_duplicates_v2 d CROSS JOIN vaults v ON v.ws = d.ws AND v.id = d.vault
-    WHERE d.ws = ? LIMIT 1`;
+    WHERE d.ws = ?
+  UNION ALL SELECT 1 FROM vault_member_nul_v4 n CROSS JOIN vaults v ON v.ws = n.ws AND v.id = n.vault
+    WHERE n.ws = ? LIMIT 1`;
 
 export function hasInvalidVaultMembers(db: DatabaseSync, ws: string): boolean {
-  return db.prepare(VAULT_MEMBERS_INVALID).get(ws, ws) !== undefined;
+  return db.prepare(VAULT_MEMBERS_INVALID).get(ws, ws, ws) !== undefined;
 }
 
 /// Consider at most `limit` vaults. The cursor and their entries commit together.
@@ -146,17 +177,20 @@ export function backfillVaultMembers(db: DatabaseSync, ws: string, limit = 32): 
     db.prepare("INSERT OR IGNORE INTO vault_member_backfill (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     db.prepare("INSERT OR IGNORE INTO vault_member_audit_v2 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     db.prepare("INSERT OR IGNORE INTO vault_member_type_audit_v3 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    db.prepare("INSERT OR IGNORE INTO vault_member_nul_audit_v4 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     const state = db.prepare("SELECT after_id, done FROM vault_member_backfill WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     const audit = db.prepare("SELECT after_id, done FROM vault_member_audit_v2 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     const types = db.prepare("SELECT after_id, done FROM vault_member_type_audit_v3 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
-    if (state.done && audit.done && types.done) {
+    const nul = db.prepare("SELECT after_id, done FROM vault_member_nul_audit_v4 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
+    if (state.done && audit.done && types.done && nul.done) {
       db.exec("COMMIT");
       return true;
     }
     // A new lookup and its audit advance together. An existing lookup with a different cursor is audited afterwards.
     const auditBatch = !audit.done && (state.done !== 0 || state.after_id === audit.after_id);
-    const after = !state.done ? state.after_id : !audit.done ? audit.after_id : types.after_id;
+    const after = !state.done ? state.after_id : !audit.done ? audit.after_id : !types.done ? types.after_id : nul.after_id;
     const typeBatch = !types.done && types.after_id === after;
+    const nulBatch = !nul.done && nul.after_id === after;
     const rows = (after === null
       ? db.prepare("SELECT id FROM vaults WHERE ws = ? ORDER BY id LIMIT ?").all(ws, limit)
       : db.prepare("SELECT id FROM vaults WHERE ws = ? AND id > ? ORDER BY id LIMIT ?").all(ws, after, limit)) as { id: string }[];
@@ -197,9 +231,17 @@ export function backfillVaultMembers(db: DatabaseSync, ws: string, limit = 32): 
       db.prepare("UPDATE vault_member_type_audit_v3 SET after_id = ?, done = ? WHERE ws = ?")
         .run(rows.at(-1)?.id ?? types.after_id, done ? 1 : 0, ws);
     }
+    if (nulBatch) {
+      const clear = db.prepare("DELETE FROM vault_member_nul_v4 WHERE ws = ? AND vault = ?");
+      const add = db.prepare(`INSERT OR IGNORE INTO vault_member_nul_v4 SELECT v.ws, v.id FROM vaults v
+        WHERE v.ws = ? AND v.id = ? AND (${nulMembers("v.body")}) = 1`);
+      for (const row of rows) { clear.run(ws, row.id); add.run(ws, row.id); }
+      db.prepare("UPDATE vault_member_nul_audit_v4 SET after_id = ?, done = ? WHERE ws = ?")
+        .run(rows.at(-1)?.id ?? nul.after_id, done ? 1 : 0, ws);
+    }
     db.exec("COMMIT");
     return (state.done !== 0 || done) && (audit.done !== 0 || (auditBatch && done))
-      && (types.done !== 0 || (typeBatch && done));
+      && (types.done !== 0 || (typeBatch && done)) && (nul.done !== 0 || (nulBatch && done));
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
