@@ -685,6 +685,14 @@ export class Local {
     this.#changed({ kind: "archiving" });
   }
 
+  /// Whether nothing done here changes how a station's rows show (none of its chats being archived or changed from here):
+  /// a list's rows made before are then as they would be made again (views.ts keptBetween).
+  rowsQuiet(station: string): boolean {
+    this.#seen.archiving.read();
+    this.#seen.changing.read(station);
+    return !this.#archiving.some(([s]) => s === station) && !this.#changing.some((c) => c.station === station);
+  }
+
   beingArchived(station: string, row: J): boolean {
     this.#seen.archiving.read();
     return this.#archiving.some(([s, thread, session]) => s === station && (thread !== null ? get(row, "thread") === thread : get(row, "session") === session));

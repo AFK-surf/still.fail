@@ -3,6 +3,7 @@
 // of them only invalidates it, and the store has it computed when its coalesced emission goes out. What a person did
 // here and their station has not confirmed yet (local.ts) is laid over what the stations hold.
 import { Effect } from "effect";
+import { work } from "../work.ts";
 import type { Inner } from "../core.ts";
 import type { Data } from "../data.ts";
 import type { Derive } from "../db/account.ts";
@@ -160,6 +161,46 @@ function stationsOn(chats: J): J {
   const words = new Map(arr(get(chats, "stations")).map((s) => [str(get(s, "station")) ?? "", s]));
   if (![...words.values()].some((w) => get(w, "offline") !== undefined || get(w, "reconnecting") !== undefined)) return chats;
   return { ...chats, days: arr(get(chats, "days")).map((d) => ({ ...d, items: arr(get(d, "items")).map((row) => stationOn(row, words.get(str(get(row, "station")) ?? ""))) })) };
+}
+
+/// Which of a list's rows went and came since it was last made (`#chats`): `whole` when it was made again whole.
+type RowsChanged = { whole: boolean; gone: J[]; come: J[] };
+/// How many rows going and coming a list's days take one by one (`#daysOf`); more, they are made again whole.
+const ROWS_PUT_ALONE = 32;
+
+/// A station's rows as its records `listed` make them (`make`), from what `was` (its records then) made: the same
+/// records in the same order taken as they were, walking both, a record put in or taken out stepped over (a chat moved
+/// to the top is one row taken out and one put in), the rest made. What went and came is said in `changes`.
+function keptBetween(was: J[], made: (J | null)[], listed: J[], make: (raw: J) => J | null): { made: (J | null)[]; gone: J[]; come: J[] } {
+  const out: (J | null)[] = [];
+  const gone: J[] = [];
+  const come: J[] = [];
+  const put = (raw: J) => {
+    const row = make(raw);
+    if (row !== null) come.push(row);
+    out.push(row);
+  };
+  const drop = (j: number) => {
+    const row = made[j];
+    if (row !== null && row !== undefined) gone.push(row);
+  };
+  let i = 0;
+  let j = 0;
+  while (i < listed.length && j < was.length) {
+    if (listed[i] === was[j]) {
+      out.push(made[j] ?? null);
+      i++;
+      j++;
+    } else if (j + 1 < was.length && listed[i] === was[j + 1]) drop(j++);
+    else if (i + 1 < listed.length && listed[i + 1] === was[j]) put(listed[i++]);
+    else {
+      drop(j++);
+      put(listed[i++]);
+    }
+  }
+  while (j < was.length) drop(j++);
+  while (i < listed.length) put(listed[i++]);
+  return { made: out, gone, come };
 }
 
 /// The list with its first `limit` rows, in their days, and how many more it has (`more`): what a page shows of it
@@ -573,6 +614,10 @@ export class Views implements Owner {
   readonly #rowsMade = new WeakMap<object, { sig: string; row: J }>();
   /// A chat's messages as shown (`#shown`), by the message each was made of, and what else it was made with.
   readonly #shownMade = new WeakMap<object, { by: unknown; waiting: boolean; out: J }>();
+  /// Each list's rows as its stations' records made them last time, by the list (`#chats`).
+  readonly #chatsKept = new Map<string, Map<string, { listed: J[]; made: (J | null)[]; sig: string; failedKey: string }>>();
+  /// Each list's days as they were last made, from which rows (`#daysOf`).
+  readonly #daysKept = new Map<string, { rows: J[]; days: J[]; today: number; offset: number }>();
   /// A row's local day by its time (`#days`), while the zone's offset now is `#daysZone`.
   #dayOf = new WeakMap<object, [number, number]>();
   #daysZone: number | null = null;
@@ -1422,6 +1467,13 @@ export class Views implements Owner {
     const states: J[] = [];
     const troubles: [string, string, boolean, string][] = [];
     const rows: J[] = [];
+    // The rows each station's records made last time (`keptBetween`), and which of them changed since.
+    const listKey = `${scope}\u0001${mine}\u0001${watching}\u0001${visibility}`;
+    let keptLists = this.#chatsKept.get(listKey);
+    if (!keptLists) this.#chatsKept.set(listKey, (keptLists = new Map()));
+    let whole = false;
+    const gone: J[] = [];
+    const come: J[] = [];
     let loading = false;
     const unread: string[] = [];
     // Catching up on what changed while away (station/sync.ts `#catching`): whether a station has yet to say what, and
@@ -1452,12 +1504,14 @@ export class Views implements Owner {
         // (its connects: a Slack or Feishu row's link there, #rowMenu)
         const connects = arr(get(this.ok({ topic: "overview", station: s.address }), "connects"));
         const sig = JSON.stringify([s.address, s.name, mark, me, slackUsers, members_, watching, hint, menu, connects.map((c) => [c.id, c.kind, get(get(c, "connection"), "state"), get(get(c, "connection"), "workspace"), get(get(c, "feishu"), "domain")])]);
-        for (const raw of [...asked, ...listed]) {
-          if (mine && get(raw, "mine") !== true) continue;
-          if (this.local.beingArchived(s.address, raw)) continue;
+        // One record's row, or null where the list does not show it.
+        const make = (raw: J): J | null => {
+          work.listed++;
+          if (mine && get(raw, "mine") !== true) return null;
+          if (this.local.beingArchived(s.address, raw)) return null;
           const shown = this.local.asChanging(s.address, raw);
-          if (visibility === "visible" && get(shown, "hidden") === true) continue;
-          if (visibility === "hidden" && get(shown, "hidden") !== true) continue;
+          if (visibility === "visible" && get(shown, "hidden") === true) return null;
+          if (visibility === "hidden" && get(shown, "hidden") !== true) return null;
           // Only a frozen row (db/account.ts) is surely as it was when its row was made.
           const keepable = isObject(shown) && Object.isFrozen(shown);
           const kept = keepable ? this.#rowsMade.get(shown) : undefined;
@@ -1470,8 +1524,35 @@ export class Views implements Owner {
             if (row !== null) deepFreeze(row);
             if (keepable) this.#rowsMade.set(shown, { sig, row });
           }
-          if (row !== null) rows.push(this.#unsentRow(s.address, row, failed));
+          return row === null ? null : this.#unsentRow(s.address, row, failed);
+        };
+        // What the station's rows were made into last time, kept while nothing here changes how a row is made (no row
+        // asked for, archived or changed from here; its failed messages and what rows are made with as they were): then
+        // only the records between the same ones at both ends are made again, so a chat that changed costs its row
+        // (each change of one made all of a station's 1400 again, 2026-11-08).
+        const failedKey = JSON.stringify([...failed].map(([thread, m]) => [thread, get(m, "id"), get(m, "text")]));
+        const quiet = head === null && asked.length === 0 && this.local.rowsQuiet(s.address);
+        const was = keptLists.get(s.address);
+        let made: (J | null)[];
+        if (quiet && was !== undefined && was.sig === sig && was.failedKey === failedKey) {
+          if (was.listed === listed) made = was.made;
+          else {
+            const between = keptBetween(was.listed, was.made, listed, make);
+            made = between.made;
+            gone.push(...between.gone);
+            come.push(...between.come);
+          }
+        } else {
+          made = listed.map(make);
+          whole = true;
         }
+        if (quiet) keptLists.set(s.address, { listed, made, sig, failedKey });
+        else keptLists.delete(s.address);
+        for (const raw of asked) {
+          const row = make(raw);
+          if (row !== null) rows.push(row);
+        }
+        for (const row of made) if (row !== null) rows.push(row);
       }
       let state: string;
       let message: J = null;
@@ -1509,7 +1590,7 @@ export class Views implements Owner {
       const now = looks.doing(state, cause, this.ok({ topic: "overview", station: s.address }));
       states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}), ...now, ...rowWords(s, this.link(s.address)) });
     }
-    const days = this.#days(rows);
+    const days = this.#daysOf(listKey, rows, { whole, gone, come });
     let trouble: J = null;
     if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false, station: troubles[0][3] };
     else if (troubles.length > 1) {
@@ -1768,6 +1849,25 @@ export class Views implements Owner {
     return marked;
   }
 
+  /// A row's local calendar day, kept with it while the zone is as it was (the zone's offset at each row's time was
+  /// asked of the host for each of 1400 rows on every change of one, 2026-11-08).
+  #dayOfRow(row: J): number {
+    const host = this.#core.host;
+    const ms = typeof row.lastActiveAt === "number" ? row.lastActiveAt : 0;
+    const kept = this.#dayOf.get(row);
+    if (kept !== undefined && kept[0] === ms) return kept[1];
+    const d = Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
+    this.#dayOf.set(row, [ms, d]);
+    return d;
+  }
+
+  /// The rows' days kept (`#dayOfRow`) while the zone's offset now is `offset`: let go as it changes.
+  #zone(offset: number): void {
+    if (this.#daysZone === offset) return;
+    this.#daysZone = offset;
+    this.#dayOf = new WeakMap();
+  }
+
   /// Rows newest first, grouped by the viewer's local calendar day; the pinned above them all.
   #days(rows: J[]): J[] {
     const host = this.#core.host;
@@ -1777,24 +1877,9 @@ export class Views implements Owner {
     pinned.sort((a, b) => when(b) - when(a) || at(b) - at(a));
     const now = host.nowMs();
     const offset = host.utcOffsetMin(now);
-    // Each row's local day, kept with it while the zone is as it was (the zone's offset at each row's time was asked
-    // of the host for each of 1400 rows on every change of one, 2026-11-08).
-    if (this.#daysZone !== offset) {
-      this.#daysZone = offset;
-      this.#dayOf = new WeakMap();
-    }
-    const dayOf = this.#dayOf;
-    const day = (row: J, ms: number) => {
-      const kept = dayOf.get(row);
-      if (kept !== undefined && kept[0] === ms) return kept[1];
-      const d = Math.floor((ms + host.utcOffsetMin(ms) * 60_000) / DAY_MS);
-      dayOf.set(row, [ms, d]);
-      return d;
-    };
-    const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => {
-      const time = at(row);
-      return { row, time, day: day(row, time) };
-    });
+    this.#zone(offset);
+    work.listed += rows.length;
+    const rest = rows.filter((row) => !pinnedAt.has(row)).map((row) => ({ row, time: at(row), day: this.#dayOfRow(row) }));
     rest.sort((a, b) => b.day - a.day || b.time - a.time);
     const today = Math.floor((now + offset * 60_000) / DAY_MS);
     const days: [number, number, J[]][] = [];
@@ -1807,6 +1892,58 @@ export class Views implements Owner {
     if (pinned.length > 0) out.push({ daysAgo: -1, at: at(pinned[0]), label: t("core-views.pinned"), pinned: true, items: pinned });
     for (const [d, ti, items] of days) out.push({ daysAgo: today - d, at: ti, label: format.dayLabel(ti, now, offset), items });
     return out;
+  }
+
+  /// A list's days (`#days`), made from the last ones where only a few rows went and came (`changes`): those rows are
+  /// taken out of and put into their days, the other days kept as they were.
+  #daysOf(key: string, rows: J[], changes: RowsChanged): J[] {
+    const host = this.#core.host;
+    const now = host.nowMs();
+    const offset = host.utcOffsetMin(now);
+    const today = Math.floor((now + offset * 60_000) / DAY_MS);
+    this.#zone(offset);
+    const last = this.#daysKept.get(key);
+    const few = changes.gone.length + changes.come.length <= ROWS_PUT_ALONE;
+    const pinnedChanged = changes.gone.some((r) => pinnedAt.has(r)) || changes.come.some((r) => pinnedAt.has(r));
+    let days: J[];
+    if (last !== undefined && !changes.whole && few && !pinnedChanged && last.today === today && last.offset === offset && last.rows.length - changes.gone.length + changes.come.length === rows.length) {
+      days = last.days.slice();
+      work.listed += changes.gone.length + changes.come.length;
+      const at = (row: J) => (typeof row.lastActiveAt === "number" ? row.lastActiveAt : 0);
+      const dayAt = (d: number) => days.findIndex((g) => g.pinned !== true && g.daysAgo === today - d);
+      for (const row of changes.gone) {
+        const i = dayAt(this.#dayOfRow(row));
+        const items: J[] = i < 0 ? [] : days[i].items;
+        const j = items.indexOf(row);
+        if (j < 0) {
+          days = this.#days(rows);
+          this.#daysKept.set(key, { rows, days, today, offset });
+          return days;
+        }
+        const left = items.filter((_, k) => k !== j);
+        if (left.length === 0) days.splice(i, 1);
+        else days[i] = { ...days[i], items: left, at: at(left[0]) };
+      }
+      for (const row of changes.come) {
+        const d = this.#dayOfRow(row);
+        const time = at(row);
+        const i = dayAt(d);
+        if (i < 0) {
+          // A day of its own, among the days newest first (after the pinned).
+          let k = 0;
+          while (k < days.length && (days[k].pinned === true || days[k].daysAgo < today - d)) k++;
+          days.splice(k, 0, { daysAgo: today - d, at: time, label: format.dayLabel(time, now, offset), items: [row] });
+          continue;
+        }
+        const items: J[] = days[i].items;
+        let k = 0;
+        while (k < items.length && at(items[k]) >= time) k++;
+        const put = [...items.slice(0, k), row, ...items.slice(k)];
+        days[i] = { ...days[i], items: put, at: at(put[0]) };
+      }
+    } else days = this.#days(rows);
+    this.#daysKept.set(key, { rows, days, today, offset });
+    return days;
   }
 
   // ── stations and connects ──
