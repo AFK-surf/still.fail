@@ -839,6 +839,12 @@ pub let fix_answer_ms : Double = 1400.0
 pub let fix_turn_end_ms : Double = 700.0
 
 ///|
+/// The status its agent at work on what was sent has: "queued" as the station has its words and it has not taken them
+/// yet (or a summary read before it took them said so).
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_working_status : Ref[String] = Ref("running")
+
+///|
 pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
   match (fix_clock.val, fix_ctx.val) {
     (Some(clock), _) => fix_timers.push((clock() + ms, f))
@@ -877,7 +883,7 @@ pub fn with_sent(base : Json, session : String) -> Json {
             match a {
               Object(am) => {
                 let w = am.copy()
-                w["status"] = Json::string("running")
+                w["status"] = Json::string(fix_working_status.val)
                 w["started"] = Json::boolean(true)
                 w["since"] = Json::number(fc.working)
                 Json::object(w)
