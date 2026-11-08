@@ -2155,3 +2155,24 @@ test "click-read" {
   )
   |> ignore
 }
+
+///|
+test "build-clock: what a frame's paint reads is not counted" {
+  // read in what a paint taker is given, in a function only that calls, in one only paint's root calls: not counted;
+  // in a function also called as it is built: counted
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "fn p(c : @ui.Ctx) -> Unit {\n  c.look_by(n, fn() { look(c.now()) })\n  c.look_by(n, fn() { shown(c) })\n  both(c)\n}\nfn shown(c : @ui.Ctx) -> Double {\n  c.shows_motion(m, true)\n}\nfn both(c : @ui.Ctx) -> Unit {\n  c.shows_motion(m, true)\n}\nfn q(c : @ui.Ctx) -> Unit {\n  c.look_by(n, fn() { both(c) })\n}\n",
+      ),
+      (
+        "src/ui/draw.mbt",
+        "fn frame_paint(c : Ctx) -> Unit {\n  c.paint_bar(b)\n}\nfn Ctx::paint_bar(self : Ctx, b : Int) -> Unit {\n  self.now() |> ignore\n}\nfn Ctx::build_bar(self : Ctx) -> Unit {\n  self.now() |> ignore\n}\n",
+      ),
+    ],
+    "build-clock",
+    2,
+  )
+  assert_eq(lines(fs), [8, 10])
+}

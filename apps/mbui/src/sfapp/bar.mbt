@@ -1019,6 +1019,14 @@ fn notch_lips(w : Double, cy : Double, r : Double) -> (Double, Double)? {
 }
 
 ///|
+/// The notch where it is drawn as the frame is painted (BarModel::k_painted), and where its lips are then: none while
+/// its circle is not through the edge.
+fn notch_painted(c : @ui.Ctx, w : Double) -> (Double, Double, (Double, Double)?) {
+  let (cy, r) = notch_at(bar.k_painted(c))
+  (cy, r, notch_lips(w, cy, r))
+}
+
+///|
 /// The glass `w` wide from `top` to `bottom` (in the panel's frame) with the notch cut into its top (Bar.kt: the
 /// glass clipped to its outline, its lit rim, `glass_bottom_bar`; solid, its ground), and the notch's own edge lit
 /// (white at 70%, 22% in the dark, 1 wide across the outline, under the glass's top). The notch where `cy` and `r` have
@@ -1030,14 +1038,9 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
   let corner = dmin(rad, h / 2.0)
   let edge_ink = @sf.alpha(0xFFFFFFFFL, if t.dark { 0.22 } else { 0.7 })
   if moves {
-    // (the notch where it is drawn, and where its lips are then: none while the circle is not through the edge)
-    let notch = fn() {
-      let (cy, r) = notch_at(bar.k_painted(c))
-      (cy, r, notch_lips(w, cy, r))
-    }
     let glass = at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar())
     c.notch_by(glass, fn() {
-      match notch() {
+      match notch_painted(c, w) {
         (cy, r, Some(_)) => (cy, r, fillet)
         (_, _, None) => (0.0, 0.0, 0.0)
       }
@@ -1056,14 +1059,14 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
         border_color=edge_ink,
       )
       c.notch_by(edge, fn() {
-        let (cy, r, _) = notch()
+        let (cy, r, _) = notch_painted(c, w)
         (cy + 0.5, r - 0.5, fillet + 0.5)
       })
       // (no lips, no edge: nothing of it drawn)
-      c.look_by(edge, fn() { @ui.look(alpha=if notch().2 is Some(_) { 1.0 } else { 0.0 }) })
+      c.look_by(edge, fn() { @ui.look(alpha=if notch_painted(c, w).2 is Some(_) { 1.0 } else { 0.0 }) })
     })
     c.cut_across_by(lips, fn() {
-      match notch().2 {
+      match notch_painted(c, w).2 {
         Some((l, rr)) => (l, rr)
         None => (0.0, 0.0)
       }
@@ -1211,16 +1214,14 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, tint : Tin
       _ => @sf.icon(c, name, size=28.0, color~)
     }
   }
-  // the lit picture over it as opaque as it is lit: as it is, or as each frame is painted (`by`)
-  let lit_over = fn(v : Double, by : (() -> @ui.Look)?) {
+  // the lit picture over it as opaque as it is lit (as it is, or as each frame is painted: a look on it), the node
+  let lit_over = fn(v : Double) -> Int {
+    let mut over = -1
     c.layer(align=ACenter, fn() {
-      let over = c.box(h=Fill(1.0), justify=JCenter, opacity=v, fn() { icon(lit) |> ignore })
-      match by {
-        Some(f) => c.look_by(over, f)
-        None => ()
-      }
+      over = c.box(h=Fill(1.0), justify=JCenter, opacity=v, fn() { icon(lit) |> ignore })
     })
     |> ignore
+    over
   }
   match tint {
     Lit(v) => {
@@ -1228,7 +1229,7 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, tint : Tin
         icon(idle) |> ignore
       }
       if v > 0.001 {
-        lit_over(v, None)
+        lit_over(v) |> ignore
       }
     }
     // on its way: both pictures, each shown as it is as each frame is painted (the idle one gone once nearly lit, the lit
@@ -1236,10 +1237,10 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, tint : Tin
     Going(g) => {
       let shown = icon(idle)
       c.look_by(shown, fn() { @ui.look(alpha=if g.painted(c) < 0.999 { 1.0 } else { 0.0 }) })
-      lit_over(1.0, Some(fn() {
+      c.look_by(lit_over(1.0), fn() {
         let v = g.painted(c)
         @ui.look(alpha=if v > 0.001 { v } else { 0.0 })
-      }))
+      })
     }
   }
   if dot != 0L {

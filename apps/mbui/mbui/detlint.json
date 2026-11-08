@@ -246,9 +246,7 @@
       "src/motion/way.mbt": 1,
       "src/ui/cover.mbt": 2,
       "src/ui/ctx.mbt": 2,
-      "src/ui/editor.mbt": 1,
       "src/ui/frame_watch.mbt": 5,
-      "src/ui/image.mbt": 1,
       "src/ui/kept_part.mbt": 1,
       "src/ui/list.mbt": 5,
       "src/ui/list_scroll_fast.mbt": 1,
@@ -258,10 +256,9 @@
       "src/ui/reader.mbt": 3,
       "src/ui/reveal.mbt": 3,
       "src/ui/scroll.mbt": 3,
-      "src/ui/scroll_bar.mbt": 2,
+      "src/ui/scroll_bar.mbt": 1,
       "src/ui/shot.mbt": 1,
-      "src/ui/sideways.mbt": 2,
-      "src/ui/tree_field.mbt": 1
+      "src/ui/sideways.mbt": 2
     },
     "click-read": {}
   },

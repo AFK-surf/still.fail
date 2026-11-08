@@ -332,8 +332,9 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
   }
   let readers = host_readers(mbts, cfg)
   lap("host readers")
+  let painted = paint_fns(mbts)
   for f in mbts {
-    lint_mbt(f, cfg, findings, returns, readers)
+    lint_mbt(f, cfg, findings, returns, readers, painted)
     lint_style(f, cfg, findings)
     lint_style_text(f, findings)
   }
