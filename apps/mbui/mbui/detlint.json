@@ -260,6 +260,7 @@
       "src/kit/disclosure.mbt": 1
     },
     "old-island": {},
+    "old-panel": {},
     "click-read": {}
   },
   "excused": {
@@ -321,6 +322,7 @@
     "build-clock": {},
     "old-list": {},
     "old-island": {},
+    "old-panel": {},
     "click-read": {}
   },
   "tester": {
