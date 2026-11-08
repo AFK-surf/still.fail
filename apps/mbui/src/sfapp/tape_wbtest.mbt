@@ -884,12 +884,12 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   let edge = @ui.concentric(16.0, 6.0)
   assert_eq(@sf.tape_edge.radius(@ui.corner_roots()), edge)
   let pane = @sf.tape_corner
-  // the sidebar in use: its left corners at the window's, the page's right ones past its right edge as they will be
-  // there
+  // the sidebar in use: its left corners at the window's (its ground a node of the window's tree: dock_node), the
+  // page's right ones past its right edge as they will be there
   guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
   assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{page.radii}")
   assert_true(
-    t.boxes().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
+    t.boxes_held().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
     msg="no sidebar's panel with its left corners the window's",
   )
   assert_eq(t.corner_faults(), [])

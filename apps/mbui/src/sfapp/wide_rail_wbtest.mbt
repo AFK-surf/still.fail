@@ -78,12 +78,19 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       t.run_for(@ui.move_most_ms)
       assert_true(t.find("新建对话") is Some(_), msg="shown a while")
     }
-    let bar = t
-      .boxes()
-      .iter()
-      .find_first(fn(b) { b.x == @sfdesk.closed_bar_in && b.radius > 0.0 && b.h > 400.0 && b.bg != 0L })
+    // (the block's ground a node of the window's tree: as the tree draws it)
+    guard @ui.view_tree()
       .unwrap()
-    assert_eq(bar.radii, (follow, follow, follow, follow))
+      .drawn()
+      .iter()
+      .find_first(fn(d) { d.x == @sfdesk.closed_bar_in && d.h > 400.0 && d.ground != 0L }) is Some(bar) else {
+      fail("no closed bar's ground drawn at \{@sfdesk.closed_bar_in}")
+    }
+    let radii = match bar.corners {
+      Some(k) => k
+      None => (bar.radius, bar.radius, bar.radius, bar.radius)
+    }
+    assert_eq(radii, (follow, follow, follow, follow))
     // the settings' ground at the bar's foot, 6 from its left and its foot: the bar's corner there (10) less 6, 4, is
     // squarer than the ranges let a corner be (6): it stands alone, a small block's 10, all round alike; a place's in
     // the middle the same, one layer, one corner

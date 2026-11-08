@@ -766,7 +766,13 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_goes.parts.push(side)
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
       tape_swipes(side, Side)
-      @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+      // (the block, the tree's: its ground, the rail and a place's sidebar not made once in it, dock_node)
+      side.box(fn(b) {
+        b.over(Is(true)) |> ignore
+        dock_node(b, fn() { tape_side_at(side) }, fn(c) { tape_rail_built(c, src) }, fn(c, _) { tape_sidebar_built(c, src) })
+        |> ignore
+      })
+      |> ignore
       // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
       // the panel is behind the one in use: tape_behind's)
       side.box(fn(sides) {
@@ -1091,37 +1097,27 @@ fn tape_covered(p : TapePane) -> Bool {
 }
 
 ///|
-/// The rail and the sidebar's column on the tape (its island, as wide as the tree lays it out: the sidebar's width where
-/// its move has got): the block apart from the page, in the workspace in view.
-fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
+/// The rail on the tape (its old view in the sidebar's panel's nodes: dock_node), open, apart from the page; behind the
+/// panel in use on its darker ground (tape_behind).
+fn tape_rail_built(c : @ui.Ctx, src : Source) -> Unit {
   let (now, all, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
-  let r = tape_room_now()
-  let s = dmax(0.0, c.width - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
-  tape_behind(c, Side, fn() {
-    dock(
-      c,
-      src,
-      w,
-      all,
-      false,
-      false,
-      s,
-      c.width,
-      if side_full_height(false) {
-        0.0
-      } else {
-        r.top
-      },
-      r.foot,
-      0.0,
-      held=true,
-    )
-  })
+  if !@sf.native_on() {
+    tape_behind(c, Side, fn() { rail(c, src, w, all, false) })
+  }
 }
 
 ///|
-/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as tape_side_built
+/// The sidebar of a place not made once over the block on the tape (lists.mbt sidebar), its old view's, as wide as its
+/// box; behind the panel in use on its darker ground (tape_behind).
+fn tape_sidebar_built(c : @ui.Ctx, src : Source) -> Unit {
+  let (now, _, _, _) = @sfbase.workspace_in_view(src)
+  guard now is Some(w) else { return }
+  tape_behind(c, Side, fn() { sidebar(c, src, w, c.width) })
+}
+
+///|
+/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as dock_node
 /// lays it out (dock_side_at, the tape's look), in the column's own room.
 fn tape_side_at(side : @view.View) -> SideAt {
   let r = tape_room_now()
@@ -1129,8 +1125,11 @@ fn tape_side_at(side : @view.View) -> SideAt {
   let s = dmax(0.0, col - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
   let top = if side_full_height(false) { 0.0 } else { r.top }
   // (its top row the tape's, its band the bar's, as tape_under says them: side_brand_h)
+  // (behind the panel in use, its ground a step darker as far as the tape's move has got: tape_behind's)
+  let k = tape_behind_at(Side, tape_drawn_at(side))
   {
     ..dock_side_at(false, false, s, col, top, r.foot, 0.0, side.window().1, None),
+    ground: if k <= 0.0 { apart_ground() } else { @sf.behind_ground(k~) },
     brand: side_brand_h(false, r.top),
     band: 1.0,
     tape: true,
