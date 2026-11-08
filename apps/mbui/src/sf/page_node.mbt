@@ -852,13 +852,18 @@ pub fn switch_node(
 ) -> Unit {
   parent.box(fn(at) {
     at.lines_up(Is(Some(Start))) |> ignore
-    at.box(fn(v) {
+    // (its press's room: as wide as a press's least room where it is drawn narrower, reached from round it as the old
+    // view's press_room has a small target's, laid out as wide as it is drawn: what is by it moves none)
+    at.box(fn(room) {
+    let out = fn() { dmax(0.0, (theme().items.least - switch_size(small).0) / 2.0) }
+    room.padding(By(fn() { (out(), 0.0, out(), 0.0) })).margin(By(fn() { (-out(), 0.0, -out(), 0.0) })) |> ignore
+    room.box(fn(v) {
       // (its track in the middle of that room, up and down: switch_reach's)
       v.min_height(By(fn() { Some(theme().items.least) })).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
       let knob = EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
       let held = EdgeWay::new(0.0)
       v.reacts(on, fn(now) { knob.go(v, if now { 1.0 } else { 0.0 }, @kit.switch_ms) })
-      v.reacts(fn() { v.pressed() && @ui.pointing() is Finger }, fn(down) {
+      v.reacts(fn() { room.pressed() && @ui.pointing() is Finger }, fn(down) {
         held.go_by(v, if down { 1.0 } else { 0.0 }, @motion.lift_spring)
       })
       let press = fn() {
@@ -868,15 +873,13 @@ pub fn switch_node(
         }
         turn(to)
       }
+      room.presses(By(fn() { !disabled() })).focusable(By(fn() { !disabled() })).on_press(press) |> ignore
       v
-      .presses(By(fn() { !disabled() }))
-      .focusable(By(fn() { !disabled() }))
       .alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } }))
       .says(By(fn() { Some(@view.said(Switch, label=label(), check=if on() { On } else { Off })) }))
-      .on_press(press)
       |> ignore
-      let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
-      v.gesture(
+      let on_it = fn(d : @view.Drag) { room.finger_target(d.wx, d.wy) }
+      room.gesture(
         @ui.touch_slop(),
         tap=fn(d) { if on_it(d) && !disabled() { press() } },
         hold=(@ui.long_press_ms, fn(_) {  }),
@@ -941,7 +944,7 @@ pub fn switch_node(
           |> ignore
         })
         // (the keyboard's focus on it: a ring round it, its gap and width the theme's)
-        track.show(fn() { v.focus_shown() }, fn(ring) {
+        track.show(fn() { room.focus_shown() }, fn(ring) {
           let out = fn() {
             let t = @ui.tree_theme()
             t.focus_gap + t.focus_w
@@ -955,6 +958,8 @@ pub fn switch_node(
         })
       })
       |> ignore
+    })
+    |> ignore
     })
     |> ignore
   })
