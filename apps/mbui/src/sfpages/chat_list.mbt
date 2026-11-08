@@ -26,6 +26,7 @@ pub fn chat_list(
   lead? : Double = unread_lead,
   bar? : Double = bar_foot,
   foot? : Double = list_foot,
+  slotted? : Bool = false,
 ) -> Unit {
   let key = list_key(r)
   // (laid out by the width it is at, or on the page's way otherwise: laid_w)
@@ -277,8 +278,8 @@ pub fn chat_list(
   // (where it is, for what a quote led to to be put in its middle: passage_centre)
   @motion.measure(c, list_box, "chat-list/" + key)
   // (what of it the bar and the composer hide: its pictures, noted as its, go out from under them before they grow
-  // into the viewer)
-  @sfbase.note_list(c, list_box, rk, bar, room)
+  // into the viewer; under a bar of the page's nodes, in the page's slot: `slotted`)
+  @sfbase.note_list(c, list_box, rk, bar, room, slot=if slotted { c.owner } else { 0 })
   // a new chat's list comes up out of the composer with its first words: drawn below its place by how far they have
   // to go, from where this frame lays their row out (flight.mbt flight_carry_shift)
   if flight_carried(lf.draft) {

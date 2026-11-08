@@ -72,13 +72,17 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 /// A chat's page made once in node `v` of a stack's (entry `serial`'s: nav_view's and nav_flat_view's `made`), and the
 /// new chat that becomes it in place, the same page: what it holds its old view as yet, its island (Nav::page_island),
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
-/// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes.
+/// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes. Over it
+/// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
+/// time on top, `stint`).
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
   serial : Int,
   build : (@ui.Ctx, Source, Page) -> Unit,
   key? : () -> String = fn() { "" },
+  over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
+  stint? : () -> Int = fn() { 0 },
 ) -> Unit {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
@@ -96,6 +100,17 @@ pub fn chat_page_made(
   )
   .grow(Is(1.0))
   |> ignore
+  // (a picture flying from its list drawn here while under its bar, the bar over it: viewer_flight_slot)
+  v.box(fn(slot) { viewer_flight_slot(slot, retained, serial, fn() { slot.window() }) }) |> ignore
+  match over {
+    Some(f) =>
+      // (while the page shows, as its old view is built: what it reads let go of while another covers it)
+      v.show(fn() { app.nav.shows(serial) }, fn(o) {
+        o.over(Is(true)) |> ignore
+        f(o, retained, fn() { app.nav.page_of(serial).map(fn(e) { e.0 }) }, stint)
+      })
+    None => ()
+  }
 }
 
 ///|

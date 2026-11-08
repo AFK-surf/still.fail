@@ -1263,8 +1263,8 @@ pub fn words_node(parent : @view.View, words : () -> String, style : () -> @ui.T
 
 ///|
 /// A round key in a bar (nav_button's) as a node: `side` across, round, its icon `icon_size` in the
-/// ink in its middle, no disc behind it (a ground while pressed: its ripple), read out a button named `label`; `press`
-/// done as it is pressed.
+/// ink (or `ink`) in its middle, no disc behind it (a ground while pressed: its ripple), read out a button named
+/// `label`; `press` done as it is pressed.
 pub fn round_key_node(
   parent : @view.View,
   icon : String,
@@ -1272,6 +1272,7 @@ pub fn round_key_node(
   press : () -> Unit,
   side? : Double = 34.0,
   icon_size? : Double = 22.0,
+  ink? : () -> Int64 = fn() { theme().p.text },
 ) -> Unit {
   parent.box(fn(k) {
     k
@@ -1282,7 +1283,7 @@ pub fn round_key_node(
     .lies_along(Is(Middle))
     |> ignore
     pressed_node(k, press, Is(side / 2.0), Button, label)
-    icon_node(k, icon, icon_size, By(fn() { theme().p.text })) |> ignore
+    icon_node(k, icon, icon_size, By(ink)) |> ignore
   })
   |> ignore
 }

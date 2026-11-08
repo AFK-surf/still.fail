@@ -1,10 +1,10 @@
 ///|
 /// The made-up chat open over Home (chat_fixture.mbt), from its start: pushed in.
-fn chat_tester(mode : String) -> @ui.Tester {
+fn chat_tester(mode : String, w? : Double = 390.0) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -13,10 +13,9 @@ fn chat_tester(mode : String) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
-  // its people in the bar lettered as it calls them: the viewer 「你」, not their name
-  let bar = t.words().filter(fn(w) { w.2 < 100.0 }).map(fn(w) { w.0 })
-  assert_true(bar.contains("你"))
-  assert_true(!bar.contains("林"))
+  // (what the bar shows: its words seen, not those its row left out for the title and its agent, as a phone's is)
+  let bar = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.2 < 100.0 && w.5 > 0.0 }).map(fn(w) { w.0 }) }
+  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{bar(t)}")
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -29,6 +28,10 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
+  // its people in the bar where it has the room, lettered as it calls them: the viewer 「你」, not their name
+  let wide = chat_tester("chat", w=480.0)
+  assert_true(bar(wide).contains("你"), msg="its people with the room: \{bar(wide)}")
+  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{bar(wide)}")
 }
 
 ///|
