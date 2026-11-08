@@ -1082,7 +1082,8 @@ fn[P] Ctx::nav_layer(
   if nav.mode != 0 {
     let height = self.height
     self.moved_by(i, fn(w, _) {
-      let p = nav.at(self)
+      // (the clock read, followed, while it slides)
+      let p = nav.at(self.now_before(nav.slide_end(self)))
       if rising {
         (0.0, if under { 0.0 } else { p * height })
       } else {
@@ -1096,16 +1097,27 @@ fn[P] Ctx::nav_layer(
 }
 
 ///|
-/// Where the top page is, in its widths off to its side (0 in place: Nav's `p`), as its slide has it at the frame's
-/// time, from where it set out, by when and how (the clock read followed while it slides: what reads it, as it is
-/// painted, painted again each frame till its end); followed by a finger, where the finger has it.
-fn[P] Nav::at(self : Nav[P], c : Ctx) -> Double {
+/// When the top page's slide ends (-1: none goes), its start moved on as late as its first frame was (Nav::late_check):
+/// till then what places it reads the clock, followed (painted again each frame).
+fn[P] Nav::slide_end(self : Nav[P], c : Ctx) -> Double {
   if (self.mode == 1 || self.mode == 2 || self.mode == 4) && self.t0 >= 0.0 {
     self.late_check(c)
-    let t = if self.dur <= 0.0 || c.clock >= self.t0 + self.dur {
+    self.t0 + self.dur
+  } else {
+    -1.0
+  }
+}
+
+///|
+/// Where the top page is, in its widths off to its side (0 in place: Nav's `p`), as its slide has it at `now` (the
+/// frame's time as it is laid out and painted: Nav::slide_end says till when that is followed), from where it set out,
+/// by when and how; followed by a finger, where the finger has it.
+fn[P] Nav::at(self : Nav[P], now : Double) -> Double {
+  if (self.mode == 1 || self.mode == 2 || self.mode == 4) && self.t0 >= 0.0 {
+    let t = if self.dur <= 0.0 || now >= self.t0 + self.dur {
       1.0
     } else {
-      dmax((c.now() - self.t0) / self.dur, 0.0)
+      dmax((now - self.t0) / self.dur, 0.0)
     }
     let (x, _) = move_path(self.p0 - self.p1, self.v0, dmin(t, 1.0) * self.dur, self.dur)
     self.p = self.p1 + x
