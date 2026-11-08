@@ -591,13 +591,8 @@ export class LiveHub {
     void Promise.resolve().then(() => locate(key, pending.signal)).then((at) => {
       if (this.watched.get(key) !== watched || watched.following !== pending || watched.tail === null) return;
       if (at === null) { finished(); return; }
-      const before = watched.tail.snapshot();
-      const changed = before.length !== at.paths.length || before.some((state, i) => {
-        const ref = at.paths[i]!;
-        return state.path !== (typeof ref === "string" ? ref : ref.path) || (state.runtime ?? at.runtime) !== (typeof ref === "string" ? at.runtime : ref.runtime);
-      });
       const path = watched.tail.path;
-      watched.tail.extend(at.paths);
+      const changed = watched.tail.extend(at.paths);
       watched.behind = at.current === false;
       if (watched.tail.path !== path) watched.arm();
       finished();

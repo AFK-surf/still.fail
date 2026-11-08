@@ -159,3 +159,23 @@ test("a missing transcript does not make the live reader poll without another re
     assert.equal(calls, 2);
   } finally { hub.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a transcript at the same path is reread when its runtime changes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "live-follow-order-")), path = join(dir, "current.jsonl");
+  writeFileSync(path, line("one", "m1"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path], current: true }), time.clock);
+  const got: LiveMessage[] = [];
+  try {
+    hub.subscribe("s", 0, null, (m) => got.push(m));
+    hub.locateAsync = async () => ({ runtime: "codex", paths: [{ path, runtime: "codex" }], current: true });
+    hub.moved("s");
+    writeFileSync(path, `${JSON.stringify({ type: "response_item", timestamp: "2026-09-26T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "two" }] } })}\n`);
+    await settle();
+    await time.adjust(40);
+    await settle();
+    const timelines = got.filter((m) => m.type === "timeline");
+    assert.deepEqual(timelines.at(-1)?.entries.map((entry) => entry.text), ["two"]);
+    assert.equal(timelines.at(-1)?.start, 0);
+  } finally { hub.close(); rmSync(dir, { recursive: true, force: true }); }
+});

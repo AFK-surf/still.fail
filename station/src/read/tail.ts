@@ -247,13 +247,16 @@ export class ChainTail {
   }
 
   /// Goes on with the transcripts given (those it has, then new ones): the new ones are read after what it has.
-  extend(paths: TranscriptRef[]) {
+  /// Whether the chain changed, so its reader can read the new or replaced transcripts.
+  extend(paths: TranscriptRef[]): boolean {
     const refs = paths.map((ref) => transcriptRef(this.runtime, ref));
     if (refs.length < this.tails.length || this.tails.some((t, i) => t.path !== refs[i]!.path || t.runtime !== refs[i]!.runtime)) {
       this.tails = refs.map((r) => new TranscriptTail(r.runtime, r.path, this.shape, this.keeps));
-      return;
+      return true;
     }
+    if (refs.length === this.tails.length) return false;
     for (const r of refs.slice(this.tails.length)) this.tails.push(new TranscriptTail(r.runtime, r.path, this.shape, this.keeps));
+    return true;
   }
 
   /// New entries since the last read, with the index of the first (all from the first that changed when an earlier
