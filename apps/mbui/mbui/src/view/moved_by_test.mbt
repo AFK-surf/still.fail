@@ -78,3 +78,40 @@ test "its height changed while it moves: placed by the new height, its time the 
   assert_eq(tree.work().structure - before.structure, 0)
   assert_eq(tree.work().made - before.made, 0)
 }
+
+///|
+test "what moves it reads the clock only once it is laid out some size: followed from the frame it is, risen as the clock goes" {
+  let sheet : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    sheet.val = Some(
+      root.box(fn(s) {
+        s
+        .width(Is(Some(100.0)))
+        .height(Is(Some(100.0)))
+        .moved_by(fn(_, h) {
+          // (nothing to go before it has a height: the clock not read)
+          if h <= 0.0 {
+            return (0.0, 0.0)
+          }
+          let ms = h * rise_ms_per_point
+          let t = s.drawn_at()
+          let gone = if t >= ms { 1.0 } else { t / ms }
+          (0.0, h * (1.0 - gone))
+        })
+        |> ignore
+      }),
+    )
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  let id = sheet.val.unwrap().id()
+  assert_eq(tree.drawn_of(id).unwrap().y, 100.0)
+  let before = tree.work()
+  tree.at(100.0 * rise_ms_per_point / 4.0)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq(tree.drawn_of(id).unwrap().y, 75.0)
+  tree.at(100.0 * rise_ms_per_point)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq(tree.drawn_of(id).unwrap().y, 0.0)
+  assert_eq(tree.work().structure - before.structure, 0)
+  assert_eq(tree.work().computes - before.computes, 0)
+}

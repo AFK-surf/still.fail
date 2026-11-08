@@ -2765,7 +2765,8 @@ pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
 /// place's, as big as it is laid out in the frame drawing it (a sheet rising by its own height over a time its own
 /// height says). Asked as it is placed, nothing laid out again for it: what `f` reads (where a motion is: the clock,
 /// View::drawn_at) places it again as the next frame is drawn, and a frame laying it out another size places it by
-/// that size. `f` gives the same for the same state, time and size, however often asked. Ctx::moved_by's, a node's:
+/// that size, what `f` reads at that size followed from then on (the clock read only once it is laid out some size,
+/// where it moves only so: followed as of that frame). `f` gives the same for the same state, time and size, however often asked. Ctx::moved_by's, a node's:
 /// what that becomes once old views go.
 pub fn View::moved_by(self : View, f : (Double, Double) -> (Double, Double)) -> View {
   guard self.live() is Some(n) else { return self }
@@ -2774,9 +2775,12 @@ pub fn View::moved_by(self : View, f : (Double, Double) -> (Double, Double)) -> 
   let at = self.at
   self.bind(
     MovedBy,
+    // (followed at the size it is laid out, told as all of it is laid out and worked out again in that same pass
+    // (Tree::sizes_told): what `f` reads at that size followed from the frame it comes to it, the clock it reads only
+    // once it is some size too; none laid out yet, as nothing big)
     By(fn() {
-      let n = tree.nodes[at]
-      f(n.flex.width, n.flex.height)
+      let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
+      f(w, h)
     }),
     Place,
     fn(d) { tree.nodes[at].moved = d },
