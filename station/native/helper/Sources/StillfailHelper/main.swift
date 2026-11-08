@@ -10,7 +10,7 @@
 //   one starting itself again (STILLFAIL_HELPER_TAKEOVER), which waits for the lock.
 //
 // Each connection to the socket is one request: a JSON line `{token, op, …}`, the token the station gave it at start.
-//   hello               → {ok, v: 1, pid, app, capabilities: ["screen", "files", "simulator", "outflow", "ui"]}
+//   hello               → {ok, v: 1, pid, app, capabilities: ["screen", "files", "simulator", "ui"]}
 //   status              → {capture, control, display, responsible, files, live: {capture, control}, asking, asked}:
 //                         `live` what this very process may do (macOS gives a running process a new grant only once it
 //                         starts again); `files` the folder grants (Files.swift); `asked` what the window shows

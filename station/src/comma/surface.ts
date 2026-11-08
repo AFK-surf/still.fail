@@ -11,12 +11,15 @@
 //   a post while it waits for it. task.file: a file of a Task's Message, read a part at a time.
 // - task.status: where the session stands. task.leave: the Task runs elsewhere; the session leaves its thread.
 // - task.hello: as it connects, the Tasks it takes part in and how far it has each; Comma gives what it missed.
+// - stats.index (to Comma): the workspace's statistics (stats.ts), what Comma lacks of them a page at a time, as it
+//   connects and as they change; Comma answers what it holds.
 // Comma's heartbeat is answered with one. Whatever else Comma asks (files, commands: a Comma station's) is refused.
 import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { arch, platform } from "node:os";
 import { Effect } from "effect";
 import type WebSocket from "ws";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { version } from "../ops/version.ts";
@@ -28,6 +31,7 @@ import { ConnectedSurface } from "../connects/surface.ts";
 import type { Handler, InboundFile, ModelChoice, Person, ThreadRef } from "../sessions/chat.ts";
 import { sessionKey } from "../sessions/hub.ts";
 import type { Attachment, Store } from "../store/store.ts";
+import { type CommaStats, heldFrom, nextPage, probePage } from "./stats.ts";
 import { type CommaTasks, type Start, type Task, TASK_CHANNEL } from "./tasks.ts";
 
 type Json = any;
@@ -131,6 +135,8 @@ export type CommaSurfaceOptions = {
   models: () => ModelChoice[];
   book?: NameBook | null;
   lang?: Lang;
+  /// The workspace's statistics it sends Comma; none, none are sent.
+  stats?: CommaStats | null;
 };
 
 export class CommaSurface extends ConnectedSurface {
@@ -143,6 +149,7 @@ export class CommaSurface extends ConnectedSurface {
   private readonly store: Store;
   private readonly models: () => ModelChoice[];
   private readonly lang: Lang;
+  private readonly stats: CommaStats | null;
   /// Stays the same across the sockets of one process (Comma tells a process replaced from a socket dialed again).
   private readonly instance = randomUUID();
   /// The socket now, once Comma said it is connected; and the requests to Comma waiting for their answer.
@@ -166,6 +173,7 @@ export class CommaSurface extends ConnectedSurface {
     this.store = options.store;
     this.models = options.models;
     this.lang = options.lang ?? stationLang();
+    this.stats = options.stats ?? null;
   }
 
   // ── the connection ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -205,6 +213,7 @@ export class CommaSurface extends ConnectedSurface {
         log.info("comma", "connected to Comma", { connect: this.id, device: frame.device_id, run: frame.connector_run_id });
         this.send({ type: "metadata", capabilities: this.capabilities(), skills: [], system_info: { os: platform(), arch: arch(), hostname: this.name } });
         this.hello();
+        void this.sendStats(socket);
         return;
       case "heartbeat":
         this.send({ type: "heartbeat" });
@@ -278,13 +287,60 @@ export class CommaSurface extends ConnectedSurface {
       const known = (models[m.runtime] ??= []);
       if (m.model !== null && !known.includes(m.model)) known.push(m.model);
     }
-    return { scope: "", persistent_processes: false, computer_use_tool: false, host_access_required: false, execution_boundary: "stillfail-connect", runtime_probe: false, tasks: TASKS_VERSION, task_models: models };
+    return { scope: "", persistent_processes: false, computer_use_tool: false, host_access_required: false, execution_boundary: "stillfail-connect", runtime_probe: false, tasks: TASKS_VERSION, task_models: models, ...(this.stats === null ? {} : { stats_index: 1 }) };
   }
 
   /// Tells Comma it is here, and how far it has each Task it takes part in: Comma gives what it missed.
   private hello() {
     const tasks = this.tasks.taking(this.id).map((t) => ({ task: t.task, fetched: t.fetched }));
     this.ask("task.hello", { tasks }).catch((error) => log.info("comma", "Comma was not told the station is here", { connect: this.id, error: (error as Error).message }));
+  }
+
+  /// Keeps Comma's copy of the workspace's statistics current while `socket` is the connection: asks what Comma
+  /// holds, sends what it lacks a page at a time, and again a second after they changed. Comma answers `rate_limited`
+  /// to more than a few pages a second; any other refusal ends it until the next connection.
+  private async sendStats(socket: WebSocket) {
+    const stats = this.stats;
+    if (stats === null) return;
+    stats.start();
+    let changed: () => void = () => {};
+    let moved = new Promise<void>((resolve) => (changed = resolve));
+    const stop = stats.listen(() => changed());
+    const live = () => this.socket_ === socket;
+    const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
+    try {
+      let held: ReturnType<typeof heldFrom> = null;
+      let page = probePage(stats);
+      while (live()) {
+        let answer: Json;
+        try {
+          answer = await this.ask("stats.index", page);
+        } catch (error) {
+          if ((error as Error).message !== "rate_limited") return;
+          await wall.sleep(1000);
+          continue;
+        }
+        held = heldFrom(answer);
+        if (held === null) return;
+        const next = nextPage(stats, held);
+        if (next !== null) {
+          page = next;
+          await wall.sleep(300);
+          continue;
+        }
+        stats.held(this.id, held.through);
+        // Nothing more to send: until the statistics change, a second's changes together.
+        await Promise.race([moved, closed]);
+        moved = new Promise<void>((resolve) => (changed = resolve));
+        await wall.sleep(1000);
+        page = nextPage(stats, held) ?? probePage(stats);
+      }
+    } catch (error) {
+      log.info("comma", "the statistics were not sent", { connect: this.id, error: (error as Error).message });
+    } finally {
+      stop();
+      stats.gone(this.id);
+    }
   }
 
   // ── what Comma asks ────────────────────────────────────────────────────────────────────────────────────────────

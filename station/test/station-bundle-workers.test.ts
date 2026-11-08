@@ -113,7 +113,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/card-posts-worker.js", { thread }],
       ["read/card-posts-worker.js", { thread: saidThread, people: true }],
       ["read/archive-mark-worker.js", { scope: "all" }],
-      ["outflow/chat-index-worker.js", "H"],
+      ["read/chat-index-worker.js", "H"],
       ["vault/signin-save-worker.js", "s"],
     ] as const) {
       const worker = new Worker(join(process.env.STATION_BUNDLE!, file), { workerData: { path, priority: store.backfillPriority } });

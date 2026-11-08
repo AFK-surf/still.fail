@@ -12,7 +12,7 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
-import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+import { OutflowChatIndex } from "./chat-index-builder.ts";
 import { SaidBuilder } from "./said-builder.ts";
 import { RequestedBuilder } from "./requested-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";

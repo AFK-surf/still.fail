@@ -697,16 +697,6 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   out.push(fn() { station_logins(c, core, address) })
-  // (asked for only when the station's overview says there are some)
-  let grants = match field(o, "outflowGrants") {
-    Some(Number(n, ..)) => n > 0.0
-    _ => false
-  }
-  match field(o, "outflowTailcat") {
-    Some(Object(_)) as link => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers"), grants, link) })
-    _ if grants => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers"), grants, None) })
-    _ => ()
-  }
   match field(o, "agentEnv") {
     Some(Array(env)) => out.push(fn() { station_env(c, core, address, env, manager) })
     _ => ()

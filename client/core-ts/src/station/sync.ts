@@ -31,7 +31,7 @@ import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./req
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
 import { concat, readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
@@ -478,32 +478,6 @@ export class StationsSync {
     });
   }
 
-  /// The programs granted the station's data (GET /outflow/grants, the `outflowGrants` topic),
-  /// read each time a page shows them; then as the station tells (`outflow-grants`). A station from before: none.
-  outflowShown(address: string): void {
-    this.#enqueue(address, "outflowGrants", Priority.shown, this.#outflow(address));
-  }
-
-  #outflow(address: string): Effect.Effect<void, CoreError> {
-    const key = topicKey({ topic: "outflowGrants", station: address });
-    return Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/outflow/grants", null, { quiet: true }));
-      if (answer._tag === "Success") {
-        link.errors.delete(key);
-        link.memory.set(OUTFLOW, answer.success);
-        this.onChange(address, "log", key);
-      } else if (answer.failure.status === 404) {
-        link.errors.delete(key);
-        link.memory.set(OUTFLOW, { unsupported: true });
-        this.onChange(address, "log", key);
-      } else if (answer.failure.status !== undefined && !link.memory.has(OUTFLOW)) {
-        link.errors.set(key, answer.failure);
-        this.onChange(address, "errors", key);
-      }
-    });
-  }
 
   /// What a web link in a message is (GET /link-preview, the `linkPreview` topic), read as its card shows it (cardShown).
   linkPreviewShown(address: string, url: string): void {
@@ -1503,14 +1477,6 @@ export class StationsSync {
       case "presets":
         if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
         return;
-      // The programs granted the station's data changed, or read it.
-      case "outflow-grants": {
-        const link = this.#links.get(address);
-        if (!link || !Array.isArray(get(data, "grants"))) return;
-        link.memory.set(OUTFLOW, data);
-        this.onChange(address, "log", topicKey({ topic: "outflowGrants", station: address }));
-        return;
-      }
       // A login's terminal as it changes (while one is shown).
       case "login-screen": {
         const link = this.#links.get(address);
@@ -2225,9 +2191,6 @@ export class StationsSync {
         // What the agents' memory says of it changed (a skill shared or no longer): read again where it is shown or held.
         case "memory":
           if (this.#core.store.inUse({ topic: "memory", station: address }) || this.#links.get(address)?.memory.has(MEMORY)) reads.push(["memory", this.#memory(address)]);
-          break;
-        case "outflowGrants":
-          reads.push(["outflowGrants", this.#outflow(address)]);
           break;
         case "presets":
           reads.push(["presets", this.#presets(address)]);

@@ -1,7 +1,8 @@
-// What a program granted data outflow reads, in the shape of its version (`/v1`): written out
-// field by field here, so that what the station keeps changing never changes what such a program is answered. The
-// chats of one workspace of the station's (its home one, unless another station of a workspace it joined asks),
-// a message only when asked for.
+// The statistics a Comma connect sends of the workspace (comma/stats.ts), as one station reads them of its own: what
+// its agents spent and the chats they worked in, written out field by field here, so that what the station keeps
+// changing never changes what another station of another version is answered (`outflow.read`, comma/peer.ts, named so
+// as stations of every version answer it). The chats of one workspace of the station's (its home one, unless another
+// station of a workspace it joined asks).
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
@@ -118,31 +119,4 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
   if (page === null) return { since, chats };
   const last = chats.at(-1);
   return { since, chats, more, next: more && last ? `${last.lastActiveAt}.${last.thread}` : null };
-}
-
-/// Which chat a program names for its messages: its `thread` (as `chats` and `usage` say it), a `session` of it (as
-/// `usage` rows name it), or a chat app's address (`channel` and `ts`). Null when none of them is a chat here.
-export function outflowThread(s: Store, by: { thread?: number | null; session?: string | null; channel?: string | null; ts?: string | null }): number | null {
-  if (typeof by.thread === "number" && Number.isSafeInteger(by.thread)) return by.thread;
-  if (typeof by.session === "string" && by.session !== "") return store.threadOfSession(s, by.session);
-  if (typeof by.channel === "string" && by.channel !== "" && typeof by.ts === "string" && by.ts !== "") return store.threadAt(s, by.channel, by.ts);
-  return null;
-}
-
-/// v1 `messages`: a chat's messages after its message `after` (its `n`), at most `limit`, oldest first: each one's
-/// `n`, what it is (`message`, `edit`: a later wording of message `target`), who wrote it (`person`, `agent`, and
-/// their reference), its words and when; `last`, the chat's latest `n`, and `more` when there are more after these.
-/// Null for a chat that is not the workspace's.
-export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME): Json {
-  if (store.getThread(s, thread) === null || !store.seesThread(s, of, thread)) return null;
-  const entries = store.entriesAfter(s, thread, BigInt(after), limit + 1);
-  const page = entries.slice(0, limit);
-  return {
-    thread,
-    messages: page.map((e) => ({
-      n: e.n, kind: e.kind, target: e.target, authorKind: e.authorKind, author: e.author, text: e.text, at: e.at,
-    })),
-    last: store.lastEntry(s, thread),
-    more: entries.length > page.length,
-  };
 }
