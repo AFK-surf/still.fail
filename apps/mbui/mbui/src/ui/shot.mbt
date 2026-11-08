@@ -220,11 +220,11 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
 }
 
 ///|
-/// Once the frame is presented, each shot built and painted in it with nothing in it still coming (or waited for long
-/// enough) taken whole and told: drawn by the host a window's height at a time, moved up by what is taken, its rows
-/// read back into its PNG. One with a picture still coming waits for the frame that brings it (the host's), or its
-/// time's end. One not built in this frame (what built it is gone) is let go untold.
-fn Ctx::shots_after_present(self : Ctx) -> Unit {
+/// Once the frame drawn at `at` (its moment) is presented, each shot built and painted in it with nothing in it still
+/// coming (or waited for long enough by then) taken whole and told: drawn by the host a window's height at a time,
+/// moved up by what is taken, its rows read back into its PNG. One with a picture still coming waits for the frame that
+/// brings it (the host's), or its time's end. One not built in this frame (what built it is gone) is let go untold.
+fn Ctx::shots_after_present(self : Ctx, at : Double) -> Unit {
   if self.shots.is_empty() {
     return
   }
@@ -249,7 +249,7 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
       continue
     }
     let end = s.since + shot_wait_most
-    if s.waits && self.now() < end {
+    if s.waits && at < end {
       // (the host's frame as a picture comes; its time's end at the latest)
       if self.wake_at < 0.0 || end < self.wake_at {
         self.wake_at = end

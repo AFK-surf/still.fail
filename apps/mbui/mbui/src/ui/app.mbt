@@ -167,7 +167,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     perf_touch_submitted(work_now())
   }
   // what the shots being taken drew read back (shot.mbt)
-  c.shots_after_present()
+  c.shots_after_present(t)
   log_drawn(w, h, scale, t)
   // (a frame of the looks alone drew no picture of its own: none is let go for it)
   if !looks_drawn.val {
