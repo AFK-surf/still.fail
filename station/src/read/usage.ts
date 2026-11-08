@@ -242,8 +242,11 @@ let reportedSummaryReuse = false;
 let reportedCleanSummaryReuse = false;
 
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
-  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; detailsPreparing?: boolean } = {}): Json {
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; detailsPreparing?: boolean; metadata?: boolean } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
+  // A program's usage export needs the rows and their costs, but constructs its own people and does not send the
+  // usage page's chat titles, price table or profile details.
+  const includeMetadata = options.metadata !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
   const started = performance.now() - (options.batched?.ms ?? 0);
@@ -284,7 +287,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const seen = viewer === null || hasCompactUsage(s.db) ? null : seenBy(s, viewer, groups.map((r) => r.session));
   const rows = seen === null ? groups : groups.filter((r) => seen(r.session));
   mark("visibility");
-  const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
+  const wanted = includeMetadata ? [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))] : [];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {
     // A Slack channel's name, as far as known (`known_channel`).
@@ -292,15 +295,15 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     threads[String(t.id)] = { title, surface: t.surface, home: t.home, archived: t.hiddenAt !== null };
   }
   mark("threads");
-  const refs = [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes);
+  const refs = includeMetadata ? [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes) : [];
   const people: Record<string, Json> = {};
   for (const r of refs) people[r] = creator(s, lang, r);
   mark("people");
   const i64 = (n: bigint) => (JSON as any).rawJSON(String(n));
   const since = usageSince(s);
-  const detailSince = usageDetailSince(s.db);
-  const prices = priceTable(lang, rows.map((r) => r.model));
-  const profiles = configProfiles(s.dataDir);
+  const detailSince = includeMetadata ? usageDetailSince(s.db) : null;
+  const prices = includeMetadata ? priceTable(lang, rows.map((r) => r.model)) : undefined;
+  const profiles = includeMetadata ? configProfiles(s.dataDir) : undefined;
   // An older station may not have complete historical statistics. Leave the unavailable part absent so clients can
   // still show the complete details and distinguish missing history from an actual zero.
   let remoteRuns: Json | undefined = [];
@@ -320,11 +323,9 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     ...(detailSince !== null ? { detailSince } : {}),
     reading,
     ...(options.detailsPreparing ? { detailsPreparing: true } : {}),
-    prices,
+    ...(includeMetadata ? { prices } : {}),
     rows,
-    threads,
-    people,
-    profiles,
+    ...(includeMetadata ? { threads, people, profiles } : {}),
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
