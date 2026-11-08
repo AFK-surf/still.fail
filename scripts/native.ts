@@ -339,22 +339,36 @@ const PARTS: Record<string, Part> = {
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
     },
   },
-  // The station's reader in MoonBit (station/mb: read/mb-reader.ts), linked to the shell's static library (the
-  // shell-apple part's, its key in this one's). The Mac's for now; elsewhere the station keeps the worker it replaces.
+  // The station's reader in MoonBit (station/mb: read/mb-reader.ts), for every station: its C made by moon on a Mac,
+  // compiled and linked there for each target (station/mb/build.sh: zig for Linux and Windows), with the shell's static
+  // library for it (shell-apple's on the Mac, shell-station's elsewhere: its key in this one's).
   reader: {
-    files: () => ["stillfail-reader"],
-    targets: ["darwin-arm64"],
+    files: (t) => [exe("stillfail-reader")(t)],
+    targets: STATION_BINS,
     env: "STILLFAIL_MB_READER",
     rust: false,
     inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
       "apps/mbui/mbui/src/effect", "apps/mbui/mbui/moon.mod",
       ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
-    recipe: (t) => ({ moon: "native release", shell: key("shell-apple", t) }),
+    recipe: (t) => ({ moon: "native release", shell: t === "darwin-arm64" ? key("shell-apple", t) : key("shell-station", t), mac: key("shell-apple", "darwin-arm64") }),
     build(t, out) {
-      if (t !== "darwin-arm64" || osPlatform() !== "darwin" || osArch() !== "arm64") throw new Error("the reader is built on an Apple Silicon Mac");
-      const shell = ensure("shell-apple", t);
-      run("bash", [join(ROOT, "station/mb/build.sh")], { env: { ...process.env, SHELL_LIB: join(shell, "libstillfail_shell.a") } });
-      copyFileSync(join(ROOT, "station/mb/_build/native/release/build/station/reader/reader.exe"), join(out, "stillfail-reader"));
+      if (osPlatform() !== "darwin" || osArch() !== "arm64") throw new Error("the reader is built on an Apple Silicon Mac");
+      const shell = ensure(t === "darwin-arm64" ? "shell-apple" : "shell-station", t);
+      run("bash", [join(ROOT, "station/mb/build.sh"), t, join(out, exe("stillfail-reader")(t))], { env: { ...process.env, SHELL_LIB: join(shell, "libstillfail_shell.a") } });
+    },
+  },
+  // The shell (client/shell) as a static library for the stations that are not Macs, the reader's (above): built on a
+  // Mac with zig, as the station's crates are (Linux for glibc 2.28 on, Windows MinGW's).
+  "shell-station": {
+    files: () => ["libstillfail_shell.a"],
+    targets: ["linux-x64", "linux-arm64", "win32-x64"],
+    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", "vendor/libadb", ...VENDORED],
+    recipe: (t) => ({ cargo: shellStation(t) }),
+    build(t, out) {
+      const target = targetDir(join(ROOT, "client/target"), "shell-station");
+      rustTarget(TRIPLE(t));
+      run("cargo-zigbuild", shellStation(t), { cwd: join(ROOT, "client"), env: rustEnv({ CARGO_TARGET_DIR: target }) });
+      copyFileSync(join(target, TRIPLE(t), "release/libstillfail_shell.a"), join(out, "libstillfail_shell.a"));
     },
   },
   // The core's shell for the mbui app on Apple (scripts/core.sh shell's): the crate as a static library, with what it
@@ -531,6 +545,12 @@ const appleCOldest = (t: Target): Record<string, string> =>
 const shellApple = (t: Target) => [
   "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
   "--", "--print", "native-static-libs",
+];
+/// The shell as a static library for a station that is not a Mac (cargo-zigbuild's rustc: `cargo zigbuild` builds what the
+/// manifest says, a cdylib and an rlib; Linux for glibc 2.28 on).
+const shellStation = (t: Target) => [
+  "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib",
+  "--target", t === "win32-x64" ? TRIPLE(t) : `${TRIPLE(t)}.2.28`,
 ];
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
 const shellCommand = () => [

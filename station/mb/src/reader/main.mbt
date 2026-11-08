@@ -73,7 +73,7 @@ fn message(e : Error) -> String {
 ///|
 /// `--data <dir>`: the station's data directory.
 fn data_dir() -> String? {
-  let args = @env.args()
+  let args = @host.args()
   for i = 0; i + 1 < args.length(); i = i + 1 {
     if args[i] == "--data" {
       return Some(args[i + 1])

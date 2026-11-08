@@ -12,13 +12,13 @@ import { platform } from "../platform/index.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 
 /// The program: STILLFAIL_MB_READER, else beside the station's code in a release, else where `moon build` puts it in
-/// a checkout (station/mb/build.sh). None: not built here.
+/// a checkout (station/mb/build.sh, for the Mac). None: not built here.
 export function mbReaderBinary(): string | null {
   const candidates = [
     process.env.STILLFAIL_MB_READER,
     fileURLToPath(new URL(`./${platform.exe("stillfail-reader")}`, import.meta.url)),
     // (from the source only: bundled, this is main.js, beside which the release puts the program)
-    import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("../../mb/_build/native/release/build/station/reader/reader.exe", import.meta.url)) : undefined,
+    import.meta.url.endsWith(".ts") ? fileURLToPath(new URL("../../mb/_build/stillfail-reader-darwin-arm64", import.meta.url)) : undefined,
   ];
   return candidates.find((p) => p !== undefined && p !== "" && existsSync(p)) ?? null;
 }

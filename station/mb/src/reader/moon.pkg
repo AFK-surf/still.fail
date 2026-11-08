@@ -1,7 +1,6 @@
 import {
   "station/host",
   "station/wire",
-  "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 

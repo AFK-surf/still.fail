@@ -10,7 +10,7 @@
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path:
 #                                                          what the installer, bin/stillfail, the desktop app and
 #                                                          services run)
-#   stillfail/station/{main.js, built workers and assets, mesh.node, stillfail-runner, package.json}
+#   stillfail/station/{main.js, built workers and assets, mesh.node, stillfail-runner, stillfail-reader, package.json}
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
 #                                                          macOS app for what macOS grants §4;
 #                                                          on win32-x64 stillfail-screen.exe: the desktop's screen,
@@ -42,8 +42,8 @@ launcher="$(native launcher)"
 mesh="$(native mesh)"
 runner="$(native runner)"
 helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
-# The reader in MoonBit (station/mb), the Mac's so far: elsewhere the station keeps the worker it replaces.
-reader=; [ "$platform" = darwin-arm64 ] && reader="$(native reader)"
+# The reader in MoonBit (station/mb).
+reader="$(native reader)"
 screen=; [ "$platform" = win32-x64 ] && screen="$(native screen)"
 tree=; [ "$platform" = win32-x64 ] && tree="$(native agent-desktop)"
 # The build's output is the complete set of station files for this release, not a previous build's leftover workers.
@@ -64,7 +64,7 @@ cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
 # it in the launcher's artifact).
 [ "$platform" = win32-x64 ] && cp "$(dirname "$launcher")/stillfail-station-w.exe" "$app/mesh/target/release/"
 cp "$mesh" "$runner" "$app/station/"
-[ -z "$reader" ] || cp "$reader" "$app/station/"
+cp "$reader" "$app/station/"
 [ -z "$helper" ] || cp -R "$helper" "$app/station/"
 [ -z "$screen" ] || cp "$screen" "$app/station/"
 [ -z "$tree" ] || cp "$tree" "$app/station/"
