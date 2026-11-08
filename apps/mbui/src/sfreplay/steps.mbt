@@ -579,7 +579,13 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       self.t.run_for(frame_ms)
     }
     while self.t.rest_of("") > self.t.time() {
-      self.t.run_for(self.t.rest_of("") - self.t.time())
+      let before = self.t.time()
+      self.t.run_for(self.t.rest_of("") - before)
+      // run_for treats a rounding-sized difference as the same frame. If the motion's end is just beyond that
+      // frame, show the next one so the motion is actually sampled at rest instead of waiting forever.
+      if self.t.time() == before {
+        self.t.frame()
+      }
     }
     // (a toast's time too, before the frame owed: what is shown does not wait for it, but one left at the end goes at
     // its time, not as the end's last frame happens to fall)
