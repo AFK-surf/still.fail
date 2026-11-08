@@ -150,7 +150,6 @@ test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
   assert.deepEqual(messages.map((m: J) => [m.key, m.notice, m.from.name, m.text]), [
     ["9.1.0", "job", "ci-time-watch", said],
     ["9.1.1", "job", "web", "up"],
-    ["9.1.7", "stillfail", "still.fail", notices[7]],
   ]);
   assert.deepEqual(tasks.map((x: J) => [x.text, x.agent, x.failed, x.result]), [
     ["任务已退出（退出码 1）：shot", false, true, "boom"],
@@ -158,7 +157,31 @@ test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
     ["任务已被 Ada 停止：shot", false, false, null],
     ["任务无法重新启动：shot", false, true, "no such file"],
     ["对话需要你处理：Fix CI", true, false, "pick one"],
+    ["远程任务有新消息：t1 · teststat", false, false, null],
   ]);
+});
+
+test("a_remote_tasks_notice_is_its_end_in_a_line_or_what_it_said", () => {
+  const job = (state: string, exitCode: number | null) => ({ id: "remote_1", name: "lint", command: "npx oxlint", state, exitCode, log: "/x/log" });
+  const notices = [
+    `Remote task k1 on st1aaaaaaaa: ${JSON.stringify({ key: "k1", job: job("exited", 0), log: "ok\ndone\n", notices: [] })}`,
+    `Remote task k2 on st2bbbbbbbb: ${JSON.stringify({ key: "k2", job: job("exited", 2), log: "boom\n", notices: [] })}`,
+    `Remote task k3 on st1aaaaaaaa: ${JSON.stringify({ key: "k3", job: job("running", null), log: "", notices: [{ at: 2, text: "half way" }, { at: 1, text: "began" }] })}`,
+    `Remote task k4 on st1aaaaaaaa: ${JSON.stringify({ key: "k4", job: job("stopped", null), log: "", notices: [] })}`,
+    `Remote task k5 on st1aaaaaaaa: {"key":"k5","job":{"id":"remote_5","name":"long","command":"${"x".repeat(40)}\n… (900 more characters)`,
+    "Remote task k6 on st1aaaaaaaa: that station does not know it 10 minutes after its start was asked for, and is no longer followed. Ask with get, or prepare and start it again.",
+  ];
+  const text = notices.map((n, i) => `<message via="station" from="station" ts="9.${i}">\n${n}\n</message>`).join("\n");
+  const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text }] }, { ...cx([], [], []), stations: new Map([["st1aaaaaaaa", "Host-1"]]) });
+  const { tasks, messages } = h.items[0].body.content;
+  assert.deepEqual(tasks.map((x: J) => [x.text, x.failed, x.result]), [
+    ["远程任务已退出（退出码 0）：lint · Host-1", false, "ok\ndone"],
+    ["远程任务已退出（退出码 2）：lint · st2bbbbb", true, "boom"],
+    ["远程任务已停止：lint · Host-1", false, null],
+    ["远程任务有新消息：long · Host-1", false, null],
+    ["远程任务没有启动，已不再跟进：k6 · Host-1", true, null],
+  ]);
+  assert.deepEqual(messages.map((m: J) => [m.notice, m.from.name, m.text]), [["job", "lint", "half way"]]);
 });
 
 test("a_task_notification_is_read_into_how_the_work_ended", () => {
