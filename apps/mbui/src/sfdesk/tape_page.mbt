@@ -323,79 +323,24 @@ fn tape_made(
     )
   }
   match page {
-    // (laid out by the page's width, narrow or wide: page_node's)
-    Setting(About) if pane_makes.val =>
-      made("about", fn(p, core, _here, _stint, told, _acts) {
-        context_node(p)
-        @sfpages.about_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-      })
-    Setting(Memories) if pane_makes.val =>
-      made("memories", fn(p, core, here, _stint, told, _acts) {
-        context_node(p)
-        @sfpages.memories_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-      })
-    Setting(Changelog) if pane_makes.val =>
-      made("changelog", fn(p, core, _here, _stint, told, _acts) {
-        context_node(p)
-        @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-      })
-    // (a place of the rail's whose page is one of those: that page as the settings open it, at the stack's root, made
-    // under its own kind)
     Place(name) =>
       match @settings.route_of(name) {
-        // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if @sfpages.settings_node_key(r) is Some(_) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
-    // (by its station: another station's another page, not this one become it)
-    Setting(Memory(address)) if pane_makes.val =>
-      made("memory/" + address, fn(p, core, here, _stint, told, _acts) {
-        context_node(p)
-        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
-      })
-    Setting(Shortcuts) if pane_makes.val =>
-      made("shortcuts", fn(p, core, _here, stint, told, _acts) {
-        context_node(p)
-        // (recording while it is the one on top of the stack: its stay there, stint's)
-        @sfpages.shortcuts_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, active=fn() {
-          app.nav.top_stay().1 == stint()
-        }, said=told, width~)
-      })
-    Setting(Notifications) if pane_makes.val =>
-      made("notifications", fn(p, core, here, stint, told, _acts) {
-        context_node(p)
-        @sfpages.notify_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
-      })
-    Setting(AutoCompletion) if pane_makes.val =>
-      made("auto-completion", fn(p, core, here, _stint, told, acts) {
-        context_node(p)
-        @sfpages.completion_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
-      })
-    Setting(Usage) if pane_makes.val =>
-      made("usage", fn(p, core, here, _stint, told, acts) {
-        context_node(p)
-        @sfpages.usage_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, bar_actions=acts)
-      })
-    // (by its days: another's of other days another page)
-    Setting(UsagePrices(days)) if pane_makes.val =>
-      made("usage-prices/" + days.to_string(), fn(p, core, here, _stint, told, _acts) {
-        context_node(p)
-        @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-      })
-    Setting(Archiving) if pane_makes.val =>
-      made("archiving", fn(p, core, here, stint, told, _acts) {
-        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
-      })
-    Setting(AutoDecisions) if pane_makes.val =>
-      made("auto-decisions", fn(p, core, here, _stint, told, _acts) {
-        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
-      })
-    // (by its station: another station's another page, not this one become it)
-    Setting(StationArchiving(st)) if pane_makes.val =>
-      made("station-archiving/" + st, fn(p, core, here, _stint, told, _acts) {
-        @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
-      })
+    Setting(r) if pane_makes.val =>
+      match @sfpages.settings_node_key(r) {
+        Some(kind) => made(kind, fn(p, core, here, stint, told, acts) {
+          // These pages select their own context handling instead of the frame's.
+          if !(r is (Archiving | AutoDecisions | StationArchiving(_))) {
+            context_node(p)
+          }
+          @sfpages.settings_node(r, p, core, here, frame=fn() { tape_made_frame }, stint~,
+            active=fn() { app.nav.top_stay().1 == stint() }, width~, tips~, said=told, bar_actions=acts)
+        })
+        None => None
+      }
     _ => None
   }
 }

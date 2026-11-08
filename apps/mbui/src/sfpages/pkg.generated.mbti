@@ -837,3 +837,7 @@ type SrCover
 // Type aliases
 
 // Traits
+
+pub fn settings_node(@settings.Route, @view.View, @settings.Core, () -> @settings.Here, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, active~ : () -> Bool, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, bar_actions? : ((@view.View) -> Unit, (@sf.Look) -> Double) -> Unit) -> Unit
+
+pub fn settings_node_key(@settings.Route) -> String?

@@ -361,7 +361,7 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if @sfpages.settings_node_key(r) is Some(_) =>
           narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -528,50 +528,15 @@ fn narrow_made_as(
           @sf.layout(p.window().0) is Small
         })
       })
-    Setting(About) => made("about", fn(p, core, _here, frame, _stint, _acts) { @sfpages.about_node(p, core, on_back=core.pop, frame~) })
-    Setting(Changelog) =>
-      made("changelog", fn(p, core, _here, frame, _stint, _acts) { @sfpages.changelog_node(p, core, on_back=core.pop, frame~) })
-    Setting(Archiving) =>
-      made("archiving", fn(p, core, here, frame, stint, _acts) {
-        @sfpages.archiving_node(p, core, here, on_back=core.pop, frame~, stint~)
-      })
-    Setting(StationArchiving(st)) =>
-      made("station-archiving/" + st, fn(p, core, here, frame, _stint, _acts) {
-        @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame~)
-      })
-    Setting(AutoDecisions) =>
-      made("auto-decisions", fn(p, core, here, frame, _stint, _acts) {
-        @sfpages.decisions_node(p, core, here, on_back=core.pop, frame~)
-      })
-    Setting(AutoCompletion) =>
-      // (what it does in its place's top bar as a place; at its head as a page of the stack)
-      made("auto-completion", fn(p, core, here, frame, _stint, acts) {
-        @sfpages.completion_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
-      })
-    Setting(Usage) =>
-      // (what it does in its place's top bar as a place; at its head as a page of the stack)
-      made("usage", fn(p, core, here, frame, _stint, acts) {
-        @sfpages.usage_node(p, core, here, on_back=core.pop, frame~, bar_actions?=if place { Some(acts) } else { None })
-      })
-    Setting(Shortcuts) =>
-      // (recording while it is the one on top of the stack: its stay there, stint's)
-      made("shortcuts", fn(p, core, _here, frame, stint, _acts) {
-        @sfpages.shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stint() })
-      })
-    Setting(Notifications) =>
-      made("notifications", fn(p, core, here, frame, stint, _acts) {
-        @sfpages.notify_node(p, core, here, on_back=core.pop, frame~, stint~)
-      })
-    Setting(UsagePrices(days)) =>
-      made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
-        @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)
-      })
-    Setting(Memories) =>
-      made("memories", fn(p, core, here, frame, _stint, _acts) { @sfpages.memories_node(p, core, here, on_back=core.pop, frame~) })
-    Setting(Memory(address)) =>
-      made("memory/" + address, fn(p, core, here, frame, _stint, _acts) {
-        @sfpages.memory_node(p, core, here, address, on_back=core.pop, frame~)
-      })
+    Setting(r) =>
+      match @sfpages.settings_node_key(r) {
+        Some(kind) => made(kind, fn(p, core, here, frame, stint, acts) {
+          @sfpages.settings_node(r, p, core, here, frame~, stint~,
+            active=fn() { app.nav.top_stay().1 == stint() },
+            bar_actions?=if place { Some(acts) } else { None })
+        })
+        None => None
+      }
     _ => None
   }
 }
