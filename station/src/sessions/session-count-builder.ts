@@ -1,16 +1,19 @@
 import { Worker } from "node:worker_threads";
+import { MbBackfill, mbReaderBinary } from "../read/mb-reader.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { sessionCountsReady, sessionCountsStep } from "../store/session-counts.ts";
 import type { Store } from "../store/store.ts";
 
-/// Wait for the previous station before reading old rows; a stopped worker resumes at its committed cursor.
-export function buildSessionCounts(store: Store, previous: Promise<void>, workerFile?: URL): { ready: Promise<boolean>; close: () => Promise<void> } {
+/// Wait for the previous station before reading old rows; a stopped worker resumes at its committed cursor. By the
+/// MoonBit builder (station/mb, src/counts) where its program is there, else by the worker; a worker of its own
+/// given, by that one.
+export function buildSessionCounts(store: Store, previous: Promise<void>, workerFile?: URL, mb = workerFile === undefined ? mbReaderBinary() : null): { ready: Promise<boolean>; close: () => Promise<void> } {
   const { promise: ready, resolve } = Promise.withResolvers<boolean>();
   const path = store.db.location();
   const retries = new Fibers("session counts", store.clock);
-  let worker: Worker | null = null;
+  let worker: Worker | MbBackfill | null = null;
   let cancel: (() => void) | null = null;
   let closed = false, complete = false, retryMs = 250;
   const finish = () => { if (!complete && !closed) { complete = true; resolve(true); } };
@@ -34,8 +37,11 @@ export function buildSessionCounts(store: Store, previous: Promise<void>, worker
     if (closed || complete || worker !== null) return;
     if (path === null) { memoryStep(); return; }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./session-count-worker.ts" : "./sessions/session-count-worker.js", import.meta.url);
-    let current: Worker;
-    try { current = new Worker(file, { workerData: { path, priority: store.backfillPriority } }); }
+    let current: Worker | MbBackfill;
+    try {
+      current = mb !== null ? new MbBackfill(mb, ["--builder", "session-counts", "--db", path], store.backfillPriority, 20)
+        : new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+    }
     catch (error) {
       log.warn("hub", "the session count worker could not start", { error: (error as Error).message });
       retry();
