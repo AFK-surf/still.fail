@@ -3,7 +3,8 @@
 // opened it (View::beside, as menu_node's, `side`, `along`, `offset` off it), `w` wide, grown out of that side as it
 // comes and shrunk back into it as it goes (pop_in, pop_out: drawn till its way out is over, pressed no more); its
 // title (panel_head), what it holds and its foot each the old frame's, built in a hosted view as tall as what it holds
-// (@ui.old's `natural`), what it holds scrolling where the window leaves the panel short of room. Escape, back and a
+// (@ui.old's `natural`), or what it holds and its foot nodes where they are (panel_nodes: laid out as those are), what
+// it holds scrolling where the window leaves the panel short of room. Escape, back and a
 // press outside close it (its gone told); what it holds closes it with what it was given (nothing told).
 
 ///|
@@ -158,7 +159,7 @@ fn panel_node(
           same=fn(a, b) { a == b },
         )
         let headed = fn() { headed_now.get() }
-        let footed = x.foot is Some(_)
+        let footed = x.foot is Some(_) || x.nodes.bind(fn(n) { n.foot }) is Some(_)
         // (ruled, the room over the line its body's, not the foot's: a line of what it holds going down to meet it reaches
         // it, its body cutting nothing of it: panel_rule_over)
         let ruled_foot = x.ruled && footed
@@ -192,6 +193,16 @@ fn panel_node(
           p.box(fn(b) {
             b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(By(fn() { (-panel_pad, -over(), -panel_pad, -out_under) })).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
+            match x.nodes {
+              // (what it holds nodes: in a column as the old frame's body is laid out, its words as far in as its look says)
+              Some(n) =>
+                b.box(fn(col) {
+                  style_node(col, fn() { panel_grows.then(panel_part_in(over(), under)) })
+                  col.grow(Is(1.0)).alpha(By(fn() { look().words })) |> ignore
+                  (n.body)(col, close)
+                })
+                |> ignore
+              None =>
             @ui.old(b, key=fn() { key + "/body" }, fn(c) {
               let was = opened()
               let held = c.box(style=panel_grows.then(panel_part_in(over(), under)), fn() {
@@ -209,6 +220,7 @@ fn panel_node(
               words_look(c, held)
             }).grow(Is(1.0))
             |> ignore
+            }
           })
           |> ignore
         } else {
@@ -226,6 +238,17 @@ fn panel_node(
             |> ignore
             body_box.val = Some(b)
             b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
+              match x.nodes {
+                // (what it holds nodes: in a column as the old frame's body is laid out, its words as far in as its look
+                // says)
+                Some(n) =>
+                  s.box(fn(col) {
+                    style_node(col, fn() { held_in().then(@ui.style(pt=room(over()), pb=room(under))) })
+                    col.margin(By(fn() { (0.0, -over(), 0.0, -out_under) })).alpha(By(fn() { look().words })) |> ignore
+                    (n.body)(col, close)
+                  })
+                  |> ignore
+                None =>
               @ui.old(s, natural=true, fits?=fits(1), key=fn() { key + "/body" }, fn(c) {
               let was = opened()
                 let held = c.box(style=held_in().then(@ui.style(pt=room(over()), pb=room(under))), fn() {
@@ -247,6 +270,7 @@ fn panel_node(
               })
               .margin(By(fn() { (0.0, -over(), 0.0, -out_under) }))
               |> ignore
+              }
             })
             // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
             // reaches past it drawn whole, in the panel's round corners; what it paints alone, nothing laid out by it)
@@ -274,7 +298,26 @@ fn panel_node(
             })
             .margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad)))
             |> ignore
-          None => ()
+          None =>
+            match x.nodes.bind(fn(n) { n.foot }) {
+              // (its foot nodes: laid out as the old frame's foot is, its words as far in as its look says)
+              Some(f) =>
+                p.box(fn(fv) {
+                  style_node(fv, fn() { panel_part_in(0.0, panel_pad) })
+                  fv.margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad))).alpha(By(fn() { look().words })) |> ignore
+                  if x.ruled {
+                    fv.box(fn(r) { style_node(r, fn() { foot_rule.then(@ui.style(mx=room(-panel_pad))) }) }) |> ignore
+                  }
+                  fv.box(fn(row) {
+                    let at = if x.ruled { panel_corner_foot().then(@ui.style(pt=room(@ui.capsule_in(r_menu, button_height())))) } else { panel_corner_foot() }
+                    style_node(row, fn() { panel_foot_at.then(at) }, in_row=false)
+                    f(row, close)
+                  })
+                  |> ignore
+                })
+                |> ignore
+              None => ()
+            }
         }
         // (the focus what holds its body's as it opens where it takes it, else where it was; back to what had it as it
         // goes)

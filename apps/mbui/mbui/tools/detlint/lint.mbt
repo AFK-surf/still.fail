@@ -376,6 +376,10 @@ fn lint_mbt(
     if c.name == "old" && c.kind == "pkg" && c.qual == "@ui" && app && !in_t {
       add("old-island", c.at, f.line_text(c.at))
     }
+    // a panel presented with an old body (`@sf.panel(title, body, ...)`): what is left of them, which only goes
+    if c.name == "panel" && c.kind == "pkg" && c.qual == "@sf" && app && !in_t {
+      add("old-panel", c.at, f.line_text(c.at))
+    }
     // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
     if c.name == "native_input" &&
       c.kind == "pkg" &&

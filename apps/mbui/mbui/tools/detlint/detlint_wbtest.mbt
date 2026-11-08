@@ -2200,6 +2200,25 @@ test "old-island" {
 }
 
 ///|
+test "old-panel" {
+  // a panel presented with an old body (@sf.panel): counted (a call each); one whose body is nodes (@sf.panel_nodes),
+  // one in a test, the library's own name for something else (a bare `panel`), and the framework's not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p() -> Unit {\n  @sf.panel(\"t\", fn(c, _) { body(c) }, from=Unanchored)\n  @sf.panel_nodes(\"t\", fn(v, _) { body(v) }, from=Unanchored)\n  panel(across, layer)\n  @sf.panel(\"u\", from=Unanchored, fn(c, _) {  })\n}\n",
+      ),
+      ("src/sfapp/x_wbtest.mbt", "test \"t\" {\n  @sf.panel(\"t\", fn(c, _) {  }, from=Unanchored)\n}\n"),
+      ("src/host/y.mbt", "fn y() -> Unit {\n  @sf.panel(\"t\", fn(c, _) {  }, from=Unanchored)\n}\n"),
+    ],
+    "old-panel",
+    2,
+  )
+  assert_eq(lines(fs), [2, 5])
+}
+
+///|
 test "click-read" {
   // a click read by a build outside mbui's ui and kit: counted (a call each); in ui, in kit, in a test, a field of that
   // name, not

@@ -13,13 +13,15 @@
 let tree_presented : Set[Int] = Set::new()
 
 ///|
-/// Whether `p` is the window's tree's to draw (presented_nodes): a stage, and a confirm, a question, a menu, a pick or a
-/// small panel not on a sheet. The rest (a sheet, a panel that goes in steps or as wide as what it holds) the host's
-/// (presented) still.
+/// Whether `p` is the window's tree's to draw (presented_nodes): a stage and a panel whose body is nodes (panel_nodes)
+/// on every screen, and a confirm, a question, a menu, a pick or a small panel not on a sheet. The rest (a sheet, a
+/// panel that goes in steps or as wide as what it holds) the host's (presented) still.
 fn tree_draws(p : Presented, sheet : Bool) -> Bool {
   (
     // (a stage on every screen the same, never a sheet: stage_node)
     (p.shows is Panel(x) && x.stage) ||
+    // (what it holds nodes: the tree's alone, the host's frame having none of it to draw)
+    (p.shows is Panel(x) && x.nodes is Some(_)) ||
     (
       !sheet &&
       (

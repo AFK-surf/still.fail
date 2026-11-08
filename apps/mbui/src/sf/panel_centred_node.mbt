@@ -4,8 +4,8 @@
 // dialog_margin at most, no taller than it less dialog_room; 24 in, a line round it, dialog_r round, the panel's ground
 // and shadow); its head (its title and its close button, what it says under them, or its close button alone in its top
 // corner where it has no title), what it holds and its foot each the old frame's, built in a hosted view out to the
-// dialog's edges they stand by, the dialog's padding inside them, what it holds scrolling where the window leaves the
-// dialog short of room. Escape, back, a press outside and its close button close it (its gone told); what it holds
+// dialog's edges they stand by, the dialog's padding inside them (or nodes where they are, panel_nodes: laid out as
+// those are), what it holds scrolling where the window leaves the dialog short of room. Escape, back, a press outside and its close button close it (its gone told); what it holds
 // closes it with what it was given (nothing told).
 
 ///|
@@ -54,6 +54,9 @@ fn panel_centred_node(
     }
     // (what it holds and its head on the line of its words, a row's padding in: panel_centred's)
     let words_in = panel_words - dialog_pad
+    // (what it holds and its foot nodes, panel_nodes')
+    let foot_nodes = x.nodes.bind(fn(n) { n.foot })
+    let footed = x.foot is Some(_) || foot_nodes is Some(_)
     let in_words = fn(f : () -> Unit) {
       let was = words_in_now.val
       words_in_now.val = words_in
@@ -229,6 +232,23 @@ fn panel_centred_node(
           let scroll = @view.Scroll::new()
           b.shrink(Is(1.0)).min_height(Is(Some(0.0))).margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0))) |> ignore
           b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
+            match x.nodes {
+              // (what it holds nodes: in a column on its words' line as the old frame's body is laid out, its words as
+              // far in as its look says)
+              Some(n) =>
+                s.box(fn(outer) {
+                  style_node(outer, fn() { centred_part_in(0.0, 0.0) })
+                  outer.alpha(By(fn() { look().words })) |> ignore
+                  outer.box(fn(col) {
+                    style_node(col, fn() {
+                      (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
+                    })
+                    (n.body)(col, close)
+                  })
+                  |> ignore
+                })
+                |> ignore
+              None =>
             @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
               let column = @ui.style(px=room(words_in))
               let top = body_top()
@@ -278,6 +298,7 @@ fn panel_centred_node(
               words_look(c, held)
             })
             |> ignore
+            }
           })
           // (cut at its box while what it holds is taller than it, and taking presses within it alone then)
           .clips(By(fn() { scroll.goes() }))
@@ -297,6 +318,22 @@ fn panel_centred_node(
           })
           .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))
           |> ignore
+        // (its foot nodes: its buttons at its end in its foot corner, as the old frame's foot is laid out)
+        _ if steps is None =>
+          match foot_nodes {
+            Some(f) =>
+              d.box(fn(fv) {
+                style_node(fv, fn() { centred_part_in(0.0, 0.0) })
+                fv.margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0))).alpha(By(fn() { look().words })) |> ignore
+                fv.box(fn(row) {
+                  style_node(row, fn() { dialog_foot.then(dialog_corner_foot(dialog_pad)) })
+                  f(row, close)
+                })
+                |> ignore
+              })
+              |> ignore
+            None => ()
+          }
         _ => ()
       }
       if x.live is Some(_) {

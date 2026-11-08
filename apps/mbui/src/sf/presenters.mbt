@@ -128,6 +128,16 @@ priv struct PanelOf {
   steps : Bool
   /// what back does on its first step where its steps follow a flow kept elsewhere (panel's `back`: panel_go's)
   on_back : (() -> Unit)?
+  /// what it holds and its foot as nodes of the window's tree (panel_nodes), `body` and `foot` then nothing
+  nodes : PanelNodes?
+}
+
+///|
+/// What a panel presented by panel_nodes holds and what is at its foot, each made once as nodes of the window's tree in
+/// the node the panel gives it, given what closes it.
+priv struct PanelNodes {
+  body : (@view.View, () -> Unit) -> Unit
+  foot : ((@view.View, () -> Unit) -> Unit)?
 }
 
 ///|
@@ -482,6 +492,66 @@ pub fn panel(
       offset,
       steps,
       on_back: back,
+      nodes: None,
+    }),
+    from,
+    gone~,
+  )
+}
+
+///|
+/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `gone`, `focus`, `ruled`, `form`, `side`,
+/// `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
+/// tree, each in the node the panel gives it, laid out there as the old frame's body and foot are (beside what opened
+/// it: panel_node; in the middle of the window, opened by nothing or a form: panel_centred_node), given what closes it.
+/// The window's tree draws it on every screen (on 小屏 too, till the tree draws sheets: there beside what opened it, or in
+/// the middle, as on the others). Beside @sf.panel only while panels with old bodies are left (detlint's old-panel):
+/// as the last goes, the old body's path goes and this takes the name `panel`.
+pub fn panel_nodes(
+  title : String,
+  body : (@view.View, () -> Unit) -> Unit,
+  from~ : Anchor,
+  w? : Double = panel_w,
+  description? : String = "",
+  foot? : (@view.View, () -> Unit) -> Unit,
+  wide? : Bool = false,
+  gone? : () -> Unit = fn() {  },
+  focus? : Bool = true,
+  ruled? : Bool = false,
+  form? : Bool = false,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
+  offset? : Double = panel_offset,
+) -> Unit {
+  present(
+    Panel({
+      title,
+      description,
+      body: fn(_, _) {  },
+      foot: None,
+      w,
+      fits: false,
+      wide,
+      live: None,
+      tall: 0.0,
+      grows: false,
+      focus,
+      ruled,
+      lists: false,
+      fade_out_together: false,
+      form,
+      field: "",
+      stage: false,
+      above: None,
+      head_end: None,
+      title_row: None,
+      heads_itself: false,
+      side,
+      along,
+      offset,
+      steps: false,
+      on_back: None,
+      nodes: Some({ body, foot }),
     }),
     from,
     gone~,
