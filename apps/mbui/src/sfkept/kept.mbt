@@ -2294,3 +2294,4 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"第二行 085022\",\"here\":\"01M6WR7XDC1465T5GC1A3Z91KW/ba1d27ea96539280cc2602a6d00a185de7acca1dec6bbdd42ade0010af0f0392\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"一段短的粘贴文字，来自剪贴板 082947\",\"here\":\"01M6WQSG5YY4ESNVYE33CZHCZ5/c2bcda3046b7f6f8e1ef41048b3790b712d697834eae9363b1f63d4d3945c190\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"再问一个 083209 card:先合并哪个分支 083209|先合 A 083209|先合 B 083209\",\"here\":\"01M6WRVJSG93W8ETY0BKZCTXF5/e4573b554f794a68805e198f01824a1e1c6cf7e6e4f95cef5741d60e78feb88e\"}",{"refs":[]}]
+  #|["words","{\"call\":\"ref.pasted\",\"text\":\"新对话来自 mbui 084656 post:新对话里的回答 084656\",\"here\":\"01M6WSQYVJ55333XGQKHNW68Z0/7bdfcf0b3df797fb933f8c8b93de6132b410580c280bb638f32019b2766c84c2\"}",{"refs":[]}]
