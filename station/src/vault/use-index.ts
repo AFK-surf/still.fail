@@ -187,10 +187,14 @@ export class UseIndex {
 
   /// Prepare one workspace's pending lookup in bounded transactions on the same worker as use-history preparation.
   async preparePending(ws: string, members: boolean): Promise<void> {
+    if (this.#closed) throw new Error("station stopping");
     if (pendingPreparationComplete(this.#db, ws, members)) return;
     if (this.#path === null) {
-      while (!pendingPreparationComplete(this.#db, ws, members) && !backfillPendingPreparation(this.#db, ws, members)) await new Promise<void>((resolve) => setImmediate(resolve));
-      return;
+      for (;;) {
+        if (this.#closed) throw new Error("station stopping");
+        if (pendingPreparationComplete(this.#db, ws, members) || backfillPendingPreparation(this.#db, ws, members)) return;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
     }
     const answer = await this.#ask({ kind: "pending", id: ++this.#next, ws, members });
     if (answer.ready !== true) throw new Error("the vault reader did not prepare pending requests");
