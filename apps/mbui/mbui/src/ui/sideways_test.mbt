@@ -55,7 +55,7 @@ test "sideways: a finger moving sideways drags it; up or down, the list scrolls"
 test "sideways: in a row drawn again as the list scrolled, a finger up or down on it scrolls the list, where it is scrolled to kept" {
   let at = Ref::new(0.0)
   let t = sideways_view(at)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let (_, y, _, _) = t.rect_of("xxxx").unwrap()
   t.drag(250.0, y + 5.0, 50.0, y + 5.0)

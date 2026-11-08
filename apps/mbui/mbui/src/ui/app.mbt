@@ -217,8 +217,39 @@ pub fn frame_offscreen(
   frame_moment.val = t
   frame_serial.val += 1
   frame_body(g(), w, h, scale, t) |> ignore
+  // (drawn out where a header stands for what a host keeps: as a host that keeps no groups draws it)
+  g().flat_from(0)
   frame_moment.val = -1.0
   g()
+}
+
+///|
+/// What looks at each pass of a frame's build as it is over (`at` 0 as it is laid out, 1 as nothing else builds it
+/// again; `kept0` the rows kept before it), where something does (a Tester's: rows_pass_looked): true, the frame
+/// built again.
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let pass_look : Ref[((Ctx, Int, Int) -> Bool)?] = Ref(None)
+
+///|
+fn pass_looked(c : Ctx, at : Int, kept0 : Int) -> Bool {
+  match pass_look.val {
+    Some(f) => f(c, at, kept0)
+    None => false
+  }
+}
+
+///|
+/// What is told what the frame says besides its drawing (said.mbt) as its builds are over (`at` 0) and as it is painted
+/// (1), where something asks (a Tester's: Tester::said).
+// kept across runs: set by a Tester that asks, let go by each Tester as it is made
+let frame_said : Ref[((Ctx, Int) -> Unit)?] = Ref(None)
+
+///|
+fn frame_said_told(c : Ctx, at : Int) -> Unit {
+  match frame_said.val {
+    Some(f) => f(c, at)
+    None => ()
+  }
 }
 
 ///|
@@ -227,8 +258,22 @@ pub fn frame_offscreen(
 let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|
-/// Builds, lays out and paints a frame; returns when it started.
-fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+/// The frame painted, told where a test asks (frame_hook): drawn out first where a header stands for what a host keeps,
+/// as the host draws it, what it reads read so.
+fn frame_hook_told(c : Ctx) -> Unit {
+  match frame_hook.val {
+    Some(f) => {
+      c.flat_from(0)
+      f()
+    }
+    None => ()
+  }
+}
+
+///|
+/// Builds, lays out and paints a frame; returns when it started. `tell` false: what its builds say to tell outside is
+/// not told (a frame built again only to be looked at: tester_looks.mbt).
+fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell? : Bool = true) -> Double {
   c.width = w
   c.height = h
   c.window_w = w
@@ -412,15 +457,14 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     desk.menus.clear()
     c.actions.clear()
     building.val = false
-    // (built again keeping no row, for a Tester: compared with the pass that kept them, and built once more where they
-    // part, kept_nodes.mbt)
-    if c.rows_check_end() {
+    // (what looks at each pass, where something does (a Tester's: tester_rows.mbt): true, built again)
+    if pass_looked(c, 0, kept0) {
       continue
     }
     if c.read_back_moved && pass < frame_passes_most {
       continue
     }
-    if c.rows_check_begin(kept0) {
+    if pass_looked(c, 1, kept0) {
       continue
     }
     break
@@ -437,7 +481,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // words picked with the pointer held: to what is under it as laid out now (desktop.mbt), drawn so
   c.select_after_layout()
   // what the builds said, where a Tester asks (said.mbt)
-  c.said_built_logged()
+  frame_said_told(c, 0)
   // what the last build said to tell outside, told now, once by its key: the last said of it, where the first was
   // (Ctx::after_build)
   // (those that follow where lists stand, kept: told again as a list moves with nothing built, list_scroll_fast.mbt)
@@ -448,19 +492,21 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.tells.clear()
   // (what is told changes what the next frame builds, though nothing came from outside: built again, frame_watch.mbt)
   looks_told(tell_ids, c.told.map(fn(t) { t.0 }))
-  for f in tells {
-    f()
-  }
   // what any of its builds said to tell, once each (Ctx::tell)
   let told = c.told.copy()
   c.told.clear()
-  for t in told {
-    (t.1)()
-  }
-  // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
-  // owed now, at this moment, not by whatever frame comes next)
-  if !told.is_empty() {
-    c.owe_next()
+  if tell {
+    for f in tells {
+      f()
+    }
+    for t in told {
+      (t.1)()
+    }
+    // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
+    // owed now, at this moment, not by whatever frame comes next)
+    if !told.is_empty() {
+      c.owe_next()
+    }
   }
   if scroll_logging() {
     c.log_scroll()
@@ -499,10 +545,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.moved_place()
   c.ninst = 0
   c.spans_cut()
-  match fake.val {
-    Some(f) => f.frame_failed_images.clear()
-    None => ()
-  }
+  frame_failed_images.clear()
   cycle_looks_begin()
   dr.tops.clear()
   c.segs_cut(0)
@@ -550,7 +593,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // what the widgets are, for a screen reader reading them (a11y.mbt)
   c.a11y_after_paint()
   // what the paint said, where a Tester asks (said.mbt)
-  c.said_logged()
+  frame_said_told(c, 1)
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()
   // back goes where the stack drawn now says (Ctx::nav, while building)
@@ -597,8 +640,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_bars = bs
   // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
   old_hits_framed(c)
-  // (what said its presses are another's, under a Tester: that one takes them there)
-  c.check_press_owners()
   // (its targets published whole: what nodes yield to of them told, view_host.mbt)
   yields_published(c)
   // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
@@ -618,15 +659,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()
-  // (a Tester's frame drawn out where headers stand for what a host keeps, as the host would draw it: what reads it
-  // reads the instances drawn)
-  if fake.val is Some(_) {
-    c.flat_from(0)
-  }
-  match frame_hook.val {
-    Some(f) if !looks_rebuilt.val => f()
-    _ => ()
-  }
+  frame_hook_told(c)
   paint_phase.val = 2
 }
 
@@ -2286,10 +2319,10 @@ pub let bench_app : Int = 3
 /// A bench of the app's own (a page's, as still.fail's chat bench scrolls its list) draws every frame while it asks
 /// (`on`, asked each frame): only where the host was opened for it (MBUI_BENCH=3, bench_app), with the app as it
 /// ships, no other path. Anywhere else (a run of the app, the framework's own bench, a scripted run's stable output,
-/// a Tester) it does nothing: no frame is asked for by it.
+/// a Tester, which runs no host's run) it does nothing: no frame is asked for by it.
 pub fn Ctx::bench_frames(self : Ctx, on : Bool) -> Unit {
   ignore(self)
-  if on && bench.host == bench_app && fake.val is None {
+  if on && bench.host == bench_app {
     bench.held = true
   }
 }

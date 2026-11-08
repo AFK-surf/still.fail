@@ -32,7 +32,7 @@ fn layers() -> Layers {
     }
   }
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     old(root, layer(0, None)).over(Is(true)) |> ignore
@@ -86,7 +86,7 @@ fn pointed_over(w : Double) -> Layers {
   let builds = [0, 0, 0]
   let taps = [0, 0, 0]
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     old(root, fn(_c) { builds[0] = builds[0] + 1 }).over(Is(true)) |> ignore
@@ -253,7 +253,7 @@ test "window tree: old views each built in its own room: what they read of the w
   let seen_a : Array[(Double, Double)] = []
   let seen_b : Array[(Double, Double)] = []
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.row(Is(true)) |> ignore

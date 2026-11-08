@@ -1355,7 +1355,7 @@ test "back: taken by a node of the tree's (a signal set): no old view built agai
   let gone = @signals.signal(false, same=fn(x, y) { x == y })
   let t = Tester::new(fn(_c) {  }, platform=2)
   // (parts kept as they are, built again only as what they read changes)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // (no frame built whole beside each to compare with: what is counted is what the frames build)
   t.check_looks(false)
   set_view_app(fn(root) {

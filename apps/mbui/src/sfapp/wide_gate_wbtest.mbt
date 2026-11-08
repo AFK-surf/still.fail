@@ -256,7 +256,7 @@ test "Duo: 发送批准请求 pressed on the waiting page is taken, the system's
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=669.0, h=951.0, platform=1, nav_able=true)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":82,\"bottom\":34,\"left\":0,\"right\":0}}")
   t.run_for(@ui.move_most_ms)
   // (none handed to the host in a frame would take the app's view out of the tabs, the finger on it never told it went up)

@@ -39,12 +39,14 @@ pub(open) trait Host {
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
+  clock_at_wall(Self, Double) -> Double = _
   utc_offset_min(Self, Double) -> Int = _
   event_time(Self) -> Double = _
   event_finger(Self) -> Int = _
   frame_late(Self) -> Double = _
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
+  request_frame_on(Self) -> Unit = _
   wake_after(Self, Double) -> Unit = _
   font_metrics(Self, Double, Int, Int, FixedArray[Double]) -> Unit = _
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
@@ -73,6 +75,10 @@ pub(open) trait Host {
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
   set_outside(Self, FuncRef[(Int, Int, Int) -> Unit]) -> Bool = _
+  answers_by_frame(Self, Int) -> Bool = _
+  script_step(Self, String, String) -> String = _
+  rows_on_pixels(Self) -> Bool = _
+  lines_on_pixels(Self) -> Bool = _
   frame_awaiting(Self, Int, String) -> Unit = _
   own_clock(Self) -> Bool = _
   reduce_motion(Self) -> Bool = _
@@ -89,6 +95,7 @@ pub(open) trait Host {
   system_dark(Self) -> Bool = _
   font_scale(Self) -> Double = _
   native_pointing(Self) -> Int = _
+  pointing(Self) -> Int = _
   keyboard(Self) -> Int = _
   a11y_on(Self) -> Bool = _
   a11y_tree(Self, String) -> Unit = _
@@ -206,6 +213,7 @@ pub(open) trait Host {
   st_audio(Self, Int, Bytes) -> Unit = _
   st_layers(Self) -> Int = _
   st_pointer(Self, Int, Bytes, Double, Double, Double, Double) -> Unit = _
+  st_pointer_named(Self, Int, String, () -> Bytes, Double, Double, Double, Double) -> Unit = _
   st_pointer_at(Self, Int, Double, Double, Int) -> Unit = _
   st_direct(Self, Int, Double, Double, Int) -> Unit = _
   st_h265_here(Self) -> Int = _
@@ -383,6 +391,11 @@ impl Host with wall_ms(_) {
 }
 
 ///|
+impl Host with clock_at_wall(self, ms) {
+  ms - (self.wall_ms() - self.now())
+}
+
+///|
 impl Host with utc_offset_min(_, _) {
   0
 }
@@ -410,6 +423,11 @@ impl Host with platform(_) {
 ///|
 impl Host with request_frame(_) {
   ()
+}
+
+///|
+impl Host with request_frame_on(self) {
+  self.request_frame()
 }
 
 ///|
@@ -553,6 +571,28 @@ impl Host with set_outside(_, _) {
 }
 
 ///|
+impl Host with answers_by_frame(_, _) {
+  false
+}
+
+///|
+impl Host with rows_on_pixels(_) {
+  false
+}
+
+///|
+impl Host with lines_on_pixels(self) {
+  let o = FixedArray::make(6, -1.0)
+  self.font_metrics(15.0, 400, 0, o)
+  o[5] == 1.0
+}
+
+///|
+impl Host with script_step(_, step, _) {
+  "\{step}: this host takes no such step of a script"
+}
+
+///|
 impl Host with frame_awaiting(_, _, _) {
   ()
 }
@@ -640,6 +680,11 @@ impl Host with system_dark(_) {
 ///|
 impl Host with native_pointing(_) {
   0
+}
+
+///|
+impl Host with pointing(_) {
+  -1
 }
 
 ///|
@@ -1593,6 +1638,14 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
+/// The moment on now()'s clock the time of day is `ms` (as wall_ms has it): how far the day is ahead of the clock
+/// taken from it. A run on a clock of its own (a scripted shot, a Tester's) has its day at its clock's 0 taken from it,
+/// as it is.
+pub fn clock_at_wall(ms : Double) -> Double {
+  current.val.clock_at_wall(ms)
+}
+
+///|
 /// What the pointer's event being delivered came from, where one machine has both: 1 a finger on the screen, 0 a
 /// mouse, a trackpad or a pen (Windows: a touch screen beside a mouse); -1 where the host does not say (its system's
 /// hand: Android's and iOS's fingers, a Mac's pointer).
@@ -1632,6 +1685,13 @@ pub fn platform() -> Int {
 ///|
 pub fn request_frame() -> Unit {
   current.val.request_frame()
+}
+
+///|
+/// A frame asked for what moves on by the clock (a motion going on, a cycle shown), not for what changed: a host's
+/// next display frame, as request_frame; a run whose time goes by as it says (a Tester's) owes none at this moment.
+pub fn request_frame_on() -> Unit {
+  current.val.request_frame_on()
 }
 
 ///|
@@ -1887,6 +1947,36 @@ pub fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
 }
 
 ///|
+/// Whether what the host does for the app of `kind` (as set_outside numbers them) is done by the next frame, told by
+/// no event: what waits on it reads it again at each frame while it waits. False where the host tells each as it is
+/// done (set_outside).
+pub fn answers_by_frame(kind : Int) -> Bool {
+  current.val.answers_by_frame(kind)
+}
+
+///|
+/// Whether the host draws each glyph on its device's pixels, a list's rows set on them as it moves (@ui's
+/// rows_on_grid): every platform's does.
+pub fn rows_on_pixels() -> Bool {
+  current.val.rows_on_pixels()
+}
+
+///|
+/// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
+/// length to pixels, StaticLayout each line), as it says of its fonts (font_metrics' sixth number).
+pub fn lines_on_pixels() -> Bool {
+  current.val.lines_on_pixels()
+}
+
+///|
+/// A scripted run's step only a host can carry out (@ui's drive: what the system says on its channel `system`, what a
+/// native view's host says `viewsaid`, the keyboard's height `ime`, the pickers' answers `picks`), `arg` as the script
+/// says it: "" done, else why not.
+pub fn script_step(step : String, arg : String) -> String {
+  current.val.script_step(step, arg)
+}
+
+///|
 /// As the frame just built left it: how many of the app's asks the host has not answered yet (effect.mb's outside)
 /// and what they are ("" when none). A run to a declared moment keeps its clock still while any is awaited.
 pub fn frame_awaiting(awaiting : Int, what : String) -> Unit {
@@ -2017,6 +2107,13 @@ pub fn font_scale() -> Double {
 /// mouse or a touchpad: DeX, ChromeOS; Windows otherwise), 0 where it cannot tell (the platform's then: @ui).
 pub fn native_pointing() -> Int {
   current.val.native_pointing()
+}
+
+///|
+/// What the person points with as the host knows it before any event says (event_finger): 1 a finger, 0 a mouse, a
+/// trackpad or a pen; -1 where it does not say (its system's hand then: @ui).
+pub fn pointing() -> Int {
+  current.val.pointing()
 }
 
 ///|
@@ -3018,6 +3115,10 @@ impl Host with st_pointer(_, _, _, _, _, _, _) { () }
 fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit {
   current.val.st_pointer(id, png, w, h, hx, hy)
 }
+
+///|
+/// The pointer's picture told with the name the app gives it (`key`), made (`png`) only by a host that draws it.
+impl Host with st_pointer_named(self, id, _, png, w, h, hx, hy) { self.st_pointer(id, png(), w, h, hx, hy) }
 
 ///|
 impl Host with st_pointer_at(_, _, _, _, _) { () }

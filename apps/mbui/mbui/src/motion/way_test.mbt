@@ -133,7 +133,7 @@ test "a way read as the view is painted alone (a look worked out as it is painte
 test "a way read by an old view kept in the window's tree, its parts kept as their nodes: the same" {
   let island = fn(w : @motion.Way) {
     let t = @ui.Tester::new(fn(_c) {  })
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     @ui.set_view_app(fn(root) {
       root.box(fn(v) {
         @ui.old(v, fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore }).grow(Is(1.0))

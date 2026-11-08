@@ -42,7 +42,7 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
       None => tp
     }
   })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let (_, need_y) = t.find(need).unwrap()
   let (_, last_y) = t.find("做完了：列表、跳到最新的按钮").unwrap()

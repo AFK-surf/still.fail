@@ -1,5 +1,5 @@
 // A page's list on the window's tree (View::scrolls with Scroll::list) where its host sets its rows on its pixels, as it
-// does an old view's list's (Ctx::row_slot, Ctx::rows_on_pixels; a Tester as it is told to: Tester::keep_parts): its
+// does an old view's list's (Ctx::row_slot, Ctx::rows_on_pixels; a Tester's fake host as it is told to: Tester::set_rows_on_pixels): its
 // rows each as tall as whole pixels, all moved alike so the first one's top is on one, where the list is laid out and
 // where it is scrolled to; pressed where they are drawn. A Tester not told so lays them where they are laid out.
 
@@ -49,7 +49,7 @@ fn rows_pixels_row(t : Tester, i : Int) -> (Double, Double) {
 test "a page's list where its host sets its rows on its pixels: each as tall as whole pixels, the first one's top on one, scrolled too; pressed where drawn" {
   let pressed = []
   let (t, s) = rows_pixels_tree(pressed)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   // (laid out from 10.3, 20.3 each: on 2 pixels a point from 10.5, 20.5 each)
   assert_eq((0).until(4).map(fn(i) { rows_pixels_row(t, i) }).collect(), [
@@ -145,7 +145,7 @@ fn rows_window_faults(t : Tester, at : Double, first_key : Int) -> Array[String]
 test "a page's list of blocks made as they show, where its host sets its rows on its pixels: what shows and where it is drawn one layout, scrolled away and back, one put in over what shows" {
   let keys = @signals.signal(Array::makei(200, fn(i) { i }))
   let (t, s) = rows_window_tree(keys)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let tree = view_tree().unwrap()
   assert_eq(rows_window_faults(t, 0.0, 0), [])

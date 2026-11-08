@@ -42,7 +42,7 @@ fn kept_glide(again : Bool) -> (Array[Array[String]], Int) {
     |> ignore
   }
   let t = @ui.Tester::new(view, w=320.0, h=420.0, platform=2)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.draw()
   t.run_for(kept_look_ms)

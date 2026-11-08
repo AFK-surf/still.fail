@@ -41,9 +41,7 @@ pub fn set_window_zoom(zoom : Double) -> Unit {
     return
   }
   window_zoom_wanted.set(zoom)
-  if fake.val is None {
-    @hostapi.set_window_zoom(zoom)
-  }
+  @hostapi.set_window_zoom(zoom)
   // The scale is taken at the start of a frame, so a change made during it belongs to the next one.
   g().owe_next()
 }

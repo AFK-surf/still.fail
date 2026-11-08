@@ -21,7 +21,7 @@ test "a list hosted in a moved view scrolls without layout and keeps its targets
     }) |> ignore
   })
   t.check_looks(true)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   assert_false(old_whole.val, msg="the list must really be hosted in a smaller moved view")

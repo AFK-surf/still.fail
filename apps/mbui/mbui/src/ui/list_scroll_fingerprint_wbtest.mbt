@@ -11,7 +11,7 @@ fn fingerprint_list(color : @signals.Signal[Int64]) -> Tester {
     }, rows_read=true) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t
 }
 

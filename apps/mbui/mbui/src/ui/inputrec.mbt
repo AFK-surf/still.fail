@@ -12,7 +12,7 @@ fn draw_logging() -> Bool {
   if draw_log.val < 0 {
     draw_log.val = if @hostapi.env("MBUI_DRAW_LOG") == "1" { 1 } else { 0 }
   }
-  draw_log.val == 1 && fake.val is None
+  draw_log.val == 1
 }
 
 ///|

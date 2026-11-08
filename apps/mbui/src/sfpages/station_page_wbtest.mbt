@@ -879,7 +879,7 @@ test "two station variables editors share the draft without sharing editor state
     })
   }, w=390.0, h=900.0, platform=1)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let a = first.val.unwrap()
   let b = second.val.unwrap()

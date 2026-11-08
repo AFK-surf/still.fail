@@ -124,16 +124,12 @@ let ride_groups_gone : Array[Int] = []
 let ride_spans : Array[Int] = []
 
 ///|
-/// Whether the host keeps groups of instances (@hostapi.groups_here), a Tester's frames drawing them out as one would
-/// (Ctx::flat_from): asked once.
-// kept across runs: the host's, the same for the program's life
+/// Whether the host keeps groups of instances (@hostapi.groups_here): asked once.
+// kept across runs: the host's, the same for the program's life (each Tester's asked anew: reset_globals)
 let groups_host : Ref[Int] = Ref(-1)
 
 ///|
 fn groups_on() -> Bool {
-  if fake.val is Some(_) {
-    return true
-  }
   if groups_host.val < 0 {
     groups_host.val = if @hostapi.groups_here() { 1 } else { 0 }
   }
@@ -178,12 +174,9 @@ fn ride_groups_told() -> Unit {
   if ride_groups_gone.is_empty() {
     return
   }
-  let real = fake.val is None
   for g in ride_groups_gone {
     presented.group_drop(g)
-    if real {
-      @hostapi.group_drop(g)
-    }
+    @hostapi.group_drop(g)
   }
   ride_groups_gone.clear()
 }
@@ -437,10 +430,8 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   ride_keep(r.id, kept)
   if group >= 0 {
     ride_groups[group] = kept
-    if fake.val is None {
-      presented.group_set(group, inst, n)
-      @hostapi.group_set(group, inst, FixedArray::makei(n, fn(i) { moves[i].to_double() }), n)
-    }
+    presented.group_set(group, inst, n)
+    @hostapi.group_set(group, inst, FixedArray::makei(n, fn(i) { moves[i].to_double() }), n)
   }
 }
 

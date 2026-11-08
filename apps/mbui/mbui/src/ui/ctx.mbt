@@ -2939,39 +2939,27 @@ pub fn Ctx::open_url(self : Ctx, url : String) -> Bool {
 ///|
 /// The number on the app's icon (@hostapi.set_badge: macOS's Dock tile), 0 none. Under a Tester: kept (Tester::badge).
 pub fn set_badge(n : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.badge = n
-    None => @hostapi.set_badge(n)
-  }
+  @hostapi.set_badge(n)
 }
 
 ///|
 /// This machine's station as the system says it (@hostapi.local_station), JSON; "" none. Under a Tester: as it is set
 /// (Tester::set_local_station).
 pub fn local_station() -> String {
-  match fake.val {
-    Some(f) => f.local_station
-    None => @hostapi.local_station()
-  }
+  @hostapi.local_station()
 }
 
 ///|
 /// Something done to this machine's station (@hostapi.local_station_act). Under a Tester: kept (Tester::local_acts).
 pub fn local_station_act(action : String) -> Unit {
-  match fake.val {
-    Some(f) => f.local_acts.push(action)
-    None => @hostapi.local_station_act(action)
-  }
+  @hostapi.local_station_act(action)
 }
 
 ///|
 /// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
 /// them (Tester::hold_mods).
 pub fn mods_held() -> Int {
-  match fake.val {
-    Some(f) => f.mods
-    None => @hostapi.mods_held()
-  }
+  @hostapi.mods_held()
 }
 
 ///|
@@ -2985,33 +2973,21 @@ pub fn open_url(url : String) -> Bool {
 /// (@hostapi.install_package); what comes of it when it is not installed comes on @hostapi.system_channel. Under a Tester:
 /// kept (Tester::installs); the test posts what the system says (Tester::post).
 pub fn install_package(name : String, data : Bytes) -> Unit {
-  match fake.val {
-    Some(f) => {
-      ignore(data)
-      f.installs.push(name)
-    }
-    None => @hostapi.install_package(name, data)
-  }
+  @hostapi.install_package(name, data)
 }
 
 ///|
 /// The app over another app (@hostapi.system_channel `over`) done (@hostapi.over_done): back to the app it was over, or on
 /// into the app's own window (`open_app`). Under a Tester: kept (Tester::overs_done).
 pub fn over_done(open_app~ : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.overs_done.push(open_app)
-    None => @hostapi.over_done(open_app~)
-  }
+  @hostapi.over_done(open_app~)
 }
 
 ///|
 /// What the notice says that holds the app up while it listens for a browser coming back (@hostapi.hold_words), said
 /// before the browser opens. Under a Tester: kept (Tester::hold_words).
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
-  match fake.val {
-    Some(f) => f.hold_words = Some((channel, title, body))
-    None => @hostapi.hold_words(channel~, title~, body~)
-  }
+  @hostapi.hold_words(channel~, title~, body~)
 }
 
 ///|

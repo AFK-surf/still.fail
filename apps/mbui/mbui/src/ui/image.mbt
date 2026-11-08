@@ -659,28 +659,23 @@ fn Ctx::draw_image(
   let px = dmin(self.image_px(src, bw, bh, fit), max_px.to_double())
   let px = if px <= 0.0 { 256.0 } else { px }
   let found = self.image_for(src, px)
-  // A Tester records only the failed pictures this frame actually needed. A good decode at the requested size makes
+  // The failed pictures this frame actually needed (frame_failed_images). A good decode at the requested size makes
   // an older failed decode irrelevant; a smaller fallback does not stand in for the requested resolution.
   if !shooting.val {
-    match fake.val {
-      Some(f) => {
-        let needs_decode = match found {
-          Some(e) => e.px != bucket(px)
-          None => true
-        }
-        if needs_decode {
-          match image_cache.get(src) {
-            Some(list) =>
-              for e in list {
-                if e.state < 0 && !f.frame_failed_images.contains(e.id) {
-                  f.frame_failed_images.push(e.id)
-                }
-              }
-            None => ()
+    let needs_decode = match found {
+      Some(e) => e.px != bucket(px)
+      None => true
+    }
+    if needs_decode {
+      match image_cache.get(src) {
+        Some(list) =>
+          for e in list {
+            if e.state < 0 && !frame_failed_images.contains(e.id) {
+              frame_failed_images.push(e.id)
+            }
           }
-        }
+        None => ()
       }
-      None => ()
     }
   }
   let e = match found {
@@ -846,3 +841,9 @@ fn image_decoded(id : Int, at : Double) -> Unit {
     None => ()
   }
 }
+
+///|
+/// Failed decodes the frame painted last needed, by the host's image id (Ctx::image): not every failed decode still in
+/// the cache, those of pictures no longer in the frame not among them.
+// kept across runs: emptied as each frame is painted (frame_paint)
+let frame_failed_images : Array[Int] = []

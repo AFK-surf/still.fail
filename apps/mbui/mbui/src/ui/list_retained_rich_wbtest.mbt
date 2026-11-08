@@ -24,7 +24,7 @@ test "scrolling retains the drawing of a rich row and moves its link" {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.frame_at(at + 16.0)
@@ -56,7 +56,7 @@ fn rich_row_frames(keep : Bool) -> Array[Array[Array[Double]]] {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.draw()
   let at = t.time()

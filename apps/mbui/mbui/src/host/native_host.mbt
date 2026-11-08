@@ -172,8 +172,47 @@ impl @hostapi.Host for Native with frame_late(_) {
 
 ///|
 impl @hostapi.Host for Native with platform(_) {
-  platform()
+  said_once(platform_said, fn() { platform() })
 }
+
+///|
+/// What the platform says once of what stays the same while the app runs, kept: asked (`ask`) the first time only.
+fn said_once(kept : Ref[Int?], ask : () -> Int) -> Int {
+  match kept.val {
+    Some(v) => v
+    None => {
+      let v = ask()
+      kept.val = Some(v)
+      v
+    }
+  }
+}
+
+///|
+// what the platform said once (said_once): its system, the keys typed, the native input, whether it says a copy itself,
+// its decoders and video layers
+let platform_said : Ref[Int?] = Ref(None)
+
+///|
+let keys_said : Ref[Int?] = Ref(None)
+
+///|
+let native_pointing_said : Ref[Int?] = Ref(None)
+
+///|
+let copy_shown_said : Ref[Int?] = Ref(None)
+
+///|
+let h264_said : Ref[Int?] = Ref(None)
+
+///|
+let h265_said : Ref[Int?] = Ref(None)
+
+///|
+let feeds_said : Ref[Int?] = Ref(None)
+
+///|
+let layers_said : Ref[Int?] = Ref(None)
 
 ///|
 impl @hostapi.Host for Native with request_frame(_) {
@@ -337,7 +376,7 @@ impl @hostapi.Host for Native with reduce_motion(_) {
 
 ///|
 impl @hostapi.Host for Native with keys_platform(_) {
-  keys_platform()
+  said_once(keys_said, fn() { keys_platform() })
 }
 
 ///|
@@ -432,7 +471,7 @@ impl @hostapi.Host for Native with font_scale(_) {
 
 ///|
 impl @hostapi.Host for Native with native_pointing(_) {
-  native_pointing()
+  said_once(native_pointing_said, fn() { native_pointing() })
 }
 
 ///|
@@ -1002,12 +1041,12 @@ impl @hostapi.Host for Native with st_close(_, id) {
 
 ///|
 impl @hostapi.Host for Native with st_h264_here(_) {
-  st_h264_here()
+  said_once(h264_said, fn() { st_h264_here() })
 }
 
 ///|
 impl @hostapi.Host for Native with st_feeds(_) {
-  st_feeds()
+  said_once(feeds_said, fn() { st_feeds() })
 }
 
 ///|
@@ -1067,7 +1106,7 @@ impl @hostapi.Host for Native with cl_set(_, text, png, label) {
 
 ///|
 impl @hostapi.Host for Native with dv_copy_shown(_) {
-  dv_copy_shown()
+  said_once(copy_shown_said, fn() { dv_copy_shown() })
 }
 
 ///|
@@ -1122,7 +1161,7 @@ impl @hostapi.Host for Native with st_audio_here(_) { st_audio_here() }
 impl @hostapi.Host for Native with st_audio(_, id, data) { st_audio(id, data) }
 
 ///|
-impl @hostapi.Host for Native with st_layers(_) { st_layers() }
+impl @hostapi.Host for Native with st_layers(_) { said_once(layers_said, fn() { st_layers() }) }
 
 ///|
 impl @hostapi.Host for Native with st_pointer(_, id, png, w, h, hx, hy) { st_pointer(id, png, w, h, hx, hy) }
@@ -1133,7 +1172,13 @@ impl @hostapi.Host for Native with st_pointer_at(_, id, x, y, shown) { st_pointe
 ///|
 impl @hostapi.Host for Native with st_direct(_, id, route, after, what) { st_direct(id, route, after, what) }
 
-impl @hostapi.Host for Native with st_h265_here(_) { st_h265_here() }
+impl @hostapi.Host for Native with st_h265_here(_) { said_once(h265_said, fn() { st_h265_here() }) }
 
 ///|
 impl @hostapi.Host for Native with st_hevc(_, id, hvcc, w, h) { st_hevc(id, hvcc, w, h) }
+
+///|
+/// Every platform's draws each glyph on its pixels, a list's rows set on them as it moves.
+impl @hostapi.Host for Native with rows_on_pixels(_) {
+  true
+}

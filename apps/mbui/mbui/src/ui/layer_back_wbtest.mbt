@@ -204,7 +204,7 @@ test "a stack in a part kept as drawn, a layer after it: the part's nodes moved 
   )
   // (no frame built again whole to check what was kept: its builds counted as the part's own)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   t.draw()
   t.clock_frame()

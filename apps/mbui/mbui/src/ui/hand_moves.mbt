@@ -205,8 +205,10 @@ pub fn Tester::hand_moves(self : Tester) -> Array[String] {
   // (how it is drawn changed by the test: built whole, as the frame after it is, frame_watch.mbt)
   test_stepped()
   self.fake.wants = false
+  self.fake_pages_run()
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
+  g().check_press_owners()
   let faults = c.hand_faults(rest)
   match view_app.val {
     Some(tree) => {

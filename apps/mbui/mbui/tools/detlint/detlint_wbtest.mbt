@@ -2026,3 +2026,27 @@ test "layout-read-back" {
   )
   assert_eq(lines(fs), [2, 3, 4])
 }
+
+///|
+test "tester-branch" {
+  let cfg = Config::new(
+    @rjson.parse(
+      "{\"tester\": {\"names\": [\"fake\", \"looks_check\"], \"files\": [\"src/ui/tester*.mbt\", \"src/ui/fake_host.mbt\"]}}",
+    ),
+  )
+  // what runs in the app asking for the fake host or a Tester's switch; the Tester's own files, a test's, a field of
+  // that name and another name not counted
+  found(
+    [
+      ("src/ui/hostcall.mbt", "fn h_now() -> Double {\n  match fake.val {\n    Some(f) => f.time\n    None => 0.0\n  }\n}\n"),
+      ("src/ui/frame.mbt", "fn f() -> Unit {\n  if looks_check.val {\n    ()\n  }\n  let x = c.fake.val\n  let y = other.val\n}\n"),
+      ("src/ui/tester.mbt", "fn t() -> Unit {\n  fake.val = None\n}\n"),
+      ("src/ui/fake_host.mbt", "fn h() -> Unit {\n  fake.val = None\n}\n"),
+      ("src/ui/hostcall_wbtest.mbt", "test \"t\" {\n  assert_true(fake.val is Some(_))\n}\n"),
+    ],
+    "tester-branch",
+    2,
+    cfg~,
+  )
+  |> ignore
+}
