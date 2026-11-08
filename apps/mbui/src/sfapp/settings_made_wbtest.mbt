@@ -4,10 +4,8 @@
 // not made again; its rows pressed opening their pages.
 
 ///|
-/// The settings' list on a small screen (`platform`'s input), 390 × `h`: drawn by the old frame alone (`tree` false),
-/// or by the window's tree, its page made once.
+/// The settings' list on a small screen (`platform`'s input), 390 × `h`, its page made once.
 fn settings_home_tester(
-  tree : Bool,
   platform : Int,
   h? : Double = 2400.0,
   mode? : String = "settings-home",
@@ -16,11 +14,7 @@ fn settings_home_tester(
   corners_held? : Bool = true,
 ) -> (@ui.Tester, Source) {
   let src = fixture_app(mode)
-  let t = if tree {
-    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform~, corners_held~)
-  } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h~, platform~, corners_held~)
-  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform~, corners_held~)
   // (the system's size of words as said)
   t.set_font_scale(scale)
   t.run_for(wait)
@@ -105,38 +99,21 @@ fn same_drawn(made : Array[String], old : Array[String], what : String) -> Unit 
 test "the settings' list made once: every instance drawn as its old view's, with a finger and with keyboard and mouse, at the system's larger words" {
   for case in [(2, 1.0), (0, 1.0), (2, 2.0)] {
     let (platform, scale) = case
-    // (at twice the words main's old view of this list breaks the corner rule (its account card's row, 18 round in a
-    // card 22.8 round, too square to follow it), and the workspace's row as well, its tile in its corner 8 in at its
-    // start, its words twice as tall holding it lower than 8 down its middle: what this compares with, not held here,
-    // its faults said and kept known, those two rows' alone; every other case, and every other page at any size, held
-    // as ever)
     let corners_held = scale < 2.0
-    let (old, _) = settings_home_tester(false, platform, scale~, corners_held~)
-    if !corners_held {
-      let faults = old.corner_faults()
-      assert_true(
-        faults.length() > 0 && faults.iter().all(fn(f) { f.contains("lin@example.com") || f.contains("星火工作室") }),
-        msg="main's own fault at \{scale}: \{faults}",
-      )
-    }
-    let old_drawn = instances_sorted(old)
-    let old_words = words_where(old)
-    let (made, _) = settings_home_tester(true, platform, scale~, corners_held~)
+    let (made, _) = settings_home_tester(platform, scale~, corners_held~)
     if !corners_held {
       // (the tree's drawn as the old view's, every instance (below); its corner checker finds nothing: it does not look
       // at that pair among the tree's own nodes, the old views' alone, a difference of what it checks, said so)
       assert_eq(made.corner_faults(), [])
     }
     assert_true(app.nav.top() == Settings)
-    // (the words first: what differs said by what it says)
-    same_drawn(words_where(made), old_words, "words")
-    same_drawn(instances_sorted(made), old_drawn, "instances")
+    root_reference("settings/\{platform}/\{scale}", (instances_sorted(made), words_where(made)).to_string())
   }
 }
 
 ///|
 test "the settings' list made once: its title, back, headings, rows and what they say are the tree's own nodes" {
-  let (_, _) = settings_home_tester(true, 2)
+  let (_, _) = settings_home_tester(2)
   let own = tree_words_drawn()
   for w in ["设置", "外观", "通知", "关于", "密钥", "星火工作室", "林"] {
     assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
@@ -145,7 +122,7 @@ test "the settings' list made once: its title, back, headings, rows and what the
 
 ///|
 test "the settings' list made once: a row pressed opens its page" {
-  let (t, _) = settings_home_tester(true, 2)
+  let (t, _) = settings_home_tester(2)
   let at = t.find("外观")
   let shown = t.words().map(fn(w) { w.0 })
   assert_true(shown.contains("外观"), msg="外观 not shown: \{shown}")
@@ -159,7 +136,7 @@ test "the settings' list made once: a row pressed opens its page" {
 
 ///|
 test "关于 made once: its title, rows and switch are the tree's own nodes; its switch turned, statistics told so" {
-  let (t, _) = settings_home_tester(true, 2, mode="settings-about")
+  let (t, _) = settings_home_tester(2, mode="settings-about")
   let own = tree_words_drawn()
   for w in [@sf.t("web-pages.settings.nav.about"), @sf.t("web-pages.settings.nav.changelog"), @sf.t("common.legal.terms"), @sf.t("common.legal.privacy")] {
     assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
@@ -186,7 +163,7 @@ fn tree_node_of(words : String) -> @view.NodeId? {
 
 ///|
 test "the settings' list made once: what the core says of a row followed by the same nodes, the page made no more" {
-  let (t, _) = settings_home_tester(true, 2)
+  let (t, _) = settings_home_tester(2)
   let title = tree_node_of("通知")
   let page = tree_node_of("设置")
   assert_true(title is Some(_) && page is Some(_))
@@ -203,20 +180,13 @@ test "the settings' list made once: what the core says of a row followed by the 
 ///|
 test "the settings' list made once, as its screen is recorded: what shows drawn as the old view's; the text asked beyond it, said" {
   // (each played as screens_wbtest plays it, to the Mac's last frame; read at once)
-  let old = screen_played("settings-home", @ui.move_most_ms, tree=false)
-  let (old_drawn, old_words, old_missing) = (instances_sorted(old), words_where(old), old.text_missing())
   let made = screen_played("settings-home", @ui.move_most_ms)
-  let (made_drawn, made_words, made_missing) = (instances_sorted(made), words_where(made), made.text_missing())
-  // (each said as it is, whichever differs)
-  let said = "old lacks \{old_missing.length()}: \{old_missing}\nmade lacks \{made_missing.length()}: \{made_missing}"
-  same_drawn(made_drawn, old_drawn, "instances (\{said})")
-  same_drawn(made_words, old_words, "words (\{said})")
-  assert_eq(made_missing, old_missing, msg=said)
+  root_reference("settings-recorded", (instances_sorted(made), words_where(made), made.text_missing()).to_string())
 }
 
 ///|
 test "the settings' list made once: flung by a finger, it glides on as a list's does, said so till it is at rest" {
-  let (t, _) = settings_home_tester(true, 2, h=844.0)
+  let (t, _) = settings_home_tester(2, h=844.0)
   let at = fn() { t.words().filter(fn(w) { w.0 == "外观" }).map(fn(w) { w.2 }) }
   let before = at()
   t.drag(195.0, 600.0, 195.0, 200.0)
@@ -228,7 +198,7 @@ test "the settings' list made once: flung by a finger, it glides on as a list's 
 
 ///|
 test "the settings' list dragged on past its end by a finger, counted taller below than it is: held at its end as it really is while the finger is still on it, where it rests let go" {
-  let (t, _) = settings_home_tester(true, 2, h=844.0)
+  let (t, _) = settings_home_tester(2, h=844.0)
   // (a row on its first screen and on its last: 外观 below the first since a card's rows are their words 24 in, 2026-11-04)
   let at = fn() { t.words().filter(fn(w) { w.0 == "归档" }).map(fn(w) { w.2 }) }
   let before = at()
@@ -257,7 +227,7 @@ test "the settings' list dragged on past its end by a finger, counted taller bel
 /// The settings' list dragged by a finger past its search block and back, at the system's size of words `scale`: what
 /// it holds moves as the finger does at every step, until it reaches its top.
 fn settings_list_follows_the_finger(scale : Double) -> Unit raise {
-  let (t, _) = settings_home_tester(true, 2, h=844.0, scale~)
+  let (t, _) = settings_home_tester(2, h=844.0, scale~)
   let at = fn() {
     let found = t.words().filter(fn(w) { w.0 == "归档" }).map(fn(w) { w.2 })
     if found.length() == 1 { found[0] } else { 0.0 / 0.0 }
@@ -293,9 +263,8 @@ test "the settings' list dragged back past its search block: what it holds does 
 
 ///|
 /// 记忆 on a small screen (`platform`'s input), 390 × 2400, its stations as the fixture has them, never come (`held`) or
-/// failed (`failed`): drawn by the old frame alone (`tree` false) or by the window's tree, its page made once.
+/// failed (`failed`): drawn by the window's tree, its page made once.
 fn memories_tester(
-  tree : Bool,
   platform : Int,
   held? : Bool = false,
   failed? : Bool = false,
@@ -323,11 +292,7 @@ fn memories_tester(
   } else {
     base
   }
-  let t = if tree {
-    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=2400.0, platform~, words_over_held~)
-  } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w~, h=2400.0, platform~, words_over_held~)
-  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=2400.0, platform~, words_over_held~)
   // (the system's size of words as said: what the bones' bars are as high as follows it)
   t.set_font_scale(scale)
   t.run_for(@ui.move_most_ms)
@@ -337,7 +302,7 @@ fn memories_tester(
 ///|
 test "记忆 made once, its stations read the first time: its list in its bones, as it breathes, at the system's sizes of words; none of it found or read out" {
   for scale in [1.0, 1.5, 2.0] {
-    let t = memories_tester(true, 2, held=true, scale~)
+    let t = memories_tester(2, held=true, scale~)
     let t0 = t.time()
     let out = [instances_sorted(t)]
     for dt in [@sf.breath_ms / 4.0, @sf.breath_ms / 2.0] {
@@ -360,7 +325,7 @@ test "记忆 made once, its stations read the first time: its list in its bones,
 ///|
 test "记忆 made once, its stations not read: what failed said over its list in its bones, still, read out, at the system's sizes of words" {
   for scale in [1.0, 1.5, 2.0] {
-    let t = memories_tester(true, 2, failed=true, scale~)
+    let t = memories_tester(2, failed=true, scale~)
     let t0 = t.time()
     let out = [instances_sorted(t)]
     t.frame_at(t0 + @sf.breath_ms / 2.0)
@@ -376,7 +341,7 @@ test "记忆 made once, its stations not read: what failed said over its list in
 
 ///|
 test "记忆 made once: its rows are the tree's own; an online station's opens its memory" {
-  let t = memories_tester(true, 2)
+  let t = memories_tester(2)
   let own = tree_words_drawn()
   for w in [@sf.t("web-pages.settings.memory.title"), @sf.t("android-misc.memory.note"), @sf.t("android-misc.memory.row")] {
     assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
@@ -390,7 +355,7 @@ test "记忆 made once: its rows are the tree's own; an online station's opens i
 test "归档 made once: its choice, notes and stations drawn, with a finger and with keyboard and mouse, at the system's larger words" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let made = memories_tester(true, platform, scale~, mode="settings-archiving")
+    let made = memories_tester(platform, scale~, mode="settings-archiving")
     assert_true(app.nav.top() == Setting(@settings.Route::Archiving))
     assert_true(instances_sorted(made).length() > 0, msg="\{case}")
     for w in ["Willow", @sf.t("web-pages.appearance.archive.title"), @sf.t("web-pages.archiving.auto.title")] {
@@ -402,7 +367,7 @@ test "归档 made once: its choice, notes and stations drawn, with a finger and 
 ///|
 test "归档 made once, its stations read the first time: their rows in their bones, as they breathe; none of them read out" {
   for scale in [1.0, 2.0] {
-    let t = memories_tester(true, 2, held=true, scale~, mode="settings-archiving")
+    let t = memories_tester(2, held=true, scale~, mode="settings-archiving")
     let t0 = t.time()
     let first = instances_sorted(t)
     t.frame_at(t0 + @sf.breath_ms / 2.0)
@@ -420,7 +385,7 @@ test "归档 made once, its stations read the first time: their rows in their bo
 ///|
 test "归档 made once: its own nodes; its choice chosen, what the one chosen means said under it, the one set chosen again saying nothing" {
   let calls : Array[String] = []
-  let t = memories_tester(true, 2, mode="settings-archiving", calls~)
+  let t = memories_tester(2, mode="settings-archiving", calls~)
   let own = tree_words_drawn()
   for w in [@sf.t("web-pages.archiving.title"), @sf.t("web-pages.archiving.auto.title")] {
     assert_true(own.iter().any(fn(o) { o.contains(w) }), msg="not the tree's own: \{w} in \{own}")
@@ -511,14 +476,13 @@ fn archiving_with(fields : Array[(String, Json)]) -> (Json) -> Json {
 ///|
 /// The station's own archiving page (st1's), as an old view's or made once, its archiving as `f` has it.
 fn station_archiving_tester(
-  tree : Bool,
   platform : Int,
   scale? : Double = 1.0,
   f? : @signals.Signal[(Json) -> Json] = @signals.signal(fn(a) { a }),
   busy? : @signals.Signal[Bool] = @signals.signal(false),
   calls? : Array[String] = [],
 ) -> @ui.Tester {
-  memories_tester(tree, platform, scale~, mode="settings-archiving:ws1/st1", calls~, wrap=fn(s) { archiving_as(s, f, busy) })
+  memories_tester(platform, scale~, mode="settings-archiving:ws1/st1", calls~, wrap=fn(s) { archiving_as(s, f, busy) })
 }
 
 ///|
@@ -533,7 +497,7 @@ test "一台 station 的归档 made once, with a finger and with keyboard and mo
   ]
   for c in cases {
     let (what, platform, scale, f, shown, none) = c
-    let made = station_archiving_tester(true, platform, scale~, f=@signals.signal(f))
+    let made = station_archiving_tester(platform, scale~, f=@signals.signal(f))
     assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="\{what}")
     for w in shown {
       assert_true(made.find(w) is Some(_), msg="\{what}: \{w} at \{platform} \{scale}")
@@ -549,7 +513,7 @@ test "一台 station 的归档 made once, with a finger and with keyboard and mo
 /// words), as its archiving is (`f`) and a save of it on its way or not (`busy`).
 fn station_archiving_saves(f : (Json) -> Json, busy : Bool, act : (@ui.Tester) -> Unit) -> Int {
   let calls : Array[String] = []
-  let t = station_archiving_tester(true, 2, f=@signals.signal(f), busy=@signals.signal(busy), calls~)
+  let t = station_archiving_tester(2, f=@signals.signal(f), busy=@signals.signal(busy), calls~)
   act(t)
   t.run_for(@ui.move_most_ms)
   calls.filter(fn(n) { n == "archiving.save" }).length()
@@ -593,7 +557,7 @@ test "一台 station 的归档 made once: chosen: a way, after how long, Slack's
 test "一台 station 的归档 made once: as the core says it anew, the same nodes say it: the way and the while chosen, its note" {
   let anew = archiving_with([("mode", Json::string("reviewed")), ("days", Json::number(7.0)), ("modeNote", Json::string("按模型判断，空闲七天以上"))])
   let f : @signals.Signal[(Json) -> Json] = @signals.signal(fn(a) { a })
-  let t = station_archiving_tester(true, 2, f~)
+  let t = station_archiving_tester(2, f~)
   let ids = fn(w : String) {
     @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == w }).map(fn(d) { (d.id.at, d.id.gen) })
   }
@@ -611,7 +575,7 @@ test "一台 station 的归档 made once: as the core says it anew, the same nod
 
 ///|
 test "归档 made once: a station's row pressed opens its own archiving, made once too" {
-  let t = memories_tester(true, 2, mode="settings-archiving")
+  let t = memories_tester(2, mode="settings-archiving")
   t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::StationArchiving("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
@@ -623,12 +587,12 @@ test "归档 made once: a station's row pressed opens its own archiving, made on
 test "自动决定 made once, with a finger and with keyboard and mouse, at the system's larger words; its row opens the decision's page" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let made = memories_tester(true, platform, scale~, mode="settings-decisions-settings")
+    let made = memories_tester(platform, scale~, mode="settings-decisions-settings")
     assert_true(app.nav.top() == Setting(@settings.Route::AutoDecisions))
     // (narrow: its row's note short)
     assert_true(made.find(@sf.t("web-pages.automaticDecisions.completionShort")) is Some(_), msg="\{case}")
   }
-  let t = memories_tester(true, 2, mode="settings-decisions-settings")
+  let t = memories_tester(2, mode="settings-decisions-settings")
   let own = tree_words_drawn()
   assert_true(own.iter().any(fn(o) { o.contains(@sf.t("web-pages.automaticDecisions.completion")) }), msg="not the tree's own: \{own}")
   t.tap_text(@sf.t("web-pages.automaticDecisions.completion"))
@@ -640,7 +604,7 @@ test "自动决定 made once, with a finger and with keyboard and mouse, at the 
 test "用量 made once: its figures, its days, its chats and its stations the tree's own, with a finger and with keyboard and mouse, at the system's larger words" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let made = memories_tester(true, platform, scale~, mode="settings-usage")
+    let made = memories_tester(platform, scale~, mode="settings-usage")
     assert_true(app.nav.top() == Setting(@settings.Route::Usage))
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
@@ -652,7 +616,7 @@ test "用量 made once: its figures, its days, its chats and its stations the tr
 
 ///|
 test "用量 keeps its history visible while recent details are prepared" {
-  let t = memories_tester(true, 2, mode="settings-usage-details-pending")
+  let t = memories_tester(2, mode="settings-usage-details-pending")
   let first = instances_sorted(t)
   let said = t.words_said().map(fn(w) { w.0 })
   assert_true(said.iter().any(fn(w) { w.contains("各设备的工作量") }), msg="the available history is visible: \{said}")
@@ -664,15 +628,14 @@ test "用量 keeps its history visible while recent details are prepared" {
 }
 
 ///|
-/// 用量's 价目表 reached by its link (查看价目表 →), made once (`tree`), at `platform`'s hand and the system's size of
+/// 用量's 价目表 reached by its link (查看价目表 →), made once, at `platform`'s hand and the system's size of
 /// words `scale`; its usage as `state` says once there (prices_said).
 fn prices_tester(
-  tree : Bool,
   platform : Int,
   scale : Double,
   state? : @signals.Signal[String] = @signals.signal(""),
 ) -> @ui.Tester {
-  let t = memories_tester(tree, platform, scale~, mode="settings-usage", wrap=fn(base) { prices_said(base, state) })
+  let t = memories_tester(platform, scale~, mode="settings-usage", wrap=fn(base) { prices_said(base, state) })
   t.tap_text("查看价目表 →")
   t.run_for(@ui.move_most_ms)
   t
@@ -719,7 +682,7 @@ test "价目表 made once while its usage is not read yet, fails to be read, is 
     let (platform, scale) = case
     for state in ["held", "failed", "reading", "failing", "none"] {
       let said = @signals.signal("")
-      let t = prices_tester(true, platform, scale, state=said)
+      let t = prices_tester(platform, scale, state=said)
       said.set(state)
       t.run_for(@ui.move_most_ms)
       let at = "\{case} \{state}"
@@ -746,7 +709,7 @@ test "价目表 made once in a window made narrower and wider as it shows: its c
   for case in [(2, 1.0), (0, 1.0)] {
     let (platform, scale) = case
     for w in [300.0, 240.0, 520.0] {
-      let made = prices_tester(true, platform, scale)
+      let made = prices_tester(platform, scale)
       made.resize(w, 2400.0)
       made.run_for(@ui.move_most_ms)
       // (its card's name and what its prices are within the window; its table scrolls across within the card)
@@ -763,7 +726,7 @@ test "价目表 made once in a window made narrower and wider as it shows: its c
 test "价目表 made once: its stations' cards and their tables the tree's own, with a finger and with keyboard and mouse, at the system's larger words" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let made = prices_tester(true, platform, scale)
+    let made = prices_tester(platform, scale)
     assert_true(app.nav.top() is Setting(@settings.Route::UsagePrices(_)), msg="\{case}")
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
@@ -775,7 +738,7 @@ test "价目表 made once: its stations' cards and their tables the tree's own, 
 
 ///|
 test "用量 made once in a window 220 wide at words twice as large, as it is reached: its title on its line and 分享 with its days under it at the line's end, each within the window and over none, 分享 opening its card; the year's head and the days' split each a line beside its choice; no words over words on its title's line" {
-  let made = memories_tester(true, 2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
+  let made = memories_tester(2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
   let made_over = made.words_over_frames()
   assert_true(app.nav.top() == Setting(@settings.Route::Usage))
   let words = made.words()
@@ -868,7 +831,7 @@ fn usage_30_days(t : @ui.Tester) -> Unit {
 
 ///|
 test "用量 made once in a window 220 wide at words twice as large: 30 天 chosen by a finger from its days under the title, its total then; no words over words on its title's line as it goes, frame by frame" {
-  let made = memories_tester(true, 2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
+  let made = memories_tester(2, scale=2.0, mode="settings-usage", w=220.0, words_over_held=false)
   let made_end = usage_line_end(made.words())
   let from = made.words_over_frames().length()
   usage_30_days(made)
@@ -877,10 +840,10 @@ test "用量 made once in a window 220 wide at words twice as large: 30 天 chos
   assert_true(over.iter().all(fn(m) { m.y >= made_end }), msg="words over words on its title's line: \{over}")
 }
 ///|
-/// 用量 made once (`tree`), a finger's steps on its days' bars (by where its days' names are), then what it says: its
+/// 用量 made once, a finger's steps on its days' bars (by where its days' names are), then what it says: its
 /// words where they are, as words_where has them.
-fn usage_days_after(tree : Bool, steps : (@ui.Tester, (String) -> (Double, Double)) -> Unit) -> Array[String] {
-  let t = memories_tester(tree, 2, mode="settings-usage")
+fn usage_days_after(steps : (@ui.Tester, (String) -> (Double, Double)) -> Unit) -> Array[String] {
+  let t = memories_tester(2, mode="settings-usage")
   // (a day's bar's middle, by its name under it: 6 under the plot's foot, the plot 150 high)
   let at = fn(name : String) {
     match t.words().search_by(fn(w) { w.0 == name }) {
@@ -946,17 +909,17 @@ test "用量 made once: its days chosen by a finger: a day tapped seen alone, ta
       t.touch(3, x, y)
     }),
   ]
-  let none = usage_days_after(true, fn(_, _) {  })
+  let none = usage_days_after(fn(_, _) {  })
   let seen = fn(what : String) {
     match cases.search_by(fn(c) { c.0 == what }) {
-      Some(i) => usage_days_after(true, cases[i].1)
+      Some(i) => usage_days_after(cases[i].1)
       None => []
     }
   }
   // (a day tapped: seen alone, its words other than all of them; the one let go on as the one tapped is)
   let tapped = seen("tapped")
   assert_true(tapped != none, msg="a day tapped: nothing changed")
-  same_drawn(usage_days_after(true, tap("10/5")), seen("slid across"), "slid across: the one let go on")
+  same_drawn(usage_days_after(tap("10/5")), seen("slid across"), "slid across: the one let go on")
   // (tapped again, called off: all of them, as at first; slid up: the list's (moved, maybe), no day of it picked)
   for what in ["tapped again", "called off"] {
     same_drawn(seen(what), none, what)
@@ -1021,7 +984,7 @@ test "用量 made once, while it is read, failed, nothing spent (still read or n
     let (what, wrap) = c
     for scale in [1.0, 2.0] {
       let at = "\{what} at \{scale}"
-      let t = memories_tester(true, 2, scale~, mode="settings-usage", wrap~)
+      let t = memories_tester(2, scale~, mode="settings-usage", wrap~)
       let t0 = t.time()
       let first = instances_sorted(t)
       t.frame_at(t0 + @sf.breath_ms / 2.0)
@@ -1041,7 +1004,7 @@ test "用量 made once, while it is read, failed, nothing spent (still read or n
 }
 ///|
 test "用量 made once: a day's bar activated by a screen reader seen alone, as a finger's tap on it has it; read out so" {
-  let t = memories_tester(true, 2, mode="settings-usage")
+  let t = memories_tester(2, mode="settings-usage")
   let said = t.semantics().filter(fn(s) { s.role == Button && s.label.contains("$") })
   assert_true(said.length() >= 3, msg="the days read out: \{said.length()}")
   let before = words_where(t)
@@ -1051,7 +1014,7 @@ test "用量 made once: a day's bar activated by a screen reader seen alone, as 
   assert_true(after != before, msg="nothing seen alone")
   // (the same day tapped by a finger: the same seen)
   let (x, y, w, h) = said[2].rect
-  let tapped = usage_days_after(true, fn(t2, _) {
+  let tapped = usage_days_after(fn(t2, _) {
     t2.touch(0, x + w / 2.0, y + h / 2.0)
     t2.run_for(usage_press_ms)
     t2.touch(2, x + w / 2.0, y + h / 2.0)
@@ -1060,7 +1023,7 @@ test "用量 made once: a day's bar activated by a screen reader seen alone, as 
 }
 ///|
 test "用量 made once: what the pointer rests on said: a day of the year; by week, its week" {
-  let t = memories_tester(true, 0, mode="settings-usage")
+  let t = memories_tester(0, mode="settings-usage")
   // (the year's last week's Monday: by its weekday's name's row, at the grid's end)
   let mon = match t.words().search_by(fn(w) { w.0 == "一" || w.0 == "周一" || w.0 == "Mon" }) {
     Some(i) => t.words()[i]
@@ -1090,7 +1053,7 @@ test "用量 made once: what the pointer rests on said: a day of the year; by we
 test "一台 station 的记忆 made once: its global memory's parts, its project's, its other skills and its own folded, the tree's own, with a finger and with keyboard and mouse, at the system's larger words" {
   for case in [(2, 1.0), (0, 1.0), (2, 1.5), (2, 2.0)] {
     let (platform, scale) = case
-    let made = memories_tester(true, platform, scale~, mode="settings-memory")
+    let made = memories_tester(platform, scale~, mode="settings-memory")
     assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
     assert_true(instances_sorted(made).length() > 0)
     let own = tree_words_drawn()
@@ -1103,7 +1066,7 @@ test "一台 station 的记忆 made once: its global memory's parts, its project
 ///|
 test "一台 station 的记忆 made once, its own skills' row pressed: folded open, read out open; back and in again, still open; pressed again, shut" {
   for platform in [2, 0] {
-    let t = memories_tester(true, platform, mode="settings-memory")
+    let t = memories_tester(platform, mode="settings-memory")
     t.tap_text(@sf.t("web-main.memory.builtin"))
     // (its press's ripple gone)
     t.run_for(@motion.ripple_tap_ms)
@@ -1138,7 +1101,7 @@ test "一台 station 的记忆 made once, read the first time or failing to be: 
         @sffixture.held_topics(base, ["memory"])
       }
     }
-    let made = memories_tester(true, 2, mode="settings-memory", wrap~)
+    let made = memories_tester(2, mode="settings-memory", wrap~)
     assert_true(instances_sorted(made).length() > 0, msg="nothing drawn, failed \{failed}")
     let said = made.words_said().map(fn(w) { w.0 })
     // (its bones' made-up words neither drawn nor read out; what failed said, and read out)
@@ -1151,7 +1114,7 @@ test "一台 station 的记忆 made once, read the first time or failing to be: 
 
 ///|
 test "一台 station 的记忆 made once: a part of its global memory pressed opens it, a skill its own; 记忆's station row opens this page made once" {
-  let t = memories_tester(true, 2, mode="settings-memory")
+  let t = memories_tester(2, mode="settings-memory")
   // (the part's page reads its words as Markdown: the core said to read them as they are)
   @sf.markdown_read.val = Some(fn(_, done) { done(None) })
   t.tap_text("习惯")
@@ -1167,7 +1130,7 @@ test "一台 station 的记忆 made once: a part of its global memory pressed op
     part == Setting(@settings.Route::MemoryDoc("ws1/st1", "", 1)) && skill == Setting(@settings.Route::MemoryDoc("ws1/st1", "发布流程", 0)),
     msg="\{@sfbase.page_kind(part)} \{@sfbase.page_kind(skill)}",
   )
-  let list = memories_tester(true, 2)
+  let list = memories_tester(2)
   list.tap_text("Willow")
   list.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == Setting(@settings.Route::Memory("ws1/st1")), msg="on top \{@sfbase.page_kind(app.nav.top())}")
@@ -1177,7 +1140,7 @@ test "一台 station 的记忆 made once: a part of its global memory pressed op
 
 ///|
 test "一台 station 的记忆 made once, a skill shared and no longer and again: its tag said, gone with no room left for it, said again, the same row all along" {
-  let t = memories_tester(true, 2, mode="settings-memory")
+  let t = memories_tester(2, mode="settings-memory")
   let shared = @sf.t("web-main.memory.share.shared")
   let row = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == "发布流程" }).map(fn(d) { (d.id.at, d.id.gen) }) }
   let tagged = fn() { tree_words_drawn().iter().any(fn(o) { o == shared }) }
@@ -1217,7 +1180,7 @@ fn topic_asked(base : Source, name : String, key : String, asked : Array[String]
 ///|
 test "a station's memory made once become another's in its place: its title that station's, its memory read of it, its rows there" {
   let asked : Array[String] = []
-  let t = memories_tester(true, 2, mode="settings-memory", wrap=fn(b) { topic_asked(b, "memory", "station", asked) })
+  let t = memories_tester(2, mode="settings-memory", wrap=fn(b) { topic_asked(b, "memory", "station", asked) })
   let first = (asked.last(), tree_words_drawn().contains("Willow"))
   app.nav.become(Setting(@settings.Route::Memory("ws1/st2")))
   t.run_for(@ui.move_most_ms)
@@ -1232,7 +1195,7 @@ test "a station's memory made once become another's in its place: its title that
 ///|
 test "价目表 made once become another's of other days in its place: its usage read for those days, its tables there" {
   let asked : Array[String] = []
-  let t = memories_tester(true, 2, mode="settings-usage", wrap=fn(b) { topic_asked(b, "usage", "days", asked) })
+  let t = memories_tester(2, mode="settings-usage", wrap=fn(b) { topic_asked(b, "usage", "days", asked) })
   t.tap_text("查看价目表 →")
   t.run_for(@ui.move_most_ms)
   guard app.nav.top() is Setting(@settings.Route::UsagePrices(days)) else { fail("not on 价目表") }

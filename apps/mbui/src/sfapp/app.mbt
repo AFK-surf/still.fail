@@ -350,33 +350,19 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 fn view_in(c : @ui.Ctx, src : Source) -> Unit {
-  // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet (where the
-  // window is a tree, a node of it picked by that: app_tree)
-  if !@ui.old_islands_around() && share_over.get() {
-    over_view(c, src)
-    return
+  // (starting or failed, nodes of the window's tree with no old view to say it: said here, as the state is)
+  match app_is(src) {
+    (Starting | Failed) as state => splash_said(src, state)
+    // (signed out, or signed in at the landing: the ways in's nodes, entry_tree.mbt)
+    SignedOut => entry_said()
+    SignedIn if shell_is(src, @ui.current().window_size().0) is Landing => entry_said()
+    // (signed in, its workspaces still read or failing to be: the splash's nodes)
+    SignedIn if shell_is(src, @ui.current().window_size().0) is Reading => reading_said(src)
+    // (a window of its own: its page, an old view the tree hosts, says nothing of the first page or the splash)
+    SignedIn if shell_is(src, @ui.current().window_size().0) is Lone => entry_said()
+    _ => ()
   }
-  // under it all, the app's ground, made once (mbui's made.mbt; docs/retained.md, the way there's 4): what it holds is
-  // the state the app is in, built the old way
-  // (the state it is in, a node of the window's tree where the app runs as one (app_tree): its old view put here;
-  // else made once among the frame's)
-  if @ui.old_islands_around() {
-    // (starting or failed, nodes of the window's tree with no old view to say it: said here, as the state is)
-    match app_is(src) {
-      (Starting | Failed) as state => splash_said(src, state)
-      // (signed out, or signed in at the landing: the ways in's nodes, entry_tree.mbt)
-      SignedOut => entry_said()
-      SignedIn if shell_is(src, @ui.current().window_size().0) is Landing => entry_said()
-      // (signed in, its workspaces still read or failing to be: the splash's nodes)
-      SignedIn if shell_is(src, @ui.current().window_size().0) is Reading => reading_said(src)
-      // (a window of its own: its page, an old view the tree hosts, says nothing of the first page or the splash)
-      SignedIn if shell_is(src, @ui.current().window_size().0) is Lone => entry_said()
-      _ => ()
-    }
-    @ui.old_views_here(c)
-  } else {
-    c.made("app-ground", fn() { app_ground(c, src) })
-  }
+  @ui.old_views_here(c)
   // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
   // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
   if first_waiting.val &&
@@ -385,13 +371,11 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     first_waiting.val = false
   }
   first_hide(first_waiting.val)
-  // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
+  // the first page built, waiting for what it shows (the shell): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
     // (the state's old view, or each of the shell's: narrow_shell.mbt)
-    if !@ui.old_views_look(c, { ..@ui.still_look, alpha: 0.0 }) {
-      c.look(state_node.val, { ..@ui.still_look, alpha: 0.0 })
-    }
+    @ui.old_views_look(c, { ..@ui.still_look, alpha: 0.0 }) |> ignore
     c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
   }
   // the window held (host_setup) shown with the first frame that draws more than the ground (the host shows it once
@@ -426,17 +410,6 @@ fn stack_by_finger() -> Bool {
 }
 
 ///|
-/// The window's whole, on its ground (the theme's), that the app's state is built in.
-fn app_ground_style() -> @ui.Style {
-  page_whole.then(@ui.style(bg=Data(@sf.theme().p.bg)))
-}
-
-///|
-/// The node the app's state is built in, this frame (app_ground): hidden while the first page waits (view_in).
-// kept across runs: written by each build
-let state_node : Ref[Int] = Ref(-1)
-
-///|
 /// Which of the app's states it is in, as the core's accounts and its failure say.
 fn app_is(src : Source) -> AppIs {
   match ((src.topic)("accounts", {}).value, (src.fatal)()) {
@@ -445,19 +418,6 @@ fn app_is(src : Source) -> AppIs {
     (Some(Array(_)), _) => SignedIn
     _ => Starting
   }
-}
-
-///|
-/// The app's ground, made once: the window's ground, its top dragging it where the window's buttons are in the app's
-/// top row, and the state the app is in (app_is), made as it comes and built the old way in it (its pages islands of
-/// their own), saying afresh whether the frame draws the ground alone and whether the first page waits (frame_bare,
-/// first_waiting).
-fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
-  let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) { @ui.made_old(fn(c) { app_state_island(c, src, state) }) })
-  @ui.made_holding(
-    fn(c) { c.box(style=app_ground_style(), fn() {  }) |> ignore },
-    fn() { picked() },
-  )
 }
 
 ///|
@@ -554,51 +514,6 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// The app in state `state` as an old view (app_ground's, where the window is no tree): the window's top dragging it where the window's
-/// buttons are in the app's top row, and the state built the old way, saying afresh whether the frame draws the ground
-/// alone and whether the first page waits (frame_bare, first_waiting).
-fn app_state_island(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
-  // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
-  // a window of its own still starting): under all of it, so what a page puts there takes its own presses
-  if @ui.window_inset() {
-    let id = c.id("window-ground-band")
-    c.window_drag(id)
-    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-  }
-  first_waiting.val = false
-  frame_bare.val = false
-  // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
-  // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
-  // anew each frame, not of the ground made once)
-  state_node.val = c.box(style=page_whole, fn() { app_state(c, src, state) })
-}
-
-///|
-/// The app in state `state` (app_ground's island).
-fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
-  match state {
-    Failed => splash(c, splash_label(src, state), true)
-    SignedOut => {
-      // the sign-in page inside the bars (SignIn.kt: windowInsetsPadding(systemBars)) (sfpages' gate.mbt)
-      within_bars(c, fn() { @sfpages.sign_in_page(c, src) })
-      // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
-      if !link_later.is_empty() {
-        c.tell("links", fn() { signed_out_links(src) })
-      }
-      sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
-      // the library's menus, sheets and dialogs (src/sf presenters.mbt), over the page
-      @sf.presented(c)
-    }
-    SignedIn => signed_in(c, src)
-    Starting => {
-      let label = splash_label(src, state)
-      splash(c, label, label is Some(_))
-    }
-  }
-}
-
-///|
 /// The standalone screen and its system-bar frame live in the window tree.
 /// Presenters and toasts take input only where they draw.
 fn lone_tree(v : @view.View, src : Source) -> Unit {
@@ -624,97 +539,7 @@ fn lone_tree(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// Page `p` of a window of its own, alone over all of it (lone_view's, lone_tree's): a station's screen, closing it
-/// ending the run (its window closed as its own close button closes it).
-fn lone_page_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
-  match p {
-    Screen(at) =>
-      @sfpages.screen_page(c, src, at, system_frame(), on_close=fn() {
-        c.after_build("lone-closed", fn() { @hostapi.exit(0) })
-      })
-    _ => ()
-  }
-}
-
-///|
-/// A window of its own (sfbase's window.mbt): page `p` alone over all of it, closing it ending the run (its window
-/// closed as its own close button closes it); the library's presenters and the toasts over it. None of the app's: no
-/// workspace, its notifications, the number on its icon, its updates (the app's run beside it has them).
-fn lone_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
-  lone_page_view(c, src, p)
-  @sf.presented(c)
-  toast(c)
-}
-
-///|
-/// Signed in: the workspace in view (the one switched to, else the one last open, else the first once every account
-/// has answered), its Home at the root of the pages; the splash while none is known yet and until the first page has
-/// what it shows, and a page that says so when there is none.
-fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
-  // a window of its own (@sfbase.lone_page): its page alone, none of the app's
-  match @sfbase.lone_page.val {
-    Some(p) => {
-      lone_view(c, src, p)
-      return
-    }
-    None => ()
-  }
-  let t = @sf.theme()
-  let ws = (src.topic)("workspaces", {})
-  let (current, all, answered, invited) = workspace_in_view(src)
-  match current {
-    Some(w) => {
-      signed_in_frame(c, src, w)
-      if @sfdesk.is_wide(c) {
-        // (the wide frame is the window's tree's, its shell picked by the window's width as a frame gives it: app_tree,
-        // tape_shell.mbt; laid out wide before it is known, none of it yet)
-        ()
-      } else {
-        // a page opened slides in once the core has given what it shows, or said it waits on a station (page_local_ms at
-        // most)
-        app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
-        narrow_lists(c)
-        let page_took = c.took_back(fn() {
-          let pages = fn() {
-            c.nav(app.nav, fn(page) { narrow_page(c, src, w, page) }, bg=t.p.bg) |> ignore
-            // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
-            @sfpages.search_over(c, src, w, status_top())
-          }
-          // (words picked with a mouse's drag, or a finger's hold: @ui's selection; a chat's messages pick their own with
-          // a finger, pick.mbt)
-          c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
-        })
-        if !page_took {
-          narrow_root_back(c)
-        }
-        // the player sideways: back turns it upright first; words picked in a chat, a link's menu: back lets go of
-        // them first (pick.mbt)
-        play_back(c)
-        pick_back(c)
-        narrow_over(c, src, w)
-      }
-      signed_in_over(c, src, w)
-    }
-    None =>
-      // (none in view while the prefs are read too: workspace_in_view)
-      if ws.value is Some(_) && answered && all.is_empty() {
-        // the landing inside the bars (Workspaces.kt Landing: windowInsetsPadding(systemBars.union(keyboard)))
-        // (sfpages' cloud_app.mbt); an invitation's link pasted (用邀请链接加入): its sheet over the page
-        within_bars(c, fn() { @sfpages.no_workspace(c, src, ws.value, open_invite_link) })
-        sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
-        // the library's presenters over it (the sheet among them: src/sf presenters.mbt), then the toasts
-        @sf.presented(c)
-        toast(c)
-        finger_loupe(c)
-      } else {
-        let (said, failed) = reading_said_words(src)
-        splash(c, Some(said), failed)
-      }
-  }
-}
-
-///|
-/// What the splash says while no workspace is in view yet and the landing is not shown (signed_in's): why reading the
+/// What the splash says while no workspace is in view yet and the landing is not shown (Reading): why reading the
 /// workspaces failed (the core's words), else 正在读取你的 workspace and what it waits on (t_reading_workspaces); and
 /// whether it failed (said at once, not after the splash's second).
 fn reading_said_words(src : Source) -> (String, Bool) {
@@ -726,7 +551,7 @@ fn reading_said_words(src : Source) -> (String, Bool) {
 
 ///|
 /// Signed in, its workspaces still read or failing to be (shell_is's Reading), as the frame begins (view_in's): what the
-/// old view's build said of the frame (app_state_island, splash): no first page waiting nor its pictures; the ground
+/// frame state: no first page waiting nor its pictures; the ground
 /// alone until the splash's second, unless it failed.
 fn reading_said(src : Source) -> Unit {
   first_waiting.val = false
@@ -1036,8 +861,7 @@ fn splash_label(src : Source, state : AppIs) -> String? {
 }
 
 ///|
-/// Starting or failed, the window's tree's nodes in its place (app_state_tree): what an old view's build of the app's
-/// state says of the frame (app_state_island), said from the state it is in as the frame begins (view_in): no first
+/// Starting or failed, as the frame begins (view_in): no first
 /// page waiting nor its pictures; the ground alone until the splash's second, unless there is something to say at once.
 fn splash_said(src : Source, state : AppIs) -> Unit {
   first_waiting.val = false

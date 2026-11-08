@@ -6,7 +6,7 @@
 
 ///|
 /// What the frame is told of the app at a way in drawn by the window's tree's nodes, as the frame begins (view_in's,
-/// as the old view's build of the state said it: app_state_island): no first page waiting nor its pictures, the frame
+/// view_in): no first page waiting nor its pictures, the frame
 /// not drawing the ground alone.
 fn entry_said() -> Unit {
   first_waiting.val = false

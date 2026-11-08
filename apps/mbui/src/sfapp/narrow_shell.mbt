@@ -156,7 +156,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
-/// Under the narrow shell's pages (an island): what every frame of the app's state does (app_state_island's), what the
+/// Under the narrow shell's pages (an island): the frame state, what the
 /// signed-in frame does before its pages (signed_in_frame), how the lists take a mouse.
 fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
   if @ui.window_inset() {
@@ -261,39 +261,11 @@ fn narrow_takes_back() -> Bool {
 ///|
 /// What a page laid out Small is laid out by besides what it reads: the window, the bars' room, the keyboard's, the
 /// ground, where it stands in the stack and the way a place came in, the workspace (its key as a part kept as its
-/// nodes: a page's island's, narrow_shell; its kept part's, narrow_page).
+/// nodes in narrow_shell).
 fn narrow_page_key(c : @ui.Ctx, w : Workspace) -> String {
   let t = @sf.theme()
   "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
   "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
-}
-
-///|
-/// Page `page` of the stack laid out Small, in workspace `w`.
-fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
-  // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide frame's pane
-  // says (sfdesk's frame.mbt): the page sliding in or out, a keyboard making it shorter, move none of it (it goes with
-  // the page, at once)
-  let whole = c.box(style=page_whole, fn() {
-    // kept as it was drawn while nothing it shows can have changed (mbui's Ctx::kept_part), read out, as the wide
-    // frame's panes are (sfdesk's tape_part): a mark stepping in it, a list of another page scrolled builds none of it.
-    // Its key what it is laid out by besides what it reads: the window, the bars' room, the keyboard's, the ground,
-    // where it stands in the stack and the way a place came in
-    let key = narrow_page_key(c, w)
-    // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the frame is
-    // built anew; docs/retained.md, the way there's 3)
-    c.kept_part(
-      c.id("page/kept"),
-      key,
-      fn() {
-        let (now, all, _, invited) = workspace_in_view(src)
-        page_view(c, src, now.unwrap_or(w), all, invited, page)
-      },
-      read_out=true,
-      own=true,
-    )
-  })
-  @motion.scope(c, whole, bottom=true)
 }
 
 ///|

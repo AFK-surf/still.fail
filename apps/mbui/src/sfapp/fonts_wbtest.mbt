@@ -138,6 +138,7 @@ test "a face's file the host cannot read where it is: had through the core inste
   let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0, platform=2)
   t.set_unreadable_font("/data/500")
   on.val = true
+  @ui.set_view_app(app_tree(src), around=fn(c) { view(c, src) })
   t.draw()
   t.draw()
   assert_eq(asked.val, 2)

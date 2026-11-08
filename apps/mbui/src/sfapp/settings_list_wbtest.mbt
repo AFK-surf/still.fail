@@ -62,11 +62,10 @@ test "the large settings sidebar keeps its way back visible and usable while its
 test "the settings' list: the same rows in the same order on a small screen's page and in a large one's sidebar, 下方栏 the small one's alone" {
   // small, with keyboard and mouse (a Mac's narrow window): the gear's page, all of it in a tall window, the bottom
   // bar's row with the bar under it
+  let src = fixture_app("settings-home")
   let t = @ui.Tester::new(
-    {
-      let src = fixture_app("settings-home")
-      fn(c) { view(c, src) }
-    },
+    fn(c) { view(c, src) },
+    tree=app_tree(src),
     w=390.0,
     h=2400.0,
     platform=0,
@@ -113,11 +112,10 @@ test "the settings' list: Station, 连接, Profile and 用量 among its rows whi
 
 ///|
 test "the settings' list: how things stand at each row's end, what is wrong in red" {
+  let src = fixture_app("settings-home")
   let t = @ui.Tester::new(
-    {
-      let src = fixture_app("settings-home")
-      fn(c) { view(c, src) }
-    },
+    fn(c) { view(c, src) },
+    tree=app_tree(src),
     w=390.0,
     h=2400.0,
     platform=2,

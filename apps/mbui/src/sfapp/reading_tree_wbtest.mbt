@@ -4,10 +4,9 @@
 
 ///|
 /// The fixture's `mode` signed in, its workspaces as `ws` says (what the core's topic is: none read yet, failed, read)
-/// and what the core waits on as `status` says, 390 by 844 to touch: the old view alone or the app's tree. The Tester,
+/// and what the core waits on as `status` says, 390 by 844 to touch in the app's tree. The Tester,
 /// the splash's second waited.
 fn reading_case(
-  node : Bool,
   ws : @signals.Signal[@sfbase.Topic],
   status : @signals.Signal[String],
   waited? : Bool = true,
@@ -28,11 +27,7 @@ fn reading_case(
       }
     },
   }
-  let t = if node {
-    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.check_looks(false)
   if waited {
     t.run_for(splash_label_ms)
@@ -57,32 +52,21 @@ fn reading_topic(error? : String = "", version? : Int = 1) -> @sfbase.Topic {
 ///|
 test "signed in, its workspaces read: the splash as nodes drawn as the old one is, saying it reads them and what the core waits on; failed, why at once" {
   let cases = [("", ""), ("", "正在连接 still.fail cloud"), ("连接 still.fail cloud 失败", "")]
-  let seen = []
-  let same = cases.map(fn(k) {
-    let (error, status) = k
-    let draw = fn(node) {
-      reading_drawn(
-        reading_case(
-          node,
-          @signals.signal(reading_topic(error~), same=fn(a, b) { physical_equal(a, b) }),
-          @signals.signal(status, same=fn(a, b) { a == b }),
-        ),
-      )
-    }
-    let (old, new) = (draw(false), draw(true))
-    if old != new {
-      seen.push("\{k}: old \{old.0} \{old.1.length()} \{old.2.length()} node \{new.0} \{new.1.length()} \{new.2.length()}")
-    }
-    old == new && old.2.length() > 0
-  })
-  assert_eq(same, Array::make(cases.length(), true), msg="\{seen}")
+  for (error, status) in cases {
+    let drawn = reading_drawn(reading_case(
+      @signals.signal(reading_topic(error~), same=fn(a, b) { physical_equal(a, b) }),
+      @signals.signal(status, same=fn(a, b) { a == b }),
+    ))
+    root_reference("reading/" + error + "/" + status, drawn.to_string())
+    assert_true(drawn.2.length() > 0)
+  }
 }
 
 ///|
 test "signed in, its workspaces read as nodes: what the core waits on said as it changes; failed, said so; read, none in them: the landing in its place" {
   let ws = @signals.signal(reading_topic(), same=fn(a, b) { physical_equal(a, b) })
   let status = @signals.signal("", same=fn(a, b) { a == b })
-  let t = reading_case(true, ws, status)
+  let t = reading_case(ws, status)
   // (said by the window's tree's own nodes, not an old view hosted in it)
   let by_tree = @ui.view_tree().unwrap().drawn().iter().any(fn(d) { d.words.has_prefix("正在读取你的 workspace") })
   let reading = t.find("正在读取你的 workspace") is Some(_) && by_tree
@@ -106,7 +90,7 @@ let reading_early_ms : Double = 300.0
 ///|
 test "signed in, its workspaces read as nodes, before the splash's second: the ground alone; reading them failed then: why, at once, the frame not bare" {
   let ws = @signals.signal(reading_topic(), same=fn(a, b) { physical_equal(a, b) })
-  let t = reading_case(true, ws, @signals.signal("", same=fn(a, b) { a == b }), waited=false)
+  let t = reading_case(ws, @signals.signal("", same=fn(a, b) { a == b }), waited=false)
   let early = (t.find("正在读取你的 workspace") is None, frame_bare.val, splash_waited.get())
   t.run_for(reading_early_ms)
   ws.set(reading_topic(error="连接 still.fail cloud 失败", version=2))
@@ -118,7 +102,7 @@ test "signed in, its workspaces read as nodes, before the splash's second: the g
 ///|
 test "signed in, its workspaces read as nodes, then read with one in them: the workspace in view, its shell in the splash's place" {
   let ws = @signals.signal(reading_topic(), same=fn(a, b) { physical_equal(a, b) })
-  let t = reading_case(true, ws, @signals.signal("", same=fn(a, b) { a == b }))
+  let t = reading_case(ws, @signals.signal("", same=fn(a, b) { a == b }))
   let reading = t.find("正在读取你的 workspace") is Some(_)
   ws.set({
     value: Some([
