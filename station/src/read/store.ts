@@ -491,29 +491,42 @@ export function threadsOfShown(s: Store): number[] {
 /// before reading each thread's message and other details.
 export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null, unread: "count" | "exists" | "none" = "count", visibleTo?: InWorkspace): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
-  const rows: Json[] =
-    Array.isArray(thread)
-      ? thread.length === 0
-        ? []
-        : all(s, `${base} WHERE t.id IN (${thread.map((_, i) => `?${i + 2}`).join(", ")})`, viewer, ...thread)
-      : thread !== null
-      ? all(s, `${base} WHERE t.id = ?2`, viewer, thread)
-      : session !== null
-        ? all(s, `${base} WHERE t.id IN (SELECT thread FROM thread_sessions WHERE session = ?2)`, viewer, session)
-        : all(s, base, viewer);
-  let candidates = rows.map((r) => ({ row: r, sessions: threadSessions(s, r.id) }));
-  if (visibleTo !== undefined) {
-    const seen = seenBy(s, visibleTo, candidates.flatMap((t) => t.sessions.map((m) => m.session)));
-    candidates = candidates.filter((t) => t.sessions.some((m) => seen(m.session)));
+  const where: string[] = [], args: Json[] = [viewer];
+  if (Array.isArray(thread)) {
+    if (thread.length === 0) return [];
+    where.push(`t.id IN (${thread.map((_, i) => `?${i + 2}`).join(", ")})`);
+    args.push(...thread);
+  } else if (thread !== null) {
+    where.push("t.id = ?2");
+    args.push(thread);
+  } else if (session !== null) {
+    where.push("t.id IN (SELECT thread FROM thread_sessions WHERE session = ?2)");
+    args.push(session);
   }
-  if (candidates.length === 0) return [];
+  const selected = where.length === 0 ? base : `${base} WHERE ${where.join(" AND ")}`;
+  const and = where.length === 0 ? " WHERE " : " AND ";
+  let rows: Json[];
+  if (visibleTo !== undefined) {
+    const scope = `EXISTS (SELECT 1 FROM thread_sessions visible_member
+      LEFT JOIN sessions visible_session ON visible_session.key = visible_member.session
+      WHERE visible_member.thread = t.id AND (visible_session.ws = ?${args.length + 1}
+        OR (?${args.length + 2} AND visible_session.ws IS NULL)))`;
+    try { rows = all(s, selected + and + scope, ...args, visibleTo.workspace, visibleTo.home !== false ? 1 : 0); }
+    catch (error) {
+      // Before sessions had `ws`, every session (including a missing one) belonged to the home workspace.
+      if (!(error instanceof Error) || !error.message.includes("no such column: visible_session.ws")) throw error;
+      if (visibleTo.home === false) return [];
+      rows = all(s, selected + and + "EXISTS (SELECT 1 FROM thread_sessions visible_member WHERE visible_member.thread = t.id)", ...args);
+    }
+  } else rows = all(s, selected, ...args);
+  if (rows.length === 0) return [];
   // Who the viewer is: themselves, and in a Slack thread the Slack users they are too.
   const selves = { own: [viewer], slack: [viewer, ...slackIdentities(s, viewer)] };
-  const summaries: ThreadSummary[] = candidates.map(({ row: r, sessions }) => {
+  const summaries: ThreadSummary[] = rows.map((r) => {
     const t = toThread(r);
     const read: number = r.read_n;
     return {
-      sessions,
+      sessions: threadSessions(s, t.id),
       last: lastEntry(s, t.id),
       lastMessage: lastSaid(s, t.id),
       read,
