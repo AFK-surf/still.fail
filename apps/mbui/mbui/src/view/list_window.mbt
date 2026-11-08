@@ -27,6 +27,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   foot_room? : () -> Double = fn() { 0.0 },
 ) -> View {
   guard self.live() is Some(_) else { return self }
+  // (its keys worked out once as what they read changes, not again as a block's height is told: what reads them, the
+  // blocks' tops and the blocks made, reads these)
+  let keyed = @signals.computed(fn(_) { keys() })
+  let keys = fn() { keyed.get() }
   // (how tall each was laid out while it showed, by its key, told as each is laid out (`told` counting each change of
   // it); forgotten as the column is laid out at another width, or as all words are measured anew (the system's size of
   // words, how the theme shapes them: Tree::words_again))
