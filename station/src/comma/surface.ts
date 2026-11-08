@@ -499,7 +499,7 @@ export class CommaSurface extends ConnectedSurface {
     const row = this.store.getSession(this.session(t));
     // Invited, its first Message not heard yet: idle, waiting for it.
     if (row === null) return { state: "idle", pending: 0, for_ms: null, last_failure: null };
-    return { state: row.running ? "running" : "idle", pending: this.store.pendingMessages(row.key).length, for_ms: null, last_failure: null };
+    return { state: row.running ? "running" : "idle", pending: this.store.pendingCount(row.key), for_ms: null, last_failure: null };
   }
 
   /// task.leave: the Task runs elsewhere now. Its session leaves the thread; the thread stays, as what was said.
