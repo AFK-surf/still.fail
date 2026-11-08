@@ -25,7 +25,7 @@ import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsRea
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
-import { PAGE_LETTER_KEYS, pageLetterReady } from "../store/page-letter-index.ts";
+import { PAGE_LETTER_KEYS, PAGE_LETTER_KEYS_AFTER, pageLetterReady } from "../store/page-letter-index.ts";
 import { legacyMergedNeedsRepair, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { boundedEditKey as readBoundedEditKey, LAST_MESSAGE_WITH_EDIT } from "../store/legacy-edits-read.ts";
 import { hasLegacySaid, legacySaidPageState, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_HAS_UNREAD, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "../store/legacy-said-build.ts";
@@ -34,7 +34,7 @@ import { TURN_COUNT_BATCH } from "../store/turn-state.ts";
 import { type UsageGroup, usageGroupOf } from "../store/usage.ts";
 import * as rows from "../store/rows.ts";
 import {
-  type CardAnswer, type DeliveryCardState, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGES_BEFORE, type Membership, type MessageRow, type PendingMessage,
+  type CardAnswer, type DeliveryCardState, type EntryRow, type InWorkspace, JOBS_RUNNING, LEGACY_MESSAGE_KEYS_BEFORE, LEGACY_MESSAGES_BEFORE, MESSAGE_KEYS_BEFORE, MESSAGE_PAGE_ENTRIES, MESSAGES_BEFORE, type Membership, type MessageRow, type PendingMessage,
   PEOPLE_AT, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, authorKind, cardOf, liveShare,
   ending, parsed, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, letterMessage, toMembership, toMessage, toThread,
 } from "../store/rows.ts";
@@ -825,6 +825,17 @@ export const LEGACY_PAGE_ORDINARY_KEYS = `SELECT CAST(p.n AS TEXT) AS n FROM (
 export const PAGE_LETTER_CANDIDATES = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM entries e INDEXED BY entries_letters
   WHERE e.thread=?1 AND e.n<?2 AND e.letter IS NOT NULL ORDER BY e.n DESC LIMIT ?3`;
 
+/// Ascending counterparts used by the Router's message page. Integer ordering precedes conversion to text.
+export const PAGE_ORDINARY_KEYS_AFTER = `SELECT CAST(p.n AS TEXT) AS n FROM (
+  SELECT n FROM entries INDEXED BY entries_said WHERE thread=?1 AND n>?2 AND kind='message' AND letter IS NULL
+  ORDER BY n LIMIT ?3) p ORDER BY p.n`;
+export const LEGACY_PAGE_ORDINARY_KEYS_AFTER = `SELECT CAST(p.n AS TEXT) AS n FROM (
+  SELECT n FROM legacy_said WHERE thread=?1 AND n>?2 ORDER BY n LIMIT ?3) p ORDER BY p.n`;
+export const PAGE_LETTER_CANDIDATES_AFTER = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM entries e INDEXED BY entries_letters
+  WHERE e.thread=?1 AND e.n>?2 AND e.letter IS NOT NULL ORDER BY e.n LIMIT ?3`;
+export const LEGACY_SAID_PAGE_HEAD = `SELECT CAST(e.n AS TEXT) AS n,e.kind FROM entries e
+  WHERE e.thread=?1 AND e.n>?2 ORDER BY e.n LIMIT ?3`;
+
 const letterIndexes = new WeakMap<DatabaseSync, { version: number; ready: boolean }>();
 function hasPageLetterIndex(db: DatabaseSync): boolean {
   const version = Number(db.prepare("PRAGMA schema_version").get()!.schema_version);
@@ -876,6 +887,56 @@ function unpreparedMessagePageKeys(s: Store, thread: number, before: number | bi
   const keys = tail.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
   if (keys.length < limit && tail.length === cap) return pending();
   return keys;
+}
+
+const ascendingKeys = (keys: string[]) => keys.sort((a, b) => BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
+
+// As with the descending message page, a capped raw probe proves a short page while an old lookup is preparing.
+// A full probe with too few messages asks the existing background builder to prepare the needed lookup.
+function messagePageKeysAfter(s: Store, thread: number, after: number | bigint, limit: number): string[] {
+  const old = s.legacySaid ? legacySaidPageState(s.db, thread) : null;
+  if (old && (old.preparing || old.needsDrain)) {
+    const cap = limit + 64;
+    const head = all(s, LEGACY_SAID_PAGE_HEAD, thread, after, cap);
+    const keys = head.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
+    if (keys.length < limit && head.length === cap)
+      throw old.preparing ? new LegacySaidUnavailable() : new SaidUnavailable([thread]);
+    return keys;
+  }
+  const token = pageLetterReady(s.db, thread);
+  if (!token && !hasPageLetterIndex(s.db)) {
+    const cap = limit + 64;
+    const head = all(s, LEGACY_SAID_PAGE_HEAD, thread, after, cap);
+    const keys = head.filter((r) => r.kind === "message").slice(0, limit).map((r) => r.n as string);
+    if (keys.length < limit && head.length === cap) throw new PageLetterUnavailable(thread);
+    return keys;
+  }
+  const ordinary = all(s, s.legacySaid ? LEGACY_PAGE_ORDINARY_KEYS_AFTER : PAGE_ORDINARY_KEYS_AFTER, thread, after, limit)
+    .map((r) => r.n as string);
+  if (token) {
+    const letters = all(s, PAGE_LETTER_KEYS_AFTER, thread, token, after, limit).map((r) => r.n as string);
+    return ascendingKeys([...ordinary, ...letters]).slice(0, limit);
+  }
+  const cap = limit + 64;
+  const candidates = all(s, PAGE_LETTER_CANDIDATES_AFTER, thread, after, cap);
+  const ceiling = candidates.length === cap ? BigInt(candidates.at(-1)!.n as string) : null;
+  const letters = candidates.filter((r) => r.kind === "message").map((r) => r.n as string);
+  const knownOrdinary = ceiling === null ? ordinary : ordinary.filter((key) => BigInt(key) <= ceiling);
+  const keys = ascendingKeys([...knownOrdinary, ...letters]);
+  if (keys.length < limit && ceiling !== null) throw new PageLetterUnavailable(thread);
+  return keys.slice(0, limit);
+}
+
+/// Original message entries after a position, ordered and bounded without reading intervening edits.
+export function messageEntriesAfter(s: Store, thread: number, after: number | bigint, limit: number): EntryRow[] {
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > Number.MAX_SAFE_INTEGER - 64)
+    throw new RangeError("message page limit is invalid");
+  if (limit === 0) return [];
+  s.db.exec("SAVEPOINT message_entries_after_read");
+  try {
+    const keys = messagePageKeysAfter(s, thread, after, limit);
+    return keys.length === 0 ? [] : all(s, MESSAGE_PAGE_ENTRIES, thread, JSON.stringify(keys)).map(toEntry);
+  } finally { s.db.exec("RELEASE message_entries_after_read"); }
 }
 
 /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.

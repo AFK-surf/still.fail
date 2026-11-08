@@ -35,7 +35,7 @@ export const usageOps: Record<string, ReadOp> = {
   outflowChats: (store, a) =>
     outflowChats(store, num(a.since), outflowOf(a.ws), typeof a.limit === "number" ? { limit: Math.min(Math.max(num(a.limit), 1), 1000), before: typeof a.before === "string" ? a.before : null } : null),
   // A chat's messages, as the Router reads it through a Comma connect (`task.read`).
-  outflowMessages: (store, a) => outflowMessages(store, num(a.thread), num(a.after), Math.min(Math.max(num(a.limit), 1), 500), outflowOf(a.ws)),
+  outflowMessages: (store, a) => outflowMessages(store, num(a.thread), num(a.after), Math.min(Math.max(num(a.limit), 1), 500), outflowOf(a.ws), a.messagesOnly === true),
   machineSessions: (store) => machineSessions(store),
   machineSession: (store, a) => machineSession(store, a.lang, a.runtime, a.id, a.limit),
   memory: (store, a) => {
