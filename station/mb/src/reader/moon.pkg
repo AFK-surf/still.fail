@@ -27,6 +27,7 @@ import {
   "station/vaultuses",
   "station/locate",
   "station/searchscope",
+  "station/search",
   "moonbitlang/core/json",
 }
 

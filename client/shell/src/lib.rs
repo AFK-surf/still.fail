@@ -1374,6 +1374,17 @@ impl Inner {
         if op == "fs.realpath" {
             return Ok(node_realpath(str_of(a, "path")?).map_or(Value::Null, |p| json!(p)));
         }
+        // A file's text: `strict` as a TextDecoder with `fatal` reads it (a leading byte order mark dropped, none when it
+        // is not UTF-8), else as Node's readFileSync(path, "utf8") does (what is not UTF-8 replaced); null when it does
+        // not read.
+        if op == "fs.read" {
+            let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
+            if a.get("strict").and_then(Value::as_bool).unwrap_or(false) {
+                let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+                return Ok(std::str::from_utf8(body).map_or(Value::Null, |s| json!(s)));
+            }
+            return Ok(json!(String::from_utf8_lossy(&bytes)));
+        }
         // An Ed25519 key's public half and its signature of `message` (hex both ways): a lock claim's (client/core-ts
         // lock.ts), signed for each workspace and endpoint as the core connects. In Hermes (no JIT) the JS one took ~8 ms
         // each and longer the first time, on the core's thread before anything the UI had asked for.

@@ -1,10 +1,11 @@
-// What the station finds for a search: looked for by a thread of its own (search/worker.ts) in the
-// station's data as it is then. A prepared candidate scope avoids unrelated chats; their contents are read as asked.
+// What the station finds for a search: looked for by the MoonBit program (station/mb, src/search; `--builder search`)
+// where it is built, else by a thread of its own (search/worker.ts), in the station's data as it is then. The program
+// does not look through the execution histories: a search for them asks the worker for those alone beside it. A prepared candidate scope avoids unrelated chats; their contents are read as asked.
 // The thread is started with the station and stays; one that dies is started again when next asked. The machine's
 // files are asked beside it (search/files.ts).
 import { Worker } from "node:worker_threads";
 import { rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Asker, type Group, terms } from "./match.ts";
@@ -12,6 +13,7 @@ import type { FileSearch } from "./files.ts";
 import type { Answered, Told } from "./worker.ts";
 import { SearchScopeBuilder } from "./scope-builder.ts";
 import { SessionListBuilder } from "../read/session-list-builder.ts";
+import { MbProcess, mbReaderBinary } from "../read/mb-reader.ts";
 
 /// How long a search may take before it is answered with nothing.
 const QUERY_MS = 30_000;
@@ -19,8 +21,13 @@ const QUERY_MS = 30_000;
 /// `building`: always false (said to the clients that showed an index still being built).
 export type Found = { groups: Group[]; building: boolean };
 
+type Looker = Worker | MbProcess;
+
 export class Search {
   #data: string;
+  /// The program (none: not built here; the worker looks through everything).
+  readonly #mb: string | null;
+  #program: MbProcess | null = null;
   #worker: Worker | null = null;
   #next = 0;
   #waiting = new Map<number, { resolve: (found: Found) => void; reject: (error: Error) => void; timer: () => void }>();
@@ -32,8 +39,9 @@ export class Search {
   /// The machine's files (none: not searched here).
   #files: FileSearch | null;
 
-  constructor(options: { data: string; files?: FileSearch | null; backfill?: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } }) {
+  constructor(options: { data: string; files?: FileSearch | null; backfill?: { previousGone?: Promise<void>; priority?: SharedArrayBuffer }; mb?: string | null }) {
     this.#data = options.data;
+    this.#mb = options.mb === undefined ? mbReaderBinary() : options.mb;
     this.#files = options.files ?? null;
     this.#scope = new SearchScopeBuilder(join(options.data, "stillfail.db"), options.backfill);
     this.#sessionList = new SessionListBuilder(join(options.data, "stillfail.db"), options.backfill);
@@ -42,7 +50,16 @@ export class Search {
   start(): void {
     // The index an earlier station kept: there is none now.
     for (const f of ["search.db", "search.db-wal", "search.db-shm"]) rmSync(join(this.#data, f), { force: true });
-    this.#spawn();
+    if (this.#mb !== null) this.#spawnProgram();
+    else this.#spawn();
+  }
+
+  #spawnProgram(): MbProcess | null {
+    if (this.#closed || this.#mb === null) return null;
+    const program = new MbProcess(this.#mb, ["--builder", "search", "--db", join(this.#data, "stillfail.db"), "--data", this.#data, "--sep", sep]);
+    this.#program = program;
+    this.#listen(program, () => { if (this.#program === program) this.#program = null; });
+    return program;
   }
 
   #spawn(): Worker | null {
@@ -51,9 +68,17 @@ export class Search {
     const file = new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./search/worker.js", import.meta.url);
     const worker = new Worker(file, { workerData: { data: this.#data }, resourceLimits: { maxOldGenerationSizeMb: 384 } });
     this.#worker = worker;
-    worker.on("message", (answer: Answered) => {
+    this.#listen(worker, () => { if (this.#worker === worker) this.#worker = null; });
+    return worker;
+  }
+
+  /// A looker's answers: each to the search it is for; its end ends the searches waiting on it.
+  #listen(looker: Looker, gone: () => void): void {
+    const mine = new Set<number>();
+    (looker as Worker).on("message", (answer: Answered) => {
       if ("scopePending" in answer) { if (!this.#closed) this.#prepareScope(); return; }
       if ("sessionListPending" in answer) { if (!this.#closed) this.#prepareSessions(); return; }
+      mine.delete(answer.id);
       const waiter = this.#waiting.get(answer.id);
       if (!waiter) return;
       this.#waiting.delete(answer.id);
@@ -61,17 +86,20 @@ export class Search {
       if (answer.error !== undefined) waiter.reject(new Error(answer.error));
       else waiter.resolve({ groups: answer.groups ?? [], building: false });
     });
-    worker.on("error", (error) => log.error("search", "the search's thread stopped", { error: error.message }));
-    worker.on("exit", () => {
-      if (this.#worker === worker) this.#worker = null;
+    (looker as Worker).on("error", (error: Error) => log.error("search", "the search's thread stopped", { error: error.message }));
+    (looker as Worker).on("exit", () => {
+      gone();
       for (const [id, waiter] of this.#waiting) {
+        if (!mine.has(id)) continue;
         waiter.timer();
         waiter.reject(new Error("the search stopped"));
         this.#waiting.delete(id);
       }
     });
-    return worker;
+    this.#asked.set(looker, mine);
   }
+
+  readonly #asked = new WeakMap<Looker, Set<number>>();
 
   /// What `query` finds for `asker`: by kind, at most `limit` of each (those of `kinds` only, when given; the execution
   /// history only when asked for by name), the machine's files beside the rest.
@@ -105,25 +133,38 @@ export class Search {
     }).finally(() => { if (this.#preparingSessions === pending) this.#preparingSessions = null; });
   }
 
-  #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
-    const worker = this.#worker ?? this.#spawn();
-    if (!worker) return Promise.reject(new Error("the search is stopped"));
+  async #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
+    if (this.#mb === null) return this.#ask(this.#worker ?? this.#spawn(), query, asker, options);
+    const history = options.kinds?.includes("history") === true;
+    const [found, histories] = await Promise.all([
+      this.#ask(this.#program ?? this.#spawnProgram(), query, asker, options),
+      history ? this.#ask(this.#worker ?? this.#spawn(), query, asker, { ...options, historyOnly: true }) : Promise.resolve(null),
+    ]);
+    return histories === null ? found : { ...found, groups: [...found.groups, ...histories.groups] };
+  }
+
+  #ask(looker: Looker | null, query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean; historyOnly?: boolean }): Promise<Found> {
+    if (!looker) return Promise.reject(new Error("the search is stopped"));
     const id = this.#next++;
-    const cancel = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
+    const program = looker instanceof MbProcess;
+    const cancel = program ? undefined : new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
     return new Promise<Found>((resolve, reject) => {
       const timer = wall.after(QUERY_MS, () => {
-        Atomics.store(new Int32Array(cancel), 0, 1);
+        if (cancel) Atomics.store(new Int32Array(cancel), 0, 1);
+        else looker.postMessage({ type: "cancel", id });
         this.#waiting.delete(id);
         reject(new Error("the search took too long"));
       });
       this.#waiting.set(id, { resolve, reject, timer });
-      worker.postMessage({ type: "query", id, query, asker, ...options, cancel } satisfies Told);
+      this.#asked.get(looker)?.add(id);
+      looker.postMessage({ type: "query", id, query, asker, ...options, ...(cancel ? { cancel } : {}) } satisfies Told);
     });
   }
 
   async stop(): Promise<void> {
     this.#closed = true;
-    await Promise.all([this.#worker?.terminate(), this.#scope.close(), this.#sessionList.close()]);
+    await Promise.all([this.#worker?.terminate(), this.#program?.terminate(), this.#scope.close(), this.#sessionList.close()]);
     this.#worker = null;
+    this.#program = null;
   }
 }
