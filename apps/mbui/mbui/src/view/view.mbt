@@ -496,6 +496,10 @@ struct Node {
   /// each that holds it changes by (Tree::drawn_box_of), nothing else of it
   mut drew : Bool
   mut drawn_off : (Double, Double, Double, Double)
+  /// what moves it off where it is laid out from how big it is laid out (View::moved_by), and how far that last
+  /// came to (as it was placed, or as what it reads changed)
+  mut moved_by : ((Double, Double, Double) -> (Double, Double))?
+  mut moved : (Double, Double)
   /// what it draws, as last made
   mut content : Content?
   /// leaving (View::going): since when it goes as from its start (-1: not leaving), how long all of it takes; coming
@@ -1052,6 +1056,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.lines = []
       n.drew = false
       n.drawn_off = (0.0, 0.0, 0.0, 0.0)
+      n.moved_by = None
+      n.moved = (0.0, 0.0)
       n.went = None
       n.parent = parent
       n.allow_ellipsis = false
@@ -1237,6 +1243,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drawn_stale: true,
         drew: false,
         drawn_off: (0.0, 0.0, 0.0, 0.0),
+        moved_by: None,
+        moved: (0.0, 0.0),
         content: None,
         left_at: -1.0,
         span: 0.0,
@@ -1784,7 +1792,7 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
   }
   // (where it is drawn off in what holds it, as it changes, whatever else of its place was told before: the middle of
   // what each that holds it draws, not its own)
-  let off = (n.look.dx, n.look.dy, n.look.sx, n.look.sy)
+  let off = (n.look.dx + n.moved.0, n.look.dy + n.moved.1, n.look.sx, n.look.sy)
   if n.drawn_off != off {
     n.drawn_off = off
     self.drawn_stale_from(n.parent)
@@ -2012,6 +2020,7 @@ priv enum Prop {
   RunsPicked
   Over
   Shift
+  MovedBy
   Presses
   Modal
   Shapes
@@ -2752,6 +2761,70 @@ pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
 }
 
 ///|
+/// Moved off where it is laid out by what `f` gives from how big it is laid out and the moment it is drawn at (w, h, t),
+/// what it holds with it: its place's, as big as it is laid out in the frame drawing it (a sheet rising by its own
+/// height over a time its own height says). Asked as it is placed, nothing laid out again for it, and a frame laying
+/// it out another size places it by that size. `ends`: the moment its move is over at that size (said, as a motion's
+/// end is: Anim::over), worked out as `f` is; the clock followed till then, each frame drawn placing it again, and from
+/// then on not (nothing to draw anew for it: what hosts the tree asks for no frames for it), `f` asked at the moment
+/// drawn as what else it reads changes (a move said again: followed again till its own end). `f` reads no clock
+/// itself; it gives the same for the same state, time and size, however often asked. Ctx::moved_by's, a node's: what
+/// that becomes once old views go.
+pub fn View::moved_by(
+  self : View,
+  f : (Double, Double, Double) -> (Double, Double),
+  ends : (Double, Double) -> Double,
+) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.moved_by = Some(f)
+  let tree = self.tree
+  let at = self.at
+  self.bind(
+    MovedBy,
+    // (followed at the size it is laid out, told as all of it is laid out and worked out again in that same pass
+    // (Tree::sizes_told): what `f` and `ends` read at that size followed from the frame it comes to it; none laid out
+    // yet, as nothing big. The clock followed only till its end, as that is drawn: View::drawn_past, told once then)
+    By(fn() {
+      let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
+      let t = if self.drawn_past(ends(w, h)) {
+        @signals.untracked(fn() { tree.clock.get() })
+      } else {
+        tree.clock.get()
+      }
+      f(w, h, t)
+    }),
+    Place,
+    fn(d) { tree.nodes[at].moved = d },
+  )
+  self
+}
+
+///|
+/// How far node `n` of `tree` is moved by what moves it by how big it is laid out (View::moved_by), as laid out now, at
+/// the moment drawn.
+fn Tree::moved_of(self : Tree, n : Node) -> (Double, Double) {
+  match n.moved_by {
+    Some(f) => @signals.untracked(fn() { f(n.flex.width, n.flex.height, self.clock.get()) })
+    None => (0.0, 0.0)
+  }
+}
+
+///|
+/// How far node `n` is drawn off where it is laid out: its offset, its shift by how big it is laid out, and how far
+/// what moves it by that moved it as it was placed (View::moved_by).
+fn off_of(n : Node) -> (Double, Double) {
+  (n.look.dx + n.look.sx * n.flex.width + n.moved.0, n.look.dy + n.look.sy * n.flex.height + n.moved.1)
+}
+
+///|
+/// How far node `n` is drawn off where it is laid out as it is laid out now (Tree::measured_now), what moves it by how
+/// big it is asked at that size: where it goes, not where it was placed.
+fn Tree::off_now(self : Tree, n : Node) -> (Double, Double) {
+  let (mx, my) = self.moved_of(n)
+  (n.look.dx + n.look.sx * n.flex.width + mx, n.look.dy + n.look.sy * n.flex.height + my)
+}
+
+///|
 /// How far it is drawn off where it is laid out in its own widths and heights, what it holds with it: its place's, as
 /// big as it is laid out in the frame drawing it (a page slid off by its width moves with its room as that changes).
 pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
@@ -2874,7 +2947,7 @@ fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double)
     }
     let draws = draws_of(m)
     m.drew = draws
-    m.drawn_off = (m.look.dx, m.look.dy, m.look.sx, m.look.sy)
+    m.drawn_off = (m.look.dx + m.moved.0, m.look.dy + m.moved.1, m.look.sx, m.look.sy)
     if draws && m.flex.width > 0.0 && m.flex.height > 0.0 {
       box[0] = if ox < box[0] { ox } else { box[0] }
       box[1] = if oy < box[1] { oy } else { box[1] }
@@ -2887,11 +2960,8 @@ fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double)
       if c.slot {
         take(k, ox, oy)
       } else {
-        take(
-          k,
-          ox + c.flex.left + c.look.dx + c.look.sx * c.flex.width,
-          oy + c.flex.top + c.look.dy + c.look.sy * c.flex.height,
-        )
+        let (dx, dy) = off_of(c)
+        take(k, ox + c.flex.left + dx, oy + c.flex.top + dy)
       }
     }
   }
@@ -3204,8 +3274,9 @@ pub fn View::laid_window_now(self : View) -> (Double, Double, Double, Double) {
     let m = self.tree.nodes[i]
     // (a slot lays out nothing of its own: what it holds is placed in the one that holds it)
     if !m.slot {
-      x = x + m.flex.left + m.look.dx + m.look.sx * m.flex.width
-      y = y + m.flex.top + m.look.dy + m.look.sy * m.flex.height
+      let (dx, dy) = self.tree.off_now(m)
+      x = x + m.flex.left + dx
+      y = y + m.flex.top + dy
     }
     i = m.parent
   }
@@ -3228,12 +3299,8 @@ pub fn View::placed_now(self : View) -> (Double, Double, Double, Double) {
 pub fn View::laid_place_now(self : View) -> (Double, Double, Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
   self.tree.measured_now()
-  (
-    n.flex.left + n.look.dx + n.look.sx * n.flex.width,
-    n.flex.top + n.look.dy + n.look.sy * n.flex.height,
-    n.flex.width,
-    n.flex.height,
-  )
+  let (dx, dy) = self.tree.off_now(n)
+  (n.flex.left + dx, n.flex.top + dy, n.flex.width, n.flex.height)
 }
 
 ///|
@@ -6775,9 +6842,12 @@ fn Tree::shorter_in(self : Tree, at : Int) -> Unit {
 fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   n.place_due = false
-  let x = n.flex.left + n.look.dx + n.look.sx * n.flex.width
+  // (what moves it by how big it is laid out: by how big it is laid out now, Tree::place's own moment, View::moved_by)
+  n.moved = self.moved_of(n)
+  let (dx, dy) = off_of(n)
+  let x = n.flex.left + dx
   // (a page's list's first row on the host's pixels where it sets them so: Tree::rows_placed)
-  let y = self.rows_placed(at, n.flex.top + n.look.dy + n.look.sy * n.flex.height)
+  let y = self.rows_placed(at, n.flex.top + dy)
   let a = n.look.alpha
   let w = n.flex.width
   let h = n.flex.height
