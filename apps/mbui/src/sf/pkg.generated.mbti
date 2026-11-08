@@ -530,6 +530,8 @@ pub fn empty(@ui.Ctx, () -> Unit) -> Unit
 
 pub let empty_in : @ui.Space
 
+pub fn empty_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub let ended_max : @ui.Len
 
 pub fn ends_reach(Double, Bool, Bool) -> (Double, Double)
@@ -555,6 +557,8 @@ pub fn feishu_mark(@ui.Ctx, Double) -> Int32
 pub fn field(@ui.Ctx, String, () -> Unit, hint? : String, error? : String, aside? : () -> Unit) -> Unit
 
 pub fn field_look(@ui.Ctx, @kit.FieldState, () -> Unit) -> Unit
+
+pub fn field_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
 
 pub fn field_round() -> Double
 
@@ -633,6 +637,8 @@ pub fn foot_fit(Double, Double, Double, least? : Double) -> Double
 pub fn foot_pad(Double) -> @ui.Style
 
 pub fn foot_reach(Double, start? : Double, words_first? : Bool) -> @ui.Style
+
+pub fn foot_spacer_node(@view.View) -> Unit
 
 pub fn found_head_in(ListAt) -> @ui.Style
 
@@ -745,6 +751,10 @@ pub let hover_card_w : @ui.Len
 pub let hover_tile_least : @ui.Len
 
 pub let hover_tile_most : @ui.Len
+
+pub fn hovered_in_node(@view.View) -> Bool
+
+pub fn hovered_node(@view.View) -> Bool
 
 pub fn icon(@ui.Ctx, String, size? : Double, color? : Int64, by_ink? : Bool) -> Int32
 
@@ -1060,6 +1070,8 @@ pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @view.Al
 
 pub fn menu_held(@ui.Ctx, String) -> Bool
 
+pub fn menu_held_node() -> Unit
+
 pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool, on_press? : () -> Unit) -> Bool
 
 pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled? : Bool, chosen? : Bool, heading? : Bool) -> MenuItem
@@ -1346,6 +1358,8 @@ pub fn panel_bleed() -> @ui.Style
 
 pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool, on_press? : () -> Unit) -> Bool
 
+pub fn panel_button_node(@view.View, () -> String, () -> Unit, tone? : PanelTone) -> @view.View
+
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
@@ -1374,7 +1388,7 @@ pub let panel_in : @ui.Radius
 
 pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool, fills? : Bool) -> Int32
 
-pub fn panel_nodes(String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, description? : String, foot? : (@view.View, () -> Unit) -> Unit, wide? : Bool, gone? : () -> Unit, focus? : Bool, ruled? : Bool, form? : Bool, grows? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
+pub fn panel_nodes(String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, description? : String, foot? : (@view.View, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, focus? : Bool, ruled? : Bool, form? : Bool, grows? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
 
 pub fn panel_note(@ui.Ctx, String) -> Unit
 
@@ -1404,7 +1418,11 @@ pub let panel_w : Double
 
 pub fn panel_whole() -> Bool
 
+pub fn panel_words_at_node(@view.View) -> Double
+
 pub fn panel_words_in() -> @ui.Style
+
+pub fn panel_words_in_node(@view.View) -> @ui.Style
 
 pub fn panel_words_out_by(Double) -> @ui.Style
 
@@ -1690,6 +1708,8 @@ pub let ring_turn_keep : Double
 
 pub fn rings(@ui.Ctx, Array[(Double, Int64)], Double, Int64, most~ : Int32) -> Int32
 
+pub fn rippled_node(@view.View, () -> Unit, Double, () -> String) -> Unit
+
 pub fn room_of(Double) -> @ui.Space
 
 pub fn round_face() -> @ui.Style
@@ -1932,6 +1952,8 @@ pub fn small_panel(@ui.Ctx, w? : @ui.Size, h? : @ui.Size, min_w? : Double, max_w
 
 pub fn small_panel_inner(Double) -> Double
 
+pub fn small_panel_node(@view.View) -> @view.View
+
 pub let small_radius : @ui.Radius
 
 pub fn soft_keyboard() -> Bool
@@ -2172,6 +2194,8 @@ pub fn under_bar_room() -> @ui.Space
 
 pub fn untitled_clear() -> @ui.Style
 
+pub fn untitled_clear_node(@view.View) -> @ui.Style
+
 pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??, offered? : Bool) -> Bool
 
 pub fn update_key_node(@view.View, TipLayer, Double, Double, () -> String, () -> String, () -> Bool, () -> Double??, () -> Unit, offered? : () -> Bool) -> Unit
@@ -2195,6 +2219,8 @@ pub fn verify_ok(@ui.Ctx, String) -> Unit
 pub fn video_capsule(@ui.Ctx, String, Double, coming? : Double?, corner? : Double) -> Unit
 
 pub let video_capsule_h : Double
+
+pub fn video_capsule_node(@view.View, Double) -> Unit
 
 pub let video_ground : @ui.Color
 

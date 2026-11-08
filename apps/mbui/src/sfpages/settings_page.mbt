@@ -109,6 +109,21 @@ pub fn open_dialog(
   @sf.panel(title, body, from=Unanchored, description~, foot~, wide~, live?, gone=on_gone, steps~, back?)
 }
 
+///|
+/// The same (open_dialog's: `title`, `description`, `wide`, `on_gone`), what it holds and its buttons nodes of the
+/// window's tree made once as it opens (@sf.panel_nodes), each given what closes it.
+fn open_dialog_nodes(
+  title : String,
+  body : (@view.View, () -> Unit) -> Unit,
+  foot : (@view.View, () -> Unit) -> Unit,
+  description? : String = "",
+  wide? : Bool = false,
+  on_gone? : () -> Unit = fn() {  },
+) -> Unit {
+  desk_dialogs.val += 1
+  @sf.panel_nodes(title, body, from=Unanchored, description~, foot~, wide~, gone=on_gone)
+}
+
 // ── who a profile or a key is, at the head of its page, and a card's foot ──
 
 ///|

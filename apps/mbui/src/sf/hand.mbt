@@ -104,6 +104,15 @@ pub fn menu_held(c : @ui.Ctx, key : String) -> Bool {
 }
 
 ///|
+/// A menu asked by a node's hold (presses_held_node's `held`), as menu_held's is: felt as it opens where a finger held
+/// it (the press already the hold's: lifting it opens nothing).
+pub fn menu_held_node() -> Unit {
+  if @ui.pointing() is Finger {
+    @ui.haptic(LongPress)
+  }
+}
+
+///|
 /// The press each menu held was last felt for (menu_held), by what it is of.
 // kept across runs: let go as the app begins anew (parts_reset)
 let held_felt : Map[String, Int] = {}

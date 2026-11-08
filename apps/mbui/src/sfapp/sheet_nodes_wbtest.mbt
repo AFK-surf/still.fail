@@ -198,3 +198,64 @@ test "小屏: a sheet whose body is nodes rising and sinking away: over the time
   // (and let go as it has sunk away and its scrim faded, as the host's: its layer held by its sinking, View::moved_by)
   assert_eq(rise_trace(t), old)
 }
+
+///|
+/// How much of the window a sheet of a share of it takes here (a long list's: the things', a job's).
+let sheet_share : Double = 0.8
+
+///|
+test "小屏: a sheet a share of the window tall whose body is nodes: as tall as the host's, what it holds and its foot where the host's are; dragged up, tapped, held past its most and dragged down as the host's" {
+  let t = phone_tester()
+  let rested = fn() raise {
+    t.run_for(sheet_way_ms(t))
+    let at = (sheet_top_y(t), painted_at(t, body_ink), painted_at(t, foot_ink))
+    t.key(@ui.key_escape)
+    t.run_for(sheet_way_ms(t))
+    assert_false(@sf.presenter_visible(), msg="gone")
+    at
+  }
+  @sf.panel("面板", from=Unanchored, tall=sheet_share, grows=true, foot=old_foot(), old_body())
+  let old = rested()
+  @sf.panel_nodes("面板", from=Unanchored, tall=sheet_share, grows=true, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
+    ink_node(v, 40.0, 36.0, body_ink)
+  })
+  assert_eq(rested(), old)
+  @sf.panel("面板", from=Unanchored, tall=sheet_share, grows=true, foot=old_foot(), old_body())
+  let old = grows_trace(t)
+  @sf.panel_nodes("面板", from=Unanchored, tall=sheet_share, grows=true, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
+    ink_node(v, 40.0, 36.0, body_ink)
+  })
+  assert_eq(grows_trace(t), old)
+}
+
+///|
+/// A sheet whose title is as it is now (`live`): untitled, then titled, where what it holds is and where its title's words
+/// are each time.
+fn live_trace(t : @ui.Tester, title : @signals.Signal[String]) -> Array[((Double, Double, Double, Double), (Double, Double)?)] raise {
+  let seen = []
+  t.run_for(sheet_way_ms(t))
+  seen.push((painted_at(t, body_ink), t.find("任务")))
+  title.set("任务")
+  t.run_for(@ui.move_most_ms)
+  seen.push((painted_at(t, body_ink), t.find("任务")))
+  title.set("")
+  t.run_for(@ui.move_most_ms)
+  seen.push((painted_at(t, body_ink), t.find("任务")))
+  t.key(@ui.key_escape)
+  t.run_for(sheet_way_ms(t))
+  assert_false(@sf.presenter_visible(), msg="gone")
+  seen
+}
+
+///|
+test "小屏: a sheet whose title is as it is now (`live`) and whose body is nodes: headed while it has a title, what it holds where the host's is each way" {
+  let t = phone_tester()
+  let title = @signals.signal("")
+  @sf.panel("", from=Unanchored, tall=sheet_share, live=fn() { (title.get(), "", "") }, old_body())
+  let old = live_trace(t, title)
+  assert_true(old[1].1 is Some(_), msg="titled")
+  @sf.panel_nodes("", from=Unanchored, tall=sheet_share, live=fn() { (title.get(), "", "") }, fn(v, _) {
+    ink_node(v, 40.0, 36.0, body_ink)
+  })
+  assert_eq(live_trace(t, title), old)
+}

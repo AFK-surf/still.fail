@@ -181,6 +181,31 @@ pub fn video_capsule(
 }
 
 ///|
+/// A video's capsule (video_capsule's, as a node, at rest: nothing coming) laid over `parent`, in its foot's start corner
+/// concentric with a message's file's: a small play mark and how long it is (`duration`, none where that is not known)
+/// on the video's shade.
+pub fn video_capsule_node(parent : @view.View, duration : Double) -> Unit {
+  let length = if duration > 0.0 { clock(duration) } else { "" }
+  parent.box(fn(foot) {
+    foot.over(Is(true)) |> ignore
+    style_node(foot, fn() { video_capsule_foot })
+    foot.box(fn(b) {
+      style_node(b, fn() { video_capsule_box })
+      b.box(fn(row) {
+        style_node(row, fn() { video_capsule_row })
+        icon_node(row, "play", video_capsule_mark, Is(white)) |> ignore
+        if length != "" {
+          words_node(row, fn() { length }, fn() { video_capsule_words }) |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// How far each video's capsule last said it had come: what it fades out with once it is here.
 let video_capsule_last : Map[String, Double] = {}
 

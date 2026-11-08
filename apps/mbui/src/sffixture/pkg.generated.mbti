@@ -155,6 +155,8 @@ pub let fix_home : String
 
 pub fn fix_job(String) -> Json
 
+pub let fix_job_more : Ref[Int]
+
 pub let fix_keeping : Array[FixKeeping]
 
 pub fn fix_keeping_id(FixKeeping) -> String

@@ -179,7 +179,30 @@ fn panel_centred_node(
       // as its lists say they would be, up to that share, filling it where none says (measured_body's, capped_want's); no
       // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
       // `gives`), nothing of it scrolling past it)
-      if x.tall > 0.0 && !x.form && steps is None {
+      if x.tall > 0.0 && !x.form && steps is None && x.nodes is Some(n) {
+        // (what it holds nodes: its share of the window less its frame, no taller than the dialog leaves it, what it holds
+        // filling that and laid out in it, scrolling as it does itself)
+        d.box(fn(b) {
+          style_node(b, fn() { centred_part_in(0.0, 0.0) })
+          b
+          .height(By(fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }))
+          .shrink(Is(1.0))
+          .min_height(Is(Some(0.0)))
+          .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))
+          .alpha(By(fn() { look().words }))
+          |> ignore
+          b.box(fn(col) {
+            style_node(col, fn() {
+              (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
+            })
+            col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            panel_in_lend(col, Wide, 0.0, clear=@signals.untracked(fn() { if untitled() { dialog_close_clear() } else { 0.0 } }))
+            (n.body)(col, close)
+          })
+          |> ignore
+        })
+        |> ignore
+      } else if x.tall > 0.0 && !x.form && steps is None {
         // (whether a list in it says how tall it would be, as it was last built: what it holds as tall as that then)
         let says = @signals.signal(false)
         // (the old view itself held shorter where the dialog is short of room: what it asks its own node's height)
@@ -243,6 +266,8 @@ fn panel_centred_node(
                     style_node(col, fn() {
                       (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
                     })
+                    // (on its words' line already: none further in; clear of its close button while untitled)
+                    panel_in_lend(col, Wide, 0.0, clear=@signals.untracked(fn() { if untitled() { dialog_close_clear() } else { 0.0 } }))
                     (n.body)(col, close)
                   })
                   |> ignore

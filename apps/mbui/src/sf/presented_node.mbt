@@ -179,6 +179,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             p.from,
             shown~,
             gone~,
+            covered_by=fn() { sheet_over(serial) },
           )
         Panel(x) if x.stage =>
           stage_node(
@@ -328,4 +329,49 @@ pub fn presented_tree(page : (@ui.Ctx) -> Unit) -> (@view.View) -> Unit {
     @ui.old(root, page).grow(Is(1.0)) |> ignore
     presented_nodes(root)
   }
+}
+
+///|
+/// How far in from the column a panel's body is given node `v`'s words go (panel_words_in's, where the body is nodes:
+/// panel_nodes); none outside a panel.
+pub fn panel_words_in_node(v : @view.View) -> @ui.Style {
+  @ui.style(px=room(panel_words_at_node(v)))
+}
+
+///|
+/// The same, in points (panel_words_in_node's).
+pub fn panel_words_at_node(v : @view.View) -> Double {
+  match v.lent(panel_in_lent) {
+    Some(p) => p.words
+    None => 0.0
+  }
+}
+
+///|
+/// Node `v` of a panel's body clear of an untitled dialog's close button at its end (untitled_clear's, where the body is
+/// nodes); none elsewhere.
+pub fn untitled_clear_node(v : @view.View) -> @ui.Style {
+  @ui.style(pr=room(panel_clear_at_node(v)))
+}
+
+///|
+/// How far clear of an untitled dialog's close button node `v` of a panel's body is (untitled_clear_node's), in points.
+fn panel_clear_at_node(v : @view.View) -> Double {
+  match v.lent(panel_in_lent) {
+    Some(p) => p.clear
+    None => 0.0
+  }
+}
+
+///|
+/// Whether what a node is in is a sheet's foot whose buttons go across it, each its share (foot_fills, as nodes): lent by
+/// sheet_node to its foot's row; read by button_node and foot_spacer_node.
+// kept across runs: what each sheet lends its foot, let go with it
+let foot_fills_lent : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// What stands between a foot's buttons at its start and those at its end (Ctx::spacer's, as a node) in `parent`: the
+/// room left between them; at a sheet's foot, a share of it as each button's (foot_fills: the old spacer's Fill there).
+pub fn foot_spacer_node(parent : @view.View) -> Unit {
+  parent.box(fn(s) { s.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore }) |> ignore
 }

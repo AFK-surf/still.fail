@@ -517,6 +517,7 @@ fn hover_reset() -> Unit {
   hover_shut.val = false
   hover_open.clear()
   hover_holds.clear()
+  peek_copied_at.clear()
 }
 
 ///|
