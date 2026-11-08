@@ -143,16 +143,20 @@ pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
 }
 
 ///|
-/// What was chosen in the system's own bars (@hostapi.nav_bar) since the wide frame last took it, oldest first.
-pub let nav_tapped : Array[String] = []
+/// What was chosen in the system's own bars (@hostapi.nav_bar) since the wide frame last took it, oldest first:
+/// what takes them (sfdesk's rail_native.mbt, in the island under the frame) built again as one comes, not kept as it
+/// was till something else of its changes (an iPhone Duo's ⓘ, 2026-11-01: its popover only once a finger moved).
+// kept across runs: emptied as a run begins (sfbase's reset)
+pub let nav_tapped : @signals.Signal[Array[String]] = @signals.signal([], same=fn(a, b) { a == b })
 
 ///|
-/// How many items of the system's bars have been chosen (nav_tapped), followed: what takes them (sfdesk's
-/// rail_native.mbt, in the island under the frame) and what is put where one was chosen (its mark, over the frame) are
-/// built again as one comes, not kept as they were till something else of theirs changes (an iPhone Duo's ⓘ,
-/// 2026-11-01: its popover only once a finger moved).
-// kept across runs: it only counts on
-pub let nav_tapped_said : @signals.Signal[Int] = @signals.signal(0)
+/// Where the system said the item last chosen in its bars is (@hostapi.nav_tapped_at: x, y, width, height; no width:
+/// none said), followed by what is put where one was chosen (its mark, over the frame): moved there as it is said.
+// kept across runs: put back by what sets nav_tapped_at back (sfdesk's rail_native.mbt)
+pub let nav_tapped_place : @signals.Signal[(Double, Double, Double, Double)] = @signals.signal(
+  (0.0, 0.0, 0.0, 0.0),
+  same=fn(a, b) { a == b },
+)
 
 ///|
 /// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
@@ -170,8 +174,11 @@ fn system_said(json : String) -> Unit {
       Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
       NavTapped(id) => {
-        nav_tapped.push(id)
-        nav_tapped_said.set(@signals.untracked(fn() { nav_tapped_said.get() }) + 1)
+        let at = @hostapi.nav_tapped_at
+        nav_tapped_place.set((at[0], at[1], at[2], at[3]))
+        let taps = @signals.untracked(fn() { nav_tapped.get() }).copy()
+        taps.push(id)
+        nav_tapped.set(taps)
       }
       // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
       _ => ()

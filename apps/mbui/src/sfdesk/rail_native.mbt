@@ -530,9 +530,9 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
     return
   }
   c.layer(fn() {
-    // (at the bell where the system says it is; else where the column has it: moved there as an item is chosen,
-    // @sfbase.nav_tapped_said)
-    @sfbase.nav_tapped_said.get() |> ignore
+    // (at the bell where the system says it is; else where the column has it: moved there as the system says where
+    // an item was chosen, @sfbase.nav_tapped_place)
+    @sfbase.nav_tapped_place.get() |> ignore
     let (tx, ty, th) = native_mark_at(c)
     let id = c.id("rail/attention")
     native_mark.val = id
@@ -665,10 +665,11 @@ fn native_frame(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]
 /// What was chosen in the system's bars since the last frame: a place gone to as the rail's pressed (rail_go), the
 /// settings opened, another workspace switched to.
 fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // (read so: this island built again as one is chosen, @sfbase.nav_tapped_said)
-  @sfbase.nav_tapped_said.get() |> ignore
-  let taps = @sfbase.nav_tapped.copy()
-  @sfbase.nav_tapped.clear()
+  // (read so: this island built again as one is chosen; taken, none wait)
+  let taps = @sfbase.nav_tapped.get()
+  if !taps.is_empty() {
+    @sfbase.nav_tapped.set([])
+  }
   // (another page come to by what was chosen, mid-frame: the actions the one left handed in frames before not its; the
   // one come to hands its own as it is drawn after this: nav_frame)
   defer {
@@ -841,6 +842,7 @@ fn rail_native_reset() -> Unit {
   for k in 0..<4 {
     @hostapi.nav_tapped_at[k] = 0.0
   }
+  @sfbase.nav_tapped_place.set((0.0, 0.0, 0.0, 0.0))
   tabs_kept.clear()
   nav_log_was.val = ""
   attention_size[0] = 0.0

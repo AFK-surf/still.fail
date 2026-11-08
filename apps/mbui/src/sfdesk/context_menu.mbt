@@ -52,21 +52,38 @@ fn context_opened_at(x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// Told as the menu is opened (context_at): what shows it, built apart from what was right clicked (another old view's),
-/// follows it.
-// kept across runs: a count told, nothing reads what it is (only that it changed)
-let context_told : @signals.Signal[Int] = @signals.signal(0)
+/// The right click the menu is open for (context_asked): its place, link, picture and the words picked then; None once
+/// the menu closes (context_closed). What shows it, built apart from what was right clicked (another old view's),
+/// follows it: told as another is asked, not as the same one is asked again while it shows.
+// kept across runs: none as a run begins (context_reset)
+let context_asked_for : @signals.Signal[(Double, Double, String, String, String)?] = @signals.signal(
+  None,
+  same=fn(a, b) { a == b },
+)
 
 ///|
 /// The menu opened at (x, y) by what is right clicked in a page (context_at), told to what shows it.
 fn context_asked(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? : String = "") -> Unit {
   context_at(c, x, y, link~, image~)
-  context_told.set(@signals.untracked(fn() { context_told.get() }) + 1)
+  context_asked_for.set(Some((x, y, link, image, context.words)))
+  // (a message's turn offered by another right click, elsewhere, is not this one's)
+  match @signals.untracked(fn() { @sfbase.share_offered.get() }) {
+    Some((ox, oy, _, _, _, _)) if ox != x || oy != y => @sfbase.share_offered.set(None)
+    _ => ()
+  }
+}
+
+///|
+/// The menu closed: what it was open for, and the turn a message offered it, let go.
+fn context_closed() -> Unit {
+  context.open = false
+  context_asked_for.set(None)
+  @sfbase.share_offered.set(None)
 }
 
 ///|
 fn context_reset() -> Unit {
-  context.open = false
+  context_closed()
   context.copying = ""
   context.share = None
   context.share_link = ""
@@ -120,8 +137,7 @@ pub fn context_node(v : @view.View) -> Unit {
 /// The menu, while open: a link's items, an image's, the words'; chosen, done (what reads first, once read) and gone.
 pub fn context_menu(c : @ui.Ctx) -> Unit {
   // (built again as the menu is opened or a message's turn offered, wherever that was built)
-  context_told.get() |> ignore
-  @sfbase.share_offered_told.get() |> ignore
+  context_asked_for.get() |> ignore
   // a field right clicked anywhere: its editing
   match c.field_right_clicked() {
     Some((id, x, y)) => {
@@ -136,17 +152,23 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       context.share_link = ""
       context.share_words = ""
       context.share_key = ""
+      // (a message's turn offered elsewhere is not this one's)
+      match @signals.untracked(fn() { @sfbase.share_offered.get() }) {
+        Some((ox, oy, _, _, _, _)) if ox != x || oy != y => @sfbase.share_offered.set(None)
+        _ => ()
+      }
     }
     None => ()
   }
   // a message right clicked: its turn offered with what else that right click opened the menu for (its link, its
   // picture, the words picked: context_opened_at), or alone. (A chat's list is built after the frame's overlays: its
-  // offer is taken as it is told, share_offered_told, the menu's then, built again for it.)
-  match @sfbase.share_offered.val {
-    Some((x, y, go, link, words, key)) => {
-      @sfbase.share_offered.val = None
+  // offer is read as it is told, the menu's then, built again for it; kept while the menu is open for it, taken
+  // again only where the menu no longer holds it.)
+  match @sfbase.share_offered.get() {
+    Some((x, y, go, link, words, key)) =>
       // (not over a field right clicked)
-      if !(context_opened_at(x, y) && context.field != 0) {
+      if !(context_opened_at(x, y) && context.field != 0) &&
+        !(context_opened_at(x, y) && context.share is Some(_) && context.share_key == key) {
         if !context_opened_at(x, y) {
           context_at(c, x, y)
         }
@@ -155,7 +177,6 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
         context.share_words = words
         context.share_key = key
       }
-    }
     None => ()
   }
   context_pending(c)
@@ -204,7 +225,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     }
   }
   if entries.is_empty() {
-    context.open = false
+    context_closed()
     context_lit()
     @sf.dropdown(c, "context-menu", false, 0, [], {}, context_menu_w) |> ignore
     return
@@ -214,7 +235,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(
     fn(_) {
-      context.open = false
+      context_closed()
       context_lit()
     },
     fn() {
@@ -223,7 +244,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   )
   let m = menu.val.unwrap()
   if m.chosen is Some(_) {
-    context.open = false
+    context_closed()
   }
   context_lit()
   let field = context.field

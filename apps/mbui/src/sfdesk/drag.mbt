@@ -613,15 +613,28 @@ fn clash_dialog(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// What is asked, told as it changes (fdrag.asking set or let go, a name answered, all the rest chosen the same way):
-/// what reads it (clash_now: the dialog's title and what it says, what it holds, its foot) follows it.
-// kept across runs: only ever told; read by clash_now
-let clash_told : @signals.Signal[Int] = @signals.signal(0)
+/// What is asked, as it was last told (fdrag.asking set or let go, a name answered, all the rest chosen the same way):
+/// the asking itself, how many names it has answered, whether all the rest go one way. What reads it (clash_now: the
+/// dialog's title and what it says, what it holds, its foot) follows it, as that changes.
+// kept across runs: said again as it changes (drag_reset among them)
+let clash_told : @signals.Signal[(Asking?, Int, Bool)] = @signals.signal((None, 0, false), same=fn(a, b) {
+  let same_asking = match (a.0, b.0) {
+    (Some(x), Some(y)) => physical_equal(x, y)
+    (None, None) => true
+    _ => false
+  }
+  same_asking && a.1 == b.1 && a.2 == b.2
+})
 
 ///|
 /// What is asked changed: told (clash_told).
 fn clash_changed() -> Unit {
-  clash_told.set(@signals.untracked(fn() { clash_told.get() }) + 1)
+  clash_told.set(
+    match fdrag.asking {
+      Some(a) => (Some(a), a.answers.length(), a.all)
+      None => (None, 0, false)
+    },
+  )
 }
 
 ///|

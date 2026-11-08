@@ -128,6 +128,7 @@ let writing_n : Ref[Int] = { val: 0 }
 pub fn writings_reset() -> Unit {
   quoted_into.clear()
   files_put.clear()
+  drafts_given.set([])
   writing_stations.clear()
   shared_into.clear()
   for cached in writing_cache.val {
@@ -854,7 +855,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
   let list = quoted_into.get(draft).unwrap_or([])
   list.push((author, ts, role, file))
   quoted_into[draft] = list
-  draft_given()
+  draft_given(draft)
 }
 
 ///|
@@ -862,15 +863,17 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
 /// the chat's key; taken by its composer as it is next drawn (files_taken).
 pub fn files_into(chat : String, d : Dragged) -> Unit {
   files_put.push((chat, d))
-  draft_given()
+  draft_given(chat)
 }
 
 ///|
-/// What was put into the chat `chat`'s message since it was last asked, taken.
+/// What was put into the chat `chat`'s message since it was last asked, taken; the last of what is put into that draft
+/// to be taken (its composer takes the rest before), so nothing waits for it any more (drafts_given).
 pub fn files_taken(chat : String) -> Array[Dragged] {
-  drafts_given_read()
+  drafts_given_read(chat)
   let out = files_put.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
   files_put.retain(fn(x) { x.0 != chat })
+  drafts_given.remove(chat)
   out
 }
 
@@ -928,21 +931,21 @@ pub fn finder_dragged(src : Source, paths : Array[@ui.DroppedPath]) -> Array[Dra
 let files_put : Array[(String, Dragged)] = []
 
 ///|
-/// Told as anything is put into a draft from elsewhere (files_into, quote_file_into, shared_into, marked_into,
-/// followed_into): what takes it (a composer as it is built) built again for it.
-// kept across runs: only counts on
-let drafts_given : @signals.Signal[Int] = @signals.signal(0)
+/// The drafts (by key) something was put into from elsewhere (files_into, quote_file_into, shared_into, marked_into,
+/// followed_into) not yet taken: what takes a draft's (its composer as it is built) built again as its key comes in.
+// kept across runs: emptied by writings_reset (sfbase's reset)
+let drafts_given : @signals.Keyed[String] = @signals.keyed()
 
 ///|
-/// Something put into a draft from elsewhere: what takes it told.
-pub fn draft_given() -> Unit {
-  drafts_given.set(@signals.untracked(fn() { drafts_given.get() }) + 1)
+/// Something put into the draft `key` from elsewhere: what takes it told.
+pub fn draft_given(key : String) -> Unit {
+  drafts_given.add(key)
 }
 
 ///|
-/// What is put into drafts from elsewhere, read (a composer taking what was put into its draft).
-pub fn drafts_given_read() -> Unit {
-  drafts_given.get() |> ignore
+/// Whether something put into the draft `key` from elsewhere waits, read (its composer taking it).
+pub fn drafts_given_read(key : String) -> Unit {
+  drafts_given.has(key) |> ignore
 }
 
 ///|

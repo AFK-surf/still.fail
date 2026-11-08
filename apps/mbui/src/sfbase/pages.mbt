@@ -452,9 +452,10 @@ pub let app : App = {
 pub let left_pages : Array[Page] = []
 
 ///|
-/// Told as a page is left (left_pages): what tells where it was left (the frame's pages-left) built again for it.
-// kept across runs: only counts on
-pub let left_said : @signals.Signal[Int] = @signals.signal(0)
+/// The page last left (left_pages), by its entry's serial (unique across every Nav, never one again): what tells where
+/// it was left (the frame's pages-left) built again as another is left.
+// kept across runs: a serial is never given twice (nav.mbt), so the last left of a run before is no page of this one
+pub let left_said : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 fn page_entry_left(serial : Int, p : Page) -> Unit {
@@ -476,7 +477,7 @@ fn page_entry_left(serial : Int, p : Page) -> Unit {
       _ => ()
     }
     left_pages.push(p)
-    left_said.set(@signals.untracked(fn() { left_said.get() }) + 1)
+    left_said.set(serial)
     match p {
       Setting(r) => @settings.left(r)
       Archived => @settings.left(@settings.Route::Archive)
@@ -625,7 +626,7 @@ pub fn reset() -> Unit {
   // the topics read for what has not ended yet (held.mbt)
   held_reset()
   felt_holds.clear()
-  nav_tapped.clear()
+  nav_tapped.set([])
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
   ups_reset()
   dv_fetches.clear()
@@ -686,6 +687,7 @@ pub fn reset() -> Unit {
   // what the settings' core keeps (settings_core.mbt, notices.mbt, faces.mbt, bars.mbt)
   picture_pick.val = None
   reporting_host.set(None)
+  reporting_said.set(None)
   notices_reset()
   faces_reset()
   bars_picked.set(None)

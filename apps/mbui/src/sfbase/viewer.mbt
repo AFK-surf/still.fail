@@ -494,17 +494,29 @@ pub fn note_thumb(
   }
   pv_thumbs[id] = { radius, letterbox, top_crop, picture, id: c.node_id(node), list, over, said }
   if changed {
-    thumbs_told.set(@signals.untracked(fn() { thumbs_told.get() }) + 1)
+    match thumbs_said.get(id) {
+      Some(s) => s.set(said)
+      None => ()
+    }
   }
 }
 
 ///|
 /// What its thumbnail draws over its picture (ThumbLook's over), as its chat said it last, followed as what decides
-/// how that looks changes (thumbs_said); its chat's not drawn any more, the one it flew from (fly_from's); else none.
-/// Its place read none.
+/// how that looks changes (thumbs_said, its own); its chat's not drawn any more, the one it flew from (fly_from's); else
+/// none. Its place read none.
 pub fn Viewer::thumb_over(self : Viewer) -> (Double) -> Unit {
-  thumbs_said()
-  match pv_thumbs.get(self.thumb_id()) {
+  let id = self.thumb_id()
+  let said = match thumbs_said.get(id) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(pv_thumbs.get(id).map_or("", fn(l) { l.said }), same=fn(a, b) { a == b })
+      thumbs_said[id] = s
+      s
+    }
+  }
+  said.get() |> ignore
+  match pv_thumbs.get(id) {
     Some(l) => l.over
     None =>
       match self.fly_from {
@@ -515,16 +527,11 @@ pub fn Viewer::thumb_over(self : Viewer) -> (Double) -> Unit {
 }
 
 ///|
-/// How many times what decides a thumbnail's look over its picture changed (note_thumb's `said`).
-// kept across runs: a count, read for its changes alone
-let thumbs_told : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-/// Followed: what reads it is told as what a thumbnail draws over its picture changes (its capsule's length, how far it
-/// is brought, as its chat says it).
-pub fn thumbs_said() -> Unit {
-  thumbs_told.get() |> ignore
-}
+/// What decides each thumbnail's look over its picture (note_thumb's `said`: its capsule's length, how far it is
+/// brought, as its chat says it), by its thumbnail's id, as a signal of its own made as it is first read
+/// (Viewer::thumb_over): told as that thumbnail's changes, not as another's.
+// kept across runs: said as each changes; put back with the thumbnails
+let thumbs_said : Map[String, @signals.Signal[String]] = {}
 
 ///|
 /// What is drawn over each chat's list (by its key, as last built): how much of its top the bar takes, how much of
@@ -1789,7 +1796,7 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             let list = marked_into.get(key).unwrap_or([])
             list.push((marking.job_name, png, quotes, "image"))
             marked_into[key] = list
-            draft_given()
+            draft_given(key)
             marks_leave()
             // (closed back to the chat, where the picture and its quotes show in the composer: nothing said of it)
             self.shut(c)
@@ -3079,6 +3086,7 @@ pub fn file_viewer_reset() -> Unit {
   marking.note_field.set("")
   marks_changed()
   pv_thumbs.clear()
+  thumbs_said.clear()
   pv_lists.clear()
   pv_frames.clear()
   pv_frames_n.val = 0

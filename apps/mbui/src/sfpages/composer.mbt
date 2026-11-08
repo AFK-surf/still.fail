@@ -501,7 +501,7 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String, shaped : (String, @motion.S
 /// takes what is dragged in so).
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
-  @sfbase.drafts_given_read()
+  @sfbase.drafts_given_read(w.key)
   match composing.picking {
     Some((key, picker)) =>
       match picker.files() {
