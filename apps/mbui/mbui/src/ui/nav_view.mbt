@@ -468,6 +468,52 @@ fn[P] Nav::page_built(
 }
 
 ///|
+/// The old view of page `serial` in node `v` of a page made once (nav_view's and nav_flat_view's `made`), while what it
+/// holds is not nodes yet: built as the stack builds a page's old view (Nav::page_built's: what it keeps its own and
+/// forgotten with it, its time on top, the page it was put on from, its widgets' ids its own), as what the page is now
+/// (what it became in place) and as `key` changes (asked as it is built: Nav::under its own); none of the stack's back
+/// (the made page's node has it: Nav::backs_over). One left the stack but kept shown in place (Nav::flat_keep) built
+/// as before.
+pub fn[P] Nav::page_island(
+  self : Nav[P],
+  v : @view.View,
+  serial : Int,
+  build : (Ctx, P) -> Unit,
+  key? : () -> String = fn() { "" },
+) -> @view.View {
+  let nav = self
+  old(
+    v,
+    fn(c) {
+      nav.said.get() |> ignore
+      nav.shown.get() |> ignore
+      match nav.flat_entry(serial) {
+        Some(e) => {
+          let (owner, stint) = (c.owner, c.stint)
+          c.owner = e.serial
+          c.stint = e.stint
+          nav.built_by(e, fn() { c.scope(e.serial, fn() { build(c, e.page) }) })
+          c.owner = owner
+          c.stint = stint
+        }
+        None => ()
+      }
+    },
+    // (as the page is built: what it asks of where it stands, Nav::under, its own)
+    key=fn() {
+      match nav.flat_entry(serial) {
+        Some(e) => {
+          let said = Ref("")
+          nav.built_by(e, fn() { said.val = key() })
+          said.val
+        }
+        None => ""
+      }
+    },
+  )
+}
+
+///|
 /// A page of the stack: the whole of its room, on its ground.
 // kept across runs: a value (no field of it changes)
 let nav_page_whole : Style = css("w=Full h=Full")

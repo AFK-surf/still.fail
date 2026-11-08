@@ -109,12 +109,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     },
     most=page_local_ms,
     // (each page's island built again as what it is laid out by besides what it reads changes: narrow_page_key)
-    page_key=fn(_page) {
-      match workspace_in_view(src).0 {
-        Some(w) => narrow_page_key(@ui.current(), w)
-        None => ""
-      }
-    },
+    page_key=fn(_page) { narrow_island_key(src) },
     // (the pages made once as nodes: narrow_made)
     made=fn(page) { narrow_made(src, page) },
   )
@@ -186,6 +181,16 @@ fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
     None => ()
   }
   narrow_lists(c)
+}
+
+///|
+/// What a page's island in the narrow shell is built again by besides what it reads (narrow_page_key), with workspace
+/// in view.
+fn narrow_island_key(src : Source) -> String {
+  match workspace_in_view(src).0 {
+    Some(w) => narrow_page_key(@ui.current(), w)
+    None => ""
+  }
 }
 
 ///|
@@ -380,7 +385,8 @@ fn signed_in_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The pages of the stack made once as nodes of the tree's in the narrow shell (nav_view's `made`), by their kind, the
-/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆, 一台 station 的记忆 and 归档. Each in the workspace in view, made
+/// rest old views (narrow_page_held): the settings' list (the gear's), 关于, 记忆, 一台 station 的记忆 and 归档; a chat (and the
+/// new chat that becomes it), its old view in it as yet (chat_page_made). Each in the workspace in view, made
 /// again as that changes; its frame what the shell gives a page (back to the one under it, under the status bar, over
 /// the navigation bar: setting_page's) as that changes; under the status bar the page's ground over it, and a window's
 /// band its buttons are in dragging it, as page_view puts them over a page that has no top of its own.
@@ -519,6 +525,28 @@ fn narrow_made_as(
     made_at(kind, place, f)
   }
   match page {
+    // (a chat, and the new chat that becomes one in place: the same page, a node of the tree's, its old view in it as
+    // yet, built as the stack's island built it: narrow_page_held)
+    page if @sfbase.chat_page_is(page) && !place =>
+      Some(
+        (
+          "chat",
+          fn(v, _page, _under, _stint, k) {
+            @sfbase.chat_page_made(
+              v,
+              src,
+              k,
+              fn(c, s, p) {
+                match workspace_in_view(s).0 {
+                  Some(w) => narrow_page_held(c, s, w, p)
+                  None => ()
+                }
+              },
+              key=fn() { narrow_island_key(src) },
+            )
+          },
+        ),
+      )
     // the chats' lists under Home's top bar (home_node); a device waiting to be confirmed in the workspace's safe mode
     // sees that instead (lock_gate, its old view)
     Home =>

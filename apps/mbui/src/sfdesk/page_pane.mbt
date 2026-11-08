@@ -168,7 +168,7 @@ fn pane_stack(v : @view.View, src : Source, tips : @sf.TipLayer) -> Unit {
 ///|
 /// The pages of the library's made once as nodes in the pane off the tape (Large), in the place of their old view
 /// (nav_flat_view's `made`): 关于, 记忆, 更新日志, 一台 station 的记忆; 归档, a station's own archiving, 自动决策; 用量,
-/// 价目表. Laid out by the width the frame gives the pane (the window's less the block's column where its move goes:
+/// 价目表; a chat (and the new chat that becomes it), its old view in it as yet (chat_page_made). Laid out by the width the frame gives the pane (the window's less the block's column where its move goes:
 /// fold_target's, never what the page last laid out), narrow or wide (page_node), each made again only as that
 /// arrangement changes. What the old view's island did for the page done by its node (pane_made_host).
 fn pane_made(
@@ -288,6 +288,15 @@ fn pane_made(
       made("usage-prices/" + days.to_string(), fn(a, core, here, _stint, frame, width) {
         @sfpages.usage_prices_node(a, core, here, days, on_back=core.pop, frame~, width~)
       })
+    // (a chat, and the new chat that becomes one in place: the same page, a node of the tree's, its old view in it as
+    // yet, built as the stack's island built it: pane_page_one)
+    page if @sfbase.chat_page_is(page) =>
+      Some(
+        (
+          "chat",
+          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, pane_page_one, key=tape_island_key) },
+        ),
+      )
     _ => None
   }
 }
