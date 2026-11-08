@@ -598,6 +598,9 @@ pub struct Tree {
   mut outs_changed : Bool
   /// the nodes whose size is followed (View::laid_size_told), told as all of the layout is done
   sized : Array[Int]
+  /// whether a size followed may have come out otherwise since they were last told: something laid out or placed, one
+  /// asked anew (Tree::sizes_told; nothing looked at where nothing was)
+  mut sizes_due : Bool
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
@@ -831,6 +834,7 @@ pub fn Tree::new(
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_changed: false,
+    sizes_due: false,
     sized: [],
     shows_due: [],
     outs_gone: [],
@@ -6161,6 +6165,8 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
   let placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
+    // (what is laid out may come out another size: Tree::sizes_told)
+    self.sizes_due = true
     self.layout_due = false
     // (laid out already to be read, nothing marked since: placed by that; else laid out now, what was laid out to be
     // read before it and not placed by yet placed too, Tree::measured_now)
@@ -6243,7 +6249,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
   }
   // (the sizes followed told once all of it is laid out, and what that tells laid out in this same pass)
-  if self.sized.length() > 0 && self.sizes_told() && self.due {
+  if self.sizes_due && self.sized.length() > 0 && self.sizes_told() && self.due {
     self.laid_out(upto)
   }
   // (what waited on all of it laid out, told once now, whether any size it follows came out otherwise or not; what that
@@ -6292,6 +6298,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
 ///|
 /// The sizes followed (View::laid_size_told), all of it laid out, told as one change: whether any was told otherwise.
 fn Tree::sizes_told(self : Tree) -> Bool {
+  self.sizes_due = false
   let keep = []
   let told = Ref(false)
   @signals.start_batch()
@@ -6406,6 +6413,7 @@ pub fn View::laid_size_told(self : View) -> (Double, Double)? {
       let c : @signals.Signal[(Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
       n.size_cell = Some(c)
       self.tree.sized.push(self.at)
+      self.tree.sizes_due = true
       self.tree.marked()
       c
     }
@@ -6656,6 +6664,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   if out != n.out {
     n.out = out
     self.outs_changed = true
+    self.sizes_due = true
     // (what of it is let go of told once all of the layout is done: Tree::outs_told)
     if out {
       self.outs_gone.push(at)
@@ -7364,6 +7373,18 @@ pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
   guard n.live && n.gen == id.gen && n.content is Some(c) && !self.out_at(id.at) else { return None }
   let (x, y, a, s) = self.projected(id.at)
   Some(unfolded(c, x, y, a, s))
+}
+
+///|
+/// Where node `id` is drawn in the window (Tree::drawn_of's x and y), how opaque and how big (its scale and its
+/// holders', Tree::drawn_scale), where it lives and has been placed: none of what it draws unfolded.
+pub fn Tree::drawn_place(self : Tree, id : NodeId) -> (Double, Double, Double, Double)? {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return None
+  }
+  let n = self.nodes[id.at]
+  guard n.live && n.gen == id.gen && n.content is Some(_) && !self.out_at(id.at) else { return None }
+  Some(self.projected(id.at))
 }
 
 ///|

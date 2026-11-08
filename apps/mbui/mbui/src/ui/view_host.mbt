@@ -3285,13 +3285,10 @@ fn old_hits_moved(c : Ctx, h : OldHits, tree : @view.Tree?) -> ((Double) -> Doub
   let (dx, dy, on, s) = match tree {
     None => (0.0, 0.0, true, 1.0)
     Some(t) =>
-      match t.drawn_of(h.id) {
+      match t.drawn_place(h.id) {
         // (where they are, whatever a modal layer over them lets them take: that asked as the input comes,
         // Tree::target_at; what reads them for where things are, a thumbnail's place, reads them so)
-        Some(d) if t.presses_here(h.id) => {
-          let s = t.drawn_scale(h.id)
-          (d.x - h.x, d.y - h.y, s > 0.0, s)
-        }
+        Some((x, y, _, s)) if t.presses_here(h.id) => (x - h.x, y - h.y, s > 0.0, s)
         _ => (0.0, 0.0, false, 1.0)
       }
   }
