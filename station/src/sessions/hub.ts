@@ -50,7 +50,7 @@ import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { Presets, RepoIndex } from "./presets.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
-import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
+import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldLongChat, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { untitledChat } from "./titles.ts";
@@ -1334,6 +1334,7 @@ export class Hub {
       cleared: (key, readBack) => toldCleared(this, key, readBack),
       coldAfresh: (key, now) => goesAfresh(this, key, now),
       resumeLost: (key) => toldResumeLost(this, key),
+      longChat: (key) => toldLongChat(this, key),
       carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),

@@ -1770,6 +1770,11 @@ export class Store {
     return this.#unreadCount(viewer, thread, this.readPosition(viewer, thread));
   }
 
+  /// How many messages the thread has, everyone's, less letters (rows.ts isLetter).
+  messageCount(thread: number): number {
+    return this.#unreadCount("", thread, -1);
+  }
+
   /// Whether a still.fail chat's starter has anything unread. Null asks the sidebar state worker to finish an old run.
   unreadForArchive(viewer: string, thread: number): boolean | null {
     // The read position, last message and its boundary must describe the same snapshot while other stations write.
