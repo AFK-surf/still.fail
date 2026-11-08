@@ -39,6 +39,9 @@ const ADB_TIMEOUT = 30_000;
 /// How long a phone whose offer ended is kept for another offer of it (the pairing port opened, a new link): its port
 /// and what adb holds of it stay.
 export const GRACE = 5_000;
+/// A phone's connection silent this long ends its offer, as QUIC's idle timeout once did: the connection itself is now
+/// kept 10 minutes for an app frozen in the background (native/mesh CONNECTION_IDLE_MS), adb listing a phone gone.
+export const SILENT_MS = 30_000;
 /// How long a connected phone's state is looked at before it is taken as it is (adb says `offline` a moment first).
 export const SETTLE = 6_000;
 /// How long after adb failed to get in it is tried again, doubled each time it fails again (up to `RETRY_MOST`): what
@@ -311,6 +314,25 @@ export async function answerAdb(shares: Shares, conn: Connection, viewer: Viewer
   return reply(400, tr(asked, "station.adb.unknownAsk"));
 }
 
+/// Resolves "silent" once `conn` has answered nothing for SILENT_MS (never, with an addon that cannot ask); `stop` ends
+/// the asking.
+function silent(shares: Shares, conn: Connection): { silent: Promise<"silent">; stop: () => void } {
+  let stopped = false;
+  const silent = new Promise<"silent">((resolve) => {
+    const answers = conn.answers?.bind(conn);
+    if (answers === undefined) return;
+    void (async () => {
+      for (let missed = 0; !stopped && !conn.isClosed(); ) {
+        await shares.run(Effect.sleep(SILENT_MS / 3)).catch(() => (stopped = true)); // timer: a heartbeat of the phone's connection
+        if (stopped) return;
+        missed = (await answers(SILENT_MS / 6).catch(() => true)) ? 0 : missed + 1;
+        if (missed >= 3) return resolve("silent");
+      }
+    })();
+  });
+  return { silent, stop: () => (stopped = true) };
+}
+
 /// An offer: the phone in `shares` (its listener up), adb told, and how adb holds it said down the stream until the
 /// phone stops it, its connection goes, or the station is removed. A later offer from the phone takes this one's place.
 async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: string, ask: Json, asked: Lang, stream: Stream) {
@@ -373,9 +395,11 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     if (cloud.removed()) return resolve("removed");
     unlisten = cloud.listen(() => cloud.removed() && resolve("removed"));
   });
+  const silence = silent(shares, conn);
   const ends = Promise.race([
     stream.stopped().then(() => "stopped" as const),
     conn.closed().then(() => "closed" as const),
+    silence.silent,
     removed,
     shares.stopped(),
   ]);
@@ -400,6 +424,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   unlisten();
+  silence.stop();
   share.streams--;
   if (ended === "stopping") return;
   // Only the latest offer takes the phone away (one that came on another link has it now), and only if no other comes

@@ -1144,6 +1144,9 @@ impl Inner {
                     .congestion_controller_factory(Arc::new(cubic))
                     .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
                     .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
+                    // A link kept 10 minutes in silence, as the station's (its CONNECTION_IDLE_MS): the app frozen in the
+                    // background past iroh's 30 s came back to every link timed out.
+                    .max_idle_timeout(Some(iroh::endpoint::VarInt::from_u32(10 * 60_000).into()))
                     .build(),
             );
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
