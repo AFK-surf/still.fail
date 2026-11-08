@@ -173,9 +173,9 @@ test "the way in as nodes set to work and back: its button's spinner's room open
   let (old, new) = (along(false), along(true))
   let same = Array::makei(old.length(), fn(k) { way_in_all_near(old[k], new[k]) })
   let apart = Array::makei(old.length(), fn(k) { way_in_first_apart(old[k], new[k]) })
-  // (its spinner's pieces drawn on the way in and at work)
+  // (its spinner's pieces drawn on the way in once past half its size, and at work)
   let spun = new.map(fn(d) { d.iter().any(fn(i) { i[5] == 10.0 }) })
-  assert_eq((same, spun[0], spun[1], spun[4]), (Array::make(old.length(), true), false, true, true), msg="\{apart}")
+  assert_eq((same, spun[0], spun[1], spun[2], spun[4]), (Array::make(old.length(), true), false, false, true, true), msg="\{apart}")
 }
 
 ///|

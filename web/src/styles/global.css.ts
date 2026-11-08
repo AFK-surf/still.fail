@@ -1,4 +1,4 @@
-import { globalStyle } from "@vanilla-extract/css";
+import { createVar, globalStyle } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, strokeRevealKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { STILL, stillAtOnce, stillFlash } from "@stillfail/ui/styles/still.ts";
@@ -236,12 +236,15 @@ globalStyle('input[type="checkbox"]', {
 });
 globalStyle('input[type="checkbox"]:hover:not(:disabled)', { borderColor: vars.fieldHover });
 globalStyle('input[type="checkbox"]:checked', { background: vars.primary, borderColor: vars.primary });
+/** How far the tick is in: its scale, clear up to half its size (apps/mbui AGENTS.md, Motion). */
+const tickIn = createVar({ syntax: "<number>", inherits: false, initialValue: "0" });
 globalStyle('input[type="checkbox"]::before', {
-  content: '""', width: "12px", height: "12px", background: vars.onPrimary, transform: "scale(.5)", opacity: "0",
-  transition: `transform ${vars.dur} ${vars.easeOut}, opacity ${vars.dur} ${vars.easeOut}`,
+  content: '""', width: "12px", height: "12px", background: vars.onPrimary,
+  transform: `scale(${tickIn})`, opacity: `clamp(0, (${tickIn} - .5) * 2, 1)`,
+  transition: `${tickIn.slice(4, -1)} ${vars.dur} ${vars.easeOut}`,
   mask: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.4 2.4 4.6-5'/%3E%3C/svg%3E") center / contain no-repeat`,
 });
-globalStyle('input[type="checkbox"]:checked::before', { transform: "scale(1)", opacity: "1" });
+globalStyle('input[type="checkbox"]:checked::before', { vars: { [tickIn]: "1" } });
 globalStyle('input[type="checkbox"]:disabled', { opacity: ".45", cursor: "default" });
 globalStyle('input[type="checkbox"]:focus-visible', { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "2px" });
 globalStyle("code, pre", { fontFamily: vars.fontMono });

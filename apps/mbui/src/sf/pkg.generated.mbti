@@ -2290,8 +2290,6 @@ pub fn under_bar_room() -> @ui.Space
 
 pub let under_card_words : @ui.Style
 
-pub let unseen_scale : Double
-
 pub fn untitled_clear() -> @ui.Style
 
 pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool, coming? : Double??, offered? : Bool) -> Bool

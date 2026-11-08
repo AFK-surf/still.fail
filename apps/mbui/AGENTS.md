@@ -98,8 +98,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     differs from last frame's, and no measured size is a follow's target: what the window, the sidebar, a keyboard
     or the tier does to a thing is no motion of its own.
   - No time window is a cause, and no logic reads whether a motion runs.
-  - What comes or goes by its size is not seen at half of it or less (the user, 2026-11-08): from 0.5 it fades in
-    as it grows to whole (`@sf.seen_at`), or it starts at 0.5 clear.
+  - What comes or goes by its size keeps its whole scale, from where it starts, and is not seen at half its size or
+    less, so it does not jump (the user, 2026-10-31, again 2026-11-08): its opacity is `@sf.seen_at(scale)`.
 
 ## Running the app in development
 
