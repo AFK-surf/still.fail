@@ -413,6 +413,7 @@ fn reset() -> Unit {
   anims.clear()
   anims_moving.clear()
   ripples.clear()
+  foot_moved.clear()
   reset_fx()
   motion_log.val = -1
 }
@@ -1418,7 +1419,7 @@ let together : Map[String, (Double, Array[(Anim, Double, Spec)])] = {}
 /// For each cause (`by`) a shape set off for from its foot (reshape's `foot`): the frame it did, and how far its foot
 /// moved in that frame for nothing it changes for, which what moves with it takes at once. Kept for the frame, not for
 /// one build of it: a build again of that frame (its rows kept or not) reads what the first did.
-// kept across runs: read for the frame it was set in only
+// (forgotten as the app is reset: frames are counted again from there, a cause's frame of before no frame of now)
 let foot_moved : Map[String, (Int, Double)] = {}
 
 ///|

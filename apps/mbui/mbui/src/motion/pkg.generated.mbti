@@ -176,7 +176,7 @@ pub fn move(points? : Double, over? : Double, delay? : Double) -> Spec
 
 pub let move_spring : Spec
 
-pub fn[T : Eq] moves_for(@view.View, () -> T, spec? : Spec) -> Moves
+pub fn[T : Eq] moves_for(@view.View, () -> T, spec? : Spec, spec_of? : (T, T) -> Spec, carry_of? : (T, T) -> Bool) -> Moves
 
 pub fn ms_to_seconds(Double) -> Double
 

@@ -60,13 +60,41 @@ pub struct Moves {
 ///|
 /// What moves in `owner` for the cause `by` reads (any value naming that state: a button's words, a page, whether a
 /// composer is open): each shape and part said of it (Moves::reshapes, Moves::moves_with) goes as `spec` says (a Move
-/// by default), from the moment `by` changes, from where the tree drew it then. What moves for it.
-pub fn[T : Eq] moves_for(owner : @view.View, by : () -> T, spec? : Spec = move()) -> Moves {
+/// by default), from the moment `by` changes, from where the tree drew it then. `spec_of`: how it goes by what the cause
+/// changed from and to (a composer opened on one clock, gone to another page on another), in place of `spec`;
+/// `carry_of`: whether a shape that may go from where it was with what it holds (Moves::reshapes' `carry`) does, by the
+/// same (every change, where none is said). What moves for it.
+pub fn[T : Eq] moves_for(
+  owner : @view.View,
+  by : () -> T,
+  spec? : Spec = move(),
+  spec_of? : (T, T) -> Spec,
+  carry_of? : (T, T) -> Bool,
+) -> Moves {
   let m = { owner, spec, shapes: [], parts: [] }
   // (where each stands as a change comes laid out and placed then, whatever changed it before, frame or none)
   owner.laid_before_causes()
-  // (done first with what `by` is as it is made, none of it said yet, nothing drawn: nothing goes)
-  owner.reacts(by, fn(_) { m.set_off() })
+  // (done first with what `by` is as it is made, none of it said yet, nothing drawn: nothing goes; each change after it
+  // with what it changed from, its own)
+  let from : Ref[T?] = Ref(None)
+  owner.reacts(by, fn(now) {
+    let (way, carries) = match from.val {
+      Some(was) =>
+        (
+          match spec_of {
+            Some(f) => f(was, now)
+            None => spec
+          },
+          match carry_of {
+            Some(f) => f(was, now)
+            None => true
+          },
+        )
+      None => (spec, true)
+    }
+    from.val = Some(now)
+    m.set_off(way, carries)
+  })
   m
 }
 
@@ -237,7 +265,7 @@ fn held_in(v : @view.View, of : @view.View) -> Bool {
 /// set off in the frame their cause changed (layer.mbt's layout_entry, by the same functions), on ways as long as the
 /// furthest goes. What was never drawn has nowhere to go from: where it is laid out (carried on a shape going with what
 /// it holds, if it is in one).
-fn Moves::set_off(self : Moves) -> Unit {
+fn Moves::set_off(self : Moves, spec : Spec, carries : Bool) -> Unit {
   let at = self.owner.cause_at()
   let shapes = self.shapes.filter(fn(s) { s.v.alive() && s.v.was_placed() })
   let parts = self.parts.filter(fn(p) { p.v.alive() })
@@ -257,7 +285,7 @@ fn Moves::set_off(self : Moves) -> Unit {
   let set : Array[(Shape, (Double, Double, Double, Double), (Double, Double, Double, Double))] = []
   for i, s in shapes {
     let (placed, laid) = shapes_at[i]
-    let carry = @signals.untracked(s.carry)
+    let carry = carries && @signals.untracked(s.carry)
     // (where its ground was drawn as the change came: as far off where it stood as its ways had it off where they
     // went, moved since by what holds it; how far its corners had got)
     let p0 = s.round.way.value_at(at)
@@ -320,7 +348,7 @@ fn Moves::set_off(self : Moves) -> Unit {
     }
   }
   // (as long as the furthest goes: a Move said for one way as long as that, any other spec as it is)
-  let spec = if self.spec.way_said() { self.spec } else { self.spec.over(most) }
+  let spec = if spec.way_said() { spec } else { spec.over(most) }
   for e in set {
     let (s, g, laid) = e
     // (each edge from where it was drawn, as fast as it went then, to where it is laid out; its corners from none of
