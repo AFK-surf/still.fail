@@ -35,6 +35,40 @@ let splash_side : Double = 50.0
 let accounts_come : Double = splash_label_ms - 400.0
 
 ///|
+test "the splash deadline stops on the sign-in page and keeps its original moment if loading returns" {
+  for return_at in [splash_label_ms - splash_side, splash_label_ms + splash_side] {
+    new_run()
+    let signed_out = @signals.signal(false, same=fn(a, b) { a == b })
+    let base = splash_src(@signals.signal(false, same=fn(a, b) { a == b }))
+    let src : Source = {
+      ..base,
+      topic: fn(name, params) {
+        if name == "accounts" && signed_out.get() {
+          { value: Some(Json::array([])), error: None, version: 1 }
+        } else {
+          (base.topic)(name, params)
+        }
+      },
+    }
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src))
+    let started = t.time()
+    t.run_for(accounts_come)
+    signed_out.set(true)
+    t.draw()
+    assert_true(app_is(src) is SignedOut)
+    t.assert_idle()
+    t.run_for(started + return_at - t.time())
+    signed_out.set(false)
+    t.draw()
+    assert_eq(splash_waited.get(), return_at >= splash_label_ms)
+    if return_at < splash_label_ms {
+      t.run_for(started + splash_label_ms + splash_side - t.time())
+      assert_true(splash_waited.get())
+    }
+  }
+}
+
+///|
 /// Whether the splash says it reads the workspaces (signed in, none in view yet).
 fn reads_workspaces(t : @ui.Tester) -> Bool {
   t.find(tr("android-misc.workspaces.loading")) is Some(_)

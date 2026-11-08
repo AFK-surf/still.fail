@@ -81,6 +81,7 @@ fn reset() -> Unit {
   splash_waited.set(false)
   splash_from.val = -1.0
   splash_owner.val = None
+  splash_stop.val = None
   first_shown.val = false
   first_waiting.val = false
   @sfbase.first_page_waits.set(false)
@@ -371,6 +372,17 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
     first_waiting.val = false
   }
   first_hide(first_waiting.val)
+  if !first_waiting.val &&
+    (app_is(src) is SignedOut ||
+      (app_is(src) is SignedIn && !(shell_is(src, @ui.current().window_size().0) is Reading))) {
+    match splash_stop.val {
+      Some(stop) => {
+        stop()
+        splash_stop.val = None
+      }
+      None => ()
+    }
+  }
   // the first page built, waiting for what it shows (the shell): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
@@ -952,14 +964,29 @@ let splash_from : Ref[Double] = Ref(-1.0)
 let splash_owner : Ref[@view.View?] = Ref(None)
 
 ///|
+// The startup deadline survives loading states, but ends when the first page is ready.
+// kept across runs: put back as a run begins (new_run)
+let splash_stop : Ref[(() -> Unit)?] = Ref(None)
+
+///|
 /// The app's first splash begun at `at` (once; a splash begun again, in another of the app's states, waits for the same
 /// moment): the moment it has waited its second kept by `owner`, splash_waited set then, at that moment.
 fn splash_begin(owner : @view.View, at : Double) -> Unit {
-  if splash_from.val >= 0.0 {
+  if splash_waited.get() || splash_stop.val is Some(_) {
     return
   }
-  splash_from.val = at
-  owner.at_moment(at + splash_label_ms, fn() { splash_waited.set(true) }) |> ignore
+  if splash_from.val < 0.0 {
+    splash_from.val = at
+  }
+  let deadline = splash_from.val + splash_label_ms
+  if at >= deadline {
+    splash_waited.set(true)
+    return
+  }
+  splash_stop.val = Some(owner.at_moment(deadline, fn() {
+    splash_stop.val = None
+    splash_waited.set(true)
+  }))
 }
 
 ///|
