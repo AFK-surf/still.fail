@@ -255,12 +255,12 @@ pub fn composer(
     held ||
     sent_box > 0.0 ||
     w.text.get() != "" ||
-    w.files.length() > 0 ||
-    w.quotes.length() > 0
+    w.files.get().length() > 0 ||
+    w.quotes.get().length() > 0
   // ready as the core says, or as soon as there are words in the field: the core's say comes a moment after them (its
   // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
   // nothing sent)
-  let ready = (w.ready || (w.text.get().trim() != "" && !w.starting)) && !spec.locked
+  let ready = (w.ready.get() || (w.text.get().trim() != "" && !w.starting.get())) && !spec.locked
   // sent once what it refers to can be read in this workspace (sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
@@ -332,7 +332,7 @@ pub fn composer(
     w,
     focused || held,
     moved,
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}",
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.get().length()}|\{w.quotes.get().length()}|\{w.error.get() != ""}",
     shape,
   )
   // gone to a page with no choices in its row from one with them (a new chat become its chat, or left for one): they
@@ -354,20 +354,20 @@ pub fn composer(
   let mut said = -1
   // A still appearing can turn a file card into a tile, and a quote can acquire its own picture. Both change what the
   // composer holds even when the number of files and quotes stays the same.
-  let quote_pictures = w.quotes.map(fn(q) { quote_picture(c, src, w, spec.station, Some(q)) })
-  let file_pictures = w.files.map(fn(f) { waiting_picture(src, w, Some(f)) })
-  let quote_shapes = w.quotes.mapi(fn(i, q) {
+  let quote_pictures = w.quotes.get().map(fn(q) { quote_picture(c, src, w, spec.station, Some(q)) })
+  let file_pictures = w.files.get().map(fn(f) { waiting_picture(src, w, Some(f)) })
+  let quote_shapes = w.quotes.get().mapi(fn(i, q) {
     let v = Some(q)
     text(v, "id") + "\u{1}" + text(v, "author") + "\u{1}" + text(v, "text") + "\u{1}" + text(v, "role") +
     (if quote_pictures[i] is Some(_) { "|picture" } else { "|words" })
   }).join("\u{2}")
-  let file_shapes = w.files.mapi(fn(i, f) {
+  let file_shapes = w.files.get().mapi(fn(i, f) {
     text(Some(f), "id") + (if file_pictures[i] is Some(_) { "|picture" } else { "|card" })
   }).join("\u{2}")
   let holds = if whose != composing.draft_before && !moved {
     ""
   } else {
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{file_shapes}|\{quote_shapes}|\{w.error != ""}|" +
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{file_shapes}|\{quote_shapes}|\{w.error.get() != ""}|" +
     w.field.text()
   }
   let box = c.box(
@@ -410,7 +410,7 @@ pub fn composer(
               None => ()
             }
             said = composer_note(c, spec.note)
-            send_i = send_button(c, ready, w.starting, submit)
+            send_i = send_button(c, ready, w.starting.get(), submit)
           })
           |> ignore
         })
@@ -420,7 +420,7 @@ pub fn composer(
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tail_row, fn() {
           said = composer_note(c, spec.note)
-          send_i = send_button(c, ready, w.starting, submit)
+          send_i = send_button(c, ready, w.starting.get(), submit)
         })
         |> ignore
       }
@@ -450,8 +450,8 @@ pub fn composer(
     }
   }
   @motion.measure(c, box, "composer/content")
-  if w.error != "" {
-    c.box(style=error_box, fn() { c.text(w.error, style=composer_error_words) |> ignore }) |> ignore
+  if w.error.get() != "" {
+    c.box(style=error_box, fn() { c.text(w.error.get(), style=composer_error_words) |> ignore }) |> ignore
   }
 }
 
@@ -595,7 +595,7 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
 /// Whether what is carried into draft `key` goes as files (the chat's own choice, else the device's: prefs
 /// `dropFiles`, `dropAs`), not named by its path.
 pub fn drops_as_files(src : Source, key : String) -> Bool {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   match field(field(prefs, "dropFiles"), key) {
     Some(True) => true
     Some(False) => false
@@ -637,7 +637,7 @@ fn composer_text(
   submit : () -> Unit,
 ) -> Int {
   let p = @sf.theme().p
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let hint = space_hint(c, prefs, spec.locked)
   let away = @sfbase.flight_hint_away(c, w.key)
   let no_files = spec.locked || spec.offline
@@ -686,7 +686,7 @@ fn composer_text(
         // does not take is the field's)
         files=!no_files,
         // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
-        paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
+        paste_limit=if no_files || w.starting.get() { 0 } else { @sfbase.paste_threshold(c, src) },
         look=@sfbase.refs_look(w.key, p.accent),
         field=w.field,
       )
@@ -705,7 +705,7 @@ fn composer_text(
           submit()
         }
         None =>
-          if res.text != w.text.get() && !w.starting {
+          if res.text != w.text.get() && !w.starting.get() {
             writing_text(src, w, res.text)
             warm(c, src, spec)
           }
@@ -878,7 +878,7 @@ fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = 
 /// A quote's comment line having the focus: the words' field has it instead (its quote sent or taken out, the line
 /// goes, and with it the focus and the screen's keyboard).
 fn quote_focus_to_words(c : @ui.Ctx, w : Writing) -> Unit {
-  if w.quotes.iter().any(fn(q) { c.editor_focused("composer/quote/" + text(Some(q), "id")) }) {
+  if w.quotes.get().iter().any(fn(q) { c.editor_focused("composer/quote/" + text(Some(q), "id")) }) {
     c.focus_editor(composer_field_key)
   }
 }
@@ -891,7 +891,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, 
   // The room for what is added is present even when empty, outside the flow then. Its height and position change with
   // the ground; what is new in it grows with it as it opens, whole (held_coming), never cut through by its edge (a
   // picture's foot cut square and faded as it came in, 2026-11-02 the user: 「能看出问题吗」).
-  let empty = w.quotes.is_empty() && w.files.is_empty()
+  let empty = w.quotes.get().is_empty() && w.files.get().is_empty()
   let room = Ref(-1)
   let area = c.box(
     style=extras_column,
@@ -906,9 +906,9 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, 
 
 ///|
 fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[Int]) -> Unit {
-  if !w.quotes.is_empty() {
+  if !w.quotes.get().is_empty() {
     c.box(style=quotes_column, fn() {
-      for i, q in w.quotes {
+      for i, q in w.quotes.get() {
         let v = Some(q)
         let id = text(v, "id")
         let key = "composer/quote/" + id
@@ -921,7 +921,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
           }
         }
         // (the one the core says asks for the focus: none where it says none, a quote of its own with no id among them)
-        if w.focus != "" && w.focus == id {
+        if w.focus.get() != "" && w.focus.get() == id {
           c.focus_editor(key)
           writing_focused(src, w)
         }
@@ -970,9 +970,9 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
     |> ignore
   }
   // (a quote's picture is its own, not among them)
-  if !w.files.is_empty() {
+  if !w.files.get().is_empty() {
     c.box(style=files_flow(), flow=true, line_gap=files_lines(), fn() {
-      for n, f in w.files {
+      for n, f in w.files.get() {
         let i = c.box(fn() { composer_file(c, src, spec, w, f, file_pictures[n]) })
         let key = "composer/file/" + text(Some(f), "id")
         @motion.layout(c, i, key + "/in", spec=shape, by=holds)
@@ -1113,7 +1113,7 @@ fn waiting_as(v : Json?) -> WaitingAs {
 /// Whether pasted words waiting can be put back as words (✎ on their card): while they are kept, and no chat is being
 /// made for them.
 fn restorable(w : Writing, v : Json?) -> Bool {
-  field(field(v, "pasted"), "text") is Some(String(_)) && !w.starting
+  field(field(v, "pasted"), "text") is Some(String(_)) && !w.starting.get()
 }
 
 ///|
@@ -1665,11 +1665,11 @@ fn remember_sent_pictures(src : Source, w : Writing, station : String) -> Unit {
       @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
     }
   }
-  for file in w.files {
+  for file in w.files.get() {
     let v = Some(file)
     remember(v, waiting_picture(src, w, v).unwrap_or(""))
   }
-  for q in w.quotes {
+  for q in w.quotes.get() {
     let v = Some(q)
     // A station's picture already has the same source in both places. Calling it a local one would make its reveal
     // stop halfway when the message takes over. Only carry pictures this device supplied itself.
@@ -1687,7 +1687,7 @@ fn remember_sent_pictures(src : Source, w : Writing, station : String) -> Unit {
 /// its picture is (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
 fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
-  w.files.filter_map(fn(f) {
+  w.files.get().filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
     let picture = waiting_picture(src, w, v)
@@ -1738,7 +1738,7 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
 /// The quotes of a draft as its message has them (composer.ts sentQuote): what is said about each trimmed, its own
 /// picture named as its file goes.
 fn sent_quotes(w : Writing) -> Array[Json] {
-  w.quotes.map(fn(q) {
+  w.quotes.get().map(fn(q) {
     let v = Some(q)
     let own = field(v, "own")
     let file = match field(own, "done") {
@@ -1823,7 +1823,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
   let flying : Array[FlyingFile] = []
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   for i, q in sent_quotes(w) {
-    let v = Some(w.quotes[i])
+    let v = Some(w.quotes.get()[i])
     let id = text(v, "id")
     let own = field(v, "own")
     let picture = match (own, composing.pictures.get(id), @motion.measured_drawn_state(c, quote_picture_key(id))) {

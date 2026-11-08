@@ -900,7 +900,7 @@ fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
   if !d.files.iter().any(fn(f) { f.core_id != "" && f.done.get() is None && f.error.get() is None }) {
     return
   }
-  let v = (src.topic)("composer", { "key": Json::string(upload_key(d)) }).value
+  let v = src.topic("composer", { "key": Json::string(upload_key(d)) }).get().value
   for one in items(v, "files") {
     let id = text(Some(one), "id")
     for f in d.files {

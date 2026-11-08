@@ -55,7 +55,10 @@ fn PageWait::shows(self : PageWait, stay : (Int, Int)) -> Unit {
 fn PageWait::follow(self : PageWait, v : @view.View, ready : (Page) -> Bool, most : () -> Double) -> Unit {
   app.nav.flat_owned(true)
   self.reset()
-  v.reacts(fn() { app.nav.top_stay() }, fn(stay) {
+  // Both reactions read the same tracked readiness. The first callback is untracked, so asking the source there
+  // would briefly create and release its subscription before the second reaction could follow it.
+  let current = @signals.computed(fn(_) { (app.nav.top_stay(), ready(app.nav.top())) })
+  v.reacts(fn() { current.get().0 }, fn(stay) {
     (self.due)()
     self.due = fn() {  }
     let before = self.shown.get()
@@ -63,7 +66,7 @@ fn PageWait::follow(self : PageWait, v : @view.View, ready : (Page) -> Bool, mos
       return
     }
     // (one pushed over the one in place: shown over it as it slides in, its wait the stack's, Nav::held_by)
-    if app.nav.top_over() || ready(app.nav.top()) {
+    if app.nav.top_over() || current.get().1 {
       self.shown.set(stay)
       app.nav.flat_keep(None)
       return
@@ -72,7 +75,7 @@ fn PageWait::follow(self : PageWait, v : @view.View, ready : (Page) -> Bool, mos
     self.due = v.at_moment(v.cause_at() + most(), fn() { self.shows(stay) })
   })
   // (what the core gives the page on top, at that answer's moment)
-  v.reacts(fn() { (app.nav.top_stay(), ready(app.nav.top())) }, fn(told) {
+  v.reacts(fn() { current.get() }, fn(told) {
     let (stay, now) = told
     if now {
       self.shows(stay)

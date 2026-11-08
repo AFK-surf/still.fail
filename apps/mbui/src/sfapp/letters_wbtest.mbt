@@ -9,8 +9,8 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
   let asked : Array[Map[String, Json]] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, t.value) {
         ("chat", Some(v)) => { ..t, value: Some(fix_with_letters(v)) }
         ("chatLetters", _) => {

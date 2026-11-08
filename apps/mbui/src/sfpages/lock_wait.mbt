@@ -26,7 +26,7 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : @settings.Here) -> Unit {
 /// one, turning; else what is so (none found, why it failed, not asked yet), 发送批准请求 under it (`in_card`: last on
 /// a page's card, in its foot corner, concentric with it: @sf.foot_reach).
 pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false) -> Unit {
-  let lock = (core.topic)("lock", { "workspace": Json::string(ws) }).value
+  let lock = (core.topic)("lock", { "workspace": Json::string(ws) }).get().value
   let me = field(lock, "me")
   let pair = field(me, "pair")
   let state = text(pair, "state")

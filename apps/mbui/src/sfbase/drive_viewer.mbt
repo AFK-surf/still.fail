@@ -91,7 +91,7 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
     }),
     place: fn() {
       // where it was left, held on this device (the core's: no wait for a station)
-      let place = (src.topic)("drivePlace", drive_params(at.station, root, at.path))
+      let place = src.topic("drivePlace", drive_params(at.station, root, at.path)).get().snapshot()
       match place.value {
         Some(v) => {
           let left = number(Some(v), "at")

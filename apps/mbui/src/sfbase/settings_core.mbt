@@ -51,8 +51,14 @@ fn settings_core_of(
   }
   {
     topic: fn(name, params) {
-      let t = (src.topic)(name, params)
-      { value: t.value, error: t.error, version: t.version }
+      let topic = src.topic(name, params)
+      let read = fn() -> @settings.Read {
+        let t = topic.get()
+        { value: t.value, error: t.error, version: t.version }
+      }
+      @signals.computed_scoped(fn(_) { read() }, untracked_read=Some(fn() {
+        if held_building.val { Some(read()) } else { None }
+      }))
     },
     call: fn(name, params, done) { (src.call)(name, params, done) },
     push: fn(r) {
@@ -66,7 +72,7 @@ fn settings_core_of(
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
-      let stations = (src.topic)("stations", { "scope": Json::string(w.id) })
+      let stations = src.topic("stations", { "scope": Json::string(w.id) }).get().snapshot()
       let mut name = ""
       match stations.value {
         Some(Array(a)) =>

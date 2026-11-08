@@ -708,8 +708,7 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
       }
     }
   }
-  let n = c.frame_number()
-  c.tell("screen-keys/" + s.view + "/\{n}", fn() {
+  c.tell("screen-keys/" + s.view, fn() {
     for j in sent {
       s.input(s.src, j)
     }
@@ -1103,8 +1102,7 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
         button_clicked(c, s, u, k.button)
       } else {
         let mods = u.held.take()
-        let n = c.frame_number()
-        c.tell("screen-row-key/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods) })
+        c.tell("screen-row-key/" + s.view + "/" + k.name, fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods) })
       }
     }
   }
@@ -1136,8 +1134,7 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 fn button_clicked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, button : Int) -> Unit {
   let mods = u.held.take()
   let at = pointer_now(s, u).unwrap_or(u.pad.at())
-  let n = c.frame_number()
-  c.tell("screen-click/" + s.view + "/\{button}/\{n}", fn() { click(fn(j) { s.input(s.src, j) }, at, button, mods) })
+  c.tell("screen-click/" + s.view + "/\{button}", fn() { click(fn(j) { s.input(s.src, j) }, at, button, mods) })
 }
 
 ///|
@@ -1164,7 +1161,7 @@ fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   !s.simulator() &&
   (match u.mouse_set {
     Some(on) => on
-    None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"
+    None => text(s.src.topic("prefs", {}).get().value, "screenMouse") != "off"
   })
 }
 

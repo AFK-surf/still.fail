@@ -262,5 +262,6 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
   self.drawing_after_layout()
   self.words_after_layout()
   scroll_paint_uncompared.val = true
+  lists_scrolled.push(id)
   ""
 }

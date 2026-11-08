@@ -26,7 +26,7 @@ fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
 ///|
 /// The history's page left: what it followed let go.
 fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
-  (src.leave)("history", history_params(r, key))
+  (src.leave)("history", history_params(r, key), @sfbase.TopicLeave::Legacy)
   // the station's figures its details read
   @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
   history_placed.remove("history/" + r.station + "/" + key)
@@ -39,7 +39,7 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
 /// its newest.
 fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
   let t = @sf.theme()
-  let chat = (src.topic)("chat", chat_params(r))
+  let chat = src.topic("chat", chat_params(r)).get().snapshot()
   let title = text(chat.value, "title")
   let link = match chat_link(r.station, key) {
     "" => ""
@@ -227,9 +227,9 @@ let history_short : Map[String, Bool] = {}
 fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Json?) -> Unit {
   let t = @sf.theme()
   let s = field(a, "session")
-  let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
+  let card = src.topic("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).get().value
   let usage = @sfpages.history_usage(src, r.station, key)
-  let host = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) }).value
+  let host = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) }).get().value
   let detail = fn(label : String, value : String, marked : Bool) {
     c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
       c.box(w=Px(76.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })

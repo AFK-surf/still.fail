@@ -152,7 +152,7 @@ fn slack_app_fold(c : @ui.Ctx, core : Core, station : String, id : String, me : 
   if !open {
     return
   }
-  let topic = (core.topic)("slackApp", { "station": str(station), "connect": str(id) })
+  let topic = (core.topic)("slackApp", { "station": str(station), "connect": str(id) }).get()
   let view = topic.value
   let links = field(view, "links")
   match (topic.error, view) {

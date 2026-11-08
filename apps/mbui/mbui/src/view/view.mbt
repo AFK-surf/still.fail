@@ -737,6 +737,8 @@ pub struct Tree {
   /// whether what a node that scrolls holds was moved from where it was placed since this was last taken
   /// (Tree::take_scrolled)
   mut scrolled_now : Bool
+  /// the nodes that scroll whose held moved since Tree::take_scrolled was last asked
+  scrolled_ats : Array[NodeId]
   /// the count of changes to how its nodes are drawn, each node's drawn_rev one of them (Tree::touched)
   mut drawn_revs : Int
   /// the nodes let go since the host last took them (Tree::take_removed): what it keeps for them to let go too
@@ -922,6 +924,7 @@ pub fn Tree::new(
     changed: [],
     composed: [],
     scrolled_now: false,
+    scrolled_ats: [],
     drawn_revs: 1,
     removed: [],
     pending: [],
@@ -5037,7 +5040,7 @@ pub fn View::owns(self : View, f : () -> Unit) -> View {
 ///|
 /// `stop` kept as one it lets go of as it goes (View::owns), and what lets go of that keeping again: for what ends
 /// before it does (a moment's work done or called off), nothing of it kept by it after.
-fn View::owns_while(self : View, stop : () -> Unit) -> () -> Unit {
+pub fn View::owns_while(self : View, stop : () -> Unit) -> () -> Unit {
   guard self.live() is Some(n) else { return fn() {  } }
   let key = n.drop_next
   n.drop_next = n.drop_next + 1
@@ -6776,6 +6779,11 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   // (what a node that scrolls holds, moved from where it was placed: scrolled, Tree::take_scrolled)
   if n.placed && (x != n.lx || y != n.ly) && n.parent >= 0 && self.nodes[n.parent].scroll_held == at {
     self.scrolled_now = true
+    let p = self.nodes[n.parent]
+    let id = { at: n.parent, gen: p.gen }
+    if !self.scrolled_ats.contains(id) {
+      self.scrolled_ats.push(id)
+    }
   }
   let sized = !n.placed || w != n.lw || h != n.lh
   n.placed = true
@@ -6981,6 +6989,15 @@ pub fn Tree::take_scrolled(self : Tree) -> Bool {
   let was = self.scrolled_now
   self.scrolled_now = false
   was
+}
+
+///|
+/// The nodes that scroll whose held moved since this was last asked, as Tree::take_scrolled says whether any did: each
+/// where it is drawn all drawn anew (ui's view_paint, what a host draws again).
+pub fn Tree::take_scrolled_nodes(self : Tree) -> Array[NodeId] {
+  let out = self.scrolled_ats.copy()
+  self.scrolled_ats.clear()
+  out
 }
 
 ///|

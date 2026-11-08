@@ -961,6 +961,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if tree.take_scrolled() {
     scroll_paint_uncompared.val = true
   }
+  // (each that scrolled drawn anew where it shows, all of it: told to what works out what a host draws again, h_present)
+  let scrolled = tree.take_scrolled_nodes()
   dr.targets_said = true
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
   view_glyphs_held(tree, self.scale / words_zoom.val)
@@ -1086,6 +1088,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 {
       return false
+    }
+    if scrolled.length() > 0 && scrolled.contains(c.id) && !shooting.val {
+      let k = clip_top()
+      damage_known.push(
+        (
+          dmax(x, clip_stack[k]),
+          dmax(y, clip_stack[k + 1]),
+          dmin(x + c.w * s, clip_stack[k + 2]),
+          dmin(y + c.h * s, clip_stack[k + 3]),
+        ),
+      )
     }
     // (a list's row: drawn as kept, moved, where nothing of it changed since and it is only moved (Ctx::ride_kept_for),
     // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again)
@@ -2908,20 +2921,20 @@ fn view_event(f : () -> Unit, what? : String = "event") -> Unit {
 ///|
 /// An outside event can call another event. Only the outer event is timed, so its work is not reported twice.
 // kept across runs: zero whenever an event is not being handled
-let event_probe_depth : Ref[Int] = Ref(0)
+let event_depth : Ref[Int] = Ref(0)
 
 ///|
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") -> Unit {
-  let recording = event_probe_depth.val == 0 && @hostapi.perf_recording()
+  let recording = event_depth.val == 0 && @hostapi.perf_recording()
   let start = if recording { work_now() } else { 0.0 }
   let tree = if recording { view_app.val } else { None }
   let before = tree.map(fn(t) { t.work() })
   let alive = tree.map(fn(t) { t.alive() }).unwrap_or(0)
   let memory = if recording { h_mem_mb() } else { -1.0 }
   let in_frame = frame_running.val
-  event_probe_depth.val += 1
+  event_depth.val += 1
   match view_app.val {
     Some(t) => t.event_said(h_event_time(), said, f)
     None => {
@@ -2931,7 +2944,12 @@ fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") 
   }
   // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
   turns_said(g(), h_event_time())
-  event_probe_depth.val -= 1
+  event_depth.val -= 1
+  // A resource whose readers changed between this event's separate signal flushes can be released only once all of
+  // the event has run. An event inside a frame leaves its handovers for the frame's end instead.
+  if event_depth.val == 0 && !frame_running.val {
+    frame_afters_run()
+  }
   if recording {
     let elapsed = work_now() - start
     if elapsed >= probe_slow_ms {

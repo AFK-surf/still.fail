@@ -184,7 +184,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
   let av = Some(a)
   let s = field(av, "session")
   let key = text(s, "key")
-  let card = (src.topic)("agentCard", { "station": Json::string(station), "key": Json::string(key) }).value
+  let card = src.topic("agentCard", { "station": Json::string(station), "key": Json::string(key) }).get().value
   let status = text(av, "status")
   let working = status == "running" || status == "queued"
   let history = fn(entry : Int?) { open_page(History(r, key, entry)) }

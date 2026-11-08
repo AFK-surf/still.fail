@@ -40,6 +40,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 pub fn run_let_go() -> Unit {
   made_forget()
   view_forget()
+  frame_watches_let_go()
 }
 
 ///|
@@ -79,6 +80,9 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 fn reset_globals() -> Unit {
   window_zoom_reset()
   run_let_go()
+  // A run can end with a frame's resource handover still queued. Finish it before resetting the next run.
+  frame_afters_run()
+  frame_afters.val = []
   the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()

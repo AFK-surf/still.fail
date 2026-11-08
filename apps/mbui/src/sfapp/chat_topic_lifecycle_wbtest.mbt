@@ -4,21 +4,21 @@ test "changing the source for a chat on the same frame tree reads the new source
   let base = fixture("chat")
   let first : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" {
         { value: None, error: Some(Json::string("first")), version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
   let second : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" {
         { value: None, error: Some(Json::string("second")), version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -44,15 +44,17 @@ test "a chat view still watched after the page leaves follows the topic's next c
   let marked = Ref(0)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" {
         let version = changed.get()
         { value: None, error: Some(Json::number(version.to_double())), version }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
-    leave: fn(_, _) {  },
+    leave: fn(_, _, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
   let watcher = @signals.watch(fn() { marked.val += 1 })

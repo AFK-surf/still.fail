@@ -102,7 +102,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
   let signs_in = kind == "subscription" || flag(access, "login")
   let signing_in = ["starting", "needs_code", "needs_approval", "verifying"].contains(text(login, "state"))
   // its row of the workspace's list: the account it is, on whichever stations have it
-  let list = items((core.topic)("profiles", { "scope": str(here.workspace) }).value, "items")
+  let list = items((core.topic)("profiles", { "scope": str(here.workspace) }).get().value, "items")
   let entry = match
     list.search_by(fn(e) {
       items(Some(e), "members").iter().any(fn(m) { text(Some(m), "station") == address && text(Some(m), "profileId") == id })
@@ -111,42 +111,60 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
     None => None
   }
   let blocks : Array[() -> Unit] = []
+  // (each block by what it is and what it shows: one come or gone opens or closes where it is, one showing another
+  // thing goes to its height, @sf.page's `keys`: its usage read the first time no step under it)
+  let keys : Array[(String, String)] = []
+  let sign = json_sign(p)
   // what to do first: a subscription to sign in (or signing in, or its last sign-in failed), else what its trouble
   // says to do
   let needed = text(check, "state") == "login" || signing_in
   let asked = needed || text(login, "state") == "failed"
   if !copy && signs_in && !machine && asked {
     blocks.push(fn() { profile_sign_in(c, core, address, text(s, "name"), p, needed) })
+    keys.push(("sign-in", sign))
   } else if field(p, "trouble") is Some(Object(_)) && text(field(p, "trouble"), "action") != "login" {
     blocks.push(fn() { profile_trouble(c, core, s, p) })
+    keys.push(("trouble", sign))
   }
   blocks.push(fn() { profile_quota(c, core, address, p) })
+  keys.push(("quota", sign))
   blocks.push(fn() { profile_usage(c, core, here, s, p, entry) })
+  let usage = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(7.0) }).get().value
+  keys.push(("usage", sign + json_sign(usage) + json_sign(entry)))
   blocks.push(fn() { profile_used_by(c, core, address, o, p) })
+  keys.push(("used-by", sign + json_sign(field(o, "connects"))))
   if entry is Some(_) && !items(entry, "places").is_empty() {
     blocks.push(fn() { profile_stations(c, core, address, entry) })
+    keys.push(("stations", json_sign(entry)))
   }
   if !copy {
     blocks.push(fn() { profile_models(c, core, here, address, p) })
+    keys.push(("models", sign))
     // how it runs, in one section (the web's two of the same title: fast mode, and the background on a message)
     let fast = has(p, "fast") && !(field(p, "fast") is Some(Null))
     let background = items(p, "runtimes").iter().any(fn(r) { r == "claude" }) && has(p, "backgroundOnMessage")
     if fast || background {
       blocks.push(fn() { profile_run(c, core, address, p, fast, background) })
+      keys.push(("run", sign))
     }
   }
   if has(o, "sharing") && !(field(o, "sharing") is Some(Null)) {
     blocks.push(fn() { profile_share(c, core, s, p, entry) })
+    keys.push(("share", sign + json_sign(entry)))
   }
   if !copy {
     blocks.push(fn() { profile_workspaces(c, core, address, p) })
+    // (not what it reads of the station's workspaces: read here, it would be asked for before its block is in view)
+    keys.push(("workspaces", sign))
     blocks.push(fn() { profile_account(c, core, s, p, !asked) })
+    keys.push(("account", sign))
     if kind == "env" {
       blocks.push(fn() { profile_env(c, core, address, p) })
+      keys.push(("env", sign))
     }
   }
   // its head says who it is: no title over it
-  @sf.page(c, on_back=core.pop, frame~, "profile/" + address + "/" + id, text(p, "name"), blocks, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
+  @sf.page(c, on_back=core.pop, frame~, "profile/" + address + "/" + id, text(p, "name"), blocks, keys~, small=@sf.t("android-misc.bar.place.profiles"), head=fn() {
     profile_head(c, core, here, address, text(s, "name"), p, entry)
   })
 }
@@ -737,7 +755,7 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
 /// side by side; on several stations, here's alone. The way to the whole usage at its heading.
 fn profile_usage(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?, entry : Json?) -> Unit {
   let address = text(s, "station")
-  let usage = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(7.0) }).value
+  let usage = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(7.0) }).get().value
   guard usage is Some(_) else {  }
   let item = match items(usage, "lists").search_by(fn(l) { text(Some(l), "key") == "profiles" }) {
     Some(i) =>
@@ -939,7 +957,7 @@ fn profile_models_panel(c : @ui.Ctx, core : Core, address : String, p : Json?) -
   let name = fn(m : String) { match text(names, m) { "" => m; n => n } }
   let busy = has(p, "modelsSaving") && !(field(p, "modelsSaving") is Some(Null))
   // what is starred, as the new chat's model control of this station has it (its options, each `liked`, by spelling)
-  let options = items((core.topic)("pick", { "station": Json::string(address), "of": Json::string("new") }).value, "options")
+  let options = items((core.topic)("pick", { "station": Json::string(address), "of": Json::string("new") }).get().value, "options")
   let liked = fn(m : String) {
     options.iter().any(fn(o) { flag(Some(o), "liked") && (text(Some(o), "model") == m || strings(Some(o), "ids").contains(m)) })
   }
@@ -1288,7 +1306,7 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
 /// Which of the workspaces the station joined may run their chats on it (WorkspacesSection), a switch each, for its
 /// home's managers once the station is in more than one.
 fn profile_workspaces(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
-  let m = (core.topic)("memberships", { "station": str(address) }).value
+  let m = (core.topic)("memberships", { "station": str(address) }).get().value
   let joined = if flag(m, "manages") { items(m, "workspaces").filter(fn(w) { !flag(Some(w), "home") }) } else { [] }
   if joined.length() == 0 {
     return

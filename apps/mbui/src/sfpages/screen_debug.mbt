@@ -208,8 +208,7 @@ fn ScreenSess::android(self : ScreenSess) -> Bool {
 ///|
 /// A press of one of the device's buttons.
 fn debug_press(c : @ui.Ctx, s : ScreenSess, k : Combo) -> Unit {
-  let n = c.frame_number()
-  c.tell("screen-device/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
+  c.tell("screen-device/" + s.view + "/" + k.keys, fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
 }
 
 ///|

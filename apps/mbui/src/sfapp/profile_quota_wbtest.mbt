@@ -24,7 +24,7 @@ fn profile_quota_tester(
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "profiles" {
         { value: Some({
           "items": [{
@@ -48,7 +48,7 @@ fn profile_quota_tester(
           "wait": { "reading": false, "failing": [], "empty": false },
         }), error: None, version: if online.get() { 2 } else { 1 } }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

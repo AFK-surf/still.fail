@@ -30,6 +30,7 @@
 ///|
 struct NavPage[P] {
   serial : Int
+  mut ended : Bool
   mut page : P
   // the page under it as it was put on the stack (none: the root); only the top changes, so it stays so while it is
   // there
@@ -53,7 +54,7 @@ let nav_serial : Ref[Int] = { val: 0 }
 ///|
 fn[P] nav_page(page : P, under : P?) -> NavPage[P] {
   nav_serial.val = nav_serial.val + 1
-  { serial: nav_serial.val, page, under, rise: false, over: false, stint: next_stint() }
+  { serial: nav_serial.val, ended: false, page, under, rise: false, over: false, stint: next_stint() }
 }
 
 ///|
@@ -120,6 +121,7 @@ struct Nav[P] {
   mut moved_progress : Double
   mut moved_p : Double
   on_leave : (P) -> Unit
+  on_entry_leave : (Int, P) -> Unit
   // told of a page back took off (its own back: the edge's swipe, the system's, Ctx::back): the page, whether it was
   // pushed over the one under it, whether it rose from the foot, and the pages left
   went_back : (P, Bool, Bool, Array[P]) -> Unit
@@ -171,6 +173,7 @@ struct Nav[P] {
 pub fn[P] Nav::new(
   root : P,
   on_leave? : (P) -> Unit = fn(_) {  },
+  on_entry_leave? : (Int, P) -> Unit = fn(_, _) {  },
   went_back? : (P, Bool, Bool, Array[P]) -> Unit = fn(_, _, _, _) {  },
   from_left? : (P, P?) -> Bool = fn(_, _) { false },
 ) -> Nav[P] {
@@ -198,6 +201,7 @@ pub fn[P] Nav::new(
     moved_progress: -1.0,
     moved_p: 0.0,
     on_leave,
+    on_entry_leave,
     went_back,
     from_left,
     mover: Mover::new(),
@@ -221,6 +225,14 @@ pub fn[P] Nav::new(
     hosted: None,
     shown: @signals.signal(0),
   }
+}
+
+///|
+fn[P] Nav::entry_left(self : Nav[P], entry : NavPage[P]) -> Unit {
+  if entry.ended { return }
+  entry.ended = true
+  (self.on_entry_leave)(entry.serial, entry.page)
+  (self.on_leave)(entry.page)
 }
 
 ///|
@@ -906,7 +918,7 @@ pub fn[P] Ctx::nav(
   }
   for e in nav.gone {
     self.forget(e.serial)
-    (nav.on_leave)(e.page)
+    nav.entry_left(e)
   }
   nav.gone.clear()
   if nav.t0 == nav_held {
@@ -934,7 +946,7 @@ pub fn[P] Ctx::nav(
       // the page that slid away forgotten in the frame its slide ends (`on_leave` told), not the next
       for e in nav.gone {
         self.forget(e.serial)
-        (nav.on_leave)(e.page)
+        nav.entry_left(e)
       }
       nav.gone.clear()
     } else {
@@ -1318,7 +1330,7 @@ pub fn[P] Ctx::nav_flat(
       Some(h) if h.serial == e.serial => kept.push(e)
       _ => {
         self.forget(e.serial)
-        (nav.on_leave)(e.page)
+        nav.entry_left(e)
       }
     }
   }

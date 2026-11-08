@@ -132,7 +132,7 @@ pub fn dv_station(v : Json) -> DvStation {
 ///|
 /// The workspace's stations (the `stations` topic), and why they could not be read.
 pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
-  let t = (src.topic)("stations", { "scope": Json::string(ws) })
+  let t = src.topic("stations", { "scope": Json::string(ws) }).get().snapshot()
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -155,7 +155,7 @@ pub(all) struct DvRights {
 
 ///|
 pub fn dv_rights(src : Source, ws : String, s : DvStation?) -> DvRights {
-  let w = (src.topic)("workspace", { "workspace": Json::string(ws) }).value
+  let w = src.topic("workspace", { "workspace": Json::string(ws) }).get().value
   let role = match s {
     Some(st) => st.role
     None => ""

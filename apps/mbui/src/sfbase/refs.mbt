@@ -407,7 +407,7 @@ pub fn refs_at(key : String) -> (Int, String)? {
 /// reading); what it says when it has none yet, or failed.
 pub fn refs_search(src : Source, key : String, params : Map[String, Json]) -> Topic {
   let f = ref_field(key)
-  let topic = (src.topic)("chatSearch", params)
+  let topic = src.topic("chatSearch", params).get().snapshot()
   match (topic.value, f.found) {
     (Some(_), _) => {
       f.found = topic.value
@@ -624,7 +624,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
     let info = field(Some(v), "info")
     match info {
       Some(Object(_)) =>
-        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
+        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.get().length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
       _ => ()
     }
   })
@@ -635,7 +635,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
 /// again with what the core said of them).
 pub fn writing_paste_again(src : Source, w : Writing, id : String) -> Unit {
   guard writing_went.get(id) is Some((station, name, bytes)) else { return }
-  let info = w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
+  let info = w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
   writing_remove(src, w, id)
   match info {
     Some(Some(p)) => writing_add(src, w, station, name, bytes, pasted=p)

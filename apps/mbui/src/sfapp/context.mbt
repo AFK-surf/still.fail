@@ -67,7 +67,7 @@ fn context_tile_name(c : @ui.Ctx, name : String, open : ContextTile?) -> Unit {
 /// (asked first: @sf.confirm).
 fn open_context(src : Source, r : ChatRef, key : String) -> Unit {
   @sf.panel(tr("web-pages.chat.context"), from=Unanchored, fn(c, close) {
-    let s = field(agent_json((src.topic)("chat", chat_params(r)).value, key), "session")
+    let s = field(agent_json(src.topic("chat", chat_params(r)).get().value, key), "session")
     if flag(s, "canCompact") &&
       @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub")) {
       close()

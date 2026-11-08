@@ -124,7 +124,7 @@ fn station_trouble_words(src : Source, w : Workspace) -> String {
 /// What this device did with the stations' trouble (`seen`; `gone` from before it was no longer listed once seen): the
 /// words it had then, "" none (the prefs' `trouble`, by `<workspace>\n<what>`).
 fn trouble_kept(src : Source, w : Workspace, what : String) -> String {
-  match field(field((src.topic)("prefs", {}).value, "trouble"), w.id + "\n" + what) {
+  match field(field(src.topic("prefs", {}).get().value, "trouble"), w.id + "\n" + what) {
     Some(String(s)) => s
     _ => ""
   }
@@ -230,7 +230,7 @@ let att_sheet : @ui.Style = @ui.css("w=Full")
 /// Each workspace's chats in 待处理 (the core's marks' items), the one in view's first, those let go here left out
 /// when `shown`: (workspace, its name, its chats).
 fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String, String, Array[Json])] {
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
   let groups : Array[(String, String, Array[Json])] = []
   match field(marks, "workspaces") {
     Some(Object(by)) => {

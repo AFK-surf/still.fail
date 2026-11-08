@@ -616,11 +616,11 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaceMarks" {
         { value: Some({ "workspaces": { "ws1": {}, "ws2": {} } }), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -688,14 +688,14 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaceMarks" {
         { value: Some({ "workspaces": {
           "ws1": { "chat": { "station": "ws1/st1", "key": "s-c1" } },
           "ws2": {},
         } }), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -1006,11 +1006,11 @@ test "an iPhone Duo on its side: another chat opened, its view read a while late
   let read = @signals.signal(false)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if Json::object(params).stringify().contains("s-c2") && !read.get() {
         return { value: None, error: None, version: 0 }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
@@ -1144,8 +1144,8 @@ test "a picture looked at on an iPhone Duo, the language changed while it is (th
   // (the core's prefs saying the language `lang` has, as they are read each frame)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("prefs", Some(Object(m))) => {
           let o = m.copy()

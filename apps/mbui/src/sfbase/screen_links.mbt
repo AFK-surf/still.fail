@@ -148,7 +148,7 @@ pub(all) struct ScreenCard {
 pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
   guard to.card == "screen" else { return None }
   let (station, screen) = (to.station, to.screen)
-  let v = (src.topic)("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).value
+  let v = src.topic("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).get().value
   guard v is Some(Object(_)) else { return None }
   Some({
     kind: text(v, "kind"),
@@ -166,7 +166,7 @@ pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
 pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
   guard to.card == "adb" else { return None }
   let station = to.station
-  match (src.topic)("adbCard", { "station": Json::string(station) }).value {
+  match src.topic("adbCard", { "station": Json::string(station) }).get().value {
     Some(Object(_)) as v => v
     _ => None
   }
@@ -207,7 +207,7 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
 pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) {
   guard to.card == "service" else { return ("", "", false) }
   let (station, job) = (to.station, to.job)
-  let j = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) }).value
+  let j = src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().value
   let name = match text(j, "name") {
     "" => @sf.t("android-chat.preview.service")
     n => n
@@ -397,7 +397,7 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, 
         }
         @settings.AdbLends => {
           // lent to another station now: lending it here moves it
-          let now = (src.topic)("adbShare", {}).value
+          let now = src.topic("adbShare", {}).get().value
           let elsewhere = flag(now, "sharing") && text(now, "station") != station
           @sf.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
           @sf.ask_buttons(c, fn() {

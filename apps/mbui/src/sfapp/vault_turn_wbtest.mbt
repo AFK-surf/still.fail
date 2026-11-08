@@ -79,7 +79,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
   let base = fixture("")
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "accounts" =>
           {
@@ -107,7 +107,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
           vc.vaults_asked = true
           { value: None, error: None, version: 0 }
         }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

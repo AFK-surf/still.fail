@@ -21,9 +21,9 @@ fn panel_gap_open(client : @core.Client, drop? : Bool = true) -> (@ui.Tester, So
   }
   let src : Source = {
     ..base,
-    topic: fn(name, p) {
+    topic_read: fn(name, p) {
       if !which(name, p) {
-        return (base.topic)(name, p)
+        return base.topic(name, p).get().snapshot()
       }
       let sub = client.subscribe(name, params=@sfbase.core_topic_params(name, p)).followed()
       { value: sub.value, error: sub.error, version: sub.version }
@@ -41,7 +41,7 @@ fn panel_gap_open(client : @core.Client, drop? : Bool = true) -> (@ui.Tester, So
   t.frame()
   let give = fn(topic : String, p : Map[String, Json]) raise {
     let sub = client.subscribe(topic, params=@sfbase.core_topic_params(topic, p))
-    guard (base.topic)(topic, p).value is Some(Object(m)) else { fail("no \{topic} in the fixture") }
+    guard base.prefetch(topic, p).value is Some(Object(m)) else { fail("no \{topic} in the fixture") }
     client.receive_json({ "id": Json::number(sub.id.to_double()), "value": Json::object(m.copy()) })
     (m.copy(), sub.id)
   }

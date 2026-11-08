@@ -57,12 +57,12 @@ fn chats_shown(src : Source, scope : String, filter : String) -> Map[String, Jso
   guard chat_limits_was.get(key) is Some(was) else { return now }
   let before = now.copy()
   before["limit"] = Json::number(was.to_double())
-  let asked = (src.topic)("chats", now)
+  let asked = src.topic("chats", now).get()
   if asked.value is None && asked.error is None {
     return before
   }
   chat_limits_was.remove(key)
-  (src.leave)("chats", before)
+  (src.leave)("chats", before, TopicLeave::Legacy)
   now
 }
 
@@ -78,7 +78,7 @@ pub fn chats_scrolled(c : @ui.Ctx, src : Source, scope : String, filter : String
 ///|
 /// How many rows list `filter` of workspace `scope` has past those the core sent (its `more`).
 pub fn chats_more(src : Source, scope : String, filter : String) -> Int {
-  match field((src.topic)("chats", chats_params(scope, filter)).value, "more") {
+  match field(src.topic("chats", chats_params(scope, filter)).get().value, "more") {
     Some(Number(n, ..)) => n.to_int()
     _ => 0
   }
@@ -94,7 +94,7 @@ pub fn chats_ask_more(src : Source, scope : String, filter : String, limit : Int
     if !chat_limits_was.contains(key) {
       chat_limits_was[key] = limit
     } else {
-      (src.leave)("chats", chats_params(scope, filter))
+      (src.leave)("chats", chats_params(scope, filter), TopicLeave::Legacy)
     }
     chat_limits[key] = limit + chats_page
   }
@@ -110,7 +110,7 @@ pub fn chats_limit(scope : String, filter : String) -> Int {
 /// The chats' list of workspace `scope` as it is asked (all of its chats, its first rows: chats_params), for what is
 /// read of it beside its rows (its stations' trouble, its glyph).
 pub fn chats_topic(src : Source, scope : String) -> Topic {
-  (src.topic)("chats", chats_shown(src, scope, "all"))
+  src.topic("chats", chats_shown(src, scope, "all")).get().snapshot()
 }
 
 ///|
@@ -174,7 +174,7 @@ pub fn filter_of(src : Source, ws : String) -> String {
   let f = match app.filters.get(ws) {
     Some(f) => f
     None => {
-      let prefs = (src.topic)("prefs", {}).value
+      let prefs = src.topic("prefs", {}).get().value
       match field(field(prefs, "listFilter"), ws) {
         Some(String(f)) => f
         _ =>
@@ -428,7 +428,7 @@ pub fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
 pub fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
   let chats = chats_topic(src, ws)
   let g = field(chats.value, "glyph")
-  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
+  let status = src.topic("status", { "workspace": Json::string(ws) }).get().value
   let asleep = flag(g, "asleep")
   let glyph : @sf.GlyphCounts = {
     online: count(g, "online"),
@@ -456,7 +456,7 @@ pub fn seq_key(station : String, thread : Double, seq : Double) -> String {
 ///|
 /// How many services are left up long in the workspace (the `longJobs` topic).
 pub fn long_jobs(src : Source, w : Workspace) -> Int {
-  items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").fold(init=0, fn(n, g) {
+  items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").fold(init=0, fn(n, g) {
     n + items(Some(g), "jobs").length()
   })
 }
@@ -489,16 +489,15 @@ pub fn long_stop(station : String, job : Json?) -> (String, Json, Array[(String,
 /// Whether those left up long light the rail's bell (the `longJobs` topic's `lit`: one it has not shown yet, and the
 /// bell lit by them).
 pub fn long_jobs_lit(src : Source, w : Workspace) -> Bool {
-  flag((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "lit")
+  flag(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "lit")
 }
 
 ///|
 /// The bell has shown those left up long: kept, so they no longer light it (`prefs.set {jobsSeen}` with the
 /// `longJobs` topic's `ids`).
 pub fn long_jobs_seen(src : Source, w : Workspace) -> Unit {
-  let ids = field((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "ids").unwrap_or(Json::array([]))
+  let ids = field(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "ids").unwrap_or(Json::array([]))
   let m : Map[String, Json] = {}
   m[w.id] = ids
   (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), fn(_) {  })
 }
-

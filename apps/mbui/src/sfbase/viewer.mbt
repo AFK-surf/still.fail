@@ -996,7 +996,7 @@ pub fn near_left(src : Source, station : String) -> Unit {
   near_asked.each(fn(k, p) {
     if p.get("station") == Some(Json::string(station)) {
       gone.push(k)
-      (src.leave)("imageNear", p)
+      (src.leave)("imageNear", p, TopicLeave::Legacy)
     }
   })
   for k in gone {
@@ -2151,7 +2151,7 @@ fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer)
         None => p["session"] = Json::string(session)
       }
       near_asked[Json::object(p).stringify()] = p
-      let told = (src.topic)("imageNear", p).value
+      let told = src.topic("imageNear", p).get().value
       let side = fn(k : String) -> T? {
         match field(told, k) {
           Some(Object(_) as j) => {

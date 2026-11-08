@@ -19,6 +19,8 @@ pub fn add_image(String, Bytes) -> Unit
 
 pub fn add_vector_image(String, Bytes, (Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?) -> Unit
 
+pub fn after_frame(() -> Unit) -> Unit
+
 pub fn alpha(Int64, Double) -> Int64
 
 pub fn app_awake() -> Bool
@@ -361,13 +363,13 @@ pub fn native_pointing() -> Pointing
 
 pub let native_unsupported : String
 
-pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String, head? : (@view.View, Int32, Bool) -> Unit, gone? : (Int32) -> Unit, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?, shown? : (Array[Int32]) -> Unit) -> @view.View
+pub fn[P] nav_flat_view(@view.View, Nav[P], (Ctx, P) -> Unit, (P) -> Bool, Double, bg? : () -> Int64, edge? : Double, takes_back? : () -> Bool, stacks? : () -> Bool, page_key? : (P) -> String, page_for? : (@view.View, Int32) -> (@view.View) -> (Ctx, P) -> Unit, head? : (@view.View, Int32, Bool) -> Unit, gone? : (Int32) -> Unit, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?, shown? : (Array[Int32]) -> Unit) -> @view.View
 
 pub let nav_late_most : Double
 
 pub fn nav_rest() -> Double
 
-pub fn[P] nav_view(@view.View, Nav[P], (Ctx, P) -> Unit, bg? : () -> Int64, edge? : Double, ready? : (P) -> Bool, most? : Double, page_key? : (P) -> String, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?) -> @view.View
+pub fn[P] nav_view(@view.View, Nav[P], (Ctx, P) -> Unit, bg? : () -> Int64, edge? : Double, ready? : (P) -> Bool, most? : Double, page_key? : (P) -> String, page_for? : (@view.View, Int32) -> (@view.View) -> (Ctx, P) -> Unit, made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int32, Int32) -> Unit)?) -> @view.View
 
 pub fn notice_answer() -> Bool?
 
@@ -1510,6 +1512,7 @@ type FakeHost
 type Field
 pub fn Field::colors(Self, placeholder~ : Int64, caret~ : Int64) -> Unit
 pub fn Field::composed_said(Self) -> String
+pub fn Field::composing(Self) -> Bool
 pub fn Field::focus(Self) -> Unit
 pub fn Field::follow(Self, String, generation? : Int32) -> Unit
 pub fn Field::laid(Self, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, trim? : Bool) -> FieldLaid
@@ -1919,7 +1922,7 @@ pub fn[P] Nav::flat_keep(Self[P], (Int32, Int32)?) -> Unit
 pub fn[P] Nav::flat_owned(Self[P], Bool) -> Unit
 pub fn[P] Nav::held_over(Self[P], @view.View, (P) -> Bool, Double) -> Unit
 pub fn[P] Nav::moving(Self[P]) -> Bool
-pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, went_back? : (P, Bool, Bool, Array[P]) -> Unit, from_left? : (P, P?) -> Bool) -> Self[P]
+pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, on_entry_leave? : (Int32, P) -> Unit, went_back? : (P, Bool, Bool, Array[P]) -> Unit, from_left? : (P, P?) -> Bool) -> Self[P]
 pub fn[P] Nav::offset(Self[P]) -> Double
 pub fn[P] Nav::page_of(Self[P], Int32) -> (P, P?)?
 pub fn[P] Nav::pages(Self[P]) -> Array[P]

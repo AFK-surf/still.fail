@@ -40,8 +40,8 @@ test "48-share" {
     // the file, read through the core, handed to the system's share sheet as it is
     f.until(fn() { f.t.shared_out().length() > 0 })
     let shared = f.t.shared_out()
-    assert_eq(shared.length(), 1)
-    assert_eq(shared[0].1, "说明.txt")
+    f.check(shared.length() == 1, "the share sheet was not given exactly one file")
+    f.check(shared.iter().any(fn(item) { item.1 == "说明.txt" }), "the share sheet was not given 说明.txt")
     // the bottom bar's springs and tweens to their declared end
     f.run_to(@sfapp.bar_rest())
     f.end()

@@ -102,7 +102,7 @@ fn open_add_station(
 ) -> Unit {
   adding_reset(known, existing)
   @sf.panel(tr("android-settings.station.add"), from~, tall=0.72, form=true, fn(c, close) {
-    let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
+    let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).get().value
     let rows = joinable_rows(joinable)
     let offered = flag(joinable, "offered") && rows.length() > 0
     // the choice stays at the top; only what is under it scrolls
@@ -157,7 +157,7 @@ fn open_add_station(
     }
   }, foot=fn(c, close) {
     // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), the step's
-    let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
+    let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).get().value
     let rows = joinable_rows(joinable)
     if flag(joinable, "offered") && rows.length() > 0 && adding.existing.get() && adding.made.get() is None {
       join_buttons(c, core, here, rows)
@@ -533,7 +533,7 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             placeholder=tr("android-settings.station.firstPlaceholder"),
             fn() {  },
           )
-          let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
+          let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).get().value
           if flag(joinable, "offered") && items(joinable, "items").length() > 0 {
             if tap_text(c, "first-existing", tr("web-pages.settings.stations.firstExisting"), size=14.0) {
               open_add_station(core, here, [], existing=true)

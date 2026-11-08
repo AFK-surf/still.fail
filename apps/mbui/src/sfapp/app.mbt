@@ -280,11 +280,18 @@ fn home() -> Unit {
 ///|
 /// The pages left since a build last began, told so (where each was left, what it held let go).
 fn pages_left(src : Source) -> Unit {
-  for p in left_pages {
+  for i in 0..<left_pages.length() {
+    let p = left_pages[i]
+    let (page_src, chat_view) = @sfbase.left_page_source(src, i)
     match p {
       Chat(r) => {
-        chat_left(src, r)
-        viz_chat_left(r.station, r.session)
+        match page_src {
+          Some(source) => {
+            chat_left(source, r, saved=chat_view)
+            viz_chat_left(r.station, r.session)
+          }
+          None => ()
+        }
       }
       DriveRead(at) => reader_left(at)
       DrivePlay(at) => play_left(at)
@@ -315,6 +322,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // (the made-up core, where one is linked, on this frame's runtime)
   (@sfbase.made_frame.val)(c)
   @sfbase.held_build()
+  c.after_build("held/end", fn() { @sfbase.held_end() })
   shell.val = pages_shell(src)
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
@@ -452,7 +460,7 @@ let state_node : Ref[Int] = Ref(-1)
 ///|
 /// Which of the app's states it is in, as the core's accounts and its failure say.
 fn app_is(src : Source) -> AppIs {
-  match ((src.topic)("accounts", {}).value, (src.fatal)()) {
+  match (src.topic("accounts", {}).get().value, (src.fatal)()) {
     (_, Some(_)) => Failed
     (Some(Array(list)), _) if list.length() == 0 => SignedOut
     (Some(Array(_)), _) => SignedIn
@@ -484,7 +492,8 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     // nodes is made: what one says on its first frame is its words in that language, not their keys or the device's
     // laid out and then said again; the old frame tells them each build, the same)
     @sf.set_words(fill)
-    @sfbase.language_said(src)
+    // Keep the prefs reader with the tree from its first read, including before the first frame is built.
+    root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.language_from_prefs)
     // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its
     // first frame asks the core, not the library's stand-in; the old frame says it each build, the same)
     @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
@@ -676,7 +685,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
     None => ()
   }
   let t = @sf.theme()
-  let ws = (src.topic)("workspaces", {})
+  let ws = src.topic("workspaces", {}).get().snapshot()
   let (current, all, answered, invited) = workspace_in_view(src)
   match current {
     Some(w) => {
@@ -734,7 +743,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
 /// workspaces failed (the core's words), else 正在读取你的 workspace and what it waits on (t_reading_workspaces); and
 /// whether it failed (said at once, not after the splash's second).
 fn reading_said_words(src : Source) -> (String, Bool) {
-  match (src.topic)("workspaces", {}).error {
+  match src.topic("workspaces", {}).get().error {
     Some(e) => (text(Some(e), "message"), true)
     None => (t_reading_workspaces(src), false)
   }
@@ -761,7 +770,7 @@ fn reading_tree(v : @view.View, src : Source) -> Unit {
 /// 正在读取你的 workspace, with what the core has been waiting on for a while under it, a line each (`status`'s
 /// lines: what is read and how far it has come, then what lasts).
 fn t_reading_workspaces(src : Source) -> String {
-  let lines = items((src.topic)("status", {}).value, "lines").filter_map(fn(l) {
+  let lines = items(src.topic("status", {}).get().value, "lines").filter_map(fn(l) {
     match l {
       String(s) => Some(s)
       _ => None
@@ -1044,7 +1053,7 @@ fn splash_label(src : Source, state : AppIs) -> String? {
   match state {
     Failed => (src.fatal)()
     _ =>
-      match (src.topic)("accounts", {}).error {
+      match src.topic("accounts", {}).get().error {
         Some(e) => Some(text(Some(e), "message"))
         None => None
       }
@@ -1196,8 +1205,8 @@ fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   let answered = fn(t : Topic) { t.value is Some(_) || t.error is Some(_) }
   match p {
     Chat(r) => chat_answered(src, r)
-    History(r, key, _) => chat_answered(src, r) && answered((src.topic)("history", history_params(r, key)))
-    Home => list_ready(src, w) && answered((src.topic)("changelog", Map::new()))
+    History(r, key, _) => chat_answered(src, r) && answered(src.topic("history", history_params(r, key)).get().snapshot())
+    Home => list_ready(src, w) && answered(src.topic("changelog", Map::new()).get().snapshot())
     _ => true
   }
 }
@@ -1281,8 +1290,8 @@ fn pane_ready(src : Source, p : Page) -> Bool {
 /// of them on the device: Source.waits).
 fn chat_answered(src : Source, r : ChatRef) -> Bool {
   let params = chat_params(r)
-  let t = (src.topic)("chat", params)
-  t.value is Some(_) || t.error is Some(_) || (src.waits)("chat", params)
+  let t = src.topic("chat", params).get()
+  t.value is Some(_) || t.error is Some(_) || t.waiting
 }
 
 ///|

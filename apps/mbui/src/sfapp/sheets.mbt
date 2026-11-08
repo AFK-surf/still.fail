@@ -248,7 +248,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 /// links. What is done with it is the "…"'s menu, a row of the list's. As tall as what it shows.
 fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
-  let chat = (src.topic)("chat", chat_params(r)).value
+  let chat = src.topic("chat", chat_params(r)).get().value
   let (view, _, _) = view_of_chat(src, r)
   let agents = items(chat, "agents")
   let (archived, offline) = match view {
@@ -548,7 +548,7 @@ fn open_info(src : Source, r : ChatRef) -> Unit {
     "",
     from=Unanchored,
     title_row=fn(c) {
-      let chat = (src.topic)("chat", chat_params(r)).value
+      let chat = src.topic("chat", chat_params(r)).get().value
       let (view, _, _) = view_of_chat(src, r)
       let open = match view {
         Some(v) => !v.archived && !v.offline
@@ -595,9 +595,9 @@ fn open_rename(src : Source, r : ChatRef, thread : Double?, was : String, from~ 
 /// account, its history, its jobs; and its context by hand (context.mbt).
 fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
-  let chat = (src.topic)("chat", chat_params(r)).value
+  let chat = src.topic("chat", chat_params(r)).get().value
   let a = agent_json(chat, key)
-  let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
+  let card = src.topic("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).get().value
   let jobs = items(a, "jobs")
   let stations = station_marks(src, workspace_of(r.station))
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
@@ -738,7 +738,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
 /// in the panel's corner; what it did a card of the panel's under it, 16 in (the user, 2026-11-03, 面板里可以放卡片).
 fn agent_title_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
   let t = @sf.theme()
-  let chat = (src.topic)("chat", chat_params(r)).value
+  let chat = src.topic("chat", chat_params(r)).get().value
   let a = agent_json(chat, key)
   let s = field(a, "session")
   let status = text(a, "status")
@@ -1150,7 +1150,7 @@ fn job_groups(
 /// shown (the core leaves them out).
 fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit {
   let t = @sf.theme()
-  let topic = (src.topic)("chatJobs", chat_params(r))
+  let topic = src.topic("chatJobs", chat_params(r)).get().snapshot()
   let view = match topic.value {
     Some(Object(_)) as v => v
     _ => {
@@ -1214,7 +1214,7 @@ fn waiting_rows(c : @ui.Ctx, error : Json?, sample : () -> Unit) -> Unit {
 /// grows (a service has only its output), stopped from here while it runs.
 fn job_body(c : @ui.Ctx, src : Source, r : ChatRef, id : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
-  let topic = (src.topic)("chatJobs", chat_params(r))
+  let topic = src.topic("chatJobs", chat_params(r)).get().snapshot()
   let job = items(topic.value, "jobs").iter().find_first(fn(j) { text(Some(j), "id") == id })
   let j = match job {
     Some(j) => Some(j)
@@ -1239,7 +1239,7 @@ fn job_body(c : @ui.Ctx, src : Source, r : ChatRef, id : String, close : () -> U
 /// while it is not there (read, or gone), its own head (its dot and name) once it is.
 fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
   let missing = fn() {
-    !items((src.topic)("chatJobs", chat_params(r)).value, "jobs").iter().any(fn(j) { text(Some(j), "id") == id })
+    !items(src.topic("chatJobs", chat_params(r)).get().value, "jobs").iter().any(fn(j) { text(Some(j), "id") == id })
   }
   @sf.panel(
     "",
@@ -1306,7 +1306,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
         "station": Json::string(r.station),
         "job": Json::string(id),
         "lines": Json::number(1.0),
-      }).value
+      }).get().value
       let said = match last {
         Some(Object(_)) => text(last, "said")
         _ => text(j, "outputSaid")
@@ -1412,7 +1412,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
 /// background jobs, each under its heading, three of a group and the rest folded under 还有 N 个; nothing while there
 /// are none. A row leads to its chat; its stop at its end.
 fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let groups = items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups")
+  let groups = items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups")
   if groups.length() == 0 {
     return
   }
@@ -1687,7 +1687,7 @@ fn jobs_sample(c : @ui.Ctx, r : ChatRef) -> Unit {
 /// What the letters' sheet holds below its head, and the wide frame's agent 往来 tab (wide_panel.mbt): the list of the
 /// chats written with, or the one opened.
 fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  let topic = (src.topic)("chatLetters", letters_params(r, thread))
+  let topic = src.topic("chatLetters", letters_params(r, thread)).get().snapshot()
   let (chat, _, _) = view_of_chat(src, r)
   let view = match topic.value {
     Some(Object(_)) as v => v
