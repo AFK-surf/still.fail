@@ -403,6 +403,9 @@ fn main {
         { "thread": Number(_, ..), .. } => Some(@legacy.said_step(db))
         _ => None
       }))
+    (Some("session-counts"), Some(db), _) =>
+      // (a backfill the station drives itself: each line, whatever it says, asks for the next batch)
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session count", (db, _) => Some(@counts.step(db))))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {
@@ -496,7 +499,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts --db <file>")
       2
     }
   }
