@@ -478,6 +478,19 @@ export class Local {
     });
   }
 
+  /// A station's chats with a message that failed to go, each with the first such (`unsent` of each of its chats).
+  failedOutboxes(station: string): Map<number, J> {
+    this.#seen.outbox.read();
+    const out = new Map<number, J>();
+    for (const [k, list] of this.#outbox) {
+      const at = k.indexOf(SEP);
+      if (k.slice(0, at) !== station) continue;
+      const failed = list.find((m) => m.state === "failed");
+      if (failed !== undefined) out.set(Number(k.slice(at + 1)), failed);
+    }
+    return out;
+  }
+
   /// Puts back a chat's outbox as its view found it (what arrived goes).
   outboxSettle(station: string, thread: number, list: J[]): void {
     if (equal(list, this.outbox(station, thread))) return;
@@ -670,6 +683,14 @@ export class Local {
       if (i >= 0) this.#archiving.splice(i, 1);
     }
     this.#changed({ kind: "archiving" });
+  }
+
+  /// Whether nothing done here changes how a station's rows show (none of its chats being archived or changed from here):
+  /// a list's rows made before are then as they would be made again (views.ts keptBetween).
+  rowsQuiet(station: string): boolean {
+    this.#seen.archiving.read();
+    this.#seen.changing.read(station);
+    return !this.#archiving.some(([s]) => s === station) && !this.#changing.some((c) => c.station === station);
   }
 
   beingArchived(station: string, row: J): boolean {

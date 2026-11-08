@@ -15,6 +15,9 @@ export const work = {
   shaped: 0,
   /// Rows of a log (a thread's entries) read from the database rather than taken as parsed (db/account.ts).
   logRows: 0,
+  /// Records a chat list made into rows, and rows it put into its days (views.ts #chats): those that changed, where
+  /// the list is made from the last one.
+  listed: 0,
 };
 
 export type Work = typeof work;

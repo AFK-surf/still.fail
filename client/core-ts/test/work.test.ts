@@ -50,3 +50,31 @@ test("a_new_message_costs_the_same_with_150_messages_shown_as_with_50", async ()
   assert.ok(more.shown > fifty.shown, `more shown: ${more.shown} > ${fifty.shown}`);
   assert.deepEqual(more.counted, fifty.counted, JSON.stringify({ more: more.counted, fifty: fifty.counted }));
 });
+
+/// Home's list (its first 50 chats) on a station of `n` chats while one of them moves to the top 10 times, as its station
+/// tells each new message in it.
+async function homeChanging(n: number) {
+  const row = (i: number, at: number) => ({ id: String(i), thread: i, session: `k${i}`, title: `第 ${i} 个`, agents: [], lastActiveAt: at });
+  const answers: Record<string, unknown> = { ...base(), "GET /chats": Array.from({ length: n }, (_, i) => row(i, 1_000_000 - i * 1000)) };
+  const { host, core, push } = await started(answers);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws", mine: false, limit: 50 });
+  await host.time.pass(1_000, 50);
+  const from = { ...work };
+  for (let k = 1; k <= 10; k++) {
+    push("chat", row(100 + k * 7, 2_000_000 + k * 1000));
+    await host.time.pass(200, 50);
+  }
+  const counted = workSince(from);
+  const shown = core.inner.store.get({ topic: "chats", scope: "ws", mine: false, limit: 50 }) as { days: { items: { thread: number }[] }[] };
+  core.close();
+  return { counted, top: shown.days.flatMap((d) => d.items).slice(0, 3).map((r) => r.thread) };
+}
+
+test("a_chat_moving_to_the_top_of_a_list_of_600_costs_what_it_costs_in_one_of_300", async () => {
+  const small = await homeChanging(300);
+  assert.ok(small.counted.listed > 0, "the list was made");
+  assert.deepEqual(small.top, [170, 163, 156], "the chats that changed last on top");
+  const large = await homeChanging(600);
+  assert.deepEqual(large.counted, small.counted, JSON.stringify({ large: large.counted, small: small.counted }));
+});
