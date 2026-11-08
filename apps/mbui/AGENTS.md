@@ -135,6 +135,17 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   say the moment, assert, as mbui's rules say. `detlint.json` (run with `mbui/scripts/detlint`) counts the waits left
   and only lets them fall.
 
+## Where the tests run (the user, 2026-11-08)
+
+- The whole suite (`scripts/test.sh`, `mbui/scripts/test.sh`) is the PR's CI's: native, side by side, five minutes.
+  On Studio or a laptop it is wasm-gc in a row, half an hour and more, with every other agent queued behind it, so
+  both scripts refuse outside CI. There run `check`, detlint and the test files the change touches
+  (`moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt`), and a bench when it is a speed change.
+- A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
+  not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
+- A PR that has not met what it must to merge is not waited on: no watching its CI, go on with the next step.
+- A brief that sends an agent to work here says the same; it never asks for a full run before the PR.
+
 ## Before a PR
 
 - Don't `moon fmt` here (it rewrites a hundred files nobody touched).
