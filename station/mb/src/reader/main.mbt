@@ -413,6 +413,8 @@ fn main {
         { "kind": "activity", .. } => Some(@activity.activity_step(db))
         { "kind": "recovery", .. } => Some(@activity.recovery_step(db))
         { "kind": "awake", .. } => Some(@activity.awake_step(db))
+        { "kind": "legacy-said", .. } => Some(@legacy.said_maintenance(db))
+        { "kind": "legacy-edits", .. } => Some(@legacy.edits_maintenance(db))
         { "kind": String(_), .. } => raise @legacy.Fallback
         _ => Some(@activity.activity_step(db))
       }))
