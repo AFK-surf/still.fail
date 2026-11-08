@@ -233,7 +233,10 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   said = p.session(said);
   assert.equal(said.statusText, "等待：CI 跑完");
   assert.equal(p.waiting({ process: "running", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), null);
-  assert.equal(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), null);
+  // Given a message while it waits: still at what it waits on until the turn the message begins, not queued between.
+  assert.deepEqual(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), { since: 5, seconds: null, text: "等待中" });
+  assert.equal(st({ process: "warm", pending: 1, lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), "running");
+  assert.equal(st({ process: "warm", pending: 1, lastTurn: { declared: "final", outcome: "completed", endedAt: 5 } }), "queued");
   assert.equal(st({}), "idle");
 });
 

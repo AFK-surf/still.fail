@@ -1001,6 +1001,26 @@ test("a_chats_end_says_nothing_of_its_ended_turn_from_the_viewers_words_sent_unt
   core.close();
 });
 
+test("an_agent_waiting_on_its_work_stays_at_it_as_messages_are_given_it_until_the_turn_they_begin", async () => {
+  // Waiting on a job it started, then written to: between the station's word that a message waits for it and that it
+  // took it, it stood queued, its activity in the chat gone and back (2026-11-08).
+  const waits = { kind: "input", declared: "waiting", ending: "waiting", waitFor: "CI 跑完", outcome: "completed", startedAt: 1, endedAt: 2 };
+  const told = { ...summary("a", 1), lastTurn: waits };
+  const answers: J = { ...base(), "GET /sessions": [told], "GET /sessions/a": { session: told, threads: [], turns: [], jobs: [] } };
+  const { host, core, push } = await started(answers);
+  await host.settle();
+  const held = () => core.inner.data.summary(ST, "a") as J;
+  const at = () => [present.sessionStatus(held()), present.waiting(held())?.text ?? null];
+  assert.deepEqual(at(), ["running", "等待：CI 跑完"]);
+  push("session-pending", { key: "a", pending: 1 });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  assert.deepEqual(at(), ["running", "等待：CI 跑完"]);
+  push("session-pending", { key: "a", pending: 0 });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  assert.deepEqual(at(), ["running", null]);
+  core.close();
+});
+
 test("jobs_are_put_in_place_from_their_events_and_from_stopping_them", async () => {
   const job = (id: string, state: string) => ({ id, session: "a", name: id, state, port: 4817, startedAt: 1 });
   const answers: J = {
