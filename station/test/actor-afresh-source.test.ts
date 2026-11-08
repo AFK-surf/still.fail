@@ -34,7 +34,7 @@ test("switching accounts looks up only the runtime source it is leaving", async 
   } finally { await rig.close(); }
 });
 
-for (const source of ["without point lookup", "missing", "other runtime"] as const) {
+for (const source of ["without point lookup", "missing", "other runtime", "without point lookup and another runtime"] as const) {
   test(`switching accounts keeps subagent behavior with a source ${source}`, async () => {
     const rig = new Rig();
     try {
@@ -52,9 +52,11 @@ for (const source of ["without point lookup", "missing", "other runtime"] as con
       const open = rig.claude.open.bind(rig.claude);
       rig.claude.open = async (...args) => {
         const next = await open(...args);
-        if (source === "without point lookup") Object.defineProperty(rig.store, "runtimeSessionSource", { value: undefined, configurable: true });
+        if (source === "other runtime" || source === "without point lookup and another runtime")
+          rig.store.db.prepare("UPDATE runtime_sessions SET runtime='codex' WHERE session_key=? AND id=?").run(key, first.id());
+        if (source === "without point lookup" || source === "without point lookup and another runtime")
+          Object.defineProperty(rig.store, "runtimeSessionSource", { value: undefined, configurable: true });
         else if (source === "missing") rig.store.runtimeSessionSource = () => null;
-        else rig.store.db.prepare("UPDATE runtime_sessions SET runtime='codex' WHERE session_key=? AND id=?").run(key, first.id());
         return next;
       };
       first.end({ kind: "failed", reason: classifyResult("usage limit reached"), message: "usage limit reached" });
@@ -62,7 +64,7 @@ for (const source of ["without point lookup", "missing", "other runtime"] as con
       const second = rig.claude.last();
       assert.notEqual(second.id(), first.id());
       const copied = existsSync(join(project, second.id(), "subagents", "agent-a1.jsonl"));
-      assert.equal(copied, source !== "other runtime");
+      assert.equal(copied, source !== "other runtime" && source !== "without point lookup and another runtime");
     } finally { await rig.close(); }
   });
 }
