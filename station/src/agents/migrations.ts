@@ -128,6 +128,7 @@ export const NOTES: [number, string][] = [
   [121, "The instructions were rewritten whole and much shorter; every earlier note is void. Follow only the current instructions (the file named below): one state per turn, cards only for real choices, details of other chats, agents, Slack and Feishu in the new skill stillfail-chats."],
   [122, "phone_send {path} puts a file on the phone granted to your chat (it fetches it as it downloads a chat's file), much faster and surer than adb push over its link, and answers its path there (pm cannot read that folder: install an APK from a copy in /data/local/tmp). Use it instead of adb push for anything but small files."],
   [123, "Skill stillfail-chats corrected: Slack shows login cards (a login on this station that takes a pasted code or a device code, with its link); only Feishu has none, where the login's link goes alone."],
+  [124, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only
