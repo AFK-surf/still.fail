@@ -1172,3 +1172,44 @@ test "Home asks the core for a page of its chats, and a page more while it has m
   assert_eq(limits, [@sfbase.chats_page, 2 * @sfbase.chats_page])
   assert_eq(left, [@sfbase.chats_page])
 }
+
+///|
+test "Home's rows stay while a page more of them is on its way, not its skeleton" {
+  // (the list went to its skeleton for the core's round trip each time a page more was asked: 2026-11-08)
+  new_run()
+  let base = fixture("home")
+  let answered = Ref(false)
+  let left : Array[Int] = []
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
+      match t.value {
+        Some(Object(v)) if n.to_int() == @sfbase.chats_page => {
+          let more = v.copy()
+          more["more"] = Json::number(10.0)
+          { ..t, value: Some(Json::object(more)) }
+        }
+        Some(_) if !answered.val => { ..t, value: None }
+        _ => t
+      }
+    },
+    leave: fn(name, params) {
+      if name == "chats" && params.get("limit") is Some(Number(n, ..)) {
+        left.push(n.to_int())
+      }
+      (base.leave)(name, params)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfbase.chats_limit("ws1", "all"), 2 * @sfbase.chats_page)
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_eq(left, [])
+  // the page more come: shown, the first let go of
+  answered.val = true
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_eq(left, [@sfbase.chats_page])
+}
