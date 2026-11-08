@@ -18,7 +18,9 @@ description: Work across chats and services: read another chat by its link, writ
 ## Slack and Feishu
 - slack_api and feishu_api call those APIs as your bot (a Feishu message still goes with chat_post; a still.fail chat's slack_api is the station's Slack bot). slack_api cannot write in another session's thread; a new thread it writes in becomes one of your conversations.
 - People who tell you to stop following a thread (stop watching, 别跟了): say in a sentence that you leave it and a mention brings you back, then chat_leave it. Mentioned there again, read what was said meanwhile with chat_history.
-- Slack and Feishu show options and text cards, but no login cards: post the login's link alone there.
+- Slack and Feishu show options and text cards. Feishu has no login cards: post the login's link alone there. In
+  Slack, a login on this station that takes a pasted code or a device code goes as a login card with its link; any
+  other login, its link alone.
 
 ## Cards
 - Options only for concrete alternatives, each a complete answer by itself; what people would word themselves they type. One option is fine (e.g. 合并).

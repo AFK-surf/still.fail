@@ -40,7 +40,7 @@ repository's docs).
 apps/mbui/scripts/check.sh                          # moon check, js and native
 apps/mbui/scripts/test.sh                           # the library's, the pages' and the core client's tests
 APP=sffix apps/mbui/scripts/mac.sh build            # macOS: sffix (Home over made-up chats), sfkit, stillfail, coredemo…
-APP=sffix apps/mbui/scripts/web.sh build            # the browser build (tests and previews only)
+apps/mbui/scripts/web-app.sh                        # the web's build of the app (web/mbui.html)
 apps/mbui/scripts/shots.sh home web-home            # screenshots to look at, in out/shots (no references)
 apps/mbui/scripts/android.sh build                  # the Android app, debug (APP=stillfail); VARIANT=release the mbui one
 apps/mbui/scripts/e2e-local.sh all                  # the end-to-end flows against a local still.fail (e2e/)
@@ -58,7 +58,7 @@ framework and the Rust shell (`scripts/core.sh apple`).
 `scripts/mac-app.sh` makes `out/mac/<name>.app` (arm64) as its variant says: the release build of `APP=stillfail`,
 the core's script in its Resources (the core host finds it there), its icon (`scripts/mac-icon.swift`: the Android
 icon on macOS's rounded square), an Info.plist of its own; then signs, checks and zips it. In CI it is signed with
-still.fail's macOS identity (`.github/mac_signing.py`): AFK's Developer ID, the hardened runtime, notarized and
-stapled before it is zipped, so Gatekeeper opens it downloaded from the web. As a bundle it has the system's
+still.fail's macOS identity (`.github/mac_signing.py`): AFK's Developer ID, the hardened runtime, notarized before it
+is zipped (the ticket not stapled: Gatekeeper checks it online), so it opens downloaded from the web. As a bundle it has the system's
 notifications (mbui's mac host: UNUserNotificationCenter), its own Keychain items and data
 (`~/Library/Application Support/<its id>`).

@@ -72,7 +72,8 @@ cd cloud && pnpm install --frozen-lockfile && pnpm run types && pnpm test
 | --- | --- |
 | `station/` | station（`stillfail-station`）：agent runtime、Slack 和飞书、任务、文件、屏幕、密钥库；原生组件在 `station/native/` |
 | `client/` | 共用的客户端 core（`core-ts`）、它的原生外壳和翻译（`i18n`） |
-| `web/` | 网页版、官网和组件 stories |
+| `web/` | 网页上运行 app 的宿主，以及登录、分享和管理后台页面 |
+| `website/` | 官网 |
 | `apps/mbui/` | 各端 app（安卓、iOS、macOS、Windows、Linux），用 mbui（`apps/mbui/mbui`）写 |
 | `cloud/` | Cloudflare 上的账号、workspace、中继和发布 |
 | `docs/` | 开发和运维文档；发布说明在 `docs/releases/` |

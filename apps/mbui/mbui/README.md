@@ -5,11 +5,10 @@ builds, lays out and paints a tree every frame and draws everything itself on
 the GPU, and thin hosts that put it on the screen and feed it input — macOS
 and iOS (Metal), Windows (Direct3D 11), Android and Linux (OpenGL ES), and a
 WebGL2 host for tests and previews. Its flexbox passes Yoga's tests and its text
-segmentation Unicode's own. It is what [still.fail](https://still.fail)'s
-native clients are being rebuilt in: that app, its design system and pages,
-live in still.fail's repository (`apps/mbui`, built by these scripts with
-`MBUI_APP_MOD`); so does the player (`src/player`) for now, as it draws with still.fail's design system (it can come
-back as framework once it takes its icons and theme from its caller). It is experimental: APIs change without notice.
+segmentation Unicode's own. [still.fail](https://still.fail)'s apps are
+written in it: that app, its design system and pages, live in still.fail's
+repository (`apps/mbui`, built by these scripts with `MBUI_APP_MOD`). It is
+experimental: APIs change without notice.
 
 ## Running (on a Mac with MoonBit and Xcode)
 
@@ -46,11 +45,11 @@ On Windows (Git Bash, MoonBit, MSVC from a Developer Command Prompt):
 ```sh
 scripts/win.sh build && scripts/win.sh run      # Win32 window
 scripts/win.sh script ime                       # scripted IME run, snapshots in out/ime
-scripts/shots.sh windows                        # screenshot compared with goldens/windows.png
+scripts/shots.sh windows                        # a screenshot to look at (goldens/windows.png, by hand)
 ```
 
-CI (the repository's `.github/workflows/mbui-windows.yml`) builds it on `windows-latest`, runs the
-`shot` and `ime` scripts and compares the screenshot with the golden.
+CI (the repository's `.github/workflows/mbui-windows.yml`) builds it on `windows-latest` and runs the `ime` script;
+no picture of the window is compared: what Direct3D draws is held to its references by `mbui-render-windows`.
 
 On Linux (MoonBit, a C compiler, GTK 4.12 or later with its development files: Ubuntu 24.04's `libgtk-4-dev
 libsoup-3.0-dev`):
