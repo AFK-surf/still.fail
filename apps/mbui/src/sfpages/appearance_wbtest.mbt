@@ -51,10 +51,10 @@ test "外观's 震动 switch is at the end of its row and turns haptics off and 
     let titles = t.boxes_held().filter(fn(b) { b.text == "震动" })
     assert_eq(titles.length(), 1, msg="\{at}: \{titles.map(fn(b) { (b.x, b.y, b.w, b.h, b.weight) })}")
     let (x, y, _, sh) = t.get(Switch, label="震动").rect
-    assert_true(x >= titles[0].x + titles[0].w, msg="\{at}: switch follows its title")
+    // (the title's words as they are drawn: where they end, their line's middle)
+    guard t.rect_of("震动") is Some((tx, ty, tw, th)) else { fail("\{at}: no 震动 drawn") }
+    assert_true(x >= tx + tw, msg="\{at}: switch follows its title: title ends \{tx + tw}, switch \{x}")
     if !laid_wide(w) {
-      // (the title's words as they are drawn: their line's middle)
-      guard t.rect_of("震动") is Some((_, ty, _, th)) else { fail("\{at}: no 震动 drawn") }
       let title_mid = ty + th / 2.0
       assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line: title \{(ty, th)}, switch \{(y, sh)}")
     }
