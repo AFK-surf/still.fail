@@ -42,7 +42,9 @@
     // (what it waits for said again by the frame, if it still does: H.wakeAfter, from its time)
     wakeFor = -1;
     buildingFor = t;
-    cb.frame(cssW, cssH, dpr, t);
+    // the soft keyboard over the canvas's foot: the app laid out above it, the canvas keeping its size (as the phones'
+    // apps keep their drawables', ios_app.m's drawFor)
+    cb.frame(cssW, Math.max(1, cssH - keyboardOver()), dpr, t);
     buildingFor = -1;
     inFrame = false;
     frames++;
@@ -2272,6 +2274,8 @@
 
   // ---- input ----
   let imeActive = false, composing = false;
+  // what the textarea held after the last edit of it (setIme's, or one the input event below has told the app of)
+  let taHad = '';
   H.setIme = (active, x, y, w, h, text, s, e) => {
     imeActive = active;
     ta.style.left = `${x}px`;
@@ -2283,10 +2287,29 @@
     if (active && !composing) {
       if (ta.value !== text) ta.value = text;
       if (ta.selectionStart !== s || ta.selectionEnd !== e) ta.setSelectionRange(s, e);
+      taHad = text;
     }
     if (active && document.activeElement !== ta) ta.focus({ preventScroll: true });
     if (!active && document.activeElement === ta) ta.blur();
   };
+
+  // What an edit changed of the textarea's words `was`, to `now` with the caret at `caret`: [from, to, put], the words
+  // of `was` from `from` to `to` replaced by `put`. What is after the caret is what it left alone, where `was` ends so
+  // (an "a" put in before "aa" is put in there, though "aaa" could be read as it after them); the halves of a surrogate
+  // pair stay together.
+  function taEdit(was, now, caret) {
+    const most = Math.min(was.length, now.length);
+    let tail = now.length - caret;
+    if (tail > was.length || !was.endsWith(now.slice(caret))) {
+      tail = 0;
+      while (tail < most && was[was.length - 1 - tail] === now[now.length - 1 - tail]) tail++;
+    }
+    let from = 0;
+    while (from < most - tail && was[from] === now[from]) from++;
+    if (from > 0 && (now.charCodeAt(from - 1) & 0xfc00) === 0xd800) from--;
+    if (tail > 0 && (now.charCodeAt(now.length - tail) & 0xfc00) === 0xdc00) tail--;
+    return [from, was.length - tail, now.slice(from, now.length - tail)];
+  }
 
   function pos(e) {
     const r = canvas.getBoundingClientRect();
@@ -2400,12 +2423,28 @@
       cb.key(own ?? 1000 + c.charCodeAt(0), mods);
       e.preventDefault();
     });
-    // (what is put in goes to the field as typed; the input method's field is given the field's words again as the
-    // app says them, setIme)
+    // What an input method did to its field goes to the app's as what it changed there, not as what it says it put in:
+    // voice input writes a guess and replaces it as it hears more (iOS's dictation selects its last guess and inserts
+    // the next over it; another's keyboard may delete it key by key and type the next), corrections and suggestions
+    // replace a word, each an event whose data is only the new words. (The textarea is given the field's words again
+    // as the app says them, setIme.)
     ta.addEventListener('input', (e) => {
-      if (e.isComposing) return;
-      if (e.inputType === 'insertText' || e.inputType === 'insertReplacementText') {
-        if (e.data) cb.text(0, e.data, 0, 0);
+      if (e.isComposing || composing) return;
+      const was = taHad, now = ta.value;
+      taHad = now;
+      const [from, to, put] = taEdit(was, now, ta.selectionStart);
+      // (a line's end typed by a keyboard that does not send the key: as the key, ios_app.m's insertText)
+      if (from === to && put === '\n') { cb.key(7, 0); return; }
+      if (to > from) cb.text(3, '', from, to);
+      if (to > from || put) cb.text(0, put, 0, 0);
+    });
+    // The keyboard put away by the person (Safari's Done over it), not by the app: the field lets go of the focus, as
+    // the phones' apps' do (or setIme would take the focus back and the keyboard come up again). (The page sent behind
+    // blurs the textarea too, and leaves it the focused element.)
+    ta.addEventListener('blur', () => {
+      if (imeActive && keyboardOver() > 0 && document.activeElement !== ta) {
+        cb.text(7, '', 0, 0);
+        H.requestFrame();
       }
     });
     // ⌘V (the browser's paste): files on the clipboard (copied in Finder, a screenshot's picture) are the app's ⌘V
@@ -2430,11 +2469,15 @@
     ta.addEventListener('compositionupdate', (e) => cb.text(1, e.data || '', (e.data || '').length, 0));
     ta.addEventListener('compositionend', (e) => {
       composing = false;
+      taHad = ta.value;
       cb.text(1, '', 0, 0);
       if (e.data) cb.text(0, e.data, 0, 0);
     });
     const sizeChanged = () => { sizeDirty = true; H.requestFrame(); };
     window.addEventListener('resize', sizeChanged);
+    // (the soft keyboard coming or going changes no size of the page's: keyboardOver)
+    window.visualViewport?.addEventListener('resize', H.requestFrame);
+    window.visualViewport?.addEventListener('scroll', H.requestFrame);
     if (typeof ResizeObserver !== 'undefined') {
       sizeObserver = new ResizeObserver(sizeChanged);
       sizeObserver.observe(canvas);
@@ -2625,16 +2668,22 @@
   };
 
   // ---- the device beyond the window (src/hostapi/device.mbt) ----
-  // A key catcher's focus (keyCatch: the textarea's keys, above); the soft keyboard's height as the visual viewport
-  // leaves it (a phone's browser); the clipboard read and written where the page may (navigator.clipboard: a picture
-  // of another kind made a PNG through a canvas; refused or absent, read as empty); the screen kept on (a wake lock);
-  // no haptics.
+  // A key catcher's focus (keyCatch: the textarea's keys, above); the soft keyboard's height (keyboardOver); the
+  // clipboard read and written where the page may (navigator.clipboard: a picture of another kind made a PNG through a
+  // canvas; refused or absent, read as empty); the screen kept on (a wake lock); no haptics.
   let catching = false;
   H.keyCatch = (on) => { catching = !!on; };
-  H.imeInset = () => {
+  // How far the soft keyboard reaches over the canvas's foot, in points. A phone's browser puts it over the page and
+  // leaves the page's size alone (Safari always, Chrome since 108): only the visual viewport ends above it. None while
+  // the page is pinched in (less of it shown, with no keyboard), nor for less than a point (a browser zoomed to a
+  // fraction rounds the two apart).
+  function keyboardOver() {
     const v = window.visualViewport;
-    return v ? Math.max(0, window.innerHeight - v.height - v.offsetTop) : 0;
-  };
+    if (!v || Math.abs(v.scale - 1) > 0.001) return 0;
+    const over = cssH - v.height - v.offsetTop;
+    return over >= 1 ? over : 0;
+  }
+  H.imeInset = keyboardOver;
   const PNG_MAX = 8 << 20, SOURCE_MAX = 32 << 20, PIXELS_MAX = 16 * 1024 * 1024;
   const clips = new Map();
   let clipNext = 1;
