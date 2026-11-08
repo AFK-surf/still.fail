@@ -450,7 +450,7 @@ fn wide_link_row_node(
           .min_height(By(fn() {
             if under() {
               l.words_redone() |> ignore
-              Some(@ui.current().sp(@ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
+              Some(node_sp(l, @ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)))
             } else {
               None
             }

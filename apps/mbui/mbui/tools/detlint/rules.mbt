@@ -8,7 +8,7 @@ let rule_names : Array[String] = [
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "after-build-input", "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
-  "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number",
+  "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number", "ui-current",
 ]
 
 ///|
@@ -38,6 +38,7 @@ let rule_words : Map[String, String] = {
   "page-screen": "a page reads the native input (@sf.native_input(): touch, or keyboard and mouse, as the app was started): what differs by it is the theme's, the library's parts', the presenters' and the shell's; a page that needs it asks the library for a part that holds it for every page",
   "tier-outside-shell": "a page reads the tier (@sf.layout) or the shell's own state (is_wide, the tape's, the stack's): what is laid out by the tier is the shell's (its files, detlint.json `shell.files`); a page is drawn into the box it is given, laid out by its own width, and what it needs of the frame it is given (PageFrame)",
   "frame-number": "what is built knows which frame or build it is (Ctx::frame_number, Ctx::build_number): what it is for is said by its cause, recorded where the cause is taken, or by the moment (Ctx::moment); a frame or a build counted is no cause, and the frames between two moments do not matter",
+  "ui-current": "what is built reaches the frame's context from anywhere (@ui.current()): what is built gets its Ctx passed (an old view's build, a test's Tester), a node of the window's tree what its View gives (View::words_scale, pixel_scale, glass_solid, keyboard_inset, image_ready, cause_at, window; Field::focus, View::focus_let_go), an event's handler its event; never a global one",
   "tester-branch": "what runs in the app asks whether a Tester runs it (its fake host, `fake.val`; a switch only a Tester sets, detlint.json `tester.names`): what differs under a Tester is its fake host's answer (@hostapi.Host, mbui's ui/fake_host.mbt) or what the Tester does itself after a frame (its own files, `tester.files`), never a path of the app's of its own",
   "fixture-import": "the app says the made-up core (detlint.json `fixture.package`: its fake topics, calls and data) outside the file that opens a mode over the app (`fixture.openers`) and outside its tests: the made-up core is the tests' and the tools' (sffix, sffilm, sflayout, sfreplay), never what a page reads",
   "page-look": "a page draws one arrangement's piece itself (narrow_*, desk_*, its own branch on Narrow or Wide): its parts are the library's (a page's parts, src/sf page.mbt), which the page's frame lays out by its width, the same page on every screen",

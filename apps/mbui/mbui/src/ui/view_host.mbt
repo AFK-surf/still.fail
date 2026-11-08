@@ -286,6 +286,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let made : Ref[@view.Tree?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
+      // (where its nodes are drawn told it first: what they read of it as they are made, as later)
+      view_drawn_by(root.tree)
       make(root)
       // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
       // else the window's for its width): as that changes, every word measured and drawn again so at the change's
@@ -362,6 +364,21 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
   // to it is: what it takes it by said as it was made, before what tells of its changes was set)
   g().back_told_host()
+}
+
+///|
+/// Where the nodes of the window's tree `t` are drawn, each value as a node asks it (Tree::drawn_by): the size of words
+/// its words are measured at (Ctx::sp's, view_words_measure), the window's pixels, glass solid or not, the soft keyboard,
+/// a picture's decodes; and the focus let go of as Ctx::blur lets it go, on either side.
+fn view_drawn_by(t : @view.Tree) -> Unit {
+  t.drawn_by(
+    words_scale=fn() { g().font_scale },
+    pixel_scale=fn() { g().scale },
+    glass_solid=fn() { glass_paint.solid },
+    keyboard_inset=fn() { ime_said.get() },
+    image_ready=fn(src, px) { g().image_ready(src, px) },
+    focus_let_go=fn() { g().blur() },
+  )
 }
 
 ///|
