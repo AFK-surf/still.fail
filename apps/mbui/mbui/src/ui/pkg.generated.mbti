@@ -636,6 +636,8 @@ pub fn tree_corner_roots_now() -> @paint.CornerRoots
 
 pub fn tree_corners_linked(@view.View, () -> FixedArray[@paint.CornerOf]?) -> Unit
 
+pub fn tree_image_pixels(@view.View, String, Int32) -> () -> ImagePixels?
+
 pub fn tree_scroll_bar() -> @view.ScrollBar
 
 pub fn tree_theme() -> Theme
