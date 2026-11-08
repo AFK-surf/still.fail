@@ -107,7 +107,7 @@ function turnSummary(t: store.TurnSummary): Json {
 }
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
-export function slackConnectOf(t: ThreadSummary): string | null {
+export function slackConnectOf(t: Pick<ThreadSummary, "sessions">): string | null {
   return t.sessions.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null;
 }
 
@@ -179,7 +179,7 @@ function isMine(api: Api, viewer: Viewer): (person: Json | null) => boolean {
 
 /// Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel, and where its thread lives
 /// (a Feishu or Comma connect's own). No connection is up to name the workspace, nor knows the channel.
-function origin(t: ThreadSummary): Json {
+function origin(t: Pick<ThreadSummary, "thread" | "sessions">): Json {
   const connect = slackConnectOf(t);
   const s = currentStore!;
   return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs, surface: t.thread.surface };
@@ -536,6 +536,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
+  type ListedThread = { thread: ThreadRow; sessions: ThreadSummary["sessions"]; lastAt: number; summary: ThreadSummary | null };
   // For some items alone, the sessions they are made of alone: each change read every session the station ever had.
   const sessions = (
     scope === null
@@ -547,8 +548,8 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
   const all = new Map(sessions.map((x) => [x.key, x]));
-  const listed = (t: ThreadSummary) => (t.thread.hiddenAt !== null) === archived;
-  const inChat = (t: ThreadSummary): string[] => {
+  const listed = (t: ListedThread) => (t.thread.hiddenAt !== null) === archived;
+  const inChat = (t: ListedThread): string[] => {
     const alone = archived && t.thread.home === null;
     return t.sessions.filter((m) => (alone ? all.has(m.session) : shown.has(m.session))).map((m) => m.session);
   };
@@ -567,15 +568,25 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   };
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
-  const threads = store.listThreads(s, "", null, of, "none").filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const selected: ListedThread[] = titlesOnly
+    ? store.threadsForChatNames(s, of).map((t) => ({ ...t, summary: null }))
+    : store.listThreads(s, "", null, of, "none").map((t) => ({ thread: t.thread, sessions: t.sessions, lastAt: t.lastMessage?.createdAt ?? 0, summary: t }));
+  const threads = selected.filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const titleTexts = new Map<number, string | null>();
+  const nameText = (t: ListedThread): string | null => {
+    if (t.summary !== null) return t.summary.firstText;
+    if (!titleNeedsFirstText(t.thread)) return null;
+    if (!titleTexts.has(t.thread.id)) titleTexts.set(t.thread.id, store.firstText(s, t.thread.id));
+    return titleTexts.get(t.thread.id) ?? null;
+  };
   const stats: ReturnType<typeof store.sessionActivity> = titlesOnly ? new Map() : store.sessionActivity(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and who wrote
   // in its Slack threads (a row is mine for them).
-  const origins = new Map<string, ThreadSummary>();
+  const origins = new Map<string, ListedThread>();
   const chatted = new Set<string>();
   const spoke = new Map<string, Json[]>();
   for (const t of threads) {
-    const writers = t.thread.surface !== STILLFAIL_SURFACE ? people(t.people) : [];
+    const writers = t.thread.surface !== STILLFAIL_SURFACE && t.summary !== null ? people(t.summary.people) : [];
     for (const m of t.sessions) {
       if (t.thread.surface === STILLFAIL_SURFACE) {
         if (listed(t)) chatted.add(m.session);
@@ -619,15 +630,16 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const agents = inChat(t).map(agent);
     const origin_ = from === null ? null : origin(from);
     const creator_ = creator(t.thread.createdBy);
-    const people_ = people(t.people);
+    const people_ = t.summary === null ? [] : people(t.summary.people);
     const names = titlesOnly ? null : authorNames(api, t.thread.id);
-    const lastView = names === null || t.lastMessage === null ? null : messageView(t.lastMessage, names, api.store);
+    const lastMessage = t.summary?.lastMessage ?? null;
+    const lastView = names === null || lastMessage === null ? null : messageView(lastMessage, names, api.store);
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
     // with no name of its own, the Slack thread its agent came from names it
     const named = from !== null && origin_ !== null && given(t.thread) === null
-      ? { thread: from.thread, firstText: from.firstText, channelName: origin_.channelName }
-      : { thread: t.thread, firstText: t.firstText, channelName: null };
+      ? { thread: from.thread, firstText: nameText(from), channelName: origin_.channelName }
+      : { thread: t.thread, firstText: nameText(t), channelName: null };
     let last: Json = null;
     if (lastView !== null) {
       const text0 = trim(typeof lastView.text === "string" ? lastView.text : "");
@@ -652,7 +664,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
       last,
       unread: false,
       mine: false,
-      lastActiveAt: Math.max(t.thread.createdAt, t.lastMessage?.createdAt ?? 0),
+      lastActiveAt: Math.max(t.thread.createdAt, t.lastAt),
       connect: from === null ? null : slackConnectOf(from),
       origin: origin_,
       // Who is in it, for the row's pictures: who started it, and everyone who wrote in it.
@@ -706,7 +718,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const from = origins.get(key) ?? null;
     const origin_ = from === null ? null : origin(from);
     const own = x.title === null ? "" : trim(x.title);
-    const named = own !== "" ? { thread: { surface: STILLFAIL_SURFACE, title: own } } : from !== null && origin_ !== null ? { thread: from.thread, firstText: from.firstText, channelName: origin_.channelName } : { thread: { surface: STILLFAIL_SURFACE } };
+    const named = own !== "" ? { thread: { surface: STILLFAIL_SURFACE, title: own } } : from !== null && origin_ !== null ? { thread: from.thread, firstText: nameText(from), channelName: origin_.channelName } : { thread: { surface: STILLFAIL_SURFACE } };
     const starter = creator(x.createdBy);
     const row: Json = {
       id: key, session: key, thread: null,
