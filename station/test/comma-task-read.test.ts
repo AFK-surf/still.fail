@@ -31,8 +31,8 @@ test("the Router reads the current title of the requested workspace chat", async
     });
     assert.equal((await routerReads(stats, reads, "7@other", 0, 20)).title, "Peer");
     assert.deepEqual(asked, [
-      ["here", "outflowMessages", { thread: 7, after: 3, limit: 20, ws: { workspace: "home", home: true } }],
-      ["other", "outflowMessages", { thread: 7, after: 0, limit: 20 }],
+      ["here", "outflowMessages", { thread: 7, after: 3, limit: 20, messagesOnly: true, ws: { workspace: "home", home: true } }],
+      ["other", "outflowMessages", { thread: 7, after: 0, limit: 20, messagesOnly: true }],
     ]);
     assert.equal((await routerReads(stats, reads, "8", 0, 20)).title, "", "a chat not in the index has no title");
     stats.apply([station([])], ["other"], from);

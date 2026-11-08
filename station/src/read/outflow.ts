@@ -125,10 +125,12 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
 /// through a Comma connect (`task.read`): each one's `n`, what it is (`message`, `edit`: a later wording of message
 /// `target`), who wrote it (`person`, `agent`, and their reference, a person's name and email as far as known), its words
 /// and when; `last`, the chat's latest `n`, and `more` when there are more after these. Null for a chat that is not the
-/// workspace's.
-export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME): Json {
+/// workspace's. A newer Router asks for messages alone; without that option old peers still receive entries and edits.
+export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME, messagesOnly = false): Json {
   if (store.getThread(s, thread) === null || !store.seesThread(s, of, thread)) return null;
-  const entries = store.entriesAfter(s, thread, BigInt(after), limit + 1);
+  const entries = messagesOnly
+    ? store.messageEntriesAfter(s, thread, BigInt(after), limit + 1)
+    : store.entriesAfter(s, thread, BigInt(after), limit + 1);
   const page = entries.slice(0, limit);
   const people = new Map<string, Json>();
   const named = (ref: string) => (people.has(ref) ? people.get(ref) : people.set(ref, person(s, ref)).get(ref));
@@ -140,5 +142,6 @@ export function outflowMessages(s: Store, thread: number, after: number, limit: 
     })),
     last: store.lastEntry(s, thread),
     more: entries.length > page.length,
+    ...(messagesOnly ? { messagesOnly: true } : {}),
   };
 }

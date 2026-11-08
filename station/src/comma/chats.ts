@@ -10,6 +10,11 @@ import { BUILD_DAYS, chatOf, type CommaStats } from "./stats.ts";
 type Json = any;
 type RouterWrite = { id: string; thread: number; n: number; pending: number };
 
+// An older station answers with raw entries. Bound retries through edits; if no message can be reached in that
+// budget, an explicit upgrade error is safer than answering that the chat has no more messages.
+const LEGACY_READ_PAGES = 8;
+const LEGACY_READ_ROWS = 100;
+
 // The JSON contains only this chat's already-validated hearing members, in their original order.
 export const ROUTER_TARGETS_INSERT = `INSERT INTO comma_router_once_targets (id, position, session)
   SELECT o.id, CAST(j.key AS INTEGER), j.value FROM comma_router_once o, json_each(?) j WHERE o.key = ?`;
@@ -34,15 +39,46 @@ export function routerSaysAfter(hub: Hub, stats: CommaStats, home: () => string 
 export async function routerReads(stats: CommaStats, reads: Pick<WorkspaceReads, "home" | "here" | "there">, ref: string, after: number, limit: number): Promise<Json> {
   const chat = chatOf(ref);
   if (chat === null) throw new Error("no such chat");
-  const args = { thread: chat.thread, after, limit };
   const home = reads.home();
-  const got = JSON.parse(chat.station === null
-    ? await reads.here("outflowMessages", home === null ? args : { ...args, ws: { workspace: home, home: true } })
-    : await reads.there(chat.station, "outflowMessages", args));
-  if (got === null) throw new Error("no such chat of the workspace");
+  const read = async (position: number, count: number): Promise<Json> => {
+    const args = { thread: chat.thread, after: position, limit: count, messagesOnly: true };
+    const got = JSON.parse(chat.station === null
+      ? await reads.here("outflowMessages", home === null ? args : { ...args, ws: { workspace: home, home: true } })
+      : await reads.there(chat.station, "outflowMessages", args));
+    if (got === null) throw new Error("no such chat of the workspace");
+    if (!Array.isArray(got.messages) || !Number.isSafeInteger(got.last) || got.last < 0 ||
+        (got.more !== undefined && typeof got.more !== "boolean") ||
+        (got.messagesOnly === true && (typeof got.more !== "boolean" || (got.more && got.messages.length === 0))))
+      throw new Error("that station's message answer is incomplete");
+    return got;
+  };
+  let cursor = after;
+  let got = await read(cursor, limit);
+  let pages = 1;
+  const messages: Json[] = [];
+  for (;;) {
+    if (pages > 1 && got.last < cursor) throw new Error("that station's message answer is incomplete");
+    let previous = cursor;
+    for (const entry of got.messages) {
+      if (!Number.isSafeInteger(entry?.n) || entry.n <= previous || entry.n > got.last ||
+          (got.messagesOnly === true && entry.kind !== "message"))
+        throw new Error("that station's message answer is incomplete");
+      previous = entry.n;
+      if (entry.kind === "message" && messages.length < limit) messages.push(entry);
+    }
+    if (got.messagesOnly === true || got.more !== true || messages.length >= limit) break;
+    if (previous <= cursor) throw new Error("that station's message cursor does not continue");
+    if (pages >= LEGACY_READ_PAGES) {
+      if (messages.length === 0) throw new Error("that station needs an update to read past these edits");
+      break;
+    }
+    cursor = previous;
+    got = await read(cursor, LEGACY_READ_ROWS);
+    pages++;
+  }
   return {
     title: stats.taskTitle(ref),
-    messages: (got.messages as Json[]).filter((m) => m.kind === "message").map((m) => ({
+    messages: messages.slice(0, limit).map((m) => ({
       seq: m.n, author_kind: m.authorKind, author: m.person?.name ?? m.person?.email ?? m.author, text: m.text, at: m.at,
     })),
     through: got.last,
