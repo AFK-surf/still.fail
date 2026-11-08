@@ -758,7 +758,7 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
 /// the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
 /// desktop's width 12 on 1.6), scrolled across rather than wrapped. Pressed, the key copies the code and says so
 /// copied_ms.
-fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
+pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
   let over = native_input() is Mouse
   let key_inset = @ui.capsule_in(row_corner, code_key_h)
   let copied = @signals.signal(false)

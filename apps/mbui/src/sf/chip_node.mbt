@@ -64,3 +64,44 @@ pub fn chip_node(
     |> ignore
   })
 }
+
+///|
+/// A pill (pill's) as a node in `parent`: `words` in its tone's ink on its tone's ground, a capsule pill_h high, pill_in
+/// in at either end, cut short where its row has not the room; one piece in bones. The node.
+pub fn pill_node(parent : @view.View, words : () -> String, tone? : PillTone = Neutral) -> @view.View {
+  let colours = fn() {
+    let p = theme().p
+    match tone {
+      Neutral => (p.neutral_bg, p.muted)
+      Green => (p.green_bg, p.green_ink)
+      Blue => (p.blue_bg, p.blue)
+      Amber => (p.amber_bg, p.warn_ink)
+      Red => (p.red_bg, p.red)
+      Accented => (p.accent_bg, p.accent_text)
+    }
+  }
+  parent.box(fn(b) {
+    b
+    .row(Is(true))
+    .height(Is(Some(pill_h)))
+    .padding(Is((pill_in, 0.0, pill_in, 0.0)))
+    .radius(Is(pill_h / 2.0))
+    .lines_up(Is(Some(Middle)))
+    .ground(By(fn() { colours().0 }))
+    .bone_whole(Is(true))
+    .shrink(Is(1.0))
+    .min_width(Is(Some(0.0)))
+    |> ignore
+    b.box(fn(w) {
+      w
+      .words(By(words))
+      .words_look(By(fn() { @ui.style_words(pill_words) }))
+      .ink(By(fn() { colours().1 }))
+      .cuts(Is(true))
+      .min_width(Is(Some(0.0)))
+      .allow_ellipsis(Is(true))
+      |> ignore
+    })
+    |> ignore
+  })
+}

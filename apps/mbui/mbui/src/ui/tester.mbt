@@ -1471,7 +1471,7 @@ pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Dou
 }
 
 ///|
-/// The lines of the first text node whose text contains `s`, as laid out.
+/// The lines of the first text node whose text contains `s`, as laid out (an old view's, else a node's of the window's tree).
 pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
   let c = g()
   for i in 0..<c.count {
@@ -1496,6 +1496,46 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
         None => ()
       }
     }
+  }
+  // (or the words of a node of the window's tree, as it draws them (shorter ones in their place where it says them:
+  // View::shorter, none of them where they are none): laid out as the tree lays them out at its width,
+  // view_words_measure's; on one line too long for it, cut with an ellipsis as it is drawn)
+  match view_tree() {
+    Some(tree) => {
+      let found : Ref[Array[String]?] = Ref(None)
+      tree.each_drawn(fn(d, _, _, alpha) {
+        guard found.val is None && d.bones == 0L && alpha > 0.0 && d.words.contains(s) else { return }
+        let shown = d.words_drawn.unwrap_or(d.words)
+        if shown == "" {
+          found.val = Some([])
+          return
+        }
+        let look = d.words_look
+        let tl = layout_words(
+          view_words_set(shown, look),
+          c.sp(look.size),
+          look.weight,
+          if look.wrap { d.w } else { 1.0e9 },
+          look.wrap,
+          balance=look.balance,
+          line=view_line(c, look),
+          spacing=view_spacing(c, look),
+          style=view_words_style(),
+        )
+        let lines = Array::makei(tl.line_start.length(), fn(l) {
+          let (a, b) = tl.line_range(l)
+          tl.text.unsafe_substring(start=a, end=b)
+        })
+        if !look.wrap && tl.w > d.w + 0.5 && lines.length() > 0 {
+          lines[lines.length() - 1] = lines[lines.length() - 1] + "…"
+        }
+        found.val = Some(lines)
+      })
+      if found.val is Some(lines) {
+        return lines
+      }
+    }
+    None => ()
   }
   []
 }

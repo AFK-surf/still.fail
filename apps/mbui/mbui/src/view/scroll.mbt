@@ -405,6 +405,20 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
 }
 
 ///|
+/// Put at its foot however far that comes to be (where it is read, as far as it can go then; there still as that is
+/// told otherwise, till it is moved: the hand, the wheel, a fling set out from there where it is then, Scroll::stopped),
+/// what it was on by itself stopped (Scroll::put's).
+fn Scroll::to_foot(self : Scroll) -> Unit {
+  self.put(@double.infinity)
+}
+
+///|
+/// Whether it is at its foot however far that comes to be (Scroll::to_foot), not moved off it since.
+fn Scroll::at_foot(self : Scroll) -> Bool {
+  @signals.untracked(fn() { self.x.get() }) == @double.infinity
+}
+
+///|
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   let was = self.stopped(t)
@@ -717,7 +731,8 @@ pub fn View::scrolls(
       @signals.untracked(fn() { s.where_at(t) }) >= most {
       s.stopped(t) |> ignore
     }
-    if @signals.untracked(fn() { s.x.get() }) > most {
+    // (no further than it can go, but at its foot however far that comes to be: Scroll::to_foot)
+    if @signals.untracked(fn() { s.x.get() }) > most && !s.at_foot() {
       s.x.set(most)
     }
   })

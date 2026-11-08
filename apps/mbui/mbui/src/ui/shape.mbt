@@ -524,7 +524,8 @@ pub fn Tester::shape_cover(self : Tester, x : Double, y : Double) -> Double {
 }
 
 ///|
-/// The boxes that drew shapes in the last frame (Ctx::shapes), by their names: (name, x, y, w, h) as laid out.
+/// The boxes that drew shapes in the last frame (Ctx::shapes), by their names: (name, x, y, w, h) as laid out; then the
+/// window's tree's nodes drawing shapes or a picture of them, by their words, where they are drawn.
 pub fn Tester::shape_boxes(self : Tester) -> Array[(String, Double, Double, Double, Double)] {
   ignore(self)
   let c = g()
@@ -534,6 +535,16 @@ pub fn Tester::shape_boxes(self : Tester) -> Array[(String, Double, Double, Doub
     if n.shapes.length() > 0 {
       out.push((n.text, n.x, n.y, n.fw, n.fh))
     }
+  }
+  // (and the nodes of the window's tree drawing shapes or a picture of shapes, where they are drawn)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.alpha > 0.0 && (d.shapes.length() > 0 || d.picture is Some(_)) {
+          out.push((d.words, d.x, d.y, d.w, d.h))
+        }
+      }
+    None => ()
   }
   out
 }
