@@ -12,7 +12,7 @@ trap 'rm -f "$asks"' EXIT
 if [ -n "$FRESH" ]; then $make --fresh || exit 1; fi
 for round in $(seq 1 ${KEPT_ROUNDS:-64}); do
   : > "$asks"
-  KEPT_ASKS="$asks" LINES_OUT=${LINES_OUT:-3} bash "$D/test.sh"
+  MBUI_WHOLE_SUITE=1 KEPT_ASKS="$asks" LINES_OUT=${LINES_OUT:-3} bash "$D/test.sh"
   n=$(grep -c . "$asks")
   echo "kept: round $round: $n answers asked and not kept"
   [ "$n" = 0 ] && exit 0

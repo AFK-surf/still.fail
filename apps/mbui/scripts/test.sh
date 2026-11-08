@@ -15,6 +15,14 @@
 # directory for them.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+# (the whole suite is CI's, a PR's: on Studio or a laptop it is half an hour of wasm-gc in a row where CI's native runs
+# it in five minutes; outside CI run the test files a change touches, `moon test --target wasm-gc --release FILE`
+# (the user, 2026-11-08). MBUI_WHOLE_SUITE=1 only when a person asked for the whole of it here.)
+if [ -z "${GITHUB_ACTIONS:-}" ] && [ "${MBUI_WHOLE_SUITE:-}" != 1 ]; then
+  echo "test.sh: the whole suite runs in the PR's CI, not here. Run the test files your change touches:" >&2
+  echo "  moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt" >&2
+  exit 2
+fi
 cd "$A"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 code=0
