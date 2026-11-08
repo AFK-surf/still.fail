@@ -5,6 +5,15 @@ import {
   "station/marks",
   "station/bindings",
   "station/upjobs",
+  "station/widgets",
+  "station/cards",
+  "station/sessions",
+  "station/outflow",
+  "station/turns",
+  "station/said",
+  "station/archivelast",
+  "station/letters",
+  "station/cc",
   "moonbitlang/core/json",
 }
 

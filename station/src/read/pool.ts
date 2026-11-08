@@ -279,8 +279,11 @@ export class Readers {
   /// Prepare only the requested chats' last messages in bounded slices for the archive and notices.
   prepareArchiveLast(threads: readonly number[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    this.archiveLast ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
-      "archive last message", (thread, cancel) => ({ thread, archiveLast: true, cancel }));
+    // (by the MoonBit builder, station/mb's src/archivelast, where its program is there; else by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.archiveLast ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "archive last message", (thread, cancel) => ({ thread, archiveLast: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "archive-last", "--db", path] });
     return this.covered(this.archiveLast.ready(threads, signal), signal);
   }
 
@@ -312,8 +315,11 @@ export class Readers {
   /// Prepare only the requested old chats' letter-message keys, sharing progress and handover with other readers.
   preparePageLetters(threads: readonly number[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
-    this.pageLetters ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, undefined, "thread",
-      "old page letters", (thread, cancel) => ({ thread, pageLetters: true, cancel }));
+    // (by the MoonBit builder, station/mb's src/letters, where its program is there; else by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.pageLetters ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "old page letters", (thread, cancel) => ({ thread, pageLetters: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "page-letters", "--db", path] });
     return this.covered(this.pageLetters.ready(threads, signal), signal);
   }
 

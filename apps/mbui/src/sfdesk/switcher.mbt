@@ -122,19 +122,17 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               caret_color=t.p.accent,
               enter_sends=true,
               field=@sfpages.finder_field(),
+              // Enter: the line chosen opened, as it is pressed
+              on_submit=fn(typed) {
+                @sfpages.finder_typed(typed)
+                @sfpages.finder_enter(close)
+              },
             )
             // (modal, its search the only field: it has the keys while it is open, the composer's given up as it opens)
             if !res.focused {
               c.focus_editor("switcher/field")
             }
-            match res.submitted {
-              // Enter: the line chosen opened
-              Some(typed) => {
-                @sfpages.finder_typed(typed)
-                @sfpages.finder_enter(close)
-              }
-              None => @sfpages.finder_typed(res.text)
-            }
+            @sfpages.finder_typed(res.text)
           })
           |> ignore
           if switching.get() {

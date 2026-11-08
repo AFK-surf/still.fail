@@ -267,7 +267,8 @@
     "old-list": {
       "src/demo/main.mbt": 1,
       "src/kit/disclosure.mbt": 1
-    }
+    },
+    "click-read": {}
   },
   "excused": {
     "frame-request": {},
@@ -326,7 +327,8 @@
     "frame-number": {},
     "ui-current": {},
     "build-clock": {},
-    "old-list": {}
+    "old-list": {},
+    "click-read": {}
   },
   "tester": {
     "names": [

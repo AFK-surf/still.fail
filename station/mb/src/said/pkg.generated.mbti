@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "station/said"
+
+import {
+  "station/sql",
+}
+
+// Values
+pub let batch : Int32
+
+pub fn legacy(@sql.Db) -> Bool raise
+
+pub async fn step(@sql.Db, Int64, Scan?, token~ : () -> String, may_write~ : async () -> Bool, limit? : Int32) -> (Bool, Scan?)
+
+// Errors
+
+// Types and methods
+pub struct Scan {
+  // private fields
+}
+pub fn Scan::token(Self) -> String
+
+// Type aliases
+
+// Traits

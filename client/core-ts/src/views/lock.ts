@@ -336,6 +336,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
     inner.runner.fork(bindPerson(inner, ws));
+    inner.runner.fork(keepToPerson(inner, ws));
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
     lockSeen(inner).touch(`lock ${ws}`, `draft ${ws}`, "prompts");
     inner.views?.vaultChanged(ws);
@@ -482,6 +483,85 @@ export function bindPerson(inner: Inner, ws: string): Effect.Effect<void> {
         yield* new Lock(inner, ws, sub, null).append("person", { sub, person: root });
       }),
       Effect.sync(() => tried.delete(at)),
+    );
+  }).pipe(Effect.ignore);
+}
+
+/// The base keys a person's own lock names: on it now, and ever (taken off since too).
+function personIds(chain: readonly Entry[], on: Iterable<{ id: string }>): { on: Set<string>; ever: Set<string> } {
+  const ever = new Set<string>();
+  for (const e of chain) {
+    const id = e.kind === "genesis" ? get(get(e.body, "device"), "id") : e.kind === "device" ? get(e.body, "id") : null;
+    if (typeof id === "string") ever.add(id);
+  }
+  return { on: new Set([...on].map((d) => d.id)), ever };
+}
+
+/// This device of the workspace's lock signs for its person there, and is on the person's own lock they bound there:
+/// the person, and the lock's head; none otherwise.
+function signsBound(inner: Inner, ws: string): { sub: string; base: string; h: Held } | null {
+  const sub = inner.workspaces.owner(ws);
+  const h = held(inner, ws);
+  const signer = signerOf(inner);
+  if (sub === null || !h?.head || signer === null || !inner.host.appKeys || !onBoundPerson(inner, ws)) return null;
+  const base = part(inner, ws).base ?? bases.get(inner) ?? null;
+  const me = base === null ? undefined : live(fold(h.entries).devices.get(base), now(inner));
+  return base !== null && me !== undefined && me.sub === sub && me.sign_key === signer ? { sub, base, h } : null;
+}
+
+/// A device just put on its person's own lock here (face to face, views/pair.ts `approve`): put in each workspace's
+/// lock where the person bound it and this device signs for them, with the key it signs with, so it signs there and its
+/// vault's box is taken as theirs.
+export function putOnBound(inner: Inner, sub: string, device: { id: string; label: string; signKey: string | null }): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    if (device.signKey === null) return;
+    for (const [ws, owner] of inner.workspaces.owned()) {
+      const at = owner === sub ? signsBound(inner, ws) : null;
+      if (at === null || live(fold(at.h.entries).devices.get(device.id), now(inner)) !== undefined) continue;
+      yield* Effect.ignore(new Lock(inner, ws, sub, null).append("device", { id: device.id, sub, kind: "app", label: device.label, sign_key: device.signKey }), { log: "Unhandled", message: "put on a bound lock" });
+      yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "bound lock read" });
+    }
+  });
+}
+
+/// The person's app devices in the workspace's lock kept to the ones on their own lock, where they bound it: one taken
+/// off their lock, or there from before the binding and never put on it, is taken out of the workspace's lock, so it
+/// neither signs there nor has its vault's box taken as theirs (a web page holds no key of their lock: kept). Their
+/// lock is read from the cloud first, so a device just put on it is not taken for gone. Done by a device on it that
+/// signs for them; tried as bindPerson is, no timer of its own.
+const keeping = new WeakMap<Inner, Set<string>>();
+export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const before = signsBound(inner, ws);
+    if (before === null) return;
+    let tried = keeping.get(inner);
+    if (tried === undefined) keeping.set(inner, (tried = new Set()));
+    // (once for each head of the two locks: reading the person's lock tells of it, which would ask again)
+    const key = `${ws}/${before.h.head!.hash}/${inner.adb.personal().entries(before.sub).length}`;
+    if (tried.has(key)) return;
+    tried.add(key);
+    yield* Effect.tapError(
+      Effect.gen(function* () {
+        const personal = inner.adb.personal();
+        yield* personal.refresh(before.sub);
+        const at = signsBound(inner, ws);
+        const chain = personal.chain(before.sub);
+        if (at === null || chain === null || personal.standing(at.sub) !== "member") return;
+        const { on, ever } = personIds(personal.entries(at.sub), chain.devices.values());
+        const entries = at.h.entries;
+        const lastAt = (f: (e: Entry) => boolean) => {
+          for (let i = entries.length - 1; i >= 0; i--) if (f(entries[i]!)) return i;
+          return -1;
+        };
+        const bound = lastAt((e) => e.kind === "person" && get(e.body, "sub") === at.sub);
+        const gone = [...fold(entries).devices.values()].filter((d) => {
+          if (d.sub !== at.sub || d.kind !== "app" || d.id === at.base || on.has(d.id)) return false;
+          return ever.has(d.id) || lastAt((e) => e.kind === "device" && get(e.body, "id") === d.id) < bound;
+        });
+        for (const d of gone) yield* new Lock(inner, ws, at.sub, null).append("device.remove", { id: d.id });
+        if (gone.length > 0) yield* read(inner, ws);
+      }),
+      () => Effect.sync(() => tried.delete(key)),
     );
   }).pipe(Effect.ignore);
 }

@@ -24,7 +24,7 @@ pub let accent : @ui.TextStyle
 
 pub fn accent_key() -> String
 
-pub fn accent_pick(@ui.Ctx, String, Array[String], String, String, String) -> String
+pub fn accent_pick(@ui.Ctx, String, Array[String], String, String, String, on_pick? : (String) -> Unit) -> String
 
 pub let accents : Array[AccentTone]
 
@@ -184,7 +184,7 @@ pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, 
 
 pub let bubble_raised : Raised
 
-pub fn button(@ui.Ctx, String, key? : String, tone? : Tone, icon? : String, busy? : Bool, disabled? : Bool, w? : @ui.Size, reach? : @ui.Style, hint? : String) -> Bool
+pub fn button(@ui.Ctx, String, key? : String, tone? : Tone, icon? : String, busy? : Bool, disabled? : Bool, w? : @ui.Size, reach? : @ui.Style, hint? : String, on_press? : () -> Unit) -> Bool
 
 pub let button_38 : @ui.Len
 
@@ -254,7 +254,7 @@ pub let check_room_w : @ui.Len
 
 pub fn check_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, lead? : (@ui.Ctx) -> Unit) -> Bool
 
-pub fn chip(@ui.Ctx, String, key? : String, icon? : String, ink? : Int64, disabled? : Bool, inner? : Bool, said? : String) -> Bool
+pub fn chip(@ui.Ctx, String, key? : String, icon? : String, ink? : Int64, disabled? : Bool, inner? : Bool, said? : String, on_press? : () -> Unit) -> Bool
 
 pub fn chip_node(@view.View, () -> String, () -> Unit, icon? : String, ink? : () -> Int64, said? : () -> String, tips? : TipLayer) -> @view.View
 
@@ -262,11 +262,11 @@ pub fn choice(String, String, note? : String, value? : String, icon? : String, m
 
 pub let choice_gap : Double
 
-pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : String, lead? : () -> Unit, tag? : () -> Unit, trail? : () -> Unit, ink? : Int64, disabled? : Bool, busy? : Bool) -> Bool
+pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : String, lead? : () -> Unit, tag? : () -> Unit, trail? : () -> Unit, ink? : Int64, disabled? : Bool, busy? : Bool, on_press? : () -> Unit) -> Bool
 
 pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? : String, icon? : (String) -> Unit, extra? : (String) -> (() -> Unit)?, disabled? : Array[String], note? : (String) -> Unit) -> String
 
-pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool) -> @kit.Menu
+pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool, on_pick? : (String) -> Unit) -> @kit.Menu
 
 pub let chooser_chevron : Double
 
@@ -332,7 +332,7 @@ pub fn composer_round_in() -> Double
 
 pub fn confirm(String, String, String, () -> Unit, danger? : Bool, warning? : String, from? : Anchor) -> Unit
 
-pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool, warning? : String, scrim? : Int64, veil? : Double) -> Confirmed
+pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool, warning? : String, scrim? : Int64, veil? : Double, on_confirm? : () -> Unit) -> Confirmed
 
 pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> String, Bool, () -> Unit, () -> Unit, warning? : String, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool, covered? : () -> Bool) -> Unit
 
@@ -508,7 +508,7 @@ pub fn drawable_pixels(String, Int32, tint? : Int64) -> (Int32, Int32, FixedArra
 
 pub fn drawable_vector(String) -> @pixels.Vector?
 
-pub fn dropdown(@ui.Ctx, String, Bool, Int32, Array[@kit.Entry], Map[String, String], Double, submenu? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double, at? : (Double, Double, Double, Double), row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit, danger? : Array[String], marks? : Map[String, (@ui.Ctx, Double) -> Unit], notes? : Map[String, String], check_end? : Bool) -> @kit.Menu
+pub fn dropdown(@ui.Ctx, String, Bool, Int32, Array[@kit.Entry], Map[String, String], Double, submenu? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double, at? : (Double, Double, Double, Double), row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit, danger? : Array[String], marks? : Map[String, (@ui.Ctx, Double) -> Unit], notes? : Map[String, String], check_end? : Bool, on_pick? : (String) -> Unit) -> @kit.Menu
 
 pub let dur_ms : Double
 
@@ -792,7 +792,7 @@ pub fn icon(@ui.Ctx, String, size? : Double, color? : Int64, by_ink? : Bool) -> 
 
 pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
-pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
+pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String, on_press? : () -> Unit) -> Bool
 
 pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String) -> @view.View
 
@@ -828,7 +828,7 @@ pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
 
 pub fn inner_or(Surface?, Double) -> Double
 
-pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field) -> @kit.Field
+pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> @kit.Field
 
 pub fn input_height() -> Double
 
@@ -928,7 +928,7 @@ pub let link_mark_w : @ui.Len
 
 pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 
-pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, chevron_room? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool) -> Bool
+pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, chevron_room? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool, tile? : Bool, on_press? : () -> Unit) -> Bool
 
 pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool) -> Unit
 
@@ -1120,7 +1120,7 @@ pub fn menu_held(@ui.Ctx, String) -> Bool
 
 pub fn menu_is_open(String) -> Bool
 
-pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool) -> Bool
+pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool, on_press? : () -> Unit) -> Bool
 
 pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled? : Bool, chosen? : Bool, heading? : Bool) -> MenuItem
 
@@ -1354,7 +1354,7 @@ pub fn page_card(@ui.Ctx, () -> Unit, footed? : Bool) -> Unit
 
 pub fn page_card_node(@view.View, (@view.View) -> Unit, footed? : Bool, layered? : Bool) -> Unit
 
-pub fn page_choice(@ui.Ctx, String, Array[String], Int32, item_w? : Double) -> Int32
+pub fn page_choice(@ui.Ctx, String, Array[String], Int32, item_w? : Double, on_pick? : (Int32) -> Unit) -> Int32
 
 pub fn page_choice_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, item_w? : Double) -> Unit
 
@@ -1420,7 +1420,7 @@ pub fn panel_back(to? : Int32) -> Bool
 
 pub fn panel_bleed() -> @ui.Style
 
-pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool) -> Bool
+pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool, on_press? : () -> Unit) -> Bool
 
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
@@ -1444,7 +1444,7 @@ pub fn panel_head(@ui.Ctx, String, note? : String, end? : (@ui.Ctx) -> Unit) -> 
 
 pub fn panel_held() -> Bool
 
-pub fn panel_icon_button(@ui.Ctx, String, String, String, disabled? : Bool, cornered? : Bool) -> Bool
+pub fn panel_icon_button(@ui.Ctx, String, String, String, disabled? : Bool, cornered? : Bool, on_press? : () -> Unit) -> Bool
 
 pub let panel_icon_corner : @ui.Style
 
@@ -1868,7 +1868,7 @@ pub fn seg_node(@view.View, () -> Array[String], () -> Int32, (Int32) -> Unit, i
 
 pub let seg_pill_min : @ui.Len
 
-pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64, icons? : Array[String], bar? : Bool, said? : String, tips? : Array[String], fill? : Bool) -> Int32
+pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64, icons? : Array[String], bar? : Bool, said? : String, tips? : Array[String], fill? : Bool, on_pick? : (Int32) -> Unit) -> Int32
 
 pub fn segmented_height() -> Double
 
@@ -2032,7 +2032,7 @@ pub fn slack_mark_node(@view.View, Double) -> @view.View
 
 pub let sleep_ms : Double
 
-pub fn slider(@ui.Ctx, String, Double, Double, Double, step? : Double, ink? : Int64, accent? : Int64, ground? : Int64) -> Double
+pub fn slider(@ui.Ctx, String, Double, Double, Double, step? : Double, ink? : Int64, accent? : Int64, ground? : Int64, on_change? : (Double) -> Unit, on_let_go? : (Double) -> Unit) -> Double
 
 pub let small_button : @ui.Len
 
@@ -2118,7 +2118,7 @@ pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?], icon? : String, si
 
 pub fn surface(Double, Double) -> Surface
 
-pub fn switch(@ui.Ctx, String, Bool, label? : String, disabled? : Bool, small? : Bool, busy? : Bool) -> Bool
+pub fn switch(@ui.Ctx, String, Bool, label? : String, disabled? : Bool, small? : Bool, busy? : Bool, on_change? : (Bool) -> Unit) -> Bool
 
 pub let switch_h : Double
 
@@ -2128,7 +2128,7 @@ pub fn switch_look(@ui.Ctx, String, Bool, small? : Bool, pressed? : Bool) -> Uni
 
 pub fn switch_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String) -> Unit
 
-pub fn switch_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, busy? : Bool, lead? : (@ui.Ctx) -> Unit) -> Bool
+pub fn switch_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, busy? : Bool, lead? : (@ui.Ctx) -> Unit, on_change? : (Bool) -> Unit) -> Bool
 
 pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String) -> Unit
 
@@ -2184,7 +2184,7 @@ pub let text_scale : @ui.TextScale
 
 pub fn text_toggle_node(@view.View, () -> String, () -> Unit) -> Unit
 
-pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool) -> String
+pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool, on_change? : (String) -> Unit) -> String
 
 pub fn textarea_node(@view.View, @ui.Field, rows? : Int32, most? : Int32, placeholder? : String, corner? : Double, placeholder_by? : () -> String, disabled? : () -> Bool) -> @view.View
 

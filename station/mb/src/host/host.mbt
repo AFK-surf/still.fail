@@ -175,3 +175,18 @@ pub fn args() -> Array[String] {
   }
   out
 }
+
+///|
+/// A clock that never goes back, in ms (host.c `sfh_now`).
+pub fn now() -> Int64 {
+  now_ffi()
+}
+
+///|
+extern "C" fn pid_ffi() -> Int = "sfh_pid"
+
+///|
+/// This process's id.
+pub fn pid() -> Int {
+  pid_ffi()
+}

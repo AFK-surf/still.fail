@@ -428,16 +428,13 @@ fn message_name(
 ) -> Unit {
   let goes = agent != "" || from != ""
   let id = if goes { c.id("msg-name/" + key) } else { 0 }
-  if goes {
-    if c.clicked(id) {
-      if agent != "" {
-        open_detail(src, here_ref(here), agent)
-      } else {
-        let to = from
-        c.tell("msg-name/" + key, fn() { open_link(to) })
-      }
+  c.on_press(id, fn() {
+    if agent != "" {
+      open_detail(src, here_ref(here), agent)
+    } else {
+      open_link(from)
     }
-  }
+  })
   c.box(style=msg_name_room, id~, fn() {
     // (the accent's words already: pointed at, underlined, mbui ui/hand_moves.mbt)
     c.rich([@ui.span(name, underline=goes && c.hovered(id))], style=msg_name) |> ignore
@@ -831,16 +828,15 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         let cut = retry_share < 1.0
         let action = c.box(style=if cut { notice_action_cut.then(@ui.style(max_w=Fixed(natural * retry_share))) } else { notice_action_room }, fn() {
           let inner = c.box(style=notice_action_in, keep=cut, fn() {
-            if @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline) {
-              c.tell("notice-cancel/" + m.ts, fn() {
-                act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
-                  "station": Json::string(station),
-                  "key": Json::string(session),
-                  "thread": Json::number(m.thread),
-                  "seq": Json::number(m.seq),
-                })
+            @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline, on_press=fn() {
+              act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
+                "station": Json::string(station),
+                "key": Json::string(session),
+                "thread": Json::number(m.thread),
+                "seq": Json::number(m.seq),
               })
-            }
+            })
+            |> ignore
           })
           @motion.measure(c, inner, retry_key)
         })
@@ -900,9 +896,7 @@ let notices_open : Map[String, Bool] = {}
 fn notice_action(c : @ui.Ctx, key : String, action : String, ink : @ui.Color, busy : Bool, run : () -> Unit) -> Unit {
   let id = c.id(key)
   if !busy {
-    if c.clicked(id) {
-      c.tell(key, run)
-    }
+    c.on_press(id, run)
   }
   c.box(style=notice_end, keep=true, fn() {
     c.box(style=notice_dot_room, fn() {
@@ -979,10 +973,8 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
   let stuck = b.state == "missing" || b.state == "failed"
   let busy = install_busy(src, station, b)
   let id = if b.action != "" { c.id("blocked/" + key) } else { 0 }
-  if id != 0 && !busy {
-    if c.clicked(id) {
-      c.tell("blocked/" + key, fn() { install_runtime(src, station, b) })
-    }
+  if !busy {
+    c.on_press(id, fn() { install_runtime(src, station, b) })
   }
   let hot = id != 0 && !busy && c.hovered(id)
   let words = if stuck { blocked_words_stuck } else { blocked_words }
@@ -1142,11 +1134,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
     None => ("", "")
   }
   let place = if url != "" { c.id("msg-place/" + key) } else { 0 }
-  if place != 0 {
-    if c.clicked(place) {
-      c.tell("msg-place/" + key, fn() { @sfbase.open_slack(app, url) |> ignore })
-    }
-  }
+  c.on_press(place, fn() { @sfbase.open_slack(app, url) |> ignore })
   c.box(style=msg_route, fn() {
     @sf.icon(c, if s.received { "received" } else { "send" }, size=route_icon, color=t.p.accent) |> ignore
     c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string(), style=route_words)

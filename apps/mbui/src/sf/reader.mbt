@@ -1324,22 +1324,14 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
       dmax(m, c.words_across(l, desk_layout_label).ceil())
     })
     let (lines_least, lines_most) = reader_lines
-    let lines = desk_slider_row(c, "reader/lines", slider_labels[0], style.line, lines_least, lines_most, desk_lines_step, p, r, label_w~, fn(v) {
+    // (kept as the pointer lets it go, or a key steps it)
+    desk_slider_row(c, "reader/lines", slider_labels[0], style.line, lines_least, lines_most, desk_lines_step, p, r, label_w~, fn(v) {
       "\{(v * 100.0).round().to_int()}%"
-    })
-    // (kept once the frame's builds are over: as the pointer let it go)
-    match lines {
-      Some(v) => c.after_build("reader/lines", fn() { set(Line(v)) })
-      None => ()
-    }
+    }, fn(v) { set(Line(v)) })
     let (margin_least, margin_most) = reader_margins
-    let margins = desk_slider_row(c, "reader/margin", slider_labels[1], style.margin.to_double(), margin_least.to_double(), margin_most.to_double(), desk_margin_step, p, r, label_w~, fn(v) {
+    desk_slider_row(c, "reader/margin", slider_labels[1], style.margin.to_double(), margin_least.to_double(), margin_most.to_double(), desk_margin_step, p, r, label_w~, fn(v) {
       "\{v.round().to_int()}"
-    })
-    match margins {
-      Some(v) => c.after_build("reader/margin", fn() { set(Margin(v.round().to_int())) })
-      None => ()
-    }
+    }, fn(v) { set(Margin(v.round().to_int())) })
     c.box(style=if narrow { desk_layout_pair } else { desk_layout_column }, fn() {
       c.box(style=if narrow { desk_layout_half.then(@ui.style(w=Fixed(half))) } else { desk_layout_block }, fn() {
         label(t("web-pages.drive.reader.face"))
@@ -1413,7 +1405,7 @@ fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : Reade
 
 ///|
 /// A setting along a hairline with a knob: its name, the line, its value as `shown` says; dragged
-/// or tapped, the value follows, and is kept as the pointer lets go: Some(it) on that frame.
+/// or tapped, the value follows, and is kept (`keep`) as the pointer lets go there, or a key steps it.
 fn desk_slider_row(
   c : @ui.Ctx,
   key : String,
@@ -1425,31 +1417,25 @@ fn desk_slider_row(
   p : ReaderPaper,
   r : Reading,
   shown : (Double) -> String,
+  keep : (Double) -> Unit,
   label_w? : Double = desk_slider_label_w,
-) -> Double? {
-  let (_, _, down) = c.pointer()
+) -> Unit {
   let draft = r.drafts.get(key)
   let now = draft.unwrap_or(value)
-  let mut kept : Double? = None
   c.box(style=desk_slider_box, fn() {
     c.box(style=@ui.style(w=Fixed(label_w)), fn() {
       c.text(label, style=desk_layout_label.then(@ui.text_style(color=Data(p.muted)))) |> ignore
     })
     |> ignore
     c.box(style=desk_grow, fn() {
-      let v = slider(c, key, now, min, max, step~, ink=p.ink, accent=p.accent, ground=p.ground)
-      if down && c.pressed(c.id(key)) {
-        r.drafts[key] = v
-      } else {
-        // let go (or stepped by the keys): kept, the draft let go with it once the frame's builds are over
-        match draft {
-          Some(d) => {
-            kept = Some(d)
-            c.after_build(key + "/let-go", fn() { r.drafts.remove(key) })
-          }
-          None => if v != value { kept = Some(v) }
+      // (held: where it is drawn, a draft; let go: kept, the draft let go with it)
+      slider(c, key, now, min, max, step~, ink=p.ink, accent=p.accent, ground=p.ground, on_change=fn(v) { r.drafts[key] = v }, on_let_go=fn(v) {
+        r.drafts.remove(key)
+        if v != value {
+          keep(v)
         }
-      }
+      })
+      |> ignore
     })
     |> ignore
     c.box(style=desk_slider_value_box, fn() {
@@ -1458,7 +1444,6 @@ fn desk_slider_row(
     |> ignore
   })
   |> ignore
-  kept
 }
 
 // ── a phone's ───────────────────────────────────────────────────────────
@@ -1686,18 +1671,17 @@ fn narrow_glass(p : ReaderPaper) -> @ui.Glass {
 /// as it lets go.
 fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : Bool) -> Unit {
   let key = "reader/where"
-  let (_, _, down) = c.pointer()
   let shown = if r.draft >= 0.0 { r.draft } else { reader_fraction(r, book) }
-  let v = slider(c, key, shown, 0.0, 1.0, ink=p.ink, accent=p.accent, ground=p.raised)
-  if live && down && c.pressed(c.id(key)) {
-    r.draft = v
-  } else if !down && (r.draft >= 0.0 || (live && v != shown)) {
-    // The slider also reports a tap or the last movement of a drag that arrived between frames.
-    let to = v
+  // (held: where the knob is, a draft; let go there: gone to, as it is let go)
+  slider(c, key, shown, 0.0, 1.0, ink=p.ink, accent=p.accent, ground=p.raised, on_change=fn(v) { if live { r.draft = v } }, on_let_go=fn(to) {
+    let held = r.draft >= 0.0
     r.draft = -1.0
-    let last = book.chunks.length() - 1
-    reader_jump(r, (to * (if last < 0 { 0 } else { last }).to_double()).round().to_int(), 0)
-  }
+    if live || held {
+      let last = book.chunks.length() - 1
+      reader_jump(r, (to * (if last < 0 { 0 } else { last }).to_double()).round().to_int(), 0)
+    }
+  })
+  |> ignore
 }
 
 ///|

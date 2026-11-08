@@ -9,7 +9,8 @@ fn shade(c : Int64, f : Double) -> Int64 {
 }
 
 ///|
-/// A button, in the theme's accent unless `bg`; returns true on the frame after it was clicked.
+/// A button, in the theme's accent unless `bg`; `on_press`: what pressing it does, as it is let go (Ctx::on_press).
+/// Returns true on the frame after it was clicked.
 pub fn Ctx::button(
   self : Ctx,
   label : String,
@@ -17,10 +18,15 @@ pub fn Ctx::button(
   bg? : Int64,
   color? : Int64,
   w? : Size = Auto,
+  on_press? : () -> Unit,
 ) -> Bool {
   let bg = bg.unwrap_or(self.theme.accent)
   let color = color.unwrap_or(self.theme.on_accent)
   let id = self.id(if key == "" { label } else { key })
+  match on_press {
+    Some(f) => self.on_press(id, f)
+    None => ()
+  }
   let pressed = self.pressed(id)
   let fill = if pressed {
     shade(bg, 0.82)
@@ -48,20 +54,25 @@ pub fn Ctx::button(
 }
 
 ///|
-/// Tabs with an indicator that slides between them on a spring; returns the
-/// selected index.
+/// Tabs with an indicator that slides between them on a spring; `on_pick`: what choosing one does, given its index,
+/// as it is pressed (Ctx::on_press). Returns the selected index.
 pub fn Ctx::segmented(
   self : Ctx,
   key : String,
   labels : Array[String],
   selected : Int,
   item_w? : Double = 76.0,
+  on_pick? : (Int) -> Unit,
 ) -> Int {
   let mut sel = selected
   let base = self.id(key)
-  for i, l in labels {
+  for i, _ in labels {
     if self.clicked(mix(base, i + 1)) {
       sel = i
+    }
+    match on_pick {
+      Some(f) => self.on_press(mix(base, i + 1), fn() { f(i) })
+      None => ()
     }
   }
   let x = self.spring(key, sel.to_double() * item_w)

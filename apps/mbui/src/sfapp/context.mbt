@@ -68,29 +68,30 @@ fn context_tile_name(c : @ui.Ctx, name : String, open : ContextTile?) -> Unit {
 fn open_context(src : Source, r : ChatRef, key : String) -> Unit {
   @sf.panel(tr("web-pages.chat.context"), from=Unanchored, fn(c, close) {
     let s = field(agent_json(src.topic("chat", chat_params(r)).get().value, key), "session")
-    if flag(s, "canCompact") &&
-      @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub")) {
-      close()
-      let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
-      // told once the frame's builds are over, not while this one builds
-      c.tell("context/compact", fn() {
+    if flag(s, "canCompact") {
+      @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub"), on_press=fn() {
+        close()
+        let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
         act(src, tr("web-pages.chat.compact"), context_key("session.compact", r.station, key), "session.compact", params, done=tr("web-mobile.agent.compacting"))
       })
+      |> ignore
     }
-    if flag(s, "canClear") &&
-      @sf.choice_row(c, "context/clear", false, tr("web-pages.chat.clear"), note=tr("web-mobile.agent.clearSub"), ink=@sf.theme().p.red) {
-      close()
-      // asked first: the row shows it under way, a failure said by a toast
-      @sf.confirm(tr("web-pages.chat.clearConfirm"), tr("web-pages.chat.clearBody"), tr("web-pages.chat.clear"), danger=true, fn() {
-        @ui.haptic(Confirm)
-        act(
-          src,
-          tr("web-pages.chat.clear"),
-          context_key("session.clear", r.station, key),
-          "session.clear",
-          { "station": Json::string(r.station), "key": Json::string(key) },
-        )
+    if flag(s, "canClear") {
+      @sf.choice_row(c, "context/clear", false, tr("web-pages.chat.clear"), note=tr("web-mobile.agent.clearSub"), ink=@sf.theme().p.red, on_press=fn() {
+        close()
+        // asked first: the row shows it under way, a failure said by a toast
+        @sf.confirm(tr("web-pages.chat.clearConfirm"), tr("web-pages.chat.clearBody"), tr("web-pages.chat.clear"), danger=true, fn() {
+          @ui.haptic(Confirm)
+          act(
+            src,
+            tr("web-pages.chat.clear"),
+            context_key("session.clear", r.station, key),
+            "session.clear",
+            { "station": Json::string(r.station), "key": Json::string(key) },
+          )
+        })
       })
+      |> ignore
     }
   })
 }

@@ -10,6 +10,7 @@ let rule_names : Array[String] = [
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
   "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number", "ui-current",
   "build-clock", "old-list",
+  "click-read",
 ]
 
 ///|
@@ -39,6 +40,7 @@ let rule_words : Map[String, String] = {
   "page-screen": "a page reads the native input (@sf.native_input(): touch, or keyboard and mouse, as the app was started): what differs by it is the theme's, the library's parts', the presenters' and the shell's; a page that needs it asks the library for a part that holds it for every page",
   "tier-outside-shell": "a page reads the tier (@sf.layout) or the shell's own state (is_wide, the tape's, the stack's): what is laid out by the tier is the shell's (its files, detlint.json `shell.files`); a page is drawn into the box it is given, laid out by its own width, and what it needs of the frame it is given (PageFrame)",
   "frame-number": "what is built knows which frame or build it is (Ctx::frame_number, Ctx::build_number): what it is for is said by its cause, recorded where the cause is taken, or by the moment (Ctx::moment); a frame or a build counted is no cause, and the frames between two moments do not matter",
+  "click-read": "what is built reads whether a press came (Ctx::clicked, clicked_on, double_clicked: true the frame after it) to do what the press does: that is done in the build, or told after the frame's builds, not at the press; say it as the press's handler (Ctx::on_press; a part's on_press, on_pick, on_change, on_submit: done as the press is let go, at its moment, outside any build). Counted so what is left only falls; the Bool goes from mbui's API once none is",
   "ui-current": "what is built reaches the frame's context from anywhere (@ui.current()): what is built gets its Ctx passed (an old view's build, a test's Tester), a node of the window's tree what its View gives (View::words_scale, pixel_scale, glass_solid, keyboard_inset, image_ready, cause_at, window; Field::focus, View::focus_let_go), an event's handler its event; never a global one",
   "build-clock": "the frames' clock read where it is followed (Ctx::now, now_before, now_of, cycle, shows_motion; ui's clock_read, clock_read_here, frame_clock): read as a frame is built, the frame's one watch is told by the clock and the whole frame is built again each frame while it is read (a spinner on a page: every frame of its turn). What moves by the clock is read where it is drawn, given its moment there (Ctx::cycle_look's phase; a look's, a move's closure, Ctx::look_by, moved_by); a stamp or a moment woken at is the moment (Ctx::moment, wake_in, every); what changes when a motion ends is said by that end, a moment declared. Counted where they are called, built or painted alike (a lexer cannot tell which: mbui's old parts read it as they paint too), and only fall",
   "old-list": "a long list laid out by the old immediate-mode view (Ctx::list, the library's rows_list, desk_lanes, panel_list over it): a list is the window's tree's (a page made once, page_node; View::each in what scrolls, View::scrolls_window); counted so the ones left only go, and Ctx::list goes from mbui with its fast paths once none is",
@@ -53,7 +55,7 @@ let rule_words : Map[String, String] = {
   "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
   "style-text": "a named style (a top-level let, a .then(…) of one) said as a call whose properties are all tokens and numbers: moonc makes each @ui.style(…) call ~5-10 KB of C run as the app starts; write it as its text, @ui.css(\"…\") (printed after `write:`). @ui.style(…) is for a style naming a variable or worked out, and inside functions (mbui's ui/style.mbt)",
   "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again while what it read changes, and a build let go of tells all the same; say what every build works out alike in Ctx::after_build (once the frame's builds are over, as the last says it), what an input took in Ctx::tell (once, whichever build took it), or in the event's own handler",
-  "after-build-input": "what an input took (a click, a row or a switch used, a choice made) told by Ctx::after_build: that is the frame's last build's alone, and a build after the one that took the input sees it not, so a frame built again (a layout read back, what it read changed) loses it; tell it with Ctx::tell (once the builds are over, whichever build took it), or do it at once",
+  "after-build-input": "what an input took (a click, a row or a switch used, a choice made) told by Ctx::after_build: that is the frame's last build's alone, and a build after the one that took the input sees it not, so a frame built again (a layout read back, what it read changed) loses it; do it in the input's handler (Ctx::on_press; a part's on_press, on_pick, on_change, on_submit: at the input's moment, outside any build)",
   "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says its end): counted so the ones left only go",
   "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's sf/motion.mbt)",
@@ -205,6 +207,10 @@ let later_calls : Array[String] = [
   "fork", "effect", "spawn", "after", "later", "video", "site", "subscribe", "each_later",
   "watch", "take_back",
 ]
+
+///|
+/// the Ctx's own handlers: what is given to one runs as its input comes, not as the frame builds
+let handler_methods : Array[String] = ["on_press", "follow_press", "on_key"]
 
 ///|
 let later_labels : Array[String] = [
