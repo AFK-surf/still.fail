@@ -1,16 +1,8 @@
-// What an app asks of the host about where it runs (its clock, the system, dark or light, the window's top row, the
+// What an app asks of the host about where it runs (whether its clock is its own, the system, dark or light, the window's top row, the
 // environment, its version), each through the fake host under a Tester: there nothing the app reads comes from the
 // machine the test runs on. A Tester sets them (Tester::new's `platform`, `dark`, `window_inset`, `env`,
 // `app_version`; Tester::set_dark, set_window_inset, set_env); by default macOS, light, no inset, an empty
 // environment, version 0.
-
-///|
-/// The host's clock in ms (a Tester's: its frames'). Inside a view, Ctx::now is this frame's; read as a view is built,
-/// followed as Ctx::now is (frame_watch.mbt).
-pub fn now() -> Double {
-  clock_read_here()
-  h_now()
-}
 
 ///|
 /// Whether the run is on a clock of its own, not the machine's: its frames', still while the app awaits the host (a

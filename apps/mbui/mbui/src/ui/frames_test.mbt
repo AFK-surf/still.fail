@@ -13,11 +13,11 @@ fn counting() -> (@ui.Ctx) -> Unit {
   fn(c) {
     if c.button("加一") {
       taps.val = taps.val + 1
-      at.val = c.now()
-      c.wake_in(counting_later_ms)
+      at.val = c.moment()
     }
     c.text("按了 \{taps.val} 次") |> ignore
-    if at.val >= 0.0 && c.now() - at.val >= counting_later_ms {
+    // (counted from the tap's moment: built again at the moment it comes, Ctx::every, no clock followed)
+    if at.val >= 0.0 && c.every(counting_later_ms, from=at.val) >= 1 {
       c.text("过了一会儿") |> ignore
     }
   }

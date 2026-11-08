@@ -309,6 +309,7 @@ fn closing_under_coming(comes_ms~ : Double) -> Unit raise {
   let n = [20]
   let since = [-1.0]
   let way = [@ui.row_size_ms]
+  let closing = @ui.Mover::new()
   let rows : @ui.ListRows[Int] = @ui.ListRows::new()
   let t = @ui.Tester::new(
     fn(c) {
@@ -339,7 +340,9 @@ fn closing_under_coming(comes_ms~ : Double) -> Unit raise {
                 None => abort("no rows' way as row 18 closes")
               }
             }
-            let p = (c.now_before(since[0] + way[0]) - since[0]) / way[0]
+            // (where it is at the frame's moment on its way, said to move till its end: built each frame of it)
+            let p = (c.moment() - since[0]) / way[0]
+            c.shows_motion(closing, p < 1.0)
             120.0 - 70.0 * @ui.Ease::Move.at(if p > 1.0 { 1.0 } else { p })
           } else {
             120.0

@@ -29,7 +29,7 @@ test "animate: the value the view reads at frame n is the transition's generator
       ignore(x.val.animate(100.0, spec))
     })
     seen.push(x.val.get())
-    at.push(c.now())
+    at.push(c.moment())
   })
   // forked in the first frame, run in a frame after; from the frame it starts in, every frame reads where the spring is
   // by then (the runtime's clock: the frame's moment in whole ms)
@@ -185,7 +185,7 @@ fn interrupted(seed : Int, k : Int) -> (Array[(Double, Double)], Int64, Int64) {
         back.val = @effect.now()
         ignore(x.animate(0.0, @motion.spring_to(stiffness=200.0, damping=15.0)))
       })
-      seen.push((c.now(), x.get()))
+      seen.push((c.moment(), x.get()))
     },
     seed~,
   )

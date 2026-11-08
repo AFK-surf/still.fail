@@ -965,7 +965,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
       kept.val = Some(v)
       if ask {
         // started here, at this frame's time: its end said at once
-        if v.ends_at() != c.now() + fade_ms {
+        if v.ends_at() != c.moment() + fade_ms {
           abort("an Anim told in a frame did not say its end there")
         }
       }
@@ -1092,10 +1092,10 @@ test "run_for: what its last frame says starts there is drawn at that moment, it
     let a = @motion.anim(c, "toast-fade", 1.0)
     fade.val = Some(a)
     if begun.val < 0.0 {
-      begun.val = c.now()
+      begun.val = c.moment()
     }
-    // (a toast's deadline: it goes once shown that long, from the first frame)
-    if c.now() >= begun.val + shown && a.target() != 0.0 {
+    // (a toast's deadline: it goes once shown that long, from the first frame: a frame at that moment, Ctx::every)
+    if c.every(shown, from=begun.val) >= 1 && a.target() != 0.0 {
       a.animate(0.0, @motion.tween(200.0, ease=Out))
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
@@ -1132,7 +1132,7 @@ test "a chain of tweens each from the one before's declared end, whichever frame
       }
     }
     let j = k.val
-    seen.push((c.now(), j, segs[j].get()))
+    seen.push((c.moment(), j, segs[j].get()))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   t.draw()
