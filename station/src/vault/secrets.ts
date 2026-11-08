@@ -911,7 +911,9 @@ export class Secrets {
     // another connection can change a vault, its markers and its lookup between any two statements.
     this.#d.db.exec("SAVEPOINT vault_pending_read");
     try {
-      const ready = lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
+      // JSON-extracted SQL text and a bound JavaScript string do not compare alike for isolated surrogate code units.
+      const ready = viewer.email.isWellFormed() && (lock === null || viewer.sub.isWellFormed())
+        && lost?.ready === true && pendingIndexComplete(this.#d.db, ws)
         && (lock === null || (lock.ws === ws && hasVaultMembers(this.#d.db) && vaultMembersComplete(this.#d.db, ws) && !hasInvalidVaultMembers(this.#d.db, ws)));
       if (!ready) {
         const sql = pendingIndexComplete(this.#d.db, ws) ? PENDING_BODIES : "SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'";
