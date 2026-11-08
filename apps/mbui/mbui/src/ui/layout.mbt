@@ -1134,6 +1134,7 @@ fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
 /// tapped and found there. Read as it is laid out, not followed, and again as the frame is painted, followed there:
 /// what `f` reads (where a motion is: the clock) places it again as the next frame is painted, nothing built nor laid
 /// out (Ctx::moved_place, frame_watch.mbt). `f` gives the same for the same state and time, however often asked.
+/// An old view's, going with Ctx: a node's is View::moved_by, what this becomes once old views go.
 pub fn Ctx::moved_by(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
   self.nodes[i].moved_by = Some(f)
   // (a motion, whatever said it before: Ctx::moved_carries)
