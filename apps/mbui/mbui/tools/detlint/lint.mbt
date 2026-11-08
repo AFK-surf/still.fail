@@ -214,6 +214,17 @@ fn lint_mbt(
       }
     }
   }
+  // the frames' clock read followed by its own signal (`frame_clock.get()`), outside the tests (build-clock)
+  for k, tk in toks {
+    if tk.kind == "ident" &&
+      tk.text == "frame_clock" &&
+      k + 2 < toks.length() &&
+      toks[k + 1].text == "." &&
+      toks[k + 2].text == "get" &&
+      !f.in_test(k) {
+      add("build-clock", k, f.line_text(k))
+    }
+  }
   // a page reading the shell's own state by its fields (`wide.tape`): the shell's files alone do (not in a page's tests)
   if under(f.rel, cfg.pages) && !under(f.rel, cfg.shell) && cfg.shell_state.length() > 0 {
     for k, tk in toks {
@@ -441,6 +452,12 @@ fn lint_mbt(
           break
         }
       }
+    }
+    // the frames' clock read followed (build-clock): a Ctx's (`now` and `cycle` on a Ctx, or on `c`/`ctx` whose type
+    // is not told), a motion's (`now_before`, `now_of`, `shows_motion`), ui's own (clock_read, clock_read_here); not
+    // in the tests
+    if !in_t && build_clock_read(f, c, returns) {
+      add("build-clock", c.at, f.line_text(c.at))
     }
     // 5. the app reads the clock
     if c.name == "now" &&
@@ -1653,3 +1670,26 @@ fn lint_style_text(f : MbtFile, out : Array[Finding]) -> Unit {
     }
   }
 }
+
+///|
+/// Whether the call `c` reads the frames' clock where it is followed (build-clock).
+fn build_clock_read(f : MbtFile, c : Call, returns : Map[String, String]) -> Bool {
+  if c.kind == "method" {
+    if build_clock_methods.contains(c.name) {
+      return true
+    }
+    if c.name == "now" || c.name == "cycle" {
+      return match f.recv_type(c.at, returns) {
+        Some(t) => t == "Ctx"
+        None => c.at >= 2 && (f.toks[c.at - 2].text == "c" || f.toks[c.at - 2].text == "ctx")
+      }
+    }
+    false
+  } else {
+    c.kind == "bare" && (c.name == "clock_read" || c.name == "clock_read_here")
+  }
+}
+
+///|
+/// A motion's reads of the frames' clock, followed (build-clock)
+let build_clock_methods : Array[String] = ["now_before", "now_of", "shows_motion"]

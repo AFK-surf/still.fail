@@ -637,7 +637,7 @@ test "a motion going on owes no frame at a moment: draw draws one, run_for draws
 ///|
 test "set_frame_times: every frame at the times given (an input's, run_for's, draw's), then on the period from the last" {
   let taps : Array[Double] = []
-  let t = @ui.Tester::new(fn(c) { if c.button("Go") { taps.push(c.now()) } }, w=200.0, h=200.0)
+  let t = @ui.Tester::new(fn(c) { if c.button("Go") { taps.push(c.moment()) } }, w=200.0, h=200.0)
   let now = t.time()
   // a run's own frames: not evenly apart
   let times = Array::makei(12, fn(k) { now + 15.0 * (k + 1).to_double() + (if k % 3 == 0 { 1.5 } else { 0.0 }) })

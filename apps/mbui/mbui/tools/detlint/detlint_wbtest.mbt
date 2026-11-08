@@ -2090,3 +2090,25 @@ test "ui-current" {
   )
   assert_eq(lines(fs), [2, 3])
 }
+
+///|
+test "build-clock" {
+  // the frames' clock read followed: a Ctx's now and cycle (on a Ctx, or on `c` not typed), a motion's reads, ui's
+  // own and its signal read; a View's cycle, the runtime's now, a moment, a test's, the signal set, not
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "fn p(c : @ui.Ctx) -> Unit {\n  let f = c.cycle(period)\n  c.shows_motion(m, true)\n  let g = fn(c, s) { c.now() }\n  v.cycle(period)\n  rt.now()\n  c.moment()\n}\n",
+      ),
+      (
+        "src/ui/frame_watch.mbt",
+        "fn Ctx::now(self : Ctx) -> Double {\n  clock_read(loc)\n  frame_clock.get() |> ignore\n  frame_clock.set(t)\n  self.now_before(e)\n}\n",
+      ),
+      ("src/kit/x_test.mbt", "test \"t\" {\n  ignore(c.now())\n}\n"),
+    ],
+    "build-clock",
+    6,
+  )
+  assert_eq(lines(fs), [2, 2, 3, 3, 4, 5])
+}

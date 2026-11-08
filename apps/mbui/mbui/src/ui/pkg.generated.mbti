@@ -384,8 +384,6 @@ pub fn notice_settings() -> Bool
 
 pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : String, opens~ : String) -> Unit
 
-pub fn now() -> Double
-
 pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, gives? : Bool, fits? : (Double, @signals.Signal[Double?]), unlaid? : () -> Double) -> @view.View
 
 pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
@@ -1277,10 +1275,6 @@ pub fn Ctx::node_radii(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::node_radius(Self, Int32) -> Double
 pub fn Ctx::node_rect(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::notch_by(Self, Int32, () -> (Double, Double, Double)) -> Unit
-#callsite(autofill(loc))
-pub fn Ctx::now(Self, loc~ : SourceLoc) -> Double
-#callsite(autofill(loc))
-pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
 pub fn Ctx::now_of(Self, Mover, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit

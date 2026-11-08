@@ -450,6 +450,9 @@
       "src/sfdesk/switch.mbt": 1,
       "src/sfdesk/tape_view.mbt": 3,
       "src/sfpages/search.mbt": 2
+    },
+    "build-clock": {
+      "src/sfapp/bar.mbt": 3
     }
   },
   "excused": {
@@ -466,9 +469,7 @@
     "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
-    "app-clock": {
-      "src/sffixture/browse_fixture.mbt": 1
-    },
+    "app-clock": {},
     "wall-clock": {},
     "engine-math": {},
     "poll": {},
@@ -522,6 +523,7 @@
     },
     "tester-branch": {},
     "frame-number": {},
-    "ui-current": {}
+    "ui-current": {},
+    "build-clock": {}
   }
 }

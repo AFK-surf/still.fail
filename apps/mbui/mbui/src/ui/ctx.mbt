@@ -2467,9 +2467,11 @@ pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
 ///|
 /// The frames' clock (ms): this frame's time, followed (frame_watch.mbt): what reads it as it is built or drawn is built
 /// and drawn again each frame. What only changes at a moment says so (Ctx::wake_in, Ctx::every, a cycle's step) and
-/// is not built again till then.
+/// is not built again till then. The framework's own (its old parts that still move as they are built, detlint's
+/// `build-clock`): what is built outside it reads no clock. A look by the clock is given where its cycle is
+/// (Ctx::cycle_look); a stamp, or a moment to be woken at, is the moment (Ctx::moment).
 #callsite(autofill(loc))
-pub fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
+fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
   clock_read(loc)
   self.clock
 }

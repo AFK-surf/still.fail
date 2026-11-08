@@ -257,7 +257,7 @@ fn clock_read(loc : SourceLoc) -> Unit {
 /// state): the record names the motion (Mover::told_as) where it was told who it is.
 fn clock_read_here(who? : Mover) -> Unit {
   if @signals.active_sub() is Some(_) {
-    clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @ui.now, @hostapi.polled)", who)
+    clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @hostapi.polled)", who)
     frame_clock.get() |> ignore
   }
 }
@@ -354,7 +354,7 @@ fn init {
 /// The frames' clock (ms), followed only before `end` (Ctx::now): what moves till then and is still from then on (a
 /// spring's way, a fade), built again each frame till it is.
 #callsite(autofill(loc))
-pub fn Ctx::now_before(self : Ctx, end : Double, loc~ : SourceLoc) -> Double {
+fn Ctx::now_before(self : Ctx, end : Double, loc~ : SourceLoc) -> Double {
   if self.clock < end {
     clock_read(loc)
   }
