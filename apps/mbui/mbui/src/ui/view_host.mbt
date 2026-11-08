@@ -1495,40 +1495,79 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
 }
 
 ///|
-/// As a frame's paint goes through the tree, before anything of it places a glyph: the glyphs each node's content
-/// composed in this frame (as it is drawn now: what is not drawn, gone or faded out, holds none) draws from kept in the
-/// atlas through this frame (Atlas::drawn: never emptied for another while drawn from), as glyphs an old view draws are
-/// as it draws them; content one of whose glyphs is no longer where it was (its plot emptied, the atlas made anew, or
-/// one there was no room for as it was made) made again as it is composed, never composed out of what the atlas now
-/// holds there instead.
-fn view_glyphs_held(tree : @view.Tree, sc : Double) -> Unit {
+/// As a frame's paint goes through the tree, before anything of it places a glyph: where a glyph may have gone from
+/// where it was (glyphs_lost: a plot emptied for another, all forgotten, or one there was no room for) or the words'
+/// pixels a point changed, all that is kept to be composed again (each node's content, each list's row kept) looked
+/// through, what draws one no longer where it was (or one there was no room for as it was made) made again as it is
+/// composed, never composed out of what the atlas now holds there instead; else nothing looked at. What the frame draws
+/// from is kept in the atlas through it as a plot is to be emptied (glyphs_held_drawn), not said each frame.
+fn view_glyphs_held(_tree : @view.Tree, sc : Double) -> Unit {
+  if !glyphs_lost.val && sc == glyphs_held_sc.val {
+    return
+  }
+  glyphs_lost.val = false
+  glyphs_held_sc.val = sc
   let stale : Array[@view.NodeId] = []
-  // (a row kept, nothing of it changed since (Ctx::ride_kept_for): its glyphs held as it kept them, its nodes not gone
-  // through; what holds no block of its own passed over whole)
-  tree.each_drawn_laid_or_past(
-    fn(c, _x, _y, a, _s, _ux, _uy) {
-      if c.id.at == 0 || a <= 0.002 || c.hosted {
-        return false
-      }
-      match ride_kept.get(c.id) {
-        Some(k) if tree.drawn_rev(c.id) <= k.rev && k.kept.iter().all(fn(g) { glyphs_still(g, sc) }) =>
-          return true
-        _ => ()
-      }
-      match view_blocks.get(c.id) {
-        Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
-        _ => ()
-      }
-      false
-    },
-    draws=fn(c) { view_blocks.contains(c.id) },
-  )
+  for id in view_blocks.keys() {
+    match view_blocks.get(id) {
+      Some(b) if !glyphs_there(b.kept, sc) => stale.push(id)
+      _ => ()
+    }
+  }
+  // (a row kept drawing one of them made again with it: Ctx::ride_kept_for)
   if stale.length() > 0 {
     ride_glyphs_gone.val = ride_glyphs_gone.val + 1
   }
   for id in stale {
     view_blocks.remove(id)
   }
+  let rows : Array[@view.NodeId] = []
+  for id in ride_kept.keys() {
+    match ride_kept.get(id) {
+      Some(k) if !k.kept.iter().all(fn(g) { glyphs_there(g, sc) }) => rows.push(id)
+      _ => ()
+    }
+  }
+  for id in rows {
+    ride_kept.remove(id)
+  }
+}
+
+///|
+/// The words' pixels a point what is kept to be composed was last looked through at (view_glyphs_held).
+// kept across runs: worked out again as a run begins (glyphs_lost)
+let glyphs_held_sc : Ref[Double] = Ref(0.0)
+
+///|
+/// What the window's tree draws now from the atlas said drawn from in this frame (Atlas::drawn), before a plot is
+/// emptied for what comes (Atlas::before_full): each node's content composed in it (as it is drawn now: what is not
+/// drawn, gone or faded out, holds none), each list's row kept drawn again, as glyphs an old view draws are as it
+/// draws them.
+fn glyphs_held_drawn() -> Unit {
+  guard view_app.val is Some(tree) else { return }
+  let sc = glyphs_held_sc.val
+  tree.each_drawn_laid_or_past(
+    fn(c, _x, _y, a, _s, _ux, _uy) {
+      if c.id.at == 0 || a <= 0.002 || c.hosted {
+        return false
+      }
+      match ride_kept.get(c.id) {
+        Some(k) if tree.drawn_rev(c.id) <= k.rev => {
+          for g in k.kept {
+            glyphs_still(g, sc) |> ignore
+          }
+          return true
+        }
+        _ => ()
+      }
+      match view_blocks.get(c.id) {
+        Some(b) => glyphs_still(b.kept, sc) |> ignore
+        None => ()
+      }
+      false
+    },
+    draws=fn(c) { view_blocks.contains(c.id) },
+  )
 }
 
 ///|
