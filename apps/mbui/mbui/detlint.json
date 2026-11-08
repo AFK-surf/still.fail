@@ -259,6 +259,7 @@
       "src/demo/main.mbt": 1,
       "src/kit/disclosure.mbt": 1
     },
+    "old-island": {},
     "click-read": {}
   },
   "excused": {
@@ -319,6 +320,7 @@
     "ui-current": {},
     "build-clock": {},
     "old-list": {},
+    "old-island": {},
     "click-read": {}
   },
   "tester": {

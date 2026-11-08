@@ -43,7 +43,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Fonts | BarSettings | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
+  if !(route is (Fonts | BarSettings | Me | Workspace | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -51,18 +51,10 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
   @settings.frame(core, here)
   settings_fixture(src, core)
   match route {
-    // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
-    // pushed
-    Home =>
-      @sf.page(c, on_back=fn() { @sfpages.settings_search_reset(); (core.pop)() }, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
-        (core.push)(r)
-      }))
     Fonts => @sfpages.fonts_page(c, core, frame)
     BarSettings => @sfpages.bars_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
     Workspace => @sfpages.workspace_page(c, core, here, frame)
-    Security => @sfpages.security_page(c, core, here, frame)
-    SecurityOpen => @sfpages.security_open_page(c, core, here, frame)
     Vault => @sfpages.vault_page(c, core, here, frame)
     VaultItems => @sfpages.vault_items_page(c, core, here, frame)
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)

@@ -371,6 +371,11 @@ fn lint_mbt(
     if c.name == "list" && c.kind == "method" && app && !in_t && c.args.length() >= 4 {
       add("old-list", c.at, f.line_text(c.at))
     }
+    // an old view hosted in a node of the window's tree (`@ui.old(v, build)`): what of the old view is left inside
+    // what is made once, waiting for its part as nodes, which only goes
+    if c.name == "old" && c.kind == "pkg" && c.qual == "@ui" && app && !in_t {
+      add("old-island", c.at, f.line_text(c.at))
+    }
     // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
     if c.name == "native_input" &&
       c.kind == "pkg" &&

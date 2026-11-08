@@ -409,6 +409,16 @@ fn tape_made(
         context_node(p)
         @sfpages.permissions_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    Setting(Security) if pane_makes.val =>
+      made("security", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.security_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
+      })
+    Setting(SecurityOpen) if pane_makes.val =>
+      made("security-open", fn(p, core, here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.security_open_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
     Setting(AutoCompletion) if pane_makes.val =>
       made("auto-completion", fn(p, core, here, _stint, told, acts) {
         context_node(p)

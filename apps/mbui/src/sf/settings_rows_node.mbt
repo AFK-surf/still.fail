@@ -143,3 +143,46 @@ let note_link_inline_narrow : @ui.TextStyle = secondary.then(one_line)
 ///|
 // kept across runs: a value (no field of it changes)
 let note_link_inline_wide : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+/// A row on a group's card that undoes what is not got back (关闭安全模式: a page's narrow foot), as an old view's row of
+/// the body's words in red: lit under the hand, rippling under a finger, `press` done as it is pressed; while `busy`
+/// says, a spinner after its words and pressed none, lit none. Read out a button named `title`.
+pub fn danger_row_node(parent : @view.View, title : () -> String, press : () -> Unit, busy? : () -> Bool = fn() { false }) -> Unit {
+  parent.box(fn(r) {
+    style_node(r, fn() { pg_row })
+    let live = fn() { !busy() }
+    let go = fn() {
+      if @signals.untracked(live) {
+        press()
+      }
+    }
+    r
+    .ground(By(fn() { if live() && lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } }))
+    .presses(By(live))
+    .focusable(By(live))
+    .says(By(fn() { Some(@view.said(Button, label=title())) }))
+    .on_press(go)
+    |> ignore
+    let rippled = press_look(r, Is(row_corner), fn() { false })
+    let on_it = fn(d : @view.Drag) { r.finger_target(d.wx, d.wy) }
+    r.gesture(
+      @ui.touch_slop(),
+      press=fn(d) { if @signals.untracked(live) { rippled(d) } },
+      tap=fn(d) { if on_it(d) { go() } },
+      drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { go() } },
+    )
+    |> ignore
+    words_node(r, title, fn() { danger_row_words }) |> ignore
+    r.show(busy, fn(s) { spinner_node(s, size=danger_row_spin) |> ignore })
+  })
+  |> ignore
+}
+
+///|
+/// A danger row's words (the body's in red) and its spinner (14).
+// kept across runs: a value (no field of it changes)
+let danger_row_words : @ui.TextStyle = body.then(bad)
+
+///|
+let danger_row_spin : Double = 14.0

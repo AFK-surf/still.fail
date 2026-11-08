@@ -544,51 +544,6 @@ fn settings_found(parts : Array[SettingsPart], core : Core, query : String) -> A
 }
 
 ///|
-/// The list as a page of its own (a small screen's, the gear's): who is signed in and the workspace on cards of their
-/// own, each group on its card under its heading. `open`: a row pressed, its page.
-pub fn settings_blocks(c : @ui.Ctx, core : Core, here : @settings.Here, open : (@settings.Route) -> Unit) -> Array[() -> Unit] {
-  let query = settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower()
-  let parts = settings_found(settings_parts(c, core, here), core, query)
-  let blocks : Array[() -> Unit] = [fn() { c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore }]
-  if parts.is_empty() && query != "" {
-    blocks.push(fn() { @sf.page_note(c, @sf.t("common.noMatch")) })
-  }
-  for part in parts {
-    let identity = part.rows.iter().any(fn(r) { !(r.lead is Icon(_)) })
-    // (the account and the workspace each a card of its own, as large as who and where they are)
-    let cards = if identity { part.rows.map(fn(r) { [r] }) } else { [part.rows] }
-    for i, rows in cards {
-      let heading = if i == 0 { part.heading } else { "" }
-      blocks.push(fn() {
-        if heading != "" {
-          @sf.heading(c, heading)
-        }
-        @sf.group(c, fn() {
-          for row in rows {
-            if @sf.link_row(
-                c,
-                "settings/" + row.key,
-                row.title,
-                value=if row.key.has_prefix("find/") { "" } else { row.value },
-                value_bad=row.bad,
-                value_dot=row.dot,
-                note=row.line,
-                strong=!(row.lead is Icon(_)),
-                lead=fn() { settings_lead(c, core, here, row, false) },
-                tile=row.lead is Space(_, _),
-                note_cut=row.lead is Space(_, _),
-              ) {
-              open(row.route)
-            }
-          }
-        })
-      })
-    }
-  }
-  blocks
-}
-
-///|
 /// The list as a sidebar's (beside the settings' pages on a medium or large screen): the same rows in the same groups,
 /// a sidebar's rows (the theme's side_row, as its other rows of one line), the room of a heading between two groups
 /// with none. `lit`: the row of the page beside it.
@@ -715,7 +670,7 @@ let settings_side_said : @ui.TextStyle = @ui.text_style(w=Hug)
 
 
 ///|
-/// The list as a page of its own made once as nodes (settings_blocks', the gear's on a small screen) in node `v`: who
+/// The list as a page of its own made once as nodes (the gear's on a small screen) in node `v`: who
 /// is signed in and the workspace on cards of their own, each group on its card under its heading. The page's frame
 /// and how far it is scrolled kept whatever changes; its cards and their rows each a node of its own by its group's key
 /// and its own, come, gone and in their order as the core says which there are (security mode where the

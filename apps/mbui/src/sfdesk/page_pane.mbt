@@ -296,6 +296,14 @@ fn pane_made(
       made("permissions", fn(a, core, _here, _stint, frame, width) {
         @sfpages.permissions_node(a, core, on_back=core.pop, frame~, width~)
       })
+    Setting(Security) =>
+      made("security", fn(a, core, here, stint, frame, width) {
+        @sfpages.security_node(a, core, here, on_back=core.pop, frame~, stint~, width~)
+      })
+    Setting(SecurityOpen) =>
+      made("security-open", fn(a, core, here, _stint, frame, width) {
+        @sfpages.security_open_node(a, core, here, on_back=core.pop, frame~, width~)
+      })
     Setting(AutoCompletion) =>
       made("auto-completion", fn(a, core, here, _stint, frame, width) {
         @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
