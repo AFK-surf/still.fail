@@ -429,7 +429,6 @@ fn reset() -> Unit {
   reveal_heights.clear()
   anims.clear()
   anims_moving.clear()
-  anims_painted.clear()
   ripples.clear()
   reset_fx()
   motion_log.val = -1

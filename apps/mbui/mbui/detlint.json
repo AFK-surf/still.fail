@@ -227,7 +227,6 @@
     "motion-length": {},
     "tester-branch": {},
     "frame-number": {
-      "src/motion/anim.mbt": 2,
       "src/motion/fx.mbt": 1,
       "src/motion/layer.mbt": 2
     },
