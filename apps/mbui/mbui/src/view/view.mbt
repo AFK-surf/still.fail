@@ -113,9 +113,9 @@ pub(all) struct Look {
   /// Android's stretch of what it holds (View::stretches): from its top positive, from its foot negative; 0 none
   mut stretch : Double
   /// how far it and what it holds are drawn off where they are laid out, drawn only (View::drawn_off); how far its own
-  /// ground is drawn off and how much bigger than it is laid out (View::ground_drawn)
+  /// ground is drawn off and how much bigger than it is laid out, and how round (View::ground_drawn)
   mut drawn_off : (Double, Double)
-  mut ground_drawn : (Double, Double, Double, Double)
+  mut ground_drawn : GroundShape
   /// whether what it holds past its edges fades out towards them softly, by how far it reaches past (View::cuts_softly)
   mut cut_soft : Bool
   /// what it draws called by name, as what finds it on screen calls it (an icon's: View::drawn_as)
@@ -1057,7 +1057,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.fades = (0.0, 0.0, 0.0, 0.0)
       n.look.stretch = 0.0
       n.look.drawn_off = (0.0, 0.0)
-      n.look.ground_drawn = (0.0, 0.0, 0.0, 0.0)
+      n.look.ground_drawn = ground_as_laid
       n.look.cut_soft = false
       n.look.lines = []
       n.drew = false
@@ -1152,7 +1152,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -3058,23 +3058,44 @@ pub fn View::drawn_off(self : View, d : Live[(Double, Double)]) -> View {
 }
 
 ///|
-/// How far its own ground is drawn off where it is laid out and how much wider and taller (points; from its top left),
-/// as it changes: all of its ground (its shadow, its glass, its fill, its edge, as round as said), as a rect going on
-/// its own; not what it holds, which is where its layout puts it (each said to go itself); pressed where it is laid
-/// out (a thing changing shape for its cause: @motion's moves_together). Place's: nothing of it made again.
-pub fn View::ground_drawn(self : View, d : Live[(Double, Double, Double, Double)]) -> View {
+/// How a node's own ground is drawn other than as it is laid out (View::ground_drawn): how far off where it is laid out
+/// across and down, how much wider and taller (points, from its top left), and how round its corners are drawn (top
+/// left, then round it; None: as it says, View::radius and View::corners).
+pub(all) struct GroundShape {
+  dx : Double
+  dy : Double
+  dw : Double
+  dh : Double
+  corners : (Double, Double, Double, Double)?
+} derive(Eq, Debug)
+
+///|
+/// A ground drawn as it is laid out: off by nothing, as big, as round as it says.
+pub let ground_as_laid : GroundShape = { dx: 0.0, dy: 0.0, dw: 0.0, dh: 0.0, corners: None }
+
+///|
+/// Whether it says the ground is drawn other than as it is laid out.
+pub fn GroundShape::reshaped(self : GroundShape) -> Bool {
+  self.dx != 0.0 || self.dy != 0.0 || self.dw != 0.0 || self.dh != 0.0 || self.corners is Some(_)
+}
+
+///|
+/// How its own ground is drawn other than as it is laid out (GroundShape: off, bigger, rounder; points, from its top
+/// left), as it changes: all of its ground (its shadow, its glass, its fill, its edge), as a shape going on its own; not
+/// what it holds, which is where its layout puts it (each said to go itself); pressed where it is laid out (a thing
+/// changing shape for its cause: @motion's Moves::reshapes). Place's: nothing of it made again.
+pub fn View::ground_drawn(self : View, d : Live[GroundShape]) -> View {
   self.bind(GroundDrawn, d, Place, fn(d) { self.tree.nodes[self.at].look.ground_drawn = d })
   self
 }
 
 ///|
-/// How far node `id` draws its own ground off where it is laid out, and how much bigger (View::ground_drawn; none for
-/// one let go).
-pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> (Double, Double, Double, Double) {
+/// How node `id` draws its own ground other than as it is laid out (View::ground_drawn; as laid out for one let go).
+pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> GroundShape {
   if self.alive_id(id) {
     self.nodes[id.at].look.ground_drawn
   } else {
-    (0.0, 0.0, 0.0, 0.0)
+    ground_as_laid
   }
 }
 

@@ -69,7 +69,7 @@ pub fn MoveGroup::add(self : MoveGroup, v : @view.View, reshapes? : Bool = false
     // where its layout puts it, each said to go itself: an old view's reshape)
     v.ground_drawn(By(fn() {
       let (x, y) = m.off()
-      (x, y, m.ways[2].shown(v) - m.to[2], m.ways[3].shown(v) - m.to[3])
+      ({ dx: x, dy: y, dw: m.ways[2].shown(v) - m.to[2], dh: m.ways[3].shown(v) - m.to[3], corners: None } : @view.GroundShape)
     }))
     |> ignore
   } else {
