@@ -439,12 +439,16 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   assert_eq(kind_of_input(moved[0]), "down")
   assert_eq(kind_of_input(moved[moved.length() - 1]), "move")
   let still = r.inputs().length()
-  r.t.run_for(200.0)
+  r.t.run_for(held_still_ms)
   assert_eq(r.inputs().length(), still)
   r.t.release(bx, by)
   assert_eq(kind_of_input(r.inputs()[r.inputs().length() - 1]), "up")
   screen_done(r.t)
 }
+
+///|
+/// How long a drag is held still in it: a dozen frames and more at any rate.
+let held_still_ms : Double = 200.0
 
 ///|
 test "turned sideways the same view goes on, the controls down the side" {
