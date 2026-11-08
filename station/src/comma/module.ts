@@ -6,6 +6,7 @@ import { Effect, Layer } from "effect";
 import { DatabaseSync } from "node:sqlite";
 import { commaEntry, commaRoutes } from "../api/routes/comma.ts";
 import { connectsPart } from "../connects/part.ts";
+import { member } from "../mesh/peer.ts";
 import { stationLang } from "../ops/i18n.ts";
 import { Agents } from "../sessions/agents.ts";
 import { ControlPlane, Parts, Paths, Peers, Previous, Readers, StationConfig, Store } from "../services.ts";
@@ -38,7 +39,8 @@ export const CommaLive = Layer.effectDiscard(
       (stop) => Effect.sync(stop),
     );
     // Another station of the workspace reading this one's statistics, for the Comma connect there.
-    bus.on(READ, peerRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home(), stationLang));
+    bus.on(READ, peerRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home(), stationLang,
+      () => homeVersion, (peer, workspace) => { member(cloud, peer, workspace); }));
     const readsFor = (workspace: string): WorkspaceReads => ({
       home: () => workspace,
       here: (op, args) => readers.read(op, { ...args, lang: stationLang() }, stationLang(), { background: true }),

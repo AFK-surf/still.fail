@@ -256,12 +256,23 @@ export class CommaSurface extends ConnectedSurface {
       case "request": {
         const id = String(frame.id ?? "");
         const method = String(frame.method ?? "");
+        const refuse = (error: Error) => {
+          if (this.socket_ !== socket) return;
+          log.info("comma", "a request from Comma was refused", { connect: this.id, method, error: error.message });
+          this.send({ id, type: "error", error: error.message });
+        };
         this.handle(method, frame.params ?? {}).then(
-          (result) => this.send({ id, type: "response", result }),
-          (error: Error) => {
-            log.info("comma", "a request from Comma was refused", { connect: this.id, method, error: error.message });
-            this.send({ id, type: "error", error: error.message });
+          (result) => {
+            if (this.socket_ !== socket) return;
+            try {
+              if (method === "task.read" && !this.inScope()) throw new Error("the workspace changed while reading");
+            } catch (error) {
+              refuse(error as Error);
+              return;
+            }
+            if (this.socket_ === socket) this.send({ id, type: "response", result });
           },
+          refuse,
         );
         return;
       }

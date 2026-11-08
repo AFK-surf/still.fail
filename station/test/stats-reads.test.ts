@@ -252,7 +252,7 @@ test("a page of exported chats does not enumerate every session", () => {
 
 test("another station's read: one of the statistics reads, of the workspace it asks in, its answer as bytes", async () => {
   const asked: [string, any][] = [];
-  const answer = peerRead(async (op, args) => (asked.push([op, args]), JSON.stringify({ chats: [{ thread: 3 }] })), () => "ws-home", () => "en");
+  const answer = peerRead(async (op, args) => (asked.push([op, args]), JSON.stringify({ chats: [{ thread: 3 }] })), () => "ws-home", () => "en", () => 0, () => {});
   const got = await answer("peer", { method: "outflow.read", op: "outflowChats", args: { since: 7, ws: { workspace: "forged", home: true } } }, "ws-home");
   assert.deepEqual(JSON.parse(await textOf(bytesOf(got)!)), { chats: [{ thread: 3 }] });
   assert.deepEqual(asked, [["outflowChats", { since: 7, lang: "en", ws: { workspace: "ws-home", home: true } }]], "the workspace is the transport's, never the request's");

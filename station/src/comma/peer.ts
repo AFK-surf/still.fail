@@ -1,7 +1,7 @@
 // The workspace's statistics as a Comma connect sends them (stats.ts): this station's, read here, and each other
 // station's of the workspace, read of it over the mesh (`outflow.read`, the name stations of every version answer),
 // and how a station answers another's read.
-import { type Bytes, bytesOf, withBytes } from "../mesh/bus.ts";
+import { type Bytes, bytesOf, guardBytes, withBytes } from "../mesh/bus.ts";
 import { oneBytes } from "../mesh/files.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Read, StationRows } from "./stats.ts";
@@ -21,18 +21,28 @@ const CHATS_PAGE = 1000;
 const PEER_READS = 2;
 
 /// What answers another station's `outflow.read`: the read it names of this station's chats of the workspace it asks
-/// in, the answer's JSON as the bytes after its head. `read`: the station's reads (read/ops.ts); `home`: its home
-/// workspace now.
-export function peerRead(read: (op: string, args: unknown, lang: Lang) => Promise<string>, home: () => string | null, lang: () => Lang) {
-  return async (_peer: string, request: Json, workspace?: string) => {
+/// in, the answer's JSON as the bytes after its head. `version` changes whenever the home workspace changes;
+/// `member` refuses a peer no longer authorized in the requested workspace.
+export function peerRead(read: (op: string, args: unknown, lang: Lang) => Promise<string>, home: () => string | null, lang: () => Lang,
+  version: () => number, member: (peer: string, workspace: string) => void) {
+  return async (peer: string, request: Json, workspace?: string) => {
     const op = typeof request?.op === "string" ? request.op : "";
     if (!OPS.includes(op)) throw new Error("no such read");
     if (typeof workspace !== "string" || workspace === "") throw new Error("which workspace is not known");
+    const originalHome = home(), originalVersion = version();
+    const check = () => {
+      if (home() !== originalHome || version() !== originalVersion) throw new Error("the workspace changed while reading");
+      member(peer, workspace);
+    };
+    check();
     const args = request?.args !== null && typeof request?.args === "object" ? request.args : {};
     const said = lang();
-    const text = await read(op, { ...args, lang: said, ws: { workspace, home: workspace === home() } }, said);
+    const text = await read(op, { ...args, lang: said, ws: { workspace, home: workspace === originalHome } }, said);
+    check();
     const bytes = Buffer.from(text, "utf8");
-    return withBytes({ size: bytes.length }, oneBytes(bytes));
+    // The transport writes the answer head before pulling the body. Check again after that wait, before the body
+    // leaves, so a roster or home change while it writes the head cannot send an answer that is no longer permitted.
+    return withBytes({ size: bytes.length }, guardBytes(oneBytes(bytes), check));
   };
 }
 
