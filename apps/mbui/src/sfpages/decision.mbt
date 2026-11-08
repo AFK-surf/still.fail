@@ -7,11 +7,12 @@
 // Turns::in_turn): the list's height changes only for what comes.
 
 ///|
-/// Whether post `seq` of chat `here` (None: where the chat stands) was on screen in its list as the frame before left
+/// Whether post `seq` of chat `here` (None: where the chat stands) was on screen in its list as the build before left
 /// it (Reading::sees); never out of a chat's list.
 fn seen_in(c : @ui.Ctx, here : MessageHere, seq : Double?) -> Bool {
+  ignore(c)
   match here.list {
-    Some(l) => reading_of(l.rk).sees(c.frame_number(), seq)
+    Some(l) => reading_of(l.rk).sees(seq)
     None => false
   }
 }

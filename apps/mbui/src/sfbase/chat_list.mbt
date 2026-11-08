@@ -75,10 +75,11 @@ pub(all) struct Reading {
   mut top_seq : Double
   /// the message at the foot of what shows (-1 none): what ⌘F starts at lies between
   mut bottom_seq : Double
-  /// the frame those were last worked out in (read_place: once its builds were over, its page shown), whether where
-  /// the chat stands (its State row) was in view then, and whether the list was still then (not gliding, nothing in
-  /// its turns under way or waiting): what is on screen (Reading::sees)
-  mut view_frame : Int
+  /// whether those were worked out (read_place: once a build that showed its list was over) since its list last came
+  /// to show (let go as a build begins that it was not shown in before: linger_tick), whether where the chat stands
+  /// (its State row) was in view then, and whether the list was still then (not gliding, nothing in its turns under
+  /// way or waiting): what is on screen (Reading::sees)
+  mut view_read : Bool
   mut state_seen : Bool
   mut view_still : Bool
   /// how far that message's top is below the list's (points: above it, less than 0)
@@ -108,14 +109,16 @@ pub(all) struct Reading {
   /// the rows at its end that go from it as its turns go (by key): its agents' lines, where it stands. One gone leaves
   /// its room as a floor; an agent's line gone is forgotten (row_keys)
   acts : Map[String, Bool]
-  /// the frame its page was last built in, and its own data last taken in (chat_tick: what comes out of its avatars
-  /// played on, its activities' lingering)
-  mut shown_frame : Int
-  mut played : Int
-  mut ticked : Int
+  /// its list shown (built, or kept as its build left it and drawn again) in the build begun last (`shown`), and in
+  /// the build before that (`was_shown`: linger_tick hands one to the other as each build begins); its own data taken
+  /// in the build begun last (chat_tick, once a build: what comes out of its avatars played on, its activities'
+  /// lingering; let go as each build begins, linger_tick)
+  mut shown : Bool
+  mut was_shown : Bool
+  mut played : Bool
+  mut ticked : Bool
+  /// the rows new to it, by key, until they show
   fresh : Map[String, Bool]
-  /// the frame a row new to it last came into it (`fresh`): what comes at its end then is glided after
-  mut came_frame : Int
   /// the rows that came new to it while it shows, by key: the how-manieth (`came_n`), and the agent whose avatar it
   /// came out of ("" none). Words sent from here are not among them: they fly in (flight.mbt)
   came : Map[String, (Int, String)]
@@ -124,9 +127,8 @@ pub(all) struct Reading {
   /// built ("" nothing): its cause to glide down (sfpages chat_list)
   makes_way : Map[String, String]
   /// the newest row that came in over rows at its end while it was followed (what is at the end stays where it shows,
-  /// the rows over it go up for it: sfpages chat_list), and the frame it came in ("" and -10: none yet)
+  /// the rows over it go up for it: sfpages chat_list; "" none yet)
   mut over : String
-  mut over_frame : Int
   /// rows asked a turn to come in
   admitted : Map[String, Bool]
   /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
@@ -157,13 +159,14 @@ pub(all) struct Reading {
   /// the room agents' lines left as they went from the list: the list never gets shorter under the
   /// reader. What comes in next takes it back (`floor_takers`: each row by key, as tall as the build last read it;
   /// `floor_laid`: as the frame before laid it out). Each agent's line's room (its row, the gap over it with it) as last
-  /// read, by key; the frame the floor was last counted in
+  /// read, by key; whether the floor was counted in the build begun last, from what the layout before it left (once a
+  /// build: let go as each begins, linger_tick)
   mut floor : Double
   floor_takers : Map[String, Double]
   floor_laid : Map[String, Double]
   act_room : Map[String, Double]
   act_whole : Map[String, Bool]
-  mut floor_frame : Int
+  mut floor_counted : Bool
   /// the room as it was last counted (more since: what went new, the rows making way for it from where they stood)
   mut floor_was : Double
   /// the agents running as last drawn
@@ -234,7 +237,7 @@ pub fn reading_of(key : String) -> Reading {
         seen_whole: -1.0,
         top_seq: -1.0,
         bottom_seq: -1.0,
-        view_frame: -10,
+        view_read: false,
         state_seen: false,
         view_still: true,
         top_off: 0.0,
@@ -253,16 +256,15 @@ pub fn reading_of(key : String) -> Reading {
         known: {},
         drawn: false,
         acts: {},
-        shown_frame: -10,
-        played: -10,
-        ticked: -10,
+        shown: false,
+        was_shown: false,
+        played: false,
+        ticked: false,
         fresh: {},
-        came_frame: -10,
         came: {},
         came_n: 0,
         makes_way: {},
         over: "",
-        over_frame: -10,
         admitted: {},
         list_read: None,
         newest: "",
@@ -281,7 +283,7 @@ pub fn reading_of(key : String) -> Reading {
         floor_laid: {},
         act_room: {},
         act_whole: {},
-        floor_frame: -1,
+        floor_counted: false,
         floor_was: 0.0,
         running: {},
         last_turns: {},
@@ -628,9 +630,19 @@ pub(all) struct Lingering {
 /// messages coming out of an avatar), whose activity stays a moment as its turn ends, and how long, counted by the
 /// framework (@kit.after) from the build that sees the turn over; a chat under another page lingers on the time that
 /// goes by, as Chat.kt's. The chat's page draws what it says. `in_front`: the app shown (what is said then is
-/// watched).
+/// watched). As each build begins (here, before any page): whether each chat's list was shown in the one before
+/// (Reading's `was_shown`), and not yet in this one; its data not taken in this one yet, nor its floor counted.
 pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
   for rk, rd in readings {
+    rd.was_shown = rd.shown
+    rd.shown = false
+    rd.played = false
+    rd.ticked = false
+    rd.floor_counted = false
+    // (not shown: where its reader was is worked out anew once it shows again, Reading::sees)
+    if !rd.was_shown {
+      rd.view_read = false
+    }
     // every chat kept whose data the page read: its activities linger on the time that goes by, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
@@ -643,19 +655,18 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
       continue
     }
     match view_of_chat(page_src, r).0 {
-      Some(v) => chat_tick(c, rk, rd, v, shown=rd.shown_frame >= c.frame_number() - 1, in_front~)
+      Some(v) => chat_tick(c, rk, rd, v, shown=rd.was_shown, in_front~)
       None => ()
     }
   }
 }
 
 ///|
-/// A chat's own data, once a frame, before its page is built (linger_tick; its page the first frame it shows): what
-/// comes out of its avatars played on, whose activity stays a moment and how long.
+/// A chat's own data, once a build, before its page is built (linger_tick; its page the first build it shows in):
+/// what comes out of its avatars played on, whose activity stays a moment and how long.
 pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
-  let frame = c.frame_number()
-  let lingered = rd.ticked == frame
-  let played = rd.played == frame
+  let lingered = rd.ticked
+  let played = rd.played
   if lingered && (played || !shown) {
     return
   }
@@ -674,7 +685,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   // (played on while its page shows: under another page it waits where it is, as before)
   let em = emits_of(rk)
   if shown && !played {
-    rd.played = frame
+    rd.played = true
     // what changes the list's height, one at a time: each whose turn has come starts
     let turns = turns_of(rk)
     turns.step(c, match rd.list_read {
@@ -713,7 +724,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   if lingered {
     return
   }
-  rd.ticked = frame
+  rd.ticked = true
   // its turn over: it stays a moment
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
@@ -866,9 +877,9 @@ pub fn act_rooms(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) 
 
 ///|
 /// How tall the floor agents' lines left is in this build (web's): what they left, less the rows that
-/// came in since, each as tall as last laid out (read back: laid out otherwise, the frame is built again). As a frame
-/// begins, from what the frame before laid out: once they fill it, it is gone; one gone from the list (an outbox entry
-/// become its message, by another key), its height is taken for good.
+/// came in since, each as tall as last laid out (read back: laid out otherwise, the frame is built again). As each
+/// build first asks, from what the layout before it laid out: once they fill it, it is gone; one gone from the list
+/// (an outbox entry become its message, by another key), its height is taken for good.
 pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -> Double {
   // (how much of it is still kept: the rows making way for the line gone, from the frame it went)
   let out = @motion.anim(c, "floor/out/" + key, 0.0, global=true)
@@ -880,8 +891,8 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
     out.snap(0.0)
     return 0.0
   }
-  if rd.floor_frame != c.frame_number() {
-    rd.floor_frame = c.frame_number()
+  if !rd.floor_counted {
+    rd.floor_counted = true
     rd.floor_laid.clear()
     let mut took = 0.0
     for k, h in rd.floor_takers {
@@ -1015,11 +1026,10 @@ pub fn read_place(
   lr : @ui.ListReader,
   top : Double,
   room : Double,
-  frame : Int,
 ) -> Unit {
   let n = list.length()
   let info = lr.info()
-  rd.view_frame = frame
+  rd.view_read = true
   rd.state_seen = match info {
     Some(i) if i.first >= 0 => {
       let mut k = i.first
@@ -1093,13 +1103,14 @@ pub fn read_place(
 }
 
 ///|
-/// Whether the row of message `seq` (None: where the chat stands, its State row) was on screen as the frame before
-/// `frame` left the list, its page shown then: what changes in it is seen changing (Turns::in_turn's `seen`). The
-/// chat left and opened again, or the row scrolled away and back, it was not. While the list moves (gliding, a turn
-/// under way or waiting) it counts as seen whatever is in view: what goes out of sight goes once the list is still,
-/// never changing the rows' places while they are on their way.
-pub fn Reading::sees(self : Reading, frame : Int, seq : Double?) -> Bool {
-  if self.view_frame != frame - 1 {
+/// Whether the row of message `seq` (None: where the chat stands, its State row) was on screen as the build before
+/// left the list, its page shown then and where its reader was worked out from it since it came to show: what
+/// changes in it is seen changing (Turns::in_turn's `seen`). The chat left and opened again, or the row scrolled
+/// away and back, it was not. While the list moves (gliding, a turn under way or waiting) it counts as seen whatever
+/// is in view: what goes out of sight goes once the list is still, never changing the rows' places while they are on
+/// their way.
+pub fn Reading::sees(self : Reading, seq : Double?) -> Bool {
+  if !self.was_shown || !self.view_read {
     return false
   }
   if !self.view_still {
@@ -1317,7 +1328,6 @@ pub fn row_keys(
       }
       if !rd.known.contains(keys[i]) && !caught {
         rd.fresh[keys[i]] = true
-        rd.came_frame = c.frame_number()
         // (out of whose avatar; words sent from here fly in, as nothing coming)
         let from = match e {
           Out(o) if local_sent(o) => None
@@ -1346,7 +1356,6 @@ pub fn row_keys(
     }
     if came_last >= 0 && was_last > came_last {
       rd.over = keys[came_last]
-      rd.over_frame = c.frame_number()
     }
   }
   // what each row that makes way saw come in over it last: the newest of the rows over it that came, by whose avatar
@@ -1732,9 +1741,8 @@ pub fn sent_let_go(rd : Reading, flight : SendFlight?) -> Bool {
 /// What a chat's list is made of this frame, as both frames make it, before they draw it (sfapp's messages, sfdesk's
 /// chat_list): its rows and their keys (`read`, its entries; those coming out of an avatar held out of it till their
 /// turn), its turns and its messages out of avatars played on, the list following its newest, words sent flying from
-/// the composer of draft `draft`, whether what comes at its end glides, and the page before come in above what is
-/// in view keeping it where it is. `rise_ms`, `top`, `in_front`: as row_keys', follow_newest's,
-/// chat_tick's.
+/// the composer of draft `draft`, and the page before come in above what is in view keeping it where it is.
+/// `rise_ms`, `top`, `in_front`: as row_keys', follow_newest's, chat_tick's.
 pub fn list_frame(
   c : @ui.Ctx,
   r : ChatRef,
@@ -1756,8 +1764,8 @@ pub fn list_frame(
   let em = emits_of(ek)
   // (shown each frame its list is: built, or kept as its build left it and drawn again, as what a build marks used is
   // marked again: linger_tick plays it on then)
-  rd.shown_frame = c.frame_number()
-  @ui.built_used(fn() { rd.shown_frame = @ui.current().frame_number() })
+  rd.shown = true
+  @ui.built_used(fn() { rd.shown = true })
   chat_tick(c, ek, rd, v, shown=true, in_front~)
   let read = if em.queue.length() > 0 || em.current is Some(_) {
     read.filter(fn(e) {
@@ -1805,10 +1813,6 @@ pub fn list_frame(
     em.out_key = out_key
     em.changed()
   }
-  // what comes at its end glides after it when it is new to the list (said while it shows, sent, an agent starting:
-  // row_keys's fresh), not what was there or caught up on (the chat opened, its pages coming in), at once
-  // (not what came in over rows at its end: there at once, the rows over it going up for it, sfpages chat_list)
-  let glides = rd.came_frame == c.frame_number() && rd.over_frame != c.frame_number()
   // (the same keys as the last frame's, the same names: the motion goes over none of them)
   if !physical_equal(rd.motion_of, keys) || rd.motion_list != key {
     rd.motion_of = keys
@@ -1841,13 +1845,13 @@ pub fn list_frame(
   }
   rd.head = head
   rd.head_at = head_at
-  { key, rk: ek, rd, em, turns, list, keys, flight, glides, draft }
+  { key, rk: ek, rd, em, turns, list, keys, flight, draft }
 }
 
 ///|
 /// A chat's list as list_frame made it this frame (its key, its chat's key, what the page keeps of it, its messages
-/// out of avatars, its turns, its rows and their keys, the words sent flying to it, whether what comes at its end
-/// glides, and the composer's draft words sent fly from (a new chat's first words carry its list up out of it:
+/// out of avatars, its turns, its rows and their keys, the words sent flying to it, and the composer's draft words
+/// sent fly from (a new chat's first words carry its list up out of it:
 /// flight.mbt flight_carry_shift).
 pub(all) struct ListFrame {
   key : String
@@ -1858,7 +1862,6 @@ pub(all) struct ListFrame {
   list : Array[Entry]
   keys : Array[String]
   flight : SendFlight?
-  glides : Bool
   draft : String
 }
 
@@ -2139,7 +2142,7 @@ pub fn list_after(
     let tu = turns_of(r.station + "\u{1}" + r.session)
     let still = !c.list_moving(key) && tu.asks.is_empty() && !tu.open
     c.after_build_or_scroll("reading", fn() {
-      read_place(rd, v, list, lr, bar, room, c.frame_number())
+      read_place(rd, v, list, lr, bar, room)
       rd.view_still = still
     })
     // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone

@@ -1319,7 +1319,7 @@ pub let quoted_into : Map[String, Array[(String, String, String, @json.Json)]]
 
 pub let read_only_words : String
 
-pub fn read_place(Reading, ChatView, Array[Entry], @ui.ListReader, Double, Double, Int32) -> Unit
+pub fn read_place(Reading, ChatView, Array[Entry], @ui.ListReader, Double, Double) -> Unit
 
 pub fn reader_key(DriveAt) -> String
 
@@ -2577,7 +2577,6 @@ pub(all) struct ListFrame {
   list : Array[Entry]
   keys : Array[String]
   flight : SendFlight?
-  glides : Bool
   draft : String
 }
 
@@ -2982,7 +2981,7 @@ pub(all) struct Reading {
   mut seen_whole : Double
   mut top_seq : Double
   mut bottom_seq : Double
-  mut view_frame : Int32
+  mut view_read : Bool
   mut state_seen : Bool
   mut view_still : Bool
   mut top_off : Double
@@ -3001,16 +3000,15 @@ pub(all) struct Reading {
   known : Map[String, Bool]
   mut drawn : Bool
   acts : Map[String, Bool]
-  mut shown_frame : Int32
-  mut played : Int32
-  mut ticked : Int32
+  mut shown : Bool
+  mut was_shown : Bool
+  mut played : Bool
+  mut ticked : Bool
   fresh : Map[String, Bool]
-  mut came_frame : Int32
   came : Map[String, (Int32, String)]
   mut came_n : Int32
   makes_way : Map[String, String]
   mut over : String
-  mut over_frame : Int32
   admitted : Map[String, Bool]
   mut list_read : @ui.ListReader?
   mut newest : String
@@ -3029,7 +3027,7 @@ pub(all) struct Reading {
   floor_laid : Map[String, Double]
   act_room : Map[String, Double]
   act_whole : Map[String, Bool]
-  mut floor_frame : Int32
+  mut floor_counted : Bool
   mut floor_was : Double
   running : Map[String, Agent]
   last_turns : Map[String, String]
@@ -3048,7 +3046,7 @@ pub(all) struct Reading {
   mut motion_keys : Array[String]
   rows : @ui.ListRows[Entry]
 }
-pub fn Reading::sees(Self, Int32, Double?) -> Bool
+pub fn Reading::sees(Self, Double?) -> Bool
 
 pub(all) struct Relaying {
   station : @signals.Signal[String]
@@ -3430,7 +3428,7 @@ pub(all) struct Turns {
   mut sent_at : Double
   mut sent_until : Double
   mut list_rest : Double
-  mut stepped : Int32
+  mut stepped_at : Double
   mut now : Double
   mover : @ui.Mover
 }
