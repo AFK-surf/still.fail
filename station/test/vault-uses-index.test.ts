@@ -238,10 +238,19 @@ test("a ready vault page can be read while a foreground write is pending", async
     worker.postMessage({ id: 2, ws: "slow", vault: PLAIN, owner: "alice@x.com", limit: 2 });
     await blocked(2);
     worker.postMessage({ id: 3, ws: "w", vault: PLAIN, owner: "alice@x.com", limit: 2 });
-    await blocked(2);
+    const ready = async (id: number) => {
+      for (;;) {
+        const message = await next();
+        if (message.foreground) continue;
+        assert.equal(message.id, id, "the unfinished page still waits for the foreground writer");
+        return message;
+      }
+    };
+    const first = await ready(3);
+    assert.deepEqual(first.bodies!.map((b) => JSON.parse(b).item), ["old"]);
     worker.postMessage({ id: 4, ws: "w", vault: PLAIN, owner: "alice@x.com", limit: 2 });
-    const behind = await next();
-    assert.equal(behind.id, 3, "a ready vault passes a different workspace waiting for a write");
+    const second = await ready(4);
+    assert.deepEqual(second.bodies!.map((b) => JSON.parse(b).item), ["old"]);
     await messages.return?.();
   } finally {
     if (worker !== null) await worker.terminate();
