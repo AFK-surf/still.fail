@@ -59,9 +59,9 @@ pub(all) struct Turns {
   mut sent_until : Double
   /// the list's glide after what came, as last seen: over from then (inf: under way, its end not known yet)
   mut list_rest : Double
-  /// the frame they were last played on in (Turns::step): their chat's page shown then; that frame's time, as handed
-  /// to what moves (Moving::sample)
-  mut stepped : Int
+  /// the moment they were last played on at (Turns::step): their chat's page shown then; the time handed to what
+  /// moves (Moving::sample)
+  mut stepped_at : Double
   mut now : Double
   mover : @ui.Mover
 }
@@ -88,7 +88,7 @@ pub fn turns_of(key : String) -> Turns {
         sent_at: -1.0,
         sent_until: -1.0,
         list_rest: -1.0,
-        stepped: -1,
+        stepped_at: @double.neg_infinity,
         now: 0.0,
         mover: @ui.Mover::new(),
       }
@@ -171,11 +171,11 @@ pub fn Turns::emitting(self : Turns) -> Bool {
 
 ///|
 /// `target` (something under a post shown or not: a decision's options, 忽略, a card asking) as it shows. What changes
-/// out of sight (`seen` false: its row not on screen the frame before, Reading::sees) changes at once, its motion over
-/// before it is seen (`started` long ago: unseen_at). On screen, what comes waits its turn among what changes the
-/// list's height and holds the next for `ms` (its motion) once made; what goes does not go: it stays as it is, its
-/// room with it, until it is out of sight (the user, 2026-10-29: what is answered on screen moves nothing, the list
-/// changing only for what comes). The first time it is asked, as it is.
+/// out of sight (`seen` false: its row not on screen as the build before left it, Reading::sees) changes at once, its
+/// motion over before it is seen (`started` long ago: unseen_at). On screen, what comes waits its turn among what
+/// changes the list's height and holds the next for `ms` (its motion) once made; what goes does not go: it stays as it
+/// is, its room with it, until it is out of sight (the user, 2026-10-29: what is answered on screen moves nothing, the
+/// list changing only for what comes). The first time it is asked, as it is.
 pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double, seen~ : Bool) -> Bool {
   ignore(ms)
   ignore(seen)
@@ -290,7 +290,7 @@ pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 /// not known), not the reader's hand on it.
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
   self.list_rest = list_rest
-  self.stepped = c.frame_number()
+  self.stepped_at = c.moment()
   let mut steps = 0
   while steps < 16 {
     steps = steps + 1
@@ -342,8 +342,9 @@ impl @ui.Moving for Turns with keeps_time(self) {
 
 ///|
 impl @ui.Moving for Turns with rest_at(self, now, frame) {
-  // (their chat's page not shown this frame: nothing plays; shown again, its build plays them on)
-  if self.stepped < frame {
+  ignore(frame)
+  // (not played on at this moment, their chat's page not shown: nothing plays; shown again, its build plays them on)
+  if self.stepped_at < now {
     return -1.0
   }
   match self.next_ask() {

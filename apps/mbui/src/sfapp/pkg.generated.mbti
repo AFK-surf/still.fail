@@ -738,7 +738,7 @@ pub let quoted_into : Map[String, Array[(String, String, String, @json.Json)]]
 
 pub let read_only_words : String
 
-pub fn read_place(@sfbase.Reading, @sfbase.ChatView, Array[@sfbase.Entry], @ui.ListReader, Double, Double, Int32) -> Unit
+pub fn read_place(@sfbase.Reading, @sfbase.ChatView, Array[@sfbase.Entry], @ui.ListReader, Double, Double) -> Unit
 
 pub fn reader_key(@sfbase.DriveAt) -> String
 

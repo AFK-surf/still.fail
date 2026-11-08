@@ -36,14 +36,13 @@ pub fn chat_list(
   let draft = r.station + ":" + r.session
   // what a message's menu left to do (menus.mbt)
   menus_frame(c)
-  // its pictures that could not be had for want of its station asked again: as the chat comes into view (not drawn the
-  // frame before), and as its station is reached again
-  let frame = c.frame_number()
-  match lists_drawn.get(key) {
-    Some(f) if f == frame || f == frame - 1 => ()
-    _ => src.images.again(r.station)
+  // its pictures that could not be had for want of its station asked again: as the chat comes into view (its list
+  // shown neither in the build before nor yet in this one: Reading's `was_shown`, `shown`), and as its station is
+  // reached again
+  let reading = reading_of(r.station + "\u{1}" + r.session)
+  if !reading.shown && !reading.was_shown {
+    src.images.again(r.station)
   }
-  lists_drawn[key] = frame
   src.images.seen(r.station, !v.offline)
   let lf = list_frame(
     c,
@@ -598,14 +597,8 @@ pub fn find_forget() -> Unit {
 }
 
 ///|
-/// The frame each chat's list was last drawn in (chat_list): one not drawn the frame before is coming into view.
-// kept across runs: put back by list_reset (reset)
-let lists_drawn : Map[String, Int] = {}
-
-///|
 /// What the list keeps of its own, let go (the package's reset).
 fn list_reset() -> Unit {
-  lists_drawn.clear()
   lists_set_off.clear()
   flashing_now.val = ("", 0.0)
   ask_turns.clear()
@@ -638,10 +631,11 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
     match lists_set_off.get(key) {
       // (the frame that finds its way over: laid out anew as of the moment it is there)
       Some((id, _, ends, _)) if id != "" => {
-        lists_set_off[key] = ("", 0.0, dmin(ends, now), c.frame_number())
+        lists_set_off[key] = ("", 0.0, dmin(ends, now), now)
         return (c.width, false, dmin(ends, now))
       }
-      Some((_, _, at, frame)) if frame == c.frame_number() => return (c.width, false, at)
+      // (asked again at the moment that found it over: as of when it was there, whichever build asks)
+      Some((_, _, at, found)) if found == now => return (c.width, false, at)
       Some(_) => lists_set_off.remove(key) |> ignore
       None => ()
     }
@@ -651,7 +645,7 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
     Some((id, w, _, _)) if id == way.id => w
     _ => c.width
   }
-  lists_set_off[key] = (way.id, from, way.ends, c.frame_number())
+  lists_set_off[key] = (way.id, from, way.ends, now)
   let to = way.to
   if (from <= chat_narrow_w) != (to <= chat_narrow_w) || composer_across(from) != composer_across(to) {
     return (dmin(dmin(from, to), c.width), true, now)
@@ -663,9 +657,9 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
 }
 
 ///|
-/// Each chat list on a page's way, or the frame it found it over: the way ("" over), how wide its pane was as it set
-/// off, when it is there, and the frame last asked (laid_w).
-let lists_set_off : Map[String, (String, Double, Double, Int)] = {}
+/// Each chat list on a page's way, or the moment it found it over: the way ("" over), how wide its pane was as it set
+/// off, when it is there, and the moment last asked at (laid_w).
+let lists_set_off : Map[String, (String, Double, Double, Double)] = {}
 
 ///|
 fn row_side(w : Double) -> Double {
