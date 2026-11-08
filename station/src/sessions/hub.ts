@@ -724,24 +724,37 @@ export class Hub {
   /// Gives sessions a message they have not had: each runs it, or stops for `-stop`, compacts its
   /// context for `-compact`, clears it for `-clear` (saying in the thread why not, when it cannot now).
   /// A session archived by hand hears nothing until shown again.
-  deliver(thread: number, n: number, sessions: string[], text: string) {
+  deliver(thread: number, n: number, sessions: string[], text: string, options: { retryPending?: boolean; workspace?: string | null } = {}) {
     // Neither archived by hand nor gone from the thread (chat_leave).
     const left = new Set(this.store.threadSessions(thread).filter((m) => m.leftAt !== null).map((m) => m.session));
     const hearing = sessions.filter((key) => !left.has(key) && this.store.getSession(key)?.archivedBy !== MANUAL);
-    for (const key of this.store.deliver(thread, n, hearing)) {
+    const workspace = options.workspace === undefined ? undefined : { expected: options.workspace, fallback: this.wsOf(null) };
+    const added = this.store.deliver(thread, n, hearing, workspace);
+    const command = threadCommand(text);
+    const give = (key: string) => {
       this.store.touch(key);
       const row = this.store.getSession(key);
-      if (!row) continue;
+      if (!row) return;
       const actor = this.actor(row);
-      const command = threadCommand(text);
       if (command === null) {
         void actor.kick();
-        continue;
+        return;
       }
-      this.store.markDelivered(key, [{ thread, n, apart: false }]);
+      // Another process can be retrying the same delivery; only the one that marks it runs the command.
+      const marked = this.store.markDelivered(key, [{ thread, n, apart: false }]);
+      if (options.workspace !== undefined && marked === 0) return;
       if (command === "stop") void actor.stop();
       else if (command === "compact") void actor.compact(true);
       else void actor.clear(true);
+    };
+    for (const key of added) give(key);
+    // A process may have stopped after queuing a delivery but before waking its actor. Retry only what still waits.
+    if (options.retryPending === true) {
+      const fresh = new Set(added);
+      for (const key of new Set(hearing)) {
+        if (fresh.has(key) || !this.store.deliveryPending(thread, n, key)) continue;
+        give(key);
+      }
     }
   }
 

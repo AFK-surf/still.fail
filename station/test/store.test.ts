@@ -8,8 +8,8 @@ import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LATEST_DECISIONS_SCOPED_NO_TIME, LEGACY_LATEST_DECISIONS, LEGACY_LATEST_DECISIONS_SCOPED, LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, decisionScopedWithSession, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, DELIVERY_INSERT_IF_MEMBER, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LATEST_DECISIONS_SCOPED_NO_TIME, LEGACY_LATEST_DECISIONS, LEGACY_LATEST_DECISIONS_SCOPED, LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, ROUTER_WORKSPACE_MISMATCH, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, decisionScopedWithSession, newMessage,
 } from "../src/store/store.ts";
 import { addClientColumn, addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
 import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, installArchivePolicyIndex } from "../src/store/archive-policy-index.ts";
@@ -1819,7 +1819,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]], [SESSION_THREAD_BY_ID, [1, "a"]],
     [LATEST_THREAD_ATTEMPT, ["a"]], [LATEST_THREAD_SCOPE, ["a"]],
     [THREAD_INSERT_IF_ABSENT, ["slack", "C", "1", null, null, 1, null]],
-    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]],
+    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]], [DELIVERY_INSERT_IF_MEMBER, [1, 1, "a", MANUAL]], [ROUTER_WORKSPACE_MISMATCH, [1, "home", "home"]],
     [STATS_OF, ["a"]], [SESSION_COUNT_TOTAL, [1, "ws"]], [SESSION_COUNT_CONNECT, [1, "ws", "a"]],
     [SESSION_COUNT_FIRST, ["100", 64]], [SESSION_COUNT_NEXT, ["1", "100", 64]],
     [SESSION_LIST_FIRST, ["100", 64]], [SESSION_LIST_NEXT, ["1", "100", 64]],
@@ -1869,6 +1869,11 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(THREAD_INSERT_IF_ABSENT)!.some((d) => d.includes("(surface=? AND channel=? AND thread_ts=?)")));
   assert.ok(plans.get(MEMBER_JOIN_IF_NEEDED)!.some((d) => d.includes("(thread=? AND session=?)")));
   assert.ok(plans.get(DELIVERY_INSERT_IF_ABSENT)!.some((d) => d.includes("(thread=? AND n=? AND session=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_MEMBER)!.some((d) => d.includes("(thread=? AND session=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_MEMBER)!.some((d) => d.includes("(thread=? AND n=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_MEMBER)!.some((d) => d.includes("(thread=? AND n=? AND session=?)")));
+  assert.ok(plans.get(ROUTER_WORKSPACE_MISMATCH)!.some((d) => d.includes("(thread=?)")));
+  assert.ok(plans.get(ROUTER_WORKSPACE_MISMATCH)!.some((d) => d.includes("(key=?)")));
   assert.ok(plans.get(SESSION_COUNT_TOTAL)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=?)")));
   assert.ok(plans.get(SESSION_COUNT_CONNECT)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=? AND connect=?)")));
   assert.ok(plans.get(SESSION_COUNT_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
@@ -2021,7 +2026,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_THREAD_BY_ID, [1, "a"]],
     [LATEST_THREAD_ATTEMPT, ["a"]], [LATEST_THREAD_SCOPE, ["a"]],
     [THREAD_INSERT_IF_ABSENT, ["slack", "C", "1", null, null, 1, null]],
-    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]],
+    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]], [DELIVERY_INSERT_IF_MEMBER, [1, 1, "a", MANUAL]], [ROUTER_WORKSPACE_MISMATCH, [1, "home", "home"]],
     [WIDGET_SOURCE, ["a", "/w/item.html"]], [WIDGET_SOURCE_MISSING, ["a"]], [WIDGET_SOURCE_UNUSUAL, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
@@ -2055,6 +2060,11 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(THREAD_INSERT_IF_ABSENT, "(surface=? AND channel=? AND thread_ts=?)");
   has(MEMBER_JOIN_IF_NEEDED, "(thread=? AND session=?)");
   has(DELIVERY_INSERT_IF_ABSENT, "(thread=? AND n=? AND session=?)");
+  has(DELIVERY_INSERT_IF_MEMBER, "(thread=? AND session=?)");
+  has(DELIVERY_INSERT_IF_MEMBER, "(thread=? AND n=?)");
+  has(DELIVERY_INSERT_IF_MEMBER, "(thread=? AND n=? AND session=?)");
+  has(ROUTER_WORKSPACE_MISMATCH, "(thread=?)");
+  has(ROUTER_WORKSPACE_MISMATCH, "(key=?)");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;

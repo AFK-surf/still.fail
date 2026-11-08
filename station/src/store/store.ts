@@ -102,6 +102,17 @@ export const MEMBER_JOIN_IF_NEEDED = `INSERT INTO thread_sessions (thread, sessi
 export const DELIVERY_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO deliveries (thread, n, session)
   SELECT ?1, ?2, ?3 WHERE NOT EXISTS
     (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`;
+// A Router write keeps its original targets across a retry. Check they still exist, belong to the chat and can hear it
+// in the same statement as the insertion, so a concurrent deletion cannot recreate a delivery for a removed session.
+export const DELIVERY_INSERT_IF_MEMBER = `INSERT OR IGNORE INTO deliveries (thread, n, session)
+  SELECT ?1, ?2, ?3 WHERE EXISTS
+    (SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session
+     WHERE ts.thread = ?1 AND ts.session = ?3 AND ts.left_at IS NULL AND (s.archived_by IS NULL OR s.archived_by <> ?4))
+  AND EXISTS (SELECT 1 FROM entries WHERE thread = ?1 AND n = ?2 AND kind = 'message')
+  AND NOT EXISTS (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`;
+// A Router may only deliver while the whole chat still belongs to the requesting workspace.
+export const ROUTER_WORKSPACE_MISMATCH = `SELECT 1 FROM thread_sessions ts LEFT JOIN sessions s ON s.key = ts.session
+  WHERE ts.thread = ?1 AND (s.key IS NULL OR COALESCE(s.ws, ?2) IS NOT ?3) LIMIT 1`;
 export const SESSION_HOME_THREAD = `SELECT t.*, ts.connect FROM threads t INDEXED BY threads_home
   CROSS JOIN thread_sessions ts WHERE t.home = ?1 AND ts.thread = t.id AND ts.session = ?1
   ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`;
@@ -1400,6 +1411,7 @@ export class Store {
         // All of this session's deliveries go: clear its first one once instead of finding the next after every deletion.
         this.#run("DELETE FROM session_first WHERE session = ?", key);
         this.#run("DELETE FROM deliveries WHERE session = ?", key);
+        this.#run("DELETE FROM comma_router_once_targets WHERE session = ?", key);
         this.#run("DELETE FROM letter_deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
         this.#run("DELETE FROM runtime_sessions WHERE session_key = ?", key);
@@ -1418,6 +1430,8 @@ export class Store {
             continue;
           }
           removed.push(thread);
+          this.#run("DELETE FROM comma_router_once_targets WHERE id IN (SELECT id FROM comma_router_once WHERE thread = ?)", thread);
+          this.#run("DELETE FROM comma_router_once WHERE thread = ?", thread);
           this.#run("DELETE FROM deliveries WHERE thread = ?", thread);
           this.#run("DELETE FROM entries WHERE thread = ?", thread);
           this.#run("DELETE FROM letter_deliveries WHERE thread = ?", thread);
@@ -1773,9 +1787,10 @@ export class Store {
 
   /// Records something said. A message already recorded in that thread (Slack delivers to every connect in the channel,
   /// and redelivers) is the same message: its n comes back with `fresh` false and nothing changes. For a new message,
-  /// `before` runs under the write lock and may throw to roll back. It must only do bounded, synchronous work; if the
-  /// lock is held by another writer, MessageWriteBusy says nothing was written and the caller may retry later.
-  insertMessage(m: NewMessage, before?: () => void): [number, boolean] {
+  /// `before` runs under the write lock; `inserted` runs there after the new entry has its number. Either may throw
+  /// to roll back, and must only do bounded, synchronous work. If another writer has the lock, MessageWriteBusy says
+  /// nothing was written and the caller may retry later.
+  insertMessage(m: NewMessage, before?: () => void, inserted?: (n: number) => void): [number, boolean] {
     return this.#with((changes) => {
       const existing = this.messageNumberAt(m.thread, m.ts);
       if (existing !== null) return [existing, false];
@@ -1795,6 +1810,9 @@ export class Store {
         },
         changes,
         before,
+        before !== undefined,
+        undefined,
+        inserted,
       );
       return [entry.n, true];
     });
@@ -2189,17 +2207,48 @@ export class Store {
   // ── deliveries ──
 
   /// Hands a message to sessions. Those that did not have it yet.
-  deliver(thread: number, n: number, sessions: string[]): string[] {
+  deliver(thread: number, n: number, sessions: string[], workspace?: { expected: string | null; fallback: string | null }): string[] {
     return this.#with((changes) => {
-      const added: string[] = [];
-      for (const s of sessions) {
-        if (this.#run(DELIVERY_INSERT_IF_ABSENT, thread, n, s) > 0) {
-          added.push(s);
-          changes.push({ type: "session", key: s });
+      if (workspace === undefined) {
+        const added: string[] = [];
+        for (const s of sessions) {
+          if (this.#run(DELIVERY_INSERT_IF_ABSENT, thread, n, s) > 0) {
+            added.push(s);
+            changes.push({ type: "session", key: s });
+          }
         }
+        return added;
       }
+      // The workspace check and all Router deliveries see one write-locked snapshot. A concurrent move must not
+      // happen between authorization and inserting the deliveries.
+      const added = this.#tx(() => {
+        if (
+          this.#one("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1", thread) === undefined ||
+          this.#one(ROUTER_WORKSPACE_MISMATCH, thread, workspace.fallback, workspace.expected) !== undefined
+        ) throw new Error("no such chat of the workspace");
+        const added: string[] = [];
+        for (const s of sessions) {
+          if (this.#run(DELIVERY_INSERT_IF_MEMBER, thread, n, s, MANUAL) > 0) added.push(s);
+        }
+        return added;
+      }, true);
+      for (const s of added) changes.push({ type: "session", key: s });
       return added;
     });
+  }
+
+  /// Whether this exact message was handed to the session and still waits to be read.
+  deliveryPending(thread: number, n: number, session: string): boolean {
+    return this.#one("SELECT 1 FROM deliveries WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL", thread, n, session) !== undefined;
+  }
+
+  /// Finishes this particular Router write, never a later write which has reused its expired key.
+  completeRouterWrite(id: string): boolean {
+    return this.#tx(() => {
+      const changed = this.#run("UPDATE comma_router_once SET pending = 0 WHERE id = ? AND pending = 1", id);
+      if (changed > 0) this.#run("DELETE FROM comma_router_once_targets WHERE id = ?", id);
+      return changed > 0 || this.#one("SELECT 1 FROM comma_router_once WHERE id = ? AND pending = 0", id) !== undefined;
+    }, true);
   }
 
   /// What the session has yet to read, as merged now, in the order it was handed over: its threads' messages, and the
@@ -2254,11 +2303,12 @@ export class Store {
   }
 
   /// Marks messages read by the session.
-  markDelivered(session: string, messages: Handed[]): void {
-    this.#with((changes) => {
+  markDelivered(session: string, messages: Handed[]): number {
+    return this.#with((changes) => {
       const now = this.now();
+      let marked = 0;
       for (const { thread, n, apart } of messages) {
-        this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL`, now, thread, n, session);
+        marked += this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL`, now, thread, n, session);
       }
       if (messages.length > 0) {
         const pending = Number(this.#one(
@@ -2267,6 +2317,7 @@ export class Store {
         )?.n ?? 0);
         changes.push({ type: "session", key: session, pending });
       }
+      return marked;
     });
   }
 
@@ -3557,7 +3608,7 @@ export class Store {
   }
 
   /// Appends an entry as the thread's next.
-  #append(entry: EntryRow, changes: Changes, before?: () => void, tryWrite = before !== undefined, committed?: () => void): EntryRow {
+  #append(entry: EntryRow, changes: Changes, before?: () => void, tryWrite = before !== undefined, committed?: () => void, inserted?: (n: number) => void): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
       const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
@@ -3567,6 +3618,7 @@ export class Store {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
+      inserted?.(entry.n);
     }, tryWrite);
     committed?.();
     // As a read of it gives it: what is told of it is made from this (api/events.ts), not read back.

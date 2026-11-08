@@ -133,6 +133,25 @@ CREATE TABLE IF NOT EXISTS entries (
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
 -- The first person to answer a card is found by its entry number, without reading intervening agent messages.
 CREATE INDEX IF NOT EXISTS entries_people_by_n ON entries (thread, n) WHERE author_kind = 'person' AND kind = 'message';
+-- The Router's idempotency key is committed with its message. Targets are kept only until delivery has been handed on.
+CREATE TABLE IF NOT EXISTS comma_router_once (
+  -- A retry may still be finishing while an expired key is reused. Never reuse its identity.
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  at INTEGER NOT NULL,
+  pending INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS comma_router_once_age ON comma_router_once (at);
+CREATE INDEX IF NOT EXISTS comma_router_once_thread ON comma_router_once (thread);
+CREATE TABLE IF NOT EXISTS comma_router_once_targets (
+  id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  PRIMARY KEY (id, position)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS comma_router_once_target_session ON comma_router_once_targets (session, id);
 CREATE TABLE IF NOT EXISTS deliveries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
