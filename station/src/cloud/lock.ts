@@ -86,8 +86,22 @@ export const signedBytes = (hash: string) => Buffer.concat([Buffer.from("stillfa
 /// asks for a credential for that endpoint).
 export const endpointBytes = (ws: string, endpoint: string) => Buffer.from(`stillfail-lock-endpoint/1\0${ws}\0${endpoint}`);
 
+/// Keys already made, by id: a chain's few keys check every entry they signed (a lock folded again, each device's
+/// hello), and making node's key object from its JWK costs more than the check itself. Bounded: cleared when full.
+const made = new Map<string, ReturnType<typeof makePublicKey>>();
+const MADE_MAX = 1024;
+
 /// A signing key's public half by its id: `ed25519:<hex>` or `p256:<base64url of the uncompressed point>`.
 export function publicKey(id: string) {
+  const known = made.get(id);
+  if (known !== undefined) return known;
+  const key = makePublicKey(id);
+  if (made.size >= MADE_MAX) made.clear();
+  made.set(id, key);
+  return key;
+}
+
+function makePublicKey(id: string) {
   if (id.startsWith("ed25519:") && isId(id.slice(8))) {
     return { alg: "Ed25519" as const, key: createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(id.slice(8), "hex").toString("base64url") }, format: "jwk" }) };
   }
