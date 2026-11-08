@@ -8,7 +8,9 @@
 /// how that lines up across it and lies along it, its corner, its ground and whether it cuts what it holds. What it
 /// says nothing of is left as the node has it.
 pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false) -> Unit {
-  let p = fn() { look().base }
+  // (worked out once for all it binds, again as what it reads changes)
+  let base = @signals.computed(fn(_) { look().base })
+  let p = fn() { base.get() }
   // (what it says as the node is made: what it binds; what it says nothing of, left to the node's maker)
   let q0 = @signals.untracked(p)
   let room = fn(s : @ui.Space?) {
@@ -47,86 +49,91 @@ pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false
   }
   // (`w=Full` along what holds it in a row, `h=Full` along a column: what is left of it, from none)
   let along = fn(q : @ui.Patch) { if in_row { q.w } else { q.h } }
-  v.row(By(fn() { p().row.unwrap_or(false) })) |> ignore
-  if points(q0.w) is Some(_) {
-    v.width(By(fn() { points(p().w) })) |> ignore
-  }
-  if points(q0.h) is Some(_) {
-    v.height(By(fn() { points(p().h) })) |> ignore
-  }
-  if along(q0) is Some(Full | Grow(_)) {
-    v
-    .grow(By(fn() {
-      match along(p()) {
-        Some(Full) => 1.0
-        Some(Grow(k)) => k
-        _ => 0.0
-      }
-    }))
-    .basis(Is(Some(0.0)))
-    |> ignore
-  }
-  if q0.min_w is Some(_) {
-    v.min_width(By(fn() { points(p().min_w) })) |> ignore
-  }
-  if q0.max_w is Some(_) {
-    v.max_width(By(fn() { points(p().max_w) })) |> ignore
-  }
-  if q0.min_h is Some(_) {
-    v.min_height(By(fn() { points(p().min_h) })) |> ignore
-  }
+  // (all of it read in one watch: what of it changes set again, each property alone as before)
   v
-  .padding(By(fn() {
-    let q = p()
-    sides(room, q.p, q.px, q.py, q.pl, q.pt, q.pr, q.pb)
-  }))
-  .gap(By(fn() { room(p().gap).unwrap_or(0.0) }))
-  .lines_up(By(fn() {
-    match p().align {
-      Some(AStart) => Some(Start)
-      Some(ACenter) => Some(Middle)
-      Some(AEnd) => Some(End)
-      Some(AStretch) | None => None
+  .binds_together(fn() {
+    v.row(By(fn() { p().row.unwrap_or(false) })) |> ignore
+    if points(q0.w) is Some(_) {
+      v.width(By(fn() { points(p().w) })) |> ignore
     }
-  }))
-  .lies_along(By(fn() {
-    match p().justify {
-      Some(JCenter) => Middle
-      Some(JEnd) => End
-      _ => Start
+    if points(q0.h) is Some(_) {
+      v.height(By(fn() { points(p().h) })) |> ignore
     }
-  }))
-  |> ignore
-  if q0.m is Some(_) || q0.mx is Some(_) || q0.my is Some(_) || q0.ml is Some(_) || q0.mt is Some(_) || q0.mr is Some(_) || q0.mb is Some(_) {
+    if along(q0) is Some(Full | Grow(_)) {
+      v
+      .grow(By(fn() {
+        match along(p()) {
+          Some(Full) => 1.0
+          Some(Grow(k)) => k
+          _ => 0.0
+        }
+      }))
+      .basis(Is(Some(0.0)))
+      |> ignore
+    }
+    if q0.min_w is Some(_) {
+      v.min_width(By(fn() { points(p().min_w) })) |> ignore
+    }
+    if q0.max_w is Some(_) {
+      v.max_width(By(fn() { points(p().max_w) })) |> ignore
+    }
+    if q0.min_h is Some(_) {
+      v.min_height(By(fn() { points(p().min_h) })) |> ignore
+    }
     v
-    .margin(By(fn() {
+    .padding(By(fn() {
       let q = p()
-      sides(margin, q.m, q.mx, q.my, q.ml, q.mt, q.mr, q.mb)
+      sides(room, q.p, q.px, q.py, q.pl, q.pt, q.pr, q.pb)
     }))
-    |> ignore
-  }
-  if q0.radius is Some(_) {
-    v
-    .radius(By(fn() {
-      match p().radius {
-        Some(r) => @ui.tree_theme().corner(r)
-        None => 0.0
+    .gap(By(fn() { room(p().gap).unwrap_or(0.0) }))
+    .lines_up(By(fn() {
+      match p().align {
+        Some(AStart) => Some(Start)
+        Some(ACenter) => Some(Middle)
+        Some(AEnd) => Some(End)
+        Some(AStretch) | None => None
+      }
+    }))
+    .lies_along(By(fn() {
+      match p().justify {
+        Some(JCenter) => Middle
+        Some(JEnd) => End
+        _ => Start
       }
     }))
     |> ignore
-  }
-  if q0.bg is Some(_) {
-    v
-    .ground(By(fn() {
-      match p().bg {
-        Some(Data(k)) => k
-        Some(c) => @ui.tree_theme().color(c)
-        None => 0L
-      }
-    }))
-    |> ignore
-  }
-  if q0.clip is Some(_) {
-    v.clips(By(fn() { p().clip.unwrap_or(false) })) |> ignore
-  }
+    if q0.m is Some(_) || q0.mx is Some(_) || q0.my is Some(_) || q0.ml is Some(_) || q0.mt is Some(_) || q0.mr is Some(_) || q0.mb is Some(_) {
+      v
+      .margin(By(fn() {
+        let q = p()
+        sides(margin, q.m, q.mx, q.my, q.ml, q.mt, q.mr, q.mb)
+      }))
+      |> ignore
+    }
+    if q0.radius is Some(_) {
+      v
+      .radius(By(fn() {
+        match p().radius {
+          Some(r) => @ui.tree_theme().corner(r)
+          None => 0.0
+        }
+      }))
+      |> ignore
+    }
+    if q0.bg is Some(_) {
+      v
+      .ground(By(fn() {
+        match p().bg {
+          Some(Data(k)) => k
+          Some(c) => @ui.tree_theme().color(c)
+          None => 0L
+        }
+      }))
+      |> ignore
+    }
+    if q0.clip is Some(_) {
+      v.clips(By(fn() { p().clip.unwrap_or(false) })) |> ignore
+    }
+  })
+  |> ignore
 }
