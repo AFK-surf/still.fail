@@ -437,6 +437,8 @@ fn narrow_made_as(
                 let core = settings_core(src, w)
                 let here = fn() { @settings.here_of(core, w.id, w.name) }
                 @settings.frame(core, @signals.untracked(here))
+                // (a dialog a fixture's mode puts up over its page, before the page is made: setting_page's)
+                @sfdesk.settings_fixture(src, core)
                 // (its words in pieces picked with the mouse, as an old view's page's in this frame are (narrow_page's
                 // c.selectable), before what it holds is made)
                 @ui.words_picked(p)
@@ -602,6 +604,8 @@ fn narrow_made_as(
       })
     Setting(Workspace) =>
       made("workspace", fn(p, core, here, frame, stint, _acts) { @sfpages.workspace_node(p, core, here, on_back=core.pop, frame~, stint~) })
+    Setting(VaultItems) =>
+      made("vault-items", fn(p, core, here, frame, _stint, _acts) { @sfpages.vault_items_node(p, core, here, on_back=core.pop, frame~) })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)

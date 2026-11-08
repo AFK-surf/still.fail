@@ -260,3 +260,43 @@ pub fn icon_inks_node(
   |> ignore
   made.val.unwrap()
 }
+
+///|
+/// A provider's mark as a node, `size` across (provider_logo's): OpenCode's frame, the sliders of a profile of the
+/// environment's own keys, else the mark of the company that made it (`mark` an API provider's own), a plug where there
+/// is none. The node.
+pub fn provider_logo_node(parent : @view.View, runtime : String, kind : String, size : Double, mark : String) -> @view.View {
+  if kind == "opencode-go" || mark == "opencode" {
+    // (OpenCodeMark: a frame half as wide as its size and two thirds as high)
+    return parent.box(fn(b) {
+      b.width(Is(Some(size))).height(Is(Some(size))).lines_up(Is(Some(Middle))).lies_along(Is(Middle)) |> ignore
+      b.box(fn(f) {
+        style_node(f, fn() { opencode_frame })
+        f.width(Is(Some(size * opencode_w))).height(Is(Some(size * opencode_h))) |> ignore
+      })
+      |> ignore
+    })
+  }
+  if kind == "env" {
+    return icon_node(parent, "sliders", size, By(fn() { theme().p.text }))
+  }
+  let maker = if kind == "api-provider" {
+    mark
+  } else if runtime == "claude" || kind == "anthropic-api" {
+    "anthropic"
+  } else {
+    match runtime {
+      "grok" => "xai"
+      "cursor" => "cursor"
+      "devin" => "devin"
+      "hermes" => "hermes"
+      "agy" => "gemini"
+      _ => "openai"
+    }
+  }
+  if maker == "" || !has_drawable("maker_" + maker.replace_all(old="-", new="_")) {
+    icon_node(parent, "plug", size, By(fn() { theme().p.text }))
+  } else {
+    maker_mark_node(parent, maker, runtime, size)
+  }
+}

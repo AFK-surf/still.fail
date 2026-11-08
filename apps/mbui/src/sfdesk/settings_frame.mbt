@@ -43,7 +43,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Fonts | BarSettings | Me | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
+  if !(route is (Fonts | BarSettings | Me | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -55,7 +55,6 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     BarSettings => @sfpages.bars_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
     Vault => @sfpages.vault_page(c, core, here, frame)
-    VaultItems => @sfpages.vault_items_page(c, core, here, frame)
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
     Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
     Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
@@ -73,8 +72,9 @@ let settings_deep : Ref[Bool] = Ref(false)
 
 ///|
 /// A dialog a fixture's mode puts up over its page (MBUI_FIXTURE=settings-policy-text, settings-security-join, …:
-/// @settings.fixture_desk), once the page is drawn with what it needs.
-fn settings_fixture(src : Source, core : Core) -> Unit {
+/// @settings.fixture_desk), once the page is drawn with what it needs; before it is made where a frame makes it once
+/// (pane_made, tape_made, the narrow frame's).
+pub fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
     "policy-option" => @sfpages.fx_policy_up.val = "option"

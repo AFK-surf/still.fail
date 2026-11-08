@@ -128,6 +128,7 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     MemoryDoc(a, skill, at) => memory_doc_node(p, core, here, a, skill, at, on_back=core.pop, frame~, width~)
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
     Workspace => workspace_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    VaultItems => vault_items_node(p, core, here, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {
@@ -151,7 +152,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     BarSettings => bars_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
-    VaultItems => vault_items_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     Connects(only) => connects_page(c, src, core, here, frame, only)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)

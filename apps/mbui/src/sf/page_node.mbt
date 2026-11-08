@@ -1315,6 +1315,51 @@ pub fn page_card_node(parent : @view.View, body : (@view.View) -> Unit, footed? 
 }
 
 ///|
+/// Words on a card (card_lines', cardRowText) in `parent`: its `title` strong, `words` under it, `note` quieter under
+/// them, `bad` in red, 2 apart, each while it says any, as it says it now.
+pub fn card_lines_node(
+  parent : @view.View,
+  title : () -> String,
+  words? : () -> String = fn() { "" },
+  note? : () -> String = fn() { "" },
+  bad? : () -> String = fn() { "" },
+) -> Unit {
+  parent.box(fn(l) {
+    l.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(card_lines_gap)) |> ignore
+    for line in [(title, desk_strong), (words, desk_words), (note, desk_muted), (bad, desk_note_bad)] {
+      let (said, look) = line
+      l.show(fn() { said() != "" }, fn(w) { styled_words(w, said, fn() { look }) |> ignore })
+    }
+  })
+  |> ignore
+}
+
+///|
+/// card_lines' room between its lines (desk_card_text's gap=S0_5).
+let card_lines_gap : Double = 2.0
+
+///|
+/// A footed card's buttons (card_foot's, cardFoot), made by `make` in a row in `parent`, last on the card: 8 apart,
+/// across their middle, reaching its foot corners as far as they are tall, at its start (the first, without an icon,
+/// its words at the card's: button_node's `card_words`), or its end where `at_end`.
+pub fn card_foot_node(parent : @view.View, make : (@view.View) -> Unit, at_end? : Bool = false) -> Unit {
+  parent.box(fn(f) {
+    let out = card_foot_in(button_height()) - card_pad
+    f.row(Is(true)).gap(Is(card_foot_gap)).lines_up(Is(Some(Middle))).margin(Is((out, 0.0, out, 0.0))) |> ignore
+    if at_end {
+      f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+    }
+    make(f)
+  })
+  |> ignore
+}
+
+///|
+/// card_foot's room between its buttons (pg_card_foot's gap=S2).
+let card_foot_gap : Double = 8.0
+
+
+///|
 /// A page's card's room between what is on it (desk_card's gap=S3_5) and under it (pg_card_room's pb=S2_5).
 let page_card_gap : Double = 14.0
 
