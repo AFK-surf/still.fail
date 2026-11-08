@@ -1929,6 +1929,7 @@ pub fn[P] Nav::held_over(Self[P], @view.View, (P) -> Bool, Double) -> Unit
 pub fn[P] Nav::moving(Self[P]) -> Bool
 pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, on_entry_leave? : (Int32, P) -> Unit, went_back? : (P, Bool, Bool, Array[P]) -> Unit, from_left? : (P, P?) -> Bool) -> Self[P]
 pub fn[P] Nav::offset(Self[P]) -> Double
+pub fn[P] Nav::page_island(Self[P], @view.View, Int32, (Ctx, P) -> Unit, key? : () -> String) -> @view.View
 pub fn[P] Nav::page_of(Self[P], Int32) -> (P, P?)?
 pub fn[P] Nav::pages(Self[P]) -> Array[P]
 pub fn[P] Nav::pop(Self[P]) -> Bool

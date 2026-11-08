@@ -71,6 +71,42 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 }
 
 ///|
+/// A chat's page made once in node `v` of a stack's (entry `serial`'s: nav_view's and nav_flat_view's `made`), and the
+/// new chat that becomes it in place, the same page: what it holds its old view as yet, its island (Nav::page_island),
+/// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
+/// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes.
+pub fn chat_page_made(
+  v : @view.View,
+  src : Source,
+  serial : Int,
+  build : (@ui.Ctx, Source, Page) -> Unit,
+  key? : () -> String = fn() { "" },
+) -> Unit {
+  let retained = page_entry_source(src, v, serial)
+  let page_read = page_chat_reader(retained, v, serial)
+  let shown = src.owned_by(v)
+  v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  app.nav.page_island(
+    v,
+    serial,
+    fn(c, page) {
+      page_entry_read(serial, retained, page)
+      page_read(page)
+      build(c, if page is Chat(_) { retained } else { shown }, page)
+    },
+    key~,
+  )
+  .grow(Is(1.0))
+  |> ignore
+}
+
+///|
+/// Whether page `page` is a chat's made once (chat_page_made): a chat, or the new chat that becomes one in place.
+pub fn chat_page_is(page : Page) -> Bool {
+  page is (Chat(_) | NewChat)
+}
+
+///|
 priv struct PageSource {
   source : Source
   mut page : Page?

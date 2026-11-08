@@ -58,7 +58,11 @@ fn tape_page_pane(v : @view.View, src : Source) -> Unit {
         }
       },
       // (a page's bar on the tape the tree's, over its own view: what the page says of it, collected as it is built)
-      head=fn(b, k, made) { tape_bar_head(b, k, made, tips) },
+      // (a chat's page made once holds its old view, which says its bar as it is built, as an old view's page does)
+      head=fn(b, k, made) {
+        let chat = @signals.untracked(fn() { app.nav.page_of(k) is Some((p, _)) && @sfbase.chat_page_is(p) })
+        tape_bar_head(b, k, made && !chat, tips)
+      },
       // (a page of the library's made once in its place, where it is: its bar the tape's, from what the page is)
       made=fn(p) { tape_made(src, p, tips) },
       // (what its bar said kept till its entry leaves the stack: shown again (beside the one over it as that goes back),
@@ -408,6 +412,15 @@ fn tape_made(
       made("station-archiving/" + st, fn(p, core, here, _stint, told, _acts) {
         @sfpages.station_archiving_node(p, core, here, st, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    // (a chat, and the new chat that becomes one in place: the same page, a node of the tree's, its old view in it as
+    // yet, built as the stack's island built it (tape_page_one), its bar what that says (tape_bar_collected))
+    page if pane_makes.val && @sfbase.chat_page_is(page) =>
+      Some(
+        (
+          "chat",
+          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) },
+        ),
+      )
     _ => None
   }
 }
