@@ -116,6 +116,11 @@ export function given(thread: ThreadRow): string | null {
   return titles.givenTitle(thread);
 }
 
+/// The shared title rule uses the first message only for an unnamed external chat.
+export function titleNeedsFirstText(thread: ThreadRow): boolean {
+  return titles.givenTitle(thread) === null && !titles.isOwnChat(thread);
+}
+
 /// What a thread is called (title_of over a summary).
 export function chatTitle(t: ThreadSummary, channelName: string | null): string {
   return titleOf(t.thread, t.firstText, channelName);

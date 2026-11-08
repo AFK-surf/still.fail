@@ -7,7 +7,7 @@ import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
 import { outflowChatIndexReady, outflowChatScopes } from "../store/outflow-index.ts";
-import { titleOf } from "./views.ts";
+import { titleNeedsFirstText, titleOf } from "./views.ts";
 import { slackCreator } from "./slack-known.ts";
 import { usage } from "./usage.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -107,7 +107,7 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
     chats.push({
       thread: thread.id,
       surface: thread.surface === store.STILLFAIL_SURFACE ? "stillfail" : thread.surface,
-      title: titleOf(thread, store.firstText(s, thread.id), null),
+      title: titleOf(thread, titleNeedsFirstText(thread) ? store.firstText(s, thread.id) : null, null),
       state: state(latest),
       creator: creator === null ? null : { ref: creator, ...person(s, creator) },
       createdAt: thread.createdAt,
