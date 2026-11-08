@@ -27,11 +27,11 @@ test "关于 names the build for its channel" {
     let t = setting_tester(About, 390.0, platform=2, over=fn(s) {
       {
         ..s,
-        topic: fn(name, params) {
+        topic_read: fn(name, params) {
           if name == "prefs" {
             { value: Some(Json::object({ "productName": Json::string(product) })), error: None, version: 1 }
           } else {
-            (s.topic)(name, params)
+            s.topic(name, params).get().snapshot()
           }
         },
       }
@@ -229,8 +229,8 @@ test "更新日志, at each width and with either hand: the build, a tab a part,
 fn changelog_one_tab(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let v = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = base.topic(name, params).get().snapshot()
       match v.value {
         Some(Object(o)) if name == "changelog" =>
           match o.get("tabs") {

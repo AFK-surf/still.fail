@@ -75,8 +75,8 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
   let base = fixture("home")
   let src = {
     ..base,
-    topic: fn(name, params) {
-      let tv = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let tv = base.topic(name, params).get().snapshot()
       match (name, tv.value) {
         ("chats", Some(Object(v))) => {
           let row : Map[String, Json] = {
@@ -300,11 +300,11 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
   let waiting = @signals.signal(true)
   let src = {
     ..src,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chats" && waiting.get() {
         { value: None, error: None, version: 0 }
       } else {
-        (src.topic)(name, params)
+        src.topic(name, params).get().snapshot()
       }
     },
   }

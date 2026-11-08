@@ -290,12 +290,12 @@ fn search_of(src : Source, scope : String, query : String) -> SearchView? {
     params["kind"] = Json::string(finder.kind)
   }
   match finder.held {
-    Some(before) if before != params => (src.leave)("search", before)
+    Some(before) if before != params => (src.leave)("search", before, @sfbase.TopicLeave::Legacy)
     _ => ()
   }
   finder.held = Some(params)
-  finder_leave.val = Some(fn() { (src.leave)("search", params) })
-  let topic = (src.topic)("search", params)
+  finder_leave.val = Some(fn() { (src.leave)("search", params, @sfbase.TopicLeave::Legacy) })
+  let topic = src.topic("search", params).get().snapshot()
   finder.failed.set(topic.error is Some(_))
   match topic.value {
     Some(v) => {

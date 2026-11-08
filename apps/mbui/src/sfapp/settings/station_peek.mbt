@@ -217,7 +217,7 @@ fn peek_station(core : Core, address : String) -> Json? {
     Some(i) => address.view(end_offset=i).to_owned()
     None => address
   }
-  match (core.topic)("stations", { "scope": str(ws) }).value {
+  match (core.topic)("stations", { "scope": str(ws) }).get().value {
     Some(Array(a)) =>
       for x in a {
         if text(Some(x), "station") == address {
@@ -256,7 +256,7 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) 
 ///|
 /// Where to go on from it: its files, where it has a drive, a way there from where it is named; its page.
 fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -> Unit) -> Unit {
-  let screens = (core.topic)("screens", { "station": str(address) }).value
+  let screens = (core.topic)("screens", { "station": str(address) }).get().value
   let screen_items : Array[@sf.MenuItem?] = []
   for screen in items(screens, "screens") {
     let sc = Some(screen)

@@ -231,7 +231,7 @@ test "small screen home: a long workspace name gives way to syncing and transfer
   let base = downloads_src("home-syncing", [listed("dist.zip", "going", 1.0, 50.0, "正在下载")], calls)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaces" {
         {
           value: Some([{
@@ -244,7 +244,7 @@ test "small screen home: a long workspace name gives way to syncing and transfer
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -695,14 +695,14 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   let read : Array[String] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chats" {
         let k = Json::object(params).stringify()
         if !read.contains(k) {
           read.push(k)
         }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -977,11 +977,11 @@ test "the wide frame's first page: shown once its pane has landed on what the co
   let slow = @signals.signal(true)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if slow.get() && name == "workspaceMarks" {
         return { value: None, error: None, version: 0 }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -1047,7 +1047,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaces" {
         {
           value: Some([{ "account": { "email": "lin@example.com" }, "workspaces": Json::array(many), "invitations": [], "loaded": true }]),
@@ -1055,7 +1055,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        (base.topic_read)(name, params)
       }
     },
   }
@@ -1139,8 +1139,8 @@ test "Home asks the core for a page of its chats, and a page more while it has m
   let left : Array[Int] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
       let limit = n.to_int()
       if !limits.contains(limit) {
@@ -1156,14 +1156,14 @@ test "Home asks the core for a page of its chats, and a page more while it has m
         _ => t
       }
     },
-    leave: fn(name, params) {
+    leave: fn(name, params, reason) {
       if name == "chats" {
         match params.get("limit") {
           Some(Number(n, ..)) => left.push(n.to_int())
           _ => ()
         }
       }
-      (base.leave)(name, params)
+      (base.leave)(name, params, reason)
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -1178,12 +1178,12 @@ test "Home's rows stay while a page more of them is on its way, not its skeleton
   // (the list went to its skeleton for the core's round trip each time a page more was asked: 2026-11-08)
   new_run()
   let base = fixture("home")
-  let answered = Ref(false)
+  let answered = @signals.signal(false)
   let left : Array[Int] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       guard name == "chats" && params.get("limit") is Some(Number(n, ..)) else { return t }
       match t.value {
         Some(Object(v)) if n.to_int() == @sfbase.chats_page => {
@@ -1191,15 +1191,15 @@ test "Home's rows stay while a page more of them is on its way, not its skeleton
           more["more"] = Json::number(10.0)
           { ..t, value: Some(Json::object(more)) }
         }
-        Some(_) if !answered.val => { ..t, value: None }
+        Some(_) if !answered.get() => { ..t, value: None }
         _ => t
       }
     },
-    leave: fn(name, params) {
+    leave: fn(name, params, reason) {
       if name == "chats" && params.get("limit") is Some(Number(n, ..)) {
         left.push(n.to_int())
       }
-      (base.leave)(name, params)
+      (base.leave)(name, params, reason)
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -1208,7 +1208,7 @@ test "Home's rows stay while a page more of them is on its way, not its skeleton
   assert_true(t.find("整理发布清单") is Some(_))
   assert_eq(left, [])
   // the page more come: shown, the first let go of
-  answered.val = true
+  answered.set(true)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("整理发布清单") is Some(_))
   assert_eq(left, [@sfbase.chats_page])

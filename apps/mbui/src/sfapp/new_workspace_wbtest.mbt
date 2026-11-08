@@ -8,8 +8,8 @@ fn ws_sheet_core(calls : Array[(String, Json)], invited? : Bool = false) -> @ui.
   let base = fixture("home-sheet")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, t.value) {
         ("workspaces", Some(Array(a))) if invited =>
           {

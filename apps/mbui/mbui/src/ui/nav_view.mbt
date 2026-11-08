@@ -161,6 +161,7 @@ pub fn[P] nav_view(
   ready? : (P) -> Bool,
   most? : Double = 0.0,
   page_key? : (P) -> String = fn(_) { "" },
+  page_for? : (@view.View, Int) -> (@view.View) -> (Ctx, P) -> Unit,
   made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
 ) -> @view.View {
   v.box(fn(s) {
@@ -217,12 +218,13 @@ pub fn[P] nav_view(
             }
             g().forget(k)
             match entry {
-              Some(e) => (nav.on_leave)(e.page)
+              Some(e) => nav.entry_left(e)
               None => ()
             }
           }
         })
         |> ignore
+        let draw_for = match page_for { Some(make) => make(pv, k); None => fn(_) { page } }
         // (its old view while it shows, built again as `page_key` of it changes; or, where `made` says so, its nodes made
         // once, as it first shows, and kept as long as it is on the stack, laid out nowhere while it does not show (what they hold, their
         // fields' words, how far they scroll, as they were), its data what it becomes in place followed by them; another
@@ -258,6 +260,7 @@ pub fn[P] nav_view(
               _ =>
                 b.show(fn() { nav.shows(k) }, fn(o) {
                   o.grow(Is(1.0)) |> ignore
+                  let draw_page = draw_for(o)
                   let key = fn() {
                     match nav.entry(k) {
                       // (as the page is built: what it asks of where it stands, Nav::under, its own)
@@ -269,7 +272,7 @@ pub fn[P] nav_view(
                       None => ""
                     }
                   }
-                  old(o, fn(c) { nav.page_built(c, k, page, bg(), edge) }, key~).grow(Is(1.0)) |> ignore
+                  old(o, fn(c) { nav.page_built(c, k, draw_page, bg(), edge) }, key~).grow(Is(1.0)) |> ignore
                 })
             }
           },

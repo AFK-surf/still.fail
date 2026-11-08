@@ -119,7 +119,7 @@ fn open_invite_link() -> Unit {
 /// The sheet, over the pages or the sign-in page.
 fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
-  let accounts = (src.topic)("accounts", {})
+  let accounts = src.topic("accounts", {}).get().snapshot()
   let list = match accounts.value {
     Some(Array(a)) => a
     _ => []

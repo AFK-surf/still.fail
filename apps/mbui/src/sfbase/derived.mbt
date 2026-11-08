@@ -155,25 +155,162 @@ fn kept_reset() -> Unit {
 }
 
 ///|
-/// What `work` makes of topic `name`'s value (Derived::read), by the topic's params: a Kept whose getter reads the
-/// topic, so worked out again as it changes, given what it made of it last.
+/// A derived value belongs to both its parameters and the source that produced it. Sources may share a wire topic
+/// while giving it different projections, or one view's source may end while another still reads the same topic.
+priv struct SourceKept[T] {
+  kept : Map[String, Array[SourceKeptOne[T]]]
+  mut listed : Bool
+}
+
+///|
+priv struct SourceKeptOne[T] {
+  source : Source
+  value : @signals.Computed[T]
+  mut read : Int
+}
+
+///|
+fn[T] SourceKept::read(self : SourceKept[T], source : Source, key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
+  let frame = kept_frame()
+  let entries = match self.kept.get(key) {
+    Some(entries) => entries
+    None => {
+      let entries = []
+      self.kept[key] = entries
+      entries
+    }
+  }
+  let one = match entries.search_by(fn(entry) { physical_equal(entry.source, source) }) {
+    Some(i) => {
+      let found = entries[i]
+      if i != entries.length() - 1 {
+        entries.remove(i) |> ignore
+        entries.push(found)
+      }
+      found
+    }
+    None => {
+      let made = { source, value: @signals.computed(getter, same?), read: frame }
+      entries.push(made)
+      if !self.listed {
+        self.listed = true
+        kept_lists.push({ sweep: fn(f) { self.sweep(f) }, clear: fn() { self.clear() } })
+      }
+      made
+    }
+  }
+  one.read = frame
+  one.value.get()
+}
+
+///|
+/// The last value read for these parameters, without acquiring another topic.
+fn[T] SourceKept::peek(self : SourceKept[T], key : String) -> T? {
+  match self.kept.get(key) {
+    Some(entries) if entries.length() > 0 => entries[entries.length() - 1].value.peek()
+    _ => None
+  }
+}
+
+///|
+/// The value last read from this particular source, without acquiring a topic or changing the last-read order.
+fn[T] SourceKept::peek_from(self : SourceKept[T], source : Source, key : String) -> T? {
+  match self.kept.get(key) {
+    Some(entries) =>
+      match entries.iter().find_first(fn(entry) { physical_equal(entry.source, source) }) {
+        Some(entry) => entry.value.peek()
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
+/// Forget just one source's value. A graph still following it keeps its dependencies until that graph lets it go.
+fn[T] SourceKept::forget_from(self : SourceKept[T], source : Source, key : String) -> Unit {
+  match self.kept.get(key) {
+    Some(entries) =>
+      match entries.search_by(fn(entry) { physical_equal(entry.source, source) }) {
+        Some(i) => {
+          let entry = entries[i]
+          if !entry.value.watched() { entry.value.dispose() }
+          entries.remove(i) |> ignore
+          if entries.length() == 0 { self.kept.remove(key) |> ignore }
+        }
+        None => ()
+      }
+    None => ()
+  }
+}
+
+///|
+fn[T] SourceKept::forget(self : SourceKept[T], key : String) -> Unit {
+  match self.kept.get(key) {
+    Some(entries) => {
+      for entry in entries {
+        if !entry.value.watched() { entry.value.dispose() }
+      }
+      self.kept.remove(key) |> ignore
+    }
+    None => ()
+  }
+}
+
+///|
+fn[T] SourceKept::sweep(self : SourceKept[T], frame : Int) -> Unit {
+  let gone : Array[(String, SourceKeptOne[T])] = []
+  for key, entries in self.kept {
+    for entry in entries {
+      if entry.read != frame && entry.read != frame - 1 && !entry.value.watched() {
+        gone.push((key, entry))
+      }
+    }
+  }
+  for (key, entry) in gone {
+    match self.kept.get(key) {
+      Some(entries) =>
+        match entries.search_by(fn(other) { physical_equal(other, entry) }) {
+          Some(i) => {
+            entry.value.dispose()
+            entries.remove(i) |> ignore
+            if entries.length() == 0 { self.kept.remove(key) |> ignore }
+          }
+          None => ()
+        }
+      None => ()
+    }
+  }
+}
+
+///|
+fn[T] SourceKept::clear(self : SourceKept[T]) -> Unit {
+  for _, entries in self.kept {
+    for entry in entries {
+      entry.value.dispose()
+    }
+  }
+  self.kept.clear()
+}
+
+///|
+/// What `work` makes of topic `name`'s value (Derived::read), by its source and params, worked out again as it changes.
 pub struct Derived[T] {
   priv name : String
   priv work : (Json, T?) -> T
-  priv kept : Kept[T?]
+  priv kept : SourceKept[T?]
 }
 
 ///|
 pub fn[T] Derived::new(name : String, work : (Json, T?) -> T) -> Derived[T] {
-  { name, work, kept: Kept::new() }
+  { name, work, kept: { kept: {}, listed: false } }
 }
 
 ///|
 /// Topic `name` with `params` (Source.topic), and what `work` makes of its value: None while it has none.
 pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Json]) -> (T?, Topic) {
-  let topic = (src.topic)(self.name, params)
-  let value = self.kept.read(Json::object(params).stringify(), fn(was) {
-    match (src.topic)(self.name, params).value {
+  let topic = src.topic(self.name, params).get().snapshot()
+  let value = self.kept.read(src, Json::object(params).stringify(), fn(was) {
+    match src.topic(self.name, params).get().value {
       Some(v) =>
         Some(
           (self.work)(v, match was {
@@ -192,6 +329,15 @@ pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Js
 /// asked for.
 pub fn[T] Derived::kept(self : Derived[T], params : Map[String, Json]) -> T? {
   match self.kept.peek(Json::object(params).stringify()) {
+    Some(v) => v
+    None => None
+  }
+}
+
+///|
+/// What was last made for these parameters from `src`, without asking the source for the topic again.
+pub fn[T] Derived::kept_from(self : Derived[T], src : Source, params : Map[String, Json]) -> T? {
+  match self.kept.peek_from(src, Json::object(params).stringify()) {
     Some(v) => v
     None => None
   }

@@ -4,7 +4,7 @@
 
 ///|
 pub fn personal_lock_page(c : @ui.Ctx, core : Core) -> Unit {
-  let view = (core.topic)("adbShare", Map([])).value
+  let view = (core.topic)("adbShare", Map([])).get().value
   let locks = items(view, "personal")
   c.box(style=adb_whole, fn() {
     nav_bar(c, core, tr("android-misc.personal.back"), tr("android-misc.personal.heading"), about=tr("android-misc.personal.about"))

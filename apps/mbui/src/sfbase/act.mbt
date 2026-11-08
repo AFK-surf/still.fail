@@ -138,7 +138,7 @@ pub fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
 /// Whether one of `calls` about what `on` names is under way, as the core's `doing` says (doing.ts useDoing: its
 /// params as words).
 pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, String)]) -> Bool {
-  items((src.topic)("doing", {}).value, "doing").iter().any(fn(d) {
+  items(src.topic("doing", {}).get().value, "doing").iter().any(fn(d) {
     text(Some(d), "stage") != "failed" && doing_of(d, calls, on)
   })
 }
@@ -148,7 +148,7 @@ pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, Strin
 /// useDoingFailed), if it did.
 pub fn core_failed(src : Source, calls : Array[String], on : Array[(String, String)]) -> String? {
   let mut why : String? = None
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     if text(Some(d), "stage") == "failed" && doing_of(d, calls, on) {
       why = Some(
         match text(Some(d), "error") {

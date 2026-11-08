@@ -13,8 +13,8 @@ fn completion_over(
 ) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match name {
         "decisionForm" => { value: form.get(), error: None, version: 1 }
         // (Willow offline where `offline` says so; `more` stations offline after the workspace's own: a page longer
@@ -64,7 +64,7 @@ test "归档建议 made once: its editable station's draft opened once as its ro
     let offline = @signals.signal(false)
     let calls = []
     let t = setting_tester(AutoCompletion, w, platform~, over=fn(base) {
-      form.set((base.topic)("decisionForm", Map::new()).value)
+      form.set(base.topic("decisionForm", Map::new()).get().value)
       completion_over(base, form, calls, offline~)
     })
     let opened = named_calls(calls, "automaticDecisions.form.open")
@@ -94,7 +94,7 @@ test "归档建议 made once: its rows follow the draft as the core says it; cha
     let form : @signals.Signal[Json?] = @signals.signal(None)
     let calls = []
     let t = setting_tester(AutoCompletion, w, platform~, h=1600.0, over=fn(base) {
-      form.set((base.topic)("decisionForm", Map::new()).value)
+      form.set(base.topic("decisionForm", Map::new()).get().value)
       completion_over(base, form, calls)
     })
     let save = @sf.t("web-pages.automaticDecisions.save")
@@ -151,7 +151,7 @@ test "归档建议 made once: its rule changed, scrolled out of the window and b
     let offline = @signals.signal(false)
     let calls = []
     let t = setting_tester(AutoCompletion, w, platform~, h=360.0, over=fn(base) {
-      form.set((base.topic)("decisionForm", Map::new()).value)
+      form.set(base.topic("decisionForm", Map::new()).get().value)
       completion_over(base, form, calls, offline~, more=12)
     })
     let enabled = @sf.t("web-pages.automaticDecisions.enabled")

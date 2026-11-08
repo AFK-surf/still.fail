@@ -83,6 +83,22 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
         None => ()
       }
     },
+    page_for=fn(entry, serial) {
+      let retained = @sfbase.page_entry_source(src, entry, serial)
+      let page_read = @sfbase.page_chat_reader(retained, entry, serial)
+      fn(visible) {
+        let shown = src.owned_by(visible)
+        fn(c, page) {
+          @sfbase.page_entry_read(serial, retained, page)
+          page_read(page)
+          let page_src = if page is Chat(_) { retained } else { shown }
+          match workspace_in_view(page_src).0 {
+            Some(w) => narrow_page_held(c, page_src, w, page)
+            None => ()
+          }
+        }
+      }
+    },
     bg=fn() { @sf.theme().p.bg },
     // a page opened slides in once the core has given what it shows
     ready=fn(page) {
@@ -196,6 +212,20 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
 /// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: what is
 /// told as the frame ends, the icon's number, links, updates, what was shared in, the keys, whether the first page waits.
 fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  // The folder and its player both need the same entries. Keep them while moving between the two and when
+  // replacing one film with the next, until the new page has its own reader.
+  match app.nav.top() {
+    Drive(at) => match at.root {
+      Some(root) => src.topic("drive", @sfbase.drive_params(at.station, root, at.path)).get() |> ignore
+      None => ()
+    }
+    DrivePlay(at) => {
+      let root = at.root.unwrap_or("")
+      let folder = @sfbase.dv_parent(at.path)
+      src.topic("drive", @sfbase.drive_params(at.station, root, folder)).get() |> ignore
+    }
+    _ => ()
+  }
   // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
   c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
   // (a person's act taken as an old view builds (a row pressed: its change is that build's), done with it: where it
@@ -705,4 +735,3 @@ fn next_place_actions_gen() -> Int {
   place_actions_made.val += 1
   place_actions_made.val
 }
-

@@ -28,7 +28,7 @@ pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
       }
-      let told = (src.topic)("imageNear", p).value
+      let told = src.topic("imageNear", p).get().value
       let at = match field(told, "index") {
         Some(Number(n, ..)) => n.to_int()
         _ => -1

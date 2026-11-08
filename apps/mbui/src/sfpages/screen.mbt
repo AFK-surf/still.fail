@@ -626,7 +626,7 @@ fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
     Some(on) => on
     None if self.simulator() => false
     None if self.fit is Some(_) && text(self.state, "kind") == "browser" => false
-    None => text((src.topic)("prefs", {}).value, "screenTouch") != "direct"
+    None => text(src.topic("prefs", {}).get().value, "screenTouch") != "direct"
   }
 }
 
@@ -634,7 +634,7 @@ fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
 /// How large a picture this device asks for (prefs `screenQuality`, 控制中心's 画质): `smooth`, `hd`, `original`, or
 /// "" (自动: as large as the stage it is shown on, in device pixels: ScreenSess::bounds).
 fn screen_quality(src : Source) -> String {
-  match text((src.topic)("prefs", {}).value, "screenQuality") {
+  match text(src.topic("prefs", {}).get().value, "screenQuality") {
     "smooth" | "hd" | "original" as q => q
     _ => ""
   }
@@ -644,7 +644,7 @@ fn screen_quality(src : Source) -> String {
 /// The most frames a second this device asks for (prefs `screenFps`, 控制中心's 帧率): 120, 90, 60, 30 or 15, or 0 (自动:
 /// as many as the station and the link give).
 fn screen_fps(src : Source) -> Int {
-  let n = number((src.topic)("prefs", {}).value, "screenFps").to_int()
+  let n = number(src.topic("prefs", {}).get().value, "screenFps").to_int()
   if screen_fps_choices.contains(n) && n > 0 {
     n
   } else {

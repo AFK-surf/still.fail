@@ -833,7 +833,7 @@ pub fn stations_of(v : Json?) -> Array[Station] {
 /// The workspace's stations as a page that only names them shows them (`stations` `brief`: each one's mark and how it
 /// is reached, not its overview and profiles, nor their changes).
 pub fn station_marks(src : Source, scope : String) -> Array[Station] {
-  stations_of((src.topic)("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).value)
+  stations_of(src.topic("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).get().value)
 }
 
 ///|

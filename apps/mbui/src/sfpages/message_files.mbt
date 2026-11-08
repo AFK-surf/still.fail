@@ -88,6 +88,33 @@ pub fn local_picture(c : @ui.Ctx, key : String, name : String, w : Double, h : D
 }
 
 ///|
+/// The station moves a staged file from its uploads folder into the session's uploads folder when its message is
+/// accepted, keeping its unique stored name. Only those paths can be matched across that move.
+fn staged_file_name(key : String) -> String {
+  let path = key.replace_all(old="\\", new="/")
+  match path.rev_find("/") {
+    Some(i) => {
+      let parent = path.view(end_offset=i).to_string()
+      if @sfbase.base_name(parent) == "uploads" { @sfbase.base_name(path) } else { "" }
+    }
+    None => ""
+  }
+}
+
+///|
+/// Where this message's file lands: first its exact key, then a staged file's unchanged stored name if it identifies
+/// exactly one file on both sides of the handoff. Ambiguous names and unrelated paths keep their own keys.
+fn file_flight_key(key : String, files : Array[String], flying : Array[String]) -> String {
+  if flying.contains(key) { return key }
+  let name = staged_file_name(key)
+  if name == "" || files.filter(fn(k) { staged_file_name(k) == name }).length() != 1 {
+    return key
+  }
+  let matches = flying.filter(fn(k) { staged_file_name(k) == name })
+  if matches.length() == 1 { matches[0] } else { key }
+}
+
+///|
 /// A message's files (Files), at the column's end when it is the viewer's (`mine`).
 pub fn message_files(
   c : @ui.Ctx,
@@ -132,6 +159,13 @@ pub fn message_files(
     }
   }
   let column = if mine { files_column_end } else { files_column }
+  let flight = flight_here(here)
+  let flying_keys = match flight {
+    Some(f) if landing_key == "" => f.files.map(fn(ff) { ff.key })
+    None => []
+    _ => []
+  }
+  let file_keys = if flying_keys.length() > 0 { list.map(fn(a) { @sfbase.file_key(a) }) } else { [] }
   // (the gap between rows the room the ✕ hangs in past the next's top on top of their own, out to the scale's next step)
   let column = if hung > 0.0 {
     column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(scale_up(files_gap + hung))))
@@ -145,14 +179,20 @@ pub fn message_files(
           // (each in a box of its own: where a file sent from the composer flies to, sfbase's flight.mbt)
           // (as wide as laid out for it: a card does not give way to the picture beside it)
           let a = list[i]
-          let key = if landing_key == "" { @sfbase.file_key(a) } else { landing_key }
+          let key = if landing_key != "" {
+            landing_key
+          } else if flying_keys.length() > 0 {
+            file_flight_key(file_keys[i], file_keys, flying_keys)
+          } else {
+            @sfbase.file_key(a)
+          }
           let media = match file_kind(a.name) {
             "image" | "video" => Some(message_media(c, src, here.station, owner_of(here, a), a))
             _ => None
           }
           let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~, corner~, at~) })
           let paint = media.map(fn(p) { fn(w, h, fit, radius) { media_content(c, p, w, h, fit, radius) } })
-          match flight_here(here) {
+          match flight {
             Some(f) => flight_landing(
               c, f, item, key, share=landing_share(a),
               top_crop=file_kind(a.name) == "image" && tall_image_cropped(a), paint~,

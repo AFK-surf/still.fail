@@ -12,8 +12,8 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
       calls.push({ name, params, bytes: None, done, heard: None })
       done(Ok(Json::object({})))
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       if name == "chat" {
         { ..t, value: over(t.value) }
       } else {

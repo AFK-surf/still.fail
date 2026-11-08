@@ -18,6 +18,6 @@ test "desk: a page's marks waiting for the chat go into its composer's draft, ea
   // its screenshot the quote's own picture, not among the files
   t.frame()
   let w = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
-  assert_eq(text(field(Some(w.quotes[0]), "own"), "name"), "首页-标注1-120000.png")
-  assert_eq(w.files.length(), 0)
+  assert_eq(text(field(Some(w.quotes.get()[0]), "own"), "name"), "首页-标注1-120000.png")
+  assert_eq(w.files.get().length(), 0)
 }

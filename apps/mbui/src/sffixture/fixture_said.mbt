@@ -91,8 +91,8 @@ pub fn said_steps_of(topic : String) -> Array[Array[String]] {
 pub fn said_longest_source(src : Source) -> Source {
   {
     ..src,
-    topic: fn(name, params) {
-      let t = (src.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = src.topic(name, params).get().snapshot()
       let steps = said_steps_of(name)
       match t.value {
         Some(v) if steps.length() > 0 => {

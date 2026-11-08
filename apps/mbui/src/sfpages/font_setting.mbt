@@ -29,10 +29,10 @@ let fonts_pointed : Ref[String] = Ref("")
 /// 字体's setting, a block at a time: the places' choice, the chat as their faces set it, the faces of the place in
 /// view.
 fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
-  let prefs = (core.topic)("prefs", Map::new()).value
+  let prefs = (core.topic)("prefs", Map::new()).get().value
   let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
   let all = items(field(prefs, "faces"), "list")
-  let files_state = (core.topic)("fonts", Map::new()).value
+  let files_state = (core.topic)("fonts", Map::new()).get().value
   // the faces whose files this device keeps (chosen or not): no size said, choosing one fetches nothing
   let kept = items(files_state, "kept")
   let place = @settings.font_places[@settings.fonts_at.get()]

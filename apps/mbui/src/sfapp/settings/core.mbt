@@ -15,7 +15,7 @@ pub(all) struct Read {
 /// What the pages need of the app around them.
 pub(all) struct Core {
   /// the topic `name` with its params (the core's `subscribe`)
-  topic : (String, Map[String, Json]) -> Read
+  topic : (String, Map[String, Json]) -> @signals.Computed[Read]
   /// a call to the core, its answer or its error to `done`
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   /// a page pushed over this one
@@ -368,7 +368,7 @@ pub fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)
 
 ///|
 fn doing_items(core : Core) -> Array[Json] {
-  items((core.topic)("doing", Map::new()).value, "doing")
+  items((core.topic)("doing", Map::new()).get().value, "doing")
 }
 
 ///|
@@ -417,13 +417,13 @@ pub fn act(
 ///|
 /// The workspace's view (`workspace`, still.fail cloud's: its role, members, stations, added, invitations, relays).
 pub fn workspace_view(core : Core, here : Here) -> Read {
-  (core.topic)("workspace", { "workspace": str(here.workspace) })
+  (core.topic)("workspace", { "workspace": str(here.workspace) }).get()
 }
 
 ///|
 /// The workspace's stations (`stations`: StationView).
 pub fn stations_of(core : Core, here : Here) -> Read {
-  (core.topic)("stations", { "scope": str(here.workspace) })
+  (core.topic)("stations", { "scope": str(here.workspace) }).get()
 }
 
 ///|
@@ -472,7 +472,7 @@ fn workspace_of(address : String) -> String {
 ///|
 /// The workspace `id` and the account it is reached through, from the `workspaces` topic (AccountWorkspaces).
 pub fn here_of(core : Core, id : String, name : String) -> Here {
-  let ws = (core.topic)("workspaces", Map::new())
+  let ws = (core.topic)("workspaces", Map::new()).get()
   match ws.value {
     Some(Array(accounts)) =>
       for a in accounts {
@@ -716,5 +716,5 @@ fn int_of(s : String, or_else : Int) -> Int {
 /// `core` as what a page will show is drawn over it in its bones (@sf.waiting's `sample`: made of made-up words): its
 /// topics say nothing and its calls are never answered, so what is only shown asks the real core for nothing.
 pub fn Core::quiet(self : Core) -> Core {
-  { ..self, topic: fn(_, _) { { value: None, error: None, version: 0 } }, call: fn(_, _, _) {  }, picture: fn(_, _) { "" } }
+  { ..self, topic: fn(_, _) { @signals.computed(fn(_) { { value: None, error: None, version: 0 } }) }, call: fn(_, _, _) {  }, picture: fn(_, _) { "" } }
 }

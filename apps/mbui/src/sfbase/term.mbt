@@ -103,12 +103,12 @@ pub fn job_output_lines(
     "job": Json::string(job),
     "lines": Json::number(lines),
   }
-  guard hold(src, jobs_scope(station), "jobLog", params).value is Some(Object(_)) else { return None }
+  guard hold(src, jobs_scope(station), "jobLog", params).get().value is Some(Object(_)) else { return None }
   job_ink.set(ink)
   job_dark.set(dark)
   Some(
     job_outputs.read(Json::object(params).stringify(), fn(_) {
-      let v = (src.topic)("jobLog", params).value
+      let v = src.topic("jobLog", params).get().value
       let words = text(v, "text")
       let runs = items(v, "runs")
       if words == "" {

@@ -76,7 +76,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
 ///|
 /// ⌘↓ (chat.latest): the list to its end, following it again; short of the chat's end, its latest page.
 fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   if @settings.action_pressed(c, prefs, "chat.latest") {
     if !v.newer {
       c.list_to_end(list_key(r))

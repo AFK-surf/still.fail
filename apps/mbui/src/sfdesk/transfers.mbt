@@ -31,7 +31,7 @@ pub fn transfers_open() -> Unit {
 ///|
 /// The person's transfers into the workspace's stations (the `driveTransfers` topic), newest first.
 fn transfer_list(src : Source, ws : String) -> Array[Json] {
-  items((src.topic)("driveTransfers", { "workspace": Json::string(ws) }).value, "transfers")
+  items(src.topic("driveTransfers", { "workspace": Json::string(ws) }).get().value, "transfers")
 }
 
 ///|

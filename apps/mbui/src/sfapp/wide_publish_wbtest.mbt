@@ -84,8 +84,8 @@ test "wide: right click copies the whole message for its author and the viewer, 
     let base = fixture("chat")
     let src : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         guard name == "chat" && got.value is Some(Object(chat)) else { return got }
         let out = chat.copy()
         let messages = items(got.value, "messages").copy()

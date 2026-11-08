@@ -14,11 +14,11 @@ fn login_core(
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "machineLogin" => { value: Some(login), error: None, version: 1 }
         "machineLogins" => { value: Some({ "canLogin": true, "canRelay": Json::boolean(relay) }), error: None, version: 1 }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -335,7 +335,7 @@ test "a code-pasting login's card in its chat and on its station's page beside i
   let pasting = login_of([("step", "open"), ("paste", true), ("url", "https://claude.ai/oauth/authorize")])
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "machineLogin" => { value: Some(pasting), error: None, version: 1 }
         "machineLogins" =>
@@ -344,7 +344,7 @@ test "a code-pasting login's card in its chat and on its station's page beside i
             error: None,
             version: 1,
           }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
   }

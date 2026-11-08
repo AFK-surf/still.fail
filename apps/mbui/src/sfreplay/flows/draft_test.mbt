@@ -23,6 +23,8 @@ test "06-draft" {
     f.check(field.value.contains("还没发出去的草稿 082947"), "the field holds \{field.value.escape()}")
     // the bar moved by what this did (the field focused, the chat left) at rest
     f.run_to(@sfapp.bar_rest())
+    // The live recording checks the field here too; name the step for strict replay.
+    f.field_visible("还没发出去的草稿 082947")
     f.end()
   })
 }

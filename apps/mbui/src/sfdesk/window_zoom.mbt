@@ -2,7 +2,7 @@
 
 ///|
 fn zoom_at(src : Source) -> Int {
-  let kept = @settings.pref_from((src.topic)("prefs", {}).value, "windowZoom")
+  let kept = @settings.pref_from(src.topic("prefs", {}).get().value, "windowZoom")
   @sfbase.window_zoom_levels.search_by(fn(z) { z.0 == kept }).unwrap_or(5)
 }
 
@@ -31,7 +31,7 @@ pub fn window_zoom_keys(c : @ui.Ctx, src : Source) -> Unit {
   if !@ui.window_zoom_supported() {
     return
   }
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   @ui.set_window_key_handler(fn(code, mods) {
     if @signals.untracked(fn() { @settings.keys_recording.get() }) != "" {
       return false

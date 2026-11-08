@@ -41,7 +41,7 @@ pub fn work_mark(
   smallest? : Bool = false,
 ) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let card = (src.topic)("agentCard", params).value
+  let card = src.topic("agentCard", params).get().value
   let mark = text(card, "workMark")
   if mark == "" {
     return
@@ -130,7 +130,7 @@ let work_mark_press : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 ///|
 /// All of it in a panel beside what opened it (`from`): its card's tasks and checklist as they are now.
 fn open_work(src : Source, params : Map[String, Json], from : Int) -> Unit {
-  @sf.panel("", fn(c, _) { agent_work(c, src, (src.topic)("agentCard", params).value) }, from=Of(from), w=work_panel_w, along=End)
+  @sf.panel("", fn(c, _) { agent_work(c, src, src.topic("agentCard", params).get().value) }, from=Of(from), w=work_panel_w, along=End)
 }
 
 ///|

@@ -378,7 +378,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
         @sf.group(c, fn() {
           @sf.block(c, fn() {
             station_resource_dials(c, items(host, "meters"), items(host, "gpus"))
-            match (core.topic)("stationNet", { "station": str(address) }).value {
+            match (core.topic)("stationNet", { "station": str(address) }).get().value {
               Some(Object(_)) as net => station_net(c, net)
               _ => ()
             }
@@ -396,7 +396,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
     })
   }
   // its screens; one from before them says so quietly
-  match (core.topic)("screens", { "station": str(address) }).value {
+  match (core.topic)("screens", { "station": str(address) }).get().value {
     Some(Object(_)) as v => {
       let screens = items(v, "screens")
       let note = text(v, "note")
@@ -960,7 +960,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
       f
     }
   }
-  let d = (core.topic)("agentEnvForm", { "station": str(address), "form": str(form) }).value
+  let d = (core.topic)("agentEnvForm", { "station": str(address), "form": str(form) }).get().value
   let draft = match env_drafts.get(address) {
     Some(draft) => draft
     None => {
@@ -1301,7 +1301,7 @@ fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, 
 /// The workspaces it is in (Workspaces), for its home's owners and admins once it is in more than one: its home
 /// first, what each has of the machine.
 fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
-  let m = (core.topic)("memberships", { "station": str(address) }).value
+  let m = (core.topic)("memberships", { "station": str(address) }).get().value
   let ws = items(m, "workspaces")
   if !flag(m, "manages") || ws.length() < 2 {
     return

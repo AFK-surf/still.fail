@@ -1,7 +1,11 @@
 // The app over kept conversations with its core (source.mbt).
 
 ///|
-test "signed out, as a run's core said: the sign-in page" {
+fn signed_out_run() -> Unit raise {
+  // The preceding run must release its readers while its own replay is still attached. Otherwise resetting the
+  // client can make those readers subscribe into this recording before this Tester's first frame.
+  @ui.run_let_go()
+  @sfbase.reset()
   let r = @core.Replay::parse((
     #|{"out":{"id":1,"subscribe":{"topic":"accounts"},"keyed":true}}
     #|{"in":{"id":1,"value":[]},"w":1000}
@@ -19,7 +23,20 @@ test "signed out, as a run's core said: the sign-in page" {
 }
 
 ///|
+test "signed out, as a run's core said: the sign-in page" {
+  signed_out_run()
+}
+
+///|
+test "a signed-out replay after a signed-in run starts with its own accounts" {
+  let previous = @sfreplay.Flow::start(@sfreplay.trace("draft"))
+  previous.see("端到端测试")
+  signed_out_run()
+}
+
+///|
 test "a legacy jobs recording is shared by the bar and the opened sheet" {
+  @ui.run_let_go()
   let r = @core.Replay::parse((
     #|{"out":{"id":7,"subscribe":{"topic":"chatJobs","station":"w/s","session":"k"},"keyed":true}}
     #|{"in":{"id":7,"value":{"jobs":[{"id":"j1"}]}},"w":1}
@@ -30,19 +47,24 @@ test "a legacy jobs recording is shared by the bar and the opened sheet" {
   let src = @sfreplay.source()
   let full : Map[String, Json] = { "station": "w/s", "session": "k" }
   let summary : Map[String, Json] = { "station": "w/s", "session": "k", "summary": true }
-  (src.topic)("chatJobs", summary) |> ignore
+  @sfbase.held_build(1)
+  src.topic("chatJobs", summary).get().snapshot() |> ignore
+  @sfbase.held_end()
   assert_eq(r.deliver(), 1)
-  let shown = (src.topic)("chatJobs", full).value
+  @sfbase.held_build(2)
+  let shown = src.topic("chatJobs", full).get().value
   assert_eq(shown.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
-  (src.leave)("chatJobs", full)
-  (src.leave)("chatJobs", summary)
-  assert_eq(r.diverged().length(), 0)
+  @sfbase.held_end()
+  (src.leave)("chatJobs", full, @sfbase.TopicLeave::Legacy)
+  (src.leave)("chatJobs", summary, @sfbase.TopicLeave::Legacy)
+  assert_eq(r.diverged(), [])
   assert_eq(r.fuzzy().length(), 0)
   @core.Replay::detach()
 }
 
 ///|
 test "a newer jobs recording keeps the summary and sheet separate" {
+  @ui.run_let_go()
   let r = @core.Replay::parse((
     #|{"out":{"id":7,"subscribe":{"topic":"chatJobs","station":"w/s","session":"k","summary":true,"compact":true},"keyed":true}}
     #|{"in":{"id":7,"value":{"jobs":[],"hasJobs":true}},"w":1}
@@ -54,13 +76,19 @@ test "a newer jobs recording keeps the summary and sheet separate" {
   let src = @sfreplay.source()
   let full : Map[String, Json] = { "station": "w/s", "session": "k" }
   let summary : Map[String, Json] = { "station": "w/s", "session": "k", "summary": true }
-  (src.topic)("chatJobs", summary) |> ignore
+  @sfbase.held_build(1)
+  src.topic("chatJobs", summary).get().snapshot() |> ignore
+  @sfbase.held_end()
   assert_eq(r.deliver(), 1)
-  (src.topic)("chatJobs", full) |> ignore
+  @sfbase.held_build(2)
+  src.topic("chatJobs", full).get().snapshot() |> ignore
+  @sfbase.held_end()
   assert_eq(r.deliver(), 1)
-  assert_eq((src.topic)("chatJobs", summary).value.unwrap().stringify(), "{\"jobs\":[],\"hasJobs\":true}")
-  assert_eq((src.topic)("chatJobs", full).value.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
-  assert_eq(r.diverged().length(), 0)
+  @sfbase.held_build(3)
+  assert_eq(src.topic("chatJobs", summary).get().value.unwrap().stringify(), "{\"jobs\":[],\"hasJobs\":true}")
+  assert_eq(src.topic("chatJobs", full).get().value.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
+  assert_eq(r.diverged(), [])
   assert_eq(r.fuzzy().length(), 0)
+  @sfbase.held_end()
   @core.Replay::detach()
 }

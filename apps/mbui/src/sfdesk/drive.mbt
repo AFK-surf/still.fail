@@ -341,7 +341,7 @@ fn ask_remove(c : @ui.Ctx, src : Source, asking : Array[(DriveAt, DvEntry)]) -> 
 fn entry_busy(src : Source, at : DriveAt, name : String) -> Bool {
   let root = at.root.unwrap_or("")
   let full = dv_join(at.path, name)
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let call = text(Some(d), "call")
     let p = field(Some(d), "params")
     if text(Some(d), "stage") == "failed" || text(p, "station") != at.station || text(p, "root") != root {
@@ -365,6 +365,8 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
   let root = at.root.unwrap_or("")
   let st = f.st
   let write = f.rights.write
+  // Keep the entries' operation state while a newly opened folder is still loading.
+  src.topic("doing", {}).get() |> ignore
   let view = view_in(src, "page", list_room(src, f.room))
   let (value, error) = drive_folder(src, at.station, root, at.path)
   let entries = @sfbase.dv_entries(src, at.station, root, at.path).unwrap_or([])
@@ -425,7 +427,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
       b.new_folder(c, src, at.path)
     }
     // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed)
-    if @settings.action_pressed(c, (src.topic)("prefs", {}).value, "files.preview") {
+    if @settings.action_pressed(c, src.topic("prefs", {}).get().value, "files.preview") {
       set_preview_shown(src, "page", !previewing)
     }
   }

@@ -167,9 +167,10 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 ///|
 /// The chat left (its page gone): the core told it shows no more, and where it was left (`chat.place`: the message
 /// at the top, none at its end). Never with Source.readonly.
-fn chat_left(src : Source, r : ChatRef) -> Unit {
+fn chat_left(src : Source, r : ChatRef, saved? : ChatView? = None) -> Unit {
   let k = r.station + "\u{1}" + r.session
-  match (chat_kept(r), readings.get(k)) {
+  let kept = match saved { Some(view) => Some(view); None => @sfbase.chat_kept_from(src, r) }
+  match (kept, readings.get(k)) {
     (Some(v), Some(rd)) if !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
       match v.thread {
@@ -184,17 +185,17 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
   // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
   // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again
   // where it was first opened, not where it was left (views.ts: chatJobs and imageNear are of the chat's topic)
-  @sfbase.chat_inputs_left(r)
-  (src.leave)("chat", chat_params(r))
-  (src.leave)("chatJobs", chat_params(r))
-  (src.leave)("chatJobs", chat_jobs_summary_params(r))
+  @sfbase.chat_inputs_left_from(src, r)
+  (src.leave)("chat", chat_params(r), @sfbase.TopicLeave::Legacy)
+  (src.leave)("chatJobs", chat_params(r), @sfbase.TopicLeave::Legacy)
+  (src.leave)("chatJobs", chat_jobs_summary_params(r), @sfbase.TopicLeave::Legacy)
   // what its agents' lines and its jobs' sheets read: their work as it goes, their logs as they grow
   @sfbase.let_go(src, @sfbase.chat_scope(r.station, r.session))
   @sfbase.let_go(src, @sfbase.jobs_scope(r.station))
   // what its agents and other chats' wrote each other, read for its sheet: let go if it was (held only once opened)
   match dui.letters_held.get(k) {
     Some(th) => {
-      (src.leave)("chatLetters", letters_params(r, th))
+      (src.leave)("chatLetters", letters_params(r, th), @sfbase.TopicLeave::Legacy)
       dui.letters_held.remove(k)
     }
     None => ()
@@ -283,7 +284,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
   let t = @sf.theme()
   let stations = station_marks(src, w.id)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  let jobs = (src.topic)("chatJobs", chat_jobs_summary_params(r))
+  let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().snapshot()
   let has_jobs = flag(jobs.value, "hasJobs") || items(jobs.value, "jobs").length() > 0
   let archive = v.archivable && !v.archived
   // 归档 comes and goes as nothing is left in the chat or something is again (Chat.kt ChatBar: 280 ms, ArchiveEase;
@@ -384,7 +385,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       true,
       on_info=fn() { open_info(src, r) },
       on_more=fn(id) {
-        let chat = (src.topic)("chat", chat_params(r)).value
+        let chat = src.topic("chat", chat_params(r)).get().value
         @sfpages.open_chat_menu(src, w.id, r, @sfpages.chat_extra_items(src, r, chat), from=Of(id))
       },
     )

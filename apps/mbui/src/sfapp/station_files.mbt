@@ -98,7 +98,7 @@ fn refs_uploading(key : String) -> Bool {
 /// Whether the chat `key` takes a station's files as files (StationFiles.kt dropsAsFiles: the core's prefs, the chat's
 /// own say in `dropFiles`, else `dropAs`).
 fn drops_as_files(src : Source, key : String) -> Bool {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   match field(field(prefs, "dropFiles"), key) {
     Some(True) => true
     Some(False) => false
@@ -110,7 +110,7 @@ fn drops_as_files(src : Source, key : String) -> Bool {
 /// The chat `key` set to take them as files or not (AppState.setDropsAsFiles: its own say dropped when it is the
 /// settings' anyway).
 fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let own : Json = if on == (text(prefs, "dropAs") == "file") { Json::null() } else { Json::boolean(on) }
   let files : Map[String, Json] = Map([])
   files[key] = own

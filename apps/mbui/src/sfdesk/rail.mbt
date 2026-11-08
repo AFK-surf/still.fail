@@ -12,7 +12,7 @@
 /// the kinds the panel that adds them groups them by, the default, the rail of a workspace with none of its own (`all`)
 /// and each one's own (`by`).
 fn rail_view(src : Source) -> Json? {
-  field((src.topic)("prefs", {}).value, "railView")
+  field(src.topic("prefs", {}).get().value, "railView")
 }
 
 ///|
@@ -649,7 +649,7 @@ fn rail_place(
       wide.peek_next.set(wide.crowded && !place_bare(place) && place != "attention")
     }
   })
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
   let here = field(field(marks.value, "workspaces"), w.id)
   let dot = match place {
     "attention" => bell_lit(src, w)
@@ -1140,7 +1140,7 @@ pub let rail_closed_w : Double = 42.0
 /// how many and who works.
 pub fn rail_stations_label(src : Source, ws : String) -> String {
   let chats = @sfbase.chats_topic(src, ws).value
-  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
+  let status = src.topic("status", { "workspace": Json::string(ws) }).get().value
   let trouble = text(field(chats, "trouble"), "text")
   let waiting = if text(status, "state") != "" { text(status, "text") } else { "" }
   let summary = text(field(chats, "glyph"), "summary")

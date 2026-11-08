@@ -27,6 +27,8 @@ fn setting_tester(
   @sfbase.reset()
   reset()
   @settings.reset()
+  // (as the app begins anew: a prior Tester's keyed page rows do not belong to this one)
+  @sf.page_rows_reset()
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
