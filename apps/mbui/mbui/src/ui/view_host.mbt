@@ -1278,6 +1278,10 @@ fn Ctx::view_drawn(
       b
     }
   }
+  // (the glyphs it draws from, the row's being drawn: held for it while it is drawn again kept, view_glyphs_held)
+  if riding.val is Some(r) {
+    r.kept.push(block.kept)
+  }
   let i0 = self.ninst
   // (drawn bigger or smaller than laid out, what holds it with it: about where it is drawn, as a look's scale is; its
   // glyphs set on the pixels where they would be were nothing grown or shrunk, as an old view's are painted where they
@@ -1499,15 +1503,26 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
 /// holds there instead.
 fn view_glyphs_held(tree : @view.Tree, sc : Double) -> Unit {
   let stale : Array[@view.NodeId] = []
-  tree.each_drawn_scaled(fn(c, _x, _y, a, _s) {
-    if c.id.at == 0 || a <= 0.002 || c.hosted {
-      return
-    }
-    match view_blocks.get(c.id) {
-      Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
-      _ => ()
-    }
-  })
+  // (a row kept, nothing of it changed since (Ctx::ride_kept_for): its glyphs held as it kept them, its nodes not gone
+  // through; what holds no block of its own passed over whole)
+  tree.each_drawn_laid_or_past(
+    fn(c, _x, _y, a, _s, _ux, _uy) {
+      if c.id.at == 0 || a <= 0.002 || c.hosted {
+        return false
+      }
+      match ride_kept.get(c.id) {
+        Some(k) if tree.drawn_rev(c.id) <= k.rev && k.kept.iter().all(fn(g) { glyphs_still(g, sc) }) =>
+          return true
+        _ => ()
+      }
+      match view_blocks.get(c.id) {
+        Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
+        _ => ()
+      }
+      false
+    },
+    draws=fn(c) { view_blocks.contains(c.id) },
+  )
   if stale.length() > 0 {
     ride_glyphs_gone.val = ride_glyphs_gone.val + 1
   }

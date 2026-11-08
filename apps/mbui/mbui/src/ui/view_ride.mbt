@@ -55,6 +55,9 @@ priv struct RideKept {
   inside_y : Bool
   /// how many of the tree's nodes it drew
   nodes : Int
+  /// the glyphs each of its nodes' blocks draws from (ViewBlock's `kept`): held in the atlas for it as a frame begins
+  /// without its nodes gone through (view_glyphs_held)
+  kept : Array[Array[(Int, Double, Double)]]
 }
 
 ///|
@@ -80,12 +83,13 @@ priv struct Riding {
   mut x1 : Double
   mut y1 : Double
   mut nodes : Int
+  kept : Array[Array[(Int, Double, Double)]]
 }
 
 ///|
 /// What each row drew last, by its root (kept while it is drawn so: let go with the node, view_forget).
 // kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
-let ride_kept : Map[@view.NodeId, RideKept] = {}
+let ride_kept : ByNode[RideKept] = ByNode::new()
 
 ///|
 /// The row being drawn now, as the tree is painted (none between paints).
@@ -192,6 +196,7 @@ fn Ctx::ride_begin(
     x1: x + c.w,
     y1: y + c.h,
     nodes: 0,
+    kept: [],
   })
 }
 
@@ -264,6 +269,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     inside_x: side_x == 0,
     inside_y: side_y == 0,
     nodes: r.nodes,
+    kept: r.kept,
   }
 }
 
