@@ -16,6 +16,7 @@ import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
+import { signal } from "./reactive.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
 import { isStationAuthor } from "./titles.ts";
@@ -28,8 +29,24 @@ const get = (v: unknown, k: string | number): J => getU(v, k);
 /// The time a value is put together for: now, and the viewer's offset from UTC.
 export type Clock = { now: number; offsetMin: number };
 
+/// The clock a value's times in words are read by, at the grain they change at: the minute, and the local day (each
+/// with the offset from UTC). Words made in a computed (output.ts, each item of a list) read the one they change by,
+/// and are made again only when it moves: a chat of days ago says its day (11月3日 18:12) until local midnight.
+const minute = signal("");
+const day = signal("");
+
+/// The clock moved on to `c` (a value is put together for it): what reads a grain that changed is made again.
+export function clockAt(c: Clock): void {
+  minute.set(`${Math.floor(c.now / 60_000)}/${c.offsetMin}`);
+  day.set(`${format.localDay(c.now, c.offsetMin)}/${c.offsetMin}`);
+}
+
+const DAY_MS = 86_400_000;
+
 /// A moment in words (Stamp).
 export function stamp(ms: number, c: Clock): Record<string, unknown> {
+  // (a day or more past, its words are its day's: 昨天 18:12, 11月3日 18:12; nearer, or to come, the minute's)
+  (c.now - ms >= DAY_MS ? day : minute).get();
   return {
     past: ms <= c.now,
     at: ms,
@@ -49,6 +66,7 @@ export function leftLevel(used: number): [number, string] {
 }
 
 function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
+  minute.get();
   const out = list.map((w) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
@@ -99,6 +117,7 @@ export function times(value: unknown, c: Clock): unknown {
     }
   }
   if ("windows" in map && "state" in map) {
+    minute.get();
     const credits = map.credits;
     if (isObject(credits)) {
       const text =

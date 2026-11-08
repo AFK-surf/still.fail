@@ -51,12 +51,17 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
     chat_row_key,
     chat_item,
   )
-  // (each row's JSON to what was made of it, in the order the days hold them)
+  // (each row's JSON to what was made of it, in the order the days hold them; as its station's state makes it)
+  let stations = stations_said(v)
   let at = Ref(0)
   let view = chats_view_by(v, fn(_) {
     let item = read[at.val].1
     at.val += 1
-    item
+    if stations.is_empty() {
+      item
+    } else {
+      station_on(item, stations.get(item.station))
+    }
   })
   { view, read }
 })

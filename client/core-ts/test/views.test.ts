@@ -13,7 +13,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
@@ -219,6 +219,9 @@ for (const name of ["usage", "profiles"]) {
     assert.equal(t.router.computed, before, `${name} did not change while the link stayed online`);
   });
 }
+
+/// A list's rows as they are shown: each as its station's state makes it, said once for the station (`stations`).
+const shownRows = (v: J): J[] => v.days.flatMap((d: J) => d.items).map((i: J) => stationOn(i, v.stations.find((s: J) => s.station === i.station)));
 
 test("usage_keeps_its_spending_and_account_allowance_current", async () => {
   const t = setup();
@@ -822,7 +825,9 @@ test("chats_puts_together_the_online_stations", async () => {
   let items = v.days[0].items;
   assert.deepEqual(ids(v), ["1", "1", "s1"]);
   assert.deepEqual([items[0].station, items[1].station, items[1].stationName], ["ws/a", "ws/b", "beta"]);
-  const shown = { ...structuredClone(slack), station: "ws/a", stationName: "alpha", state: null, agents: [{ key: "s1", runtime: "claude", model: "opus", process: "cold", pending: 0 }] };
+  // (what the list's rows say: no more of an agent than its mark shows, nor what no client reads of the chat)
+  const { lastActiveAt: _at, mine: _mine, ...listed } = structuredClone(slack);
+  const shown = { ...listed, station: "ws/a", stationName: "alpha", state: null, agents: [{ key: "s1", runtime: "claude" }] };
   assert.deepEqual(plain(items[2]), plain(shown));
   // A station given an emoji: its rows carry it (the rows made before are made again), and the stations list too.
   const withEmoji = stations(t.nowS());
@@ -846,10 +851,24 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.equal(v.note.reading, false);
   assert.deepEqual(v.trouble, { text: "2 台 station 异常", state: "offline", retry: false });
   items = v.days[0].items;
-  assert.deepEqual([items[0].offline, items[1].offline], [undefined, "beta 离线"]);
+  // Said once, for the station: not on each of its rows.
+  assert.deepEqual([items[0].offline, items[1].offline], [undefined, undefined]);
+  assert.equal(v.stations[1].offline, "beta 离线");
+  assert.deepEqual(shownRows(v).map((i: J) => i.offline), [undefined, "beta 离线", undefined]);
   t.set(link("ws/b"), { state: "online" });
   await t.read(u, 1);
   assert.deepEqual(u.value.trouble, { text: "gamma 离线", state: "offline", retry: false, station: "ws/c" });
+  // A station's link coming and going changes its state in the list once, not each of its rows (1400 rows patched,
+  // 278 KB, for each change of one station, 2026-11-08).
+  t.set(link("ws/b"), { state: "reconnecting" });
+  await t.host.time.pass(100);
+  const said = t.host.takeEmitted().map(([, m]) => m as J).filter((m) => m.id === 1);
+  assert.equal(said.length, 1);
+  assert.ok(said[0].delta.every((op: J) => op.path[0] !== "days"), JSON.stringify(said[0].delta));
+  u.value = applyOps(u.value, said[0].delta);
+  assert.equal(u.value.stations[1].reconnecting, "正在重新连接 beta");
+  t.set(link("ws/b"), { state: "online" });
+  await t.read(u, 1);
   t.fail(rows("ws/a"), new CoreError("http_500", "坏了"));
   await t.read(u, 1);
   v = u.value;
@@ -862,7 +881,8 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.deepEqual([v.stations[0].state, v.stations[0].message], ["connecting", "连接已断开"]);
   assert.equal(ids(v).length, 2);
   assert.deepEqual(v.trouble, { text: "2 台 station 异常", state: "offline", retry: false });
-  const reconnecting = (x: J) => x.days[0].items.map((i: J) => [i.station, i.reconnecting ?? null]);
+  const reconnecting = (x: J) => shownRows(x).map((i: J) => [i.station, i.reconnecting ?? null]);
+  assert.ok(v.days[0].items.every((i: J) => i.reconnecting === undefined));
   assert.ok(reconnecting(v).some(([s, r]: J) => s === "ws/a" && r === "正在重新连接 alpha"), JSON.stringify(v));
   assert.ok(reconnecting(v).every(([s, r]: J) => s === "ws/a" || r === null));
   t.set(link("ws/a"), { state: "error", message: "没有权限" });
@@ -1052,7 +1072,7 @@ test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", a
   // Its station offline: nothing there to take it.
   t.set(link("ws/st"), { state: "offline" });
   await t.read(u, 1);
-  assert.equal(u.value.days.flatMap((d: J) => d.items).some((i: J) => i.swipeArchive === true), false);
+  assert.equal(shownRows(u.value).some((i: J) => i.swipeArchive === true), false);
 });
 
 test("a_chat_someone_else_started_asks_before_its_swipe_archives_it_for_the_whole_workspace", async () => {
@@ -1271,7 +1291,7 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   const b = (list.value as J[]).find((s) => s.station === "ws/b");
   assert.deepEqual([b.online, b.summary, b.line, b.blocked], [false, "安全模式未放行", "安全模式未放行", why]);
   const v = chats.value;
-  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock", running: 0, doing: "安全模式未放行" });
+  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock", running: 0, doing: "安全模式未放行", offline: "安全模式未放行 beta" });
   assert.deepEqual(v.trouble, { text: "安全模式未放行 beta", state: "offline", retry: false, station: "ws/b" });
   // Down for another reason: as before, nothing of a security mode.
   t.set(link("ws/b"), { state: "offline", cause: "unreached" });

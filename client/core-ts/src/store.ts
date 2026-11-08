@@ -714,6 +714,7 @@ export class Store {
     // Gone before its source hears: what the source asks of the live topics then no longer has it.
     this.#topics.delete(topicKey(topic));
     entry.stop?.();
+    entry.output?.stop();
     if (this.#firstPending.get(topicKey(topic)) === entry) this.#firstPending.delete(topicKey(topic));
     if (this.#updatesPending.get(topicKey(topic)) === entry) this.#updatesPending.delete(topicKey(topic));
     this.#source?.stop(topic);
