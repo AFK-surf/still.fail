@@ -14,6 +14,9 @@ import {
   "station/archivelast",
   "station/letters",
   "station/cc",
+  "station/usage",
+  "station/recent",
+  "station/lookups",
   "moonbitlang/core/json",
 }
 

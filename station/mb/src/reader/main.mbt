@@ -263,6 +263,44 @@ async fn cc_builder(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The checker of the kept statistics' coverage (usage/minute-worker.ts): `{id, viewer}`, `{id, detail}`, `{id,
+/// remote}` or `{id, chats}` answered `{id}` when complete, `{id, error}` when not; `{"complete": true}` said first
+/// when every statistic is.
+async fn usage_checker(host : @host.Host, db_path : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=250)
+  if @usage.complete(db) {
+    let complete : Json = { "complete": true }
+    host.say(complete.stringify())
+  }
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask : Json = @json.parse(line) catch { _ => Json::null() }
+    let id = match ask {
+      { "id": id, .. } => id
+      _ => Json::null()
+    }
+    let answer : Json = try {
+      let (ready, name) = match ask {
+        { "viewer": _, .. } => (@usage.minutes_ready(db), "minute")
+        { "detail": v, .. } => (@usage.detail_ready(db, v), "detail")
+        { "chats": v, .. } => (@usage.chats_ready(db, v), "chat and card")
+        _ => (@usage.remote_ready(db), "remote task")
+      }
+      if ready {
+        { "id": id }
+      } else {
+        { "id": id, "error": Json::string("historical \{name} statistics are unavailable") }
+      }
+    } catch {
+      e => { "id": id, "error": Json::string(message(e)) }
+    }
+    host.say(answer.stringify())
+  }
+}
+
+///|
 /// A step of what is built whole (`{"scope": "all"}`).
 fn all(step : (@sql.Db) -> Bool raise) -> (@sql.Db, Json) -> Bool? raise {
   (db, ask) => if ask is { "scope": "all", .. } { Some(step(db)) } else { None }
@@ -343,6 +381,16 @@ fn main {
         { "thread": Number(thread, ..), .. } => Some(@cards.step(db, thread.to_int64()))
         _ => None
       }))
+    (Some("closed-cards"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "closed card", (db, ask) => match ask {
+        { "thread": Number(thread, ..), .. } => Some(@lookups.closed_step(db, thread.to_int64()))
+        _ => None
+      }))
+    (Some("people-since"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "people-time", (db, ask) => match ask {
+        { "thread": Number(thread, ..), .. } => Some(@lookups.people_step(db, thread.to_int64()))
+        _ => None
+      }))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {
@@ -388,6 +436,31 @@ fn main {
           }
         })
       })
+    (Some("recent-chat"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let preparation : Ref[@recent.Preparation?] = Ref(None)
+        builder(host, db, "recent chat", (db, ask) => {
+          guard ask is { "scope": String(scope), .. } else { return None }
+          // (the scope as the reader names it: `[workspace, home]`, each a string or null)
+          let parsed : Json = @json.parse(scope) catch { _ => Json::null() }
+          let (ws, home) = match parsed {
+            Array([ws, home]) if (ws is (String(_) | Null)) && (home is (String(_) | Null)) =>
+              (if ws is String(s) { Some(s) } else { None }, if home is String(s) { Some(s) } else { None })
+            _ => raise Failure("invalid recent chat scope")
+          }
+          let p = match preparation.val {
+            Some(p) => p
+            None => {
+              let p = @recent.Preparation::new(db)
+              preparation.val = Some(p)
+              p
+            }
+          }
+          Some(p.step(ws, home))
+        })
+      })
+    (Some("usage-check"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => usage_checker(host, db))
     (Some("cc-index"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => cc_builder(host, db))
     (Some("turn-counts"), Some(db), _) =>
@@ -411,7 +484,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since --db <file>")
       2
     }
   }

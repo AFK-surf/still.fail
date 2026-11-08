@@ -33,7 +33,7 @@ import { ConnectedSurface } from "../connects/surface.ts";
 import type { Handler, InboundFile, ModelChoice, Person, ThreadRef } from "../sessions/chat.ts";
 import { sessionKey } from "../sessions/hub.ts";
 import type { Attachment, Store } from "../store/store.ts";
-import { type CommaStats, type IndexRow, type RevIndex, heldFrom, nextPage, probePage, statsWire, taskWire } from "./stats.ts";
+import { type CommaStats, type IndexRow, type RevIndex, IndexSync, heldFrom, probePage, statsWire, taskWire } from "./stats.ts";
 import { type CommaTasks, type Start, type Task, TASK_CHANNEL } from "./tasks.ts";
 
 type Json = any;
@@ -328,12 +328,11 @@ export class CommaSurface extends ConnectedSurface {
   private async sendIndex(socket: WebSocket, method: "stats.index" | "task.index", wire: (row: IndexRow) => Json | null) {
     let changed: () => void = () => {};
     let moved = new Promise<void>((resolve) => (changed = resolve));
-    let stats: RevIndex | null = null;
     let stop = () => {};
-    const holder = randomUUID();
     let didClose = false;
     const live = () => !didClose && this.socket_ === socket && this.inScope();
     const closed = new Promise<void>((resolve) => socket.once("close", () => { didClose = true; resolve(); }));
+    let following: IndexSync | null = null;
     try {
       // An older process may still be sending the unscoped index. Clear or send ours only after it has exited.
       await Promise.race([this.previousExited, closed]);
@@ -341,10 +340,40 @@ export class CommaSurface extends ConnectedSurface {
       // A scoped database may still be in use by the previous process; open and build it after handover.
       const indexes = typeof this.stats === "function" ? this.stats() : this.stats;
       indexes.start();
-      stats = method === "stats.index" ? indexes.stats : indexes.tasks;
+      const stats = method === "stats.index" ? indexes.stats : indexes.tasks;
       stop = stats.listen(() => changed());
-      let held: ReturnType<typeof heldFrom> = null;
-      let page = probePage(stats);
+      // An old sender uses the old epoch and does not register its readers here. Let it finish before this one resets.
+      await Promise.race([stats.ready, closed]);
+      if (!live()) return;
+      const retryWait = (ms: number) => new Promise<boolean>((resolve) => {
+        let cancel = () => {};
+        const finish = (open: boolean) => { cancel(); socket.off("close", onClose); resolve(open); };
+        const onClose = () => finish(false);
+        socket.once("close", onClose);
+        cancel = wall.after(ms, () => finish(true)); // timer: retry a locked index with backoff
+        if (!live()) finish(false);
+      });
+      const readIndex = async <T>(read: () => T): Promise<{ value: T } | null> => {
+        let delay = 25;
+        while (live()) {
+          try { return { value: read() }; }
+          catch (error) {
+            const code = (error as { errcode?: number }).errcode;
+            if (code === undefined || ((code & 0xff) !== 5 && (code & 0xff) !== 6)) throw error;
+            // An old connection can hold the index during guard installation or acknowledgement. Retry that work,
+            // with backoff, until it succeeds or this socket closes.
+            if (!await retryWait(delay)) return null;
+            delay = Math.min(delay * 2, 2000);
+          }
+        }
+        return null;
+      };
+      const started = await readIndex(() => new IndexSync(stats, wire));
+      if (started === null) return;
+      const sync = following = started.value;
+      const initial = await readIndex(() => probePage(stats));
+      if (initial === null) return;
+      let page = initial.value;
       while (live()) {
         let answer: Json;
         try {
@@ -355,27 +384,30 @@ export class CommaSurface extends ConnectedSurface {
           continue;
         }
         if (!live()) return;
-        held = heldFrom(answer);
+        const held = heldFrom(answer);
         if (held === null) return;
-        const next = nextPage(stats, held, wire);
+        const read = await readIndex(() => sync.next(held));
+        if (read === null) return;
+        const next = read.value;
         if (next !== null) {
           page = next;
           await wall.sleep(300);
           continue;
         }
-        stats.held(holder, held.through);
         // Nothing more to send: until the statistics change, a second's changes together.
         await Promise.race([moved, closed]);
         moved = new Promise<void>((resolve) => (changed = resolve));
         await wall.sleep(1000);
         if (!live()) return;
-        page = nextPage(stats, held, wire) ?? probePage(stats);
+        const readAfterChange = await readIndex(() => sync.next(held) ?? probePage(stats));
+        if (readAfterChange === null) return;
+        page = readAfterChange.value;
       }
     } catch (error) {
       log.info("comma", "an index was not sent", { connect: this.id, method, error: (error as Error).message });
     } finally {
       stop();
-      stats?.gone(holder);
+      following?.close();
     }
   }
 
@@ -499,7 +531,7 @@ export class CommaSurface extends ConnectedSurface {
     const row = this.store.getSession(this.session(t));
     // Invited, its first Message not heard yet: idle, waiting for it.
     if (row === null) return { state: "idle", pending: 0, for_ms: null, last_failure: null };
-    return { state: row.running ? "running" : "idle", pending: this.store.pendingMessages(row.key).length, for_ms: null, last_failure: null };
+    return { state: row.running ? "running" : "idle", pending: this.store.pendingCount(row.key), for_ms: null, last_failure: null };
   }
 
   /// task.leave: the Task runs elsewhere now. Its session leaves the thread; the thread stays, as what was said.

@@ -3,7 +3,7 @@
 // as an old view's page in Ctx::selectable), each a paragraph of it (SelKey's `Words`: the tree's number, the row of a
 // list made by its key it is in and its place in that row: View::row_place), found where the tree lays it out and shows
 // it now (tree_sels: what holds it cutting it, as big as it is drawn), never as the frame before painted it; what of it
-// is picked drawn under its words (View::runs_picked, as each is made and as what is picked changes: picked_said). Its
+// is picked drawn under its words (View::runs_picked, as each is made and as what is picked changes: picked_told). Its
 // plain words are picked by none, as an old view's plain words are not (Ctx::text). A finger's press is what it
 // presses; a finger held still on them a long press's time is the selection's (tree_finger_down, finger_select.mbt).
 
@@ -26,16 +26,46 @@ pub fn words_picked(v : @view.View) -> Unit {
 }
 
 ///|
-/// How many times what is picked with the pointer changed (picked_told): what each node's words say of what of them
-/// is picked follows.
-// kept across runs: counted on (what follows it reads it again), never put back
-let picked_said : @signals.Signal[Int] = @signals.signal(0)
+/// What of each paragraph's words is picked with the pointer (from, to; (0, 0) none), by its key, as a signal of its
+/// own made as it is first read (words_picked_span): told as what is picked changes (picked_told), each only as its
+/// own span does.
+// kept across runs: said again from what is picked as that changes
+let picked_spans_said : Map[SelKey, @signals.Signal[(Int, Int)]] = {}
+
+///|
+/// Whether what is picked with the pointer was picked by a finger, as a signal (Ctx::selection_by_finger).
+// kept across runs: said again from what is picked as that changes
+let picked_finger_said : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// What of paragraph `k`'s words is picked now ((0, 0): none).
+fn picked_span_of(k : SelKey) -> (Int, Int) {
+  match picked.spans.get(k) {
+    Some(s) if s.a < s.b => (s.a, s.b)
+    _ => (0, 0)
+  }
+}
 
 ///|
 /// What is picked with the pointer changed: told what follows it (each node's words of the window's tree: what of them
-/// is picked, words_picked_span), at once, nothing scanned.
+/// is picked, words_picked_span), each paragraph whose span changed alone, at once.
 fn picked_told() -> Unit {
-  picked_said.set(@signals.untracked(fn() { picked_said.get() }) + 1)
+  @signals.start_batch()
+  let unread : Array[SelKey] = []
+  picked_spans_said.each(fn(k, s) {
+    s.set(picked_span_of(k))
+    if !s.watched() {
+      unread.push(k)
+    }
+  })
+  picked_finger_said.set(picked.finger)
+  @signals.end_batch()
+  // (what no node reads any more let go)
+  if picked_spans_said.length() > 64 {
+    for k in unread {
+      picked_spans_said.remove(k)
+    }
+  }
 }
 
 ///|
@@ -46,14 +76,19 @@ fn tree_key(v : @view.View) -> SelKey {
 }
 
 ///|
-/// What of node `v`'s words is picked with the pointer, followed as that changes (picked_said): View::runs_picker's.
+/// What of node `v`'s words is picked with the pointer, followed as that changes (picked_told): View::runs_picker's.
 fn words_picked_span(v : @view.View) -> @view.Live[(Int, Int)] {
   By(fn() {
-    picked_said.get() |> ignore
-    match picked.spans.get(tree_key(v)) {
-      Some(s) if s.a < s.b => (s.a, s.b)
-      _ => (0, 0)
+    let k = tree_key(v)
+    let s = match picked_spans_said.get(k) {
+      Some(s) => s
+      None => {
+        let s = @signals.signal(picked_span_of(k), same=fn(a, b) { a == b })
+        picked_spans_said[k] = s
+        s
+      }
     }
+    s.get()
   })
 }
 

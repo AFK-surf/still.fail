@@ -41,7 +41,7 @@ test("a read-only coverage check does not wait for the previous process", async 
   const previousGone = new Promise<void>((resolve) => { finish = resolve; });
   (workerThreads as any).Worker = FakeWorker;
   syncBuiltinESMExports();
-  const reader = new (MinuteReader as any)("unused", { previousGone });
+  const reader = new (MinuteReader as any)("unused", { previousGone }, null);
   try {
     const ready = reader.ready(null);
     await Promise.resolve();
@@ -53,7 +53,7 @@ test("a read-only coverage check does not wait for the previous process", async 
 
     let finishOther!: () => void;
     const otherHandover = new Promise<void>((resolve) => { finishOther = resolve; });
-    const stopping = new (MinuteReader as any)("unused", { previousGone: otherHandover });
+    const stopping = new (MinuteReader as any)("unused", { previousGone: otherHandover }, null);
     const waiting = assert.rejects(stopping.ready(null), /station stopping/);
     await stopping.close();
     await waiting;

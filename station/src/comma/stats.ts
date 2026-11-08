@@ -126,15 +126,32 @@ export class RevIndex {
   readonly #name: string;
   readonly #listeners = new Set<() => void>();
   /// What each connection's Comma holds: tombstones go once every one holds them.
-  readonly #held = new Map<string, number>();
+  readonly #held = new Map<string | symbol, number>();
+  #guarded = false;
+  readonly ready: Promise<void>;
 
-  constructor(db: DatabaseSync, name: string) {
+  constructor(db: DatabaseSync, name: string, ready: Promise<void> = Promise.resolve()) {
     this.#db = db;
     this.#name = name;
+    this.ready = ready;
     db.exec(`
       CREATE TABLE IF NOT EXISTS ${name} (key TEXT PRIMARY KEY, source TEXT NOT NULL, kind TEXT NOT NULL, rev INTEGER NOT NULL,
         json TEXT NOT NULL, removed INTEGER NOT NULL DEFAULT 0);
       CREATE INDEX IF NOT EXISTS ${name}_rev ON ${name} (rev);`);
+  }
+
+  /// Install after the old process exits: taking a schema write lock during startup could prevent handover itself.
+  /// Once installed, the persistent trigger also records tombstones pruned by an older binary after a downgrade.
+  #guardPrunes(): void {
+    if (this.#guarded) return;
+    const name = this.#name;
+    this.#db.exec(`CREATE TRIGGER IF NOT EXISTS ${name}_pruned AFTER DELETE ON ${name}
+      WHEN OLD.removed = 1 AND OLD.rev > COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = '${name}.pruned'), 0)
+      BEGIN
+        INSERT INTO meta (key, value) VALUES ('${name}.pruned', CAST(OLD.rev AS TEXT))
+          ON CONFLICT (key) DO UPDATE SET value = excluded.value;
+      END;`);
+    this.#guarded = true;
   }
 
   epoch(): string {
@@ -145,7 +162,8 @@ export class RevIndex {
     }
     // Earlier senders truncated the NUL-delimited stats keys. A new wire epoch makes Comma rebuild its copy, while
     // an older process still handing over continues to see its own epoch in the shared database.
-    return this.#name === "stats_index" ? `${epoch}.keys1` : epoch;
+    // Earlier versions did not keep the prune floor. Reset their copies once, including any already missing a delete.
+    return this.#name === "stats_index" ? `${epoch}.keys1.gc1` : `${epoch}.gc1`;
   }
 
   rev(): number {
@@ -159,13 +177,30 @@ export class RevIndex {
   }
 
   /// What connection `host`'s Comma holds now; tombstones every one holds go.
-  held(host: string, through: number): void {
+  held(host: string | symbol, through: number): void {
+    this.#guardPrunes();
     this.#held.set(host, through);
-    this.#db.prepare(`DELETE FROM ${this.#name} WHERE removed = 1 AND rev <= ?`).run(Math.min(...this.#held.values()));
+    const throughAll = Math.min(...this.#held.values());
+    // The trigger records the highest tombstone actually removed in the same statement's transaction, including
+    // deletes from older processes. Avoid a separate search of all acknowledged rows when there is nothing to delete.
+    this.#db.prepare(`DELETE FROM ${this.#name} WHERE removed = 1 AND rev <= ?`).run(throughAll);
+  }
+
+  /// A socket is a distinct reader even when it is replacing a previous socket of the same connect.
+  following(): symbol { this.#guardPrunes(); const token = Symbol(); this.#held.set(token, 0); return token; }
+  observed(token: symbol, through: number): void { if (this.#held.has(token)) this.#held.set(token, through); }
+
+  /// Greatest revision of a tombstone already pruned; it survives disconnected senders and process restarts.
+  pruned(): number { return Number(this.#meta("pruned") ?? 0); }
+
+  /// Capture the floor, revision and page rows in one snapshot; callers encode only after the snapshot is released.
+  snapshot<T>(read: () => T): T {
+    this.#db.exec("SAVEPOINT comma_index_page");
+    try { return read(); } finally { this.#db.exec("RELEASE comma_index_page"); }
   }
 
   /// A connection gone: what it held no longer keeps tombstones.
-  gone(host: string): void {
+  gone(host: string | symbol): void {
     this.#held.delete(host);
   }
 
@@ -231,13 +266,13 @@ export class CommaStats {
   readonly #changes: (changed: () => void) => () => void;
 
   /// `changes`: tells when the agents spent or a chat moved, until the function it answers is called.
-  constructor(path: string, read: Read, changes: (changed: () => void) => () => void) {
+  constructor(path: string, read: Read, changes: (changed: () => void) => () => void, ready: Promise<void> = Promise.resolve()) {
     this.#read = read;
     this.#changes = changes;
     this.#db = new DatabaseSync(path);
     this.#db.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-    this.stats = new RevIndex(this.#db, "stats_index");
-    this.tasks = new RevIndex(this.#db, "task_index");
+    this.stats = new RevIndex(this.#db, "stats_index", ready);
+    this.tasks = new RevIndex(this.#db, "task_index", ready);
     this.#db.exec("CREATE TABLE IF NOT EXISTS said (key TEXT PRIMARY KEY, n INTEGER NOT NULL, at INTEGER NOT NULL)");
   }
 
@@ -260,9 +295,9 @@ export class CommaStats {
     this.#db.prepare("DELETE FROM said WHERE at < ?").run(now - BUILD_DAYS * DAY_MS);
   }
 
-  static at(data: string, read: Read, changes: (changed: () => void) => () => void): CommaStats {
+  static at(data: string, read: Read, changes: (changed: () => void) => () => void, ready?: Promise<void>): CommaStats {
     mkdirSync(data, { recursive: true });
-    return new CommaStats(join(data, "comma-stats.db"), read, changes);
+    return new CommaStats(join(data, "comma-stats.db"), read, changes, ready);
   }
 
   /// A workspace's index is never taken from the old, unscoped index: its owner is not known after a home change.
@@ -456,13 +491,22 @@ export function taskWire(row: IndexRow): Json | null {
 }
 
 /// The next page to send after Comma answered `held`; null once it holds all of the index.
-export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json | null = statsWire): Page | null {
-  const epoch = index.epoch();
-  const rev = index.rev();
-  const reset = held.epoch !== epoch;
-  const since = reset ? 0 : held.through;
-  if (!reset && since >= rev) return null;
-  const changed = index.since(since, PAGE_ROWS + 1);
+export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json | null = statsWire,
+  resetIf?: (floor: number, rev: number, epoch: string) => boolean): Page | null {
+  // A different connection can prune between reads. The floor, revision and rows must describe the same database
+  // snapshot; release it before parsing and encoding the bodies, so those operations do not hold a SQLite read lock.
+  const slice = index.snapshot(() => {
+    const epoch = index.epoch();
+    const rev = index.rev();
+    // A restored or damaged database may have a floor ahead of its current revision; never restart a reset forever.
+    const floor = Math.min(index.pruned(), rev);
+    const forced = resetIf?.(floor, rev, epoch) === true;
+    const reset = held.epoch !== epoch || forced;
+    const since = reset ? 0 : held.through;
+    return { epoch, rev, reset, since, changed: !reset && since >= rev ? null : index.since(since, PAGE_ROWS + 1) };
+  });
+  const { epoch, rev, reset, since, changed } = slice;
+  if (changed === null) return null;
   const rows: Json[] = [];
   let bytes = 2;
   let taken = 0;
@@ -479,6 +523,44 @@ export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => J
   // A page short of the end brings Comma to its last row; the last page to the index's rev, past pruned tombstones.
   const through = taken < changed.length ? last : rev;
   return { epoch, reset, since, through, rows };
+}
+
+/// One socket following an index. A reset clears the receiver only on its first page; while it is paging, the socket
+/// holds its acknowledged position so another sender cannot prune a tombstone it still needs.
+export class IndexSync {
+  readonly #index: RevIndex;
+  readonly #wire: (row: IndexRow) => Json | null;
+  readonly #token: symbol;
+  #resetting = false;
+  #resetFloor = 0;
+
+  constructor(index: RevIndex, wire: (row: IndexRow) => Json | null = statsWire) {
+    this.#index = index;
+    this.#wire = wire;
+    this.#token = index.following();
+  }
+
+  next(held: Held): Page | null {
+    const index = this.#index;
+    index.observed(this.#token, held.epoch === index.epoch() ? held.through : 0);
+    let floor = 0;
+    const page = nextPage(index, held, this.#wire, (seen, rev, epoch) => {
+      floor = seen;
+      return held.epoch === epoch && (held.through > rev ||
+        (held.through < seen && (!this.#resetting || seen > this.#resetFloor)));
+    });
+    if (page?.reset === true) {
+      this.#resetting = true;
+      this.#resetFloor = floor;
+      index.observed(this.#token, 0);
+    } else if (page === null) {
+      this.#resetting = false;
+      index.held(this.#token, held.through);
+    }
+    return page;
+  }
+
+  close(): void { this.#index.gone(this.#token); }
 }
 
 /// Comma's answer to a page, or null when it is not one.

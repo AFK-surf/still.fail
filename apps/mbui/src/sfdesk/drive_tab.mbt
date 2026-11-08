@@ -36,28 +36,35 @@ let ftab : FChatTab = {
 }
 
 ///|
-/// Told as where the tab is by workspace changes (ftab_put): what reads it (ftab_place_of) built again then, a part
-/// kept as its nodes too, whether it was a press in the tab, the composer's way to a folder or anything else.
-// kept across runs: only counts on
-let ftab_places_said : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-fn ftab_places_told() -> Unit {
-  ftab_places_said.set(@signals.untracked(fn() { ftab_places_said.get() }) + 1)
-}
+/// Where the tab is, by workspace (as ftab.places: None none kept, Some(None) the places), each as a signal of its own
+/// made as it is first read: told as that workspace's changes (ftab_put), so what reads it (ftab_place_of) is built
+/// again then, a part kept as its nodes too, whether it was a press in the tab, the composer's way to a folder or
+/// anything else; what reads another workspace's not.
+// kept across runs: said again as the tab is put back (tab_reset)
+let ftab_places_said : Map[String, @signals.Signal[DriveAt??]] = {}
 
 ///|
 /// The tab of `ws` put at `at` (None: the places).
 fn ftab_put(ws : String, at : DriveAt?) -> Unit {
   ftab.places[ws] = at
-  ftab_places_told()
+  match ftab_places_said.get(ws) {
+    Some(s) => s.set(Some(at))
+    None => ()
+  }
 }
 
 ///|
 /// Where the tab of `ws` is (None: none kept), read as a signal.
 fn ftab_place_of(ws : String) -> DriveAt?? {
-  ignore(ftab_places_said.get())
-  ftab.places.get(ws)
+  let s = match ftab_places_said.get(ws) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(ftab.places.get(ws), same=fn(a, b) { a == b })
+      ftab_places_said[ws] = s
+      s
+    }
+  }
+  s.get()
 }
 
 ///|
@@ -66,7 +73,7 @@ fn tab_reset() -> Unit {
   panel_screen_pages.clear()
   ftab.building = false
   ftab.places.clear()
-  ftab_places_told()
+  ftab_places_said.each(fn(_, s) { s.set(None) })
   ftab.scope = ""
   ftab.let_go = None
   ftab.chat = ""

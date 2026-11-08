@@ -10,18 +10,22 @@ export class CardPostsBuilder extends RequestedBuilder<number> {
   }
 }
 
-/// The same worker also prepares the old closed-card lookup, on its own queue.
+/// The old closed-card lookup, on its own queue: by the MoonBit builder (station/mb, src/lookups) where its program is
+/// there, else by the same worker.
 export class ClosedCardsBuilder extends RequestedBuilder<number> {
-  constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}, workerFile?: URL) {
+  constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}, workerFile?: URL, mb = workerFile === undefined ? mbReaderBinary() : null) {
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./card-posts-worker.ts" : "./read/card-posts-worker.js", import.meta.url);
-    super(path, options, file, "thread", "closed card preparation", (thread, cancel) => ({ thread, cancel, closed: true }));
+    super(path, options, file, "thread", "closed card preparation", (thread, cancel) => ({ thread, cancel, closed: true }),
+      mb === null ? null : { binary: mb, args: ["--builder", "closed-cards", "--db", path] });
   }
 }
 
-/// Prepare the people-time lookup for only the old chats a read needs.
+/// Prepare the people-time lookup for only the old chats a read needs: by the MoonBit builder (station/mb,
+/// src/lookups) where its program is there, else by the worker.
 export class PeopleSinceBuilder extends RequestedBuilder<number> {
-  constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}, workerFile?: URL) {
+  constructor(path: string, options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}, workerFile?: URL, mb = workerFile === undefined ? mbReaderBinary() : null) {
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./card-posts-worker.ts" : "./read/card-posts-worker.js", import.meta.url);
-    super(path, options, file, "thread", "people-time preparation", (thread, cancel) => ({ thread, cancel, people: true }));
+    super(path, options, file, "thread", "people-time preparation", (thread, cancel) => ({ thread, cancel, people: true }),
+      mb === null ? null : { binary: mb, args: ["--builder", "people-since", "--db", path] });
   }
 }

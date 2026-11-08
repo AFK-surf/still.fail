@@ -157,10 +157,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             row,
             open,
             anchor,
-            fn() {
-              presented_said.get() |> ignore
-              items
-            },
+            fn() { presented_items_of(serial, items) },
             title,
             along,
             offset,

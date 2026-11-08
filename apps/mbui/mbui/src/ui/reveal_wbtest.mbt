@@ -127,3 +127,40 @@ test "at a large window's size too, the old window is drawn again under the circ
   assert_true(reveal.start >= 0.0)
   assert_true(ground_drawn(0xEE) && ground_drawn(0x11))
 }
+
+///|
+test "where the window is the tree's: its ground and an old view's words in it over the window as it was, in the circle; no words over words" {
+  let dark = @signals.signal(false)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, words_over_held=false, tree=fn(root) {
+    root.box(fn(b) {
+      b
+      .width(Is(Some(400.0)))
+      .height(Is(Some(300.0)))
+      .ground(By(fn() { if dark.get() { 0x111111FFL } else { 0xEEEEEEFFL } }))
+      |> ignore
+      // (the words an old view's, on the tree's ground: the same words in the same place in either theme)
+      old(b, fn(c) {
+        c.with_theme(if dark.get() { Theme::dark() } else { Theme::light() }, fn() { c.text("未开启") |> ignore })
+      })
+      .width(Is(Some(200.0)))
+      .height(Is(Some(100.0)))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.frame()
+  g().reveal_from(20.0, 10.0, dark=fn() { dark.get() })
+  t.frame()
+  dark.set(true)
+  t.frame()
+  assert_true(reveal.start >= 0.0)
+  t.run_for(reveal_ms / 2.0)
+  // the window as it was under it, the tree's ground as it is in it
+  assert_true(circle_radius() > 0.0)
+  assert_true(ground_drawn(0xEE) && ground_drawn(0x11))
+  // (the words as they were under the tree's ground, not seen through to the words as they are)
+  let over = t.words_over_frames()
+  assert_true(over.is_empty(), msg="words over words: \{over}")
+  t.run_for(reveal_ms / 2.0)
+  assert_false(reveal.on)
+}

@@ -17,6 +17,8 @@ export const SAY = "comma.say";
 const ANSWER_MAX = 64 * 1024 * 1024;
 /// Chats a read takes at once.
 const CHATS_PAGE = 1000;
+/// Bound the simultaneous peer reads: each answer can itself be large.
+const PEER_READS = 2;
 
 /// What answers another station's `outflow.read`: the read it names of this station's chats of the workspace it asks
 /// in, the answer's JSON as the bytes after its head. `read`: the station's reads (read/ops.ts); `home`: its home
@@ -79,12 +81,25 @@ export function workspaceRead(w: WorkspaceReads): Read {
     const stations: StationRows[] = [await stationRows((op, args) => w.here(op, { ...args, ...ws }), from, to)];
     const unread: string[] = [];
     const others = home === null ? [] : await w.others();
-    for (const station of others) {
-      try {
-        stations.push({ station, ...(await stationRows((op, args) => w.there(station, op, args), from, to)) });
-      } catch {
-        unread.push(station);
+    const results: (StationRows | null)[] = Array.from({ length: others.length }, () => null);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(PEER_READS, others.length) }, async () => {
+      for (;;) {
+        const at = next++;
+        const station = others[at];
+        if (station === undefined) return;
+        try {
+          results[at] = { station, ...(await stationRows((op, args) => w.there(station, op, args), from, to)) };
+        } catch {
+          // Keep this station's previous rows when it cannot answer.
+        }
       }
+    }));
+    // Completion order must not change the order in which the index gives revisions to the rows.
+    for (let i = 0; i < others.length; i++) {
+      const result = results[i];
+      if (result !== null && result !== undefined) stations.push(result);
+      else unread.push(others[i]!);
     }
     return { stations, unread };
   };
