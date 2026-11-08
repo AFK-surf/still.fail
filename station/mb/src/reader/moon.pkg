@@ -5,6 +5,8 @@ import {
   "station/marks",
   "station/bindings",
   "station/upjobs",
+  "station/widgets",
+  "station/cards",
   "moonbitlang/core/json",
 }
 
