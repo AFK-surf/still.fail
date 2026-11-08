@@ -71,6 +71,12 @@ fn message(e : Error) -> String {
 }
 
 ///|
+/// A step of what is built whole (`{"scope": "all"}`).
+fn all(step : (@sql.Db) -> Bool raise) -> (@sql.Db, Json) -> Bool? raise {
+  (db, ask) => if ask is { "scope": "all", .. } { Some(step(db)) } else { None }
+}
+
+///|
 /// `name` in the directory `path` is in (the station's data directory: its database's).
 fn beside(path : String, name : String) -> String {
   let slash = path.rev_find("/").unwrap_or(-1)
@@ -99,7 +105,8 @@ fn flag(name : String) -> String? {
 /// A builder of old state, as a builder worker is (read/requested-builder.ts): each line asks for a batch of `scope`
 /// (`{"scope": "all"}`; one with `cancel` is let go), each answer says whether all is done, or why not. A database busy
 /// with another's write is no error: the batch is asked again. The pool takes the backfill permit around each ask.
-async fn builder(host : @host.Host, db_path : String) -> Unit {
+/// `step`: one batch of what it builds for what it was asked (None: what it does not build; `name`, said then).
+async fn builder(host : @host.Host, db_path : String, name : String, step : (@sql.Db, Json) -> Bool? raise) -> Unit {
   let db = @sql.Db::attach(host, db_path, wait=250)
   db.exec("PRAGMA synchronous = NORMAL")
   while host.line() is Some(line) {
@@ -110,14 +117,13 @@ async fn builder(host : @host.Host, db_path : String) -> Unit {
     if ask is { "cancel": True, .. } {
       continue
     }
-    let answer : Json = if ask is { "scope": "all", .. } {
-      try {
-        { "done": Json::boolean(@marks.step(db)) }
-      } catch {
-        e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
+    let answer : Json = try {
+      match step(db, ask) {
+        Some(done) => { "done": Json::boolean(done) }
+        None => { "done": false, "error": Json::string("invalid \{name} preparation request") }
       }
-    } else {
-      { "done": false, "error": "invalid archive mark preparation request" }
+    } catch {
+      e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
     }
     host.say(answer.stringify())
   }
@@ -127,7 +133,14 @@ async fn builder(host : @host.Host, db_path : String) -> Unit {
 fn main {
   let code = match (flag("--builder"), flag("--db"), flag("--data")) {
     (Some("archive-marks"), Some(db), _) =>
-      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db))
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "archive mark", all(db => @marks.step(db))))
+    (Some("session-bindings"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session binding", all(db => @bindings.step(db))))
+    (Some("session-up-jobs"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session up jobs", (db, ask) => match ask {
+        { "session": String(session), .. } => Some(@upjobs.step(db, session))
+        _ => None
+      }))
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
         let reader = { host, db: data + "/stillfail.db", writer: None }
@@ -140,7 +153,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs --db <file>")
       2
     }
   }
