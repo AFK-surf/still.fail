@@ -6,7 +6,7 @@
 test "大屏: on the block's way each frame built once, the lists' rows kept" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.run_for(kept_rows_still_ms)
   let t0 = t.time()
   t.advance(between_frames_ms)
@@ -28,7 +28,7 @@ test "大屏: on the block's way each frame built once, the lists' rows kept" {
 test "大屏: on the block's way a chat's column as wide as at either end, its words not laid out otherwise" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-long")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.run_for(kept_rows_still_ms)
   let line = "和首页那边的改动有关"
   let size = fn() {

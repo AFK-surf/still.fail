@@ -12,7 +12,7 @@ let kept_rows_step_ms : Double = 120.0
 /// (`again`) or built every frame.
 fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false) -> (Array[Array[String]], Int) {
   let t = kept_rows_open("chat-long", w, h)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
   t.said() |> ignore

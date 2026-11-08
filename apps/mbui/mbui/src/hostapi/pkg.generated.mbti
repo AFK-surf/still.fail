@@ -13,6 +13,8 @@ pub fn a11y_on() -> Bool
 
 pub fn a11y_tree(String) -> Unit
 
+pub fn answers_by_frame(Int32) -> Bool
+
 pub fn app_version() -> Int32
 
 pub fn atlas_generation() -> Int32
@@ -68,6 +70,8 @@ pub fn clipboard_set(String) -> Unit
 pub fn clipboard_set_image(Bytes) -> Unit
 
 pub fn clipboard_set_secret(String, clear_ms~ : Double) -> Unit
+
+pub fn clock_at_wall(Double) -> Double
 
 pub let colour_atlas_u : Int32
 
@@ -217,6 +221,8 @@ pub fn keyboard() -> Int32
 
 pub fn keys_platform() -> Int32
 
+pub fn lines_on_pixels() -> Bool
+
 pub fn local_font_families() -> String
 
 pub fn local_station() -> String
@@ -315,6 +321,8 @@ pub fn pick_photo(String) -> Pick?
 
 pub fn platform() -> Int32
 
+pub fn pointing() -> Int32
+
 pub let polled : @ref.Ref[() -> Unit]
 
 pub fn post_next() -> (String, String, Bytes)?
@@ -343,9 +351,15 @@ pub fn render_dirty(Double, Double, Double, Double) -> Unit
 
 pub fn request_frame() -> Unit
 
+pub fn request_frame_on() -> Unit
+
+pub fn rows_on_pixels() -> Bool
+
 pub fn run(String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int32, Double, Double, Int32) -> Unit], FuncRef[(Double, Double, Double, Double, Int32) -> Unit], FuncRef[(Int32, Int32) -> Unit], FuncRef[(Int32, String, Int32, Int32) -> Unit]) -> Unit
 
 pub fn save_file(String, Bytes) -> Bool
+
+pub fn script_step(String, String) -> String
 
 pub fn set_app_state(FuncRef[(Int32) -> Unit]) -> Unit
 
@@ -413,7 +427,7 @@ pub fn stream_next(Int32) -> String
 
 pub fn stream_open() -> Int32
 
-pub fn stream_pointer(Int32, Bytes, Double, Double, Double, Double) -> Unit
+pub fn stream_pointer(Int32, String, () -> Bytes, Double, Double, Double, Double) -> Unit
 
 pub fn stream_pointer_at(Int32, Double, Double, Bool) -> Unit
 
@@ -517,11 +531,11 @@ pub fn window_corner_at(Int32) -> Double
 
 pub fn window_drag() -> Unit
 
+pub fn window_front(String) -> Bool
+
 pub fn window_hold() -> Unit
 
 pub fn window_inset() -> Bool
-
-pub fn window_front(String) -> Bool
 
 pub fn window_open(String) -> Bool
 
@@ -788,12 +802,14 @@ pub(open) trait Host {
   fn run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int32, Double, Double, Int32) -> Unit], FuncRef[(Double, Double, Double, Double, Int32) -> Unit], FuncRef[(Int32, Int32) -> Unit], FuncRef[(Int32, String, Int32, Int32) -> Unit]) -> Unit = _
   fn now(Self) -> Double = _
   fn wall_ms(Self) -> Double = _
+  fn clock_at_wall(Self, Double) -> Double = _
   fn utc_offset_min(Self, Double) -> Int32 = _
   fn event_time(Self) -> Double = _
   fn event_finger(Self) -> Int32 = _
   fn frame_late(Self) -> Double = _
   fn platform(Self) -> Int32 = _
   fn request_frame(Self) -> Unit = _
+  fn request_frame_on(Self) -> Unit = _
   fn wake_after(Self, Double) -> Unit = _
   fn font_metrics(Self, Double, Int32, Int32, FixedArray[Double]) -> Unit = _
   fn shape(Self, String, Double, Int32, Int32, FixedArray[Double]) -> Int32 = _
@@ -822,6 +838,10 @@ pub(open) trait Host {
   fn log(Self, String) -> Unit = _
   fn bench_mode(Self) -> Int32 = _
   fn set_outside(Self, FuncRef[(Int32, Int32, Int32) -> Unit]) -> Bool = _
+  fn answers_by_frame(Self, Int32) -> Bool = _
+  fn script_step(Self, String, String) -> String = _
+  fn rows_on_pixels(Self) -> Bool = _
+  fn lines_on_pixels(Self) -> Bool = _
   fn frame_awaiting(Self, Int32, String) -> Unit = _
   fn own_clock(Self) -> Bool = _
   fn reduce_motion(Self) -> Bool = _
@@ -838,6 +858,7 @@ pub(open) trait Host {
   fn system_dark(Self) -> Bool = _
   fn font_scale(Self) -> Double = _
   fn native_pointing(Self) -> Int32 = _
+  fn pointing(Self) -> Int32 = _
   fn keyboard(Self) -> Int32 = _
   fn a11y_on(Self) -> Bool = _
   fn a11y_tree(Self, String) -> Unit = _
@@ -955,6 +976,7 @@ pub(open) trait Host {
   fn st_audio(Self, Int32, Bytes) -> Unit = _
   fn st_layers(Self) -> Int32 = _
   fn st_pointer(Self, Int32, Bytes, Double, Double, Double, Double) -> Unit = _
+  fn st_pointer_named(Self, Int32, String, () -> Bytes, Double, Double, Double, Double) -> Unit = _
   fn st_pointer_at(Self, Int32, Double, Double, Int32) -> Unit = _
   fn st_direct(Self, Int32, Double, Double, Int32) -> Unit = _
   fn st_h265_here(Self) -> Int32 = _

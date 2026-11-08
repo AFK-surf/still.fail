@@ -320,7 +320,7 @@ fn kept_stack_tester(tick : @signals.Signal[Int], menu_stack : Ref[Int]) -> (Tes
     node
   }
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.box(fn(a) {

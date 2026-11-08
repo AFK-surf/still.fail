@@ -1089,13 +1089,15 @@ fn Ctx::list_finds_field(self : Ctx, st : ListState, order : Array[Int], iy : Do
 }
 
 ///|
-/// Whether a list's rows are laid on the device's pixels (Ctx::row_slot, rows_on_pixels): on a host, its rows kept or
-/// not, as it draws each glyph on its pixels; in a Tester where it keeps parts as drawn (Tester::keep_parts), else as
-/// every frame of a Tester's was always laid out; not while anything reads what each frame builds as it was (a test's
-/// instance owners, a test lighting everything). Not with the parts kept as drawn (Ctx::rows_on): on a host with them,
+/// Whether a list's rows are laid on the device's pixels (Ctx::row_slot, rows_on_pixels): where the host draws each
+/// glyph on its pixels (@hostapi.rows_on_pixels: every platform's), its rows kept or not; not while anything reads what
+/// each frame builds as it was (instance owners measured, everything lit). Not with the parts kept as drawn (Ctx::rows_on): on a host with them,
 /// they went off with them (#2325), and a list scrolled had its words crawl again.
 fn Ctx::rows_on_grid(self : Ctx) -> Bool {
-  (fake.val is None || rows_grid_test.val) && !inst_owners.on && !self.lit_every
+  if rows_on_pixels_said.val < 0 {
+    rows_on_pixels_said.val = if @hostapi.rows_on_pixels() { 1 } else { 0 }
+  }
+  rows_on_pixels_said.val == 1 && !inst_owners.on && !self.lit_every
 }
 
 ///|
@@ -1110,9 +1112,10 @@ fn Ctx::rows_grid_of(self : Ctx, scale : Double) -> Double {
 }
 
 ///|
-/// A Tester's list rows laid on the pixels as a host lays them, its rows kept as their nodes (a test of it).
-// kept across runs: set by a test, put back by each Tester (Tester::new)
-let rows_grid_test : Ref[Bool] = Ref(false)
+/// What the host said of setting a list's rows on its pixels (@hostapi.rows_on_pixels), asked once (-1 not yet).
+// kept across runs: the host's, the same for the program's life (each Tester's asked anew: reset_globals, and as its
+// test says otherwise: Tester::set_rows_on_pixels)
+let rows_on_pixels_said : Ref[Int] = Ref(-1)
 
 ///|
 /// Row node `r` of a list, laid out `h` tall: where rows are laid on the pixels (Ctx::rows_on_grid), as tall as whole

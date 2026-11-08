@@ -20,7 +20,7 @@ test "scrolling within the visible rows moves their drawing and hit without anot
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   // Both edge rows are already laid out; a further five points exposes no new row.
@@ -53,7 +53,7 @@ test "a scroll that exposes another row lays it out" {
     }, rows_read=true) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)
@@ -81,7 +81,7 @@ test "the fast scroll frame matches a complete layout and paint" {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(true)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)
@@ -129,7 +129,7 @@ test "a size change with a scroll lays out the new row height" {
     }, rows_read=true) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)
@@ -153,7 +153,7 @@ test "a view that reads the list's place is updated when the list scrolls" {
     }, rows_read=true) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)
@@ -179,7 +179,7 @@ test "an unchanged list info projection does not require layout" {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)
@@ -207,7 +207,7 @@ fn place_report_after_scroll(keep : Bool) -> ((Int, Double, Double), (Int, Doubl
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.draw()
   let at = t.time()
@@ -252,7 +252,7 @@ test "a changed list info projection falls back to a new layout" {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)
@@ -283,7 +283,7 @@ test "a scroll keeps targets and hits the row in its new clipped position" {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)

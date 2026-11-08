@@ -43,6 +43,11 @@ yet and you can add one, add it.
   declaration's Wasm side (`x_wasm.mbt` beside `x_native.mbt`, for an app run in Wasm by the native shell,
   `src/host/wasm_shell.c`) is written by `tools/wasmhost`: still.fail's `scripts/wasm-app.sh build` writes it,
   `check` says where it is not what the declarations make.
+- What runs in the app never asks whether a Tester runs it: no `fake.val`, no switch only a Tester sets. What differs
+  under a Tester is its fake host's answer (`impl Host for FakeHost`, a capability such as `rows_on_pixels`,
+  `answers_by_frame`, answered as a device would unless the test says otherwise) or what the Tester does itself after a
+  frame it draws (its own files: `tester*.mbt`, `fake_host.mbt`; what watches a frame, `pass_look`, `frame_said`,
+  `shot_watch`). So what a test or a bench measures is the path a device runs. detlint's `tester-branch` holds it.
 
 ## There are no flaky failures
 

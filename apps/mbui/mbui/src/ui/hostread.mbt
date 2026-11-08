@@ -18,10 +18,7 @@ pub fn now() -> Double {
 /// clock of its own (a core's timers) goes on the app's clock there, its timers the runtime's (Runtime::after: seen by
 /// Tester::next_wake and Ctx::at_rest); elsewhere on the machine's.
 pub fn own_clock() -> Bool {
-  match fake.val {
-    Some(_) => true
-    None => @hostapi.own_clock()
-  }
+  @hostapi.own_clock()
 }
 
 ///|
@@ -40,9 +37,10 @@ pub fn request_frame() -> Unit {
 /// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser, 5 Linux (a Tester's `platform`; a program's over its
 /// host's: set_platform).
 pub fn platform() -> Int {
-  match fake.val {
-    Some(_) => h_platform()
-    None => if said_platform.val >= 0 { said_platform.val } else { h_platform() }
+  if said_platform.val >= 0 {
+    said_platform.val
+  } else {
+    h_platform()
   }
 }
 
@@ -63,8 +61,8 @@ let said_platform : Ref[Int] = Ref(-1)
 /// The system this program plays from now on, over its host's (None: its host's again), as a Tester plays its
 /// `platform`: a run on one system made as another's (a phone's screens and flows recorded on a Mac: sffix's and the
 /// app's MBUI_PLATFORM). What the app reads of the system (platform, and by it the hand's default: pointing) and how its
-/// touches and fields feel (feel_as) are that system's; the host's own keys and window stay its own. A Tester's own is
-/// over it.
+/// touches and fields feel (feel_as) are that system's; the host's own keys and window stay its own. A program's, said
+/// as it starts (a Tester's own is Tester::new's `platform`).
 pub fn set_platform(p : Int?) -> Unit {
   said_platform.val = p.unwrap_or(-1)
 }
@@ -85,15 +83,16 @@ pub(all) enum Pointing {
 /// never these by them. Read so: what reads it as it is built is built again as it changes (hand.mbt).
 pub fn pointing() -> Pointing {
   hand.pointing.get() |> ignore
-  match fake.val {
-    Some(f) => f.pointing
+  match said_pointing.val {
+    Some(p) => p
     None =>
-      match said_pointing.val {
+      match host_pointing.val {
         Some(p) => p
         None =>
-          match host_pointing.val {
-            Some(p) => p
-            None => platform_pointing(platform())
+          match @hostapi.pointing() {
+            1 => Finger
+            0 => Mouse
+            _ => platform_pointing(platform())
           }
       }
   }
@@ -102,21 +101,17 @@ pub fn pointing() -> Pointing {
 ///|
 /// What the host last said a pointer's event came from (@hostapi.event_finger), on a machine that has both a touch
 /// screen and a mouse (Windows'): the hand of the moment from then on. None: nothing said.
-// kept across runs: a real host's alone (a Tester's is its fake host's pointing)
+// kept across runs: put back by each Tester (reset_globals)
 let host_pointing : Ref[Pointing?] = Ref(None)
 
 ///|
-/// A pointer's event said to come from a finger (1) or a mouse or a pen (0): pointing() is that from now on (the fake
-/// host's own, under a Tester); -1, nothing said, leaves it.
+/// A pointer's event said to come from a finger (1) or a mouse or a pen (0): pointing() is that from now on; -1,
+/// nothing said, leaves it.
 fn pointing_said_by_host(by : Int) -> Unit {
   if by < 0 {
     return
   }
-  let p = if by == 1 { Finger } else { Mouse }
-  match fake.val {
-    Some(f) => f.pointing = p
-    None => host_pointing.val = Some(p)
-  }
+  host_pointing.val = Some(if by == 1 { Finger } else { Mouse })
   // (told now, as the event it came with is taken: what reads the hand of the moment (pointing) follows it from this
   // event on, not from the next frame's)
   let now = @signals.untracked(fn() { pointing() })
@@ -126,38 +121,20 @@ fn pointing_said_by_host(by : Int) -> Unit {
 }
 
 ///|
-/// What the app was started to be used with (the native input), the same the whole run: a Tester's `native` (by
-/// default its system's); else, where a program plays another system (set_platform), that system's; else what the
-/// host can tell at launch (@hostapi.native_pointing: a pointer on an iPad, a mouse on Android, a touch screen and no
-/// mouse on Windows), its system's where it cannot. Read once, at the first ask. How things answer the hand of the
-/// moment is pointing's.
+/// What the app was started to be used with (the native input), the same the whole run: where a program plays another
+/// system (set_platform), that system's; else what the host can tell at launch (@hostapi.native_pointing: a pointer
+/// on an iPad, a mouse on Android, a touch screen and no mouse on Windows; a Tester's `native`), its system's where it
+/// cannot. How things answer the hand of the moment is pointing's.
 pub fn native_pointing() -> Pointing {
-  match fake.val {
-    Some(f) => f.native
-    None =>
-      match native_input_read.val {
-        Some(p) => p
-        None => {
-          let p = if said_platform.val >= 0 {
-            platform_pointing(said_platform.val)
-          } else {
-            match @hostapi.native_pointing() {
-              1 => Finger
-              2 => Mouse
-              _ => platform_pointing(platform())
-            }
-          }
-          native_input_read.val = Some(p)
-          p
-        }
-      }
+  if said_platform.val >= 0 {
+    return platform_pointing(said_platform.val)
+  }
+  match @hostapi.native_pointing() {
+    1 => Finger
+    2 => Mouse
+    _ => platform_pointing(platform())
   }
 }
-
-///|
-/// The native input as first read (native_pointing).
-// kept across runs: read once as the app starts, the same the whole run
-let native_input_read : Ref[Pointing?] = Ref(None)
 
 ///|
 /// The hand a program says it is pointed at with, over its system's (set_pointing); None: its system's.
@@ -166,8 +143,8 @@ let said_pointing : Ref[Pointing?] = Ref(None)
 
 ///|
 /// The hand this program is pointed at with from now on, over its system's (None: its system's again): a run on one
-/// system made as another's (a phone's screens drawn on a Mac, pointed at as a phone is: sffix's MBUI_POINTING). A
-/// Tester's own (Tester::new's `pointing`) is over it.
+/// system made as another's (a phone's screens drawn on a Mac, pointed at as a phone is: sffix's MBUI_POINTING): a
+/// program's, said as it starts (a Tester's own is Tester::new's `pointing`).
 pub fn set_pointing(p : Pointing?) -> Unit {
   said_pointing.val = p
 }
@@ -185,19 +162,17 @@ fn platform_pointing(platform : Int) -> Pointing {
 ///|
 /// Whether a keyboard is at hand now, part of the current input as pointing is: what says an action's keys (a tip, a
 /// menu's row) says them while one is, from the moment one is plugged in to the moment it is taken away; never what
-/// is shown otherwise, where or how big. A Tester's `keyboard` (by default its system's); else, where a program plays
-/// another system (set_platform), that system's; else the host's as it is asked (@hostapi.keyboard: a Mac's and a
-/// PC's always, a phone's or a tablet's while one is connected), its system's where it cannot tell.
+/// is shown otherwise, where or how big. Where a program plays another system (set_platform), that system's; else the
+/// host's as it is asked (@hostapi.keyboard: a Mac's and a PC's always, a phone's or a tablet's while one is
+/// connected; a Tester's `keyboard`), its system's where it cannot tell.
 pub fn keyboard() -> Bool {
-  match fake.val {
-    Some(f) => f.keyboard
-    None if said_platform.val >= 0 => platform_keyboard(said_platform.val)
-    None =>
-      match @hostapi.keyboard() {
-        1 => true
-        0 => false
-        _ => platform_keyboard(platform())
-      }
+  if said_platform.val >= 0 {
+    return platform_keyboard(said_platform.val)
+  }
+  match @hostapi.keyboard() {
+    1 => true
+    0 => false
+    _ => platform_keyboard(platform())
   }
 }
 
@@ -210,20 +185,14 @@ fn platform_keyboard(platform : Int) -> Bool {
 ///|
 /// Whether the system is set to dark (a Tester's `dark`).
 pub fn system_dark() -> Bool {
-  match fake.val {
-    Some(f) => f.dark
-    None => @hostapi.system_dark()
-  }
+  @hostapi.system_dark()
 }
 
 ///|
 /// How much bigger the system's setting makes words (@hostapi.font_scale; a Tester's `set_font_scale`): what Ctx's words
 /// are drawn at, times their size.
 pub fn font_scale() -> Double {
-  match fake.val {
-    Some(f) => f.font_scale
-    None => @hostapi.font_scale()
-  }
+  @hostapi.font_scale()
 }
 
 ///|
@@ -246,10 +215,7 @@ let inset_said : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { 
 /// Whether the window's buttons are in the app's top row, read of the host (frame_drawn, as a frame begins; or as it
 /// is asked between frames): its signal set where it changed.
 fn inset_arrive() -> Unit {
-  inset_said.set(match fake.val {
-    Some(f) => f.inset
-    None => @hostapi.window_inset()
-  })
+  inset_said.set(@hostapi.window_inset())
 }
 
 ///|
@@ -270,20 +236,14 @@ pub fn window_keys_own() -> Bool {
 ///|
 /// Whether the window is maximized now (@hostapi.window_zoomed; a Tester's as set_window_zoomed made it).
 pub fn window_zoomed() -> Bool {
-  match fake.val {
-    Some(f) => f.zoomed
-    None => @hostapi.window_zoomed()
-  }
+  @hostapi.window_zoomed()
 }
 
 ///|
 /// How the pointer stands on the window's maximize button the app draws, which only its host sees (0 not on it, 1 on
 /// it, 2 pressing it: @hostapi.window_snap_state; a Tester's as set_window_snap made it).
 pub fn window_snap_state() -> Int {
-  match fake.val {
-    Some(f) => f.snap_state
-    None => @hostapi.window_snap_state()
-  }
+  @hostapi.window_snap_state()
 }
 
 ///|
@@ -297,10 +257,7 @@ pub fn window_act(what : Int) -> Unit {
 /// Whether the app can open a window of its own beside this one (@hostapi.window_opens; a Tester's as
 /// set_window_opens made it).
 pub fn window_opens() -> Bool {
-  match fake.val {
-    Some(f) => f.window_opens
-    None => @hostapi.window_opens()
-  }
+  @hostapi.window_opens()
 }
 
 ///|
@@ -326,29 +283,14 @@ pub fn window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
 /// Whether the desktop's window fills the screen now (@hostapi.full_screen; a Tester's as Ctx::set_full_screen last
 /// made it).
 pub fn full_screen() -> Bool {
-  match fake.val {
-    Some(f) => f.full
-    None => @hostapi.full_screen()
-  }
+  @hostapi.full_screen()
 }
 
 ///|
 /// How round the system draws the window's corners now (@hostapi.window_corner; a Tester's `window_corner`, none while
 /// it fills the screen): the outermost container of all (corners.mbt).
 pub fn window_corner() -> Double {
-  let corner = match fake.val {
-    Some(f) =>
-      if f.full {
-        0.0
-      } else {
-        match f.window_corners {
-          Some(k) => k.fold(init=0.0, fn(m, r) { dmax(m, r) })
-          None => f.window_corner
-        }
-      }
-    None => @hostapi.window_corner()
-  }
-  corner / window_zoom_drawn.val
+  @hostapi.window_corner() / window_zoom_drawn.val
 }
 
 ///|
@@ -356,19 +298,7 @@ pub fn window_corner() -> Double {
 /// Tester's `window_corners`, else its `window_corner`), each its own where they differ (an iPhone Duo's outer screen:
 /// 8 along its hinge), window_corner the roundest of them.
 pub fn window_corner_at(k : Int) -> Double {
-  let corner = match fake.val {
-    Some(f) =>
-      if f.full {
-        0.0
-      } else {
-        match f.window_corners {
-          Some(c) => c[k & 3]
-          None => f.window_corner
-        }
-      }
-    None => @hostapi.window_corner_at(k)
-  }
-  corner / window_zoom_drawn.val
+  @hostapi.window_corner_at(k) / window_zoom_drawn.val
 }
 
 ///|
@@ -379,19 +309,13 @@ pub fn env(name : String) -> String {
 
 ///|
 fn h_env(name : String) -> String {
-  match fake.val {
-    Some(f) => f.env.get(name).unwrap_or("")
-    None => @hostapi.env(name)
-  }
+  @hostapi.env(name)
 }
 
 ///|
 /// This build's version code, 0 where the app does not update itself (a Tester's `app_version`).
 pub fn app_version() -> Int {
-  match fake.val {
-    Some(f) => f.app_version
-    None => @hostapi.app_version()
-  }
+  @hostapi.app_version()
 }
 
 ///|
@@ -423,6 +347,8 @@ pub fn Tester::set_env(self : Tester, name : String, value : String) -> Unit {
   } else {
     self.fake.env[name] = value
   }
+  // (what is read of it once read anew: reduced_motion)
+  reduce_env.val = -1
   self.fake.wants = true
 }
 
@@ -439,23 +365,4 @@ pub fn Tester::set_nav_able(self : Tester, able : Bool) -> Unit {
 /// The bars the app handed the system last (@hostapi.nav_bar's JSON: nav.mbt), "" where it handed none.
 pub fn Tester::nav_said(self : Tester) -> String {
   self.fake.nav_said
-}
-
-///|
-fn nav_able() -> Bool {
-  match fake.val {
-    Some(f) => f.nav_able
-    None => false
-  }
-}
-
-///|
-fn nav_bar_said(spec : String) -> Int {
-  match fake.val {
-    Some(f) => {
-      f.nav_said = spec
-      if f.nav_able { 1 } else { 0 }
-    }
-    None => 0
-  }
 }

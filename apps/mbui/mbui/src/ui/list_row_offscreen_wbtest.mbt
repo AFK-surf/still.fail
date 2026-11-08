@@ -25,7 +25,7 @@ fn row_offscreen_result(keep : Bool) -> (Bool, Double, Bool, Bool, Bool) raise {
   }
   let t = Tester::new(view, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.draw()
   t.frame_at(t.time() + 16.0)

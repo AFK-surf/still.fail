@@ -18,10 +18,6 @@ let list_fast_info_reads : Array[(String, () -> Bool)] = []
 let list_fast_place_reads : Map[Int, (String, (Int, Double, Double)?)] = {}
 
 ///|
-// kept across runs: what the last list moved with nothing built was moved by, and what of it was asked (a check's words)
-let list_fast_said : Ref[String] = Ref("")
-
-///|
 // kept across runs: the ids of what is told after a build that follows where lists stand (Ctx::after_build_or_scroll)
 let tells_follow_lists : Map[Int, Bool] = {}
 
@@ -240,10 +236,6 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
   if changed || frame_watch_of().is_stale() || layout_watch_of().is_stale() ||
     nodes_run.told || watch_said.val != "" || layout_said.val != "" {
     return "what was read of it"
-  }
-  // (said where a Tester compares the frame with it built whole, for what it says where they differ)
-  if looks_check.val {
-    list_fast_said.val = "moved \{dy}: \{list_fast_info_reads.length()} reads of how lists stand (\{list_fast_info_reads.map(fn(r) { r.0 })}), \{list_fast_place_reads.length()} of where; rows \{first.item}-\{last.item} of \{st.count}, below \{st.below} to \{below}, at its end \{st.at_end} to \{at_end}, gliding \{st.glide}"
   }
   st.anchor_off = st.anchor_off + st.pending
   st.below = below

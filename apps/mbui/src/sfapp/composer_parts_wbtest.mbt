@@ -61,7 +61,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(true)
   t.check_looks(false)
   t.run_for(@ui.move_most_ms)

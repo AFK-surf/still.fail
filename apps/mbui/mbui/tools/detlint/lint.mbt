@@ -50,6 +50,10 @@ priv struct Config {
   // (`fixture.openers`) say it, of the app's pages and its library, outside their tests (fixture-import)
   fixture_pkg : String
   fixture_openers : Array[String]
+  // what only a Tester sets, read by what runs in the app (`tester.names`: `fake`, read as `fake.val`), outside the
+  // Tester's own files (`tester.files`, globs) and the tests (tester-branch)
+  tester_names : Array[String]
+  tester_files : Array[String]
 }
 
 ///|
@@ -104,6 +108,8 @@ fn Config::new(d : @rjson.Value) -> Config {
       _ => ""
     },
     fixture_openers: strs(sect(d, "fixture").get("openers"), []),
+    tester_names: strs(sect(d, "tester").get("names"), []),
+    tester_files: strs(sect(d, "tester").get("files"), []),
   }
 }
 
@@ -176,6 +182,20 @@ fn lint_mbt(
     for k, tk in toks {
       if tk.kind == "at" && tk.text == cfg.fixture_pkg && !f.in_test(k) {
         add("fixture-import", k, f.line_text(k))
+      }
+    }
+  }
+  // what only a Tester sets read by what runs in the app (`fake.val`), outside the Tester's own files and the tests
+  if cfg.tester_names.length() > 0 && !matches(f.rel, cfg.tester_files) {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        cfg.tester_names.contains(tk.text) &&
+        !(k > 0 && toks[k - 1].text == ".") &&
+        k + 2 < toks.length() &&
+        toks[k + 1].text == "." &&
+        toks[k + 2].text == "val" &&
+        !f.in_test(k) {
+        add("tester-branch", k, f.line_text(k))
       }
     }
   }

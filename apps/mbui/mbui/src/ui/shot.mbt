@@ -257,14 +257,9 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
       continue
     }
     let n = self.nodes[node]
-    match fake.val {
-      Some(f) => {
-        f.shots.push(self.shot_words(node))
-        // (how big a picture it makes and what it drew: a test's, Tester::shot_drawn)
-        let sc = if s.scale > 0.0 { s.scale } else { self.scale }
-        f.shot_sizes.push(((n.fw * sc).round().to_int(), (n.fh * sc).round().to_int()))
-        f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, n.x, n.y))
-      }
+    // (told what watches the shots taken: a Tester's, Tester::shot_drawn)
+    match shot_watch.val {
+      Some(w) => w(self, node, s)
       None => ()
     }
     ended.push((id, self.shot_png(s, n)))
@@ -418,3 +413,9 @@ fn shot_drawn_of(inst : FixedArray[Double], n : Int, x : Double, y : Double) -> 
 pub fn Tester::shot_drawn(self : Tester) -> Array[((Int, Int), Array[String])] {
   Array::makei(self.fake.shot_sizes.length(), fn(i) { (self.fake.shot_sizes[i], self.fake.shot_drawn[i]) })
 }
+
+///|
+/// Who is told of each shot taken, as it is taken (its Ctx, its root node, the shot): a Tester's, which keeps what it
+/// says and drew (Tester::shot_drawn).
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let shot_watch : Ref[((Ctx, Int, Shot) -> Unit)?] = Ref(None)

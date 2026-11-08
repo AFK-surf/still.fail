@@ -47,6 +47,8 @@ pub fn built_used(() -> Unit) -> Unit
 
 pub fn came_from_outside() -> Unit
 
+pub fn capsule_in(Double, Double, room? : Double) -> Double
+
 pub fn capture(Ctx, Int32, zooms? : Bool) -> Unit
 
 pub let caret_blink_android_ms : Double
@@ -61,10 +63,7 @@ pub fn clipboard_set(String, label? : String) -> Unit
 
 pub fn clipboard_set_png(Bytes, label? : String) -> Unit
 
-
 pub fn code(String) -> @text.Run
-
-pub fn capsule_in(Double, Double, room? : Double) -> Double
 
 pub fn concentric(Double, Double) -> Double
 
@@ -386,7 +385,7 @@ pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : St
 
 pub fn now() -> Double
 
-pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, gives? : Bool, fits? : (Double, @signals.Signal[Double?])) -> @view.View
+pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String, natural? : Bool, gives? : Bool, fits? : (Double, @signals.Signal[Double?]), unlaid? : () -> Double) -> @view.View
 
 pub fn old_anchor(@view.View, Int32, (Double, Double, Double, Double)) -> @view.View
 
@@ -690,6 +689,8 @@ pub fn window_corner() -> Double
 
 pub fn window_corner_at(Int32) -> Double
 
+pub fn window_front(String) -> Bool
+
 pub fn window_inset() -> Bool
 
 pub fn window_inset_now() -> Bool
@@ -701,8 +702,6 @@ pub fn window_keys_left_now() -> Bool
 pub fn window_keys_own() -> Bool
 
 pub fn window_keys_own_now() -> Bool
-
-pub fn window_front(String) -> Bool
 
 pub fn window_open(String) -> Bool
 
@@ -760,6 +759,8 @@ pub(all) enum Block {
   Picture(String, Double, Double)
   Rule
 }
+
+type ByNode[V]
 
 type Catcher
 
@@ -924,6 +925,7 @@ pub struct Ctx {
   mut press_chain : Array[Int32]
   mut claimed : Bool
   mut dragging : Bool
+  mut following : Bool
   mut press_x : Double
   mut press_at : Double
   mut press_strayed : Bool
@@ -1204,7 +1206,7 @@ pub fn Ctx::keeps_selection(Self, Int32) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::kept_as_nodes(Self, Int32, String, () -> Unit, read_out? : Bool, loc~ : SourceLoc) -> Unit
 #callsite(autofill(loc))
-pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : Bool, loc~ : SourceLoc) -> Unit
+pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : Bool, rows_stay? : Bool, loc~ : SourceLoc) -> Unit
 pub fn Ctx::key_catcher(Self, String) -> KeyCatch
 pub fn Ctx::key_catcher_place(Self, String, Double, Double, Double) -> Unit
 pub fn Ctx::key_pressed(Self, Int32, mods? : Int32, in_field? : Bool) -> Bool
@@ -1335,8 +1337,8 @@ pub fn Ctx::second_pointer(Self) -> (Double, Double)?
 pub fn Ctx::segmented(Self, String, Array[String], Int32, item_w? : Double) -> Int32
 pub fn Ctx::selectable(Self, () -> Unit, color? : Int64) -> Unit
 pub fn Ctx::selected_text(Self) -> String
-pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
+pub fn Ctx::selection_by_finger(Self) -> Bool
 pub fn Ctx::selection_clear(Self) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::selection_end(Self, loc~ : SourceLoc) -> (Double, Double, Double)?
@@ -1558,6 +1560,8 @@ pub(all) enum Fit {
   FitFill
 } derive(Eq)
 
+type FloatCaret
+
 type Focusable
 
 type FontShapes
@@ -1768,6 +1772,7 @@ pub(all) enum Len {
   S80
   S96
 } derive(Eq, Show, @debug.Debug)
+pub fn Len::points(Self) -> Double?
 
 pub(all) struct ListInfo {
   count : Int32
@@ -1852,7 +1857,6 @@ type MoverEntry
 pub struct NativeCall {
   name : String
   host : @hostapi.NativeCall?
-  fake : Int32
   none : Bool
   taken : @ref.Ref[Bool]
 }
@@ -2479,7 +2483,6 @@ pub fn Tester::drawn_glyphs(Self) -> Array[(Double, Double, Int64)]
 pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]
 pub fn Tester::drawn_instances(Self) -> Array[Array[Double]]
-
 pub fn Tester::drawn_instances_keyed(Self) -> Array[Array[Double]]
 pub fn Tester::drawn_lines(Self) -> Array[(Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_notches(Self) -> Array[(Int32, Double, Double, Double, Double)]
@@ -2490,6 +2493,7 @@ pub fn Tester::drawn_rects(Self) -> Array[(Double, Double, Double, Double, Int64
 pub fn Tester::drawn_shadows(Self) -> Array[(Double, Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_shapes(Self) -> Array[(Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_text(Self) -> String
+pub fn Tester::drawn_words_found(Self) -> Array[(@view.Drawn, Int32, Bool, String, Double)]
 pub fn Tester::drive(Self, String, max? : Int32, each? : (Self) -> Unit) -> Array[String]
 pub fn Tester::drop_files(Self, Double, Double, Array[(String, Bytes)], paths? : Array[String]) -> Unit
 pub fn Tester::drop_words(Self, Double, Double, String) -> Unit
@@ -2498,6 +2502,7 @@ pub fn Tester::each_frame(Self, (() -> Unit)?) -> Unit
 pub fn Tester::edit_can(Self) -> Int32
 pub fn Tester::end_run(Self, &@hostapi.Host) -> Unit
 pub fn Tester::enter(Self) -> Unit
+pub fn Tester::export_frames(Self) -> Unit
 pub fn Tester::face_wider(Self, Int32, Double) -> Unit
 pub fn Tester::failed_images(Self) -> Array[Int32]
 pub fn Tester::failed_images_drawn(Self) -> Array[Int32]
@@ -2510,9 +2515,11 @@ pub fn Tester::find_last(Self, String) -> (Double, Double)?
 pub fn Tester::finish(Self, Int32, Int32, ok? : Bool) -> Unit
 pub fn Tester::finish_all(Self) -> Unit
 pub fn Tester::finished_order(Self) -> Array[(Int32, Int32)]
+pub fn Tester::focus_said(Self) -> String
 pub fn Tester::focused(Self) -> SemNode?
 pub fn Tester::frame(Self, ms? : Double) -> Unit
-
+pub fn Tester::frame_at(Self, Double) -> Unit
+pub fn Tester::frame_export(Self) -> Array[String]
 pub fn Tester::frame_hash(Self) -> Int64
 pub fn Tester::frame_late(Self, Double) -> Unit
 pub fn Tester::frame_perf(Self) -> FramePerf
@@ -2556,7 +2563,6 @@ pub fn Tester::ime_state(Self, String, Int32, Int32, ca? : Int32, cb? : Int32) -
 pub fn Tester::ime_trackpad(Self, Int32, Int32, Int32, Int32) -> Unit
 pub fn Tester::installs(Self) -> Array[String]
 pub fn Tester::instances(Self) -> Int32
-pub fn Tester::keep_parts(Self, Bool) -> Unit
 pub fn Tester::kept(Self) -> Array[(String, String, Bytes)]
 pub fn Tester::kept_ways(Self) -> Array[(String, @hostapi.KeepWay)]
 pub fn Tester::key(Self, Int32, mods? : Int32) -> Unit
@@ -2611,10 +2617,11 @@ pub fn Tester::posted(Self) -> Int32
 pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, Double))
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
+pub fn Tester::probe_at(Self, Double, Double) -> String
 pub fn Tester::query(Self, @view.Role, label? : String) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]
-pub fn Tester::rect_of(Self, String) -> (Double, Double, Double, Double)?
 pub fn Tester::record_host(Self) -> Unit
+pub fn Tester::rect_of(Self, String) -> (Double, Double, Double, Double)?
 pub fn Tester::refuse_native(Self, Int32, String) -> Unit
 pub fn Tester::release(Self, Double, Double) -> Unit
 pub fn Tester::replay_frames(Self, String) -> Array[(Int32, String, String)]
@@ -2660,6 +2667,7 @@ pub fn Tester::set_perf_size(Self, Double) -> Unit
 pub fn Tester::set_player(Self, Int32, duration? : Double, position? : Double, playing? : Bool, natural? : (Double, Double), shown? : Bool, buffering? : Bool, buffered? : Double, ended? : Bool) -> Unit
 pub fn Tester::set_reduce_motion(Self, Bool) -> Unit
 pub fn Tester::set_reduce_transparency(Self, Bool) -> Unit
+pub fn Tester::set_rows_on_pixels(Self, Bool) -> Unit
 pub fn Tester::set_stream_audio(Self, Bool) -> Unit
 pub fn Tester::set_stream_feeds(Self, Bool) -> Unit
 pub fn Tester::set_stream_layers(Self, Bool) -> Unit
@@ -2684,7 +2692,6 @@ pub fn Tester::size(Self) -> (Double, Double)
 pub fn Tester::squeeze_faults(Self) -> Array[String]
 pub fn Tester::start_tape(Self) -> Unit
 pub fn Tester::stepped(Self) -> Unit
-
 pub fn Tester::stream_broken(Self, Int32) -> Unit
 pub fn Tester::stream_codec_said(Self, Int32, String) -> Unit
 pub fn Tester::stream_drops(Self, Int32, Double) -> Unit

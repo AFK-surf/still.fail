@@ -129,20 +129,10 @@ let messages_in : Array[(String, String, Bytes?)] = []
 fn messages_arrive() -> Unit {
   messages_handed.val = 0
   let came : Array[(String, String, Bytes?)] = []
-  match fake.val {
-    Some(_) =>
-      if fake_posted.length() > 0 {
-        for m in fake_posted {
-          came.push(m)
-        }
-        fake_posted.clear()
-      }
-    None =>
-      if @hostapi.post_take() > 0 {
-        while @hostapi.post_next() is Some((channel, json, b)) {
-          came.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
-        }
-      }
+  if @hostapi.post_take() > 0 {
+    while @hostapi.post_next() is Some((channel, json, b)) {
+      came.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
+    }
   }
   messages_take(came)
   if messages_in.length() > 0 {
@@ -153,10 +143,10 @@ fn messages_arrive() -> Unit {
 ///|
 /// Between frames, something was posted (hostcall.mbt's outside_posted: a host that says so rather than asking for a
 /// frame): taken now, what changes only signals handed to its handler as it comes (a topic's change, a remote screen's
-/// frame), the rest kept for the next frame, which is asked for only then. Under a Tester the frame takes what came.
+/// frame), the rest kept for the next frame, which is asked for only then.
 fn messages_between() -> Unit {
-  // (while a frame runs, or under a Tester: the frame takes it, as it begins)
-  if fake.val is Some(_) || in_frame.val || frame_running.val {
+  // (while a frame runs: the frame takes it, as it begins)
+  if in_frame.val || frame_running.val {
     outside_counted()
     return
   }

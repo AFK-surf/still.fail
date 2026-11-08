@@ -62,6 +62,9 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
         words_forgotten()
       }
       fake.val = None
+      shot_watch.val = None
+      pass_look.val = None
+      frame_look.val = None
       @hostapi.set_host(restore)
     }
     _ => ()
@@ -164,10 +167,16 @@ fn reset_globals() -> Unit {
   g_view.val = fn(_c) { () }
   app_change.val = None
   reduce_env.val = -1
+  groups_host.val = -1
+  rows_on_pixels_said.val = -1
+  lines_on_pixels_said.val = -1
   draw_log.val = -1
   draw_frames.val = 0
   fx_reset(None)
-  outside_told.val = false
+  // (whether its fake host tells what it does as events, as a run asks its host's: run)
+  outside_told.val = @hostapi.set_outside(fn(k, id, st) { on_outside(k, id, st) })
+  // (the hand as its fake host says it first: @ui.pointing)
+  host_pointing.val = None
   commit_counts[0] = 0
   commit_counts[1] = 0
   commit_counts[2] = 0
@@ -339,7 +348,6 @@ pub fn Tester::new(
     image_srcs: {},
     images: {},
     image_ids: 0,
-    frame_failed_images: [],
     bold: 0.0,
     ui_face: 0.0,
     generation: 0,
@@ -405,6 +413,7 @@ pub fn Tester::new(
     marks_out: [],
     marks_next: None,
     marks_by_hand: false,
+    rows_on_pixels: false,
     shares: [],
     perf: -1,
     perf_sets: [],
@@ -455,10 +464,19 @@ pub fn Tester::new(
   // (what the app asks of its host directly, the fake's too: fake_host.mbt)
   @hostapi.set_host(f)
   reset_globals()
+  // (each pass of a frame's build that kept rows built again keeping none and compared: tester_rows.mbt)
+  pass_look.val = Some(rows_pass_looked)
+  // (each frame painted alone or of its looks alone built whole after it and the two compared: tester_looks.mbt)
+  frame_look.val = Some(looks_looked)
+  // (each shot taken kept, what it says, how big a picture it makes and what it drew: Tester::shot_drawn)
+  shot_watch.val = Some(fn(c, node, s) {
+    let n = c.nodes[node]
+    f.shots.push(c.shot_words(node))
+    let sc = if s.scale > 0.0 { s.scale } else { c.scale }
+    f.shot_sizes.push(((n.fw * sc).round().to_int(), (n.fh * sc).round().to_int()))
+    f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, n.x, n.y))
+  })
   corners_hold.val = corners_held
-  // (every frame built whole: what a test reads of a frame's nodes reads all of it; a test of the parts kept says so,
-  // Tester::keep_parts)
-  rows_grid_test.val = false
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
@@ -466,6 +484,7 @@ pub fn Tester::new(
   rows_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
   said_log.on = false
+  frame_said.val = None
   said_log.built.reset()
   said_log.sb.reset()
   said_log.ids.clear()
@@ -547,7 +566,8 @@ pub fn Tester::failed_images(self : Tester) -> Array[Int] {
 /// Failed decodes needed to draw the last painted frame, by the host's image id. A failure kept in the cache for a
 /// picture no longer in the frame is not one of these. `image_src` gives the source of each id.
 pub fn Tester::failed_images_drawn(self : Tester) -> Array[Int] {
-  self.fake.frame_failed_images.copy()
+  ignore(self)
+  frame_failed_images.copy()
 }
 
 ///|
@@ -810,8 +830,11 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     Some(f) => f()
     None => ()
   }
+  self.fake_pages_run()
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   self.frames = self.frames + 1
+  // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
+  g().check_press_owners()
   self.hold_words_over()
   self.hold_rows_steady()
   self.hold_seen_whole_now()
@@ -2148,9 +2171,13 @@ pub fn Tester::add_pixels(self : Tester, src : String, w : Int, h : Int, rgba : 
 }
 
 ///|
-/// The source decode `id` the host was asked for is of ("" none).
+/// The source decode `id` the host was asked for is of ("" none): the picture's it was asked for (bytes handed over:
+/// the source they were handed for), while the app keeps it; else the source its host was asked for.
 pub fn Tester::image_src(self : Tester, id : Int) -> String {
-  self.fake.image_srcs.get(id).unwrap_or("")
+  match image_by_id.get(id) {
+    Some((src, _)) => src
+    None => self.fake.image_srcs.get(id).unwrap_or("")
+  }
 }
 
 ///|

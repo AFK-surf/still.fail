@@ -325,16 +325,16 @@ pub fn Ctx::fitting_width(self : Ctx, content : Double, lengths : Array[Double])
 /// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
 /// length to pixels, StaticLayout each line; whole_pixel_lines, as the host says of its fonts).
 fn whole_px_layout() -> Bool {
-  match fake.val {
-    // a Tester over a host's kept text: as that host said of its fonts (any of them), asked of nothing new
-    Some(_) =>
-      match text_table.val {
-        Some(t) => t.metrics.values().any(fn(r) { r.length() > 5 && r[5] == 1.0 })
-        None => false
-      }
-    None => whole_pixel_lines(15.0, 400)
+  if lines_on_pixels_said.val < 0 {
+    lines_on_pixels_said.val = if @hostapi.lines_on_pixels() { 1 } else { 0 }
   }
+  lines_on_pixels_said.val == 1
 }
+
+///|
+/// What the host said of its lines on whole pixels (whole_px_layout), asked once (-1 not yet).
+// kept across runs: the host's, the same for the program's life (each Tester's asked anew: reset_globals)
+let lines_on_pixels_said : Ref[Int] = Ref(-1)
 
 ///|
 /// Whether a style's length (its kind and number: @flex.Style's `<name>_k`, `<name>_v`) is not `v` points.

@@ -1859,9 +1859,6 @@ pub fn Ctx::list_pinned_by(self : Ctx, li : Int) -> Double {
 /// Whether motion is reduced (the app's own choice, else the host's setting; or MBUI_REDUCE_MOTION=1): every motion at
 /// its end at once.
 pub fn reduced_motion() -> Bool {
-  if fake.val is Some(f) {
-    return f.env.get("MBUI_REDUCE_MOTION") == Some("1") || motion_chosen.val.unwrap_or(f.reduce_motion)
-  }
   if reduce_env.val < 0 {
     reduce_env.val = if @hostapi.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
   }

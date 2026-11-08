@@ -43,7 +43,7 @@ fn islands() -> Islands {
     c.box(w=Px(400.0), h=Fill(1.0), bg=islands_red, id~, fn() { c.text(b.get(), size=12.0) |> ignore }) |> ignore
   }
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -167,7 +167,7 @@ fn islands_read_late(where_read : String, in_row? : Bool = false) -> Unit raise 
     }
   }
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -236,7 +236,7 @@ fn owning(on_a : @signals.Signal[Bool], s : @signals.Signal[Int], s2 : @signals.
   }
   let view_b = fn(c : Ctx) { c.text("b \{s2.get()}", size=12.0) |> ignore }
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -335,7 +335,7 @@ test "window tree: a kept part made in one old view, then in another in its plac
     c.kept_part(c.id("part"), "part", fn() { c.text("part \{s.get()}", size=12.0) |> ignore })
   }
   let t = Tester::new(fn(_c) {  })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.show(fn() { which.get() == 0 }, fn(v) { old(v, build).over(Is(true)) |> ignore })

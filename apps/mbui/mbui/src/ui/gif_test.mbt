@@ -66,7 +66,7 @@ test "a GIF in a part kept moves with nothing else changing: built again as its 
     h=100.0,
     images=[("mem:gif", 2, 1), ("mem:gif#0", 2, 1), ("mem:gif#1", 2, 1)],
   )
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   @ui.add_image("mem:gif", two_frames())
   t.draw()
   let shown = fn() {

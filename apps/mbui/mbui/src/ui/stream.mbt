@@ -105,11 +105,6 @@ let stream_nodes : Map[Int, (Stream, (Double, Double, Double, Double)?)] = Map([
 let stream_tickets : Ref[Int] = Ref::new(0)
 
 ///|
-/// Whether the real host decodes H.264, asked once (-1 not yet).
-// kept across runs: the real host's (asked once): a Tester never reads it (h_h264_here answers its fake's)
-let h264_known : Ref[Int] = Ref::new(-1)
-
-///|
 fn streams_reset() -> Unit {
   open_streams.clear()
   stream_nodes.clear()
@@ -253,20 +248,8 @@ pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double) -> Un
 /// Whether this host decodes H.265 (the sender is then asked for it first: `hevc`). Under a Tester, false unless
 /// Tester::set_h265; a run's tape keeps the host's (its ENV line says it only when it does).
 pub fn h265_here() -> Bool {
-  match fake.val {
-    Some(f) => f.h265_here
-    None => {
-      if h265_known.val < 0 {
-        h265_known.val = if @hostapi.h265_here() { 1 } else { 0 }
-      }
-      h265_known.val == 1
-    }
-  }
+  @hostapi.h265_here()
 }
-
-///|
-// kept across runs: the real host's (asked once)
-let h265_known : Ref[Int] = Ref::new(-1)
 
 ///|
 /// A config for H.265 (`hvcc`: its HEVCDecoderConfigurationRecord; the picture `w` × `h` pixels), as `h264`'s: its
@@ -283,10 +266,7 @@ pub fn Stream::hevc(self : Stream, hvcc : Bytes, w : Int, h : Int) -> Unit {
   self.ch = h
   self.need_key = true
   if self.id != 0 && h265_here() {
-    match fake.val {
-      Some(f) => fake_fed(f, self.id, "hevc \{w}x\{h} hvcc=\{hvcc.length()}")
-      None => @hostapi.stream_hevc(self.id, hvcc, w, h)
-    }
+    @hostapi.stream_hevc(self.id, hvcc, w, h)
   }
 }
 
@@ -398,10 +378,7 @@ pub fn Stream::route(self : Stream, route : Int, after : Double, video~ : Bool, 
     return
   }
   self.routed = want
-  match fake.val {
-    Some(f) => fake_fed(f, self.id, "route \{want.0} after=\{after} video=\{video} audio=\{audio}")
-    None => @hostapi.stream_direct(self.id, route.to_double(), after, video~, audio~)
-  }
+  @hostapi.stream_direct(self.id, route.to_double(), after, video~, audio~)
 }
 
 ///|
@@ -803,165 +780,77 @@ fn stream_drawn(image : Int) -> String {
   }
 }
 
-// ── the host, or a Tester's ────────────────────────────────────────────
+// ── the host ───────────────────────────────────────────────────────────
 
 ///|
 fn h_stream_open() -> Int {
-  match fake.val {
-    Some(f) => {
-      f.stream_ids += 1
-      f.streams_fed[f.stream_ids] = []
-      f.stream_said[f.stream_ids] = []
-      f.stream_ids
-    }
-    None => @hostapi.stream_open()
-  }
-}
-
-///|
-fn fake_fed(f : FakeHost, id : Int, line : String) -> Unit {
-  match f.streams_fed.get(id) {
-    Some(a) => a.push(line)
-    None => f.streams_fed[id] = [line]
-  }
+  @hostapi.stream_open()
 }
 
 ///|
 fn h_stream_h264(id : Int, avcc : Bytes, w : Int, h : Int) -> Unit {
-  match fake.val {
-    Some(f) => fake_fed(f, id, "h264 \{w}x\{h} avcc=\{avcc.length()}")
-    None => @hostapi.stream_h264(id, avcc, w, h)
-  }
+  @hostapi.stream_h264(id, avcc, w, h)
 }
 
 ///|
 fn h_stream_frame(id : Int, data : Bytes, key : Bool, ts : Double) -> Unit {
-  match fake.val {
-    Some(f) => fake_fed(f, id, "frame key=\{key} ts=\{ts} bytes=\{data.length()}")
-    None => @hostapi.stream_frame(id, data, key, ts)
-  }
+  @hostapi.stream_frame(id, data, key, ts)
 }
 
 ///|
 fn h_stream_jpeg(id : Int, data : Bytes, ts : Double) -> Unit {
-  match fake.val {
-    Some(f) => fake_fed(f, id, "jpeg ts=\{ts} bytes=\{data.length()}")
-    None => @hostapi.stream_jpeg(id, data, ts)
-  }
+  @hostapi.stream_jpeg(id, data, ts)
 }
 
 ///|
 fn h_stream_show(id : Int, ts : Double) -> Unit {
-  match fake.val {
-    Some(f) => fake_fed(f, id, "show ts=\{ts}")
-    None => @hostapi.stream_show(id, ts)
-  }
+  @hostapi.stream_show(id, ts)
 }
 
 ///|
 fn h_stream_codec(id : Int, cmd : String, data : Bytes) -> Unit {
-  match fake.val {
-    Some(f) => fake_fed(f, id, if data.length() > 0 { "do \{cmd} bytes=\{data.length()}" } else { "do \{cmd}" })
-    None => @hostapi.stream_codec(id, cmd, data)
-  }
+  @hostapi.stream_codec(id, cmd, data)
 }
 
 ///|
 /// Whether the host's H.264 decoder is driven from here (stream_feed.mbt): Tester::set_stream_feeds, a run's ENV line.
 fn h_stream_feeds() -> Bool {
-  match fake.val {
-    Some(f) => f.stream_feeds
-    None => {
-      if feeds_known.val < 0 {
-        feeds_known.val = if @hostapi.stream_feeds() { 1 } else { 0 }
-      }
-      feeds_known.val == 1
-    }
-  }
+  @hostapi.stream_feeds()
 }
-
-///|
-// kept across runs: the real host's (asked once)
-let feeds_known : Ref[Int] = Ref::new(-1)
 
 ///|
 /// Whether a stream may be shown by the host's own video layer (@hostapi.stream_layers): Tester::set_stream_layers, a
 /// run's ENV line.
 fn h_stream_layers() -> Bool {
-  match fake.val {
-    Some(f) => f.stream_layers
-    None => layers_kind() != 0
-  }
+  @hostapi.stream_layers()
 }
 
 ///|
 /// Whether that layer shows the stream's tagged colours (@hostapi.stream_layers_tagged): a Tester's unless it said its
 /// host's are sRGB (Tester::set_stream_layers_srgb), a run's ENV line.
 fn h_stream_layers_tagged() -> Bool {
-  match fake.val {
-    Some(f) => f.stream_layers && !f.stream_layers_srgb
-    None => layers_kind() == 1
-  }
+  @hostapi.stream_layers_tagged()
 }
-
-///|
-/// The real host's layers (asked once): 0 none, 1 in the stream's tagged colours, 2 in sRGB.
-fn layers_kind() -> Int {
-  if layers_known.val < 0 {
-    layers_known.val = if !@hostapi.stream_layers() {
-      0
-    } else if @hostapi.stream_layers_tagged() {
-      1
-    } else {
-      2
-    }
-  }
-  layers_known.val
-}
-
-///|
-// kept across runs: the real host's (asked once)
-let layers_known : Ref[Int] = Ref::new(-1)
 
 ///|
 fn h_stream_close(id : Int) -> Unit {
-  match fake.val {
-    Some(f) => fake_fed(f, id, "close")
-    None => @hostapi.stream_close(id)
-  }
+  @hostapi.stream_close(id)
 }
 
 ///|
-/// The stream's next event: the test's (or the run's, said again), else the host's, on the run's tape as it is taken
+/// The stream's next event: the host's (a Tester's as the test or the run said it), on the run's tape as it is taken
 /// (`{"stream":{"id":N,"e":E}}`, what Tester::view_said says again).
 fn h_stream_next(id : Int) -> String {
-  match fake.val {
-    Some(f) =>
-      match f.stream_said.get(id) {
-        Some(q) if q.length() > 0 => q.remove(0)
-        _ => ""
-      }
-    None => {
-      let e = @hostapi.stream_next(id)
-      if e != "" && (views_tracer.val is Some(_) || taping()) {
-        view_say({ "stream": Json::object({ "id": Json::number(id.to_double()), "e": Json::string(e) }) })
-      }
-      e
-    }
+  let e = @hostapi.stream_next(id)
+  if e != "" && (views_tracer.val is Some(_) || taping()) {
+    view_say({ "stream": Json::object({ "id": Json::number(id.to_double()), "e": Json::string(e) }) })
   }
+  e
 }
 
 ///|
 fn h_h264_here() -> Bool {
-  match fake.val {
-    Some(f) => f.h264
-    None => {
-      if h264_known.val < 0 {
-        h264_known.val = if @hostapi.h264_here() { 1 } else { 0 }
-      }
-      h264_known.val == 1
-    }
-  }
+  @hostapi.h264_here()
 }
 
 ///|
@@ -1049,7 +938,7 @@ pub fn stream_layers_here() -> Bool {
 ///|
 /// This host plays system audio carried alongside a remote screen; recorded with the run's environment.
 pub fn stream_audio_here() -> Bool {
-  match fake.val { Some(f) => f.audio_here; None => @hostapi.stream_audio_here() }
+  @hostapi.stream_audio_here()
 }
 
 ///|
@@ -1058,10 +947,7 @@ pub fn Stream::audio(self : Stream, data : Bytes) -> Unit {
   if self.closed || (data.length() != 0 && data.length() != 3840) { return }
   if data.length() == 0 && !self.opened { return }
   self.open()
-  match fake.val {
-    Some(f) => fake_fed(f, self.id, "audio bytes=\{data.length()}")
-    None => @hostapi.stream_audio(self.id, data)
-  }
+  @hostapi.stream_audio(self.id, data)
 }
 
 ///|

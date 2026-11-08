@@ -22,7 +22,7 @@ test "a moved selectable row retains its drawing and can still select its words"
     })
   }, w=300.0, h=160.0, pointing=Mouse)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.frame_at(at + 16.0)

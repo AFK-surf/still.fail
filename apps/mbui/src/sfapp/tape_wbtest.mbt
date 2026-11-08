@@ -414,7 +414,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
 ///|
 test "on the tape the sidebar's list scrolled with a finger: the page beside drawn again as it was, none of it built" {
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // (drawn as parts and rows are drawn when kept, built: what drawing them again is held to)
   t.draw()
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
@@ -451,7 +451,7 @@ fn tape_flung(keep : Bool) -> Array[String] {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.drag(150.0, 760.0, 150.0, 260.0, steps=6)
   t.tap(690.0 - @sfdesk.tape_shows / 2.0, 400.0)
@@ -1037,7 +1037,7 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
 test "on the tape a passage held in the page beside the sidebar brings the page over, and its 引用 quotes it" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // (the page beside kept as it was drawn while nothing changes it, as on a device: held, built)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()

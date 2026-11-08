@@ -677,10 +677,7 @@ let sideways_log : Ref[Int] = { val: -1 }
 ///|
 fn sideways_logging() -> Bool {
   if sideways_log.val < 0 {
-    sideways_log.val = match fake.val {
-      Some(_) => 0
-      None => if @hostapi.env("MBUI_MOTION_LOG") == "1" { 1 } else { 0 }
-    }
+    sideways_log.val = if @hostapi.env("MBUI_MOTION_LOG") == "1" { 1 } else { 0 }
   }
   sideways_log.val == 1
 }

@@ -220,11 +220,9 @@ fn drops_frame_end(c : Ctx) -> Unit {
 }
 
 ///|
-/// A drop of files no view took: its reading never begun, or let go (a Tester's: nothing to let go).
+/// A drop of files no view took: its reading never begun, or let go.
 fn forget_drop(id : Int) -> Unit {
-  if fake.val is None {
-    @hostapi.forget_dropped(id)
-  }
+  @hostapi.forget_dropped(id)
 }
 
 ///|
@@ -322,11 +320,8 @@ pub fn take_drop(over? : (Double, Double) -> Bool = fn(_, _) { true }) -> (Doubl
   if dropping.paths is Some(d) && d.pick == id {
     dropping.paths = None
   }
-  let p : Pick = match fake.val {
-    // (a Tester's: the ask Tester::drop_files made, from 1)
-    Some(_) => { hosts: [], got: [], fake: id - 1 }
-    None => { hosts: [@hostapi.dropped_pick(id)], got: [None], fake: -1 }
-  }
+  // (a Tester's: the ask Tester::drop_files made, from 1)
+  let p : Pick = { hosts: [@hostapi.dropped_pick(id)], got: [None] }
   p.wait("files dropped")
   Some((x, y, p))
 }

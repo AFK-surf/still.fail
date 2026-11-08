@@ -448,7 +448,7 @@ fn held_let_go(
   (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane),
 ) {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   let (x, y) = (rx + 24.0, ry + 8.0)
   let told = Ref(0)

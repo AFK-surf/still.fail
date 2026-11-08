@@ -933,11 +933,6 @@ fn view_stood(id : Int, state : Int) -> Unit {
 /// As a frame begins, before it is decided what it does again (frame_watch.mbt): each view whose host said how it
 /// stands changed read of it (its signals set: what reads them is built again).
 fn views_arrive() -> Unit {
-  // (a Tester's fake pages run what was sent to them once they are there, as a frame begins)
-  match fake.val {
-    Some(f) => for v in open_views { fake_scripts_flush(f, v.id) }
-    None => ()
-  }
   if views_stirred.is_empty() {
     return
   }
@@ -992,7 +987,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       // on a run's log (MBUI_DRAW_LOG): where it was told to go, in device pixels, for the host's own saying where it
       // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views): its rect, its clip, its roundest
       // corner, then each corner (top left, then round it)
-      if draw_logging() && fake.val is None && shown {
+      if draw_logging() && shown {
         let px = StringBuilder()
         let most = dmax(dmax(v.at[8], v.at[9]), dmax(v.at[10], v.at[11]))
         for x in [v.at[0], v.at[1], v.at[2], v.at[3], v.at[4], v.at[5], v.at[6], v.at[7], most, v.at[8], v.at[9], v.at[10], v.at[11]] {
@@ -1100,7 +1095,7 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
   }
   // on a run's log (MBUI_DRAW_LOG): the order told, for the host's own saying how it stacked them (VIEWSTACK) to be
   // compared with (scripts/host_contract.sh HOST views)
-  if draw_logging() && fake.val is None {
+  if draw_logging() {
     h_log("VIEWSTACKTOLD " + ids.map(fn(id) { id.to_string() }).join(" "))
   }
 }

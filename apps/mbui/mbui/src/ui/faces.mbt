@@ -55,12 +55,9 @@ pub fn face_add_family(face : Int, family : String) -> Bool {
 
 ///|
 /// The font families installed on this machine (@hostapi.local_font_families), a JSON array of their names; "" where
-/// there is no way to them. Under a Tester: as it is set (Tester::set_local_fonts).
+/// there is no way to them.
 pub fn local_font_families() -> String {
-  match fake.val {
-    Some(f) => f.local_fonts
-    None => @hostapi.local_font_families()
-  }
+  @hostapi.local_font_families()
 }
 
 ///|

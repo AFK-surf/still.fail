@@ -702,7 +702,7 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Chat(r) && r.station == "ws1/st1")
   t.post(@hostapi.system_channel, "{\"nav\":\"ws/ws2\"}")

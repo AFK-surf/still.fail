@@ -13,7 +13,7 @@ test "a focused editor beside a list stays editable when its rows scroll without
     }) |> ignore
   }, w=300.0, h=220.0)
   t.check_looks(true)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   t.tap(20.0, 175.0)
   t.type_text("!")
@@ -56,7 +56,7 @@ test "an editor inside a moving row still takes the complete layout path" {
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let at = t.time()
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 1.0)

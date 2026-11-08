@@ -431,7 +431,8 @@
       "src/sfpages/service.mbt": 3,
       "src/sfpages/things.mbt": 2
     },
-    "motion-length": {}
+    "motion-length": {},
+    "tester-branch": {}
   },
   "excused": {
     "frame-request": {},
@@ -500,6 +501,7 @@
     "motion-length": {
       "src/sfbase/under_post.mbt": 1,
       "src/sfpages/composer.mbt": 3
-    }
+    },
+    "tester-branch": {}
   }
 }

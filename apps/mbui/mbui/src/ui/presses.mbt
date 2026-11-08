@@ -25,12 +25,9 @@ pub fn Ctx::presses_to_node(self : Ctx, node : @view.NodeId) -> Unit {
 }
 
 ///|
-/// Once a frame is painted, under a Tester: each box's presses said to be another's are that one's to take, where the
-/// box is (Ctx::presses_to): the area drawn as a hit target over some of the box.
+/// Once a frame is painted (a Tester's, after each frame it draws): each box's presses said to be another's are that
+/// one's to take, where the box is (Ctx::presses_to): the area drawn as a hit target over some of the box.
 fn Ctx::check_press_owners(self : Ctx) -> Unit {
-  if fake.val is None {
-    return
-  }
   for i in 0..<self.count {
     let n = self.nodes[i]
     guard n.press_owner is Some((area, loc)) else { continue }

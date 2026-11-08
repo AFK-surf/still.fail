@@ -637,12 +637,9 @@ fn fields_hold(c : Ctx, words : String) -> Bool {
 }
 
 ///|
-/// The host's way of sending a step's input (@hostapi.drive); a test's fake host has none.
+/// The host's way of sending a step's input (@hostapi.drive).
 fn h_drive(kind : Int, text : String) -> Bool {
-  match fake.val {
-    Some(_) => false
-    None => @hostapi.drive(kind, text)
-  }
+  @hostapi.drive(kind, text)
 }
 
 ///|
@@ -654,10 +651,7 @@ fn drive_end(code : Int) -> Unit {
   if code == 0 && h_env("MBUI_DRIVE_KEEP_OPEN") == "1" {
     return
   }
-  match fake.val {
-    Some(f) => f.logs.push("EXIT \{code}")
-    None => @hostapi.exit(code)
-  }
+  @hostapi.exit(code)
 }
 
 ///|
@@ -1386,31 +1380,13 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
-      "system" => {
-        match fake.val {
-          Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
-          None => {
-            drive_fail(c, d, "system: only a Tester's system says what a script tells it")
-            return
-          }
-        }
-        acted()
-        return
-      }
-      "viewsaid" => {
-        match fake.val {
-          Some(f) => {
-            // (what the host says of its native views comes from outside: frame_watch.mbt)
-            outside_counted()
-            if !fake_view_said(f, arg) {
-              drive_fail(c, d, "viewsaid: not a line of what a native view's host says: " + arg)
-              return
-            }
-          }
-          None => {
-            drive_fail(c, d, "viewsaid: only a Tester's host says what a script tells it of its views")
-            return
-          }
+      "system" | "viewsaid" | "ime" => {
+        // (what only some hosts take of a script: a Tester's says what its system, its native views' host and its
+        // keyboard do as it is told; a host that takes no such step says why)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          drive_fail(c, d, failed)
+          return
         }
         acted()
         return
@@ -1431,20 +1407,6 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
-      "ime" => {
-        match fake.val {
-          Some(f) => {
-            f.dev.ime_inset = number(arg)
-            f.wants = true
-          }
-          None => {
-            drive_fail(c, d, "ime: only a Tester's keyboard moves as a script tells it")
-            return
-          }
-        }
-        acted()
-        return
-      }
       "resize" => {
         let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
         if wh.length() < 2 {
@@ -1452,10 +1414,7 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         if !h_drive(8, "\{wh[0].to_int()}x\{wh[1].to_int()}") {
-          match fake.val {
-            Some(_) => tester_size.val = Some((wh[0], wh[1]))
-            None => h_log("DRIVE resize: the host cannot")
-          }
+          h_log("DRIVE resize: the host cannot")
         }
         acted()
         return
@@ -1485,24 +1444,10 @@ fn drive_steps(c : Ctx) -> Unit {
         next()
       }
       "picks" => {
-        match fake.val {
-          Some(f) => {
-            f.picks.clear()
-            for part in arg.split(" ") {
-              match part.rev_find(":") {
-                Some(i) => {
-                  let mut n = 0
-                  for ch in part[i + 1:] {
-                    n = n * 10 + (ch.to_int() - 48)
-                  }
-                  let bytes = Bytes::make(n, b'x')
-                  f.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
-                }
-                None => ()
-              }
-            }
-          }
-          None => h_log("DRIVE picks: no Tester here, the host's own pickers answer")
+        // (the pickers' answers a host says as it is told: a Tester's; else its own pickers answer)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          h_log("DRIVE picks: " + failed)
         }
         next()
       }
@@ -1559,10 +1504,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "quit" => {
         driver.val = None
-        match fake.val {
-          Some(f) => f.logs.push("EXIT 0")
-          None => @hostapi.exit(0)
-        }
+        @hostapi.exit(0)
         return
       }
       _ => {

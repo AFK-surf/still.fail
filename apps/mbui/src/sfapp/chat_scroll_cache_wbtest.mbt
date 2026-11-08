@@ -2,7 +2,7 @@
 test "a chat scroll within its visible messages keeps their layout and reports the new place" {
   let t = chat_tester("chat")
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.scroll_to(8)
   t.frame()
   let start = t.time()
@@ -32,7 +32,7 @@ test "a chat scroll within its visible messages keeps their layout and reports t
 fn chat_scrolled_reference(keep : Bool) -> (Double, Double, String) raise {
   let t = chat_tester("chat")
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.draw()
   let title = "首页的列表改成按天分组"

@@ -428,7 +428,7 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
   t.move(100.0, 300.0)
   t.move(140.0, 300.0)

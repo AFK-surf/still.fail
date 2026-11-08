@@ -118,7 +118,7 @@ fn emit_window(w : Double) -> @ui.Tester {
     t.run_for(@ui.move_most_ms)
     t
   }
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.frames_owed()
   // (a Medium screen's sidebar in use: the chat brought over as a person brings it, a press on its edge showing)
   if w >= 600.0 && w < 840.0 {
@@ -170,7 +170,7 @@ test "kept, host frames: a Large screen, the field let go" {
 test "the avatar going home draws its movement without laying out the chat again" {
   let clock = Ref(0.0)
   let t = emit_core(clock)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // A focused editor keeps its page live for its caret. Put the keyboard away to test the avatar's work alone.
   t.keyboard_gone()
   t.frames_owed()
