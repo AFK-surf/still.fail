@@ -2139,6 +2139,25 @@ test "build-clock" {
 }
 
 ///|
+test "old-list" {
+  // a long list laid out by the old view (a call of a `list` method with four arguments or more): counted (a call
+  // each); in a test, in the framework (src/host here), a list method of fewer (a Markdown writer's) not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p(c : @ui.Ctx) -> Unit {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n  self.list(l, 1)\n  c.list(\"k\", 1, 9.0, sized?, fn(_) {  })\n}\n",
+      ),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(c : Ctx) -> Unit {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n}\n"),
+    ],
+    "old-list",
+    2,
+  )
+  assert_eq(lines(fs), [2, 4])
+}
+
+///|
 test "click-read" {
   // a click read by a build outside mbui's ui and kit: counted (a call each); in ui, in kit, in a test, a field of that
   // name, not

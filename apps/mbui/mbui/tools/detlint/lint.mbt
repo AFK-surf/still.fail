@@ -366,6 +366,11 @@ fn lint_mbt(
     if c.name == "current" && c.kind == "pkg" && c.qual == "@ui" && !in_t && !f.rel.has_prefix("src/ui/") {
       add("ui-current", c.at, f.line_text(c.at))
     }
+    // a long list laid out by the old immediate-mode view (`c.list(key, count, est, row)`): what is left of it, which
+    // only goes (a method of that name with fewer than four arguments, a Markdown writer's, not counted)
+    if c.name == "list" && c.kind == "method" && app && !in_t && c.args.length() >= 4 {
+      add("old-list", c.at, f.line_text(c.at))
+    }
     // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
     if c.name == "native_input" &&
       c.kind == "pkg" &&

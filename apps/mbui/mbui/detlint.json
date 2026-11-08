@@ -260,6 +260,10 @@
       "src/ui/shot.mbt": 1,
       "src/ui/sideways.mbt": 2
     },
+    "old-list": {
+      "src/demo/main.mbt": 1,
+      "src/kit/disclosure.mbt": 1
+    },
     "click-read": {}
   },
   "excused": {
@@ -319,6 +323,7 @@
     "frame-number": {},
     "ui-current": {},
     "build-clock": {},
+    "old-list": {},
     "click-read": {}
   },
   "tester": {
