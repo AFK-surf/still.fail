@@ -123,15 +123,8 @@ fn screen_pointer_layer(
 }
 
 ///|
-/// The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it.
-fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
-  let phase = s.phase()
-  let over = phase_over(phase)
-  // over, the screen's place kept, gone dark (its last size, or a desktop's when none came)
-  let size = match s.frame_size() {
-    Some(sz) => Some(sz)
-    None => if over { Some((16, 10)) } else { None }
-  }
+// Both layouts give the same viewport change to the zoom model.
+fn screen_stage_room(s : ScreenSess, u : ScreenUi, size : (Int, Int)?, over : Bool, room : (Double, Double)?) -> Unit {
   if over && !u.over_seen {
     u.zoom.fit_now()
   }
@@ -140,8 +133,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   if size != u.fit_for {
     u.zoom.fit_now()
   }
-  let stage = c.id("screen-stage/" + key)
-  match c.laid_size(stage) {
+  match room {
     Some((bw, bh)) if bw != u.box_w || bh != u.box_h => {
       if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
         // Turned, or a fitted view given a new width by the system column: fit again.
@@ -160,6 +152,20 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     _ => ()
   }
   u.fit_for = size
+}
+
+///|
+/// The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it.
+fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit {
+  let phase = s.phase()
+  let over = phase_over(phase)
+  // over, the screen's place kept, gone dark (its last size, or a desktop's when none came)
+  let size = match s.frame_size() {
+    Some(sz) => Some(sz)
+    None => if over { Some((16, 10)) } else { None }
+  }
+  let stage = c.id("screen-stage/" + key)
+  screen_stage_room(s, u, size, over, c.laid_size(stage))
   // a device's case round its picture, as much as it has at its widest on each side (what the zoom fits is the picture and that)
   let cased = device_case(c, s, size)
   let (case_x, case_y) = match cased {

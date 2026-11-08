@@ -1225,6 +1225,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       }
       _ => ()
     }
+    self.paint_tree_stream(c, x, y, s, a)
     // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
     // as big, as an old view's field is painted; not in its block, kept as it was made)
     match tree_fields.get(c.id) {

@@ -56,6 +56,7 @@ fn main {
   @sfdesk.set_this_machine("")
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
+  @sfbase.lone_page.val = @sfbase.window_page(@ui.env("MBUI_WINDOW"))
   @sfapp.host_setup()
   // Preview a native action once its system bar exists, without desktop clicks.
   let native_action = @ui.env("MBUI_NATIVE_ACTION")

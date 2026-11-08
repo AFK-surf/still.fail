@@ -39,6 +39,7 @@ fn screen_rig(
   here? : String = "",
   h264? : Bool = false,
   os? : String = "",
+  retained? : Bool = false,
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -141,7 +142,7 @@ fn screen_rig(
         match app.nav.top() {
           Screen(at) => {
             shown.val = Some(at)
-            screen_page(c, src, at, @sf.no_frame)
+            if !retained { screen_page(c, src, at, @sf.no_frame) }
           }
           _ =>
             match shown.val {
@@ -152,9 +153,9 @@ fn screen_rig(
               None => ()
             }
         }
-        @sf.presented(c)
+        if !retained { @sf.presented(c) }
         // what the page said, as the shell shows it (sfbase's toasts, at the window's foot)
-        @sfbase.toasts(c, @sf.toast_bottom)
+        if !retained { @sfbase.toasts(c, @sf.toast_bottom) }
       })
     },
     w~,
@@ -162,6 +163,21 @@ fn screen_rig(
     platform~,
     h264~,
   )
+  if retained {
+    @ui.set_view_app(fn(root) {
+      root.pick(fn() { app.nav.top() }, fn(v, page) {
+        v.over(Is(true)) |> ignore
+        match page {
+          Screen(at) => screen_page_node(v, src, at, fn() { @sf.no_frame }) |> ignore
+          _ => ()
+        }
+      })
+      @ui.old(root, fn(c) {
+        @sf.presented(c)
+        @sfbase.toasts(c, @sf.toast_bottom)
+      }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    })
+  }
   t.draw()
   app.nav.push(Screen({ station: "ws-1/st-1", screen, title: "Chrome", until_gone }))
   nav_rested(t)

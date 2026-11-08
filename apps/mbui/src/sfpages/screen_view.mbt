@@ -166,18 +166,23 @@ fn phase_over(p : String) -> Bool {
 let rail_say_ms : Double = 3000.0
 
 ///|
-/// The viewer of `at.screen` on `at.station` (ScreenViewer): `at.title` until the core says one (the link's own, or the
-/// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then. Inside
-/// the room its frame keeps over and under it (`frame`: the system's bars), unless full.
-pub fn screen_page(
-  c : @ui.Ctx,
-  src : Source,
-  at : ScreenAt,
-  frame : PageFrame,
-  on_close? : () -> Unit,
-  in_tab? : Bool = false,
-  own_bar? : @ui.Style? = None,
-) -> Unit {
+priv struct ScreenPageContext {
+  session : ScreenSess
+  ui : ScreenUi
+  key : String
+  title : String
+  close : () -> Unit
+  typing : Bool
+  catcher : String
+  sideways : Bool
+  native : Bool
+}
+
+///|
+fn screen_page_context(
+  c : @ui.Ctx, src : Source, at : ScreenAt,
+  on_close : (() -> Unit)?, in_tab : Bool, own_bar : @ui.Style?,
+) -> ScreenPageContext {
   let station = at.station
   let screen = at.screen
   let title = at.title
@@ -281,6 +286,24 @@ pub fn screen_page(
   if native {
     screen_native(c, s, u, typing, catcher, close)
   }
+  { session: s, ui: u, key, title, close, typing, catcher, sideways, native }
+}
+
+///|
+/// The viewer of `at.screen` on `at.station` (ScreenViewer): `at.title` until the core says one (the link's own, or the
+/// row's it was opened from); one opened until its screen is gone (a login's page) goes back by itself then. Inside
+/// the room its frame keeps over and under it (`frame`: the system's bars), unless full.
+pub fn screen_page(
+  c : @ui.Ctx,
+  src : Source,
+  at : ScreenAt,
+  frame : PageFrame,
+  on_close? : () -> Unit,
+  in_tab? : Bool = false,
+  own_bar? : @ui.Style? = None,
+) -> Unit {
+  let page = screen_page_context(c, src, at, on_close, in_tab, own_bar)
+  let (u, native) = (page.ui, page.native)
   // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
   // (full, edge to edge: no room kept for what its frame keeps it from)
   let room = fn(h : Double) {
@@ -290,6 +313,16 @@ pub fn screen_page(
   }
   c.box(style=if u.full.get() { screen_whole } else { screen_page_box }, fn() {
   room(frame.top)
+  screen_page_inside(c, page)
+  room(frame.foot)
+  })
+  |> ignore
+}
+
+///|
+fn screen_page_inside(c : @ui.Ctx, page : ScreenPageContext) -> Unit {
+  let (s, u, key, title) = (page.session, page.ui, page.key, page.title)
+  let (close, typing, catcher, sideways, native) = (page.close, page.typing, page.catcher, page.sideways, page.native)
   let within = if native { screen_within.then(@ui.style(pr=@sf.room_of(@sf.native_clear()))) } else { screen_within }
   c.box(style=within, fn() { c.box(style=if u.full.get() { screen_page_full } else { screen_page_box }, fn() {
     if native {
@@ -373,9 +406,26 @@ pub fn screen_page(
     }
   })
   |> ignore }) |> ignore
-  room(frame.foot)
+}
+
+///|
+pub fn screen_page_node(
+  parent : @view.View, src : Source, at : ScreenAt,
+  frame : () -> PageFrame, on_close? : () -> Unit,
+) -> @view.View {
+  let u = screen_ui(screen_key(at.station, at.screen))
+  parent.box(fn(v) {
+    v.over(Is(true))
+    .ground(By(fn() { @sf.theme().p.bg }))
+    .padding(By(fn() {
+      let f = frame()
+      if u.full.get() { (0.0, 0.0, 0.0, 0.0) } else { (0.0, f.top, 0.0, f.foot) }
+    })) |> ignore
+    @ui.old(v, fn(c) {
+      let close = on_close.map(fn(f) { fn() { c.after_build("screen-window-close", f) } })
+      screen_page_inside(c, screen_page_context(c, src, at, close, false, None))
+    }).grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
   })
-  |> ignore
 }
 
 ///|

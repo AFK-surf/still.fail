@@ -599,24 +599,21 @@ fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
 }
 
 ///|
-/// A window of its own (sfbase's window.mbt) in node `v` (shell_is's Lone): on the window's ground, its top dragging it
-/// where its buttons are in the app's top row (under all of it), its page alone over all of it, an old view the tree
-/// hosts (lone_page_view: closing it ends the run), the library's presenters and the toasts over that, taking a finger
-/// only where they draw something.
+/// The standalone screen and its system-bar frame live in the window tree.
+/// Presenters and toasts take input only where they draw.
 fn lone_tree(v : @view.View, src : Source) -> Unit {
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   v.show(fn() { @ui.window_inset_now() }, fn(o) {
     o.over(Is(true)) |> ignore
     o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
   })
-  @ui.old(v, fn(c) {
-    match @sfbase.lone_page.val {
-      Some(p) => lone_page_view(c, src, p)
-      None => ()
-    }
-  })
-  .over(Is(true))
-  |> ignore
+  match @sfbase.lone_page.val {
+    Some(Screen(at)) =>
+      @sfpages.screen_page_node(v, src, at, fn() {
+        { back: None, top: status_top_now(v.window().0), foot: nav_foot(), named: false }
+      }, on_close=fn() { @hostapi.exit(0) }) |> ignore
+    _ => ()
+  }
   @ui.old(v, fn(c) {
     @sf.presented(c)
     toast(c)

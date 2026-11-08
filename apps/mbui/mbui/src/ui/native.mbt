@@ -779,19 +779,25 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
     Some(x) => x
     None => return
   }
-  if v.closed || v.id == 0 {
-    return
-  }
+  self.paint_native_at(v, (n.x, n.y, n.fw, n.fh), content, radii)
+}
+
+///|
+fn Ctx::paint_native_at(
+  self : Ctx, v : NativeView, box : (Double, Double, Double, Double),
+  content : (Double, Double, Double, Double)?, radii : FixedArray[Double],
+) -> Unit {
+  if shooting.val || v.closed || v.id == 0 { return }
   let (x, y, w, h) = match content {
-    Some((cx, cy, cw, ch)) => (n.x + cx, n.y + cy, cw, ch)
-    None => (n.x, n.y, n.fw, n.fh)
+    Some((cx, cy, cw, ch)) => (box.0 + cx, box.1 + cy, cw, ch)
+    None => (box.0, box.1, box.2, box.3)
   }
   // seen within the node and the clip it is painted in, as that shows (not a recording's band: clip_shown)
   let ((cx0, cy0, cx1, cy1), _) = clip_shown()
-  let x0 = dmax(n.x, cx0)
-  let y0 = dmax(n.y, cy0)
-  let x1 = dmin(n.x + n.fw, cx1)
-  let y1 = dmin(n.y + n.fh, cy1)
+  let x0 = dmax(box.0, cx0)
+  let y0 = dmax(box.1, cy0)
+  let x1 = dmin(box.0 + box.2, cx1)
+  let y1 = dmin(box.1 + box.3, cy1)
   if x1 <= x0 || y1 <= y0 {
     return
   }

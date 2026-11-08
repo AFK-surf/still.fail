@@ -111,6 +111,7 @@ let h264_known : Ref[Int] = Ref::new(-1)
 
 ///|
 fn streams_reset() -> Unit {
+  tree_streams.clear()
   open_streams.clear()
   stream_nodes.clear()
   stream_tickets.val = 0
@@ -741,16 +742,28 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
     Some(x) => x
     None => return false
   }
+  let before = self.ninst
+  self.paint_stream_image(s, (n.x, n.y, n.fw, n.fh), at, n.fit, n.radius, alpha)
+  if self.ninst > before { self.corners_last(n) }
+  true
+}
+
+///|
+// Both tree nodes and old views draw the decoder's texture through this geometry.
+fn Ctx::paint_stream_image(
+  self : Ctx, s : Stream, box : (Double, Double, Double, Double),
+  at : (Double, Double, Double, Double)?, fit : Fit, radius : Double, alpha : Double,
+) -> Unit {
   let (pw, ph) = match s.size {
     Some((pw, ph)) if !s.closed && s.id != 0 && pw > 0 && ph > 0 => (pw.to_double(), ph.to_double())
-    _ => return true
+    _ => return
   }
   let (bx, by, bw, bh, fit) = match at {
-    Some((x, y, w, h)) => (n.x + x, n.y + y, w, h, FitFill)
-    None => (n.x, n.y, n.fw, n.fh, n.fit)
+    Some((x, y, w, h)) => (box.0 + x, box.1 + y, w, h, FitFill)
+    None => (box.0, box.1, box.2, box.3, fit)
   }
   if bw <= 0.0 || bh <= 0.0 {
-    return true
+    return
   }
   let (x, y, w, h, u0, v0, du, dv) = match fit {
     FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)
@@ -768,10 +781,8 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
       (bx + (bw - w) / 2.0, by + (bh - h) / 2.0, w, h, 0.0, 0.0, 1.0, 1.0)
     }
   }
-  self.push_inst(x, y, w, h, n.radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha, u0, v0, du, dv)
-  self.corners_last(n)
+  self.push_inst(x, y, w, h, radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha, u0, v0, du, dv)
   self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.stream_tex_base + s.id).to_double()
-  true
 }
 
 ///|

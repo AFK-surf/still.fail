@@ -3010,3 +3010,5 @@ pub(open) trait Moving {
   fn sample(Self, Double) -> Unit = _
   fn keeps_time(Self) -> Bool = _
 }
+
+pub fn stream_node(@view.View, Stream, fit? : Fit, content? : () -> (Double, Double, Double, Double)?, layer? : () -> Bool) -> @view.View
