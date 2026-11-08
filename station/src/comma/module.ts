@@ -2,6 +2,7 @@
 // Comma connect as the overview shows it and the pages edit it, and the route that makes one; the workspace's
 // statistics and Task index its connections send Comma (stats.ts), the chats of that index as the Router reads and
 // writes in them (`task.read`, `task.say`), and what this station answers another's read of them, or write (peer.ts).
+import { hostname } from "node:os";
 import { Effect, Layer } from "effect";
 import { DatabaseSync } from "node:sqlite";
 import { commaEntry, commaRoutes } from "../api/routes/comma.ts";
@@ -108,7 +109,11 @@ export const CommaLive = Layer.effectDiscard(
       return cloud.listen(() => { if (seen !== homeVersion) { seen = homeVersion; changed(); } });
     };
     yield* connectsPart((options) => makeComma({ ...options, scope, empty, home: () => cloud.home(),
-      homeVersion: () => homeVersion, onHomeChange, previousExited: previous.exited }), { kind: "comma", shown: (c, raw) => c.shown(raw), entry: commaEntry });
+      homeVersion: () => homeVersion, onHomeChange, previousExited: previous.exited,
+      name: (ws) => {
+        const m = cloud.membership(ws ?? cloud.home() ?? "");
+        return m === null ? hostname() : `${m.workspace_name} · ${m.name === "" ? hostname() : m.name}`;
+      } }), { kind: "comma", shown: (c, raw) => c.shown(raw), entry: commaEntry });
     // (what offers Comma as a platform in the connect wizard: a station from before says nothing)
     parts.overview("comma", () => true);
     parts.routes(
