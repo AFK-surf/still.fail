@@ -687,3 +687,302 @@ pub fn decision_session_repair_step(db : @sql.Db) -> Bool raise {
     () => has_session_lookup(db, repair),
   )
 }
+
+// The agent-message time lookup (legacy-agent-build.ts).
+
+///|
+fn has_legacy_agent(db : @sql.Db) -> Bool raise {
+  if !exists(db, "table", "legacy_agent_meta") {
+    return false
+  }
+  guard first(db, "SELECT version,scanned FROM legacy_agent_meta WHERE id=1", []) is Some(m) &&
+    int(m, "version") == version &&
+    (int(m, "scanned") == 0 || int(m, "scanned") == 1) else {
+    raise Failure("legacy agent lookup has an unsupported version")
+  }
+  true
+}
+
+///|
+let agent_incompatible : (Json) -> String = v => "legacy agent version \{v.stringify()} is incompatible with \{version}"
+
+///|
+/// The keys older writers changed folded back, at most a batch of work (`legacyAgentDrain`): a key's other times
+/// removed first, then the key itself.
+fn agent_drain(db : @sql.Db) -> Int raise {
+  write(db, () => {
+    let m = meta(db, "legacy_agent_meta")
+    if int(m, "version") != version {
+      raise Failure(agent_incompatible(get(m, "version")))
+    }
+    // (before the scan has passed a key, folding it could make the scanner stage an older time for it)
+    if int(m, "scanned") != 1 {
+      return 0
+    }
+    let mut visited = 0
+    while visited < batch {
+      guard first(
+          db,
+          "SELECT CAST(d.thread AS TEXT) thread,CAST(d.n AS TEXT) n,CAST(d.old_at AS TEXT) old_at FROM legacy_agent_dirty d ORDER BY d.thread,d.n LIMIT 1",
+          [],
+        )
+        is Some(key) else {
+        break
+      }
+      let k = [get(key, "thread"), get(key, "n")]
+      let now = match
+        first(
+          db,
+          "SELECT CAST(at AS TEXT) at FROM entries WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER) AND kind='message' AND author_kind='agent'",
+          k,
+        ) {
+        Some(r) => get(r, "at")
+        None => Json::null()
+      }
+      visited += db.run(
+        "DELETE FROM legacy_agent_times WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER) AND at IN (SELECT at FROM legacy_agent_times INDEXED BY legacy_agent_times_by_key WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER) AND (?3 IS NULL OR at != CAST(?3 AS INTEGER)) ORDER BY legacy_agent_times.at LIMIT ?4)",
+        k + [now, Json::number((batch - visited).to_double())],
+      )
+      if visited == batch {
+        break
+      }
+      if !(get(key, "old_at") is Null) {
+        ignore(
+          db.run(
+            "DELETE FROM legacy_agent_build WHERE thread=CAST(? AS INTEGER) AND at=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)",
+            [k[0], get(key, "old_at"), k[1]],
+          ),
+        )
+      }
+      ignore(
+        db.run(
+          "INSERT INTO legacy_agent_build(thread,at,n) SELECT thread,at,n FROM entries WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER) AND kind='message' AND author_kind='agent' ON CONFLICT(thread,at,n) DO NOTHING",
+          k,
+        ),
+      )
+      if !(now is Null) {
+        ignore(
+          db.run(
+            "DELETE FROM legacy_agent_times WHERE thread=CAST(? AS INTEGER) AND at=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)",
+            [k[0], now, k[1]],
+          ),
+        )
+      }
+      ignore(db.run("DELETE FROM legacy_agent_dirty WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)", k))
+      visited += 1
+    }
+    visited
+  })
+}
+
+///|
+/// One batch of the agent lookup's upkeep (`legacyAgentMaintenanceStep`); whether nothing is left then.
+pub fn agent_maintenance(db : @sql.Db) -> Bool raise {
+  if !has_legacy_agent(db) {
+    return true
+  }
+  if int(meta(db, "legacy_agent_meta"), "scanned") != 1 {
+    ignore(
+      scan_step(
+        db,
+        "legacy_agent_meta",
+        "INSERT INTO legacy_agent_build(thread,at,n) SELECT e.thread,CAST(CAST(e.at AS TEXT) AS INTEGER),e.n FROM entries e WHERE e.thread=CAST(?1 AS INTEGER) AND e.n=CAST(?2 AS INTEGER) AND e.kind='message' AND e.author_kind='agent' AND NOT EXISTS (SELECT 1 FROM legacy_agent_dirty WHERE thread=e.thread AND n=e.n) ON CONFLICT(thread,at,n) DO NOTHING",
+        agent_incompatible,
+      ),
+    )
+    return false
+  }
+  agent_drain(db) < batch
+}
+
+// The login-card lookup (legacy-login-cards.ts).
+
+///|
+fn has_login_cards(db : @sql.Db) -> Bool raise {
+  if !exists(db, "table", "login_card_meta") {
+    return false
+  }
+  guard first(db, "SELECT version,scanned FROM login_card_meta WHERE id=1", []) is Some(m) &&
+    int(m, "version") == version &&
+    (int(m, "scanned") == 0 || int(m, "scanned") == 1) else {
+    raise Failure("legacy login-card lookup has an unsupported version")
+  }
+  true
+}
+
+///|
+/// A card's text as SQLite's LIKE sees it: ASCII folded, and cut at a NUL (LIKE stops there).
+fn like_text(card : String) -> String {
+  let out = StringBuilder::new()
+  for c in card {
+    if c == '\u{0}' {
+      break
+    }
+    out.write_char(if c >= 'A' && c <= 'Z' { (c.to_int() + 32).unsafe_to_char() } else { c })
+  }
+  out.to_string()
+}
+
+///|
+fn find_from(text : String, what : String, from : Int) -> Int? {
+  if from > text.length() {
+    return None
+  }
+  match text.view(start_offset=from).find(what) {
+    Some(i) => Some(from + i)
+    None => None
+  }
+}
+
+///|
+fn login_ok(login : String) -> Bool {
+  login.length() >= 1 &&
+  login.length() <= 40 &&
+  login.iter().all(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z'))
+}
+
+///|
+/// At most 64 entries and 64 login tokens of the old cards scanned into the lookup, the cursor (and the offset in a
+/// card left partly scanned) with them (`legacyLoginCardsStep`); whether the scan is done.
+fn login_cards_step(db : @sql.Db) -> Bool raise {
+  write(db, () => {
+    guard first(
+        db,
+        "SELECT version,scanned,CAST(end_thread AS TEXT) end_thread,CAST(end_n AS TEXT) end_n,CAST(cursor_thread AS TEXT) cursor_thread,CAST(cursor_n AS TEXT) cursor_n,offset FROM login_card_meta WHERE id=1",
+        [],
+      )
+      is Some(m) &&
+      int(m, "version") == version &&
+      (int(m, "scanned") == 0 || int(m, "scanned") == 1) else {
+      raise Failure("unsupported login card preparation")
+    }
+    if int(m, "scanned") == 1 {
+      return 1
+    }
+    let fields = "CAST(thread AS TEXT) thread,CAST(n AS TEXT) n,CAST(rowid AS TEXT) entry_rowid,ts,kind,author_kind,CASE WHEN card LIKE '%\"login\"%' THEN CAST(card AS TEXT) END AS card"
+    let from = if exists(db, "index", "entries_login_cards") {
+      "FROM entries INDEXED BY entries_login_cards WHERE card LIKE '%\"login\"%'"
+    } else {
+      "FROM entries WHERE 1"
+    }
+    let end_thread = get(m, "end_thread")
+    let end_n = get(m, "end_n")
+    let mut cursor_thread = get(m, "cursor_thread")
+    let mut cursor_n = get(m, "cursor_n")
+    let mut offset : Int? = match get(m, "offset") {
+      Number(o, ..) => Some(o.to_int())
+      _ => None
+    }
+    let mut visited = 0
+    let mut tokens = 0
+    let mut ready = end_thread is Null
+    while !ready && visited < batch && tokens < batch {
+      let row = if offset is Some(_) {
+        match
+          first(db, "SELECT \{fields} FROM entries WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER)", [
+            cursor_thread, cursor_n,
+          ]) {
+          Some(r) => r
+          None => {
+            offset = None
+            continue
+          }
+        }
+      } else {
+        let mut found = if cursor_thread is Null {
+          first(
+            db,
+            "SELECT \{fields} \{from} AND thread<=CAST(?1 AS INTEGER) ORDER BY entries.thread,entries.n LIMIT 1",
+            [end_thread],
+          )
+        } else {
+          first(
+            db,
+            "SELECT \{fields} \{from} AND thread=CAST(?1 AS INTEGER) AND n>CAST(?2 AS INTEGER) ORDER BY entries.n LIMIT 1",
+            [cursor_thread, cursor_n],
+          )
+        }
+        if found is None && !(cursor_thread is Null) {
+          found = first(
+            db,
+            "SELECT \{fields} \{from} AND thread>CAST(?1 AS INTEGER) AND thread<=CAST(?2 AS INTEGER) ORDER BY entries.thread,entries.n LIMIT 1",
+            [cursor_thread, end_thread],
+          )
+        }
+        guard found is Some(r) &&
+          int(
+            first(
+              db,
+              "SELECT CAST(?1 AS INTEGER)>CAST(?2 AS INTEGER) OR (CAST(?1 AS INTEGER)=CAST(?2 AS INTEGER) AND CAST(?3 AS INTEGER)>CAST(?4 AS INTEGER)) AS beyond",
+              [get(r, "thread"), end_thread, get(r, "n"), end_n],
+            ).unwrap_or(Map([])),
+            "beyond",
+          ) ==
+          0 else {
+          ready = true
+          break
+        }
+        cursor_thread = get(r, "thread")
+        cursor_n = get(r, "n")
+        offset = Some(0)
+        r
+      }
+      visited += 1
+      guard get(row, "kind") == Json::string("message") &&
+        get(row, "author_kind") == Json::string("agent") &&
+        get(row, "card") is String(card) else {
+        offset = None
+        continue
+      }
+      let text = like_text(card)
+      let prefix = "\"login\":\""
+      let mut at = offset.unwrap_or(0)
+      while tokens < batch {
+        guard find_from(text, prefix, at) is Some(start) else {
+          offset = None
+          break
+        }
+        at = start + prefix.length()
+        let login = match find_from(text, "\"", at) {
+          Some(end) => text.view(start_offset=at, end_offset=end).to_string()
+          None => ""
+        }
+        if login_ok(login) {
+          ignore(
+            db.run(
+              "INSERT INTO login_card_keys(login,thread,n,entry_rowid,ts) SELECT ?1,CAST(?2 AS INTEGER),CAST(?3 AS INTEGER),CAST(?4 AS INTEGER),?5 WHERE NOT EXISTS (SELECT 1 FROM login_card_keys WHERE login=?1 AND thread=CAST(?2 AS INTEGER) AND n=CAST(?3 AS INTEGER))",
+              [Json::string(login), get(row, "thread"), get(row, "n"), get(row, "entry_rowid"), get(row, "ts")],
+            ),
+          )
+        }
+        tokens += 1
+        offset = Some(at)
+      }
+    }
+    ignore(
+      db.run(
+        "UPDATE login_card_meta SET scanned=?,cursor_thread=CAST(? AS INTEGER),cursor_n=CAST(? AS INTEGER),offset=? WHERE id=1",
+        [
+          Json::number(if ready { 1.0 } else { 0.0 }),
+          cursor_thread,
+          cursor_n,
+          match offset {
+            Some(o) => Json::number(o.to_double())
+            None => Json::null()
+          },
+        ],
+      ),
+    )
+    if ready { 1 } else { 0 }
+  }) ==
+  1
+}
+
+///|
+/// One batch of the login-card lookup's scan (`legacyLoginCardsMaintenanceStep`); whether it is done.
+pub fn login_cards_maintenance(db : @sql.Db) -> Bool raise {
+  if !has_login_cards(db) {
+    return true
+  }
+  login_cards_step(db)
+}
