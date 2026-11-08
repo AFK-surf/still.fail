@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, onBoundPerson, pairs, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -481,7 +481,7 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     const f = fold(h.entries);
     const had = live(f.devices.get(base), Math.floor(inner.host.nowMs() / 1000));
     const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
-    if (f.disabled || (had !== undefined && !unsigned)) continue;
+    if (f.disabled || (had !== undefined && !unsigned) || onBoundPerson(inner, ws)) continue;
     workspaces.push(ws);
     let checked: Checked | null = null;
     try {
