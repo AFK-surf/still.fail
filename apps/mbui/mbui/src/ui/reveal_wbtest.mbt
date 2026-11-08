@@ -149,7 +149,7 @@ test "where the window is the tree's: its ground and an old view's words in it o
     |> ignore
   })
   t.frame()
-  g().reveal_from(20.0, 10.0, dark=fn() { dark.get() })
+  reveal_from(20.0, 10.0, dark=fn() { dark.get() })
   t.frame()
   dark.set(true)
   t.frame()
