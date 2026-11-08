@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { CommaStats, IndexSync, PAGE_BYTES, RevIndex, statsWire, taskWire, type Held, type IndexRow } from "../src/comma/stats.ts";
+import { CommaStats, IndexSync, PAGE_BYTES, RevIndex, nextPage, statsWire, taskWire, type Held, type IndexRow } from "../src/comma/stats.ts";
 
 // Count rows returned by SQLite to the page reader, not bytes read from disk.
 function countPageRows(db: DatabaseSync, count: (rows: number) => void): DatabaseSync {
@@ -78,7 +78,7 @@ test("a sender expands again after large rows give way to small ones", () => {
         seen.push(...page.rows.map((row: any) => row.row.thread));
         assert.ok(page.through > held.through);
         held = { epoch: page.epoch, through: page.through };
-        assert.ok(sizes.length <= 8, "small rows should quickly return to full pages");
+        assert.ok(sizes.length <= 7, "small rows should return to full pages without an extra page");
       }
       assert.ok(sizes.includes(200));
       assert.deepEqual(seen, Array.from({ length: 612 }, (_, i) => i + 1));
@@ -117,6 +117,34 @@ test("a smaller page does not introduce a boundary within equal revisions", () =
       assert.equal(second.through, 12);
     } finally { sync.close(); }
   } finally { f.db.close(); }
+});
+
+test("on an unchanged index adaptive reads return the same pages as full reads", () => {
+  for (const name of ["stats_index", "task_index"] as const) {
+    const f = fixture(name);
+    try {
+      for (let n = 1; n <= 600; n++) {
+        const title = n <= 12 || n % 71 === 0 ? "x".repeat(16_384) : "small";
+        const json = n % 113 === 0 ? "not json" : JSON.stringify({ thread: n, task: `task${n}`, title });
+        f.add(`chat${n}`, n, json, n % 97 === 0 ? 1 : 0);
+      }
+      f.rev(600);
+      const wire = name === "stats_index" ? statsWire : taskWire;
+      const sync = new IndexSync(f.index, wire);
+      try {
+        let held: Held = { epoch: null, through: 0 }, pages = 0;
+        for (;;) {
+          const actual = sync.next(held);
+          const expected = nextPage(f.index, held, wire);
+          assert.deepEqual(actual, expected);
+          if (actual === null) break;
+          held = { epoch: actual.epoch, through: actual.through };
+          assert.ok(++pages < 100);
+        }
+        assert.equal(held.through, 600);
+      } finally { sync.close(); }
+    } finally { f.db.close(); }
+  }
 });
 
 test("adaptive pages preserve tombstones, malformed positions, and the last revision", () => {
@@ -253,6 +281,91 @@ test("changes committed during adaptive-page encoding reach the receiver in late
       assert.equal(held.through, stats.stats.rev());
     } finally { sync.close(); }
   } finally { older.close(); stats.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a full-page retry discards its tentative snapshot when an older writer changes rows", () => {
+  const dir = mkdtempSync(join(tmpdir(), "comma-adaptive-retry-"));
+  const path = join(dir, "index.db");
+  const stats = new CommaStats(path, async () => ({ stations: [], unread: [] }), () => () => {});
+  const older = new CommaStats(path, async () => ({ stations: [], unread: [] }), () => () => {});
+  try {
+    const chats = Array.from({ length: 232 }, (_, i) => ({ thread: i + 1, title: i < 13 ? "x".repeat(16_384) : "small", agents: [] }));
+    const given = (list: typeof chats) => [{ usage: { rows: [] }, chats: list }];
+    stats.apply(given(chats), [], 0);
+    const sync = new IndexSync(stats.stats);
+    try {
+      let held: Held = { epoch: null, through: 0 }, written = false, pages = 0;
+      const copy = new Map<string, unknown>();
+      const apply = (page: NonNullable<ReturnType<IndexSync["next"]>>) => {
+        if (page.reset) copy.clear();
+        for (const row of page.rows) row.removed ? copy.delete(row.key) : copy.set(row.key, row.row);
+        held = { epoch: page.epoch, through: page.through };
+      };
+      for (let i = 0; i < 4; i++) apply(sync.next(held)!);
+      assert.equal(held.through, 12);
+      const stringify = JSON.stringify;
+      try {
+        JSON.stringify = ((value: any, replacer?: any, space?: any) => {
+          if (!written && value?.row?.thread === 13) {
+            written = true;
+            const changed = chats.filter((chat) => chat.thread !== 15).map((chat) =>
+              chat.thread === 1 || chat.thread === 13 ? { ...chat, title: "updated" } : chat);
+            changed.push({ thread: 233, title: "new", agents: [] });
+            older.apply(given(changed), [], 0);
+          }
+          return stringify(value, replacer, space);
+        }) as typeof JSON.stringify;
+        const page = sync.next(held)!;
+        assert.equal(page.rows.some((row: any) => row.row?.thread === 13 && row.row.title !== "updated"), false);
+        apply(page);
+      } finally { JSON.stringify = stringify; }
+      assert.equal(written, true);
+      for (let page = sync.next(held); page !== null; page = sync.next(held)) {
+        apply(page);
+        assert.ok(++pages < 30);
+      }
+      const expected = stats.stats.since(0, 1000).map(statsWire).filter((row) => row !== null && !row.removed);
+      const ordered = (entries: [string, unknown][]) => entries.sort(([a], [b]) => a.localeCompare(b));
+      assert.deepEqual(ordered([...copy]), ordered(expected.map((row) => [row.key, row.row])));
+      assert.equal(held.through, stats.stats.rev());
+    } finally { sync.close(); }
+  } finally { older.close(); stats.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a locked full-page retry leaves the held position safe to retry", () => {
+  const dir = mkdtempSync(join(tmpdir(), "comma-adaptive-retry-"));
+  const path = join(dir, "index.db");
+  const stats = new CommaStats(path, async () => ({ stations: [], unread: [] }), () => () => {});
+  const blocker = new DatabaseSync(path);
+  try {
+    const chats = Array.from({ length: 32 }, (_, i) => ({ thread: i + 1, title: i < 13 ? "x".repeat(16_384) : "small", agents: [] }));
+    stats.apply([{ usage: { rows: [] }, chats }], [], 0);
+    const sync = new IndexSync(stats.stats);
+    try {
+      let held: Held = { epoch: null, through: 0 }, locked = false;
+      for (let i = 0; i < 4; i++) {
+        const page = sync.next(held)!;
+        held = { epoch: page.epoch, through: page.through };
+      }
+      assert.equal(held.through, 12);
+      const stringify = JSON.stringify;
+      try {
+        JSON.stringify = ((value: any, replacer?: any, space?: any) => {
+          if (!locked && value?.row?.thread === 13) { blocker.exec("BEGIN EXCLUSIVE"); locked = true; }
+          return stringify(value, replacer, space);
+        }) as typeof JSON.stringify;
+        assert.throws(() => sync.next(held), /locked/);
+      } finally {
+        JSON.stringify = stringify;
+        if (blocker.isTransaction) blocker.exec("ROLLBACK");
+      }
+      assert.equal(locked, true);
+      const page = sync.next(held)!;
+      assert.equal(page.since, 12);
+      assert.equal(page.through, 32);
+      assert.deepEqual(page.rows.map((row: any) => row.row.thread), Array.from({ length: 20 }, (_, i) => i + 13));
+    } finally { sync.close(); }
+  } finally { blocker.close(); stats.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a custom encoder retains the original page size and is called once per considered row", () => {

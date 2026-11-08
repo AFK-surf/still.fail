@@ -501,7 +501,7 @@ export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => J
 /// One snapshot per page, with an optional lower row limit for a sender that has recently seen large wire rows.
 function readNextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json | null,
   resetIf: ((floor: number, rev: number, epoch: string) => boolean) | undefined, requestedRows: number):
-  { page: Page | null; limit: number; taken: number; bytes: number; byteLimited: boolean; rowLimited: boolean } {
+  { page: Page | null; limit: number; taken: number; byteLimited: boolean; rowLimited: boolean } {
   // A different connection can prune between reads. The floor, revision and rows must describe the same database
   // snapshot; release it before parsing and encoding the bodies, so those operations do not hold a SQLite read lock.
   const slice = index.snapshot(() => {
@@ -524,7 +524,7 @@ function readNextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json
     return { epoch, rev, reset, since, limit, changed };
   });
   const { epoch, rev, reset, since, limit, changed } = slice;
-  if (changed === null) return { page: null, limit, taken: 0, bytes: 0, byteLimited: false, rowLimited: false };
+  if (changed === null) return { page: null, limit, taken: 0, byteLimited: false, rowLimited: false };
   const rows: Json[] = [];
   let bytes = 2;
   let taken = 0;
@@ -541,7 +541,7 @@ function readNextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json
   }
   // A page short of the end brings Comma to its last row; the last page to the index's rev, past pruned tombstones.
   const through = taken < changed.length ? last : rev;
-  return { page: { epoch, reset, since, through, rows }, limit, taken, bytes, byteLimited,
+  return { page: { epoch, reset, since, through, rows }, limit, taken, byteLimited,
     rowLimited: !byteLimited && taken === limit && changed.length > limit };
 }
 
@@ -565,21 +565,21 @@ export class IndexSync {
     const index = this.#index;
     index.observed(this.#token, held.epoch === index.epoch() ? held.through : 0);
     let floor = 0;
-    const result = readNextPage(index, held, this.#wire, (seen, rev, epoch) => {
+    const resetIf = (seen: number, rev: number, epoch: string) => {
       floor = seen;
       return held.epoch === epoch && (held.through > rev ||
         (held.through < seen && (!this.#resetting || seen > this.#resetFloor)));
-    }, this.#pageRows);
+    };
+    let result = readNextPage(index, held, this.#wire, resetIf, this.#pageRows);
+    if ((this.#wire === statsWire || this.#wire === taskWire) && result.limit < PAGE_ROWS && result.rowLimited) {
+      // Small rows have arrived. Discard the tentative page and read a complete page in a new snapshot, so the
+      // receiver does not pay an extra page wait and no rows from different snapshots are combined.
+      result = readNextPage(index, held, this.#wire, resetIf, PAGE_ROWS);
+    }
     const page = result.page;
     if (this.#wire === statsWire || this.#wire === taskWire) {
       // Learn from wire size, not stored JSON size: a large Task body can make a small wire row.
       if (result.byteLimited) this.#pageRows = Math.min(PAGE_ROWS, Math.max(8, 2 * (result.taken + 1)));
-      else if (result.rowLimited) {
-        // A run of small rows should quickly return to full pages. Use the current page's wire size as an estimate;
-        // if a later row is larger, the byte limit will still stop it and the next page will learn again.
-        this.#pageRows = Math.min(PAGE_ROWS, Math.max(result.limit * 2,
-          Math.ceil(result.limit * PAGE_BYTES / Math.max(1, result.bytes))));
-      }
       else this.#pageRows = PAGE_ROWS;
     }
     if (page?.reset === true) {
