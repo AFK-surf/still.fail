@@ -399,6 +399,11 @@ fn tape_made(
       made("appearance", fn(p, core, _here, _stint, told, _acts) {
         @sfpages.appearance_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    Setting(LocalStation) if pane_makes.val =>
+      made("local-station", fn(p, core, _here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.local_station_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
     Setting(Permissions) if pane_makes.val =>
       made("permissions", fn(p, core, _here, _stint, told, _acts) {
         context_node(p)

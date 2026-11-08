@@ -628,6 +628,8 @@ fn narrow_made_as(
       made("auto-policy/" + st, fn(p, core, here, frame, _stint, _acts) { @sfpages.policy_node(p, core, here, st, on_back=core.pop, frame~) })
     Setting(Appearance) =>
       made("appearance", fn(p, core, _here, frame, _stint, _acts) { @sfpages.appearance_node(p, core, on_back=core.pop, frame~) })
+    Setting(LocalStation) =>
+      made("local-station", fn(p, core, _here, frame, _stint, _acts) { @sfpages.local_station_node(p, core, on_back=core.pop, frame~) })
     Setting(Permissions) =>
       made("permissions", fn(p, core, _here, frame, _stint, _acts) { @sfpages.permissions_node(p, core, on_back=core.pop, frame~) })
     Setting(UsagePrices(days)) =>

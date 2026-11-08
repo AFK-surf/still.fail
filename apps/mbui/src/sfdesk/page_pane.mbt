@@ -288,6 +288,10 @@ fn pane_made(
       })
     Setting(Appearance) =>
       made("appearance", fn(a, core, _here, _stint, frame, width) { @sfpages.appearance_node(a, core, on_back=core.pop, frame~, width~) })
+    Setting(LocalStation) =>
+      made("local-station", fn(a, core, _here, _stint, frame, width) {
+        @sfpages.local_station_node(a, core, on_back=core.pop, frame~, width~)
+      })
     Setting(Permissions) =>
       made("permissions", fn(a, core, _here, _stint, frame, width) {
         @sfpages.permissions_node(a, core, on_back=core.pop, frame~, width~)
