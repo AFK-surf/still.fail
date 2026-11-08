@@ -261,6 +261,8 @@ pub(all) struct DriveAt {
 /// toast's count goes on, as before it was here).
 pub fn reset() -> Unit {
   app.nav = new_nav()
+  // (no page on its way: a frame with no wide page in it says none, the last run's left as it was)
+  page_way_said("", 0.0, ends=0.0)
   // where it has been (app_history.mbt)
   history_reset()
   app.picked.set("")

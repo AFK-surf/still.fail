@@ -789,8 +789,8 @@ fn fold_bars(f : FoldLook) -> Unit {
   // (the page's width on the block's way: where the block's column goes, the window's less it)
   match (fold_goes.to, fold_goes.node) {
     (Some(b), Some(v)) if fold_going(@ui.current().moment()) =>
-      @sfbase.page_way_said(fold_goes.way.starts_at().to_string(), v.window().0 - b.col)
-    _ => @sfbase.page_way_said("", 0.0)
+      @sfbase.page_way_said(fold_goes.way.starts_at().to_string(), v.window().0 - b.col, ends=fold_goes.way.ends_at())
+    _ => @sfbase.page_way_said("", 0.0, ends=0.0)
   }
 }
 

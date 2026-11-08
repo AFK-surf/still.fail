@@ -313,6 +313,21 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
 }
 
 ///|
+/// When a move listing value `name` (Ctx::move_state) is there, as it has worked out how long it goes (Ctx::moved
+/// asked first this frame); none while none goes on. What goes on with it is there then too, whichever frame sees it.
+pub fn Ctx::moved_ends(self : Ctx, name : String) -> Double? {
+  let mut k = self.move_runs.length() - 1
+  while k >= 0 {
+    let run = self.move_runs[k]
+    if run.vars.contains(name) {
+      return Some(run.ends())
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
 /// What the nodes `from` until `to` showed as they were built (a list's row or a part kept as its nodes, put back
 /// unbuilt: kept_nodes.mbt), said again as their builds said it: the boxes named to be moved, in order, and the values
 /// of the view's own shown in them.

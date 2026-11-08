@@ -47,6 +47,8 @@ pub(all) struct Reading {
   /// the last words sent from here that let go of the composer (their row's key): the composer's room under the rows
   /// goes down where it comes to stand as they do, the Foot row's version with it
   mut sent_foot : String
+  /// how its rows were last given laid out (shown_rows' `laid`): their versions read again as that changes
+  mut rows_laid : String
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
@@ -216,6 +218,7 @@ pub fn reading_of(key : String) -> Reading {
       let r = {
         foot_sign: "",
         sent_foot: "",
+        rows_laid: "",
         head: "",
         head_at: -1,
         placed: false,
@@ -1098,6 +1101,8 @@ pub fn row_keys(
   em : Emits,
   flight : SendFlight?,
   rise_ms~ : Double,
+  laid? : String = "",
+  laid_at? : Double,
 ) -> (Array[Entry], Array[String]) {
   let info = c.list_info_as(key, follows)
   let following = match info {
@@ -1126,7 +1131,7 @@ pub fn row_keys(
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight)
+      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight, laid~, laid_at~)
     _ => ()
   }
   let made_whole = sending.is_empty() && turns.waiting.is_empty()
@@ -1360,13 +1365,16 @@ pub fn row_keys(
   // (what changes comes, goes and changes on the list's way whether the list follows its end or is read up it: the
   // row read from stays where it shows, what is over and under it moving away from it, mbui's ui/list_size.mbt; nothing
   // at once in view, 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」)
-  shown_rows(c, rd, list, keys, !v.newer, flight)
+  shown_rows(c, rd, list, keys, !v.newer, flight, laid~, laid_at~)
 }
 
 ///|
 /// A chat's rows as they show (`list`, `keys`): with what went from them in among them while its room closes, what
 /// came and changed said from now while its newest are in it (mbui's ui/list_size.mbt); what words sent fly to opening its
-/// room as long as their flight.
+/// room as long as their flight. `laid`: how the list is laid out other than by its width as it is ("" by that; on a
+/// page's way, the width it is kept at: sfpages' laid_w), its rows another version each when that changes, so their
+/// room goes on the list's way to what it is now; from `laid_at` if said, a moment before now (its way there then,
+/// whichever frame finds it so), else from now.
 fn shown_rows(
   c : @ui.Ctx,
   rd : Reading,
@@ -1374,6 +1382,8 @@ fn shown_rows(
   keys : Array[String],
   watched : Bool,
   flight : SendFlight?,
+  laid~ : String,
+  laid_at~ : Double?,
 ) -> (Array[Entry], Array[String]) {
   // words sent let go of the composer as they leave it, a share of their way on (flight_placed): their row opens
   // from then, the composer's room closes from then (composer_hold), as long, so that what is over them goes one way;
@@ -1393,15 +1403,22 @@ fn shown_rows(
     }
     _ => None
   }
+  let told_laid = laid != rd.rows_laid
+  rd.rows_laid = laid
   rd.rows.rows(
     c,
-    // (given anew as the Foot row's version changes with them: the same arrays as the frame before are not looked over)
-    if told_foot { keys.copy() } else { keys },
+    // (given anew as the Foot row's version changes with them, or every row's as the list is laid out otherwise: the
+    // same arrays as the frame before are not looked over)
+    if told_foot || told_laid { keys.copy() } else { keys },
     list,
+    // (laid out at another width as a page's way sets off or is there, each row's words wrapped otherwise, as far from
+    // the one before (20 or 28 narrow or not) and its picture inline or out in the margin: each its room going there on
+    // the list's way, not stepped at once in one frame, rows_steady.mbt)
     fn(e) {
       match e {
         Foot => "foot" + rd.foot_sign + rd.sent_foot
-        _ => shown_sign(e)
+        Top => shown_sign(e)
+        _ => shown_sign(e) + laid
       }
     },
     watched~,
@@ -1413,8 +1430,9 @@ fn shown_rows(
       }
     },
     from=fn(k) {
-      match leaving {
-        Some((_, at, _)) if at > now => Some(at)
+      match (leaving, laid_at) {
+        (Some((_, at, _)), _) if at > now => Some(at)
+        (_, Some(at)) if told_laid && at < now => Some(at)
         _ => None
       }
     },
@@ -1692,6 +1710,8 @@ pub fn list_frame(
   rise_ms~ : Double,
   top~ : Double,
   in_front~ : Bool,
+  laid? : String = "",
+  laid_at? : Double,
 ) -> ListFrame {
   let rd = reading_of(r.station + "\u{1}" + r.session)
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
@@ -1726,6 +1746,8 @@ pub fn list_frame(
     em,
     flight_of(draft),
     rise_ms~,
+    laid~,
+    laid_at?,
   )
   follow_newest(c, rd, list, keys, key, top~)
   flight_frame(c, draft)
