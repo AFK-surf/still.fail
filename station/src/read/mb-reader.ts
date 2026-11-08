@@ -8,10 +8,11 @@ import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import type { Worker } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
-import { giveBackfill, takeBackfill } from "../store/backfill.ts";
+import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
 
 /// The program: STILLFAIL_MB_READER, else beside the station's code in a release, else where `moon build` puts it in
@@ -91,27 +92,55 @@ let nextOwner = 0x60000000;
 /// MoonBit builder `args` instead: in a worker's place for its builder (`threadId`: its owner in the permit, released
 /// on its exit as a worker's). It knows nothing of the backfill permit, which this takes for each batch and gives back
 /// when it is answered, as the worker took it; a batch the permit is not had for, and one that did not finish
-/// everything, are answered after the pause the worker makes (`pauseMs`).
+/// everything, are answered after the pause the worker makes (`pauseMs`). A batch it answers `{"fallback": true}`
+/// (a kind not moved to it yet) is asked of the worker `fallback` makes, which answers from then on.
 export class MbBackfill extends EventEmitter {
   readonly threadId = nextOwner++;
   readonly #process: MbProcess;
+  readonly #buffer: SharedArrayBuffer | undefined;
   readonly #priority: Int32Array | null;
   readonly #pauseMs: number;
+  readonly #fallback: (() => Worker) | undefined;
+  #worker: Worker | null = null;
+  #asked: unknown = null;
   #holding = false;
   #exited = false;
 
-  constructor(binary: string, args: string[], priority: SharedArrayBuffer | undefined, pauseMs: number) {
+  constructor(binary: string, args: string[], priority: SharedArrayBuffer | undefined, pauseMs: number, fallback?: () => Worker) {
     super();
+    this.#buffer = priority;
     this.#priority = priority instanceof SharedArrayBuffer ? new Int32Array(priority) : null;
     this.#pauseMs = pauseMs;
+    this.#fallback = fallback;
     this.#process = new MbProcess(binary, args);
-    this.#process.on("message", (result: { done: boolean; error?: string }) => {
+    this.#process.on("message", (result: { done: boolean; error?: string; fallback?: boolean }) => {
+      if (this.#worker !== null) return;
       this.#give();
+      if (result.fallback === true && this.#fallback !== undefined) return this.#toWorker(this.#fallback);
       if (!result.done && !result.error) this.#later(result);
       else this.emit("message", result);
     });
     this.#process.on("error", (error) => this.emit("error", error));
-    this.#process.on("exit", (code) => { this.#exited = true; this.#give(); this.emit("exit", code); });
+    this.#process.on("exit", (code) => {
+      this.#give();
+      if (this.#worker !== null) return;
+      this.#exited = true;
+      this.emit("exit", code);
+    });
+  }
+
+  /// The worker in the program's place, asked what the program left to it.
+  #toWorker(make: () => Worker) {
+    const worker = this.#worker = make();
+    void this.#process.terminate();
+    worker.on("message", (result) => this.emit("message", result));
+    worker.on("error", (error) => this.emit("error", error));
+    worker.once("exit", (code) => {
+      releaseStoppedBackfill(this.#buffer, worker.threadId);
+      this.#exited = true;
+      this.emit("exit", code);
+    });
+    worker.postMessage(this.#asked);
   }
 
   #give() {
@@ -119,17 +148,19 @@ export class MbBackfill extends EventEmitter {
   }
 
   #later(result: { done: boolean }) {
-    wall.after(this.#pauseMs, () => { if (!this.#exited) this.emit("message", result); });
+    wall.after(this.#pauseMs, () => { if (!this.#exited && this.#worker === null) this.emit("message", result); });
   }
 
   postMessage(message: unknown) {
+    this.#asked = message;
+    if (this.#worker !== null) return void this.#worker.postMessage(message);
     if (!takeBackfill(this.#priority, this.threadId)) return void this.#later({ done: false });
     this.#holding = true;
     this.#process.postMessage(message);
   }
 
-  /// (a process keeps the station's event loop no more than a worker it stands for: nothing to let go)
-  unref() {}
+  /// (a process keeps the station's event loop no more than a worker it stands for)
+  unref() { this.#worker?.unref(); }
 
-  terminate(): Promise<number> { return this.#process.terminate(); }
+  terminate(): Promise<number> { return this.#worker !== null ? this.#worker.terminate() : this.#process.terminate(); }
 }

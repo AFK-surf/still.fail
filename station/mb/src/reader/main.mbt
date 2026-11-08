@@ -406,6 +406,16 @@ fn main {
     (Some("session-counts"), Some(db), _) =>
       // (a backfill the station drives itself: each line, whatever it says, asks for the next batch)
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session count", (db, _) => Some(@counts.step(db))))
+    (Some("session-backfill"), Some(db), _) =>
+      // (the backfills sessions/workspace-activity-worker.ts makes by `kind`, none: the activity; those not here yet
+      // are left to it)
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "session backfill", (db, ask) => match ask {
+        { "kind": "activity", .. } => Some(@activity.activity_step(db))
+        { "kind": "recovery", .. } => Some(@activity.recovery_step(db))
+        { "kind": "awake", .. } => Some(@activity.awake_step(db))
+        { "kind": String(_), .. } => raise @legacy.Fallback
+        _ => Some(@activity.activity_step(db))
+      }))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {
@@ -499,7 +509,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill --db <file>")
       2
     }
   }
