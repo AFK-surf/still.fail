@@ -115,6 +115,16 @@ export const PAGE_LETTER_KEYS = `SELECT CAST(p.n AS TEXT) AS n FROM (
     ORDER BY n DESC LIMIT ?4
   ) p ORDER BY p.n DESC`;
 
+/// The same bounded letter lookup in ascending order, for a Router reading messages after a position.
+export const PAGE_LETTER_KEYS_AFTER = `SELECT CAST(p.n AS TEXT) AS n FROM (
+    SELECT b.n FROM page_letter_rows b WHERE b.thread=?1 AND b.token=?2 AND b.n>CAST(?3 AS INTEGER)
+      AND NOT EXISTS (SELECT 1 FROM page_letter_dirty d WHERE d.thread=b.thread AND d.token=b.token AND d.n=b.n)
+    UNION ALL
+    SELECT e.n FROM page_letter_dirty d CROSS JOIN entries e ON e.thread=d.thread AND e.n=d.n
+      WHERE d.thread=?1 AND d.token=?2 AND d.n>CAST(?3 AS INTEGER) AND e.kind='message' AND e.letter IS NOT NULL
+    ORDER BY n LIMIT ?4
+  ) p ORDER BY p.n`;
+
 function queueScope(db: DatabaseSync, thread: number, token: string): void {
   db.prepare(`INSERT INTO page_letter_garbage(thread,token) SELECT ?,?
     WHERE NOT EXISTS (SELECT 1 FROM page_letter_garbage WHERE thread=? AND token=?)`).run(thread, token, thread, token);
