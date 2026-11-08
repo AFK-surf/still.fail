@@ -57,6 +57,9 @@ export class CloudSync {
   carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
   readonly #admins = new Set<string>();
+  /// An operator's lists that failed to come (the network, still.fail cloud's 5xx): the wait before they are asked
+  /// again, by account, and the retry waiting.
+  readonly #adminRetry = new Map<string, { ms: number; fiber: Fiber.Fiber<unknown, unknown> | null }>();
   /// The kept credentials being renewed beside their use (`#credential`), by device and key.
   readonly #renewing = new Set<string>();
 
@@ -246,22 +249,45 @@ export class CloudSync {
     });
   }
 
-  /// An operator's lists, for an account still.fail cloud says is one (`/v1/admin/me`).
+  /// An operator's lists, for an account still.fail cloud says is one (`/v1/admin/me`). One that failed for a reason
+  /// other than the account's (the network, a 5xx) is asked again after a wait: nothing else would ask while the
+  /// events socket stays open, and the console would wait on it until reloaded.
   #admin(sub: string): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const me = yield* Effect.result(core.provider.request(sub, "GET", "/v1/admin/me", null));
       if (me._tag === "Failure") {
         this.#admins.delete(sub);
+        if (passing(me.failure)) this.#adminAgain(sub);
         return;
       }
       this.#admins.add(sub);
-      yield* Effect.all(ADMIN_LISTS.map((list) => this.adminList(sub, list)), { concurrency: "unbounded" });
+      const failed = yield* Effect.all(ADMIN_LISTS.map((list) => this.adminList(sub, list)), { concurrency: "unbounded" });
+      if (failed.some((e) => e !== null && passing(e))) this.#adminAgain(sub);
+      else this.#adminRetry.delete(sub);
     });
   }
 
-  /// One of an operator's lists read again (`/v1/admin/<list>`); what was read before stays when it fails.
-  adminList(sub: string, list: string): Effect.Effect<void> {
+  #adminAgain(sub: string): void {
+    const core = this.#core;
+    let retry = this.#adminRetry.get(sub);
+    if (!retry) this.#adminRetry.set(sub, (retry = { ms: SOCKET_RETRY_MS, fiber: null }));
+    if (retry.fiber !== null) return;
+    const wait = retry.ms;
+    retry.ms = Math.min(retry.ms * 2, SOCKET_RETRY_MAX_MS);
+    const again = Effect.sleep(wait).pipe( // timer: a retry after a failure, with a backoff
+      Effect.andThen(Effect.sync(() => {
+        retry.fiber = null;
+        if (this.#adminRetry.get(sub) !== retry || !core.accounts.list().some((a) => a.sub === sub)) return;
+        core.scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      })),
+    );
+    retry.fiber = core.runner.fork(again) as Fiber.Fiber<unknown, unknown>;
+  }
+
+  /// One of an operator's lists read again (`/v1/admin/<list>`); what was read before stays when it fails. What it
+  /// failed with, or null.
+  adminList(sub: string, list: string): Effect.Effect<CoreError | null> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const topic: Topic = { topic: "admin", account: sub, list };
@@ -269,10 +295,13 @@ export class CloudSync {
       if (answer._tag === "Success") {
         this.errors.delete(topicKey(topic));
         core.data.set(topic, answer.success);
-      } else if (core.data.get(topic) === undefined) {
+        return null;
+      }
+      if (core.data.get(topic) === undefined) {
         this.errors.set(topicKey(topic), answer.failure);
         core.store.invalidate(topic);
       }
+      return answer.failure;
     });
   }
 
@@ -696,4 +725,9 @@ function readKept(v: unknown): KeptCredential | null {
 
 function strip(k: KeptCredential): Credential {
   return { credential: k.credential, issued_at: k.issued_at, expires_at: k.expires_at, relay_url: k.relay_url };
+}
+
+/// A failure that may pass if asked again: no answer, or still.fail cloud's own trouble (a 5xx, 429), not the account's.
+function passing(e: CoreError): boolean {
+  return e.code !== "signed_out" && (e.status === undefined || e.status === 429 || e.status >= 500);
 }
