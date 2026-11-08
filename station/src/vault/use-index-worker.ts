@@ -6,12 +6,11 @@ import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
 import { backfillReboxIndex } from "./rebox-index.ts";
-import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type PendingPrepare, type UseAnswer, type UseRead } from "./use-index.ts";
+import { backfillNextWorkspace, backfillUsePreparation, tryReadUses, type PendingPrepare, type UseAnswer, type UseRead } from "./use-index.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
 db.exec("PRAGMA synchronous = NORMAL");
 const waiting: (UseRead | PendingPrepare)[] = [];
-const ready = new Set<string>();
 let backgroundComplete = false;
 let reboxComplete = false;
 let reboxTurn = true;
@@ -29,12 +28,12 @@ function schedule(delay = 0) {
     if (q) {
       try {
         const pending = "kind" in q;
-        if (pending ? pendingPreparationComplete(db, q.ws, q.members, q.audit) : ready.has(q.ws) || useIndexComplete(db, q.ws)) {
+        const bodies = pending ? null : tryReadUses(db, q);
+        if (pending ? pendingPreparationComplete(db, q.ws, q.members, q.audit) : bodies !== null) {
           if (pending) {
             parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
           } else {
-            ready.add(q.ws);
-            parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+            parentPort!.postMessage({ id: q.id, bodies: bodies! } satisfies UseAnswer);
           }
           if (waiting.length || !backgroundComplete || !reboxComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
           return;
@@ -61,12 +60,13 @@ function schedule(delay = 0) {
     try {
       if (q) {
         const pending = "kind" in q;
-        if (pending ? backfillPendingPreparation(db, q.ws, q.members, q.audit) : backfillUseIndex(db, q.ws)) {
+        if (pending ? backfillPendingPreparation(db, q.ws, q.members, q.audit) : backfillUsePreparation(db, q.ws)) {
           if (pending) {
             parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
           } else {
-            ready.add(q.ws);
-            parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+            const bodies = tryReadUses(db, q);
+            if (bodies === null) waiting.push(q);
+            else parentPort!.postMessage({ id: q.id, bodies } satisfies UseAnswer);
           }
         } else waiting.push(q); // Give other workspaces a turn between this one's batches.
       } else if (!reboxComplete && (backgroundComplete || reboxTurn)) {
