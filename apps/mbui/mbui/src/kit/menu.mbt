@@ -424,14 +424,19 @@ pub fn dropdown_menu(
   let moved = @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter~, exit~)
   let shown = moved is Some(_)
   // the scrim, if any, in and out over 200 ms: the layer stays until both the panel and it have gone (Android's
-  // MenuHost), fading together
-  let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0, ease=Out)) } else { 0.0 }
+  // MenuHost), fading together (by its declared end; how far it is, as it is drawn)
+  let dim = if scrim != 0L {
+    Some(@motion.told(c, key + "/scrim", if now { 1.0 } else { 0.0 }, spec=@motion.tween(menu_scrim_ms, ease=Out)))
+  } else {
+    None
+  }
+  let dimming = dim is Some(d) && !d.over()
   let mut chosen = None
-  if shown || dim > 0.0 {
+  if shown || dimming {
     // A menu opened by touch alongside a field leaves its input method in place. When opened by the keyboard, the
     // first choice takes focus as usual; a menu without an active field focuses its panel.
     let initial = if by_key { first_item(c, key, entries) } else if @ui.pointing() is Finger && c.field_focused() { 0 } else { pid }
-    let o = c.overlay(key, modal=!submenu, anchor=trigger, return_focus=if submenu { trigger } else { 0 }, scrim=faded(scrim, dim), initial_focus=initial, inert=!now, fn() {
+    let o = c.overlay(key, modal=!submenu, anchor=trigger, return_focus=if submenu { trigger } else { 0 }, scrim~, initial_focus=initial, inert=!now, fn() {
       guard moved is Some(shows) else { return }
       let out = menu_panel(
         c,
@@ -458,12 +463,20 @@ pub fn dropdown_menu(
       chosen = out.chosen
       if out.back { now = false }
     })
+    match dim {
+      Some(d) if o.scrim >= 0 => c.bg_by(o.scrim, fn() { faded(scrim, d.get()) })
+      _ => ()
+    }
     if o.dismissed is Some(_) || chosen is Some(_) {
       now = false
     }
   }
-  { open: now, chosen, shown: shown || dim > 0.0 }
+  { open: now, chosen, shown: shown || dimming }
 }
+
+///|
+/// How long a menu's scrim takes to come and go.
+let menu_scrim_ms : Double = 200.0
 
 ///|
 /// Where a dropdown's panel `pid` hangs, by its trigger (popover.mbt anchor_of: where it was drawn last frame, else

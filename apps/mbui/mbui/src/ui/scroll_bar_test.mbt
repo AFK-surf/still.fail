@@ -264,8 +264,8 @@ fn twelve_lines() -> String {
 
 ///|
 /// How far the field's words are scrolled up in it.
-fn field_scrolled(t : @ui.Tester) -> Double {
-  let ((_, oy), (_, y, _, _)) = t.ctx().field_words("f").unwrap()
+fn field_scrolled(f : @ui.Field) -> Double {
+  let ((_, oy), (_, y, _, _)) = f.words_at().unwrap()
   y - oy
 }
 
@@ -274,10 +274,10 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
   let f = @ui.Field::new(text=twelve_lines())
   let t = @ui.Tester::new(field_rows(f), w=300.0, h=400.0)
   // its end shown, where the caret is
-  assert_eq(field_scrolled(t), 180.0)
+  assert_eq(field_scrolled(f), 180.0)
   t.move(100.0, 30.0)
   t.wheel(100.0, 30.0, -100.0)
-  assert_eq(field_scrolled(t), 80.0)
+  assert_eq(field_scrolled(f), 80.0)
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
   t.run_for(@ui.scrollbar_fade_ms)
   let shown = thumbs(t)
@@ -285,12 +285,12 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
   assert_true(shown[0].0 == 300.0 - 2.0 - 3.0 && shown[0].1 + shown[0].3 <= 60.0, msg="\{shown}")
   // past its top the wheel goes no further
   t.wheel(100.0, 30.0, -500.0)
-  assert_eq(field_scrolled(t), 0.0)
+  assert_eq(field_scrolled(f), 0.0)
   // the words changed where the caret is: in view again
   t.tap(100.0, 30.0)
   f.set(twelve_lines() + "!")
   t.draw()
-  assert_eq(field_scrolled(t), 180.0)
+  assert_eq(field_scrolled(f), 180.0)
 }
 
 ///|
@@ -325,9 +325,9 @@ test "scroll bar: a field inset in a box cut round, its corners clear of the fie
 test "scroll bar: a finger dragging a field of more lines than it shows scrolls it, the caret put nowhere" {
   let f = @ui.Field::new(text=twelve_lines())
   let t = @ui.Tester::new(field_rows(f), w=300.0, h=400.0, platform=2)
-  assert_eq(field_scrolled(t), 180.0)
+  assert_eq(field_scrolled(f), 180.0)
   t.drag(100.0, 5.0, 100.0, 55.0)
-  assert_true(field_scrolled(t) < 180.0 - 30.0, msg="\{field_scrolled(t)}")
+  assert_true(field_scrolled(f) < 180.0 - 30.0, msg="\{field_scrolled(f)}")
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
   assert_eq(t.ctx().field_focused(), false)
   t.run_for(@ui.scrollbar_fade_ms)

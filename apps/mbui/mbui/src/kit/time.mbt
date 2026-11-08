@@ -1,9 +1,9 @@
 // Time for the components (mbui's kit/styles.mbt, "Time and motion"): everything in them that waits or moves goes
-// through these three, on the Ctx's clock (a Tester moves it; screenshots and reduced motion put motion at its end at
-// once), so that nothing counts frames of its own and one scheduler can stand behind all of it later. `after` is a
-// delay (a tooltip's, a toast's time); `presence` is Motion's AnimatePresence (what is shown comes in, and once it is
-// not shown stays built, inert, until its exit has played); `animate` a value going where it is told by a transition
-// (Motion's animate, a spring or a tween: @motion.Spec).
+// through the Ctx's clock (a Tester moves it; screenshots and reduced motion put motion at its end at once), so that
+// nothing counts frames of its own and one scheduler can stand behind all of it later. `after` is a delay (a tooltip's,
+// a toast's time); `presence` is Motion's AnimatePresence (what is shown comes in, and once it is not shown stays
+// built, inert, until its exit has played). A number going where it is told is @motion's (`told`, read where it is
+// drawn: Ctx::look_by, bg_by).
 
 ///|
 /// What the components keep from frame to frame outside the Ctx, made anew when a Tester starts.
@@ -119,13 +119,14 @@ pub fn after(
 }
 
 ///|
-/// What `presence` says of something shown or not: whether to build it (shown, or still leaving), whether it is
-/// shown (not leaving: it takes input), how far in it is (0 out … 1 in; a spring may pass 1).
+/// What `presence` says of something shown or not: whether to build it (shown, or still leaving: till its exit's
+/// declared end), whether it is shown (not leaving: it takes input), how far in it is (0 out … 1 in; a spring may pass
+/// 1), read where it is drawn (Anim::get in Ctx::look_by), not as it is built.
 pub(all) struct Presence {
   built : Bool
   shown : Bool
-  t : Double
-} derive(Show)
+  t : @motion.Anim
+}
 
 ///|
 /// Whether it is leaving (built, not shown: inert, its exit drawn).
@@ -142,8 +143,9 @@ pub let presence_out_ms : Double = 100.0
 
 ///|
 /// Motion's AnimatePresence for one thing (see the file's head): `shown` comes in by `enter`, goes out by `exit`
-/// (Motion's `animate` and `exit` transitions) and is built until it is out. `initial`: shown from the start comes in
-/// too (Motion's `initial`); else it starts in.
+/// (Motion's `animate` and `exit` transitions) and is built until its exit's declared end (Anim::over), its way told
+/// as it is built and read where it is drawn. `initial`: shown from the start comes in too (Motion's `initial`); else
+/// it starts in.
 #callsite(autofill(loc))
 pub fn presence(
   c : @ui.Ctx,
@@ -155,26 +157,15 @@ pub fn presence(
   loc~ : SourceLoc,
 ) -> Presence {
   let k = "\u{2}presence/" + key
-  let a = @motion.anim(c, k, if shown && !initial { 1.0 } else { 0.0 })
-  if shown {
-    a.follow(1.0, enter, loc~)
-  } else {
-    a.follow(0.0, exit, loc~)
-  }
-  let t = a.get()
-  { built: shown || t > 0.0 || a.moving(), shown, t }
-}
-
-///|
-/// A number going to `target` by `transition` (Motion's animate; by default a spring): from where it is, as fast as
-/// it goes, when told anew. Its value this frame. `key` in the scope it is asked in.
-#callsite(autofill(loc))
-pub fn animate(
-  c : @ui.Ctx,
-  key : String,
-  target : Double,
-  transition? : @motion.Spec = @motion.spring(),
-  loc~ : SourceLoc,
-) -> Double {
-  @motion.animate(c, "\u{2}animate/" + key, target, spec=transition, loc~)
+  // (told reading no clock: where it is is read as it is drawn, @motion.told's way)
+  let a = @signals.untracked(fn() {
+    let a = @motion.anim(c, k, if shown && !initial { 1.0 } else { 0.0 })
+    if shown {
+      a.follow(1.0, enter, loc~)
+    } else {
+      a.follow(0.0, exit, loc~)
+    }
+    a
+  })
+  { built: shown || !a.over(), shown, t: a }
 }

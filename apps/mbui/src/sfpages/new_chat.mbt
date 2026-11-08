@@ -888,7 +888,7 @@ fn new_send(
     d.key,
     words,
     flying_quotes(c, src, d, station) + flying_files(c, src, d),
-    field=composer_field_key,
+    field=d.field,
     hold=fn(c, ms) { composer_hold(c, d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,

@@ -1870,7 +1870,7 @@ fn flying_quotes(c : @ui.Ctx, src : Source, w : Writing, station : String) -> Ar
         let quote_words = words_width.map(fn(width) { ("flight/quote-words/" + id, width) })
         // An empty field's hint belongs to the composer alone: carry it from where it was and let it leave with the ✕.
         let leaving = if written == "" {
-          match c.field_words("composer/quote/" + id) {
+          match composing.comments.get(id).bind(fn(f) { f.words_at() }) {
             Some((_, (lx, ly, lw, lh))) if lw > 0.0 && lh > 0.0 => {
               let hint_field = @ui.Field::new()
               Some(((lx + dx, ly + dy, lw, lh), fn(c) {
@@ -1982,7 +1982,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     words,
     room,
     flying,
-    field=composer_field_key,
+    field=w.field,
     hold=fn(c, ms) { composer_hold(c, w.key, room, box, ms) },
     desk=true,
     marks~,

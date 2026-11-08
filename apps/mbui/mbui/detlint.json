@@ -199,10 +199,7 @@
     "page-screen": {},
     "page-look": {},
     "follow-layout": {},
-    "motion-read": {
-      "src/kit/sheet.mbt": 1,
-      "src/kit/time.mbt": 1
-    },
+    "motion-read": {},
     "page-old-part": {},
     "page-old-sheet": {},
     "corners-each": {},
@@ -210,8 +207,7 @@
     "tier-outside-shell": {},
     "fixture-import": {},
     "motion-spring": {
-      "src/demo/main.mbt": 1,
-      "src/kit/time.mbt": 1
+      "src/demo/main.mbt": 1
     },
     "built-by-hand": {
       "src/kit/pick.mbt": 3
@@ -254,6 +250,17 @@
       "src/ui/move_state.mbt": 2,
       "src/ui/scroll.mbt": 3,
       "src/ui/sideways.mbt": 2
+    },
+    "build-motion": {
+      "src/kit/disclosure.mbt": 1,
+      "src/kit/loupe.mbt": 2,
+      "src/kit/media.mbt": 1,
+      "src/kit/progress.mbt": 2,
+      "src/kit/sheet.mbt": 1,
+      "src/kit/switch.mbt": 1,
+      "src/kit/toggle.mbt": 1,
+      "src/motion/fx.mbt": 9,
+      "src/motion/layer.mbt": 21
     },
     "old-list": {
       "src/demo/main.mbt": 1,
@@ -320,6 +327,7 @@
     "frame-number": {},
     "ui-current": {},
     "build-clock": {},
+    "build-motion": {},
     "old-list": {},
     "old-island": {},
     "old-panel": {},

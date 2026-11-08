@@ -1902,30 +1902,20 @@ pub fn Ctx::still(self : Ctx) -> Bool {
 }
 
 ///|
-/// Where the words of editor `key` start (their first line's top left, as last laid out, scrolled as it shows them),
-/// and the room they show in (x, y, w, h): where words sent from it take off.
-pub fn Ctx::field_words(
-  self : Ctx,
-  key : String,
-) -> ((Double, Double), (Double, Double, Double, Double))? {
-  let id = self.id(key)
-  match self.editors.get(id) {
-    Some(st) =>
-      match st.tl {
-        // its room as it showed last frame (it may not be built yet this one)
-        Some(_) =>
-          match self.rect_of(id) {
-            Some(r) => Some(((st.ox, st.oy), r))
-            None => Some(((st.ox, st.oy), (st.ox, st.oy, 0.0, 0.0)))
-          }
-        None => None
-      }
-    None => None
-  }
+/// Where its words start (their first line's top left, as last laid out, scrolled as it shows them) and the room they
+/// show in (x, y, w, h), in the window as it is drawn now: where words sent from it take off. Read on the Field
+/// itself, whichever holds it (an old view's editor or a field of the window's tree: both lay it out and place it,
+/// Ctx::lay_out_field, EditorState::placed_in); None before it has been laid out.
+pub fn Field::words_at(self : Field) -> ((Double, Double), (Double, Double, Double, Double))? {
+  let st = self.st
+  guard st.tl is Some(_) else { return None }
+  let (rx, ry, rw, rh) = st.room
+  let (x, y, _, _) = st.drawn_box(st.ox, st.oy, 0.0, 0.0)
+  Some(((x, y), st.drawn_box(rx, ry, rw, rh)))
 }
 
 ///|
-/// A field's words as it last laid them out, scrolled as it showed them (Ctx::field_lines): what words taken from it
+/// A field's words as it last laid them out, scrolled as it showed them (Field::lines): what words taken from it
 /// go from, line by line.
 pub struct FieldLines {
   /// its words, where each of its lines starts and ends in them (UTF-16), and the room it showed them in (x, y, w, h,
@@ -1935,52 +1925,49 @@ pub struct FieldLines {
   ends : Array[Int]
   room : (Double, Double, Double, Double)
   layout : TextLayout
-  /// its words' top left in the window
+  /// its words' top left in the window, and how big they are drawn there against how they were laid out
   x : Double
   y : Double
+  scale : Double
 }
 
 ///|
 /// Where offset `off` of the words stands in the window: its x, and the top of the line it starts.
 pub fn FieldLines::place(self : FieldLines, off : Int) -> (Double, Double) {
   let (cx, l) = self.layout.caret(off)
-  (self.x + cx, self.y + l.to_double() * self.layout.line_h)
+  (self.x + cx * self.scale, self.y + l.to_double() * self.layout.line_h * self.scale)
 }
 
 ///|
-/// How high each of its lines is.
+/// How high each of its lines is, as drawn.
 pub fn FieldLines::line_h(self : FieldLines) -> Double {
-  self.layout.line_h
+  self.layout.line_h * self.scale
 }
 
 ///|
-/// The words of editor `key` as it last laid them out (FieldLines), None before it has.
-pub fn Ctx::field_lines(self : Ctx, key : String) -> FieldLines? {
-  let id = self.id(key)
-  match self.editors.get(id) {
-    Some(st) =>
-      match st.tl {
-        Some(tl) => {
-          let n = tl.shaped.starts.length()
-          let at = fn(c : Int) { if c < n { tl.shaped.starts[c] } else { tl.text.length() } }
-          Some({
-            text: tl.text,
-            starts: tl.line_start.map(at),
-            ends: tl.line_end.map(at),
-            // its room as it showed last frame (it may not be built yet this one)
-            room: match self.rect_of(id) {
-              Some(r) => r
-              None => (st.ox, st.oy, 0.0, 0.0)
-            },
-            layout: tl,
-            x: st.ox,
-            y: st.oy,
-          })
-        }
-        None => None
-      }
-    None => None
+/// Its words as it last laid them out (FieldLines), where it is drawn now, whichever holds it (Field::words_at); None
+/// before it has been laid out.
+pub fn Field::lines(self : Field) -> FieldLines? {
+  let st = self.st
+  guard st.tl is Some(tl) else { return None }
+  let n = tl.shaped.starts.length()
+  let at = fn(c : Int) { if c < n { tl.shaped.starts[c] } else { tl.text.length() } }
+  let (rx, ry, rw, rh) = st.room
+  let (x, y, _, _) = st.drawn_box(st.ox, st.oy, 0.0, 0.0)
+  let scale = match st.drawn_now() {
+    Some((_, _, _, _, s)) => s
+    None => 1.0
   }
+  Some({
+    text: tl.text,
+    starts: tl.line_start.map(at),
+    ends: tl.line_end.map(at),
+    room: st.drawn_box(rx, ry, rw, rh),
+    layout: tl,
+    x,
+    y,
+    scale,
+  })
 }
 
 ///|

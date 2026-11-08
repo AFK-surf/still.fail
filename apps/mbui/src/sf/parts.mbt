@@ -4515,23 +4515,24 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
     return
   }
   let words = sync_said.get(key).unwrap_or(text)
-  // how far on to rest it has gone (0 to 1, as SyncRest::ease)
-  let resting = @kit.animate(c, key + "/rest", if ticked { 1.0 } else { 0.0 }, transition=match rest {
+  // how far on to rest it has gone (0 to 1, as SyncRest::ease): turned as it is drawn
+  let resting = @motion.told(c, key + "/rest", if ticked { 1.0 } else { 0.0 }, spec=match rest {
     Some(r) => @motion.tween_to(duration=r.ms, ease=fn(s) { r.ease(s) })
     None => @motion.tween(0.0, ease=Out)
   })
-  // how far the arrows are drawn back, then the tick drawn (0 to 1 each), once it is at rest
-  let back = @kit.animate(
+  // how far the arrows are drawn back, then the tick drawn (0 to 1 each), once it is at rest: read as it is built, each
+  // a shape traced so far (icon_traced: its points worked out as it is built), which no paint taker draws
+  let back = @motion.animate(
     c,
     key + "/back",
     if ticked { 1.0 } else { 0.0 },
-    transition=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=InOut, delay=settle),
+    spec=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=InOut, delay=settle),
   )
-  let drawn = @kit.animate(
+  let drawn = @motion.animate(
     c,
     key + "/tick",
     if ticked { 1.0 } else { 0.0 },
-    transition=@motion.tween(if ticked { sync_tick_ms } else { 0.0 }, ease=Out, delay=settle + sync_back_ms * 0.6),
+    spec=@motion.tween(if ticked { sync_tick_ms } else { 0.0 }, ease=Out, delay=settle + sync_back_ms * 0.6),
   )
   let id = c.id(key)
   let b = c.box(style=update_key_box.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
@@ -4554,8 +4555,15 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
         None => c.cycle_look(a, sync_turn_ms, fn(k) { @ui.look(rot=sync_turned(k)) })
         // going on to rest (upright again once there: it looks the same each half turn)
         Some(r) =>
-          if back == 0.0 && resting < 1.0 {
-            c.look(a, @ui.look(rot=r.from + (r.to - r.from) * resting))
+          if back == 0.0 {
+            c.look_by(a, fn() {
+              let k = resting.get()
+              if k < 1.0 {
+                @ui.look(rot=r.from + (r.to - r.from) * k)
+              } else {
+                @ui.still_look
+              }
+            })
           }
       }
     }
@@ -4575,7 +4583,9 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
       |> ignore
     }
   })
-  c.look(b, { ..@ui.still_look, alpha: dmin(1.0, p.t) })
+  // (coming and going, faded as it is drawn)
+  let fade = p.t
+  c.look_by(b, fn() { { ..@ui.still_look, alpha: dmin(1.0, fade.get()) } })
   c.semantics(b, Status, id~, label=words)
   tip(c, key + "/tip", id, words, side=Bottom)
 }

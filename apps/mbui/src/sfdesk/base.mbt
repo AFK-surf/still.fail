@@ -268,7 +268,8 @@ using @sfbase {
 /// A sidebar's rows, the library's (src/sf side_rows.mbt).
 using @sf {
   nav_fade,
-  nav_ground,
+  nav_ground_by,
+  nav_ground_on,
   nav_row,
   nav_apart,
   nav_item,

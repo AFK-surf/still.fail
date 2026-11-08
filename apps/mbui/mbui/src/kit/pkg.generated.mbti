@@ -20,9 +20,6 @@ pub fn after(@ui.Ctx, String, Bool, Double, keep? : Bool, later? : Bool, since? 
 
 pub fn alert_dialog(@ui.Ctx, String, Bool, String, String, description? : String, cancel? : String, danger? : Bool, w? : Double, look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit, body? : () -> Unit) -> Alert
 
-#callsite(autofill(loc))
-pub fn animate(@ui.Ctx, String, Double, transition? : @motion.Spec, loc~ : SourceLoc) -> Double
-
 pub fn aspect_ratio(@ui.Ctx, Double, () -> Unit) -> Int32
 
 pub fn avatar(@ui.Ctx, String, String, size? : Double, radius? : Double, bg? : Int64) -> Unit
@@ -142,9 +139,9 @@ pub let loupe_zoom : Double
 
 pub fn media_decode_stalled(@ui.Ctx, @ui.NativeView?) -> Bool
 
-pub fn media_grab_stalled(@ui.Ctx, @ui.NativeView) -> Bool
-
 pub let media_decode_wait_ms : Double
+
+pub fn media_grab_stalled(@ui.Ctx, @ui.NativeView) -> Bool
 
 pub let media_grab_wait_ms : Double
 
@@ -283,7 +280,8 @@ pub fn switch(@ui.Ctx, String, Bool, label? : String, disabled? : Bool, look? : 
 
 pub fn switch_held(@ui.Ctx, String, Bool) -> Double
 
-pub fn switch_knob(@ui.Ctx, String, Bool) -> Double
+#callsite(autofill(loc))
+pub fn switch_knob(@ui.Ctx, String, Bool, loc~ : SourceLoc) -> @motion.Anim
 
 pub fn switch_look(@ui.Ctx, SwitchState) -> Unit
 
@@ -643,8 +641,8 @@ pub(all) struct PopState {
 pub(all) struct Presence {
   built : Bool
   shown : Bool
-  t : Double
-} derive(Show)
+  t : @motion.Anim
+}
 pub fn Presence::leaving(Self) -> Bool
 
 pub(all) struct ProgressState {
@@ -703,7 +701,7 @@ pub(all) struct SliderState {
 
 pub(all) struct SwitchState {
   on : Bool
-  t : Double
+  t : @motion.Anim
   hovered : Bool
   pressed : Bool
   held : Double
@@ -734,8 +732,9 @@ pub fn ToastNode::toast(Self) -> Toast
 
 pub(all) struct ToastState {
   toast : Toast
-  t : Double
+  t : @motion.Anim
   dx : Double
+  away : Double
   hovered : Bool
 }
 

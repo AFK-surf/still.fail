@@ -168,7 +168,7 @@ pub fn flight_start(
   words : String,
   room : Double,
   files : Array[FlyingFile],
-  field~ : String,
+  field~ : @ui.Field,
   hold~ : (@ui.Ctx, Double) -> Unit,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
@@ -178,10 +178,10 @@ pub fn flight_start(
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
-  match c.field_words(field) {
+  match field.words_at() {
     Some(((x, y), (rx, ry, w, h))) => {
       // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
-      let (lines, lead) = field_lines_of(c, field, words)
+      let (lines, lead) = field_lines_of(field, words)
       send_flight.set(Some({
         chat,
         turns,
@@ -239,7 +239,7 @@ pub fn flight_carry_start(
   chat : String,
   words : String,
   files : Array[FlyingFile],
-  field~ : String,
+  field~ : @ui.Field,
   hold~ : (@ui.Ctx, Double) -> Unit,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
@@ -249,7 +249,7 @@ pub fn flight_carry_start(
   if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
-  match c.field_words(field) {
+  match field.words_at() {
     Some(((x, y), (rx, ry, w, h))) => {
       // without words, the list comes up from where the first file was
       let from_top = if words != "" {
@@ -936,8 +936,8 @@ fn flight_pieces_drawn(
 ///|
 /// The field's lines (`field`'s, as it laid them out) and where `words` start in them, after what came before them
 /// that was trimmed off; none when they are not there as they are.
-fn field_lines_of(c : @ui.Ctx, field : String, words : String) -> (@ui.FieldLines?, Int) {
-  match c.field_lines(field) {
+fn field_lines_of(field : @ui.Field, words : String) -> (@ui.FieldLines?, Int) {
+  match field.lines() {
     Some(l) => {
       let mut lead = 0
       while lead < l.text.length() &&
