@@ -977,7 +977,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (the nodes whose edge is drawn after what they hold, still open, the innermost last: each edged as what is drawn
   // next is no longer in it, as an old view's box's border over what it holds (scene.mbt's border_over); where it is
   // drawn, how big, how opaque)
-  let rings : Array[(@view.NodeId, FixedArray[Double], (Int, (Double, Double), @view.NodeId?, Int))] = []
+  let rings : Array[
+    (@view.NodeId, FixedArray[Double], (Int, (Double, Double), @view.NodeId?, Int), (Double, Double, Double, Double)),
+  ] = []
   // (what was open and holds not `next` (none: the end) closed, the innermost first: a clip popped, an edge drawn)
   let open = fn(id : @view.NodeId, next : @view.NodeId?) {
     match next {
@@ -999,8 +1001,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         clipping.pop() |> ignore
         pop_clip()
       } else {
-        let (_, held, by) = rings.pop().unwrap()
+        let (_, held, by, (x0, y0, x1, y1)) = rings.pop().unwrap()
         self.view_ring_put(held, by)
+        self.ride_ring_put(x0, y0, x1, y1)
       }
     }
   }
@@ -1019,8 +1022,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         clipping.pop() |> ignore
         pop_clip()
       } else {
-        let (_, held, by) = rings.pop().unwrap()
+        let (_, held, by, (x0, y0, x1, y1)) = rings.pop().unwrap()
         self.view_ring_put(held, by)
+        self.ride_ring_put(x0, y0, x1, y1)
       }
     }
   }
@@ -1184,14 +1188,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         }
       }
       -1
-    } else if (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) &&
-      stretching.length() == 0 &&
-      turn == 0.0 &&
-      ground_drawn.0 == 0.0 &&
-      ground_drawn.1 == 0.0 &&
-      ground_drawn.2 == 0.0 &&
-      ground_drawn.3 == 0.0 &&
-      (c.shadow.2 & 0xFFL) == 0L {
+    } else if in_box(c, stretching.length(), turn, ground_drawn) &&
+      (
+        (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) ||
+        ride_outside_cut(x, y, x + c.w * s, y + c.h * s)
+      ) {
       // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own
       // drawn or made, no glyph of its words asked of the host, as the old frame paints nothing of what lies outside its
       // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries); not where what it draws may lie
@@ -1199,6 +1200,14 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
       self.ride_spot(c, x, y, s, a, false)
       -1
+    } else if ride_cutting() && in_box(c, stretching.length(), turn, ground_drawn) {
+      // (in a row drawn all of it: where it lies, what it drew, told of the row, left out where
+      // it is drawn again wholly outside that clip, as here: Ctx::ride_emit)
+      let seg0 = self.segs.length() / 4
+      let spot0 = ride_spots_n()
+      let ring = self.view_drawn(tree, c, x, y, a, s, ux, uy, turn, ground_drawn)
+      self.ride_cut_node(x, y, x + c.w * s, y + c.h * s, k0, seg0, spot0, ring)
+      ring
     } else {
       self.view_drawn(tree, c, x, y, a, s, ux, uy, turn, ground_drawn)
     }
@@ -1257,7 +1266,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     if ring_at >= 0 && ring_at < self.ninst {
       let (held, by) = self.view_ring_take(ring_at)
-      rings.push((c.id, held, by))
+      rings.push((c.id, held, by, (x, y, x + c.w * s, y + c.h * s)))
     }
     false
   }, draws=view_draws)

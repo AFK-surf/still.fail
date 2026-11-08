@@ -6,8 +6,10 @@
 //
 // A header's numbers: 0, 1 how far its group's instances are moved; 5 13; 12 the group; 13 the first of its instances,
 // 14 how many (the header and the room after it the frame gives them, unwritten), 15 how far on its shapes' pieces
-// (a band's 12, kind 11) are among the frame's. Each of the group's instances moved: its rect (0, 1) always; its clip
-// (16-19), its outer (40-43) and its turn's point (33, 34) as its `moves` bits say.
+// (a band's 12, kind 11) are among the frame's; 21 one where they are cut by the clip 16-19. Each of the group's
+// instances moved: its rect (0, 1) always; its clip (16-19), its outer (40-43) and its turn's point (33, 34) as its
+// `moves` bits say; then, where the header says, cut as view_ride.mbt's inst_cut cuts it: its clip within the header's,
+// its corners square where cut.
 //
 // Included once, by the file that defines mb_host_present.
 #ifndef MB_GROUPS_H
@@ -115,6 +117,8 @@ static const double *mb_groups_draw_out(const double *buf, int32_t count) {
     }
     int32_t first = (int32_t)h[13], n = (int32_t)h[14];
     double dx = h[0], dy = h[1], seg_by = h[15];
+    int cut = h[21] == 1.0;
+    double e0 = h[16], e1 = h[17], e2 = h[18], e3 = h[19];
     if (n < 1) n = 1;
     if (k + n > count) n = count - k;
     mb_group *g = mb_group_find((int32_t)h[12]);
@@ -131,15 +135,30 @@ static const double *mb_groups_draw_out(const double *buf, int32_t count) {
       d[1] += dy;
       if (d[5] == 11.0) d[12] += seg_by;
       int32_t m = g->moves[first + i];
-      if (!m) continue;
-      for (int j = 0; j < 4; j++) {
-        double by = j % 2 == 0 ? dx : dy;
-        if (m & (1 << j)) d[16 + j] += by;
-        if (m & (1 << (4 + j))) d[40 + j] += by;
+      if (m) {
+        for (int j = 0; j < 4; j++) {
+          double by = j % 2 == 0 ? dx : dy;
+          if (m & (1 << j)) d[16 + j] += by;
+          if (m & (1 << (4 + j))) d[40 + j] += by;
+        }
+        if (m & 256) {
+          d[33] += dx;
+          d[34] += dy;
+        }
       }
-      if (m & 256) {
-        d[33] += dx;
-        d[34] += dy;
+      if (cut) {
+        double c0 = d[16] > e0 ? d[16] : e0, c1 = d[17] > e1 ? d[17] : e1;
+        double c2 = d[18] < e2 ? d[18] : e2, c3 = d[19] < e3 ? d[19] : e3;
+        int l = c0 != d[16], t = c1 != d[17], r = c2 != d[18], b = c3 != d[19];
+        if (l || t || r || b) {
+          int corner[4] = {l || t, r || t, r || b, l || b};
+          for (int c = 0; c < 4; c++)
+            if (corner[c]) d[24 + c] = d[28 + c] = 0.0;
+          d[16] = c0;
+          d[17] = c1;
+          d[18] = c2;
+          d[19] = c3;
+        }
       }
     }
     k += n;

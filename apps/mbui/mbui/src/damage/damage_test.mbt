@@ -302,6 +302,28 @@ test "a header compared as itself, its room passed over; moved, where its group 
 }
 
 ///|
+test "a header cut by a clip: its group's reach within it" {
+  let d = @damage.Damage::new()
+  d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  let next_h = fn(a : FixedArray[Double]) {
+    d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+  }
+  let cut = fn(a : FixedArray[Double]) {
+    a[60 + 16] = 0.0
+    a[60 + 17] = 0.0
+    a[60 + 18] = 400.0
+    a[60 + 19] = 100.0
+    a[60 + 21] = 1.0
+    a
+  }
+  inspect(next_h(headed(7, 2, 40.0, 3.0)), content="[(0, 0, -1, -1)]")
+  // (cut where it was: where it was and the part of it left)
+  inspect(next_h(cut(headed(7, 2, 40.0, 3.0))), content="[(98, 88, 24, 34)]")
+  // (moved wholly past the clip: only where it was)
+  inspect(next_h(cut(headed(7, 2, 80.0, 3.0))), content="[(98, 88, 24, 12)]")
+}
+
+///|
 test "known drawn anew: a part from the start, past half the window whole with nothing compared" {
   let a = frame([(10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
   let d = seen(a)

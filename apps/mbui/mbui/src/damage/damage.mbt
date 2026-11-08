@@ -281,7 +281,18 @@ fn Damage::reach_of(self : Damage, a : FixedArray[Double], k : Int, into : Rect)
     reach(a, k, into)
     return
   }
+  // (one cut by a clip, 21 one: within it)
+  let cut = a[o + 21] == 1.0
   match self.groups.get(a[o + 12].to_int()) {
+    Some(g) if !g.empty() && cut => {
+      let x0 = dmax(g.x0 + a[o], a[o + 16])
+      let y0 = dmax(g.y0 + a[o + 1], a[o + 17])
+      let x1 = dmin(g.x1 + a[o], a[o + 18])
+      let y1 = dmin(g.y1 + a[o + 1], a[o + 19])
+      if x0 < x1 && y0 < y1 {
+        into.add(x0, y0, x1, y1)
+      }
+    }
     Some(g) if !g.empty() => into.add(g.x0 + a[o], g.y0 + a[o + 1], g.x1 + a[o], g.y1 + a[o + 1])
     Some(_) => ()
     // (one not known: all of it)
