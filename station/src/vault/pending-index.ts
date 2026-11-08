@@ -27,6 +27,10 @@ const changed = `OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id OR OLD.status IS N
 const duplicateDecisionFields = (body: string) => `CASE WHEN json_valid(${body}) THEN EXISTS
   (SELECT 1 FROM json_each(${body}) WHERE key IN ('vault', 'owner', 'save', 'at') GROUP BY key HAVING count(*) > 1)
   ELSE 0 END`;
+// SQLite's JSON path matching stops at a NUL in a property name. A JSON string can contain one only as an escape;
+// the cheap text check avoids walking ordinary request bodies a second time.
+const nulFields = (body: string) => `CASE WHEN instr(${body}, '\\u0000') > 0 AND json_valid(${body}) THEN EXISTS
+  (SELECT 1 FROM json_each(${body}) WHERE instr(key, char(0)) > 0) ELSE 0 END`;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS vault_pending_lookup (
@@ -42,6 +46,12 @@ CREATE TABLE IF NOT EXISTS vault_pending_duplicates_v2 (
   ws TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (ws, id)
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS vault_pending_audit_v2 (
+  ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_pending_nul_v3 (
+  ws TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (ws, id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS vault_pending_nul_audit_v3 (
   ws TEXT PRIMARY KEY, after_id TEXT, done INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE TRIGGER IF NOT EXISTS vault_pending_add AFTER INSERT ON vault_requests
@@ -79,6 +89,25 @@ END;
 CREATE TRIGGER IF NOT EXISTS vault_pending_duplicate_drop_v2 AFTER DELETE ON vault_requests BEGIN
   DELETE FROM vault_pending_duplicates_v2 WHERE ws = OLD.ws AND id = OLD.id;
 END;
+CREATE TRIGGER IF NOT EXISTS vault_pending_nul_add_v3 AFTER INSERT ON vault_requests
+  WHEN EXISTS (SELECT 1 FROM vault_pending_nul_audit_v3 WHERE ws = NEW.ws) BEGIN
+  DELETE FROM vault_pending_nul_v3 WHERE ws = NEW.ws AND id = NEW.id;
+  INSERT OR IGNORE INTO vault_pending_nul_v3 SELECT NEW.ws, NEW.id
+    WHERE NEW.status = 'pending' AND (${nulFields("NEW.body")}) = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_pending_nul_change_v3 AFTER UPDATE ON vault_requests
+  WHEN (OLD.ws IS NOT NEW.ws OR OLD.id IS NOT NEW.id OR OLD.status IS NOT NEW.status OR OLD.body IS NOT NEW.body)
+    AND (EXISTS (SELECT 1 FROM vault_pending_nul_audit_v3 WHERE ws = OLD.ws)
+      OR EXISTS (SELECT 1 FROM vault_pending_nul_audit_v3 WHERE ws = NEW.ws)) BEGIN
+  DELETE FROM vault_pending_nul_v3 WHERE ws = OLD.ws AND id = OLD.id;
+  DELETE FROM vault_pending_nul_v3 WHERE ws = NEW.ws AND id = NEW.id;
+  INSERT OR IGNORE INTO vault_pending_nul_v3 SELECT NEW.ws, NEW.id
+    WHERE NEW.status = 'pending' AND EXISTS (SELECT 1 FROM vault_pending_nul_audit_v3 WHERE ws = NEW.ws)
+      AND (${nulFields("NEW.body")}) = 1;
+END;
+CREATE TRIGGER IF NOT EXISTS vault_pending_nul_drop_v3 AFTER DELETE ON vault_requests BEGIN
+  DELETE FROM vault_pending_nul_v3 WHERE ws = OLD.ws AND id = OLD.id;
+END;
 `;
 
 export const PENDING_BODIES = `SELECT r.body FROM vault_pending_lookup p
@@ -102,6 +131,8 @@ export const PENDING_OTHER_TIME = `SELECT r.id, r.body FROM vault_pending_lookup
 // recursive triggers are off, so only include a request that still exists and is pending.
 export const PENDING_DUPLICATES = `SELECT r.id, r.body FROM vault_pending_duplicates_v2 d
   CROSS JOIN vault_requests r ON r.ws = d.ws AND r.id = d.id WHERE d.ws = ? AND r.status = 'pending'`;
+export const PENDING_NUL_FIELDS = `SELECT r.id, r.body FROM vault_pending_nul_v3 n
+  CROSS JOIN vault_requests r ON r.ws = n.ws AND r.id = n.id WHERE n.ws = ? AND r.status = 'pending'`;
 export const PENDING_SEED_FIRST = `SELECT r.id, r.body FROM vault_pending_lookup p
   JOIN vault_requests r ON r.ws = p.ws AND r.id = p.id WHERE p.ws = ? ORDER BY p.id LIMIT ?`;
 export const PENDING_SEED = `SELECT r.id, r.body FROM vault_pending_lookup p
@@ -128,7 +159,15 @@ export function pendingIndexStarted(db: DatabaseSync, ws: string): boolean {
 }
 
 export function pendingAuditComplete(db: DatabaseSync, ws: string): boolean {
+  return duplicateAuditComplete(db, ws) && nulAuditComplete(db, ws);
+}
+
+function duplicateAuditComplete(db: DatabaseSync, ws: string): boolean {
   return (db.prepare("SELECT done FROM vault_pending_audit_v2 WHERE ws = ?").get(ws) as { done: number } | undefined)?.done === 1;
+}
+
+function nulAuditComplete(db: DatabaseSync, ws: string): boolean {
+  return (db.prepare("SELECT done FROM vault_pending_nul_audit_v3 WHERE ws = ?").get(ws) as { done: number } | undefined)?.done === 1;
 }
 
 // Test and embedded stores can use Secrets without a VaultStore. A real VaultStore creates this lookup with vaults.
@@ -147,8 +186,31 @@ export function backfillPendingPreparation(db: DatabaseSync, ws: string, members
     if (!backfillPendingIndex(db, ws)) return false;
     return pendingPreparationComplete(db, ws, members, audit);
   }
-  if (audit && !pendingAuditComplete(db, ws)) return backfillPendingAudit(db, ws) && pendingPreparationComplete(db, ws, members, audit);
+  if (audit && !duplicateAuditComplete(db, ws)) return backfillPendingAudit(db, ws) && pendingPreparationComplete(db, ws, members, audit);
+  if (audit && !nulAuditComplete(db, ws)) return backfillPendingNulAudit(db, ws) && pendingPreparationComplete(db, ws, members, audit);
   return !members || !hasVaultMembers(db) || vaultMembersComplete(db, ws) || backfillVaultMembers(db, ws);
+}
+
+/// Audit the old pending lookup for property names whose NUL suffix is hidden from SQLite JSON paths.
+export function backfillPendingNulAudit(db: DatabaseSync, ws: string, limit = 32): boolean {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("INSERT OR IGNORE INTO vault_pending_nul_audit_v3 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    const audit = db.prepare("SELECT after_id, done FROM vault_pending_nul_audit_v3 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
+    if (audit.done) { db.exec("COMMIT"); return true; }
+    const rows = (audit.after_id === null
+      ? db.prepare("SELECT id FROM vault_pending_lookup WHERE ws = ? ORDER BY id LIMIT ?").all(ws, limit)
+      : db.prepare("SELECT id FROM vault_pending_lookup WHERE ws = ? AND id > ? ORDER BY id LIMIT ?").all(ws, audit.after_id, limit)) as { id: string }[];
+    auditPendingNulRows(db, ws, rows);
+    const done = rows.length < limit;
+    db.prepare("UPDATE vault_pending_nul_audit_v3 SET after_id = ?, done = ? WHERE ws = ?")
+      .run(rows.at(-1)?.id ?? audit.after_id, done ? 1 : 0, ws);
+    db.exec("COMMIT");
+    return done;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 /// Recheck an old pending index in bounded transactions, while triggers cover concurrent inserts and updates.
@@ -180,14 +242,23 @@ function auditPendingRows(db: DatabaseSync, ws: string, rows: { id: string }[]):
   for (const row of rows) { clear.run(ws, row.id); add.run(ws, row.id); }
 }
 
+function auditPendingNulRows(db: DatabaseSync, ws: string, rows: { id: string }[]): void {
+  const clear = db.prepare("DELETE FROM vault_pending_nul_v3 WHERE ws = ? AND id = ?");
+  const add = db.prepare(`INSERT OR IGNORE INTO vault_pending_nul_v3 SELECT r.ws, r.id FROM vault_requests r
+    WHERE r.ws = ? AND r.id = ? AND r.status = 'pending' AND (${nulFields("r.body")}) = 1`);
+  for (const row of rows) { clear.run(ws, row.id); add.run(ws, row.id); }
+}
+
 /// One transaction reads at most `limit` old request ids. The triggers keep writes ahead of and behind its cursor.
 export function backfillPendingIndex(db: DatabaseSync, ws: string, limit = 32): boolean {
   db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare("INSERT OR IGNORE INTO vault_pending_backfill (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     db.prepare("INSERT OR IGNORE INTO vault_pending_audit_v2 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
+    db.prepare("INSERT OR IGNORE INTO vault_pending_nul_audit_v3 (ws, after_id, done) VALUES (?, NULL, 0)").run(ws);
     const state = db.prepare("SELECT after_id, done FROM vault_pending_backfill WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     const audit = db.prepare("SELECT after_id, done FROM vault_pending_audit_v2 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
+    const nul = db.prepare("SELECT after_id, done FROM vault_pending_nul_audit_v3 WHERE ws = ?").get(ws) as { after_id: string | null; done: number };
     if (state.done) {
       db.exec("COMMIT");
       return true;
@@ -205,6 +276,11 @@ export function backfillPendingIndex(db: DatabaseSync, ws: string, limit = 32): 
       auditPendingRows(db, ws, rows);
       db.prepare("UPDATE vault_pending_audit_v2 SET after_id = ?, done = ? WHERE ws = ?")
         .run(rows.at(-1)?.id ?? audit.after_id, done ? 1 : 0, ws);
+    }
+    if (!nul.done && nul.after_id === state.after_id) {
+      auditPendingNulRows(db, ws, rows);
+      db.prepare("UPDATE vault_pending_nul_audit_v3 SET after_id = ?, done = ? WHERE ws = ?")
+        .run(rows.at(-1)?.id ?? nul.after_id, done ? 1 : 0, ws);
     }
     db.prepare("UPDATE vault_pending_backfill SET after_id = ?, done = ? WHERE ws = ?")
       .run(rows.at(-1)?.id ?? state.after_id, done ? 1 : 0, ws);
