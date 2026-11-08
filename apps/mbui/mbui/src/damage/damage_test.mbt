@@ -268,3 +268,35 @@ test "a list scrolled, a row more: each row where it was and where it is, one pa
   let d = seen(frame(rows))
   inspect(next(d, frame(moved)), content="[(18, 25, 104, 212)]")
 }
+
+///|
+/// A frame of a ground and a header (kind 13) of group `id` moved by `dy`, standing for `n` instances, the room after it
+/// left as `junk` (what a host's frame holds there unwritten).
+fn headed(id : Int, n : Int, dy : Double, junk : Double) -> FixedArray[Double] {
+  let a = frame([(0.0, 0.0, 400.0, 300.0, 0)])
+  let b = FixedArray::make((1 + n) * 60, junk)
+  a.blit_to(b, len=60)
+  for j in 60..<120 {
+    b[j] = 0.0
+  }
+  b[60 + 1] = dy
+  b[60 + 5] = 13.0
+  b[60 + 12] = id.to_double()
+  b[60 + 13] = 0.0
+  b[60 + 14] = n.to_double()
+  b
+}
+
+///|
+test "a header compared as itself, its room passed over; moved, where its group was and is" {
+  let d = @damage.Damage::new()
+  d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  let next_h = fn(a : FixedArray[Double]) {
+    d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+  }
+  inspect(next_h(headed(7, 2, 0.0, 3.0)), content="[(0, 0, -1, -1)]")
+  // (the same header, whatever its room holds: nothing)
+  inspect(next_h(headed(7, 2, 0.0, 5.0)), content="[]")
+  // (moved 40 down: the group's reach where it was and where it is)
+  inspect(next_h(headed(7, 2, 40.0, 5.0)), content="[(98, 48, 24, 74)]")
+}

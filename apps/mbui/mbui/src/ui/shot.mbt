@@ -172,6 +172,9 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
   }
   let inst = self.inst
   let ninst = self.ninst
+  // (the frame's headers where they are in its instances, none in a shot's: Ctx::ride_copy)
+  let spans = ride_spans.copy()
+  ride_spans.clear()
   let segs = self.segs.copy()
   let tops = dr.tops.copy()
   let window_scale = self.scale
@@ -206,6 +209,8 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
   }
   self.inst = inst
   self.ninst = ninst
+  ride_spans.clear()
+  ride_spans.append(spans)
   self.segs.clear()
   self.segs.append(segs)
   dr.tops.clear()

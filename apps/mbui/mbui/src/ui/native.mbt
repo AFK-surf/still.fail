@@ -1113,11 +1113,13 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
 fn Ctx::follow_holes(self : Ctx) -> Unit {
   let at : Map[Int, Int] = {}
   let a = self.inst
-  for k in 0..<self.ninst {
+  let mut k = 0
+  while k < self.ninst {
     let b = k * inst_size
     if a[b + 5] == 9.0 {
       at[a[b + 20].to_int() - @hostapi.view_tex_base] = b
     }
+    k = inst_after(a, k)
   }
   if at.is_empty() {
     return

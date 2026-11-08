@@ -60,6 +60,9 @@ pub(open) trait Host {
   local_font_families(Self) -> String = _
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
+  groups_here(Self) -> Bool = _
+  group_set(Self, Int, FixedArray[Double], FixedArray[Double], Int) -> Unit = _
+  group_drop(Self, Int) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   edit_can(Self, Int) -> Unit = _
@@ -481,6 +484,21 @@ impl Host with atlas_generation(_) {
 
 ///|
 impl Host with present(_, _, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with groups_here(_) {
+  false
+}
+
+///|
+impl Host with group_set(_, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with group_drop(_, _) {
   ()
 }
 
@@ -1745,6 +1763,28 @@ pub fn present(
   b : Double,
 ) -> Unit {
   current.val.present(buf, count, r, g, b)
+}
+
+///|
+/// Whether the host keeps groups of instances (group_set) and draws a header of one among a frame's in its place
+/// (kind 13, mbui/src/ui/scene.mbt): a row of a list kept, moved, drawn by its header alone.
+pub fn groups_here() -> Bool {
+  current.val.groups_here()
+}
+
+///|
+/// Group `id` kept by the host: `n` instances (`inst`, as `present` takes them), and which of each one's numbers a
+/// header moves with it (`moves`, one each: bits 0-3 its clip's 16-19, 4-7 its outer's 40-43, 8 its turn's point
+/// 33-34; its rect's 0-1 always, a shape's band's first piece 12 by the header's 15). A number is never another
+/// group's.
+pub fn group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  current.val.group_set(id, inst, moves, n)
+}
+
+///|
+/// Group `id` let go: no frame presented from here on has a header of it.
+pub fn group_drop(id : Int) -> Unit {
+  current.val.group_drop(id)
 }
 
 ///|

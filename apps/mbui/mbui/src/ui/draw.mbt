@@ -942,6 +942,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
         dr.bypass = -1
       }
       dr.cycling = was
+      self.flat_from(i0)
       cycle_tag(self.inst, i0, self.ninst, cy)
       return true
     }
@@ -994,6 +995,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       dr.bypass = -1
       dr.mode = 0
       self.ninst = i0
+      self.spans_cut()
       glass_paint.run = run
       glass_paint.frost_run = frost_run
       glass_paint.run_start = run_start
@@ -1122,6 +1124,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   // (only cut, or faded: where it is drawn is where it was painted, its clips as pushed)
   if dx != 0.0 || dy != 0.0 || look.sx != 1.0 || look.sy != 1.0 || look.rot != 0.0 {
+    self.flat_from(i0)
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
     if look.rot != 0.0 {
       turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)
@@ -1131,6 +1134,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   // that a line of words half out shows its half, fading to the cut, not the whole line fainter (2026-10-30: 「带渐隐，
   // 但不是整行渐隐」)
   if cutting && e.cut_soft > 0.0 {
+    self.flat_from(i0)
     let a = self.inst
     let top = e.bottom >= 0.0 && e.bottom < n.fh
     let foot = e.top >= 0.0 && e.top < n.fh
@@ -1162,6 +1166,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   // fading towards the edges of what cuts it, where they are (laid out: what moves them moves it after)
   if e.fade_of >= 0 && e.fade_of < self.count {
+    self.flat_from(i0)
     let a = self.inst
     let o = self.nodes[e.fade_of]
     let (start, top, end, foot) = e.fades
@@ -1173,6 +1178,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   match e.keep {
     Some(d) if e.keep_rel >= 0 => {
+      self.flat_from(i0)
       let l = self.nodes[e.keep_rel]
       d.segs.clear()
       // (copied whole, not a number at a time: every row of a list that may leave is kept so on every frame)
@@ -1482,6 +1488,7 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
     for k = moves.length() - 1; k >= base; k = k - 1 {
       let m = moves[k]
       if m.dx != 0.0 || m.dy != 0.0 || m.sx != 1.0 || m.sy != 1.0 || m.rot != 0.0 {
+        self.flat_from(i0)
         self.transform_insts(i0, self.ninst, m.ox, m.oy, m.sx, m.sy, m.dx, m.dy, outer, outer_r, outer_s)
       }
       if m.rot != 0.0 {
@@ -1536,6 +1543,7 @@ fn Ctx::raise_tops(self : Ctx) -> Unit {
 ///|
 /// Instances in `ranges` (in order, apart) moved after all the rest painted so far, the rest closed up in its order.
 fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
+  self.flat_from(ranges[0].0)
   let a = self.inst
   let raised : Array[Double] = []
   for r in ranges {

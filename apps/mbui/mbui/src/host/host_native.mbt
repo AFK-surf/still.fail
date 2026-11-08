@@ -93,6 +93,16 @@ extern "C" fn ffi_present(
 ) -> Unit = "mb_host_present"
 
 ///|
+extern "C" fn ffi_groups_here() -> Int = "mb_host_groups_here"
+
+///|
+#borrow(inst, moves)
+extern "C" fn ffi_group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit = "mb_host_group_set"
+
+///|
+extern "C" fn ffi_group_drop(id : Int) -> Unit = "mb_host_group_drop"
+
+///|
 extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
 
 ///|
@@ -639,6 +649,21 @@ fn present(
   b : Double,
 ) -> Unit {
   ffi_present(buf, count, r, g, b)
+}
+
+///|
+fn groups_here() -> Bool {
+  ffi_groups_here() != 0
+}
+
+///|
+fn group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  ffi_group_set(id, inst, moves, n)
+}
+
+///|
+fn group_drop(id : Int) -> Unit {
+  ffi_group_drop(id)
 }
 
 ///|

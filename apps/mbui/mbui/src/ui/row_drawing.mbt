@@ -186,6 +186,7 @@ fn Ctx::row_drawing_cuts(
   whole? : Bool = false,
 ) -> Bool {
   klass.clear()
+  self.flat_from(from)
   let a = self.inst
   for j in from..<self.ninst {
     let b = j * inst_size
@@ -667,6 +668,7 @@ fn Ctx::paint_list_row(self : Ctx, i : Int, alpha : Double) -> Unit {
     // (what it painted whole taken back: drawn again where it is, in the list's clip; a row it could not keep, painted
     // as it is)
     self.ninst = start
+    self.spans_cut()
     self.segs.truncate(segs)
     self.paint_cut(marks)
     if !(d.valid && self.row_replay(d, i, 0.0, 0.0, k)) {
