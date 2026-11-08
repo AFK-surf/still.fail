@@ -549,14 +549,10 @@ pub fn viz_file_of(
         // under the page, out of its way: the ways to open it on its own, icons in the chat's grey
         c.box(style=viz_ways, fn() {
           let full = c.id("viz/full/" + place)
-          if c.clicked(full) {
-            c.tell("viz/open-full", fn() { viz_open_full(a.name, station, key, a.path, session) })
-          }
+          c.on_press(full, fn() { viz_open_full(a.name, station, key, a.path, session) })
           viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
           let aside = c.id("viz/aside/" + place)
-          if c.clicked(aside) {
-            open_page(PreviewFile(station, key, a.path, a.name))
-          }
+          c.on_press(aside, fn() { open_page(PreviewFile(station, key, a.path, a.name)) })
           viz_icon(c, aside, "panel-open", viz_tr("android-misc.viz.openAside"), subtle)
         })
         |> ignore

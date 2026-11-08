@@ -519,14 +519,12 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
                   placeholder_color=t.p.muted,
                   caret_color=t.p.accent,
                   field=finder_field(),
-                )
-                match res.submitted {
-                  Some(typed) => {
+                  on_submit=fn(typed) {
                     finder_typed(typed)
                     finder_enter(close)
-                  }
-                  None => finder_typed(res.text)
-                }
+                  },
+                )
+                finder_typed(res.text)
                 // (given the focus till it has it: a page come up in a view made as it opens, built more than once
                 // before it is drawn)
                 if search.focus {

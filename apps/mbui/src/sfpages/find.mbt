@@ -351,6 +351,8 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         caret_color=t.p.accent,
         enter_sends=true,
         field=finding.field,
+        // Enter: the next one, as it is pressed
+        on_submit=fn(_) { find_move(src, key, list, 1) },
       )
       // (⇧Enter put a new line in it: taken out)
       let typed = res.text.replace_all(old="\n", new="")
@@ -362,12 +364,9 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         finding.asked.set(typed)
         c.tell("find/ask/" + typed, fn() { find_ask(src, r.station, thread, key, list, typed) })
       }
-      if back || res.submitted is Some(_) {
-        if back {
-          finding.field.set(typed)
-        }
-        let by = if back { -1 } else { 1 }
-        c.tell("find/move", fn() { find_move(src, key, list, by) })
+      if back {
+        finding.field.set(typed)
+        c.tell("find/move", fn() { find_move(src, key, list, -1) })
       }
       let (at, total) = find_position()
       match finding.found.get() {
@@ -383,16 +382,12 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       }
       // (as far apart as makes each a press's room across: @sf.keys_row)
       c.box(style=@sf.keys_row(size=find_button_w), fn() {
-        if find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0) {
-          c.tell("find/move", fn() { find_move(src, key, list, -1) })
-        }
-        if find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0) {
-          c.tell("find/move", fn() { find_move(src, key, list, 1) })
-        }
-        if find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true) {
+        find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0, fn() { find_move(src, key, list, -1) })
+        find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0, fn() { find_move(src, key, list, 1) })
+        find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true, fn() {
           (list.forget)()
           find_close()
-        }
+        })
       })
       |> ignore
     })
@@ -403,8 +398,8 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
 
 ///|
 /// One of the bar's buttons, named for a screen reader and in its tip under it; not pressed while `on` is false (drawn
-/// fainter). True on the frame after a press.
-fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool) -> Bool {
+/// fainter); pressed, `does` (as it is let go: Ctx::on_press).
+fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool, does : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let b = c.box(style=if on { find_button_style } else { find_button_off }, id~, fn() {
@@ -412,7 +407,9 @@ fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bo
   })
   c.semantics(b, Button, id~, label~)
   @sf.tip(c, key, id, label, side=Bottom)
-  on && c.clicked(id)
+  if on {
+    c.on_press(id, does)
+  }
 }
 
 ///|

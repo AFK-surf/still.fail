@@ -1429,14 +1429,21 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
 }
 
 ///|
-/// What chosen or said in `p` does, once the frame is built: `p` closes (and what is over it), then `f` goes on.
-fn done_with(c : @ui.Ctx, p : Presented, f : () -> Unit) -> Unit {
+/// What chosen or said in `p` does: `p` closes (and what is over it), then `f` goes on, at once (as it is chosen: its
+/// handler's, outside any build).
+fn done_with(p : Presented, f : () -> Unit) -> Unit {
   p.ended = true
   match presented_now.search_by(fn(q) { q.serial == p.serial }) {
     Some(i) => close_from(i)
     None => ()
   }
-  c.tell("sf-present/\{p.serial}", f)
+  f()
+}
+
+///|
+/// `p` closed by what it holds, nothing more done (its close button, its back).
+fn closed_by(p : Presented) -> Unit {
+  done_with(p, fn() {  })
 }
 
 ///|
@@ -1529,17 +1536,12 @@ fn menu_popover(
     _ => 6.0
   }
   // (it goes at once as the web's does, @kit.pop_out: gone as it closes)
-  let m = dropdown(c, key, p.open, trigger, entries, icons, menu_w, along~, offset~, at?, danger~)
-  match m.chosen {
-    Some(v) => {
-      let i = v.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - 48) })
-      match items.get(i) {
-        Some(Some(item)) => done_with(c, p, item.select)
-        _ => ()
-      }
+  let m = dropdown(c, key, p.open, trigger, entries, icons, menu_w, along~, offset~, at?, danger~, on_pick=fn(v) {
+    match items.get(entry_index(v)) {
+      Some(Some(item)) => done_with(p, item.select)
+      _ => ()
     }
-    None => ()
-  }
+  })
   (m.open && m.chosen is None, p.open)
 }
 
@@ -1601,11 +1603,7 @@ fn pick_popover(
         Some(v) => c.text(v, style=pick_value) |> ignore
         None => ()
       }
-    })
-    match m.chosen {
-      Some(k) => done_with(c, p, fn() { choose(k) })
-      None => ()
-    }
+    }, on_pick=fn(k) { done_with(p, fn() { choose(k) }) })
     return (m.open && m.chosen is None, p.open)
   }
   let r = @kit.popover(
@@ -1627,16 +1625,18 @@ fn pick_popover(
         let r = menu_row_reach(theme().rows.pick)
         let mut got : @kit.Field? = None
         c.box(style=@ui.style(w=Full, mx=room(-r), mt=room(-r)), fn() {
-          got = Some(input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line))
+          // (Enter: the first found, as the words are then)
+          got = Some(input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line, on_submit=fn(words) {
+            let found = pick_found(choices, words)
+            if !found.is_empty() {
+              done_with(p, fn() { choose(found[0].key) })
+            }
+          }))
         })
         |> ignore
         let f = got.unwrap()
         focus_once(c, p, key + "/search")
-        let found = pick_found(choices, f.text)
-        if f.submitted && !found.is_empty() {
-          done_with(c, p, fn() { choose(found[0].key) })
-        }
-        found
+        pick_found(choices, f.text)
       }
       if found.is_empty() {
         c.box(style=panel_empty_at, fn() { c.text(t("common.noMatch"), style=panel_empty) |> ignore }) |> ignore
@@ -1644,9 +1644,10 @@ fn pick_popover(
       // (scrolling past pick_list_most, or what the room it has leaves it)
       @kit.in_room(c, beside_given.val, key=key + "/list", most=pick_list_most, fn() {
         for i, x in found {
-          if menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.value, under=x.note, panel=x.icon != "" || x.mark is Some(_), at_foot=i == found.length() - 1) {
-            done_with(c, p, fn() { choose(x.key) })
-          }
+          menu_item(c, x.label, key=key + "/" + x.key, icon=x.icon, mark?=x.mark, on=x.key == chosen, note=x.value, under=x.note, panel=x.icon != "" || x.mark is Some(_), at_foot=i == found.length() - 1, on_press=fn() {
+            done_with(p, fn() { choose(x.key) })
+          })
+          |> ignore
         }
       })
       |> ignore
@@ -1662,7 +1663,7 @@ fn pick_popover(
 /// what it holds then scrolling between its title and its foot.
 fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
-  let close = fn() { done_with(c, p, fn() {  }) }
+  let close = fn() { closed_by(p) }
   let mut drawn = false
   let r = @kit.popover(
     c,
@@ -1741,7 +1742,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
 ///|
 /// A panel opened by nothing, in the middle of the window (parts.tsx Dialog: @sf.dialog, its close button).
 fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
-  let close = fn() { done_with(c, p, fn() {  }) }
+  let close = fn() { closed_by(p) }
   match p.steps {
     Some(nav) => return steps_centred(c, key, p, x, nav, close)
     None => ()
@@ -1911,7 +1912,7 @@ let dialog_step_head : @ui.Style = @ui.style(row=true, w=Full, align=ACenter, mi
 /// its foot takes under it), 关闭 and its foot's buttons under it on the night (on_night), stage_gap apart. Escape, the
 /// back, 关闭 and a press beside it close it.
 fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
-  let close = fn() { done_with(c, p, fn() {  }) }
+  let close = fn() { closed_by(p) }
   let title = match x.live {
     Some(f) => f().0
     None => x.title
@@ -2024,10 +2025,9 @@ fn confirm_centred(
   danger : Bool,
   run : () -> Unit,
 ) -> (Bool, Bool) {
-  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, warning~, scrim?=scrim_of(p, false), veil=p.recede.get())
-  if r.confirmed {
-    done_with(c, p, run)
-  }
+  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~, warning~, scrim?=scrim_of(p, false), veil=p.recede.get(), on_confirm=fn() {
+    done_with(p, run)
+  })
   (r.open && !r.confirmed, dialog_built(c, key, p.open))
 }
 
@@ -2048,39 +2048,38 @@ fn ask_centred(
   run : (String) -> Unit,
 ) -> (Bool, Bool) {
   let words = Ref(p.line.text().trim(chars=" \t\n").to_string())
-  let mut said = false
+  // (said, by Enter or its action: what it says done with its words as they are then)
+  let say = fn(typed : String) {
+    let line = typed.trim(chars=" \t\n").to_string()
+    if ask_can(line, value, empty) {
+      done_with(p, fn() { run(line) })
+    }
+  }
   let still = dialog(
     c,
     key,
     p.open,
     title,
     fn() {
-      let f = input(c, key + "/line", placeholder~, secret~, field=p.line)
+      let f = input(c, key + "/line", placeholder~, secret~, field=p.line, on_submit=say)
       words.val = f.text.trim(chars=" \t\n").to_string()
       focus_once(c, p, key + "/line")
       if hint != "" {
         c.text(hint, style=field_hint) |> ignore
       }
-      if f.submitted && ask_can(words.val, value, empty) {
-        said = true
-      }
     },
     footer=fn() {
-      if button(c, t("common.cancel"), key=key + "/cancel", tone=Ghost) {
-        close_from_serial(p.serial)
-      }
-      if button(c, action, key=key + "/go", tone=Primary, disabled=!ask_can(words.val, value, empty)) {
-        said = true
-      }
+      button(c, t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() { close_from_serial(p.serial) })
+      |> ignore
+      button(c, action, key=key + "/go", tone=Primary, disabled=!ask_can(words.val, value, empty), on_press=fn() {
+        say(p.line.text())
+      })
+      |> ignore
     },
     scrim?=scrim_of(p, false),
     veil=p.recede.get(),
   )
-  if said {
-    let line = words.val
-    done_with(c, p, fn() { run(line) })
-  }
-  (still && !said && p.open, dialog_built(c, key, p.open))
+  (still && p.open, dialog_built(c, key, p.open))
 }
 
 ///|
@@ -2293,7 +2292,10 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           match x {
             None => c.box(style=sheet_rule, fn() {  }) |> ignore
             Some(item) =>
-              if item.heading { sheet_title(c, item.label) } else if sheet_row(
+              if item.heading {
+                sheet_title(c, item.label)
+              } else {
+                sheet_row(
                   c,
                   key + "/" + i.to_string(),
                   item.label,
@@ -2301,8 +2303,9 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
                   on=item.chosen == Some(true),
                   danger=item.danger,
                   disabled=item.disabled,
-                ) {
-                done_with(c, p, item.select)
+                  on_press=fn() { done_with(p, item.select) },
+                )
+                |> ignore
               }
           }
         }
@@ -2344,9 +2347,10 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           c.box(style=sheet_words_at, fn() { c.text(t("common.noMatch"), style=sheet_lead) |> ignore }) |> ignore
         }
         for x in found {
-          if sheet_row(c, key + "/" + x.key, x.label, note=x.note, value=x.value, icon=x.icon, mark?=x.mark, on=x.key == chosen) {
-            done_with(c, p, fn() { choose(x.key) })
-          }
+          sheet_row(c, key + "/" + x.key, x.label, note=x.note, value=x.value, icon=x.icon, mark?=x.mark, on=x.key == chosen, on_press=fn() {
+            done_with(p, fn() { choose(x.key) })
+          })
+          |> ignore
         }
       }
       if many {
@@ -2360,7 +2364,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       }
     }
     Panel(x) => {
-      let close = fn() { done_with(c, p, fn() {  }) }
+      let close = fn() { closed_by(p) }
       match p.steps {
         // (one that goes in steps: each its own title, what it holds and its foot, sliding in over the one before)
         Some(nav) =>
@@ -2385,12 +2389,11 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           c.text(warning, style=sheet_warning) |> ignore
         }
         c.box(style=sheet_actions, fn() {
-          if button(c, t("common.cancel"), key=key + "/cancel") {
-            close_from_serial(p.serial)
-          }
-          if button(c, action, key=key + "/go", tone=if danger { DangerSolid } else { Primary }) {
-            done_with(c, p, run)
-          }
+          button(c, t("common.cancel"), key=key + "/cancel", on_press=fn() { close_from_serial(p.serial) }) |> ignore
+          button(c, action, key=key + "/go", tone=if danger { DangerSolid } else { Primary }, on_press=fn() {
+            done_with(p, run)
+          })
+          |> ignore
         })
         |> ignore
       })
@@ -2399,6 +2402,13 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
     Ask(title, value, placeholder, action, hint, secret, empty, run) => {
       sheet_title(c, title)
       c.box(style=sheet_words_at, fn() {
+        // (said, by Enter or its action: what it says done with its words as they are then)
+        let say = fn(typed : String) {
+          let line = typed.trim(chars=" \t\n").to_string()
+          if ask_can(line, value, empty) {
+            done_with(p, fn() { run(line) })
+          }
+        }
         let f = @kit.text_field(
           c,
           key + "/line",
@@ -2408,6 +2418,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           line=text_scale.lg.1,
           look=field_look,
           field=p.line,
+          on_submit=say,
         )
         focus_once(c, p, key + "/line")
         let words = f.text.trim(chars=" \t\n").to_string()
@@ -2416,12 +2427,8 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         }
         let can = ask_can(words, value, empty)
         c.box(style=sheet_actions, fn() {
-          if button(c, t("common.cancel"), key=key + "/cancel") {
-            close_from_serial(p.serial)
-          }
-          if button(c, action, key=key + "/go", tone=Primary, disabled=!can) || (can && f.submitted) {
-            done_with(c, p, fn() { run(words) })
-          }
+          button(c, t("common.cancel"), key=key + "/cancel", on_press=fn() { close_from_serial(p.serial) }) |> ignore
+          button(c, action, key=key + "/go", tone=Primary, disabled=!can, on_press=fn() { say(p.line.text()) }) |> ignore
         })
         |> ignore
       })
@@ -2716,9 +2723,11 @@ fn sheet_row(
   on? : Bool = false,
   danger? : Bool = false,
   disabled? : Bool = false,
+  on_press? : () -> Unit,
 ) -> Bool {
   let th = theme()
   let id = c.id(key)
+  press_does(c, id, !disabled, on_press)
   let ink = if disabled {
     th.p.subtle
   } else if danger {

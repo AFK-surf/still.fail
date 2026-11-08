@@ -541,8 +541,25 @@ fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
+  let before = self.text
   self.key_edit(code, mods, now)
   self.words_told()
+  self.typed_told(before)
+}
+
+///|
+/// Its words changed from `before` by the person's edit just made: told what its last build said that does
+/// (Ctx::editor's `on_change`), at once, outside any build.
+fn EditorState::typed_told(self : EditorState, before : String) -> Unit {
+  match self.on_change {
+    Some(f) if self.text != before => {
+      let words = self.text
+      @signals.start_batch()
+      @signals.untracked(fn() { f(words) })
+      @signals.end_batch()
+    }
+    _ => ()
+  }
 }
 
 ///|
@@ -609,6 +626,21 @@ fn EditorState::key_edit(self : EditorState, code : Int, mods : Int, now : Doubl
 }
 
 ///|
+/// The words it gave up by the key just taken (Enter), told what its last build said giving them up does
+/// (Ctx::editor's `on_submit`), at once, outside any build, and taken from it: none said, left for the build to read.
+fn EditorState::submit_told(self : EditorState) -> Unit {
+  match (self.submitted, self.on_submit) {
+    (Some(words), Some(f)) => {
+      self.submitted = None
+      @signals.start_batch()
+      @signals.untracked(fn() { f(words) })
+      @signals.end_batch()
+    }
+    _ => ()
+  }
+}
+
+///|
 /// What the host's text event `kind` does to the field (put_text), kept to undo (editor_undo.mbt): a paste a step of
 /// its own, all else typing.
 fn EditorState::text_input(
@@ -623,6 +655,7 @@ fn EditorState::text_input(
   self.put_text(kind, s, a, b, now)
   self.edited(text, anchor, caret, kind != text_paste)
   self.words_told()
+  self.typed_told(text)
 }
 
 ///|
@@ -727,7 +760,10 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// it, without soft wrapping; `min_lines`, the least lines it holds even while empty, up to `max_lines`; `shorter`, other ways to
 /// say the placeholder where the field has less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
-/// where none does, as Ctx::text's words (Node::hint_shown).
+/// where none does, as Ctx::text's words (Node::hint_shown). `on_submit`: what giving its words up does, given them, as
+/// Enter is taken, outside any build (the result's `submitted` then none); `on_change`: what the person's edit of its
+/// words does (a key, the input method's text, a paste, an undo), given them, as it is made, outside any build (not
+/// what the app puts in it: Field::set).
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
@@ -752,6 +788,8 @@ pub fn Ctx::editor(
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   field? : Field,
   files? : Bool = false,
+  on_submit? : (String) -> Unit,
+  on_change? : (String) -> Unit,
 ) -> EditorResult {
   let id = self.id(key)
   // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while a press on it drags
@@ -807,6 +845,8 @@ pub fn Ctx::editor(
   st.written.get() |> ignore
   st.limit = paste_limit
   st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
+  st.on_submit = on_submit
+  st.on_change = on_change
   st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret
@@ -1722,6 +1762,8 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     ox: 0.0,
     oy: 0.0,
     submitted: None,
+    on_submit: None,
+    on_change: None,
     pref_x: -1.0,
     upstream: -1,
     floating: None,

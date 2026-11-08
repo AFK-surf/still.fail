@@ -20,7 +20,6 @@ priv struct NcFlow {
   comma_line : @ui.Field
   mut comma_line_sent : String
   mut app_id_sent : String
-  mut app_secret_sent : String
   mut look : SaDraft?
   mut look_sent : String
   mut icon_sent : String
@@ -62,7 +61,6 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     comma_line: @ui.Field::new(),
     comma_line_sent: "",
     app_id_sent: "",
-    app_secret_sent: "",
     look: None,
     look_sent: "",
     icon_sent: "",
@@ -653,24 +651,23 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
     f.app_id_sent = text(fe, "appId")
   }
   @sf.field(c, "App ID", fn() {
-    let typed = @sf.input(c, "nc-app-id/" + f.form, placeholder="cli_…", field=f.app_id).text
-    if typed != f.app_id_sent {
+    @sf.input(c, "nc-app-id/" + f.form, placeholder="cli_…", field=f.app_id, on_change=fn(typed) {
       f.app_id_sent = typed
-      c.tell("nc-app-id/" + f.form, fn() { nc_edit(core, f, obj([("feishu", obj([("appId", str(typed))]))])) })
-    }
+      nc_edit(core, f, obj([("feishu", obj([("appId", str(typed))]))]))
+    })
+    |> ignore
   })
   let errors = strings(fe, "errors")
   @sf.field(c, "App Secret", error=errors.iter().fold(init="", fn(a, e) { if a == "" { e } else { a + "；" + e } }), fn() {
-    let typed = @sf.input(c, "nc-app-secret/" + f.form, secret=true, field=f.app_secret).text
-    if typed != f.app_secret_sent {
-      f.app_secret_sent = typed
-      c.tell("nc-app-secret/" + f.form, fn() { nc_edit(core, f, obj([("feishu", obj([("appSecret", str(typed))]))])) })
-    }
+    @sf.input(c, "nc-app-secret/" + f.form, secret=true, field=f.app_secret, on_change=fn(typed) {
+      nc_edit(core, f, obj([("feishu", obj([("appSecret", str(typed))]))]))
+    })
+    |> ignore
   })
-  let now = @sf.switch_row(c, "nc-lark/" + f.form, @sf.t("web-pages.connect.feishu.lark"), lark, note=@sf.t("web-pages.connect.feishu.larkNote"))
-  if now != lark {
+  @sf.switch_row(c, "nc-lark/" + f.form, @sf.t("web-pages.connect.feishu.lark"), lark, note=@sf.t("web-pages.connect.feishu.larkNote"), on_change=fn(now) {
     nc_edit(core, f, obj([("feishu", obj([("lark", Json::boolean(now))]))]))
-  }
+  })
+  |> ignore
   let identity = field(fe, "identity")
   if flag(fe, "verified") && identity is Some(Object(_)) {
     let tenant = text(field(identity, "tenant"), "name")
@@ -706,11 +703,11 @@ fn nc_comma_line(c : @ui.Ctx, core : Core, f : NcFlow, cm : Json?, error : Strin
     None => error
   }
   @sf.field(c, @sf.t("web-pages.connect.comma.line"), hint=@sf.t("web-pages.connect.comma.lineHint"), error=said, fn() {
-    let typed = @sf.input(c, "nc-comma-line/" + f.form, placeholder="comma https://… …", field=f.comma_line).text
-    if typed != f.comma_line_sent {
+    @sf.input(c, "nc-comma-line/" + f.form, placeholder="comma https://… …", field=f.comma_line, on_change=fn(typed) {
       f.comma_line_sent = typed
-      c.tell("nc-comma-line/" + f.form, fn() { nc_edit(core, f, obj([("comma", obj([("line", str(typed))]))])) })
-    }
+      nc_edit(core, f, obj([("comma", obj([("line", str(typed))]))]))
+    })
+    |> ignore
   })
 }
 

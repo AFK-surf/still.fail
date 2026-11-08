@@ -6,6 +6,8 @@ package "station/reader"
 // Errors
 
 // Types and methods
+type Permit
+
 type Reader
 
 // Type aliases

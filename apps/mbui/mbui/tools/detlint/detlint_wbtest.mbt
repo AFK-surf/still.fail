@@ -1325,6 +1325,31 @@ test "build-effect: what a presenter keeps runs later, and so does what is hande
 }
 
 ///|
+test "build-effect: what is handed on to a press's handler runs as it is pressed" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn key(c : @ui.Ctx, id : Int, does : () -> Unit) -> Unit {
+        #|  c.on_press(id, does)
+        #|}
+        #|fn plain(c : @ui.Ctx, does : () -> Unit) -> Unit {
+        #|  does()
+        #|}
+        #|fn view(c : @ui.Ctx, src : Source) -> Unit {
+        #|  key(c, 1, fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|  plain(c, fn() { (src.call)("built", Json::null(), fn(_) {  }) })
+        #|}
+        #|
+      ),
+    ),
+  ]
+  // given to the Ctx's own handler whole: done as the press comes; called where it is given: as it builds
+  assert_eq(lines(found(files, "build-effect", 1)), [10])
+}
+
+///|
 test "build-effect: a stream's callbacks are its events" {
   let files = [
     (
@@ -2130,4 +2155,22 @@ test "old-list" {
     2,
   )
   assert_eq(lines(fs), [2, 4])
+}
+
+///|
+test "click-read" {
+  // a click read by a build outside mbui's ui and kit: counted (a call each); in ui, in kit, in a test, a field of that
+  // name, not
+  found(
+    [
+      ("src/sfdesk/x.mbt", "fn d(c : Ctx) -> Unit {\n  if c.clicked(id) {\n    go()\n  }\n  let a = c.clicked_on(id, p)\n  let b = c.double_clicked(id)\n}\n"),
+      ("src/ui/ctx.mbt", "fn n(c : Ctx) -> Bool {\n  c.clicked(1)\n}\n"),
+      ("src/kit/button.mbt", "fn n(c : Ctx) -> Bool {\n  c.clicked(1)\n}\n"),
+      ("src/sfapp/y_wbtest.mbt", "test \"t\" {\n  ignore(c.clicked(1))\n}\n"),
+      ("src/sfapp/z.mbt", "fn z() -> Bool {\n  r.clicked\n}\n"),
+    ],
+    "click-read",
+    3,
+  )
+  |> ignore
 }

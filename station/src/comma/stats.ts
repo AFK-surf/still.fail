@@ -5,7 +5,7 @@
 //   model, and the chats they worked in;
 // - the Task index (`task.index`): the chats as Comma lists the Tasks its stations host, which the Router reads and
 //   writes in through the connect (`task.read`, `task.say`, surface.ts).
-// Both cover the last BUILD_DAYS, are kept in <data>/comma-stats.db numbered as their rows change, and each
+// Both cover the last BUILD_DAYS, are kept per workspace under <data>/comma-indexes, numbered as their rows change, and each
 // connection sends Comma what it does not hold yet, a page at a time.
 //
 // Built as Comma first connects, a minute after the agents' spending was recorded, as a chat moves (a minute after
@@ -41,7 +41,7 @@ export type StationRows = { station?: string; usage: Json; chats: Json[] };
 
 /// What a build reads: this station's rows, and those of each other station of the workspace that answered
 /// (`unread`, the ids of those that did not: their rows stay as they were).
-export type Read = (from: number, to: number) => Promise<{ stations: StationRows[]; unread: string[] }>;
+export type Read = (from: number, to: number) => Promise<{ stations: StationRows[]; unread: string[]; valid?: () => boolean }>;
 
 /// A row as an index keeps it.
 export type IndexRow = { key: string; source: string; kind: string; rev: number; removed: boolean; json: string };
@@ -265,6 +265,15 @@ export class CommaStats {
     return new CommaStats(join(data, "comma-stats.db"), read, changes);
   }
 
+  /// A workspace's index is never taken from the old, unscoped index: its owner is not known after a home change.
+  static inWorkspace(data: string, workspace: string, read: Read, changes: (changed: () => void) => () => void): CommaStats {
+    const dir = join(data, "comma-indexes");
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // Preserve JavaScript's whole string, including lone surrogates, rather than folding them to U+FFFD in UTF-8.
+    const name = createHash("sha256").update(workspace, "utf16le").digest("hex");
+    return new CommaStats(join(dir, `${name}.db`), read, changes);
+  }
+
   /// Once Comma is connected first: builds now, a minute after a change, and every hour, until close.
   start(): void {
     if (this.#closed || this.#stops !== null) return;
@@ -303,7 +312,7 @@ export class CommaStats {
     }
     const now = wall.now();
     this.#building = this.#read(now - BUILD_DAYS * DAY_MS, now)
-      .then(({ stations, unread }) => this.#applyBuild(stations, unread, now - BUILD_DAYS * DAY_MS))
+      .then(({ stations, unread, valid }) => this.#applyBuild(stations, unread, now - BUILD_DAYS * DAY_MS, valid))
       .catch((e) => log.info("comma", "the statistics were not read this time", { error: (e as Error).message }))
       .finally(() => {
         this.#building = null;
@@ -321,12 +330,12 @@ export class CommaStats {
 
   // Prepare only as a build needs it. Each batch commits and yields so a first build on an old database does not
   // parse its whole history in one turn; another station's older writer is followed by the index's triggers.
-  async #applyBuild(stations: StationRows[], unread: string[], from: number): Promise<void> {
+  async #applyBuild(stations: StationRows[], unread: string[], from: number, valid: () => boolean = () => true): Promise<void> {
     let installed = false;
     let retryMs = 25;
     let version: number | null = null;
     let activeTurns = 0;
-    while (!this.#closed) {
+    while (!this.#closed && valid()) {
       try {
         if (!installed) { installStatsAge(this.#db); installed = true; }
         const ready = statsAgeReady(this.#db, 0) || statsAgeStep(this.#db).done;
@@ -340,6 +349,8 @@ export class CommaStats {
           // Unchanged old rows still use the index; a sustained writer's remaining dirty rows are read as before.
           if (activeTurns >= ACTIVE_REPAIR_TURNS) dirtyLimit = null;
         } else if (!ready) { version = null; activeTurns = 0; }
+        // A read can become obsolete while the age index is prepared over several turns.
+        if (!valid()) return;
         if ((ready || dirtyLimit === null) && this.#apply(stations, unread, from, true, dirtyLimit) !== null) return;
         retryMs = 25;
         await new Promise<void>((resolve) => setImmediate(resolve));

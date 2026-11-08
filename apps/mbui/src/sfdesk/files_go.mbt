@@ -279,6 +279,13 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       caret_color=t.p.accent,
       enter_sends=true,
       field=go.field,
+      // Enter: gone to, as it is pressed (where it was found already, at once; else once the core finds it)
+      on_submit=fn(words) {
+        match go.resolved.get() {
+          Some((was, r)) if was == words => enter(r)
+          _ => go_resolve(src, ws, words, here, enter)
+        }
+      },
     )
     // (a dialog's only field: it has the keys while it is open, a composer's given up as it opens)
     if !res.focused {
@@ -287,14 +294,6 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
     if res.text != go.typed.get() {
       go.typed.set(res.text)
       go.at.set(0)
-    }
-    match res.submitted {
-      Some(words) =>
-        match go.resolved.get() {
-          Some((was, r)) if was == words => enter(r)
-          _ => c.tell("files-goto/enter", fn() { go_resolve(src, ws, words, here, enter) })
-        }
-      None => ()
     }
   })
   |> ignore

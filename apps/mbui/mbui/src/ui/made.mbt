@@ -412,15 +412,19 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 }
 
 ///|
-/// A press on target `id` (a tap, a click, Enter or Space where it takes the focus), let go on it, does `f`: then, as it
-/// is let go, outside any build, not read as the next frame is built (the model's 5: acting is a
-/// callback). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
+/// A press on target `id` (a tap, a click, Enter or Space where it takes the focus, the Activate a screen reader asks),
+/// let go on it, does `f`: then, as it is let go, outside any build, not read as the next frame is built (the model's
+/// 5: acting is a callback); its moment the event's (Ctx::moment). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
 /// hand over it). What a frame read of the press (Ctx::clicked) it reads as before.
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   if id == 0 {
     return
   }
   self.takes_presses(id)
+  // (read so: what said it is built again as it is pressed, as what reads a click is (Ctx::clicked, hand.mbt), and
+  // draws what the press changed of what it holds)
+  hand.clicked.has(id) |> ignore
+  hand.asked.has(id) |> ignore
   made_presses[id] = f
 }
 
@@ -476,6 +480,21 @@ fn keys_taken_now(focus : Int, code : Int, mods : Int) -> Bool {
       false
     }
     None => false
+  }
+}
+
+///|
+/// A step up (`up`) or down asked of `id` (the Increment or Decrement a screen reader asks): given, at its moment, to
+/// what its last build said takes its keys (Ctx::on_key), as the Up or Down key is; whether it took it.
+fn made_stepped(id : Int, up : Bool) -> Bool {
+  match keys_taken.get(id) {
+    Some(w) if w.build >= builds_made.val => {
+      @signals.start_batch()
+      let took = @signals.untracked(fn() { (w.take)(if up { key_code_up } else { key_code_down }, 0) })
+      @signals.end_batch()
+      took
+    }
+    _ => false
   }
 }
 

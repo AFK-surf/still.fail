@@ -17,7 +17,8 @@ pub(all) struct SwitchState {
 }
 
 ///|
-/// A switch, `checked` or not (its id `key`'s), named `label` for the semantics tree. What it became, and what
+/// A switch, `checked` or not (its id `key`'s), named `label` for the semantics tree; `on_change`: what turning it does,
+/// given what it became, as it is turned (let go, a key, Activate), outside any build. What it became, and what
 /// happened to it.
 pub fn switch(
   c : @ui.Ctx,
@@ -26,8 +27,13 @@ pub fn switch(
   label? : String = "",
   disabled? : Bool = false,
   look? : (@ui.Ctx, SwitchState) -> Unit = switch_look,
+  on_change? : (Bool) -> Unit,
 ) -> @ui.Changed[Bool] {
   let id = c.id(key)
+  match on_change {
+    Some(f) if !disabled => c.on_press(id, fn() { f(!checked) })
+    _ => ()
+  }
   // (held however long, still its press: let go, turned; its knob a lens meanwhile, where its look has one)
   let r = c.interact(id, disabled~, holds=true)
   let on = if r.clicked { !checked } else { checked }

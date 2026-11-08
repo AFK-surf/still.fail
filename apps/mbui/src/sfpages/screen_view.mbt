@@ -36,10 +36,6 @@ priv struct ScreenUi {
   mouse_moved : Afloat
   /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say)
   mut mouse_set : Bool?
-  /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
-  mut scale_asked : Int
-  /// the display's resolution last asked for (0 wide none): asked once, as the scale is
-  mut size_asked : (Int, Int)
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
   mut sayings : Int
@@ -113,8 +109,6 @@ fn screen_ui(key : String) -> ScreenUi {
         tools_moved: afloat_new(),
         mouse_moved: afloat_new(),
         mouse_set: None,
-        scale_asked: 0,
-        size_asked: (0, 0),
         saying: false,
         sayings: 0,
         box_w: 0.0,
@@ -725,15 +719,15 @@ fn keyboard_toggled(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
 
 ///|
 /// A round button with an icon (40, its icon 20), its name for those who cannot see it and as its tip; `on`: pressed
-/// (the keyboard up, 控制). True when tapped.
-fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false) -> Bool {
+/// (the keyboard up, 控制); tapped, `does` (as it is let go: Ctx::on_press).
+fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false, does~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=round_button_box, selected=on, id~, fn() {
     @sf.icon(c, icon, size=round_icon, color=c.color(Fg)) |> ignore
   })
   c.semantics(i, Button, id~, label~, pressed=on, actions=[Activate])
   @sf.tip(c, key, id, label)
-  c.clicked(id)
+  c.on_press(id, does)
 }
 
 ///|
@@ -742,8 +736,10 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 /// there).
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   c.box(style=match u.own_bar { Some(own) => own; None => if u.in_tab { screen_bar_in_tabs } else { screen_bar } }, fn() {
-    if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
-      close()
+    if !u.in_tab {
+      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), does=fn() {
+        close()
+      })
     }
     let live = s.phase() == "live"
     let words = c.id("screen-net")
@@ -793,8 +789,10 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     }
     // (a panel's bar of its own: the panel's close at its end, beside what it closes, where the system has bars too:
     // among the chat's actions in them it read as another thing's; the user, 2026-11-06)
-    if u.own_bar is Some(_) && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
-      close()
+    if u.own_bar is Some(_) {
+      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), does=fn() {
+        close()
+      })
     }
   })
   |> ignore
@@ -845,9 +843,8 @@ fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
 ///|
 /// Pasting the device's clipboard (where the station carries text or pictures), while driving it.
 fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  if s.pastes() &&
-    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting) {
-    paste_asked(c, s, u)
+  if s.pastes() {
+    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting, does=fn() { paste_asked(c, s, u) })
   }
 }
 
@@ -855,9 +852,9 @@ fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// 全屏 (on) or not.
 fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
   let label = @sf.t(if u.full.get() { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-  if round_button(c, "screen-full", "landscape", label, on=u.full.get()) {
+  round_button(c, "screen-full", "landscape", label, on=u.full.get(), does=fn() {
     u.full.set(!u.full.get())
-  }
+  })
 }
 
 ///|
@@ -867,9 +864,9 @@ fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
     return
   }
   let on = s.pad(s.src)
-  if round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~) {
+  round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~, does=fn() {
     pad_chosen(c, s, !on)
-  }
+  })
 }
 
 ///|
@@ -881,16 +878,16 @@ fn mode_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
   } else {
     ("eye", @sf.t("android-misc.screen.look"))
   }
-  if round_button(c, "screen-mode-btn", icon, label, on~) {
+  round_button(c, "screen-mode-btn", icon, label, on~, does=fn() {
     control_chosen(c, s, !on)
-  }
+  })
 }
 
 ///|
 fn keyboard_button(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
-  if round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing) {
+  round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing, does=fn() {
     keyboard_toggled(c, catcher, typing)
-  }
+  })
 }
 
 ///|
@@ -917,9 +914,9 @@ fn full_tools(
     }
     let id = c.id("screen-tools")
     afloat_dragged(c, u.tools_moved, id)
-    if round_button(c, "screen-tools", icon, label, on=u.tools_open) {
+    round_button(c, "screen-tools", icon, label, on=u.tools_open, does=fn() {
       u.tools_open = !u.tools_open
-    }
+    })
     if u.tools_open {
       if s.choosable() {
         mode_button(c, s)
@@ -956,17 +953,19 @@ fn screen_rail(
   let line = text(s.state, "line")
   c.box(fn() {
     c.box(style=rail_box, fn() {
-      if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
-        close()
+      if !u.in_tab {
+        round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), does=fn() {
+          close()
+        })
       }
       c.spacer()
       if s.state is Some(_) && line != "" && s.open_now() {
         let others = items(s.state, "others").length()
         c.box(style=rail_people, fn() {
-          if round_button(c, "screen-people", "users", line, on=u.saying) {
+          round_button(c, "screen-people", "users", line, on=u.saying, does=fn() {
             u.saying = !u.saying
             u.sayings += 1
-          }
+          })
           if others > 0 {
             c.layer(fn() {
               c.box(style=rail_badge_place, fn() {

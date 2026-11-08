@@ -169,24 +169,26 @@ fn token_fields(c : @ui.Ctx, core : Core, tk : SlackTokens, masked? : (String, S
   }
   c.box(style=sk_fields, fn() {
     @sf.field(c, "App-Level Token", fn() {
-      let typed = @sf.input(c, "tokens-app/" + tk.form, placeholder=kept(masked.0, "xapp-…"), secret=true, field=tk.app).text.trim(
-          chars=" \t\n",
-        ).to_owned()
-      if typed != tk.app_sent {
-        tk.app_sent = typed
-        // (told the core once the frame's builds are over)
-        c.tell("tokens-app/" + tk.form, fn() { tokens_send(core, tk, "edit", Some(obj([("appToken", str(typed))]))) })
-      }
+      // (told the core as it is typed)
+      @sf.input(c, "tokens-app/" + tk.form, placeholder=kept(masked.0, "xapp-…"), secret=true, field=tk.app, on_change=fn(words) {
+        let typed = words.trim(chars=" \t\n").to_owned()
+        if typed != tk.app_sent {
+          tk.app_sent = typed
+          tokens_send(core, tk, "edit", Some(obj([("appToken", str(typed))])))
+        }
+      })
+      |> ignore
     })
     if !install {
       @sf.field(c, "Bot Token", fn() {
-        let typed = @sf.input(c, "tokens-bot/" + tk.form, placeholder=kept(masked.1, "xoxb-…"), secret=true, field=tk.bot).text.trim(
-            chars=" \t\n",
-          ).to_owned()
-        if typed != tk.bot_sent {
-          tk.bot_sent = typed
-          c.tell("tokens-bot/" + tk.form, fn() { tokens_send(core, tk, "edit", Some(obj([("botToken", str(typed))]))) })
-        }
+        @sf.input(c, "tokens-bot/" + tk.form, placeholder=kept(masked.1, "xoxb-…"), secret=true, field=tk.bot, on_change=fn(words) {
+          let typed = words.trim(chars=" \t\n").to_owned()
+          if typed != tk.bot_sent {
+            tk.bot_sent = typed
+            tokens_send(core, tk, "edit", Some(obj([("botToken", str(typed))])))
+          }
+        })
+        |> ignore
       })
     }
     match field(view, "verified") {
