@@ -733,11 +733,17 @@ fn ride_spoil() -> Unit {
 }
 
 ///|
-/// Whether row `c` drawn at (x, y) may be kept or drawn as kept: its box wholly within the clip it is drawn in one way
-/// at least, as all it holds must be (Ctx::ride_end); one across its edges each way, or wholly past it (a row kept
-/// for what comes, drawing nothing: no more gone through than drawn again), drawn as it comes.
+/// Whether row `c` drawn at (x, y) may be kept or drawn as kept: in a square clip (ride_clip_square), its box wholly
+/// within it one way at least, as all it holds must be (Ctx::ride_end); one in a clip not square (none kept there),
+/// across its edges each way, or wholly past it (a row kept for what comes, drawing nothing: no more gone through than
+/// drawn again), drawn as it comes.
 fn ride_may(c : @view.Content, x : Double, y : Double) -> Bool {
   let k = clip_top()
+  for j in 4..<8 {
+    if clip_stack[k + j] != 0.0 || clip_stack[k + 12 + j] != 0.0 {
+      return false
+    }
+  }
   ride_side(x, x + c.w, clip_stack[k], clip_stack[k + 2]) == 0 ||
   ride_side(y, y + c.h, clip_stack[k + 1], clip_stack[k + 3]) == 0
 }
