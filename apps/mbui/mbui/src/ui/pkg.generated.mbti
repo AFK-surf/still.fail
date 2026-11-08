@@ -434,6 +434,8 @@ pub let pasted_picture_name : String
 
 pub fn patch(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h? : Len, max_h? : Len, p? : Space, px? : Space, py? : Space, pl? : Space, pr? : Space, pt? : Space, pb? : Space, m? : Space, mx? : Space, my? : Space, ml? : Space, mr? : Space, mt? : Space, mb? : Space, gap? : Space, align? : Align, justify? : Justify, bg? : Color, radius? : Radius, border? : Stroke, border_color? : Color, dashed? : Bool, shadow? : Shadow, clip? : Bool, opacity? : Opacity) -> Patch
 
+pub fn paths_into(@view.View, Field, (Array[DroppedPath]) -> Unit) -> @view.View
+
 pub fn perf_also(String, (Double) -> String) -> Unit
 
 pub fn perf_counting() -> Bool
@@ -721,6 +723,8 @@ pub fn window_zoom_supported() -> Bool
 pub fn window_zoomed() -> Bool
 
 pub fn word_at(String, Int32) -> (Int32, Int32)
+
+pub fn words_into(@view.View, Field) -> @view.View
 
 pub fn words_over_closing_expected(Array[(String, String, String)]) -> Unit
 
