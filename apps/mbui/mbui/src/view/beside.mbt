@@ -170,6 +170,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
   fn refused(at : Int) -> Unit {
     state[at] = 3
     // (on no side of anything: View::went_told says none)
+    if self.nodes[at].went is Some(_) {
+      self.sizes_due = true
+    }
     self.nodes[at].went = None
     // (where it is laid out, as if it went beside nothing: never where it went last)
     let n = self.nodes[at]
@@ -212,6 +215,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     }
     guard n.beside is Some(b) && self.alive_id(b.anchor) else {
       // (beside nothing now, its anchor gone: on no side of it, where it last was beside it)
+      if n.went is Some(_) {
+        self.sizes_due = true
+      }
       n.went = None
       return stay()
     }
@@ -276,6 +282,9 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       padding=b.padding,
     )
     // (where it grows from, where it is drawn bigger or smaller about the side it went on: View::scale's FromBeside)
+    if n.went != Some(went) {
+      self.sizes_due = true
+    }
     n.went = Some(went)
     let (px, py) = self.pivot_of(at, n.lw, n.lh)
     let (lx, ly) = ((x - hx) / hs, (y - hy) / hs)
@@ -538,6 +547,7 @@ pub fn View::went_told(self : View) -> Side? {
       let c : @signals.Signal[Side?] = @signals.signal(None, same=fn(a, b) { a == b })
       n.went_cell = Some(c)
       self.tree.sized.push(self.at)
+      self.tree.sizes_due = true
       self.tree.marked()
       c
     }

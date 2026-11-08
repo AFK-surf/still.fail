@@ -50,9 +50,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       tell()
     }
   })
-  // (each block's top in the column and its height, in order: as tall as it was laid out, else est)
+  // (each block's top in the column and its height, in order: as tall as it was laid out, else est; and how many times
+  // they were worked out, what is read for whether they changed: not all of them compared each time the column is
+  // scrolled)
+  let laid_n = Ref(0)
   let laid = @signals.computed(fn(_) {
     told.get() |> ignore
+    laid_n.val = laid_n.val + 1
     let out : Array[(K, Double, Double, Bool)] = []
     let mut top = 0.0
     for k in keys() {
@@ -68,6 +72,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     out
   })
+  // (the first of them whose foot is past `y`, as they go down: each foot no higher than the next one's)
+  let first_past = fn(all : Array[(K, Double, Double, Bool)], y : Double) {
+    let mut lo = 0
+    let mut hi = all.length()
+    while lo < hi {
+      let mid = (lo + hi) / 2
+      if all[mid].1 + all[mid].2 > y {
+        hi = mid
+      } else {
+        lo = mid + 1
+      }
+    }
+    lo
+  }
   // (where it is scrolled to, as what it holds is drawn now)
   let at = fn() { s.drawn(self.tree) }
   // (those that show: their room met by the column's, as tall as it shows, from the first down to one not laid out yet;
@@ -76,7 +94,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     guard self.laid_size_told() is Some((_, vh)) else { return [] }
     let x = at()
     let out = []
-    for b in laid.get() {
+    let all = laid.get()
+    for i in first_past(all, x)..<all.length() {
+      let b = all[i]
       if b.1 >= x + vh {
         break
       }
@@ -92,26 +112,36 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     out
   })
   // (what shows held where it is as what is over it changes height: the first block that showed, its top as it was
-  // then, the column moved by as far as that moved; as it is scrolled, the first that shows then)
-  let anchor : Ref[(K, Double)?] = Ref(None)
-  self.reacts(fn() { (laid.get(), at()) }, fn(now) {
-    let (all, x) = now
+  // then and where it was among them, the column moved by as far as that moved; as it is scrolled, the first that shows
+  // then)
+  let anchor : Ref[(K, Double, Int)?] = Ref(None)
+  self.reacts(fn() {
+    laid.get() |> ignore
+    (laid_n.val, at())
+  }, fn(now) {
+    let (_, x) = now
+    let all = @signals.untracked(fn() { laid.get() })
     let mut d = 0.0
     match anchor.val {
-      Some((k, was)) =>
-        match all.search_by(fn(b) { b.0 == k }) {
+      Some((k, was, i)) => {
+        // (where it was among them, else looked for: none come or gone over it, it is where it was)
+        let at = if i < all.length() && all[i].0 == k {
+          Some(i)
+        } else {
+          all.search_by(fn(b) { b.0 == k })
+        }
+        match at {
           Some(i) => d = all[i].1 - was
           None => ()
         }
+      }
       None => ()
     }
     if d != 0.0 {
       s.grew_above(d)
     }
-    anchor.val = match all.search_by(fn(b) { b.1 + b.2 > x + d }) {
-      Some(i) => Some((all[i].0, all[i].1))
-      None => None
-    }
+    let i = first_past(all, x + d)
+    anchor.val = if i < all.length() { Some((all[i].0, all[i].1, i)) } else { None }
   })
   // (whether each shows, by its key: told only to those that come to show or stop, not each block reading the window,
   // all of them run again each time the column is scrolled)
