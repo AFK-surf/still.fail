@@ -25,6 +25,7 @@ import {
   "station/usagefill",
   "station/signin",
   "station/vaultuses",
+  "station/locate",
   "moonbitlang/core/json",
 }
 

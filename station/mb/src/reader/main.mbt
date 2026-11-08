@@ -398,6 +398,18 @@ async fn vault_uses(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The live view's transcript locator (sessions/live-locator.ts): each line a `locate` or a reply to one being looked
+/// for (@locate.Locator).
+async fn live_locator(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
+  let locator = @locate.Locator::new(host, @sql.Db::attach(host, db_path, wait=5000), data, sep)
+  while host.line() is Some(line) {
+    if line != "" {
+      locator.heard(line)
+    }
+  }
+}
+
+///|
 fn main {
   let code = match (flag("--builder"), flag("--db"), flag("--data")) {
     (Some("archive-marks"), Some(db), _) =>
@@ -514,6 +526,8 @@ fn main {
         String(session) => Some(@signin.step(db, session))
         _ => None
       }))
+    (Some("live-locator"), Some(db), Some(data)) =>
+      @host.run(shell_dir=beside(db, "shell"), host => live_locator(host, db, data, flag("--sep").unwrap_or("/")))
     (Some("vault-uses"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => vault_uses(host, db))
     (Some("outflow-chats"), Some(db), _) =>

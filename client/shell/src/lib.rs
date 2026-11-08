@@ -96,6 +96,67 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// `path` made absolute and its `.` and `..` taken out by their names alone, as Node's path.resolve does.
+fn lexical(path: &std::path::Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// A link's target without Windows' `\\?\` (as libuv's readlink gives it).
+fn plain(target: PathBuf) -> PathBuf {
+    let s = target.to_string_lossy().into_owned();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        target
+    }
+}
+
+/// Node's realpathSync (lib/fs.js, its JavaScript one): the path resolved, then each part from the root looked at
+/// (lstat) and a link replaced by its target resolved against the parts before it, again from the root.
+fn node_realpath(path: &str) -> std::io::Result<String> {
+    use std::path::Component;
+    let mut path = lexical(&std::path::absolute(path)?);
+    let mut links = 0;
+    'again: loop {
+        let parts: Vec<Component> = path.components().collect();
+        let mut done = PathBuf::new();
+        for (i, part) in parts.iter().enumerate() {
+            if !matches!(part, Component::Normal(_)) {
+                done.push(part);
+                continue;
+            }
+            let next = done.join(part);
+            if std::fs::symlink_metadata(&next)?.file_type().is_symlink() {
+                links += 1;
+                if links > 256 {
+                    return Err(std::io::Error::other("too many links"));
+                }
+                let mut resolved = lexical(&done.join(plain(std::fs::read_link(&next)?)));
+                for rest in &parts[i + 1..] {
+                    resolved.push(rest);
+                }
+                path = resolved;
+                continue 'again;
+            }
+            done = next;
+        }
+        return Ok(done.to_string_lossy().into_owned());
+    }
+}
+
 /// The two halves of an iroh stream, and the reads waiting on it: a reset wakes them first (as the addon's).
 struct Halves {
     /// The connection it is on: it goes when that one closes.
@@ -1275,6 +1336,43 @@ impl Inner {
         if op == "storage.path" {
             let path = storage_path(&self.dir, str_of(a, "key")?);
             return Ok(if path.is_file() { json!(path.to_string_lossy()) } else { Value::Null });
+        }
+        // A path's kind as stat (links followed) says it: "file", "dir" or "other"; null when it cannot be (none there,
+        // no right): what the station's programs ask of the filesystem (station/mb src/locate), as Node's statSync does.
+        if op == "fs.stat" {
+            return Ok(match std::fs::metadata(str_of(a, "path")?) {
+                Ok(m) if m.is_file() => json!("file"),
+                Ok(m) if m.is_dir() => json!("dir"),
+                Ok(_) => json!("other"),
+                Err(_) => Value::Null,
+            });
+        }
+        // A directory's names, with their kinds as the directory says them (`types`: [name, "file" | "dir" | "link" |
+        // "other"], links not followed), in Node's readdirSync's order (libuv sorts them by their bytes, but on Windows);
+        // null when it cannot be read.
+        if op == "fs.readdir" {
+            let Ok(entries) = std::fs::read_dir(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let mut out: Vec<(String, &str)> = Vec::new();
+            for entry in entries {
+                let Ok(entry) = entry else { return Ok(Value::Null) };
+                let kind = match entry.file_type() {
+                    Ok(t) if t.is_symlink() => "link",
+                    Ok(t) if t.is_dir() => "dir",
+                    Ok(t) if t.is_file() => "file",
+                    _ => "other",
+                };
+                out.push((entry.file_name().to_string_lossy().into_owned(), kind));
+            }
+            if !cfg!(windows) {
+                out.sort_by(|x, y| x.0.as_bytes().cmp(y.0.as_bytes()));
+            }
+            let types = a.get("types").and_then(Value::as_bool).unwrap_or(false);
+            return Ok(Value::Array(out.into_iter().map(|(name, kind)| if types { json!([name, kind]) } else { json!(name) }).collect()));
+        }
+        // A path with its links resolved as Node's realpathSync resolves them (each part looked at, a link's target put in
+        // its place; the parts' names as given, not as the disk spells them); null when a part is not there.
+        if op == "fs.realpath" {
+            return Ok(node_realpath(str_of(a, "path")?).map_or(Value::Null, |p| json!(p)));
         }
         // An Ed25519 key's public half and its signature of `message` (hex both ways): a lock claim's (client/core-ts
         // lock.ts), signed for each workspace and endpoint as the core connects. In Hermes (no JIT) the JS one took ~8 ms

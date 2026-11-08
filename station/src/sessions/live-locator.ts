@@ -1,8 +1,11 @@
-// The live view's source and path lookup, off the main thread. Only a bounded batch of source ids and path hints crosses
-// back at a time; the worker's source snapshot is taken before it starts touching the filesystem.
+// The live view's source and path lookup, off the main thread: by the MoonBit program (station/mb, src/locate;
+// `--builder live-locator`) where it is built, else live-locator-worker.ts. Only a bounded batch of source ids and path
+// hints crosses back at a time; the source snapshot is taken before the filesystem is touched.
+import { join, sep } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
+import { MbProcess, mbReaderBinary } from "../read/mb-reader.ts";
 import { onTranscriptHintsChanged, transcriptLocationHints } from "../read/transcript.ts";
 import { locationIdentity, type LiveLocation, type LiveLocationIdentity, type LiveLocationProfile, type LiveSession, type LiveSource, type LocateMessage, type LocateReply, type LocateRequest } from "./live-location-protocol.ts";
 
@@ -25,10 +28,10 @@ const sameProfiles = (a: LiveLocationProfile[], b: readonly LiveLocationProfile[
   && a.every((p, i) => p.id === b[i]?.id && p.home === b[i]?.home);
 
 export class LiveLocator {
-  private worker: Worker | null = null;
+  private worker: Worker | MbProcess | null = null;
   private active = new Map<number, Pending>();
   private waiting: Pending[] = [];
-  private cancelling = new Map<number, { worker: Worker; stop: () => void }>();
+  private cancelling = new Map<number, { worker: Worker | MbProcess; stop: () => void }>();
   private idle: (() => void) | null = null;
   private retiring: Promise<void> | null = null;
   private closed = false;
@@ -39,11 +42,13 @@ export class LiveLocator {
   private readonly session: (key: string) => LiveSession | null;
   private readonly profiles: () => readonly LiveLocationProfile[];
   private readonly workerFile: URL | undefined;
+  private readonly mb: string | null;
   private readonly time: Fibers;
 
   constructor(data: string, session: (key: string) => LiveSession | null,
     profiles: () => readonly LiveLocationProfile[], workerFile?: URL, clock?: Clock.Clock) {
     this.data = data; this.session = session; this.profiles = profiles; this.workerFile = workerFile;
+    this.mb = workerFile === undefined ? mbReaderBinary() : null;
     this.time = new Fibers("live locator", clock);
     this.unlisten = onTranscriptHintsChanged((id) => {
       for (const request of this.active.values()) {
@@ -85,9 +90,16 @@ export class LiveLocator {
     else request.resolve(value);
   }
 
-  private start(): Worker {
+  private start(): Worker | MbProcess {
+    if (this.mb !== null) {
+      const program = new MbProcess(this.mb, ["--builder", "live-locator", "--db", join(this.data, "stillfail.db"), "--data", this.data, "--sep", sep]);
+      return this.listen(program);
+    }
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./live-locator-worker.ts" : "./sessions/live-locator-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    return this.listen(new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } }));
+  }
+
+  private listen<T extends Worker | MbProcess>(worker: T): T {
     this.worker = worker;
     worker.on("message", (message: LocateMessage) => { if (this.worker === worker) this.heard(message); });
     worker.on("error", (error) => { if (this.worker === worker) this.retire(error); });
@@ -181,7 +193,7 @@ export class LiveLocator {
 
   // A synchronous filesystem call may not reach its next cancellation point. Retire the worker then and restart the
   // other requests from their snapshots, so cancelling one subscription does not strand unrelated sessions.
-  private restart(worker: Worker) {
+  private restart(worker: Worker | MbProcess) {
     if (this.worker !== worker) return;
     const requests = [...this.active.values()];
     this.worker = null; this.active.clear();
