@@ -526,6 +526,18 @@ fn main {
         String(session) => Some(@signin.step(db, session))
         _ => None
       }))
+    (Some("search-scope"), Some(db), _) => {
+      // (the lanes taken in turn across steps, as one SearchScopePreparation keeps its turn)
+      let turn = Ref(0)
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "search scope", (db, ask) => match ask {
+        { "scope": "all", .. } => {
+          let (done, next) = @searchscope.step(db, turn.val)
+          turn.val = next
+          Some(done)
+        }
+        _ => None
+      }))
+    }
     (Some("live-locator"), Some(db), Some(data)) =>
       @host.run(shell_dir=beside(db, "shell"), host => live_locator(host, db, data, flag("--sep").unwrap_or("/")))
     (Some("vault-uses"), Some(db), _) =>
