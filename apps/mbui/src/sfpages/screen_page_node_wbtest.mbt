@@ -82,3 +82,36 @@ fn screen_stage_frames(retained : Bool) -> Array[Array[Array[Double]]] raise {
 test "retained screen stage keeps live reconnecting and ended picture geometry and opacity" {
   assert_eq(screen_stage_frames(true), screen_stage_frames(false))
 }
+
+///|
+fn screen_full_frames(retained : Bool, platform : Int) -> Array[Array[Array[Double]]] raise {
+  let r = screen_rig(retained~, platform~, w=844.0, h=390.0)
+  r.live(others=[])
+  r.ui().full.set(true)
+  r.t.draw()
+  let frames = []
+  for opened in [false, true] {
+    r.ui().tools_open = opened
+    r.t.draw()
+    assert_eq((r.ui().box_w, r.ui().box_h), (844.0, 390.0))
+    assert_true(r.t.drawn_instances().any(fn(a) {
+      a[5] == 0.0 && a[2] == 844.0 && a[3] == 390.0 &&
+      a[8] == 0.0 && a[9] == 0.0 && a[10] == 0.0 && a[11] == 1.0
+    }))
+    let images = r.t.drawn_instances().filter(fn(a) { a[5] == 4.0 })
+    assert_true(images.length() > 0)
+    frames.push(images)
+  }
+  r.tap_label("退出全屏")
+  assert_false(r.ui().full.get())
+  assert_eq(r.told("screen.view").length(), 1)
+  screen_done(r.t)
+  frames
+}
+
+///|
+test "retained full screen keeps touch and mouse pictures and tools without reopening" {
+  for platform in [0, 2] {
+    assert_eq(screen_full_frames(true, platform), screen_full_frames(false, platform))
+  }
+}
