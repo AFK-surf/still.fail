@@ -148,6 +148,14 @@ pub struct Damage {
   priv groups : Map[Int, Rect]
   /// a frame with headers, each instance once and each header once, its group's room after it left out (Damage::next)
   priv mut units : FixedArray[Double]
+  // each instance's hash (inst_hash) as it was worked out, the kept frame's and this one's, by the frame it was worked
+  // out in (`stamp`): the kept frame's are this one's of the frame before, not worked out again
+  priv mut prev_hash : FixedArray[Int64]
+  priv mut prev_at : FixedArray[Int]
+  priv mut cur_hash : FixedArray[Int64]
+  priv mut cur_at : FixedArray[Int]
+  priv mut stamp : Int
+  priv mut prev_stamp : Int
 }
 
 ///|
@@ -168,6 +176,12 @@ pub fn Damage::new() -> Damage {
     telling: false,
     groups: {},
     units: FixedArray::make(0, 0.0),
+    prev_hash: FixedArray::make(0, 0L),
+    prev_at: FixedArray::make(0, -1),
+    cur_hash: FixedArray::make(0, 0L),
+    cur_at: FixedArray::make(0, -1),
+    stamp: 0,
+    prev_stamp: -1,
   }
 }
 
@@ -195,6 +209,7 @@ pub fn Damage::next(
   groups? : Bool = false,
 ) -> Array[(Double, Double, Double, Double)] {
   let (inst, count) = if groups { self.units_of(inst, count) } else { (inst, count) }
+  self.stamp = self.stamp + 1
   let same_frame = self.has &&
     w == self.w &&
     h == self.h &&
@@ -317,6 +332,14 @@ fn Damage::keep(
     self.prev = FixedArray::make(len * 2, 0.0)
   }
   inst.blit_to(self.prev, len~)
+  // (what was worked out of this frame's hashes, the kept frame's now)
+  let was_hash = self.prev_hash
+  let was_at = self.prev_at
+  self.prev_hash = self.cur_hash
+  self.prev_at = self.cur_at
+  self.cur_hash = was_hash
+  self.cur_at = was_at
+  self.prev_stamp = self.stamp
   self.n = count
   self.w = w
   self.h = h
@@ -376,10 +399,49 @@ fn same_pieces(
 fn inst_hash(a : FixedArray[Double], k : Int) -> Int64 {
   let mut h = -3750763034362895579L
   let o = k * inst_size
+  guard o + inst_size <= a.length() else { abort("damage: an instance past its frame") }
   for j in 0..<inst_size {
-    h = (h ^ a[o + j].reinterpret_as_int64()) * 1099511628211L
+    h = (h ^ a.unsafe_get(o + j).reinterpret_as_int64()) * 1099511628211L
   }
   h
+}
+
+///|
+/// Instance `k`'s hash (inst_hash) of the kept frame (`prev`: the kept one) or of this one, worked out once in it.
+fn Damage::hash_at(self : Damage, prev : Bool, inst : FixedArray[Double], k : Int) -> Int64 {
+  let stamp = if prev { self.prev_stamp } else { self.stamp }
+  if prev {
+    if k >= self.prev_at.length() {
+      self.prev_at = grown_at(self.prev_at, k)
+      self.prev_hash = grown_hash(self.prev_hash, k)
+    }
+  } else if k >= self.cur_at.length() {
+    self.cur_at = grown_at(self.cur_at, k)
+    self.cur_hash = grown_hash(self.cur_hash, k)
+  }
+  let at = if prev { self.prev_at } else { self.cur_at }
+  let hs = if prev { self.prev_hash } else { self.cur_hash }
+  if at[k] == stamp {
+    return hs[k]
+  }
+  let h = inst_hash(inst, k)
+  hs[k] = h
+  at[k] = stamp
+  h
+}
+
+///|
+fn grown_at(a : FixedArray[Int], k : Int) -> FixedArray[Int] {
+  let b = FixedArray::make((k + 1) * 2, -1)
+  a.blit_to(b, len=a.length())
+  b
+}
+
+///|
+fn grown_hash(a : FixedArray[Int64], k : Int) -> FixedArray[Int64] {
+  let b = FixedArray::make((k + 1) * 2, 0L)
+  a.blit_to(b, len=a.length())
+  b
 }
 
 ///|
@@ -707,8 +769,8 @@ fn Damage::changed(
     // of it
     let n_a = seg_old - tail - head
     let n_b = seg - tail - head
-    let ha = FixedArray::makei(n_a, fn(i) { inst_hash(prev, head + i) })
-    let hb = FixedArray::makei(n_b, fn(i) { inst_hash(inst, head + i) })
+    let ha = FixedArray::makei(n_a, fn(i) { self.hash_at(true, prev, head + i) })
+    let hb = FixedArray::makei(n_b, fn(i) { self.hash_at(false, inst, head + i) })
     let sa = ha.copy()
     let sb = hb.copy()
     sa.sort()
