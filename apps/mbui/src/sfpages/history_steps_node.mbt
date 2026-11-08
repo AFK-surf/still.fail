@@ -64,7 +64,12 @@ pub fn history_steps_node(v : @view.View, src : Source, station : String, key : 
             }
           })
         })
-      1 => steps_box_node(p, steps_box, fn(b) { steps_words(b, fn() { head().edge }, steps_edge) })
+      1 =>
+        steps_box_node(p, steps_box, fn(b) {
+          // (in the middle across, as steps_edge says: center)
+          b.lines_up(Is(Some(Middle))) |> ignore
+          steps_words(b, fn() { head().edge }, steps_edge)
+        })
       _ => steps_list_node(p, src, station, key, params, lkey, tips)
     }
   })
@@ -196,6 +201,8 @@ fn steps_list_node(
                         @sf.wait_line_node(w, fn() { steps_head_of(src, params, lkey).edge }) |> ignore
                       })
                     } else {
+                      // (in the middle across, as steps_edge says: center)
+                      e.lines_up(Is(Some(Middle))) |> ignore
                       steps_words(e, fn() { steps_head_of(src, params, lkey).edge }, steps_edge)
                     }
                   })
