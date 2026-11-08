@@ -33,6 +33,9 @@ fn attention_reset() -> Unit {
 fn attention_set(open : Bool) -> Unit {
   if !open {
     attention.trouble_seen = None
+  } else {
+    // (beside the rail's bell where it is as it opens, whatever opens it: rail_node's)
+    attention_from.val = rail_place_at("attention")
   }
   wide.attention_open.set(open)
 }
@@ -86,6 +89,18 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       },
       along=Start,
       offset=if railed { attention_off_rail } else { attention_off_side },
+      // (the rail's bell a node of the window's tree: beside where it was as it was pressed, rail_node's)
+      // (opened before the bell was placed, a fixture's: where it is now)
+      at?=if railed && !@sf.native_on() {
+        match attention_from.val {
+          Some(r) => Some(r)
+          None => rail_place_at("attention")
+        }
+      } else {
+        None
+      },
+      // (and a press of it its own, none outside the panel)
+      anchor_node?=if railed && !@sf.native_on() { rail_drawn.get("attention") } else { None },
       look=@sf.beside_look(Px(attention_w), inner=att_list),
       fn() {
         attention_rows(c, src, w, railed, close)

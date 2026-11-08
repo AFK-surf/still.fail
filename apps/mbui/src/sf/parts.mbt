@@ -4822,6 +4822,64 @@ pub fn coming_mark(c : @ui.Ctx, key : String, coming : Double?, size : Double, c
 }
 
 ///|
+/// coming_mark as a node of the window's tree in `parent`: the download's mark `size` across in `color`, the ring round
+/// it the accent from its top as far round as `coming` says it has come (0 to 1), going to a part told anew over
+/// @kit.progress_ms, eased out (progress_spinner's).
+pub fn coming_mark_node(parent : @view.View, coming : () -> Double, size : Double, color : () -> Int64) -> Unit {
+  let stroke = size * icon_stroke / 24.0
+  let side = size * coming_ring / 24.0 + stroke
+  let pi = 3.141592653589793
+  let mid = side / 2.0
+  let r = mid - stroke / 2.0
+  let ring = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
+  let part = fn() {
+    let k = coming()
+    if k < 0.0 {
+      0.0
+    } else if k > 1.0 {
+      1.0
+    } else {
+      k
+    }
+  }
+  let way = EdgeWay::new(@signals.untracked(part))
+  let look = coming_mark_box(size)
+  parent.box(fn(m) {
+    style_node(m, fn() { look })
+    m.reacts(part, fn(k) { way.go(m, k, @kit.progress_ms) })
+    m.box(fn(l) {
+      l
+      .width(Is(Some(side)))
+      .height(Is(Some(side)))
+      .lines(By(fn() {
+        let t = theme()
+        let shown = way.shown(m)
+        let lines = [@ui.line(ring, width=stroke, color=t.p.line_strong)]
+        if shown > 0.0 {
+          lines.push(@ui.line(@ui.arc(mid, mid, r, from=-0.5 * pi, sweep=shown * 2.0 * pi), width=stroke, color=t.p.accent))
+        }
+        lines
+      }))
+      |> ignore
+    })
+    |> ignore
+    m.box(fn(o) {
+      o.over(Is(true)) |> ignore
+      style_node(o, fn() { update_ring_at })
+      icon_node(o, "download-ring", size, By(color)) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What coming_mark draws in: `size` square, what it holds in its middle.
+fn coming_mark_box(size : Double) -> @ui.Style {
+  @ui.style(w=Fixed(size), h=Fixed(size), align=ACenter, justify=JCenter)
+}
+
+///|
 /// The icons' line (design/icons: stroke-width 1.75 of 24), and the width of the circles they draw (3.5 to 20.5).
 let icon_stroke : Double = 1.75
 

@@ -153,27 +153,64 @@ let glyph_breath_period : Double = 1400.0
 /// arc breathes while a link is on its way (endless decorations, Ctx::cycle: resident, up as long as Home is, so on the
 /// one clock's steps); still with motion reduced.
 pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, red : Int64) -> Int {
-  let (arcs, dots) = glyph_layout(g)
   let still = @ui.reduced_motion()
   let blinking = if g.asleep { 0 } else { g.working }
-  // a blink: open most of the time, shut for a moment (2.6 s, shut at 93%: down over 130 ms, up over 182)
-  let mut eye = 1.0
-  if blinking > 0 && !still {
-    // (on the resident clock's steps, a frame only at those of the blink: open, it is the same at every other)
-    let t = (c.loop_at(glyph_blink_period, glyph_blink_steps) / @ui.cycle_step_ms).floor() * @ui.cycle_step_ms
-    if t >= 2288.0 {
-      eye = if t < 2418.0 {
-        1.0 - 0.9 * (t - 2288.0) / 130.0
-      } else {
-        0.1 + 0.9 * (t - 2418.0) / 182.0
-      }
-      eye = (eye * 10.0).round() / 10.0
-    }
+  // (on the resident clock's steps, a frame only at those of the blink: open, it is the same at every other)
+  let eye = if blinking > 0 && !still {
+    glyph_eye((c.loop_at(glyph_blink_period, glyph_blink_steps) / @ui.cycle_step_ms).floor() * @ui.cycle_step_ms)
+  } else {
+    1.0
   }
   // a link on its way: its arc breathes between the track and ink (1.4 s), held halfway with motion reduced; breathing,
   // drawn apart over the rest in ink, its opacity a look by the clock (Ctx::cycle_look): what holds the glyph is not
   // built again for each step of it (built each step, the stations' tab on the phone's bar built the whole frame ten
   // times a second, and each frame after it again, for as long as a station could not be reached)
+  let (layers, breaths, breathing) = glyph_drawn(g, eye, still, tint, red)
+  let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking > 0}/\{eye}/\{breathing}/\{red}/\{tint}"
+  if !breathing {
+    return draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
+  }
+  // (as big as the glyph: the breath laid over it whole)
+  c.box(fn() {
+    draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None) |> ignore
+    let breath = c.layer(fn() {
+      draw_drawable(c, "glyph-breath/" + key, { w: 24.0, h: 24.0, layers: breaths }, size, None) |> ignore
+    })
+    c.cycle_look(breath, glyph_breath_period, fn(f) { @ui.look(alpha=glyph_breath_at(f)) }, resident=true)
+  })
+}
+
+///|
+/// How open the robot's eyes are `t` ms into the blink's loop (2.6 s, shut at 93%: down over 130 ms, up over 182), to a
+/// tenth.
+fn glyph_eye(t : Double) -> Double {
+  if t < 2288.0 {
+    return 1.0
+  }
+  let eye = if t < 2418.0 { 1.0 - 0.9 * (t - 2288.0) / 130.0 } else { 0.1 + 0.9 * (t - 2418.0) / 182.0 }
+  (eye * 10.0).round() / 10.0
+}
+
+///|
+/// How much of a breathing arc shows `f` of the way round its breath (between the track's and 85%, to a twentieth).
+fn glyph_breath_at(f : Double) -> Double {
+  let p = f * 2.0
+  let p = if p < 1.0 { p } else { 2.0 - p }
+  ((glyph_track + (0.85 - glyph_track) * standard_at(p)) * 20.0).round() / 20.0
+}
+
+///|
+/// What the glyph draws with its eyes `eye` open (`still`: motion reduced): its layers but a breathing arc's, the
+/// breathing arcs' apart, whether one breathes.
+fn glyph_drawn(
+  g : GlyphCounts,
+  eye : Double,
+  still : Bool,
+  tint : Int64,
+  red : Int64,
+) -> (Array[@pixels.VectorPath], Array[@pixels.VectorPath], Bool) {
+  let (arcs, dots) = glyph_layout(g)
+  let blinking = if g.asleep { 0 } else { g.working }
   let breathing = arcs.iter().any(fn(a) { a.pulse }) && !still
   let whole = if g.asleep { 0.4 } else { 1.0 }
   let layers : Array[@pixels.VectorPath] = []
@@ -204,27 +241,50 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
     }
   }
   layers.push(glyph_layer(body.to_string(), faded(tint, whole), 0L, 0.0, even_odd=true))
-  let key = "glyph-state/\{g.online}/\{g.dim}/\{g.failing}/\{g.connecting}/\{g.asleep}/\{blinking > 0}/\{eye}/\{breathing}/\{red}/\{tint}"
-  if !breathing {
-    return draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None)
-  }
-  // (as big as the glyph: the breath laid over it whole)
-  c.box(fn() {
-    draw_drawable(c, key, { w: 24.0, h: 24.0, layers }, size, None) |> ignore
-    let breath = c.layer(fn() {
-      draw_drawable(c, "glyph-breath/" + key, { w: 24.0, h: 24.0, layers: breaths }, size, None) |> ignore
+  (layers, breaths, breathing)
+}
+
+///|
+/// The stations' glyph (station_glyph's) as a node in `parent`, `size` square, as `g` says the stations are now, in
+/// `tint` (failing ones' dots in `red`): its eyes blinking on the resident clock's steps while a station works, a link
+/// on its way breathing over it (View::cycle_resident: drawn anew only at each step, nothing built again); still with
+/// motion reduced. Its node.
+pub fn station_glyph_node(
+  parent : @view.View,
+  g : () -> GlyphCounts,
+  size : Double,
+  tint : () -> Int64,
+  red : () -> Int64,
+) -> @view.View {
+  let made : Ref[@view.View?] = Ref(None)
+  parent.box(fn(v) {
+    made.val = Some(v)
+    let eye = fn() {
+      let counts = g()
+      let blinking = if counts.asleep { 0 } else { counts.working }
+      if blinking > 0 && !@ui.reduced_motion() {
+        glyph_eye((v.cycle_resident(glyph_blink_period) * glyph_blink_period / @ui.cycle_step_ms).floor() * @ui.cycle_step_ms)
+      } else {
+        1.0
+      }
+    }
+    let drawn = fn() { glyph_drawn(g(), eye(), @ui.reduced_motion(), tint(), red()) }
+    v
+    .width(Is(Some(size)))
+    .height(Is(Some(size)))
+    .shapes(By(fn() { @ui.vector_shapes({ w: 24.0, h: 24.0, layers: drawn().0 }, size, v.pixel_scale()) }))
+    |> ignore
+    // (a link on its way: its arc over the rest, breathing)
+    v.show(fn() { drawn().2 }, fn(b) {
+      b
+      .over(Is(true))
+      .shapes(By(fn() { @ui.vector_shapes({ w: 24.0, h: 24.0, layers: drawn().1 }, size, b.pixel_scale()) }))
+      .alpha(By(fn() { glyph_breath_at(b.cycle_resident(glyph_breath_period)) }))
+      |> ignore
     })
-    c.cycle_look(
-      breath,
-      glyph_breath_period,
-      fn(f) {
-        let p = f * 2.0
-        let p = if p < 1.0 { p } else { 2.0 - p }
-        @ui.look(alpha=((glyph_track + (0.85 - glyph_track) * standard_at(p)) * 20.0).round() / 20.0)
-      },
-      resident=true,
-    )
   })
+  |> ignore
+  made.val.unwrap_or(parent)
 }
 
 ///|
@@ -255,6 +315,12 @@ fn standard_at(t : Double) -> Double {
 /// A rounded frame `w` by `h` (its corner `r`) drawn as dashes `line` wide in `color` (CSS's `dashed`: a dash three of
 /// its widths, a gap two, spread to come round evenly), its line's middle on the frame; what stands by it is under.
 pub fn dashed_frame(c : @ui.Ctx, w : Double, h : Double, r : Double, line : Double, color : Int64) -> Int {
+  draw_drawable(c, "dashed/\{w}/\{h}/\{r}/\{line}/\{color}", dashed_vector(w, h, r, line, color), w + line, None)
+}
+
+///|
+/// What dashed_frame draws, as a picture `w + line` by `h + line`.
+pub fn dashed_vector(w : Double, h : Double, r : Double, line : Double, color : Int64) -> @pixels.Vector {
   let path = StringBuilder()
   for o in @ui.dashed_outlines(w, h, r, line) {
     let pts = o.0
@@ -263,12 +329,7 @@ pub fn dashed_frame(c : @ui.Ctx, w : Double, h : Double, r : Double, line : Doub
       path.write_string("\{num(pts[2 * i] + line / 2.0)} \{num(pts[2 * i + 1] + line / 2.0)}")
     }
   }
-  let d : @pixels.Vector = {
-    w: w + line,
-    h: h + line,
-    layers: [glyph_layer(path.to_string(), 0L, color, line)],
-  }
-  draw_drawable(c, "dashed/\{w}/\{h}/\{r}/\{line}/\{color}", d, w + line, None)
+  { w: w + line, h: h + line, layers: [glyph_layer(path.to_string(), 0L, color, line)] }
 }
 
 ///|

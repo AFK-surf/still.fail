@@ -286,6 +286,8 @@ pub let columns : Columns
 
 pub fn coming_mark(@ui.Ctx, String, Double?, Double, Int64) -> Unit
 
+pub fn coming_mark_node(@view.View, () -> Double, Double, () -> Int64) -> Unit
+
 pub let command_box_corner : Double
 
 pub fn compare_natural(String, String) -> Int32

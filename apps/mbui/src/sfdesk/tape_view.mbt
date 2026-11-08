@@ -769,7 +769,17 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       // (the block, the tree's: its ground, the rail and a place's sidebar not made once in it, dock_node)
       side.box(fn(b) {
         b.over(Is(true)) |> ignore
-        dock_node(b, fn() { tape_side_at(side) }, fn(c) { tape_rail_built(c, src) }, fn(c, _) { tape_sidebar_built(c, src) })
+        let tips = @sf.TipLayer::new(fn() { tape_goes.node })
+        dock_node(
+          b,
+          fn() { tape_side_at(side) },
+          fn(r) {
+            // (nothing of it read out while the panel is behind the one in use: tape_behind's)
+            r.hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
+            rail_node(r, src, tips, fn() { rail_at_tape(tape_side_at(side).ground) })
+          },
+          fn(c, _) { tape_sidebar_built(c, src) },
+        )
         |> ignore
       })
       |> ignore
@@ -1094,17 +1104,6 @@ fn tape_behind(c : @ui.Ctx, p : TapePane, body : () -> Unit) -> Unit {
 /// Whether panel `p` has its cover over it (tape_cover): not in use, or on its way to be, or pulled over by a finger.
 fn tape_covered(p : TapePane) -> Bool {
   wide.tape_at.get() != p || !tape_goes.rest.get() || wide.tape_pull.get() == Some(p)
-}
-
-///|
-/// The rail on the tape (its old view in the sidebar's panel's nodes: dock_node), open, apart from the page; behind the
-/// panel in use on its darker ground (tape_behind).
-fn tape_rail_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, all, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  if !@sf.native_on() {
-    tape_behind(c, Side, fn() { rail(c, src, w, all, false) })
-  }
 }
 
 ///|

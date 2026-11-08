@@ -82,8 +82,8 @@ fn coming_words(n : Int, percent : Int) -> String {
 }
 
 ///|
-/// Their list, while `ftransfers.open.get()`: the library's panel from `id` (beside it, or a sheet from the foot on a small
-/// screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
+/// Their list, while `ftransfers.open.get()`: the library's panel from `from` (beside it, or a sheet from the foot on a
+/// small screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
 /// closed once there is none. `go`: where a copy's folder is shown. `side`, `along`: where it stands beside `id` (the
 /// rail's key: beside the rail, `rail_menu_off` out, its foot level with the key's, as the workspaces' menu under it is;
 /// under it, it lay over the rail, the mark of the workspace in view showing at its edge).
@@ -91,7 +91,7 @@ fn transfers_list(
   c : @ui.Ctx,
   src : Source,
   ws : String,
-  id : Int,
+  from : @sf.Anchor,
   go : (DriveAt) -> Unit,
   none : Bool,
   side? : @ui.Side = Bottom,
@@ -115,7 +115,7 @@ fn transfers_list(
           transfer_row(c, src, x, go)
         }
       },
-      from=Of(id),
+      from~,
       w=ftransfers_w,
       side~,
       along~,
@@ -133,35 +133,20 @@ fn transfers_list(
 }
 
 ///|
-/// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
-/// comes and goes, as far as it has come (@sf.coming_mark in its mark's place), red's dot when one failed; pressed, their list beside
-/// it. Nothing while there is none.
-fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
-  let all = coming(src, ws)
-  let id = c.id("rail/transfers")
-  let go = fn(at : DriveAt) { open_page(Drive(at)) }
-  if all.none() {
-    transfers_list(c, src, ws, id, go, true, side=Right, along=End)
-    return
+/// Their list from the rail's key of them (rail_transfers_node), drawn over the frame (rail_overlays): beside the key
+/// where it was as the list was opened from it (else where it is now), its foot level with the key's, as the
+/// workspaces' menu under it is.
+fn rail_transfers_list(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let all = coming(src, w.id)
+  let from : @sf.Anchor = match (transfers_from.val, rail_transfers_key.val) {
+    (Some((x, y, aw, ah)), _) => At(x, y, aw, ah)
+    (None, Some(v)) if v.alive() => {
+      let (x, y, aw, ah) = v.placed_window_now()
+      At(x, y, aw, ah)
+    }
+    _ => Unanchored
   }
-  let (n, percent, failed) = all.going()
-  c.on_press(id, fn() {
-    ftransfers.open.set(!ftransfers.open.get())
-  })
-  rail_ground(
-    c,
-    id,
-    ftransfers.open.get(),
-    fn(color) {
-      // (as the small screen's key's: @sf.progress_key)
-      @sf.coming_mark(c, "rail/transfers", Some(percent.to_double() / 100.0), rail_icon_size, color)
-      if failed {
-        rail_tone_mark(c, "alert")
-      }
-    },
-    label=coming_words(n, percent),
-  )
-  transfers_list(c, src, ws, id, go, false, side=Right, along=End)
+  transfers_list(c, src, w.id, from, fn(at) { open_page(Drive(at)) }, all.none(), side=Right, along=End)
 }
 
 ///|
@@ -174,7 +159,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let id = c.id("home/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, id, go, true)
+    transfers_list(c, src, ws, Of(id), go, true)
     return
   }
   let (n, percent, failed) = all.going()
@@ -183,7 +168,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~, on_press=fn() {
     ftransfers.open.set(!ftransfers.open.get())
   })
-  transfers_list(c, src, ws, id, go, false)
+  transfers_list(c, src, ws, Of(id), go, false)
 }
 
 ///|
