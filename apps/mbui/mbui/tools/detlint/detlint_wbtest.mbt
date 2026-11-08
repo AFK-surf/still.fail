@@ -2181,6 +2181,25 @@ test "old-list" {
 }
 
 ///|
+test "old-island" {
+  // an old view hosted in a node (`@ui.old(v, build)`): counted (a call each); in a test, in the framework (src/host
+  // here), another of ui's calls of a like name (old_views_here) not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p(v : @view.View) -> Unit {\n  @ui.old(v, fn(c) { draw(c) }) |> ignore\n  @ui.old_views_here(c)\n  @ui.old(v, natural=true, fn(c) { draw(c) }) |> ignore\n}\n",
+      ),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  @ui.old(v, fn(c) { draw(c) }) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(v : @view.View) -> Unit {\n  @ui.old(v, fn(c) { draw(c) }) |> ignore\n}\n"),
+    ],
+    "old-island",
+    2,
+  )
+  assert_eq(lines(fs), [2, 4])
+}
+
+///|
 test "click-read" {
   // a click read by a build outside mbui's ui and kit: counted (a call each); in ui, in kit, in a test, a field of that
   // name, not

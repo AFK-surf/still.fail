@@ -334,7 +334,7 @@
       "src/sfpages/new_connect.mbt": 11,
       "src/sfpages/notifications.mbt": 2,
       "src/sfpages/permissions.mbt": 8,
-      "src/sfpages/security.mbt": 33,
+      "src/sfpages/security.mbt": 25,
       "src/sfpages/slack_app.mbt": 6,
       "src/sfpages/vault.mbt": 5,
       "src/sfpages/vault_dialogs.mbt": 6,
@@ -469,6 +469,26 @@
       "src/sfpages/switcher.mbt": 1,
       "src/sfpages/things.mbt": 1
     },
+    "old-island": {
+      "src/sf/menu_node.mbt": 1,
+      "src/sf/panel_centred_node.mbt": 6,
+      "src/sf/panel_node.mbt": 4,
+      "src/sf/pick_node.mbt": 1,
+      "src/sf/stage_node.mbt": 2,
+      "src/sfapp/app.mbt": 3,
+      "src/sfapp/entry_tree.mbt": 1,
+      "src/sfapp/home_node.mbt": 4,
+      "src/sfapp/narrow_shell.mbt": 3,
+      "src/sfapp/tape_shell.mbt": 4,
+      "src/sfbase/viewer_tree.mbt": 3,
+      "src/sfdesk/page_pane.mbt": 1,
+      "src/sfdesk/pane_view.mbt": 1,
+      "src/sfdesk/side_node.mbt": 4,
+      "src/sfdesk/tape_view.mbt": 2,
+      "src/sfpages/landing_node.mbt": 1,
+      "src/sfpages/search.mbt": 1,
+      "src/sfpages/security.mbt": 1
+    },
     "click-read": {
       "src/sf/files.mbt": 7,
       "src/sf/page.mbt": 5,
@@ -562,6 +582,7 @@
     "ui-current": {},
     "build-clock": {},
     "old-list": {},
+    "old-island": {},
     "click-read": {}
   }
 }

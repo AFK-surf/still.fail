@@ -550,9 +550,9 @@ pub fn search_summon(@ui.Ctx, Array[Offered], Bool) -> Unit
 
 pub fn sec_section(@ui.Ctx, @sf.Look, String, count~ : Int32, () -> Unit) -> Unit
 
-pub fn security_open_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn security_open_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
-pub fn security_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
+pub fn security_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint? : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn send_in_chat(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Writing) -> Unit
 
@@ -567,8 +567,6 @@ pub fn service_sizes_panel(String, @sf.Anchor) -> Unit
 pub fn service_view(@ui.Ctx, @sfbase.Source, String, String, Int32, String, Bool, Int32, String, file? : @sfbase.FilePage?, close? : (() -> Unit)?) -> Unit
 
 pub fn set_filter(@sfbase.Source, @sfbase.Workspace, String) -> Unit
-
-pub fn settings_blocks(@ui.Ctx, @settings.Core, @settings.Here, (@settings.Route) -> Unit) -> Array[() -> Unit]
 
 pub fn settings_home_node(@view.View, @settings.Core, () -> @settings.Here, (@settings.Route) -> Unit, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, bars~ : () -> Bool, stint~ : () -> Int32) -> Unit
 
