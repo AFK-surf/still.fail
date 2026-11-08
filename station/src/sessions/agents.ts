@@ -66,6 +66,7 @@ import type { TailState } from "../read/tail.ts";
 import { followLatestThreadRequests } from "../read/latest-thread-requests.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
+import { LiveLocator } from "./live-locator.ts";
 import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
 import { buildSessionCounts } from "./session-count-builder.ts";
 import { PostBlockBuilder } from "./post-block-builder.ts";
@@ -534,6 +535,10 @@ export const AgentsLive = (control: Control) =>
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
       };
+      // Resolving a live session's older transcript files may take a while; keep it off the station's thread.
+      const liveLocator = new LiveLocator(data, (key) => store.getSession(key), () => hub.config().profiles);
+      hub.live.locateAsync = (key, signal) => liveLocator.locate(key, signal);
+      yield* Effect.addFinalizer(() => Effect.promise(() => liveLocator.close()));
       // Not asked of them before the process before has handed over: what it carries says where each reading stands.
       hub.live.handover = previous;
       // Where each checklist was read to, for the next process to read on from (not back, at each update).

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Worker } from "node:worker_threads";
+import { pathToFileURL } from "node:url";
 import { Store } from "../src/store/store.ts";
+import { LiveLocator } from "../src/sessions/live-locator.ts";
 import { installSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { keyPart, sandboxName } from "../src/agents/sandbox-name.ts";
 import { installLegacySaid } from "../src/store/legacy-said-build.ts";
@@ -20,6 +22,27 @@ test("the station in a release starts", { skip: !process.env.STATION_BUNDLE }, (
     const run = spawnSync(process.execPath, [join(process.env.STATION_BUNDLE!, "main.js"), "status", "--data", data], { encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
   } finally { rmSync(data, { recursive: true, force: true }); }
+});
+
+test("a release's live locator finds a transcript", { skip: !process.env.STATION_BUNDLE }, async () => {
+  const data = mkdtempSync(join(tmpdir(), "station-bundle-live-"));
+  const store = Store.open(join(data, "stillfail.db"));
+  const locator = new LiveLocator(data, (key) => store.getSession(key), () => [],
+    pathToFileURL(join(process.env.STATION_BUNDLE!, "sessions/live-locator-worker.js")));
+  try {
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "mine" });
+    store.setRuntimeSessionId("one", "current");
+    const directory = join(data, "transcripts", "claude", "-w");
+    const path = join(directory, "current.jsonl");
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(path, "");
+    assert.deepEqual(await locator.locate("one"), { runtime: "claude", paths: [{ path, runtime: "claude" }], current: true });
+  } finally {
+    await locator.close();
+    store.close();
+    rmSync(data, { recursive: true, force: true });
+  }
 });
 
 // The mac-build job calls this on the release it just laid out; the regular test suite has no release directory.
