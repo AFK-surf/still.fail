@@ -556,7 +556,7 @@ fn Ctx::across_found(self : Ctx, n : Node, from : Int) -> Array[BarAt] {
 fn Ctx::across_targets(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
   for b in self.across_found(n, from) {
     self.next_bars.push(b)
-    if self.bar_shows(b) * alpha > 0.002 {
+    if self.bar_shows(b, self.clock) * alpha > 0.002 {
       self.bar_target(b)
     }
   }
@@ -617,13 +617,12 @@ fn Ctx::bar_target(self : Ctx, b : BarAt) -> Unit {
 }
 
 ///|
-/// How much of bar `b` shows now (0 hidden), as it is drawn (Ctx::paint_bar), what it wakes for aside.
-fn Ctx::bar_shows(self : Ctx, b : BarAt) -> Double {
+/// How much of bar `b` shows at `at` (0 hidden), as Ctx::paint_bar draws it then: where its thumb is taken (the
+/// frame's moment as its targets are found; an input's, as it is pressed). Read for where the thumb is, not for how it
+/// looks: what fades it is paint_bar's, which follows the clock while it fades.
+fn Ctx::bar_shows(self : Ctx, b : BarAt, at : Double) -> Double {
   guard self.bar_owner(b.id) is Some((bar, until, _)) else { return 0.0 }
-  let hide = bar.hides_at(until)
-  let t = self.clock
-  let fading = t < bar.in_at + scrollbar_fade_ms || (t >= hide && t < hide + scrollbar_fade_ms)
-  bar.shown(if fading { self.now() } else { t }, until)
+  bar.shown(at, until)
 }
 
 ///|

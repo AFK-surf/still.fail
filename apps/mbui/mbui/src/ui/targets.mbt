@@ -81,7 +81,7 @@ fn Ctx::node_targets(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let across_from = self.across_seen.length()
   self.paint_held(n, alpha)
   match bar {
-    Some(b) if self.bar_shows(b) * alpha > 0.002 => self.bar_target(b)
+    Some(b) if self.bar_shows(b, self.clock) * alpha > 0.002 => self.bar_target(b)
     _ => ()
   }
   if n.kind == kind_list {
