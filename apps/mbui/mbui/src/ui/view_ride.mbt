@@ -1,0 +1,485 @@
+// What a list's row of the window's tree drew (Tree::rides_scroll), kept as the frame's instances it came to: drawn
+// again moved, its nodes not gone through, where nothing of it changed since (Tree::drawn_rev) and it is only moved
+// by whole pixels within the clip it is drawn in, as Android's RenderNode is drawn again offset, Chrome's layer
+// scrolled. Where it was drawn otherwise than its instances moved say (its picture, decoded or fading in since; one
+// not seen asked for), that part drawn anew in its place among them.
+
+///|
+/// A part of a row drawn anew each time it is drawn again (a picture, or one not seen yet asked for): where among its
+/// instances it was (`at` until `end`), whose, where it was drawn and as big and opaque, in which clip.
+priv struct RideSpot {
+  at : Int
+  end : Int
+  c : @view.Content
+  x : Double
+  y : Double
+  s : Double
+  a : Double
+  /// none: one not seen (Ctx::view_unseen), nothing drawn
+  clip : FixedArray[Double]?
+  apart : Bool
+  window : Bool
+}
+
+///|
+/// What a row drew, kept to draw it again (Ctx::ride_again).
+priv struct RideKept {
+  /// the tree's count of changes as it was drawn (Tree::drawn_rev_taken): kept while its own is no more
+  rev : Int
+  /// where its root was drawn, how opaque, and where it is laid out off that (where its glyphs are set)
+  x : Double
+  y : Double
+  a : Double
+  off_x : Double
+  off_y : Double
+  /// the frame's pixels a point, words' zoom, the glyphs let go before it (ride_glyphs_gone), whether who drew what
+  /// was kept: drawn again only as they were
+  scale : Double
+  zoom : Double
+  glyphs : Int
+  owned : Bool
+  /// the clip it was drawn in (a clip_stack level)
+  clip : FixedArray[Double]
+  /// its instances, and which of their numbers are moved with it (ride_moves' bits)
+  inst : FixedArray[Double]
+  moves : FixedArray[Int]
+  /// its shapes' pieces, and where among the frame's they began
+  segs : Array[Double]
+  seg0 : Int
+  spots : Array[RideSpot]
+  /// who drew each, as kept (inst_owners)
+  owners : Array[(Int, (Double, Double), @view.NodeId?, Int)]
+  /// how far all it holds reaches (x0, y0, x1, y1); whether that was wholly within its clip across and up and down
+  reach : (Double, Double, Double, Double)
+  inside_x : Bool
+  inside_y : Bool
+  /// how many of the tree's nodes it drew
+  nodes : Int
+}
+
+///|
+/// A row being drawn as the tree is painted, kept as it closes (Ctx::ride_end).
+priv struct Riding {
+  id : @view.NodeId
+  rev : Int
+  k0 : Int
+  seg0 : Int
+  clips0 : Int
+  rings0 : Int
+  x : Double
+  y : Double
+  a : Double
+  off_x : Double
+  off_y : Double
+  /// where in clip_stack the clip it is drawn in is
+  clip_at : Int
+  spots : Array[RideSpot]
+  mut spoiled : Bool
+  mut x0 : Double
+  mut y0 : Double
+  mut x1 : Double
+  mut y1 : Double
+  mut nodes : Int
+}
+
+///|
+/// What each row drew last, by its root (kept while it is drawn so: let go with the node, view_forget).
+// kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
+let ride_kept : Map[@view.NodeId, RideKept] = {}
+
+///|
+/// The row being drawn now, as the tree is painted (none between paints).
+// kept across runs: none between paints
+let riding : Ref[Riding?] = Ref(None)
+
+///|
+/// How many rows were drawn as kept, moved (Ctx::ride_again): for a test.
+// kept across runs: only counts
+let ride_drawn : Ref[Int] = Ref(0)
+
+///|
+/// How many times glyphs kept by what nodes drew were let go of in the atlas (view_glyphs_held): a row kept before
+/// draws them from where they are no more.
+// kept across runs: only counts
+let ride_glyphs_gone : Ref[Int] = Ref(0)
+
+///|
+/// The clip at `k` of `clip_stack`, its 24 numbers.
+fn ride_clip_at(k : Int) -> FixedArray[Double] {
+  let c = FixedArray::make(clip_n, 0.0)
+  for j in 0..<clip_n {
+    c[j] = clip_stack[k + j]
+  }
+  c
+}
+
+///|
+/// Whether a clip is one a row's own clips are measured against the same wherever the row is in it: square, and its
+/// outer square (push_clip_r's choice of an outer: none cuts a box inside it).
+fn ride_clip_square(c : FixedArray[Double]) -> Bool {
+  for j in 4..<8 {
+    if c[j] != 0.0 || c[12 + j] != 0.0 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Which of instance `b`'s numbers (in `a`) move with the row drawn in clip `e`: its clip's edges and its outer's
+/// that are not `e`'s own (its own clips' within it, as far inside it as the row is), as bits 0-3 and 4-7; bit 8, the
+/// place 33-34 says.
+fn ride_moves(a : FixedArray[Double], b : Int, e : FixedArray[Double]) -> Int {
+  let mut m = 0
+  for j in 0..<4 {
+    if a[b + 16 + j] != e[j] {
+      m = m | (1 << j)
+    }
+  }
+  let none = a[b + 40] == 0.0 && a[b + 41] == 0.0 && a[b + 42] == 0.0 && a[b + 43] == 0.0
+  if !none {
+    for j in 0..<4 {
+      let v = a[b + 40 + j]
+      if v != e[j] && v != e[12 + j] {
+        m = m | (1 << (4 + j))
+      }
+    }
+  }
+  if a[b + 32] != 0.0 {
+    m = m | 256
+  }
+  m
+}
+
+///|
+/// Whether `v` points are whole pixels, `sc` of them a point.
+fn ride_whole(v : Double, sc : Double) -> Bool {
+  let p = v * sc
+  (p - p.round()).abs() < 1.0e-6
+}
+
+///|
+/// A row being drawn begun (`c` at (x, y), as opaque as `a`, laid out at (ux, uy)), its instances from here on its.
+fn Ctx::ride_begin(
+  self : Ctx,
+  c : @view.Content,
+  rev : Int,
+  x : Double,
+  y : Double,
+  a : Double,
+  ux : Double,
+  uy : Double,
+  clips : Int,
+  rings : Int,
+) -> Unit {
+  riding.val = Some({
+    id: c.id,
+    rev,
+    k0: self.ninst,
+    seg0: self.segs.length() / 4,
+    clips0: clips,
+    rings0: rings,
+    x,
+    y,
+    a,
+    off_x: ux - x,
+    off_y: uy - y,
+    clip_at: clip_top(),
+    spots: [],
+    spoiled: false,
+    x0: x,
+    y0: y,
+    x1: x + c.w,
+    y1: y + c.h,
+    nodes: 0,
+  })
+}
+
+///|
+/// The row being drawn ended, all of it drawn: kept where nothing of it is drawn otherwise than moving it would draw
+/// it, wholly within its clip one way at least; else what was kept of it let go.
+fn Ctx::ride_end(self : Ctx) -> Unit {
+  guard riding.val is Some(r) else { return }
+  riding.val = None
+  let k = r.clip_at
+  let side_x = ride_side(r.x0, r.x1, clip_stack[k], clip_stack[k + 2])
+  let side_y = ride_side(r.y0, r.y1, clip_stack[k + 1], clip_stack[k + 3])
+  let n = self.ninst - r.k0
+  if r.spoiled || (side_x != 0 && side_y != 0) {
+    ride_kept.remove(r.id)
+    return
+  }
+  let e = ride_clip_at(k)
+  if !ride_clip_square(e) {
+    ride_kept.remove(r.id)
+    return
+  }
+  let inst = FixedArray::make(n * inst_size, 0.0)
+  self.inst.blit_to(inst, len=n * inst_size, src_offset=r.k0 * inst_size)
+  let moves = FixedArray::make(n, 0)
+  for i in 0..<n {
+    moves[i] = ride_moves(inst, i * inst_size, e)
+  }
+  let owned = inst_owners_kept()
+  let owners : Array[(Int, (Double, Double), @view.NodeId?, Int)] = []
+  if owned {
+    let o = inst_owners.owner
+    let cl = inst_owners.cell
+    let tr = inst_owners.tree
+    let mk = inst_owners.mark
+    for k in r.k0..<self.ninst {
+      owners.push(
+        (
+          if k < o.length() { o[k] } else { -1 },
+          if k < cl.length() { cl[k] } else { (0.0, 1.0) },
+          if k < tr.length() { tr[k] } else { None },
+          if k < mk.length() { mk[k] } else { 0 },
+        ),
+      )
+    }
+  }
+  let segs = []
+  for j in (r.seg0 * 4)..<self.segs.length() {
+    segs.push(self.segs[j])
+  }
+  ride_kept[r.id] = {
+    rev: r.rev,
+    x: r.x,
+    y: r.y,
+    a: r.a,
+    off_x: r.off_x,
+    off_y: r.off_y,
+    scale: self.scale,
+    zoom: words_zoom.val,
+    glyphs: ride_glyphs_gone.val,
+    owned,
+    clip: e,
+    inst,
+    moves,
+    segs,
+    seg0: r.seg0,
+    spots: r.spots.map(fn(s) { { ..s, at: s.at - r.k0, end: s.end - r.k0 } }),
+    owners,
+    reach: (r.x0, r.y0, r.x1, r.y1),
+    inside_x: side_x == 0,
+    inside_y: side_y == 0,
+    nodes: r.nodes,
+  }
+}
+
+///|
+/// Node `c` of the row being drawn, drawn at (x, y) `s` times as big: how far the row reaches, and whether it draws
+/// what moving it would not draw again (`moved_not`: turned, grown, faded or stretched, in a layer, glass, bones, an
+/// old view, a field).
+fn ride_node(c : @view.Content, x : Double, y : Double, s : Double, moved_not : Bool) -> Unit {
+  guard riding.val is Some(r) else { return }
+  r.nodes = r.nodes + 1
+  if moved_not || s != 1.0 || c.hosted || c.bones != 0L || c.glass is Some(_) {
+    r.spoiled = true
+  }
+  r.x0 = dmin(r.x0, x)
+  r.y0 = dmin(r.y0, y)
+  r.x1 = dmax(r.x1, x + c.w * s)
+  r.y1 = dmax(r.y1, y + c.h * s)
+}
+
+///|
+/// Of the row being drawn, something it draws anew each time: `draw` drawn here, where it was among its instances
+/// kept (`clip`: none, one not seen asked for).
+fn Ctx::ride_spot(
+  self : Ctx,
+  c : @view.Content,
+  x : Double,
+  y : Double,
+  s : Double,
+  a : Double,
+  seen : Bool,
+  draw : () -> Unit,
+) -> Unit {
+  match riding.val {
+    Some(r) => {
+      let at = self.ninst
+      let k = clip_top()
+      draw()
+      r.spots.push({
+        at,
+        end: self.ninst,
+        c,
+        x,
+        y,
+        s,
+        a,
+        clip: if seen { Some(ride_clip_at(k)) } else { None },
+        apart: clip_is_apart(k),
+        window: clip_is_window(k),
+      })
+    }
+    None => draw()
+  }
+}
+
+///|
+/// Whether row `c`, drawn at (x, y) as opaque as `a`, `s` times as big, laid out at (ux, uy), may be drawn as kept,
+/// moved (Ctx::ride_again): nothing of it changed since (its count of changes no more than what was kept's), as big,
+/// opaque and set on the pixels as then, moved by whole pixels only and that within the same clip, at both ends
+/// wholly within it whichever way it moved.
+fn Ctx::ride_kept_for(
+  self : Ctx,
+  tree : @view.Tree,
+  c : @view.Content,
+  x : Double,
+  y : Double,
+  a : Double,
+  s : Double,
+  ux : Double,
+  uy : Double,
+) -> RideKept? {
+  guard ride_kept.get(c.id) is Some(k) else { return None }
+  let dx = x - k.x
+  let dy = y - k.y
+  let fits = s == 1.0 &&
+    a == k.a &&
+    ux - x == k.off_x &&
+    uy - y == k.off_y &&
+    self.scale == k.scale &&
+    words_zoom.val == k.zoom &&
+    ride_glyphs_gone.val == k.glyphs &&
+    inst_owners_kept() == k.owned &&
+    tree.drawn_rev(c.id) <= k.rev &&
+    ride_whole(dx, self.scale) &&
+    ride_whole(dy, self.scale)
+  guard fits else { return None }
+  let e = k.clip
+  let (x0, y0, x1, y1) = k.reach
+  guard dx == 0.0 || (k.inside_x && ride_side(x0 + dx, x1 + dx, e[0], e[2]) == 0) else { return None }
+  guard dy == 0.0 || (k.inside_y && ride_side(y0 + dy, y1 + dy, e[1], e[3]) == 0) else { return None }
+  let at = clip_top()
+  for j in 0..<clip_n {
+    if clip_stack[at + j] != e[j] {
+      return None
+    }
+  }
+  Some(k)
+}
+
+///|
+/// Row kept `k` drawn again, moved by (dx, dy): its instances where they were moved, what of it is drawn anew drawn
+/// so in its place among them.
+fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
+  ride_drawn.val = ride_drawn.val + 1
+  let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
+  self.segs.append(k.segs)
+  let mut from = 0
+  for sp in k.spots {
+    self.ride_copy(k, from, sp.at, dx, dy, seg_by)
+    match sp.clip {
+      None => self.view_unseen(sp.c, sp.s)
+      Some(cl) => {
+        // (the clip it was drawn in, moved where it is the row's own)
+        let e = k.clip
+        for j in 0..<clip_n {
+          let v = cl[j]
+          let moved = j < 4 && v != e[j]
+          clip_stack.push(if moved { v + (if j % 2 == 0 { dx } else { dy }) } else { v })
+        }
+        for j in 12..<16 {
+          let v = clip_stack[clip_stack.length() - clip_n + j]
+          let none = cl[12] == 0.0 && cl[13] == 0.0 && cl[14] == 0.0 && cl[15] == 0.0
+          if !none && v != e[j - 12] && v != e[j] {
+            clip_stack[clip_stack.length() - clip_n + j] = v + (if j % 2 == 0 { dx } else { dy })
+          }
+        }
+        clip_say_apart(sp.apart)
+        clip_say_window(sp.window)
+        self.view_picture(sp.c, sp.x + dx, sp.y + dy, sp.s, sp.a)
+        pop_clip()
+      }
+    }
+    from = sp.end
+  }
+  self.ride_copy(k, from, k.inst.length() / inst_size, dx, dy, seg_by)
+}
+
+///|
+/// Row kept `k`'s instances `i0` until `i1` put after the frame's, moved by (dx, dy), their shapes' pieces where they
+/// are among the frame's now (`seg_by` on).
+fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy : Double, seg_by : Double) -> Unit {
+  let n = i1 - i0
+  guard n > 0 else { return }
+  while (self.ninst + n) * inst_size > self.inst.length() {
+    self.grow()
+  }
+  let at = self.ninst
+  k.inst.blit_to(self.inst, len=n * inst_size, src_offset=i0 * inst_size, dst_offset=at * inst_size)
+  let s = self.inst
+  for i in 0..<n {
+    let b = (at + i) * inst_size
+    s.unsafe_set(b, s.unsafe_get(b) + dx)
+    s.unsafe_set(b + 1, s.unsafe_get(b + 1) + dy)
+    if s.unsafe_get(b + 5) == 11.0 {
+      s.unsafe_set(b + 12, s.unsafe_get(b + 12) + seg_by)
+    }
+    let m = k.moves.unsafe_get(i0 + i)
+    if m != 0 {
+      for j in 0..<4 {
+        let d = if j % 2 == 0 { dx } else { dy }
+        if (m & (1 << j)) != 0 {
+          s.unsafe_set(b + 16 + j, s.unsafe_get(b + 16 + j) + d)
+        }
+        if (m & (1 << (4 + j))) != 0 {
+          s.unsafe_set(b + 40 + j, s.unsafe_get(b + 40 + j) + d)
+        }
+      }
+      if (m & 256) != 0 {
+        s.unsafe_set(b + 33, s.unsafe_get(b + 33) + dx)
+        s.unsafe_set(b + 34, s.unsafe_get(b + 34) + dy)
+      }
+    }
+  }
+  if k.owned {
+    for i in 0..<n {
+      let q = at + i
+      inst_owned(q)
+      let (ow, cel, tre, mar) = k.owners[i0 + i]
+      inst_owners.owner[q] = ow
+      inst_owners.cell[q] = cel
+      inst_owners.tree[q] = tre
+      inst_owners.mark[q] = mar
+    }
+  }
+  self.ninst = at + n
+}
+
+///|
+/// The row being drawn draws what moving it would not draw again: not kept.
+fn ride_spoil() -> Unit {
+  match riding.val {
+    Some(r) => r.spoiled = true
+    None => ()
+  }
+}
+
+///|
+/// Whether row `c` drawn at (x, y) may be kept or drawn as kept: its box wholly within the clip it is drawn in one way
+/// at least, as all it holds must be (Ctx::ride_end); one across its edges each way, or wholly past it (a row kept
+/// for what comes, drawing nothing: no more gone through than drawn again), drawn as it comes.
+fn ride_may(c : @view.Content, x : Double, y : Double) -> Bool {
+  let k = clip_top()
+  ride_side(x, x + c.w, clip_stack[k], clip_stack[k + 2]) == 0 ||
+  ride_side(y, y + c.h, clip_stack[k + 1], clip_stack[k + 3]) == 0
+}
+
+///|
+/// Where what reaches from `a0` to `a1` one way is against a clip from `c0` to `c1` that way: 0 wholly within it, 1 wholly
+/// before it, 2 wholly past it, -1 across an edge of it (or on one).
+fn ride_side(a0 : Double, a1 : Double, c0 : Double, c1 : Double) -> Int {
+  if a0 > c0 && a1 < c1 {
+    0
+  } else if a1 < c0 {
+    1
+  } else if a0 > c1 {
+    2
+  } else {
+    -1
+  }
+}
