@@ -3101,7 +3101,10 @@ fn island_clips(f : () -> Unit) -> Unit {
   clip_stack.clear()
   clip_window.clear()
   clip_apart.clear()
-  clip_stack.push_iter([-1.0e9, -1.0e9, 1.0e9, 1.0e9].iter())
+  clip_stack.push(-1.0e9)
+  clip_stack.push(-1.0e9)
+  clip_stack.push(1.0e9)
+  clip_stack.push(1.0e9)
   for _ in 4..<clip_n {
     clip_stack.push(0.0)
   }
@@ -3109,11 +3112,11 @@ fn island_clips(f : () -> Unit) -> Unit {
   clip_apart.push(false)
   f()
   clip_stack.clear()
-  clip_stack.push_iter(stack.iter())
+  clip_stack.append(stack)
   clip_window.clear()
-  clip_window.push_iter(window.iter())
+  clip_window.append(window)
   clip_apart.clear()
-  clip_apart.push_iter(apart.iter())
+  clip_apart.append(apart)
 }
 
 ///|
@@ -3126,14 +3129,15 @@ fn old_hits_framed(c : Ctx) -> Unit {
   layer_hits.clear()
   layer_hits.append(next_layer_hits)
   next_layer_hits.clear()
+  // (copied whole, not a number at a time through an iterator: every target's, every frame)
   old_hits_rects.clear()
-  old_hits_rects.push_iter(c.hit_rects.iter())
+  old_hits_rects.append(c.hit_rects)
   old_hits_clips.clear()
-  old_hits_clips.push_iter(c.hit_clips.iter())
+  old_hits_clips.append(c.hit_clips)
   old_scrolls_rects.clear()
-  old_scrolls_rects.push_iter(c.scroll_rects.iter())
+  old_scrolls_rects.append(c.scroll_rects)
   old_bars.clear()
-  old_bars.push_iter(c.bars.iter())
+  old_bars.append(c.bars)
   old_hits_place(c, view_app.val)
 }
 
@@ -3147,7 +3151,11 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
   let rects = c.hit_rects
   let clips = c.hit_clips
   for h in old_hits {
-    let (at_x, at_y, on, s) = old_hits_moved(c, h, tree)
+    let (dx, dy, on, s) = old_hits_by(h, tree)
+    // (a point of what was painted where it is drawn now: old_hits_moved's, worked out here for each number)
+    let (hx, hy) = (h.x, h.y)
+    let at_x = fn(v : Double) { hx + dx + (v - hx) * s }
+    let at_y = fn(v : Double) { hy + dy + (v - hy) * s }
     for k in h.from..<h.to {
       let r = k * 4
       if r + 3 >= rects.length() || r + 3 >= old_hits_rects.length() {
@@ -3167,12 +3175,12 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
       rects[r + 3] = at_y(old_hits_rects[r + 3])
       let b = k * clip_n
       if b + clip_n <= clips.length() && b + clip_n <= old_hits_clips.length() {
-        for o in [0, 12] {
-          clips[b + o] = at_x(old_hits_clips[b + o])
-          clips[b + o + 1] = at_y(old_hits_clips[b + o + 1])
-          clips[b + o + 2] = at_x(old_hits_clips[b + o + 2])
-          clips[b + o + 3] = at_y(old_hits_clips[b + o + 3])
-          // (its corners as round as it is drawn big)
+        // (the clip and its outer, 12 on: each moved, its corners as round as it is drawn big)
+        for o = 0; o <= 12; o = o + 12 {
+          clips[b + o] = hx + dx + (old_hits_clips[b + o] - hx) * s
+          clips[b + o + 1] = hy + dy + (old_hits_clips[b + o + 1] - hy) * s
+          clips[b + o + 2] = hx + dx + (old_hits_clips[b + o + 2] - hx) * s
+          clips[b + o + 3] = hy + dy + (old_hits_clips[b + o + 3] - hy) * s
           for q in 4..<8 {
             clips[b + o + q] = old_hits_clips[b + o + q] * s
           }
@@ -3308,8 +3316,18 @@ fn old_bar_takes(c : Ctx, id : Int) -> Bool {
 /// Where what old view `h` painted is now (`tree`: as the tree has it; none, where it was painted): a point of it from
 /// its place then to where it is drawn, as big (x, y), whether it takes presses there, how big it is drawn.
 fn old_hits_moved(c : Ctx, h : OldHits, tree : @view.Tree?) -> ((Double) -> Double, (Double) -> Double, Bool, Double) {
+  ignore(c)
+  let (dx, dy, on, s) = old_hits_by(h, tree)
+  // (a point of what was painted, from its place then (h.x, h.y) to where it is drawn now, as big)
+  (fn(v) { h.x + dx + (v - h.x) * s }, fn(v) { h.y + dy + (v - h.y) * s }, on, s)
+}
+
+///|
+/// How far old view `h`'s targets are moved from where they were painted, whether it takes presses now, and how big it
+/// is drawn (old_hits_moved).
+fn old_hits_by(h : OldHits, tree : @view.Tree?) -> (Double, Double, Bool, Double) {
   // (and as big as it is drawn now, about its top left: Tree::drawn_scale; nothing taken where it is drawn as nothing)
-  let (dx, dy, on, s) = match tree {
+  match tree {
     None => (0.0, 0.0, true, 1.0)
     Some(t) =>
       match t.drawn_place(h.id) {
@@ -3319,8 +3337,6 @@ fn old_hits_moved(c : Ctx, h : OldHits, tree : @view.Tree?) -> ((Double) -> Doub
         _ => (0.0, 0.0, false, 1.0)
       }
   }
-  // (a point of what was painted, from its place then (h.x, h.y) to where it is drawn now, as big)
-  (fn(v) { h.x + dx + (v - h.x) * s }, fn(v) { h.y + dy + (v - h.y) * s }, on, s)
 }
 
 ///|
