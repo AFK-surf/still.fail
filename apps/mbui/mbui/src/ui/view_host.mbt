@@ -1099,6 +1099,19 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       ch = n.next
     }
   }
+  // (a change of theme spreading, where the old frame is not the whole window (reveal.mbt): the window as it was under
+  // all of it, the tree and its old views over it cut to the circle, as the old frame's layer of it as it is would be
+  // (that layer not painted again: what it holds is the old views painted in their places in the tree))
+  let revealing = if old_whole.val { None } else { reveal_layers() }
+  match revealing {
+    Some((was, now, cx, cy, r)) => {
+      painted[was] = true
+      painted[now] = true
+      self.paint(was, 1.0)
+      push_circle_clip(cx, cy, r)
+    }
+    None => ()
+  }
   tree.each_drawn_laid_or_past(fn(c, x, y, a, s, ux, uy) {
     // (the row being drawn, all of it drawn as what is next is none of it: ended before anything round it is closed)
     match riding.val {
@@ -1301,6 +1314,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   }
   close_to(None)
   raise_close(None)
+  if revealing is Some(_) {
+    pop_clip()
+  }
   paint_layers_under(2147483647)
   tree_over_scrim.clear()
   dr.targets_said = false

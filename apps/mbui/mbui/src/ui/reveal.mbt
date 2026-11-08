@@ -6,12 +6,14 @@
 // the circle; let go when none is in reveal_wait_most. The old frame is drawn again as any part kept is (kept_part.mbt
 // insts_replay): no picture read back, encoded or decoded, so it is there at once, at any size, on every host. While
 // it spreads the window's presses go to what shows in the circle; what lies over the page (overlay.mbt's layers) is
-// over both, as it is.
+// over both, as it is. Where the window is the tree's (view_host.mbt), the tree and its old views are drawn over the
+// window as it was, cut to the circle, as the old frame's layer is (Ctx::view_paint, reveal_layers).
 
 ///|
 /// The reveal asked: whether one is, the window as it was (its instances, the first `floats` numbers, and the pieces of
 /// their shapes), where it spreads from, the theme it was drawn in and how to tell the one it is drawn in now, when it
-/// was asked and when it set out (-1: not yet), what moves it.
+/// was asked and when it set out (-1: not yet), what moves it; while it spreads, the frame's two layers (the window as
+/// it was, as it is: -1 none) and how far the circle reaches.
 priv struct Reveal {
   mut on : Bool
   mut insts : FixedArray[Double]
@@ -24,6 +26,9 @@ priv struct Reveal {
   mut asked : Double
   mut start : Double
   mover : Mover
+  mut was_at : Int
+  mut now_at : Int
+  mut r : Double
 }
 
 ///|
@@ -40,6 +45,9 @@ let reveal : Reveal = {
   asked: 0.0,
   start: -1.0,
   mover: Mover::new(),
+  was_at: -1,
+  now_at: -1,
+  r: 0.0,
 }
 
 ///|
@@ -55,6 +63,8 @@ fn reveal_drop() -> Unit {
   reveal.segs.clear()
   reveal.start = -1.0
   reveal.dark_now = fn() { false }
+  reveal.was_at = -1
+  reveal.now_at = -1
 }
 
 ///|
@@ -116,6 +126,9 @@ pub fn Ctx::reveal_from(self : Ctx, x : Double, y : Double, dark? : () -> Bool) 
 /// the view built in a box over where the old frame is drawn again, drawn cut to the circle (a look: pressed as laid
 /// out, the whole window) once it is built and has said its theme.
 fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit {
+  // (said again by each build that spreads it)
+  reveal.was_at = -1
+  reveal.now_at = -1
   // (done, or waited for its theme too long: let go before it is built, so each build of the frame builds the same)
   if reveal.on &&
     (if reveal.start >= 0.0 {
@@ -150,6 +163,21 @@ fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit 
   let fy = dmax(reveal.y, h - reveal.y)
   let r = dmax(0.5, (fx * fx + fy * fy).sqrt() * e)
   self.look(now, look(ox=reveal.x / w, oy=reveal.y / h, circle=r))
+  reveal.was_at = was
+  reveal.now_at = now
+  reveal.r = r
+}
+
+///|
+/// While a reveal spreads in the frame built last: its layer of the window as it was, its layer of the window as it is,
+/// and the circle (where it spreads from, how far it reaches). For the window's tree painted (Ctx::view_paint): the
+/// tree and its old views over the window as it was, cut to the circle, as that layer is.
+fn reveal_layers() -> (Int, Int, Double, Double, Double)? {
+  if reveal.on && reveal.was_at >= 0 && reveal.now_at >= 0 {
+    Some((reveal.was_at, reveal.now_at, reveal.x, reveal.y, reveal.r))
+  } else {
+    None
+  }
 }
 
 ///|
