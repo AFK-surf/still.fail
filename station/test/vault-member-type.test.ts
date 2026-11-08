@@ -131,7 +131,7 @@ test("checking invalid members starts at the marker, not all vaults in the works
   const db = new DatabaseSync(":memory:");
   new VaultStore(db);
   try {
-    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${VAULT_MEMBERS_INVALID}`).all("w", "w") as { detail: string }[])
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${VAULT_MEMBERS_INVALID}`).all("w", "w", "w") as { detail: string }[])
       .map((row) => row.detail).join("\n");
     assert.match(plan, /SEARCH i USING PRIMARY KEY \(ws=\?\)[\s\S]*SEARCH v USING (?:COVERING )?INDEX .*\(ws=\? AND id=\?\)/);
   } finally { db.close(); }

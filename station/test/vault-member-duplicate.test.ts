@@ -27,7 +27,7 @@ test("the duplicate check starts with markers rather than scanning the workspace
   const db = new DatabaseSync(":memory:");
   new VaultStore(db);
   try {
-    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${VAULT_MEMBERS_INVALID}`).all("w", "w") as { detail: string }[])
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${VAULT_MEMBERS_INVALID}`).all("w", "w", "w") as { detail: string }[])
       .map((row) => row.detail).join("\n");
     assert.match(plan, /SEARCH d USING PRIMARY KEY \(ws=\?\)[\s\S]*SEARCH v USING (?:COVERING )?INDEX .*\(ws=\? AND id=\?\)/);
   } finally { db.close(); }
