@@ -81,6 +81,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/said-worker.js", { thread: saidThread }],
       ["read/said-worker.js", { session: "old-turn" }],
       ["read/recent-chat-worker.js", { scope: JSON.stringify([null, null]) }],
+      ["search/scope-worker.js", { scope: "all" }],
       ["read/session-list-worker.js", { scope: "all" }],
       ["read/session-bindings-worker.js", { scope: "all" }],
       ["read/session-up-jobs-worker.js", { session: "old-count" }],

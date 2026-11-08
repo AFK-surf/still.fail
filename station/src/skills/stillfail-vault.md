@@ -44,7 +44,7 @@ station's profiles), or anything the person said not to keep.
     `public_key` if known), `file` (a credential that is a whole file, at most 64 KB: a kubeconfig, a service account's
     JSON key, a `.p12` certificate, a `.env`).
   - How agents get it later: `proxy` with `hosts` for an HTTP API that takes it in a header (`Authorization: Bearer`,
-    `X-Api-Key`): the command only holds a placeholder. `env` (and `env`, the variable's name) for anything else: a
+    `X-Api-Key`): the command only holds a placeholder. `env` (with `env`, the variable's name) for anything else: a
     password sent in a login form or JSON body, a database client, a CLI reading a variable. `ssh` for an SSH key.
     `file` for a file: each command gets it written out where only it reads it, removed when it ends, its path in
     `env` (`KUBECONFIG`, `GOOGLE_APPLICATION_CREDENTIALS`) and `$STILLFAIL_SECRET`.

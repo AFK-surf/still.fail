@@ -74,7 +74,7 @@ let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Do
 ///|
 /// How far each old view placed (old_placed) would be drawn off where its layout alone puts it were nothing in its way
 /// grown, shrunk or drawn off (Tree::each_drawn_laid less Tree::laid_origin: what places it beside another, its offset):
-/// where its words are set on the pixels, as the tree's own are (glyphs_carried_of).
+/// where its words are set on the pixels, as the tree's own are (carry_glyphs).
 // kept across runs: put back as a run begins (view_forget)
 let old_placed_off : ByNode[(Double, Double)] = ByNode::new()
 
@@ -1083,7 +1083,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     ride_node(c, x, y, s, false)
     if a <= 0.002 {
-      self.ride_spot(c, x, y, s, a, false, fn() { self.view_unseen(c, s) })
+      self.ride_spot(c, x, y, s, a, false)
       return false
     }
     // (in a node drawn whole in its bones: nothing of it drawn, View::bone_whole)
@@ -1163,7 +1163,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries); not where what it draws may lie
       // elsewhere than its box: turned, shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
       // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
-      self.ride_spot(c, x, y, s, a, false, fn() { self.view_unseen(c, s) })
+      self.ride_spot(c, x, y, s, a, false)
       -1
     } else {
       self.view_drawn(tree, c, x, y, a, s, ux, uy, turn, ground_drawn)
@@ -1174,11 +1174,10 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // its own edge, its edge drawn over what it holds there, taking no room)
     if c.clips {
       let r = c.radius * s
-      let corners = match c.corners {
-        Some((tl, tr, br, bl)) => [tl * s, tr * s, br * s, bl * s]
-        None => [r, r, r, r]
+      match c.corners {
+        Some((tl, tr, br, bl)) => push_box_clip(x, y, c.w * s, c.h * s, tl * s, tr * s, br * s, bl * s)
+        None => push_box_clip(x, y, c.w * s, c.h * s, r, r, r, r)
       }
-      push_box_clip(x, y, c.w * s, c.h * s, fn(j) { corners[j] })
       clipping.push(c.id)
     }
     // (what it draws, and an old view it hosts, faded out towards the edges of each that holds it so, each pixel by
@@ -1227,7 +1226,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       rings.push((c.id, held, by))
     }
     false
-  })
+  }, draws=view_draws)
   match riding.val {
     Some(r) => {
       close_down(r.clips0, r.rings0)
@@ -1279,6 +1278,10 @@ fn Ctx::view_drawn(
       b
     }
   }
+  // (the glyphs it draws from, the row's being drawn: held for it while it is drawn again kept, view_glyphs_held)
+  if riding.val is Some(r) {
+    r.kept.push(block.kept)
+  }
   let i0 = self.ninst
   // (drawn bigger or smaller than laid out, what holds it with it: about where it is drawn, as a look's scale is; its
   // glyphs set on the pixels where they would be were nothing grown or shrunk, as an old view's are painted where they
@@ -1293,7 +1296,7 @@ fn Ctx::view_drawn(
   // instances are kept as they were made)
   match c.image {
     // (in its bones its block's bone stands for it: none asked for, View::bones)
-    Some(_) if c.bones == 0L => self.ride_spot(c, x, y, s, a, true, fn() { self.view_picture(c, x, y, s, a) })
+    Some(_) if c.bones == 0L => self.ride_spot(c, x, y, s, a, true)
     _ => ()
   }
   // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
@@ -1500,15 +1503,26 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
 /// holds there instead.
 fn view_glyphs_held(tree : @view.Tree, sc : Double) -> Unit {
   let stale : Array[@view.NodeId] = []
-  tree.each_drawn_scaled(fn(c, _x, _y, a, _s) {
-    if c.id.at == 0 || a <= 0.002 || c.hosted {
-      return
-    }
-    match view_blocks.get(c.id) {
-      Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
-      _ => ()
-    }
-  })
+  // (a row kept, nothing of it changed since (Ctx::ride_kept_for): its glyphs held as it kept them, its nodes not gone
+  // through; what holds no block of its own passed over whole)
+  tree.each_drawn_laid_or_past(
+    fn(c, _x, _y, a, _s, _ux, _uy) {
+      if c.id.at == 0 || a <= 0.002 || c.hosted {
+        return false
+      }
+      match ride_kept.get(c.id) {
+        Some(k) if tree.drawn_rev(c.id) <= k.rev && k.kept.iter().all(fn(g) { glyphs_still(g, sc) }) =>
+          return true
+        _ => ()
+      }
+      match view_blocks.get(c.id) {
+        Some(b) if !glyphs_still(b.kept, sc) => stale.push(c.id)
+        _ => ()
+      }
+      false
+    },
+    draws=fn(c) { view_blocks.contains(c.id) },
+  )
   if stale.length() > 0 {
     ride_glyphs_gone.val = ride_glyphs_gone.val + 1
   }
@@ -2757,18 +2771,21 @@ fn island_scale(id : @view.NodeId) -> Double {
 /// view's box moved so (Ctx::moved_carries, from where its layout alone puts it) less what places it beside another or
 /// offsets it (old_placed_off): its words on the pixels where it would be drawn were nothing grown, shrunk or drawn off,
 /// as the tree's own words are (each_drawn_laid), then carried with what moves it from there (glyphs_carried); none (0,
-/// 0) for one in no old view hosted, or in one drawn there.
-fn Ctx::glyphs_carried_of(self : Ctx, i : Int) -> (Double, Double) {
-  match self.nodes[i].island {
-    Some(id) =>
-      match old_box_of.get(id) {
-        Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => {
-          let (sx, sy) = old_placed_off.get(id).unwrap_or((0.0, 0.0))
-          (self.nodes[b].moved_x - sx, self.nodes[b].moved_y - sy)
-        }
-        _ => (0.0, 0.0)
+/// 0) for one in no old view hosted, or in one drawn there. Set in glyphs_carried.
+fn Ctx::carry_glyphs(self : Ctx, i : Int) -> Unit {
+  glyphs_carried[0] = 0.0
+  glyphs_carried[1] = 0.0
+  guard self.nodes[i].island is Some(id) else { return }
+  match old_box_of.get(id) {
+    Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => {
+      glyphs_carried[0] = self.nodes[b].moved_x
+      glyphs_carried[1] = self.nodes[b].moved_y
+      if old_placed_off.get(id) is Some((sx, sy)) {
+        glyphs_carried[0] -= sx
+        glyphs_carried[1] -= sy
       }
-    None => (0.0, 0.0)
+    }
+    _ => ()
   }
 }
 
@@ -5132,4 +5149,14 @@ fn Ctx::view_unseen(self : Ctx, c : @view.Content, s : Double) -> Unit {
     }
     _ => ()
   }
+}
+
+///|
+/// Whether the window's paint draws anything for content `c` of its own (Tree::each_drawn_laid_or_past: what holds
+/// nothing that does passed over): what the tree says it draws, its words set in runs or as drawn, a field of its own.
+fn view_draws(c : @view.Content) -> Bool {
+  c.draws() ||
+  !c.runs.is_empty() ||
+  c.words_drawn is Some(_) ||
+  (!tree_fields.is_empty() && tree_fields.contains(c.id))
 }

@@ -6,6 +6,27 @@
 /// The chats of workspace `scope` in list `filter` (all, mine, watching) as the core's view says them, worked out once
 /// for each version of it; what went wrong reading it.
 pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, String?) {
+  let (read, topic) = chats_read.read(src, chats_params(scope, filter))
+  let error = match topic.error {
+    Some(e) => Some(text(Some(e), "message"))
+    None => None
+  }
+  (read.map(fn(r) { r.view }), error)
+}
+
+///|
+/// How many of a list's rows are asked of the core at first (`limit`), and how many more each time it is scrolled near
+/// the last of them: the core sends the first ones and how many more it has, not the whole of a list of 1400.
+pub let chats_page : Int = 50
+
+///|
+// kept across runs: let go of by reset (pages.mbt)
+/// How many of each list's rows are asked of the core now, by workspace and filter (chats_page until scrolled).
+let chat_limits : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
+
+///|
+/// The chats of workspace `scope` in list `filter` as they are asked of the core: as many of them as are asked now.
+fn chats_params(scope : String, filter : String) -> Map[String, Json] {
   let params : Map[String, Json] = {
     "scope": Json::string(scope),
     "mine": Json::boolean(filter == "mine"),
@@ -16,12 +37,58 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
   if filter == "hidden" {
     params["hidden"] = Json::boolean(true)
   }
-  let (read, topic) = chats_read.read(src, params)
-  let error = match topic.error {
-    Some(e) => Some(text(Some(e), "message"))
-    None => None
+  let limit = chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
+  params["limit"] = Json::number(limit.to_double())
+  params
+}
+
+///|
+/// The list `filter` of workspace `scope` scrolled to its row `last` of the `rows` it has: within half a page of their
+/// end, a page more asked for while the core has more (its `more`), the list as it was asked let go of.
+pub fn chats_scrolled(c : @ui.Ctx, src : Source, scope : String, filter : String, last : Int, rows : Int) -> Unit {
+  guard chats_more(src, scope, filter) > 0 && last >= rows - chats_page / 2 else { return }
+  let limit = chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
+  c.tell("chats-more/" + scope + "\u{1}" + filter, fn() { chats_ask_more(src, scope, filter, limit) })
+}
+
+///|
+/// How many rows list `filter` of workspace `scope` has past those the core sent (its `more`).
+pub fn chats_more(src : Source, scope : String, filter : String) -> Int {
+  match field(src.topic("chats", chats_params(scope, filter)).get().value, "more") {
+    Some(Number(n, ..)) => n.to_int()
+    _ => 0
   }
-  (read.map(fn(r) { r.view }), error)
+}
+
+///|
+/// A page more of list `filter`'s rows asked for, where `limit` is still how many are asked (asked once for it), the
+/// list as it was asked let go of.
+pub fn chats_ask_more(src : Source, scope : String, filter : String, limit : Int) -> Unit {
+  let key = scope + "\u{1}" + filter
+  if chat_limits.get(key).unwrap_or(chats_page) == limit {
+    let was = chats_params(scope, filter)
+    chat_limits[key] = limit + chats_page
+    (src.leave)("chats", was, TopicLeave::Legacy)
+  }
+}
+
+///|
+/// How many of list `filter`'s rows are asked now.
+pub fn chats_limit(scope : String, filter : String) -> Int {
+  chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
+}
+
+///|
+/// The chats' list of workspace `scope` as it is asked (all of its chats, its first rows: chats_params), for what is
+/// read of it beside its rows (its stations' trouble, its glyph).
+pub fn chats_topic(src : Source, scope : String) -> Topic {
+  src.topic("chats", chats_params(scope, "all")).get().snapshot()
+}
+
+///|
+/// As at the start: each list asked a page of at first.
+pub fn chat_limits_reset() -> Unit {
+  chat_limits.clear()
 }
 
 ///|
@@ -330,7 +397,7 @@ pub fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
 /// device's network is), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
 /// and what is wrong with them.
 pub fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
-  let chats = src.topic("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) }).get().snapshot()
+  let chats = chats_topic(src, ws)
   let g = field(chats.value, "glyph")
   let status = src.topic("status", { "workspace": Json::string(ws) }).get().value
   let asleep = flag(g, "asleep")

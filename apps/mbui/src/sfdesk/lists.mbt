@@ -31,7 +31,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if rail_items(src, w.id).contains("attention") {
     return
   }
-  let chats = src.topic("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).get().value
+  let chats = @sfbase.chats_topic(src, w.id).value
   let trouble = field(chats, "trouble")
   let jobs = long_jobs(src, w)
   if trouble is None && jobs == 0 {

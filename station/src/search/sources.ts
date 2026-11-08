@@ -19,6 +19,7 @@ import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
 import { given, titleOf } from "../read/views.ts";
 import { type Asker, type Doc, type Group, type Hit, excerpt, has, sees } from "./match.ts";
+import { readSearchScopePage } from "./scope-read.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
 type Ws = string | null;
@@ -44,21 +45,29 @@ const MESSAGE_BATCH = 256;
 /// The next message numbers, in order, before the end captured for this search. The two indexes are merged before
 /// fetching the messages and their edits, so a batch does not walk intervening edits. As with LAST_MESSAGE, a missing
 /// entries_letters index or old letter metadata on non-messages can make the legacy lookup walk more entries.
-const searchMessages = (range: string, limit: string, legacy = false) => `SELECT * FROM merged WHERE thread = ?1 AND n IN (
+const searchMessageKeys = (range: string, limit: string, legacy = false) => `
   SELECT n FROM ${legacy ? "legacy_said" : "entries INDEXED BY entries_said"}
     WHERE thread = ?1 AND ${range}${legacy ? "" : " AND kind = 'message' AND letter IS NULL"}
   UNION ALL
   SELECT n FROM entries
     WHERE thread = ?1 AND ${range} AND kind = 'message' AND letter IS NOT NULL
-  ORDER BY n LIMIT ${limit}
-) ORDER BY n`;
+  ORDER BY n LIMIT ${limit}`;
+const searchMessages = (range: string, limit: string, legacy = false) =>
+  `SELECT * FROM merged WHERE thread = ?1 AND n IN (${searchMessageKeys(range, limit, legacy)}\n) ORDER BY n`;
+const searchMessageTimes = (range: string, limit: string, legacy = false) =>
+  `SELECT n, at FROM entries WHERE thread = ?1 AND kind = 'message' AND n IN (${searchMessageKeys(range, limit, legacy)}\n) ORDER BY n`;
 export const SEARCH_FIRST_MESSAGES = searchMessages("n <= ?2", "?3");
 export const SEARCH_NEXT_MESSAGES = searchMessages("n > ?2 AND n <= ?3", "?4");
 export const LEGACY_SEARCH_FIRST_MESSAGES = searchMessages("n <= ?2", "?3", true);
 export const LEGACY_SEARCH_NEXT_MESSAGES = searchMessages("n > ?2 AND n <= ?3", "?4", true);
+export const SEARCH_FIRST_MESSAGE_TIMES = searchMessageTimes("n <= ?2", "?3");
+export const SEARCH_NEXT_MESSAGE_TIMES = searchMessageTimes("n > ?2 AND n <= ?3", "?4");
+export const LEGACY_SEARCH_FIRST_MESSAGE_TIMES = searchMessageTimes("n <= ?2", "?3", true);
+export const LEGACY_SEARCH_NEXT_MESSAGE_TIMES = searchMessageTimes("n > ?2 AND n <= ?3", "?4", true);
 
 /// A thread's documents, with a yield after each batch even when none of its messages is searchable.
-function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null, onlyArchived = false): Generator<Doc | undefined> {
+function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string> | null = null, onlyArchived = false,
+  words?: string[]): Generator<Doc | undefined> {
   const row = store.getThread(s, id);
   if (row === null) return;
   const { ws, chat, sessions } = chatOf(s, id);
@@ -70,22 +79,30 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
   const firstText = (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
   // As the chat list calls it (read/views.ts titleOf).
   const title = titleOf(row, firstText, null);
-  const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
-  let lastAt: number | null = null;
   const wantsMessages = kinds === null || kinds.has("message");
   const wantsChat = kinds === null || kinds.has("chat");
+  const body = wantsChat ? [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n") : "";
+  const ref = { thread: id, chat, surface, archived, ...(row.channel ? { channel: row.channel } : {}) };
+  let lastAt: number | null = null;
+  // A chat's text does not include its messages. Only matches need their message times for ranking.
+  if (!wantsMessages && words !== undefined && !has(`${title}\n${body}`, words)) return;
   const end = (s.db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread = ?").get(id) as { n: number | null }).n;
   let after: number | null = null;
   const origins = new Map<string, string | null>();
   for (;;) {
-    const messages: MessageRow[] = end === null ? [] : (after === null
-        ? all(s, s.legacySaid ? LEGACY_SEARCH_FIRST_MESSAGES : SEARCH_FIRST_MESSAGES, id, end, MESSAGE_BATCH)
-        : all(s, s.legacySaid ? LEGACY_SEARCH_NEXT_MESSAGES : SEARCH_NEXT_MESSAGES, id, after, end, MESSAGE_BATCH)).map(toMessage);
+    const first = wantsMessages ? (s.legacySaid ? LEGACY_SEARCH_FIRST_MESSAGES : SEARCH_FIRST_MESSAGES)
+      : (s.legacySaid ? LEGACY_SEARCH_FIRST_MESSAGE_TIMES : SEARCH_FIRST_MESSAGE_TIMES);
+    const next = wantsMessages ? (s.legacySaid ? LEGACY_SEARCH_NEXT_MESSAGES : SEARCH_NEXT_MESSAGES)
+      : (s.legacySaid ? LEGACY_SEARCH_NEXT_MESSAGE_TIMES : SEARCH_NEXT_MESSAGE_TIMES);
+    const rows = end === null ? [] : after === null ? all(s, first, id, end, MESSAGE_BATCH) : all(s, next, id, after, end, MESSAGE_BATCH);
+    const messages: Pick<MessageRow, "n" | "createdAt">[] = wantsMessages ? rows.map(toMessage)
+      : rows.map((r) => ({ n: r.n, createdAt: r.at }));
     if (messages.length === 0) break;
-    for (const m of messages) {
-      const at = m.createdAt ?? 0;
+    for (const message of messages) {
+      const at = message.createdAt ?? 0;
       lastAt = lastAt === null ? at : Math.max(lastAt, at);
       if (!wantsMessages) continue;
+      const m = message as MessageRow;
       const text = m.text ?? "";
       const files = m.attachments.map((a: any) => (typeof a?.name === "string" ? a.name : "")).filter((n: string) => n !== "");
       if (text.trim() === "" && files.length === 0) continue;
@@ -108,7 +125,7 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
   }
   if (wantsChat) yield {
     key: `c:${id}`, kind: "chat", ws, title,
-    body: [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n"),
+    body,
     at: lastAt ?? row.createdAt ?? null, ref,
   };
 }
@@ -484,28 +501,37 @@ export function profileDocs(profiles: Profiles): Doc[] {
 
 // ── all of them ──
 
-/// The documents of the kinds asked for; undefined gives the worker a chance to handle another request.
-export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker, onlyArchived = false): Generator<Doc | undefined> {
+/// The documents of the kinds asked for; undefined gives the worker a chance to handle another request. When words
+/// are supplied, a nonmatching chat may be omitted before its message times are read.
+export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker,
+  onlyArchived = false, words?: string[], onScopeUnavailable?: () => void): Generator<Doc | undefined> {
   const wants = (k: string) => kinds === null || kinds.has(k);
   if (wants("chat") || wants("message")) {
     const end = (s.db.prepare("SELECT MAX(id) AS id FROM threads").get() as { id: number | null }).id;
     let after: number | null = null;
     while (end !== null) {
-      const rows = after === null
+      const scoped = asker ? readSearchScopePage(s.db, asker, after, end, MESSAGE_BATCH) : null;
+      if (asker && scoped === null) onScopeUnavailable?.();
+      const rows = scoped !== null ? scoped.map((id) => ({ id })) : after === null
         ? all(s, "SELECT id FROM threads WHERE id <= ? ORDER BY id LIMIT ?", end, MESSAGE_BATCH)
         : all(s, "SELECT id FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?", after, end, MESSAGE_BATCH);
       if (rows.length === 0) break;
-      for (const r of rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]!;
         try {
-          yield* threadDocSteps(s, r.id, asker, kinds, onlyArchived);
+          yield* threadDocSteps(s, r.id, asker, kinds, onlyArchived, words);
         } catch (error) {
           // A thread moved to the archive while it was read: found the next time.
           if (!(error instanceof Error && /no such|archive|ENOENT/.test(error.message))) throw error;
         }
+        // A chat filtered out before its messages produces no document for the search loop to yield on.
+        if ((i + 1) % 128 === 0 && i + 1 < rows.length) yield undefined;
       }
       after = rows.at(-1)!.id as number;
       yield undefined;
-      if (rows.length < MESSAGE_BATCH) break;
+      // A ready page can become dirty while its chats are read. Check again before ending, and resume the original
+      // walk from this cursor if a concurrent membership or session change needs repair.
+      if (scoped === null && rows.length < MESSAGE_BATCH) break;
     }
   }
   if (wants("job")) {

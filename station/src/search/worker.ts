@@ -1,5 +1,6 @@
 // The search's thread: answers what is looked for by looking through the station's data as it is then,
-// on a read-only connection to the store of its own, as a reader does (read/store.ts). Nothing is kept between searches.
+// on a read-only connection to the store of its own, as a reader does (read/store.ts). Candidate scope may have been
+// prepared in the background; document text is read as it is asked for.
 // The execution histories are looked through only when asked for (agents ask, people do not), file by file, the thread
 // let through between them, so a search asked meanwhile is answered.
 import { parentPort, workerData } from "node:worker_threads";
@@ -12,7 +13,7 @@ import { historyGroup, historyHits, profilesOf, stationDocSteps } from "./source
 
 export type Told = { type: "query"; id: number; query: string; asker: Asker; kinds?: string[]; limit?: number; offset?: number; archived?: boolean; cancel?: SharedArrayBuffer };
 
-export type Answered = { id: number; groups?: Group[]; error?: string };
+export type Answered = { id: number; groups?: Group[]; error?: string } | { scopePending: true };
 
 /// How long the execution histories are looked through at most.
 const HISTORY_MS = 15_000;
@@ -35,7 +36,11 @@ async function answer(told: Told): Promise<Group[]> {
   const limit = Math.max(1, Math.min(told.limit ?? 8, 200));
   const offset = Math.max(0, told.offset ?? 0);
   const cancelled = told.cancel ? new Int32Array(told.cancel) : null;
-  const groups = await pickAsync(stationDocSteps(s, data, config(), kinds, told.asker, told.archived === true), words, told.asker, { limit, offset }, () => cancelled !== null && Atomics.load(cancelled, 0) !== 0);
+  let scopePending = false;
+  const groups = await pickAsync(stationDocSteps(s, data, config(), kinds, told.asker, told.archived === true, words,
+    () => {
+      if (!scopePending) { scopePending = true; parentPort!.postMessage({ scopePending: true } satisfies Answered); }
+    }), words, told.asker, { limit, offset }, () => cancelled !== null && Atomics.load(cancelled, 0) !== 0);
   if (kinds?.has("history")) {
     const found = await historyHits(s, profilesOf(config(), data), words, told.asker, { limit, offset, ms: HISTORY_MS, now: () => wall.now(), cancelled: () => cancelled !== null && Atomics.load(cancelled, 0) !== 0 });
     const group = historyGroup(found);

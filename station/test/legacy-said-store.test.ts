@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { setTimeout as pause } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { lastMessage, makeStore, messagesBefore, saidOf } from "../src/read/store.ts";
-import { threadDocs } from "../src/search/sources.ts";
+import { stationDocSteps, threadDocs } from "../src/search/sources.ts";
 import { installLegacySaid, legacySaidDrain, legacySaidStep, publishLegacySaid } from "../src/store/legacy-said-build.ts";
 import { buildLegacySaid } from "../src/store/legacy-said-builder.ts";
 import { installSaidState } from "../src/store/said-state.ts";
@@ -113,6 +113,8 @@ test("a prepared old message lookup serves the station, readers and search while
         .get(thread, said.author)?.n ?? null;
       assert.deepEqual(saidOf(read, thread), said ? { n: said.n, authorKind: said.author_kind, author: said.author, other } : null);
       assert.deepEqual(threadDocs(read, thread).filter((doc) => doc.kind === "message").map((doc) => doc.body), expected.map((m) => m.text));
+      const chat = threadDocs(read, thread).find((doc) => doc.kind === "chat");
+      assert.deepEqual([...stationDocSteps(read, dir, {}, new Set(["chat"]))].find((doc) => doc?.key === `c:${thread}`), chat);
     };
     check();
     put.run(thread, 6, "person", "viewer", "mine", 6, "6");
@@ -156,6 +158,8 @@ test("a large old store answers while its message lookup is prepared in batches"
         AND letter IS NULL AND NOT (author_kind='person' AND author='viewer')`).get(thread)!.c;
       assert.equal(station!.unreadCount("viewer", thread), unread);
       assert.equal(threadDocs(read, thread).filter((doc) => doc.kind === "message").length, expected.length);
+      const chat = threadDocs(read, thread).find((doc) => doc.kind === "chat");
+      assert.deepEqual([...stationDocSteps(read, dir, {}, new Set(["chat"]))].find((doc) => doc?.key === `c:${thread}`), chat);
     };
     check();
     old.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,at,ts)

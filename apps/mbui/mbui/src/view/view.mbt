@@ -6889,12 +6889,14 @@ pub fn Tree::each_drawn_laid(self : Tree, f : (Content, Double, Double, Double, 
 
 ///|
 /// The scene gone through as each_drawn_laid goes through it, what a node holds passed over where `f` says so of it
-/// (true: it draws all of it itself, as it was drawn before, Tree::drawn_rev).
+/// (true: it draws all of it itself, as it was drawn before, Tree::drawn_rev). What holds nothing `draws` says draws
+/// anything (a list's rows not made) passed over too, but what the window holds itself.
 pub fn Tree::each_drawn_laid_or_past(
   self : Tree,
   f : (Content, Double, Double, Double, Double, Double, Double) -> Bool,
+  draws? : (Content) -> Bool,
 ) -> Unit {
-  self.each_drawn_in_order(fn(_, c, x, y, a, s, ux, uy) { f(c, x, y, a, s, ux, uy) })
+  self.each_drawn_in_order(fn(_, c, x, y, a, s, ux, uy) { f(c, x, y, a, s, ux, uy) }, drawing?=draws)
 }
 
 ///|
@@ -6903,6 +6905,7 @@ pub fn Tree::each_drawn_laid_or_past(
 fn Tree::each_drawn_in_order(
   self : Tree,
   f : (Int, Content, Double, Double, Double, Double, Double, Double) -> Bool,
+  drawing? : (Content) -> Bool,
 ) -> Unit {
   // (where each in the order is drawn, how opaque, how big, and where it would be were nothing grown, shrunk or drawn
   // off: kept for the next walk, one for each walk inside another's `f`; each place written
@@ -6921,6 +6924,21 @@ fn Tree::each_drawn_in_order(
   let ws = w.s
   let ux = w.ux
   let uy = w.uy
+  // (`drawing`: whether a node draws anything, as the walker draws it: what holds nothing that does (a list's rows not
+  // made, only as tall as they were) passed over whole, none of it given to `f`, but what the window holds itself (a
+  // layer: what is under it painted first, as where it is in the window's stack says))
+  let nd = w.next_drawn
+  let passing = drawing is Some(_)
+  if drawing is Some(draws) {
+    let mut next = len
+    for j = len - 1; j >= 0; j = j - 1 {
+      match self.nodes.unsafe_get(self.order.unsafe_get(j)).content {
+        Some(c) if draws(c) => next = j
+        _ => ()
+      }
+      nd.unsafe_set(j, next)
+    }
+  }
   let g = self.pixel_grid
   let mut i = 0
   while i < len {
@@ -6934,6 +6952,10 @@ fn Tree::each_drawn_in_order(
     let h = self.order_holder.unsafe_get(i)
     // (left out: it and all it holds, the order's run of them passed over at once)
     if n.out {
+      i = self.order_end.unsafe_get(i)
+      continue
+    }
+    if passing && h > 0 && nd.unsafe_get(i) >= self.order_end.unsafe_get(i) {
       i = self.order_end.unsafe_get(i)
       continue
     }
@@ -7056,11 +7078,14 @@ priv struct Walk {
   mut s : FixedArray[Double]
   mut ux : FixedArray[Double]
   mut uy : FixedArray[Double]
+  // (from each in the order, the first at or past it that draws anything of its own: Tree::each_drawn_in_order's
+  // `drawing`)
+  mut next_drawn : FixedArray[Int]
 }
 
 ///|
 fn Walk::new() -> Walk {
-  { x: [], y: [], a: [], s: [], ux: [], uy: [] }
+  { x: [], y: [], a: [], s: [], ux: [], uy: [], next_drawn: [] }
 }
 
 ///|
@@ -7076,6 +7101,7 @@ fn Walk::fit(self : Walk, len : Int) -> Unit {
   self.s = FixedArray::make(room, 1.0)
   self.ux = FixedArray::make(room, 0.0)
   self.uy = FixedArray::make(room, 0.0)
+  self.next_drawn = FixedArray::make(room, 0)
 }
 
 ///|
@@ -7167,6 +7193,55 @@ pub fn Tree::laid_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
     }
     at_out[i] = out.length()
     let (lx, ly) = self.laid_origin(c.id).unwrap_or((x, y))
+    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+    false
+  })
+  out
+}
+
+///|
+/// The scene as Tree::laid_held has it, but only what `wanted` names, what holds each, and what lies laid out where
+/// one of those does, as big (what holds it so, a ground laid beside it as a layer): what is worked out of an old view
+/// hosted in it against what holds it (ui's corners said Inner), not all of the tree made into nodes for the few.
+pub fn Tree::laid_held_toward(self : Tree, wanted : (Content) -> Bool) -> Array[(Drawn, Int, Bool)] {
+  let len = self.order.length()
+  let keep : Array[Bool] = Array::make(len, false)
+  for i in 0..<len {
+    match self.nodes[self.order[i]].content {
+      Some(c) if wanted(c) => {
+        let mut j = i
+        while j >= 0 && !keep[j] {
+          keep[j] = true
+          j = self.order_holder[j]
+        }
+      }
+      _ => ()
+    }
+  }
+  let out : Array[(Drawn, Int, Bool)] = []
+  let at_out : Array[Int] = Array::make(len, -1)
+  self.each_drawn_in_order(fn(i, c, x, y, a, _, _, _) {
+    let h0 = self.order_holder[i]
+    let (lx, ly) = if keep[i] || (h0 >= 0 && at_out[h0] >= 0) {
+      self.laid_origin(c.id).unwrap_or((x, y))
+    } else {
+      return false
+    }
+    // (one not wanted nor holding one: kept only laid out as its holder is, kept, as big)
+    if !keep[i] {
+      let (hd, _, _) = out[at_out[h0]]
+      if (hd.x - lx).abs() > 0.5 ||
+        (hd.y - ly).abs() > 0.5 ||
+        (hd.w - c.w).abs() > 0.5 ||
+        (hd.h - c.h).abs() > 0.5 {
+        return false
+      }
+    }
+    let mut h = h0
+    while h >= 0 && at_out[h] < 0 {
+      h = self.order_holder[h]
+    }
+    at_out[i] = out.length()
     out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
     false
   })

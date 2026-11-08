@@ -63,13 +63,11 @@ fn station_tab_name(src : Source, tab : String) -> String? {
     return Some(if name == "" { @sf.t("web-pages.screen.section") } else { name })
   }
   let scope = station.split("/").next().unwrap_or("").to_string()
-  let stations = src.topic("stations", { "scope": Json::string(scope) }).get().value
   let mut name = station
-  match stations {
-    Some(Array(xs)) => for s in xs {
-      if text(Some(s), "station") == station { name = text(Some(s), "name") }
+  for s in @sfbase.station_marks(src, scope) {
+    if s.address == station {
+      name = s.name
     }
-    _ => ()
   }
   let what = match kind {
     "drive" => "web-pages.drive.title"

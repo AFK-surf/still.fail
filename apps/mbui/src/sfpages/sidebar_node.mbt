@@ -283,6 +283,14 @@ fn chats_pane_node(
       _ => ()
     }
   })
+  // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
+  v.reacts(fn() { (scroll.drawn(v.tree), scroll.reach(), @sfbase.chats_more(src, id, filter)) }, fn(now) {
+    let (at, most, more) = now
+    let (_, _, _, h) = v.placed_window_now()
+    if more > 0 && h > 0.0 && most - at < 1.5 * h {
+      @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
+    }
+  })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
   v.scrolls_window(

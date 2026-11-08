@@ -116,7 +116,7 @@ let attention_off_side : Double = 6.0
 ///|
 /// What is wrong with the workspace's stations, in words (the chats' `trouble`, useStationTrouble); "" none.
 fn station_trouble_words(src : Source, w : Workspace) -> String {
-  let chats = src.topic("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).get().value
+  let chats = @sfbase.chats_topic(src, w.id).value
   text(field(chats, "trouble"), "text")
 }
 

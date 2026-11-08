@@ -8,7 +8,7 @@ The commands below run from the repository root unless noted. The station, the c
 ## Prerequisites
 
 - Git, Python 3, Node.js 24 or later, and pnpm 10.33.0 (every `package.json` names it in `packageManager`).
-- Rust is optional for everyday work: the native parts the TypeScript station and clients use are prebuilt (see [Native parts](#native-parts)). To change one of them you need rustup (the parts are built with the toolchain pinned in `scripts/native.ts`, which rustup installs on first use), plus, per part: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` matching `wasm-bindgen` in `client/Cargo.lock` (currently 0.2.129) and LLVM's `clang`/`llvm-ar` with WebAssembly support for the browser's iroh; the NDK below for Android's shell and engine; zig and cargo-zigbuild for the Linux station parts from a Mac.
+- Rust is optional for everyday work: the native parts the TypeScript station and clients use are prebuilt (`scripts/native.ts`). To change one of them you need rustup (the parts are built with the toolchain pinned in `scripts/native.ts`, which rustup installs on first use), plus, per part: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` matching `wasm-bindgen` in `client/Cargo.lock` (currently 0.2.129) and LLVM's `clang`/`llvm-ar` with WebAssembly support for the browser's iroh; the NDK below for Android's shell and engine; zig and cargo-zigbuild for the Linux station parts from a Mac.
 - Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); the apps (`apps/mbui/`) need MoonBit and their platform's toolchain, as [its README](../apps/mbui/README.md) says.
 
 ```sh
@@ -66,7 +66,7 @@ sh scripts/station-bundle.sh /tmp/station   # [darwin-arm64|linux-x64|linux-arm6
 
 The first command gets the browser's iroh (WebAssembly, prebuilt; the core itself is TypeScript, client/core-ts) and builds the local cloud's web/admin/preview assets, with previews pointing at the local preview host. This variable is read at build time; changing it requires rebuilding the web assets. If you change the development server's `PORT`, use its preview port (`PORT + 3`) here. Without this variable, the web build uses the hosted preview service.
 
-The last one lays out a station release in `/tmp/station/stillfail` (the layout `scripts/station-bundle.sh` describes): the station bundled, its Node, its native parts (prebuilt) and `bin/stillfail`, as the installer and the desktop app have it.
+The last one lays out a station release in `/tmp/station/stillfail` (the layout `scripts/station-bundle.sh` describes): the station bundled, its Node, its native parts (prebuilt) and `bin/stillfail`, as the installer has it.
 
 ## Isolated local development
 
@@ -105,9 +105,9 @@ The enrollment token is temporary; do not commit it. Keep `STILLFAIL_DATA` set t
 
 The mock login routes are for loopback development only. Restarting the local cloud recreates its test identities and workspace, so enroll a fresh test station again. The station's old local admin URL is a redirect, not a standalone UI.
 
-## A station on Windows (proof of concept)
+## A station on Windows from a checkout
 
-The station runs natively on Windows x64 from a checkout; there is no Windows installer or release yet ("Windows"). It needs Git for Windows: jobs and device commands run under its `sh`, as Claude Code's own commands do there. From PowerShell (Git Bash's `tar` takes `C:` for a host, so `scripts/native.ts` runs from PowerShell):
+The station runs natively on Windows x64 from a checkout. It needs Git for Windows: jobs and device commands run under its `sh`, as Claude Code's own commands do there. From PowerShell (Git Bash's `tar` takes `C:` for a host, so `scripts/native.ts` runs from PowerShell):
 
 ```powershell
 corepack pnpm install --frozen-lockfile --ignore-scripts
@@ -122,7 +122,7 @@ node src\main.ts run --app $PWD --data $env:TEMP\stillfail-test
 
 ## Local desktop packages
 
-The desktop apps are mbui's (`apps/mbui/`): `apps/mbui/scripts/mac-app.sh` makes the macOS app (signed ad hoc without `MAC_SIGN_IDENTITY`), `apps/mbui/scripts/win.sh build` and `win.sh setup` the Windows app and its installer (Git Bash with MSVC's environment); `MBUI_VARIANT=stable` or `beta` builds them as still.fail's released apps rather than still.fail mbui, a test app of its own. None of these publishes or installs the app. A redistributed fork also needs its own application identity, cloud origin and update feed; building alone does not configure those.
+The desktop apps are mbui's (`apps/mbui/`): `apps/mbui/scripts/mac-app.sh` makes the macOS app (signed ad hoc without `MAC_SIGN_IDENTITY`), `apps/mbui/scripts/win.sh build` and `win.sh setup` the Windows app and its installer (Git Bash with MSVC's environment); `MBUI_VARIANT=stable` or `beta` builds them as still.fail's released apps rather than still.fail preview, a test app of its own. None of these publishes or installs the app. A redistributed fork also needs its own application identity, cloud origin and update feed; building alone does not configure those.
 
 ## Production self-hosting
 

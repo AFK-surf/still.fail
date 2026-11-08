@@ -282,7 +282,7 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
-  let stations = stations_of(src.topic("stations", { "scope": Json::string(w.id) }).get().value)
+  let stations = station_marks(src, w.id)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().snapshot()
   let has_jobs = flag(jobs.value, "hasJobs") || items(jobs.value, "jobs").length() > 0
