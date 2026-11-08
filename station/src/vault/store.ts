@@ -66,7 +66,7 @@ CREATE TRIGGER IF NOT EXISTS vault_deleted_items_update AFTER UPDATE OF body ON 
 
 const parse = <T>(rows: unknown[]): T[] => rows.map((r) => JSON.parse((r as { body: string }).body) as T);
 
-const MEMBER_VAULTS = `SELECT v.body FROM vault_member_lookup m
+export const MEMBER_VAULTS = `SELECT v.body FROM vault_member_lookup m
   CROSS JOIN vaults v ON v.ws = m.ws AND v.id = m.vault
   WHERE m.ws = ? AND m.sub = ? ORDER BY m.vault`;
 
@@ -86,6 +86,10 @@ export class VaultStore {
 
   /// Candidate vaults in the same order as the full list. Callers still check membership on the held body.
   memberVaults(ws: string, sub: string): Vault[] {
+    // SQLite and JavaScript encode isolated surrogate code units differently; keep JavaScript's comparison for them.
+    if (!sub.isWellFormed()) return this.vaults(ws);
+    // A small workspace is cheaper to read directly; this probe visits at most 33 index entries, not vault bodies.
+    if (this.#db.prepare("SELECT 1 FROM vaults WHERE ws = ? LIMIT 1 OFFSET 32").get(ws) === undefined) return this.vaults(ws);
     // The index state, its anomaly markers and the rows must all be read from the same snapshot.
     this.#db.exec("SAVEPOINT vault_member_read");
     try {

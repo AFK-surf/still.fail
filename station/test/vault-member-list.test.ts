@@ -7,7 +7,7 @@ import { test } from "node:test";
 import type { Request } from "../src/api/request.ts";
 import { routes } from "../src/api/routes/vault.ts";
 import { backfillVaultMembers } from "../src/vault/member-index.ts";
-import { VaultStore } from "../src/vault/store.ts";
+import { MEMBER_VAULTS, VaultStore } from "../src/vault/store.ts";
 
 function fixture() {
   const db = new DatabaseSync(":memory:");
@@ -17,8 +17,12 @@ function fixture() {
       const statement = target.prepare(sql);
       if (!/\b(?:FROM|JOIN)\s+vaults\b/i.test(sql)) return statement;
       return new Proxy(statement, { get(query, method) {
-        if (method === "all") return (...args: never[]) => { const rows = query.all(...args); vaultRows += rows.length; return rows; };
-        if (method === "get") return (...args: never[]) => { const row = query.get(...args); if (row !== undefined) vaultRows++; return row; };
+        if (method === "all") return (...args: never[]) => {
+          const rows = query.all(...args); vaultRows += rows.filter((row) => typeof row.body === "string").length; return rows;
+        };
+        if (method === "get") return (...args: never[]) => {
+          const row = query.get(...args); if (row && typeof row.body === "string") vaultRows++; return row;
+        };
         const value = Reflect.get(query, method, query);
         return typeof value === "function" ? value.bind(query) : value;
       } });
@@ -114,6 +118,48 @@ test("a ready lookup returns more than one page of member vaults in storage orde
   } finally { f.db.close(); }
 });
 
+test("a small workspace uses the bounded full read, then a larger one uses the member lookup", () => {
+  const db = new DatabaseSync(":memory:"), vaults = new VaultStore(db);
+  try {
+    for (let i = 0; i < 32; i++) vaults.putVault({ ws: "w", id: `v${String(i).padStart(2, "0")}`, seq: 0,
+      members: [i === 0 ? "alice" : "bob"] } as never);
+    while (!backfillVaultMembers(db, "w", 32)) {}
+    assert.equal(vaults.memberVaults("w", "alice").length, 32);
+    vaults.putVault({ ws: "w", id: "v32", seq: 0, members: ["bob"] } as never);
+    assert.deepEqual(vaults.memberVaults("w", "alice").map((v) => v.id), ["v00"]);
+    const plan = (db.prepare("EXPLAIN QUERY PLAN SELECT 1 FROM vaults WHERE ws = ? LIMIT 1 OFFSET 32").all("w") as { detail: string }[])
+      .map((row) => row.detail).join("\n");
+    assert.match(plan, /SEARCH vaults USING COVERING INDEX .*\(ws=\?\)/);
+  } finally { db.close(); }
+});
+
+test("member listing starts with the viewer's index and reads each vault by primary key", () => {
+  const db = new DatabaseSync(":memory:");
+  new VaultStore(db);
+  try {
+    const plan = (db.prepare(`EXPLAIN QUERY PLAN ${MEMBER_VAULTS}`).all("w", "alice") as { detail: string }[])
+      .map((row) => row.detail).join("\n");
+    assert.match(plan, /SEARCH m USING PRIMARY KEY \(ws=\? AND sub=\?\)/);
+    assert.match(plan, /SEARCH v USING INDEX .*\(ws=\? AND id=\?\)/);
+    assert.doesNotMatch(plan, /TEMP B-TREE/);
+  } finally { db.close(); }
+});
+
+test("member lookup agrees with the original list for Unicode and embedded NUL identities", () => {
+  const db = new DatabaseSync(":memory:"), vaults = new VaultStore(db);
+  try {
+    const subs = ["alice" + String.fromCharCode(0) + "bob", String.fromCodePoint(0x1f600),
+      String.fromCharCode(0xd800), String.fromCharCode(0xdc00)];
+    for (let i = 0; i < 40; i++) vaults.putVault({ ws: "w", id: `other-${i}`, seq: 0, members: ["bob"] } as never);
+    for (const [i, sub] of subs.entries()) vaults.putVault({ ws: "w", id: `v${i}`, seq: 0, members: [sub] } as never);
+    while (!backfillVaultMembers(db, "w", 32)) {}
+    for (const sub of subs) {
+      const visible = (v: { members: string[] }) => v.members.includes(sub);
+      assert.deepEqual(vaults.memberVaults("w", sub).filter(visible), vaults.vaults("w").filter(visible));
+    }
+  } finally { db.close(); }
+});
+
 test("a duplicate member field written after preparation uses the original list", async () => {
   const f = fixture();
   try {
@@ -182,10 +228,11 @@ test("membership readiness and candidate reads use one snapshot", () => {
   const vaults = new VaultStore(observed), before = { ws: "w", id: "v", seq: 0, members: ["alice"] };
   try {
     vaults.putVault(before as never);
+    for (let i = 0; i < 40; i++) vaults.putVault({ ws: "w", id: `other-${i}`, seq: 0, members: ["bob"] } as never);
     while (!backfillVaultMembers(db, "w", 32)) {}
     armed = true;
     assert.deepEqual(vaults.memberVaults("w", "alice"), [before]);
     assert.equal(armed, false);
-    assert.deepEqual(vaults.memberVaults("w", "alice"), [JSON.parse(replacement)]);
+    assert.deepEqual(vaults.memberVaults("w", "alice").filter((v) => v.members.includes("alice")), [JSON.parse(replacement)]);
   } finally { other.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
 });
