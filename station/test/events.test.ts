@@ -1153,3 +1153,35 @@ test("a vault's records are told to its members as they are as each is told, aga
   assert.deepEqual(again.map(told), [[], ["r1"]]);
   for (const s of again) await s.close();
 });
+
+test("a session's summary read before its messages were taken is not told after the station told they were", async () => {
+  // Its agent took a message (`session-pending`, told at once) while the summary a change before asked for was still
+  // being read: told after it, that summary had the message waiting again and the turn before, and a device stood the
+  // agent back in the queue, its activity in the chat gone until the next summary came (2026-11-09).
+  const { events, readers, change } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  const read = readers.read;
+  let pending = 1;
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  let first = true;
+  readers.read = async (op: string, args: any) => {
+    if (op !== "summary") return read(op, args);
+    const snapshot = pending;
+    if (first) {
+      first = false;
+      await held;
+    }
+    return JSON.stringify({ key: args.key, pending: snapshot });
+  };
+  change({ type: "session", key: "s" });
+  await settle();
+  pending = 0;
+  change({ type: "session", key: "s", pending: 0 });
+  release();
+  await settle();
+  const told = a.got.filter((e) => e.event === "session" || e.event === "session-pending").map((e) => [e.event, e.data.pending]);
+  assert.deepEqual(told, [["session-pending", 0], ["session", 0]]);
+  await a.close();
+});

@@ -243,6 +243,9 @@ export class Events {
   }
   /// The process state last told per session.
   private states = new Map<string, string>();
+  /// How many times each session's taking of its messages was told (`session-pending`): a summary read across one is
+  /// older than it.
+  private taken = new Map<string, number>();
   private flushing: Promise<void> | null = null;
   private time: Fibers;
   private timers: (() => void)[] = [];
@@ -775,7 +778,10 @@ export class Events {
       case "session":
         // Its messages taken: how many it has yet to take, told now (its summary, read after, says it too): read
         // behind the station's other tells can leave a person's message showing that it waits for its agent.
-        if (change.pending !== undefined) this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
+        if (change.pending !== undefined) {
+          this.taken.set(change.key, (this.taken.get(change.key) ?? 0) + 1);
+          this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
+        }
         this.dirty.sessions.add(change.key);
         // Its summary is told (`session`): a device that makes its rows puts it in them.
         this.itemsChanged({ sessions: [change.key] }, null, true);
@@ -783,6 +789,7 @@ export class Events {
       case "sessionRemoved":
         this.dirty.sessions.delete(change.key);
         this.states.delete(change.key);
+        this.taken.delete(change.key);
         this.overviewChanged();
         this.emit("session-removed", { key: change.key }, { sees: { ws: change.ws ?? null } }, `session\0${change.key}`);
         this.itemsChanged({ sessions: [change.key] });
@@ -976,7 +983,12 @@ export class Events {
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
       try {
-        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh", TOLD)), { sees: { session: key } }, `session\0${key}`);
+        const taken = this.taken.get(key);
+        const summary = await this.deps.readers.read("summary", { key }, "zh", TOLD);
+        // Its messages taken while it was read: it has them waiting and the turn before, told after they were taken; the
+        // change that told it reads it again in the next round.
+        if (this.taken.get(key) !== taken) continue;
+        this.emit("session", JSON.parse(summary), { sees: { session: key } }, `session\0${key}`);
       } catch (error) {
         log.warn("events", "session event not sent", { session: key, error: (error as Error).message });
       }
