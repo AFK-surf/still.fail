@@ -263,6 +263,10 @@
       "src/ui/shot.mbt": 1,
       "src/ui/sideways.mbt": 2,
       "src/ui/tree_field.mbt": 1
+    },
+    "old-list": {
+      "src/demo/main.mbt": 1,
+      "src/kit/disclosure.mbt": 1
     }
   },
   "excused": {
@@ -321,7 +325,8 @@
     "tester-branch": {},
     "frame-number": {},
     "ui-current": {},
-    "build-clock": {}
+    "build-clock": {},
+    "old-list": {}
   },
   "tester": {
     "names": [

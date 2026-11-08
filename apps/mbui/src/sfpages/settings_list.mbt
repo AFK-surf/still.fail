@@ -363,15 +363,67 @@ let settings_search_page : @ui.Style = @ui.css("w=Full pb=S3 clip=true")
 let settings_search_foot : Double = 12.0
 
 ///|
-/// The same search control hosted in the Small settings page's made-once tree.
+/// The same search control (settings_search's) as nodes, over the settings' list made once: its round ground as tall as
+/// the theme's band, the search mark, the field, and while it holds words the clear key at its end, inside the ground,
+/// as round as it; 12 under it. Its field an editor of its own (a Field is one editor's: the list made once while
+/// another of it still leaves, the sidebar's old one), what it holds the list's words (settings_search_field: kept as a
+/// result is opened, the sidebar's the same), each told the other's as they change.
 fn settings_search_node(parent : @view.View) -> Unit {
-  @ui.old(parent, fn(c) {
-    c.with_theme(@sf.ui_theme(), fn() {
-      c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore
+  let own = @ui.Field::new(text=@signals.untracked(fn() { settings_search_field.text() }))
+  let held = fn() { own.text() != "" }
+  parent.box(fn(page) {
+    @sf.style_node(page, fn() { settings_search_page })
+    page.reacts(fn() { own.text() }, fn(w) { settings_search_field.set(w) })
+    page.reacts(fn() { settings_search_field.text() }, fn(w) {
+      if @signals.untracked(fn() { own.text() }) != w {
+        own.set(w)
+      }
     })
-    // (as tall as it is before it is laid out too: made again as it scrolls back, told 0 it would close its room under
-    // the finger, not show, and open it again further on)
-  }, natural=true, unlaid=fn() { @sf.theme().chat_list.band_h + settings_search_foot }).width_share(Is(1.0)) |> ignore
+    page.box(fn(g) {
+      // (its end's room the clear key's while it holds words: round in the round ground's end, concentric)
+      @sf.style_node(g, fn() {
+        let l = @sf.theme().chat_list
+        let end = if held() { @sf.room_of(0.0) } else { @sf.room_of(l.band_pad) }
+        settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(l.band_pad), pr=end))
+      })
+      @sf.icon_node(g, "search", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+      @ui.field(
+        g,
+        own,
+        placeholder_by=fn() { @sf.t("web-pages.settings.search") },
+        max_lines=1,
+        enter_sends=true,
+        size_by=fn() { @sf.theme().t.ui },
+        line=@signals.untracked(fn() { @sf.theme().t.ui_line }),
+        colors_by=fn() {
+          let p = @sf.theme().p
+          (p.text, p.subtle, p.accent)
+        },
+      )
+      .grow(Is(1.0))
+      .basis(Is(Some(0.0)))
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      |> ignore
+      g.show(held, fn(k) {
+        let l = @signals.untracked(fn() { @sf.theme().chat_list })
+        @sf.icon_button_node(
+          k,
+          "close",
+          fn() { @sf.t("android-misc.drive.pick.filterClear") },
+          fn() {
+            own.set("")
+            own.focus()
+          },
+          size=l.band_h,
+          icon_size=l.band_icon,
+        )
+        |> ignore
+      })
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|

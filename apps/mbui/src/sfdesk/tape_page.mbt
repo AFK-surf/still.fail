@@ -360,7 +360,7 @@ fn tape_made(
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion) =>
+        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions) =>
           tape_made(src, Setting(r), tips).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -382,6 +382,17 @@ fn tape_made(
       made("notifications", fn(p, core, here, stint, told, _acts) {
         context_node(p)
         @sfpages.notify_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~)
+      })
+    // (by its station, skill and the part first shown: another's another page)
+    Setting(MemoryDoc(address, skill, at)) if pane_makes.val =>
+      made("memory-doc/" + address + "/" + skill + "/" + at.to_string(), fn(p, core, here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.memory_doc_node(p, core, here, address, skill, at, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    Setting(Permissions) if pane_makes.val =>
+      made("permissions", fn(p, core, _here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.permissions_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
     Setting(AutoCompletion) if pane_makes.val =>
       made("auto-completion", fn(p, core, here, _stint, told, acts) {
