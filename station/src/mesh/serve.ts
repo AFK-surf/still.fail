@@ -132,7 +132,7 @@ function brought(hello: any, cloud: Cloud, workspace: string, base: string | und
 
 /// The longest chain of each person's own lock this station heard, by the lock's genesis.
 const chains = new WeakMap<Cloud, PersonChains>();
-function chainsOf(cloud: Cloud): PersonChains {
+export function personChainsOf(cloud: Cloud): PersonChains {
   let c = chains.get(cloud);
   if (c === undefined) chains.set(cloud, (c = new PersonChains(join(meshDir(cloud.data), "person-chains.json"))));
   return c;
@@ -238,7 +238,7 @@ function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"],
   if (pin === undefined) return [409, { error: "no lock of their own bound here" }];
   try {
     if (personFold(chain, viewer.sub).genesis !== pin) return [409, { error: "not the lock bound here" }];
-    const chains = chainsOf(cloud);
+    const chains = personChainsOf(cloud);
     chains.keep(pin, chains.newest(pin, viewer.sub, chain));
     return [200, {}];
   } catch (e) {
@@ -247,28 +247,49 @@ function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"],
 }
 
 /// With a lock pinned: the member admitted only on a device the lock names, with the lower of the lock's role and the
-/// credential's (`named`). Without one, as the credential says. Throws a LockRefusal why not.
-export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string): Admitted {
+/// credential's (`named`). Without one, as the credential says. A member bound to a lock of their own there goes by it
+/// alone on an app device: one the workspace's lock names is let in only as it is on the person's lock this station
+/// has heard (else one taken off it would still be let in); a web page, which holds no key of that lock, by its entry.
+/// Throws a LockRefusal why not.
+export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string, hello: unknown = null): Admitted {
   // The lock of the workspace the member is in.
   const ws = admitted.viewer.workspace && admitted.viewer.workspace !== cloud.home() ? admitted.viewer.workspace : null;
   const locked = cloud.locked(ws);
   if (locked === null) return { ...admitted, viewer: { ...admitted.viewer, role: named } };
   if (locked.state === null) throw new LockRefusal("this station's workspace lock is broken; run `stillfail lock reset` on it");
   const v = admitted.viewer;
-  const { role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
+  const { device, role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
+  if (device.kind === "app" && locked.state.persons.has(v.sub)) {
+    const person = onPersonalLock(cloud, admitted, named, endpoint, hello);
+    if (person === null) throw new LockRefusal("this device goes by its person's own lock in this workspace, and it brought none");
+    return person;
+  }
   return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
+}
+
+/// inLock again for a connection already in (its lock or its person's changed): by its person's own lock where it is
+/// not a device of the workspace's lock, as it was let in. Throws a LockRefusal why not.
+export function stillIn(cloud: Cloud, admitted: Admitted, named: string, endpoint: string): Admitted {
+  try {
+    return inLock(cloud, admitted, named, endpoint);
+  } catch (e) {
+    if (!(e instanceof LockRefusal)) throw e;
+    const person = onPersonalLock(cloud, admitted, named, endpoint, null);
+    if (person === null) throw e;
+    return person;
+  }
 }
 
 /// inLock, for a hello that may bring what put the device in the lock (`lock.entries`): not in the lock as this station
 /// has it, the entries it brought are taken (checked as any) and it is asked again.
 export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, endpoint: string, hello: unknown): Admitted {
   try {
-    return inLock(cloud, admitted, named, endpoint);
+    return inLock(cloud, admitted, named, endpoint, hello);
   } catch (e) {
     if (!(e instanceof LockRefusal)) throw e;
     if (brought(hello, cloud, admitted.viewer.workspace, admitted.viewer.lockDevice?.base)) {
       try {
-        return inLock(cloud, admitted, named, endpoint);
+        return inLock(cloud, admitted, named, endpoint, hello);
       } catch (again) {
         if (!(again instanceof LockRefusal)) throw again;
       }
@@ -279,22 +300,24 @@ export function inLockBringing(cloud: Cloud, admitted: Admitted, named: string, 
   }
 }
 
-/// Not in the workspace's lock as a device, on the person's own lock its member bound there (`lock.person`, the chain a
-/// hello brings). The chain is checked and kept here as long as it goes on from the one this
-/// station has: an older one brought again (a device taken off since) is judged as the longer it has. Null when the
-/// hello brings none; throws a LockRefusal why not.
+/// On the person's own lock its member bound there (`lock.person`, the chain a hello brings; none brought, or no hello,
+/// the one this station has heard). The chain is checked and kept here as long as it goes on from the one this station
+/// has: an older one brought again (a device taken off since) is judged as the longer it has. Null when there is none
+/// to go by; throws a LockRefusal why not.
 function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string, hello: any): Admitted | null {
   const raw = hello?.lock?.person;
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > BROUGHT_MOST) return null;
+  if (raw !== undefined && (!Array.isArray(raw) || raw.length === 0 || raw.length > BROUGHT_MOST)) return null;
   const v = admitted.viewer;
   const ws = v.workspace && v.workspace !== cloud.home() ? v.workspace : null;
   const state = cloud.locked(ws)?.state;
   if (!state || !state.persons.has(v.sub)) return null;
   const who = { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof };
-  const chains = chainsOf(cloud);
-  const newest = chains.newest(state.persons.get(v.sub)!, v.sub, raw);
+  const chains = personChainsOf(cloud);
+  const pin = state.persons.get(v.sub)!;
+  const newest = raw === undefined ? chains.kept(pin) : chains.newest(pin, v.sub, raw);
+  if (newest === null) return null;
   const { role } = admitPerson(state, who, newest);
-  chains.keep(state.persons.get(v.sub)!, newest);
+  chains.keep(pin, newest);
   return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
 }
 
@@ -388,7 +411,7 @@ export async function serve(m: Members, conn: Connection) {
     else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
     else {
       try {
-        current = inLock(m.cloud, current, named, device);
+        current = stillIn(m.cloud, current, named, device);
         return false;
       } catch {
         conn.close(3, "lock_unconfirmed");
@@ -403,7 +426,12 @@ export async function serve(m: Members, conn: Connection) {
     expiry = wall.after(Math.max(0, current.exp * 1000 - wall.now()) + 50, () => void (gone() || watchExpiry()));
   };
   watchExpiry();
-  const unlisten = m.cloud.listen(gone);
+  const unlistenCloud = m.cloud.listen(gone);
+  const unlistenPersons = personChainsOf(m.cloud).listen(gone);
+  const unlisten = () => {
+    unlistenCloud();
+    unlistenPersons();
+  };
   // Renewals on the credential stream.
   (async () => {
     for (let line = await credentials.line().catch(() => null); line !== null; line = await credentials.line().catch(() => null)) {
