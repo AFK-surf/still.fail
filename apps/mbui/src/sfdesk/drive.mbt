@@ -463,7 +463,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     let lid = c.id("files/list/" + f.key)
     // (a ground round its rows: a press there chooses none)
     c.cursor(lid, Arrow)
-    let lit = drag_target(c, lid, "pane/" + f.key + "/" + at.station + "/" + root + "/" + at.path, at, name, shown, 0)
+    let lit = drag_target(c, src, lid, "pane/" + f.key + "/" + at.station + "/" + root + "/" + at.path, at, name, shown, 0)
     c.box(style=list_box, id=lid, fn() {
       if view == "columns" {
         // (columns stay while the folder opened is read: each column says its own reading or trouble)
@@ -830,14 +830,11 @@ pub fn drive_row(
   let live = !busy && !row.renaming
   // (touch: no ⋯, a hold its menu, a folder's › saying a press goes in; a computer: its ⋯ under the pointer)
   let held_more = @sf.more_held()
-  if live {
-    if c.pressed(id) {
-      drag_press(c, src, at, e)
-    }
-  }
+  // pressed and moved: dragged (followed as the press goes: drag.mbt)
+  drag_press(c, id, src, at, e, s.b.owner == "tab", live)
   // a folder takes what is dropped on it
   let lit = match row.drop {
-    Some(into) => drag_target(c, id, "row/" + key, into, e.name, s, 2)
+    Some(into) => drag_target(c, src, id, "row/" + key, into, e.name, s, 2)
     None => None
   }
   // (a finger: its ⋯ always there, as nothing is hovered; a tap opens it, as a double click does with a mouse)
