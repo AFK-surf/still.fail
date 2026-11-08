@@ -309,6 +309,24 @@ fn main {
         _ => None
       }))
     (Some("said"), Some(db), _) => @host.run(shell_dir=beside(db, "shell"), host => said_builder(host, db))
+    (Some("archive-last"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let archive : Ref[@archivelast.Archive?] = Ref(None)
+        builder(host, db, "archive last message", (db, ask) => {
+          let a = match archive.val {
+            Some(a) => a
+            None => {
+              let a = @archivelast.Archive::new(db)
+              archive.val = Some(a)
+              a
+            }
+          }
+          match ask {
+            { "thread": Number(thread, ..), .. } => Some(a.step(thread.to_int64()))
+            _ => None
+          }
+        })
+      })
     (Some("turn-counts"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => turn_builder(host, db))
     (Some("session-list"), Some(db), _) =>
@@ -330,7 +348,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last --db <file>")
       2
     }
   }
