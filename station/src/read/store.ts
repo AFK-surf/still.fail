@@ -1718,10 +1718,35 @@ const toJob = (r: Json): JobRow => {
   return job;
 };
 
-/// The jobs up (running, or a service stopped on its own that holds its port), newest first: by the index of their
-/// states, not every job the station ever ran.
-export function upJobs(s: Store): JobRow[] {
-  return all(s, rows.JOBS_UP).map(toJob);
+// SQLite compares the stored bytes; seenBy compares strings decoded by the Node SQLite driver. Different Node versions
+// may stop decoding at a NUL, and old writers can have left non-UTF-8 bytes. Keep unusual values for seenBy to decide.
+const JOB_WORKSPACE_CANDIDATE = `(s.ws = ?1 OR (?2 AND s.ws IS NULL)
+  OR typeof(j.session_key) <> 'text' OR instr(CAST(j.session_key AS BLOB), x'00') > 0
+  OR j.session_key GLOB '*[^ -~]*'
+  OR (s.ws IS NOT NULL AND (typeof(s.ws) <> 'text' OR instr(CAST(s.ws AS BLOB), x'00') > 0
+    OR s.ws GLOB '*[^ -~]*')))`;
+
+/// A superset of the viewer's up jobs, filtered before their records leave SQLite. seenBy makes the final decision.
+export const JOBS_UP_IN_WORKSPACE = `SELECT j.* FROM jobs j LEFT JOIN sessions s ON s.key = j.session_key
+  WHERE j.state = 'running' AND ${JOB_WORKSPACE_CANDIDATE}
+  UNION ALL
+  SELECT j.* FROM jobs j LEFT JOIN sessions s ON s.key = j.session_key
+  WHERE j.state = 'exited' AND j.port IS NOT NULL AND ${JOB_WORKSPACE_CANDIDATE}
+  ORDER BY started_at DESC`;
+
+/// The jobs up (running, or a service stopped on its own that holds its port), newest first. The state index still
+/// visits other workspaces' up jobs; the join avoids loading those records and their session keys into the reader.
+export function upJobs(s: Store, visibleTo: InWorkspace | null = null): JobRow[] {
+  if (visibleTo === null) return all(s, rows.JOBS_UP).map(toJob);
+  // Binding an unusual viewer can normalize it before SQLite compares it. Preserve the old JavaScript path for it.
+  if (!/^[\x20-\x7e]*$/.test(visibleTo.workspace)) return all(s, rows.JOBS_UP).map(toJob);
+  try {
+    return all(s, JOBS_UP_IN_WORKSPACE, visibleTo.workspace, visibleTo.home !== false ? 1 : 0).map(toJob);
+  } catch (error) {
+    // Before sessions had workspaces, every session (including a missing one) belonged to the home workspace.
+    if (!(error instanceof Error) || !error.message.includes("no such column: s.ws")) throw error;
+    return visibleTo.home !== false ? all(s, rows.JOBS_UP).map(toJob) : [];
+  }
 }
 
 /// How many of a session's latest jobs its detail lists for a device (`?jobs=now`, `jobsNow`).
