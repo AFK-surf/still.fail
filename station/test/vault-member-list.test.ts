@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { Request } from "../src/api/request.ts";
@@ -95,4 +98,94 @@ test("a saved vault with duplicate member keys follows the last key", async () =
     while (!backfillVaultMembers(f.db, "w", 32)) {}
     assert.deepEqual((await f.read("/vault/vaults")).body, { vaults: [...f.visible, JSON.parse(body)] });
   } finally { f.db.close(); }
+});
+
+test("a ready lookup returns more than one page of member vaults in storage order", async () => {
+  const f = fixture();
+  try {
+    const more = Array.from({ length: 70 }, (_, i) => ({ ws: "w", id: `member-${String(i).padStart(3, "0")}`,
+      seq: 0, owner: "alice", members: ["alice"], epoch: 0 }));
+    for (const v of more) f.vaults.putVault(v as never);
+    while (!backfillVaultMembers(f.db, "w", 32)) {}
+    const result = await f.read("/vault/vaults");
+    assert.deepEqual(result.body, { vaults: [...f.visible, ...more] });
+    assert.ok(result.vaultRows <= f.visible.length + more.length, `read ${result.vaultRows} vault bodies`);
+    assert.deepEqual((await f.read("/vault/items")).body, { items: [f.item] });
+  } finally { f.db.close(); }
+});
+
+test("a duplicate member field written after preparation uses the original list", async () => {
+  const f = fixture();
+  try {
+    while (!backfillVaultMembers(f.db, "w", 32)) {}
+    const body = '{"ws":"w","id":"other-000","members":["bob"],"members":["alice"]}';
+    f.db.prepare("UPDATE vaults SET body=? WHERE ws='w' AND id='other-000'").run(body);
+    assert.deepEqual((await f.read("/vault/vaults")).body, { vaults: [...f.visible, JSON.parse(body)] });
+  } finally { f.db.close(); }
+});
+
+test("the storage key chooses order while the held body chooses identity and workspace", async () => {
+  const f = fixture();
+  try {
+    const differentId = { ws: "w", id: "body-id", members: ["alice"] };
+    const differentWs = { ws: "another", id: "other-001", members: ["alice"] };
+    const update = f.db.prepare("UPDATE vaults SET body=? WHERE ws='w' AND id=?");
+    update.run(JSON.stringify(differentId), "other-000");
+    update.run(JSON.stringify(differentWs), "other-001");
+    const item = { ws: "w", vault: "body-id", id: "two", version: 0, epoch: 0 };
+    f.vaults.putItem(item as never);
+    while (!backfillVaultMembers(f.db, "w", 32)) {}
+    assert.deepEqual((await f.read("/vault/vaults")).body, { vaults: [...f.visible, differentId] });
+    assert.deepEqual((await f.read("/vault/items")).body, { items: [f.item, item] });
+  } finally { f.db.close(); }
+});
+
+test("member lookup stays inside its caller's outer transaction", async () => {
+  const f = fixture();
+  try {
+    while (!backfillVaultMembers(f.db, "w", 32)) {}
+    f.db.exec("BEGIN");
+    const added = { ws: "w", id: "other-000", seq: 1, owner: "bob", members: ["alice"], epoch: 0 };
+    f.vaults.putVault(added as never);
+    assert.deepEqual((await f.read("/vault/vaults")).body, { vaults: [...f.visible, added] });
+    f.db.exec("ROLLBACK");
+    assert.deepEqual((await f.read("/vault/vaults")).body, { vaults: f.visible });
+  } finally { f.db.close(); }
+});
+
+test("membership readiness and candidate reads use one snapshot", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vault-member-list-")), path = join(dir, "data.sqlite");
+  const db = new DatabaseSync(path);
+  db.exec("PRAGMA journal_mode=WAL");
+  new VaultStore(db);
+  const other = new DatabaseSync(path);
+  const write = other.prepare("UPDATE vaults SET body=? WHERE ws='w' AND id='v'");
+  const replacement = '{"ws":"w","id":"v","members":["bob"],"members":["alice"]}';
+  let armed = false;
+  const observed = new Proxy(db, { get(target, key) {
+    if (key === "prepare") return (sql: string) => {
+      const statement = target.prepare(sql);
+      if (!sql.includes("FROM vault_member_invalid i CROSS JOIN vaults")) return statement;
+      return new Proxy(statement, { get(query, method) {
+        if (method === "get") return (...args: never[]) => {
+          const result = query.get(...args);
+          if (armed) { armed = false; write.run(replacement); }
+          return result;
+        };
+        const value = Reflect.get(query, method, query);
+        return typeof value === "function" ? value.bind(query) : value;
+      } });
+    };
+    const value = Reflect.get(target, key, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const vaults = new VaultStore(observed), before = { ws: "w", id: "v", seq: 0, members: ["alice"] };
+  try {
+    vaults.putVault(before as never);
+    while (!backfillVaultMembers(db, "w", 32)) {}
+    armed = true;
+    assert.deepEqual(vaults.memberVaults("w", "alice"), [before]);
+    assert.equal(armed, false);
+    assert.deepEqual(vaults.memberVaults("w", "alice"), [JSON.parse(replacement)]);
+  } finally { other.close(); db.close(); rmSync(dir, { recursive: true, force: true }); }
 });
