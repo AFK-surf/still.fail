@@ -170,8 +170,10 @@ export class RevIndex {
     return Number(this.#meta("rev") ?? 0);
   }
 
-  since(since: number, limit: number): IndexRow[] {
-    return (this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, source, kind, rev, removed, json FROM ${this.#name} WHERE rev > ? ORDER BY rev LIMIT ?`).all(since, limit) as Json[]).map((r) => ({
+  since(since: number, limit: number, omitRemovedBodies = false): IndexRow[] {
+    // The built-in wire encoders never use a removed row's old body. Other readers still receive it.
+    const body = omitRemovedBodies ? "CASE WHEN removed IS NOT 0 THEN '' ELSE json END AS json" : "json";
+    return (this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, source, kind, rev, removed, ${body} FROM ${this.#name} WHERE rev > ? ORDER BY rev LIMIT ?`).all(since, limit) as Json[]).map((r) => ({
       key: Buffer.from(r.key).toString("utf8"), source: r.source, kind: r.kind, rev: r.rev, removed: r.removed !== 0, json: r.json,
     }));
   }
@@ -503,7 +505,8 @@ export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => J
     const forced = resetIf?.(floor, rev, epoch) === true;
     const reset = held.epoch !== epoch || forced;
     const since = reset ? 0 : held.through;
-    return { epoch, rev, reset, since, changed: !reset && since >= rev ? null : index.since(since, PAGE_ROWS + 1) };
+    return { epoch, rev, reset, since, changed: !reset && since >= rev ? null :
+      index.since(since, PAGE_ROWS + 1, wire === statsWire || wire === taskWire) };
   });
   const { epoch, rev, reset, since, changed } = slice;
   if (changed === null) return null;
