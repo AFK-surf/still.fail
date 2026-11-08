@@ -11,8 +11,9 @@
 // margins), from 40 under the bar; a hairline along the foot says how far through it is. A panel docks at the right
 // under the bar, 320 wide, on the paper with a line before it, the text kept clear of it: the contents (the chapters
 // numbered, the one being read marked; finding in the whole text), the search (each place found, in a line of its
-// text), the layout (the day's paper, the size, the lines, the margins, the face, the indent). ⌘F finds, ← → go from
-// chapter to chapter, Esc closes what is open over the text (else goes back).
+// text), the layout (the day's paper, the size, the lines, the margins, the face, the indent: nodes of the window's
+// tree laid over the reader where the panel docks, reader_layout_node.mbt). ⌘F finds, ← → go from chapter to chapter,
+// Esc closes what is open over the text (else goes back).
 //
 // The phone's page reads with the same column and state (reader_column, Reading), its own bars over it.
 
@@ -120,7 +121,7 @@ pub(all) enum ReaderPanel {
 ///|
 /// A text being read: how it comes (how much so far), then the book and where to start; where the reader is (a block
 /// and how far down it the top of the screen is), a phone's bars, a panel, the search, a jump on its way, where it was
-/// last kept; a desktop's bar on its scroll and its sliders' values while one is dragged.
+/// last kept; a desktop's bar on its scroll.
 pub(all) struct Reading {
   key : String
   /// the file as last given (where it was left is asked of it, and kept with it)
@@ -160,8 +161,6 @@ pub(all) struct Reading {
   mut draft : Double
   /// a desktop's bar, gone as the text is read on down
   bar : BarOnScroll
-  /// a desktop's sliders' values while one is dragged, by its key (kept as it is let go)
-  drafts : Map[String, Double]
 }
 
 ///|
@@ -202,7 +201,6 @@ pub fn reading_for(key : String) -> Reading {
         kept_moves: 0,
         draft: -1.0,
         bar: BarOnScroll::new(),
-        drafts: Map([]),
       }
       readings[key] = r
       r
@@ -219,6 +217,8 @@ pub fn reader_let_go(key : String) -> Unit {
         Some(book) => reader_keep(r, book, true)
         None => ()
       }
+      // (its layout's panel let go with it)
+      reader_panel_set(r, NoPanel)
       readings.remove(key)
     }
     None => ()
@@ -229,6 +229,29 @@ pub fn reader_let_go(key : String) -> Unit {
 /// Every text read let go of (the app begun again).
 fn readings_reset() -> Unit {
   readings.clear()
+  layout_open.set(None)
+}
+
+///|
+/// The text whose layout's panel is open (its reading's key; None, none): what the window's tree lays it out by
+/// (reader_layout_nodes), told as a reader's panel is opened or closed (reader_panel_set).
+// kept across runs: put back by readings_reset
+let layout_open : @signals.Signal[String?] = @signals.signal(None)
+
+///|
+/// Reading `r`'s panel made `panel` (where it is the layout, what the window's tree lays out told so; its layout's
+/// panel closed, told that), outside any build: as a tool opens it, Escape or its close closes it, or what opens a
+/// reader at a panel (sffix's reader-layout) does.
+pub fn reader_panel_set(r : Reading, panel : ReaderPanel) -> Unit {
+  r.panel = panel
+  let open = @signals.untracked(fn() { layout_open.get() })
+  if panel == Layout {
+    if open != Some(r.key) {
+      layout_open.set(Some(r.key))
+    }
+  } else if open == Some(r.key) {
+    layout_open.set(None)
+  }
 }
 
 ///|
@@ -772,7 +795,7 @@ pub fn reader_snippet(chunk : String, m : TextMatch, accent : Int64) -> Array[@u
 ///|
 /// A panel opened (the search's field taking the keys).
 pub fn reader_open_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit {
-  r.panel = panel
+  reader_panel_set(r, panel)
   r.contents_put = panel == Contents
   if panel == Find {
     c.focus_field(r.search)
@@ -780,10 +803,11 @@ pub fn reader_open_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit 
 }
 
 ///|
-/// The panel closed (a phone's drawn sinking away until it has gone: `closing`).
+/// The panel closed (a phone's drawn sinking away until it has gone: `closing`; the layout's, nodes of the window's
+/// tree, sinks away there).
 pub fn reader_close_panel(c : @ui.Ctx, r : Reading) -> Unit {
-  r.closing = r.panel
-  r.panel = NoPanel
+  r.closing = if r.panel == Layout { NoPanel } else { r.panel }
+  reader_panel_set(r, NoPanel)
   c.blur()
 }
 
@@ -820,6 +844,13 @@ pub fn reader(
 ) -> Unit {
   let r = reading_for(key)
   reader_load(r, file, markdown)
+  // (gone back: its layout's panel, the window's tree's, closed with it)
+  let on_back = fn() {
+    if r.panel == Layout {
+      reader_panel_set(r, NoPanel)
+    }
+    on_back()
+  }
   let host = viewer_host()
   // laid out Small: a phone's (its own bars that a tap brings, the panels as the page's sheets), as the viewer's frame
   let narrow = layout(c.width) is Small
@@ -1019,8 +1050,9 @@ fn desk_reader_chrome(
     |> ignore
   })
   |> ignore
-  if r.panel != NoPanel {
-    c.layer(fn() { desk_panel(c, r, book, style, p, chapter, has_chapters) }) |> ignore
+  // (the layout's: nodes of the window's tree laid over it there, reader_layout_nodes)
+  if r.panel != NoPanel && r.panel != Layout {
+    c.layer(fn() { desk_panel(c, r, book, p, chapter, has_chapters) }) |> ignore
   }
 }
 
@@ -1078,7 +1110,6 @@ fn desk_panel(
   c : @ui.Ctx,
   r : Reading,
   book : Book?,
-  style : ReaderStyle,
   p : ReaderPaper,
   chapter : Int,
   has_chapters : Bool,
@@ -1095,8 +1126,7 @@ fn desk_panel(
         c.box(style=desk_panel_head, fn() {
           let title = match r.panel {
             Contents => t("web-pages.drive.reader.contents")
-            Find => t("web-pages.drive.reader.find")
-            _ => t("web-pages.drive.reader.layout")
+            _ => t("web-pages.drive.reader.find")
           }
           c.text(title, style=desk_panel_title.then(@ui.text_style(color=Data(p.ink)))) |> ignore
           c.box(style=desk_grow, fn() {  }) |> ignore
@@ -1119,8 +1149,7 @@ fn desk_panel(
         |> ignore
         match r.panel {
           Contents => desk_contents(c, r, book, p, chapter, has_chapters)
-          Find => desk_find(c, r, book, p)
-          _ => desk_layout(c, r, style, p)
+          _ => desk_find(c, r, book, p)
         }
       })
       |> ignore
@@ -1268,188 +1297,6 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
         |> ignore
       })
       |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The paper, the size, the lines, the margins, the face and the indent (Reader.tsx Layout, a desktop's: the face and
-/// the indent each on a row of their own), each changed as it is picked (the host's set_reader_style).
-fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, narrow? : Bool = false) -> Unit {
-  let set = viewer_host().set_reader_style
-  // what it is laid out in: the panel's 280 (320 less 20 either side), a phone's sheet's width less 20 either side
-  let inner = if narrow { dmax(desk_none, c.width - 2.0 * desk_layout_in) } else { desk_layout_inner }
-  let swatch = (inner - desk_papers_gaps) / desk_papers_row
-  let half = (inner - desk_pair_gap) / 2.0
-  let seg_item = if narrow { (half - desk_seg_track) / 2.0 } else { desk_seg_item }
-  let label = fn(words : String) {
-    c.text(words, style=desk_layout_label.then(@ui.text_style(color=Data(p.muted)))) |> ignore
-  }
-  c.box(style=desk_layout_box, fn() {
-    // the day's papers; night is the app's dark (外观), never picked here
-    c.box(style=desk_layout_block, fn() {
-      label(t("web-pages.drive.reader.paper"))
-      c.box(style=desk_papers, fn() {
-        let shown = if theme().dark { "night" } else { day_paper_key(style.paper) }
-        for key in ["white", "green", "grey"] {
-          desk_swatch(c, key, shown == key, p, swatch, on_press=fn() {
-            set(Paper(key))
-          })
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-    c.box(style=desk_layout_block, fn() {
-      label(t("web-pages.drive.reader.size"))
-      c.box(style=desk_size_row.then(@ui.style(bg=Data(alpha(p.ink, desk_size_ground)))), fn() {
-        let (least, most) = reader_sizes
-        let size_word = t("web-pages.drive.reader.size")
-        desk_size_key(c, "reader/size-less", "A−", style.size > least, p, said=t("web-pages.drive.reader.less", args=[("what", size_word)]), on_press=fn() {
-          set(Size(style.size - 1))
-        })
-        c.box(style=desk_grow_middle, fn() {
-          c.text("\{style.size}", style=desk_size_value.then(@ui.text_style(color=Data(p.ink)))) |> ignore
-        })
-        |> ignore
-        desk_size_key(c, "reader/size-more", "A+", style.size < most, p, said=t("web-pages.drive.reader.more", args=[("what", size_word)]), on_press=fn() {
-          set(Size(style.size + 1))
-        })
-      })
-      |> ignore
-    })
-    |> ignore
-    // (the sliders' labels in a column as wide as the wider of them in this language, 48 at least: words of a length
-    // known, whole)
-    let slider_labels = [t("web-pages.drive.reader.lines"), t("web-pages.drive.reader.margin")]
-    let label_w = slider_labels.fold(init=desk_slider_label_w, fn(m, l) {
-      dmax(m, c.words_across(l, desk_layout_label).ceil())
-    })
-    let (lines_least, lines_most) = reader_lines
-    // (kept as the pointer lets it go, or a key steps it)
-    desk_slider_row(c, "reader/lines", slider_labels[0], style.line, lines_least, lines_most, desk_lines_step, p, r, label_w~, fn(v) {
-      "\{(v * 100.0).round().to_int()}%"
-    }, fn(v) { set(Line(v)) })
-    let (margin_least, margin_most) = reader_margins
-    desk_slider_row(c, "reader/margin", slider_labels[1], style.margin.to_double(), margin_least.to_double(), margin_most.to_double(), desk_margin_step, p, r, label_w~, fn(v) {
-      "\{v.round().to_int()}"
-    }, fn(v) { set(Margin(v.round().to_int())) })
-    c.box(style=if narrow { desk_layout_pair } else { desk_layout_column }, fn() {
-      c.box(style=if narrow { desk_layout_half.then(@ui.style(w=Fixed(half))) } else { desk_layout_block }, fn() {
-        label(t("web-pages.drive.reader.face"))
-        let k = segmented(
-          c,
-          "reader/face",
-          [t("web-pages.drive.reader.serif"), t("web-pages.drive.reader.sans")],
-          if style.face == "serif" { 0 } else { 1 },
-          item_w=seg_item,
-        )
-        let want = if k == 0 { "serif" } else { "sans" }
-        if want != style.face {
-          set(Face(want))
-        }
-      })
-      |> ignore
-      c.box(style=if narrow { desk_layout_half.then(@ui.style(w=Fixed(half))) } else { desk_layout_block }, fn() {
-        label(t("web-pages.drive.reader.indentLabel"))
-        let k = segmented(
-          c,
-          "reader/indent",
-          [t("web-pages.drive.reader.indent"), t("web-pages.drive.reader.flush")],
-          if style.indent { 0 } else { 1 },
-          item_w=seg_item,
-        )
-        if (k == 0) != style.indent {
-          set(Indent(k == 0))
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// One paper, drawn in itself: 文 on its ground, ringed in the accent when it is the one,
-/// its name under it. `on_press` as it is pressed.
-fn desk_swatch(c : @ui.Ctx, key : String, on : Bool, p : ReaderPaper, w : Double, on_press? : () -> Unit) -> Unit {
-  let id = c.id("reader/paper/" + key)
-  // (each as it is by day, whatever the app's theme)
-  let paper = paper_by_key(key)
-  c.box(style=desk_swatch_box.then(@ui.style(w=Fixed(w))), id~, fn() {
-    c.box(
-      style=(if on { desk_swatch_on } else { desk_swatch_off }).then(
-        @ui.style(bg=Data(paper.ground), border_color=Data(if on { p.accent } else { alpha(p.ink, desk_swatch_line) })),
-      ),
-      fn() {
-        c.rich([@ui.span(t("web-pages.drive.reader.paperGlyph"), serif=true)], style=desk_swatch_glyph.then(@ui.text_style(color=Data(paper.ink))))
-        |> ignore
-      },
-    )
-    |> ignore
-    c.text(t("web-pages.drive.reader.paper." + key), style=desk_swatch_name.then(@ui.text_style(color=Data(p.muted)))) |> ignore
-  })
-  |> ignore
-  match on_press {
-    Some(f) => c.on_press(id, f)
-    None => ()
-  }
-}
-
-///|
-/// A size's key: A− or A+, 32 high, 44 wide at least, quiet where it can go no further.
-fn desk_size_key(c : @ui.Ctx, key : String, words : String, on : Bool, p : ReaderPaper, said~ : String, on_press? : () -> Unit) -> Unit {
-  let id = c.id(key)
-  let b = c.box(style=desk_size_key_box, disabled=!on, id=if on { id } else { 0 }, fn() {
-    c.text(words, style=desk_size_key_words.then(@ui.text_style(color=Data(p.ink)))) |> ignore
-  })
-  c.semantics(b, Button, id~, label=said, disabled=!on)
-  match on_press {
-    Some(f) if on => c.on_press(id, f)
-    _ => ()
-  }
-}
-
-///|
-/// A setting along a hairline with a knob: its name, the line, its value as `shown` says; dragged
-/// or tapped, the value follows, and is kept (`keep`) as the pointer lets go there, or a key steps it.
-fn desk_slider_row(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  value : Double,
-  min : Double,
-  max : Double,
-  step : Double,
-  p : ReaderPaper,
-  r : Reading,
-  shown : (Double) -> String,
-  keep : (Double) -> Unit,
-  label_w? : Double = desk_slider_label_w,
-) -> Unit {
-  let draft = r.drafts.get(key)
-  let now = draft.unwrap_or(value)
-  c.box(style=desk_slider_box, fn() {
-    c.box(style=@ui.style(w=Fixed(label_w)), fn() {
-      c.text(label, style=desk_layout_label.then(@ui.text_style(color=Data(p.muted)))) |> ignore
-    })
-    |> ignore
-    c.box(style=desk_grow, fn() {
-      // (held: where it is drawn, a draft; let go: kept, the draft let go with it)
-      slider(c, key, now, min, max, step~, ink=p.ink, accent=p.accent, ground=p.ground, on_change=fn(v) { r.drafts[key] = v }, on_let_go=fn(v) {
-        r.drafts.remove(key)
-        if v != value {
-          keep(v)
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-    c.box(style=desk_slider_value_box, fn() {
-      c.text(shown(now), style=desk_slider_value.then(@ui.text_style(color=Data(p.ink)))) |> ignore
     })
     |> ignore
   })
@@ -1668,7 +1515,7 @@ fn narrow_reader_chrome(
     })
     |> ignore
   }
-  narrow_sheets(c, r, book, style, chapter, share)
+  narrow_sheets(c, r, book, chapter, share)
 }
 
 ///|
@@ -1723,13 +1570,15 @@ fn narrow_tool(c : @ui.Ctx, key : String, icon_name : String, label : String, on
 ///|
 /// The panel open (or sinking away) as the page's sheet (narrow): the contents and the search 72% of
 /// the page and dragged by its grabber, the layout half of it; each on the page's own ground, a pick closing it.
-fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, chapter : Int, share : Double) -> Unit {
+fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, chapter : Int, share : Double) -> Unit {
   let sheet = match viewer_host().sheet {
     Some(f) => f
     None => return
   }
+  // (the layout's a sheet of the window's tree's: reader_layout_nodes)
   let (panel, closing) = match r.panel {
     NoPanel => if r.closing != NoPanel { (r.closing, true) } else { return }
+    Layout => return
     x => (x, false)
   }
   let p = sheet_paper()
@@ -1751,8 +1600,7 @@ fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, ch
         narrow_sheet_tall,
         true,
       )
-    Find => (t("web-pages.drive.reader.find"), "", narrow_sheet_tall, true)
-    _ => (t("web-pages.drive.reader.layout"), "", narrow_sheet_half, false)
+    _ => (t("web-pages.drive.reader.find"), "", narrow_sheet_tall, true)
   }
   sheet(c, {
     title,
@@ -1765,8 +1613,7 @@ fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, ch
     body: fn() {
       match panel {
         Contents => desk_contents(c, r, book, p, chapter, has_chapters, done=close)
-        Find => desk_find(c, r, book, p, done=close)
-        _ => desk_layout(c, r, style, p, narrow=true)
+        _ => desk_find(c, r, book, p, done=close)
       }
     },
   })

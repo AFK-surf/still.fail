@@ -1,8 +1,10 @@
 // A panel whose body and foot are nodes (panel_nodes) as a sheet from the foot of the window (小屏's: @kit.sheet's, the
 // host's present_sheet), as nodes of the window's tree: a modal layer over the window, what is under it dimmed by the
 // sheet's scrim (black at 28%, in and out over @kit.sheet_scrim_ms, CSS's ease), the sheet in the window's foot as
-// tall as what it holds (sheet_most of the window at most, what it holds scrolling in it past that), its top corners
-// the pane's, on the frosted glass of a sheet; its grabber over its title, what it says, what it holds and its foot,
+// tall as what it holds (sheet_most of the window at most, what it holds scrolling in it past that; one a share of the
+// window tall, `tall`, that share, what it holds filling the room it leaves and laid out in it), its top corners
+// the pane's, on the frosted glass of a sheet; its grabber over its title (none where what it holds heads itself,
+// `heads_itself`), what it says, what it holds and its foot,
 // laid out as the host's sheet lays a panel out (sheet_step). It rises from below on a Move as long as its own height
 // makes it (SheetRise, placed as it is drawn by how tall it is laid out: View::moved_by) and sinks away on one as
 // it closes. Its top (sheet_drag_h: the grabber and the head) drags it down with the finger: let go more than
@@ -57,6 +59,9 @@ fn sheet_node(
         }
       })
       let live = fn() { !layer.leaving() }
+      // (a share of the window tall (`tall`, not a form): that tall, what it holds filling the room left it and laid out
+      // in it, as the host's sheet has a capped panel's (sheet_capped_room))
+      let capped = x.tall > 0.0 && !x.form
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
@@ -99,7 +104,15 @@ fn sheet_node(
         .height(By(fn() {
           match tall_held.get() {
             Some(h) => Some(h + sheet_under)
-            None => if sized.get() { Some(tall.shown(sheet) + sheet_under) } else { None }
+            None =>
+              if sized.get() {
+                Some(tall.shown(sheet) + sheet_under)
+              } else if capped {
+                // (its share of the window, as the host's sheet is: present_sheet's)
+                Some(x.tall * layer.window().1 + sheet_under)
+              } else {
+                None
+              }
           }
         }))
         .radius(Is(pane_corner))
@@ -203,15 +216,28 @@ fn sheet_node(
           |> ignore
         })
         |> ignore
-        // (its title)
-        if x.title != "" {
+        // (its title; none where what it holds heads itself, `heads_itself`: its own title's row there)
+        if x.title != "" && !x.heads_itself {
           sheet.box(fn(r) {
             style_node(r, fn() { sheet_title_row })
             words_node(r, fn() { x.title }, fn() { sheet_title_words }) |> ignore
           })
           |> ignore
         }
-        // what it holds, scrolling where the sheet is short of room for it
+        // what it holds, scrolling where the sheet is short of room for it; a share of the window tall, filling the room
+        // it leaves, laid out in it (sheet_capped_room)
+        if capped {
+          sheet.box(fn(b) {
+            b.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            b.box(fn(col) {
+              style_node(col, fn() { sheet_capped_room })
+              col.min_height(Is(Some(0.0))) |> ignore
+              (n.body)(col, close)
+            })
+            |> ignore
+          })
+          |> ignore
+        } else {
         sheet.box(fn(b) {
           let scroll = @view.Scroll::new()
           b.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
@@ -241,6 +267,7 @@ fn sheet_node(
           |> ignore
         })
         |> ignore
+        }
         match n.foot {
           Some(f) => {
             if x.ruled {

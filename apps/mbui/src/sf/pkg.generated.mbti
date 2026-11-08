@@ -1650,6 +1650,8 @@ pub fn reader_open_at(@ui.Ctx, Reading, Book) -> Bool
 
 pub fn reader_open_panel(@ui.Ctx, Reading, ReaderPanel) -> Unit
 
+pub fn reader_panel_set(Reading, ReaderPanel) -> Unit
+
 pub fn reader_paper(String) -> ReaderPaper
 
 pub let reader_place_ms : Double
@@ -2965,7 +2967,6 @@ pub(all) struct Reading {
   mut kept_moves : Int32
   mut draft : Double
   bar : BarOnScroll
-  drafts : Map[String, Double]
 }
 
 #derive(Eq, Show, @debug.Debug)

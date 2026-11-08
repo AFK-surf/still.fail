@@ -66,8 +66,11 @@ fn pick_menu_of(choices : Array[Choice], search : Bool) -> Bool {
 
 ///|
 /// What of the presented the window's tree draws, in `root` (over all of it the root holds: each at its place in the
-/// window's stack of layers), made as one is presented and let go once it has gone.
+/// window's stack of layers), made as one is presented and let go once it has gone; and under them the reader's
+/// layout's panel while one is open (reader_layout_nodes).
 pub fn presented_nodes(root : @view.View) -> Unit {
+  // (the reader's layout's panel, laid over it: under what is presented, which stands in the window's stack of layers)
+  reader_layout_nodes(root)
   root.each(
     fn() {
       presented_said.get() |> ignore
