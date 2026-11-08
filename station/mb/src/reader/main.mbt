@@ -426,6 +426,29 @@ fn main {
           }
         })
       })
+    (Some("recent-chat"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => {
+        let preparation : Ref[@recent.Preparation?] = Ref(None)
+        builder(host, db, "recent chat", (db, ask) => {
+          guard ask is { "scope": String(scope), .. } else { return None }
+          // (the scope as the reader names it: `[workspace, home]`, each a string or null)
+          let parsed : Json = @json.parse(scope) catch { _ => Json::null() }
+          let (ws, home) = match parsed {
+            Array([ws, home]) if (ws is (String(_) | Null)) && (home is (String(_) | Null)) =>
+              (if ws is String(s) { Some(s) } else { None }, if home is String(s) { Some(s) } else { None })
+            _ => raise Failure("invalid recent chat scope")
+          }
+          let p = match preparation.val {
+            Some(p) => p
+            None => {
+              let p = @recent.Preparation::new(db)
+              preparation.val = Some(p)
+              p
+            }
+          }
+          Some(p.step(ws, home))
+        })
+      })
     (Some("usage-check"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => usage_checker(host, db))
     (Some("cc-index"), Some(db), _) =>
@@ -451,7 +474,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat --db <file>")
       2
     }
   }
