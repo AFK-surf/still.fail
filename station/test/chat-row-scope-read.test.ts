@@ -80,6 +80,9 @@ test("a change's sidebar items and a chat's view read their own shares and opene
     const reader = openStore(dir);
     const counts: Record<string, number> = {};
     const db = reader.db;
+    const selectedSessions: string[] = [];
+    let selectionSql: string | null = null;
+    db.function("scope_test_session", (key) => { selectedSessions.push(String(key)); return 1; });
     (reader as any).db = new Proxy(db, {
       get: (target, property) => {
         if (property !== "prepare") {
@@ -87,6 +90,10 @@ test("a change's sidebar items and a chat's view read their own shares and opene
           return typeof value === "function" ? value.bind(target) : value;
         }
         return (sql: string) => {
+          if (sql.includes("LEFT JOIN sessions visible_session ON visible_session.key = visible_member.session")) {
+            selectionSql = sql;
+            sql = sql.replace("visible_session.key = visible_member.session", "visible_session.key = visible_member.session AND scope_test_session(visible_session.key)");
+          }
           const statement = target.prepare(sql);
           const table = /\bFROM (chat_shares|opened_chats)\b/i.exec(sql)?.[1]
             ?? (/\bFROM sessions INDEXED BY sessions_ws\b/i.test(sql) ? "visibility_sessions" : undefined);
@@ -115,7 +122,11 @@ test("a change's sidebar items and a chat's view read their own shares and opene
       for (const key of Object.keys(counts)) delete (counts as Record<string, number>)[key];
       const list = ops.threads!(reader, { viewer, session: "k", lang: "zh" }) as any[];
       assert.deepEqual(list.map((t) => [t.id, t.xshare?.to.map((x: any) => x.workspace)]), [[chat.id, ["w2"]]]);
-      assert.deepEqual(counts, { visibility_sessions: 1, chat_shares: 1 }, "one session's threads do not fetch other sessions or shares");
+      assert.deepEqual(counts, { chat_shares: 1 }, "one session's threads do not fetch other shares");
+      assert.deepEqual(selectedSessions, ["k"], "workspace selection checks only the thread's member");
+      assert.ok(selectionSql);
+      const scopePlan = (db.prepare(`EXPLAIN QUERY PLAN ${selectionSql}`).all(viewer.email, "k", viewer.workspace, 1) as { detail: string }[]).map((row) => row.detail).join(" | ");
+      assert.match(scopePlan, /SEARCH visible_session USING INDEX .*\(key=\?\)/);
       const plan = (sql: string, keys: string) => (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(keys) as { detail: string }[]).map((row) => row.detail).join(" | ");
       assert.match(plan(`${SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, '["k"]'), /SEARCH sessions USING COVERING INDEX sessions_ws \(key=\?\)/);
       assert.match(plan(SHARES_OF, '["k"]'), /SEARCH chat_shares USING INDEX .*\(session=\?\)/);
