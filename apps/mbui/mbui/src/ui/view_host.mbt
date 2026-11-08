@@ -438,6 +438,8 @@ fn view_forget() -> Unit {
   old_around.val = false
   view_blocks.clear()
   view_shape_bands.clear()
+  ride_kept.clear()
+  riding.val = None
   view_pictures.clear()
   inst_owners.tree_words.clear()
   view_paint_work.made = 0
@@ -672,6 +674,7 @@ fn view_changes_taken(tree : @view.Tree) -> Unit {
   // (what was let go lets go of what it drew)
   for id in tree.take_removed() {
     view_blocks.remove(id)
+    ride_kept.remove(id)
     view_shape_bands.remove(id)
     view_pictures.remove(id)
     inst_owners.tree_words.remove(id)
@@ -925,6 +928,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   dr.targets_said = true
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
   view_glyphs_held(tree, self.scale / words_zoom.val)
+  // (what changes how the tree is drawn from here on counted past what its rows are kept as now: Ctx::ride_kept_for)
+  let paint_rev = tree.drawn_rev_taken()
   let n0 = self.ninst
   // (what is drawn off where it is laid out drawn off by whole pixels of this frame's: View::drawn_off)
   tree.set_pixel_grid(self.scale)
@@ -950,6 +955,26 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         break
       }
       // (the inner of the two first: a node's own clip before its edge, as an old view pops its clip before its border)
+      let clip_first = clip_out &&
+        (!ring_out || tree.holds_in_order(rings[rings.length() - 1].0, clipping[clipping.length() - 1]))
+      if clip_first {
+        clipping.pop() |> ignore
+        pop_clip()
+      } else {
+        let (_, held, by) = rings.pop().unwrap()
+        self.view_ring_put(held, by)
+      }
+    }
+  }
+  // (what was opened since there were `c0` clips and `r0` edges open closed, the innermost first: a row being drawn ended,
+  // Ctx::ride_end)
+  let close_down = fn(c0 : Int, r0 : Int) {
+    while true {
+      let clip_out = clipping.length() > c0
+      let ring_out = rings.length() > r0
+      if !clip_out && !ring_out {
+        break
+      }
       let clip_first = clip_out &&
         (!ring_out || tree.holds_in_order(rings[rings.length() - 1].0, clipping[clipping.length() - 1]))
       if clip_first {
@@ -1005,7 +1030,15 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       ch = n.next
     }
   }
-  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
+  tree.each_drawn_laid_or_past(fn(c, x, y, a, s, ux, uy) {
+    // (the row being drawn, all of it drawn as what is next is none of it: ended before anything round it is closed)
+    match riding.val {
+      Some(r) if !tree.holds_in_order(r.id, c.id) => {
+        close_down(r.clips0, r.rings0)
+        self.ride_end()
+      }
+      _ => ()
+    }
     close_to(Some(c.id))
     raise_close(Some(c.id))
     while fading.length() > 0 && !tree.holds_in_order(fading[fading.length() - 1].0, c.id) {
@@ -1016,28 +1049,50 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 {
-      return
+      return false
     }
+    // (a list's row: drawn as kept, moved, where nothing of it changed since and it is only moved (Ctx::ride_kept_for),
+    // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again)
+    if riding.val is None &&
+      fading.length() == 0 &&
+      stretching.length() == 0 &&
+      ride_may(c, x, y) &&
+      tree.rides_scroll(c.id) {
+      match self.ride_kept_for(tree, c, x, y, a, s, ux, uy) {
+        Some(k) => {
+          self.ride_again(k, x - k.x, y - k.y)
+          view_paint_work.copied = view_paint_work.copied + k.nodes
+          return true
+        }
+        None => self.ride_begin(c, paint_rev, x, y, a, ux, uy, clipping.length(), rings.length())
+      }
+    }
+    ride_node(c, x, y, s, false)
     if a <= 0.002 {
-      self.view_unseen(c, s)
-      return
+      self.ride_spot(c, x, y, s, a, false, fn() { self.view_unseen(c, s) })
+      return false
     }
     // (in a node drawn whole in its bones: nothing of it drawn, View::bone_whole)
     if c.bones != 0L && c.bone_as == 2 {
-      return
+      return false
     }
     // (its turn and its ground drawn in a box of its own, read once for all that asks them below)
     let turn = tree.turn_angle_of(c.id)
+    if turn != 0.0 {
+      ride_spoil()
+    }
     let ground_drawn = tree.ground_drawn_of(c.id)
     // (in the window's stack of layers, held by the root after what is in none of it: what clipped before it is none
     // of its, out of the way by now; the old layers under it first)
     let stack = tree.stack_of(c.id)
     if stack >= 0 && tree.root_holds(c.id) {
+      ride_spoil()
       close_to(None)
       raise_close(None)
       paint_layers_under(stack)
     }
     if raising.val is None && !dr.scrims.is_empty() && tree.over_scrim_of(c.id) {
+      ride_spoil()
       raising.val = Some((c.id, self.ninst))
     }
     let k0 = self.ninst
@@ -1094,7 +1149,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       // clip where it is drawn (scene.mbt's paint, what is moved carried: draw_carries); not where what it draws may lie
       // elsewhere than its box: turned, shadowed, its ground drawn in a box of its own (View::ground_drawn), or in what is drawn
       // stretched (Android's list at an end, moved after it is drawn). What it holds each looked at where it is.)
-      self.view_unseen(c, s)
+      self.ride_spot(c, x, y, s, a, false, fn() { self.view_unseen(c, s) })
       -1
     } else {
       self.view_drawn(tree, c, x, y, a, s, ux, uy, turn, ground_drawn)
@@ -1132,6 +1187,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       None => tree.fades_of(c.id)
     }
     if start > 0.0 || top > 0.0 || end > 0.0 || foot > 0.0 {
+      ride_spoil()
       fading.push((c.id, (x, y, x + c.w * s, y + c.h * s), (start * s, top * s, end * s, foot * s)))
     }
     // (what it draws, and an old view it hosts, as each that holds it stretched shows it, the innermost first: as an
@@ -1146,6 +1202,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     let ov = tree.stretch_of(c.id)
     if ov != 0.0 {
+      ride_spoil()
       // (cut to its own clip, pushed by now: what is inside it is mapped with it, no further)
       let k = clip_top()
       let (c0, c1) = if c.clips { (clip_stack[k + 1], clip_stack[k + 3]) } else { (y, y + c.h * s) }
@@ -1155,7 +1212,15 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       let (held, by) = self.view_ring_take(ring_at)
       rings.push((c.id, held, by))
     }
+    false
   })
+  match riding.val {
+    Some(r) => {
+      close_down(r.clips0, r.rings0)
+      self.ride_end()
+    }
+    None => ()
+  }
   close_to(None)
   raise_close(None)
   paint_layers_under(2147483647)
@@ -1214,57 +1279,16 @@ fn Ctx::view_drawn(
   // instances are kept as they were made)
   match c.image {
     // (in its bones its block's bone stands for it: none asked for, View::bones)
-    Some((src, stand_in, most)) if c.bones == 0L => {
-      // (its instances the node's, as what its block makes are: view_made's)
-      let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
-      inst_owners.painting = -1
-      inst_owners.tree_painting = Some(c.id)
-      // (what stands in for it till it is decoded for the pixels it is drawn at, now, or for the room it is judged
-      // ready for where that is said (View::image_for): asked for then, whatever stands in)
-      let (w, h) = (c.w * s, c.h * s)
-      // (its picture where it lies in it, as big, a matte round it: View::image_in)
-      let (pw, ph) = match c.image_in {
-        Some(((_, _, iw, ih), _)) => (iw * s, ih * s)
-        None => (w, h)
-      }
-      let (fw, fh) = c.image_for
-      let judged = fw > 0.0 || fh > 0.0
-      let room = if judged { dmax(fw, fh) * s } else { dmax(pw, ph) }
-      let shown = if stand_in == "" && !judged {
-        src
-      } else if self.image_ready(src, dmin(room * self.scale, most.to_double())) || stand_in == "" {
-        src
-      } else {
-        stand_in
-      }
-      match c.image_in {
-        // (the picture and its matte as one, cut once at the node's edge, as Ctx::picture's matte is)
-        Some(((ix, iy, iw, ih), matte)) => {
-          let before = self.ninst
-          self.draw_image(shown, x + ix * s, y + iy * s, iw * s, ih * s, FitFill, c.radius * s, a, fade=false, max_px=most, ground=matte, matte=true, frame=Some((x, y, w, h)))
-          // (its corners each, where it says them (View::corners), as big as it is drawn: the frame's)
-          match c.corners {
-            Some((tl, tr, br, bl)) if self.ninst > before => self.corners_last_each(tl * s, tr * s, br * s, bl * s)
-            _ => ()
-          }
-        }
-        // (covering it where it says so, as an old view's picture does: View::image_covers; fading in where it says so,
-        // View::image_fades; a GIF that moves going through its frames, each woken for, as an old view's: moving_key)
-        None => {
-          let fit = if c.image_cover { FitCover } else { FitFill }
-          let shown = self.moving_key(shown, w, h, fit)
-          self.draw_image(shown, x, y, w, h, fit, c.radius * s, a, fade=c.image_fade, max_px=most)
-        }
-      }
-      inst_owners.painting = was
-      inst_owners.tree_painting = was_tree
-    }
+    Some(_) if c.bones == 0L => self.ride_spot(c, x, y, s, a, true, fn() { self.view_picture(c, x, y, s, a) })
     _ => ()
   }
   // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
   // as big, as an old view's field is painted; not in its block, kept as it was made)
   match (if tree_fields.is_empty() { None } else { tree_fields.get(c.id) }) {
-    Some(tf) if c.bones == 0L => self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
+    Some(tf) if c.bones == 0L => {
+      ride_spoil()
+      self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
+    }
     _ => ()
   }
   // (what it draws itself turned where it is drawn, as a look's turn is: about its middle, or the middle of what it
@@ -1290,6 +1314,57 @@ fn Ctx::view_drawn(
   } else {
     -1
   }
+}
+
+///|
+/// Content `c`'s picture, each frame where it is drawn (at (x, y), `s` times as big, as opaque as `a`) and as big, over what
+/// its block draws: its decode the one for that size, asked for as an old view's is, its own kept as one shown this
+/// frame, View::image; not in its block, whose instances are kept as they were made.
+fn Ctx::view_picture(self : Ctx, c : @view.Content, x : Double, y : Double, s : Double, a : Double) -> Unit {
+  guard c.image is Some((src, stand_in, most)) else { return }
+  // (its instances the node's, as what its block makes are: view_made's)
+  let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+  inst_owners.painting = -1
+  inst_owners.tree_painting = Some(c.id)
+  // (what stands in for it till it is decoded for the pixels it is drawn at, now, or for the room it is judged
+  // ready for where that is said (View::image_for): asked for then, whatever stands in)
+  let (w, h) = (c.w * s, c.h * s)
+  // (its picture where it lies in it, as big, a matte round it: View::image_in)
+  let (pw, ph) = match c.image_in {
+    Some(((_, _, iw, ih), _)) => (iw * s, ih * s)
+    None => (w, h)
+  }
+  let (fw, fh) = c.image_for
+  let judged = fw > 0.0 || fh > 0.0
+  let room = if judged { dmax(fw, fh) * s } else { dmax(pw, ph) }
+  let shown = if stand_in == "" && !judged {
+    src
+  } else if self.image_ready(src, dmin(room * self.scale, most.to_double())) || stand_in == "" {
+    src
+  } else {
+    stand_in
+  }
+  match c.image_in {
+    // (the picture and its matte as one, cut once at the node's edge, as Ctx::picture's matte is)
+    Some(((ix, iy, iw, ih), matte)) => {
+      let before = self.ninst
+      self.draw_image(shown, x + ix * s, y + iy * s, iw * s, ih * s, FitFill, c.radius * s, a, fade=false, max_px=most, ground=matte, matte=true, frame=Some((x, y, w, h)))
+      // (its corners each, where it says them (View::corners), as big as it is drawn: the frame's)
+      match c.corners {
+        Some((tl, tr, br, bl)) if self.ninst > before => self.corners_last_each(tl * s, tr * s, br * s, bl * s)
+        _ => ()
+      }
+    }
+    // (covering it where it says so, as an old view's picture does: View::image_covers; fading in where it says so,
+    // View::image_fades; a GIF that moves going through its frames, each woken for, as an old view's: moving_key)
+    None => {
+      let fit = if c.image_cover { FitCover } else { FitFill }
+      let shown = self.moving_key(shown, w, h, fit)
+      self.draw_image(shown, x, y, w, h, fit, c.radius * s, a, fade=c.image_fade, max_px=most)
+    }
+  }
+  inst_owners.painting = was
+  inst_owners.tree_painting = was_tree
 }
 
 ///|
@@ -1420,6 +1495,9 @@ fn view_glyphs_held(tree : @view.Tree, sc : Double) -> Unit {
       _ => ()
     }
   })
+  if stale.length() > 0 {
+    ride_glyphs_gone.val = ride_glyphs_gone.val + 1
+  }
   for id in stale {
     view_blocks.remove(id)
   }
