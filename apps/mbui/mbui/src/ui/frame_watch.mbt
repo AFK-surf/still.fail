@@ -877,7 +877,13 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
   c.wake_by = None
   c.wake_at = looks_base.wake
   dues_wake(c)
-  paint_watch_of().read(fn() { frame_paint(c, paint_base.root, alone=true) })
+  // (a list moved alone: the last frame painted, its rows' headers moved, scroll_patch.mbt; its paint's watch left as
+  // told, each frame from here painted alone till one is painted)
+  if c.patch_draw() {
+    frame_hook_told(c)
+  } else {
+    paint_watch_of().read(fn() { frame_paint(c, paint_base.root, alone=true) })
+  }
   c.t_build = 0.0
   c.t_layout = 0.0
   c.t_paint = work_now() - t0

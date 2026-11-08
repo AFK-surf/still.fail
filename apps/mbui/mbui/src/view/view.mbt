@@ -423,6 +423,8 @@ struct Node {
   /// the tree's count of changes as it or anything it holds last changed how it is drawn in its place (Tree::touched):
   /// what is drawn of all of it is what it was then, wherever it is moved
   mut drawn_rev : Int
+  /// as drawn_rev, but for what it holds moved only by a node that scrolls in it (Tree::drawn_rev_still)
+  mut drawn_rev_still : Int
   /// whether what it scrolls it scrolls across (View::scrolls with Scroll::across): which way Tree::scrolls_now asks
   /// whether it can go
   mut scroll_across : Bool
@@ -741,6 +743,9 @@ pub struct Tree {
   scrolled_ats : Array[NodeId]
   /// the count of changes to how its nodes are drawn, each node's drawn_rev one of them (Tree::touched)
   mut drawn_revs : Int
+  /// the node scrolled whose moving alone is told only of it (Tree::drawn_rev_still): any other's told as a change of
+  /// how the tree is drawn (Tree::still_watch)
+  mut still_held : Int
   /// the nodes let go since the host last took them (Tree::take_removed): what it keeps for them to let go too
   removed : Array[NodeId]
   /// the nodes whose content was made again since the host last took them (Tree::take_changed), and whether anything
@@ -926,6 +931,7 @@ pub fn Tree::new(
     scrolled_now: false,
     scrolled_ats: [],
     drawn_revs: 1,
+    still_held: -1,
     removed: [],
     pending: [],
     drawn_due: false,
@@ -1099,6 +1105,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.claims_scroll = false
       n.scroll_held = -1
       n.drawn_rev = 0
+      n.drawn_rev_still = 0
       n.scroll_across = false
       n.list_rows = false
       n.focus_shown_cell = None
@@ -1195,6 +1202,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         claims_scroll: false,
         scroll_held: -1,
         drawn_rev: 0,
+        drawn_rev_still: 0,
         scroll_across: false,
         list_rows: false,
         focus_shown_cell: None,
@@ -1766,9 +1774,13 @@ fn Tree::look_marked_at(self : Tree, at : Int) -> Unit {
 
 ///|
 /// Its place (how far it is drawn off, how opaque) to be worked out again, what it holds with it.
-fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
+fn Tree::place_marked_at(self : Tree, at : Int, said? : Bool = false) -> Unit {
   let n = self.nodes[at]
-  self.touched(at)
+  if said {
+    self.touched_scrolled(at)
+  } else {
+    self.touched(at)
+  }
   if !n.place_due {
     n.place_due = true
     self.places_due.push(at)
@@ -2143,7 +2155,10 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     match phase {
       Layout => tree.layout_marked_at(at)
       Paint => tree.look_marked_at(at)
-      Place => tree.place_marked_at(at)
+      // (where it is, how opaque and how big: what placing it again says changed where it did, Tree::place; else
+      // changed as it is marked, how it is drawn: Tree::drawn_rev_still)
+      Place =>
+        tree.place_marked_at(at, said=prop is (Offset | Shift | Alpha | Scale))
       Both => {
         tree.layout_marked_at(at)
         tree.look_marked_at(at)
@@ -6767,6 +6782,17 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   // (left out of its row: laid out nowhere; told once all of it is laid out, View::left_out)
   let out = n.flex.left_out()
   let went = !n.placed || x != n.lx || y != n.ly || a != n.la || s != n.ls || px != n.lpx || py != n.lpy || out != n.out
+  // (only scrolled: what a node that scrolls holds, moved in it and nothing else of it changed)
+  let scrolled_only = n.placed &&
+    n.parent >= 0 &&
+    self.nodes[n.parent].scroll_held == at &&
+    a == n.la &&
+    s == n.ls &&
+    px == n.lpx &&
+    py == n.lpy &&
+    out == n.out &&
+    w == n.lw &&
+    h == n.lh
   if out != n.out {
     n.out = out
     self.outs_changed = true
@@ -6786,6 +6812,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
     }
   }
   let sized = !n.placed || w != n.lw || h != n.lh
+  let was_a = if n.placed { n.la } else { -1.0 }
   n.placed = true
   n.lx = x
   n.ly = y
@@ -6796,7 +6823,11 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.lpx = px
   n.lpy = py
   if went || sized {
-    self.touched(at)
+    if (scrolled_only && at == self.still_held) || (a == was_a && self.unseen(at, 16) > 0) || (!went && self.quiet(n)) {
+      self.touched_scrolled(at)
+    } else {
+      self.touched(at)
+    }
   }
   if went {
     self.work.composed = self.work.composed + 1
@@ -6811,7 +6842,12 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
 /// Node `at`'s content made again, as it looks now and as big as it is: one of the frame's changes.
 fn Tree::made_again(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
-  self.touched(at)
+  // (only as big as it is changed, of one drawing nothing itself and cutting nothing: what it draws as it was)
+  if !n.look_due && n.content is Some(_) && self.quiet(n) {
+    self.touched_scrolled(at)
+  } else {
+    self.touched(at)
+  }
   n.look_due = false
   let id = { at, gen: n.gen }
   self.work.instances = self.work.instances + 1
@@ -7010,8 +7046,167 @@ fn Tree::touched(self : Tree, at : Int) -> Unit {
   while i >= 0 && i < self.nodes.length() {
     let n = self.nodes.unsafe_get(i)
     n.drawn_rev = r
+    n.drawn_rev_still = r
     i = n.parent
   }
+}
+
+///|
+/// Whether node `n` draws nothing itself as it is now (Content::draws), cuts, fades, stretches nor scrolls nothing it
+/// holds: where it is and how big draws nothing as it is changed, what it holds told of as it is placed itself.
+fn Tree::quiet(_self : Tree, n : Node) -> Bool {
+  let l = n.look
+  let draws = draws_of(n) ||
+    l.glass is Some(_) ||
+    l.shadow.0 > 0.0 ||
+    (match n.content {
+      Some(c) => c.draws() || c.bones != 0L
+      None => false
+    })
+  !draws &&
+  !n.hosted &&
+  !l.clips &&
+  !l.cut_soft &&
+  l.fades == (0.0, 0.0, 0.0, 0.0) &&
+  l.stretch == 0.0 &&
+  n.scroll_held < 0
+}
+
+///|
+/// Whether nothing of node `at` and what it holds is seen as it is now, no more than `budget` of them looked at: each
+/// as clear as nothing (View::alpha) or quiet (Tree::quiet) holding only such. How many were left to look at (0: some
+/// of it seen, or too many to say).
+fn Tree::unseen(self : Tree, at : Int, budget : Int) -> Int {
+  let n = self.nodes[at]
+  if budget <= 0 {
+    return 0
+  }
+  if n.look.alpha <= 0.002 {
+    return budget - 1
+  }
+  if !self.quiet(n) {
+    return 0
+  }
+  let mut left = budget - 1
+  for k in n.kids {
+    if self.nodes[k].live {
+      left = self.unseen(k, left)
+      if left <= 0 {
+        return 0
+      }
+    }
+  }
+  left
+}
+
+///|
+/// What node `at` holds as a node that scrolls moved only (Tree::place): as Tree::touched, but of what holds the node
+/// that scrolls, not how it is drawn but for where that shows what it holds (Tree::drawn_rev_still).
+fn Tree::touched_scrolled(self : Tree, at : Int) -> Unit {
+  let r = self.drawn_revs
+  let n = self.nodes.unsafe_get(at)
+  n.drawn_rev_still = r
+  let mut i = at
+  while i >= 0 && i < self.nodes.length() {
+    let n = self.nodes.unsafe_get(i)
+    n.drawn_rev = r
+    i = n.parent
+  }
+}
+
+///|
+/// As Tree::drawn_rev, but where what node `id` holds was moved only by a node in it that scrolls, its held: what it
+/// draws but for that is what it drew then, that node that scrolls drawn anew (ui's view_paint, kept with holes).
+pub fn Tree::drawn_rev_still(self : Tree, id : NodeId) -> Int {
+  guard self.alive_id(id) else { return -1 }
+  self.nodes.unsafe_get(id.at).drawn_rev_still
+}
+
+///|
+/// The node scrolled (a held) whose moving alone changes not how the rest of the tree is drawn (Tree::still_rev); any
+/// other's moving does.
+pub fn Tree::still_watch(self : Tree, held : NodeId?) -> Unit {
+  self.still_held = match held {
+    Some(h) if self.alive_id(h) => h.at
+    _ => -1
+  }
+}
+
+///|
+/// Whether node `id` is what a node that scrolls holds (its held), or in it however deep: moved as it scrolls.
+pub fn Tree::scrolls_with(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  let mut i = id.at
+  while i >= 0 {
+    let p = self.nodes.unsafe_get(i).parent
+    if p >= 0 && self.nodes.unsafe_get(p).scroll_held == i {
+      return true
+    }
+    i = p
+  }
+  false
+}
+
+///|
+/// The tree's count of changes as anything of it last changed how it is drawn but for what a node that scrolls holds
+/// moved in it only (Tree::drawn_rev_still of its root).
+pub fn Tree::still_rev(self : Tree) -> Int {
+  guard self.nodes.length() > 0 else { return -1 }
+  self.nodes.unsafe_get(0).drawn_rev_still
+}
+
+///|
+/// The node that scrolls row `id` (Tree::rides_scroll): what it holds, the node scrolled (its held); none for one not a
+/// row of such a node.
+pub fn Tree::row_held(self : Tree, id : NodeId) -> NodeId? {
+  guard self.alive_id(id) else { return None }
+  let mut p = self.nodes.unsafe_get(id.at).parent
+  while p >= 0 && self.nodes[p].slot {
+    p = self.nodes[p].parent
+  }
+  guard p >= 0 else { return None }
+  let s = self.nodes[p].parent
+  guard s >= 0 && self.nodes[s].scroll_held == p else { return None }
+  Some({ at: p, gen: self.nodes[p].gen })
+}
+
+///|
+/// Where node `id` was last placed in what holds it (its layout's place and offset), its top: how far a node that
+/// scrolls has moved what it holds.
+pub fn Tree::placed_top(self : Tree, id : NodeId) -> Double {
+  guard self.alive_id(id) else { return 0.0 }
+  self.nodes.unsafe_get(id.at).ly
+}
+
+///|
+/// The rows held by `held` (the node a node that scrolls moves, Tree::row_held), each placed: from and to, top to foot,
+/// in its terms, two numbers each (none of a row left out).
+pub fn Tree::rows_spans(self : Tree, held : NodeId) -> Array[Double] {
+  let out = []
+  guard self.alive_id(held) else { return out }
+  fn go(t : Tree, at : Int, out : Array[Double]) -> Unit {
+    for k in t.nodes[at].kids {
+      let n = t.nodes[k]
+      if !n.live {
+        continue
+      }
+      if n.slot {
+        go(t, k, out)
+      } else if n.placed && !n.out {
+        out.push(n.ly)
+        out.push(n.ly + n.lh)
+      }
+    }
+  }
+
+  go(self, held.at, out)
+  out
+}
+
+///|
+/// Whether node `id` scrolls what it holds (View::scrolls).
+pub fn Tree::scrolls_held(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes.unsafe_get(id.at).scroll_held >= 0
 }
 
 ///|

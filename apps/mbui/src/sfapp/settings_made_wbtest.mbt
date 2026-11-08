@@ -32,7 +32,16 @@ fn settings_home_tester(
 /// a shape's band by its pieces (read at once: the Tester's are what the window last drew, whichever Tester that was).
 fn instances_sorted(t : @ui.Tester) -> Array[String] {
   // (a shape's band by its pieces, not where they stand among the frame's: drawn_instances_keyed)
-  let all = t.drawn_instances_keyed().map(fn(a) {
+  // (none wholly outside its clip: a list's row drawn all of it, what of it lies outside the list's clip drawing
+  // nothing there, ui's inst_cut)
+  let all = t.drawn_instances_keyed().filter(fn(a) {
+      a[18] >= a[16] &&
+      a[19] >= a[17] &&
+      a[0] <= a[18] &&
+      a[0] + a[2] >= a[16] &&
+      a[1] <= a[19] &&
+      a[1] + a[3] >= a[17]
+    }).map(fn(a) {
     a
     .mapi(fn(j, x) {
       // (a glyph's place in its atlas, 12 and 13: where the order its glyphs were first drawn in put it, not what is

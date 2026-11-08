@@ -142,6 +142,29 @@ test "a row a finger scrolls the list from: not lit" {
 }
 
 ///|
+test "the list a finger holds and moves: frames of it moving alone drawn as the last one painted, its rows moved, as drawn whole" {
+  // (a list longer than the window: moved, not stretched at its end)
+  new_run()
+  let src = fixture("long")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  // (its rows on the device's pixels, as a host sets them)
+  t.set_rows_on_pixels(true)
+  let (patched, _) = @ui.frames_patched()
+  let (x, y) = (195.0, 560.0)
+  // (first far down the list, past its first screen: rows that turn or are said to move gone from it)
+  t.hold_drag(x, 650.0, x, 150.0, steps=20)
+  t.release(x, 150.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.nav.depth(), 1, msg="still Home")
+  // (each frame drawn so drawn whole after it as well and the two compared, the test failing where they differ: ui's
+  // tester_looks.mbt)
+  t.hold_drag(x, y, x, y - 160.0, steps=40)
+  let (now, why) = @ui.frames_patched()
+  assert_true(now > patched, msg="frames of the list moving alone drawn as the last one painted (not: \{why})")
+  t.release(x, y - 160.0)
+}
+
+///|
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
   t.tap_text("星火工作室")

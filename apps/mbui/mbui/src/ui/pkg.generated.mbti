@@ -179,6 +179,8 @@ pub fn frame_offscreen((Ctx) -> Unit, Double, Double, Double, Double) -> Ctx
 
 pub let frame_period_default : Double
 
+pub fn frames_patched() -> (Int32, String)
+
 pub fn full_screen() -> Bool
 
 pub fn gallery_read() -> GalleryRead?

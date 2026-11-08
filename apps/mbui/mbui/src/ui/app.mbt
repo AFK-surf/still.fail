@@ -593,6 +593,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.across_seen.clear()
   c.glass_frame()
   // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
+  patch_rec_begin()
   c.view_paint(root)
   // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
   // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
@@ -685,6 +686,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()
+  // (what it may be drawn again for read off its headers, before a test's hook draws them out)
+  c.patch_rec_end()
   frame_hook_told(c)
   paint_phase.val = 2
 }

@@ -1190,8 +1190,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       -1
     } else if in_box(c, stretching.length(), turn, ground_drawn) &&
       (
-        (x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]) ||
-        ride_outside_cut(x, y, x + c.w * s, y + c.h * s)
+        x > clip_stack[k + 2] || y > clip_stack[k + 3] || x + c.w * s < clip_stack[k] || y + c.h * s < clip_stack[k + 1]
       ) {
       // (wholly outside the clip it is drawn in, where it is drawn (moved, grown, what holds it scrolled): nothing of its own
       // drawn or made, no glyph of its words asked of the host, as the old frame paints nothing of what lies outside its
@@ -1210,6 +1209,21 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       ring
     } else {
       self.view_drawn(tree, c, x, y, a, s, ux, uy, turn, ground_drawn)
+    }
+    // (what is drawn as what a node that scrolls holds, but by a row's header, or stretched or faded: no frame of a
+    // scroll alone drawn from this one, scroll_patch.mbt)
+    if patch_rec.on && patch_rec.ok {
+      if stretching.length() > 0 ||
+        fading.length() > 0 ||
+        (riding.val is None && self.ninst > k0 && tree.scrolls_with(c.id)) {
+        patch_spoil("drawn stretched, faded or not by a header in a list")
+      } else if c.hosted {
+        if tree.scrolls_with(c.id) {
+          patch_spoil("an old view in a list")
+        } else {
+          patch_island(c.id)
+        }
+      }
     }
     // (then, after all it draws itself however it ends, as each of its own was done on the way out: written here, not
     // deferred, a deferred block being a closure made for each node drawn)
@@ -1578,6 +1592,7 @@ fn view_glyphs_held(_tree : @view.Tree, sc : Double) -> Unit {
     }
   }
   for id in rows {
+    ride_gen.val = ride_gen.val + 1
     ride_kept.remove(id)
   }
 }

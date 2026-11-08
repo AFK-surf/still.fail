@@ -24,6 +24,8 @@ priv struct RideSpot {
 ///|
 /// What a row drew, kept to draw it again (Ctx::ride_again).
 priv struct RideKept {
+  /// the row kept
+  id : @view.NodeId
   /// the tree's count of changes as it was drawn (Tree::drawn_rev_taken): kept while its own is no more
   rev : Int
   /// where its root was drawn, how opaque, and where it is laid out off that (where its glyphs are set)
@@ -59,8 +61,6 @@ priv struct RideKept {
   /// of its nodes is wholly outside the clip there left out (`edges`, Riding's)
   cut : Bool
   edges : Array[Double]
-  /// whether it left out a node as outside its clip (ride_outside_cut)
-  left_out : Bool
   /// how many of the tree's nodes it drew
   nodes : Int
   /// the glyphs each of its nodes' blocks draws from (ViewBlock's `kept`): held in the atlas for it as a frame begins
@@ -104,8 +104,6 @@ priv struct Riding {
   /// y0, x1, y1, off its root's place), and what it drew, from and to: its instances, shape pieces and pictures, off
   /// the row's, and the clip of the row's own it is drawn in (Ctx::ride_cut_node), fourteen numbers each
   edges : Array[Double]
-  /// whether it left out a node as outside its clip (ride_outside_cut)
-  mut left_out : Bool
 }
 
 ///|
@@ -152,9 +150,16 @@ fn groups_on() -> Bool {
 }
 
 ///|
+/// How many times what the rows keep changed (ride_keep, ride_let_go): what a frame drawn again as the last one painted
+/// draws by is what it was drawn by while it is the same (scroll_patch.mbt).
+// kept across runs: only counts
+let ride_gen : Ref[Int] = Ref(0)
+
+///|
 /// Row `id` kept as `k`, what it kept before let go.
 fn ride_keep(id : @view.NodeId, k : RideKept) -> Unit {
   ride_let_go(id)
+  ride_gen.val = ride_gen.val + 1
   ride_kept[id] = k
 }
 
@@ -163,6 +168,7 @@ fn ride_keep(id : @view.NodeId, k : RideKept) -> Unit {
 fn ride_let_go(id : @view.NodeId) -> Unit {
   match ride_kept.get(id) {
     Some(k) => {
+      ride_gen.val = ride_gen.val + 1
       if k.group >= 0 {
         ride_groups.remove(k.group)
         ride_groups_gone.push(k.group)
@@ -176,6 +182,8 @@ fn ride_let_go(id : @view.NodeId) -> Unit {
 ///|
 /// All the rows kept let go (view_forget).
 fn ride_let_go_all() -> Unit {
+  patch_forget()
+  ride_gen.val = ride_gen.val + 1
   for g, _ in ride_groups {
     ride_groups_gone.push(g)
   }
@@ -403,7 +411,6 @@ fn Ctx::ride_begin(
     island,
     cut,
     edges: [],
-    left_out: false,
   })
   if cut {
     push_unclipped()
@@ -422,22 +429,6 @@ fn in_box(c : @view.Content, stretching : Int, turn : Double, ground : (Double, 
   ground.2 == 0.0 &&
   ground.3 == 0.0 &&
   (c.shadow.2 & 0xFFL) == 0L
-}
-
-///|
-/// Whether a node of the row being drawn all of it (Riding's `cut`), reaching from (x0, y0) to (x1, y1) inside the clip
-/// of the row's own it is drawn in, is wholly outside the row's clip: left out, as one wholly outside the clip it is
-/// drawn in is (Ctx::view_paint: none of its glyphs asked of the host), told of the row so (`edges`: its instances
-/// none, -1), the row drawn again only while it is still outside.
-fn ride_outside_cut(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Bool {
-  guard riding.val is Some(r) && r.cut else { return false }
-  let k = r.clip_at
-  guard x0 > clip_stack[k + 2] || y0 > clip_stack[k + 3] || x1 < clip_stack[k] || y1 < clip_stack[k + 1] else {
-    return false
-  }
-  ride_edge(r, x0, y0, x1, y1, -1, -1, 0, 0, 0, 0)
-  r.left_out = true
-  true
 }
 
 ///|
@@ -612,6 +603,10 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     ride_cut_not[r.id] = true
   }
   let keep = !(r.spoiled || (!r.island && !r.cut && side_x != 0 && side_y != 0) || !ride_clip_square(e))
+  // (one not kept drawn as it is, not by a header: no frame of its list moving alone drawn again so, scroll_patch.mbt)
+  if !keep {
+    patch_spoil("a row not kept")
+  }
   if !keep && !r.cut {
     ride_let_go(r.id)
     return
@@ -652,6 +647,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     -1
   }
   let kept : RideKept = {
+    id: r.id,
     rev: r.rev,
     x: r.x,
     y: r.y,
@@ -675,7 +671,6 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     inside_y: side_y == 0,
     cut: r.cut,
     edges: r.edges,
-    left_out: r.left_out,
     nodes: r.nodes,
     kept: r.kept,
     group,
@@ -706,7 +701,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     self.ninst = r.k0
     self.spans_cut()
     self.segs_cut(r.seg0 * 4)
-    self.ride_emit(kept, 0.0, 0.0, caps=true)
+    self.ride_emit(kept, 0.0, 0.0, caps=true, outside=!keep)
   }
 }
 
@@ -818,8 +813,6 @@ fn Ctx::ride_kept_for(
   if k.cut {
     // (one drawn all of it, cut by its clip each time: wherever it meets it; wholly past it, drawn as nothing)
     guard x1 + dx > e[0] && x0 + dx < e[2] && y1 + dy > e[1] && y0 + dy < e[3] else { return None }
-    // (none it left out as outside its clip come in: what it drew gone out is left out as it is drawn again)
-    guard ride_out_now(k, dx, dy) is Some(_) else { return None }
   } else {
     guard dx == 0.0 || (k.inside_x && ride_side(x0 + dx, x1 + dx, e[0], e[2]) == 0) else { return None }
     guard dy == 0.0 || (k.inside_y && ride_side(y0 + dy, y1 + dy, e[1], e[3]) == 0) else { return None }
@@ -845,12 +838,21 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
 ///|
 /// Row kept `k`'s drawing put after the frame's, moved by (dx, dy), as Ctx::ride_again draws it (`caps`: the captures
 /// its glass takes as ride_caps says already, Ctx::ride_end's).
-fn Ctx::ride_emit(self : Ctx, k : RideKept, dx : Double, dy : Double, caps? : Bool = false) -> Unit {
+fn Ctx::ride_emit(
+  self : Ctx,
+  k : RideKept,
+  dx : Double,
+  dy : Double,
+  caps? : Bool = false,
+  outside? : Bool = false,
+) -> Unit {
   if !caps {
     ride_caps.clear()
   }
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
-  let out = if k.cut { ride_out_now(k, dx, dy).unwrap_or(ride_none_out) } else { ride_none_out }
+  // (one drawn so once, not kept (Ctx::ride_end): what of it is wholly outside its clip left out, as it is drawn from
+  // then on, ride_cut_not)
+  let out = if k.cut && outside { ride_out_now(k, dx, dy).unwrap_or(ride_none_out) } else { ride_none_out }
   if out.is_empty() {
     self.segs_put(k.segs, k.pack)
   } else {
@@ -901,7 +903,7 @@ fn Ctx::ride_emit(self : Ctx, k : RideKept, dx : Double, dy : Double, caps? : Bo
 fn ride_out_now(k : RideKept, dx : Double, dy : Double) -> Array[Int]? {
   let e = k.clip
   // (all of it within the clip, none left out: none of it outside)
-  if !k.left_out && ride_within(k, dx, dy) {
+  if ride_within(k, dx, dy) {
     return Some(ride_none_out)
   }
   let ox = k.x + dx
@@ -955,6 +957,8 @@ fn Ctx::ride_spot_again(self : Ctx, k : RideKept, sp : RideSpot, dx : Double, dy
   match sp.clip {
     None => self.view_unseen(sp.c, sp.s)
     Some(cl) => {
+      // (a picture drawn anew each time: no frame of its list moving alone drawn again so, scroll_patch.mbt)
+      patch_spoil("a picture of a row drawn anew")
       // (the clip it was drawn in, moved where it is the row's own)
       let e = k.clip
       for j in 0..<clip_n {
@@ -1000,6 +1004,9 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
     self.ride_head(k.group, i0, n, at, dx, dy, seg_by, clip)
   } else {
     ride_put(k, i0, n, self.inst, at, dx, dy, seg_by, clip)
+    // (one of no list's, an old view hosted, drawn where it was: drawn so again while it reads as it did; one of a
+    // list's, moved with it, no frame of the list moving alone drawn again so, scroll_patch.mbt)
+    patch_put(k.id)
   }
   if k.owned {
     for i in 0..<n {
