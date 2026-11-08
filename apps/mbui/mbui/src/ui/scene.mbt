@@ -167,6 +167,41 @@ fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Doub
 }
 
 ///|
+/// Whether (`x`, `y`) is the clip `k`'s corner `corner` (clip_corner_r's).
+fn clip_corner_is(k : Int, corner : Int, x : Double, y : Double) -> Bool {
+  let s = clip_stack
+  let cx = if corner == 0 || corner == 3 { s[k] } else { s[k + 2] }
+  let cy = if corner < 2 { s[k + 1] } else { s[k + 3] }
+  (x - cx).abs() < 1.0e-6 && (y - cy).abs() < 1.0e-6
+}
+
+///|
+/// clip_corner_r's radius alone (a pair is an allocation each).
+fn clip_corner_radius(k : Int, corner : Int, x : Double, y : Double) -> Double {
+  if clip_corner_is(k, corner, x, y) {
+    clip_stack[k + 4 + corner]
+  } else {
+    0.0
+  }
+}
+
+///|
+/// clip_corner_r's smoothness alone.
+fn clip_corner_smooth(k : Int, corner : Int, x : Double, y : Double) -> Double {
+  if clip_corner_is(k, corner, x, y) {
+    clip_stack[k + 8 + corner]
+  } else {
+    0.0
+  }
+}
+
+///|
+/// A box's corner of radius `r` as drawn in a box `room` to its shorter side's half: at most that, none below 0.
+fn box_corner_r(r : Double, room : Double) -> Double {
+  dmax(dmin(r, room), 0.0)
+}
+
+///|
 /// A clip of its own rect (x0 y0 x1 y1, as given) pushed: its corners round where they are the clip it is in's.
 fn push_clip(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
   let k = clip_top()
@@ -204,8 +239,7 @@ fn push_clip_r(
   } else if outer_kept {
     k + 12
   } else {
-    let cands = if has_outer && !apart { [k, k + 12] } else { [k] }
-    match clip_cutting(cands, clip_stack, x0, y0, x1, y1, r, sm) {
+    match clip_cutting(k, if has_outer && !apart { k + 12 } else { -1 }, clip_stack, x0, y0, x1, y1, r, sm) {
       Some(c) => c
       None => if apart { k + 12 } else { -1 }
     }
@@ -263,14 +297,15 @@ fn clip_has_outer(k : Int) -> Bool {
 }
 
 ///|
-/// Of the clips that may be the outer of a clip of rect (x0 y0 x1 y1), its corners `r` as smooth as `sm` (each at its
-/// offset in `at`: 12 numbers, a clip_stack level's or an instance's 40-51), the one whose curves cut into it the most
+/// Of the clips that may be the outer of a clip of rect (x0 y0 x1 y1), its corners `r` as smooth as `sm` (`c0`, and `c1`
+/// unless that is -1: each at its offset in `at`, 12 numbers, a clip_stack level's or an instance's 40-51), the one whose curves cut into it the most
 /// (clip_cut_depth), none where none cuts any of it. Straight edges are no cut (it is cut to their rects already), nor
 /// a corner it shares, as round or rounder (sd_clip draws a corner where its box has it): only a curve that reaches
 /// into its shape where it is not that corner, a band brushed across a frame's foot, a frame scrolled into a pane's
 /// corner.
 fn[A : ClipNumbers] clip_cutting(
-  cands : Array[Int],
+  c0 : Int,
+  c1 : Int,
   at : A,
   x0 : Double,
   y0 : Double,
@@ -279,16 +314,15 @@ fn[A : ClipNumbers] clip_cutting(
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
 ) -> Int? {
-  let mut best : Int? = None
-  let mut most = clip_cut_least
-  for c in cands {
-    let d = clip_cut_depth(at, c, x0, y0, x1, y1, r, sm)
-    if d > most {
-      most = d
-      best = Some(c)
-    }
+  let d0 = clip_cut_depth(at, c0, x0, y0, x1, y1, r, sm)
+  let d1 = if c1 >= 0 { clip_cut_depth(at, c1, x0, y0, x1, y1, r, sm) } else { clip_cut_least }
+  if d1 > d0 && d1 > clip_cut_least {
+    Some(c1)
+  } else if d0 > clip_cut_least {
+    Some(c0)
+  } else {
+    None
   }
-  best
 }
 
 ///|
@@ -344,19 +378,19 @@ fn[A : ClipNumbers] clip_cut_depth(
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
 ) -> Double {
-  let n = fn(j : Int) { at.clip_number(o + j) }
-  let (ox0, oy0, ox1, oy1) = (n(0), n(1), n(2), n(3))
+  let ox0 = at.clip_number(o)
+  let oy0 = at.clip_number(o + 1)
+  let ox1 = at.clip_number(o + 2)
+  let oy1 = at.clip_number(o + 3)
   let ohx = dmax((ox1 - ox0) / 2.0, 0.0)
   let ohy = dmax((oy1 - oy0) / 2.0, 0.0)
-  let own = [r.0, r.1, r.2, r.3]
-  let owns = [sm.0, sm.1, sm.2, sm.3]
   let mut most = -1.0e9
   for j in 0..<4 {
-    let rr = n(4 + j)
+    let rr = at.clip_number(o + 4 + j)
     if rr <= 0.0 {
       continue
     }
-    let ss = n(8 + j)
+    let ss = at.clip_number(o + 8 + j)
     let reach = rr * (1.0 + (smooth_scale - 1.0) * ss)
     let left = j == 0 || j == 3
     let top = j < 2
@@ -372,15 +406,6 @@ fn[A : ClipNumbers] clip_cut_depth(
     }
     let vx = dmax(ohx, reach)
     let vy = dmax(ohy, reach)
-    // (a point of the shape's rect its own curves cut away, a square corner beside a frame's corner it shares, is none
-    // of it)
-    let past = fn(px : Double, py : Double) {
-      if sd_clip(px, py, x0, y0, x1, y1, r, sm) > clip_cut_least {
-        -1.0e9
-      } else {
-        sd_corner(dmax(vx - (px - kx) * ix, 0.0), dmax(vy - (py - ky) * iy, 0.0), vx, vy, rr, ss)
-      }
-    }
     // the shape's corners within that square
     for i in 0..<4 {
       let sl = i == 0 || i == 3
@@ -389,10 +414,21 @@ fn[A : ClipNumbers] clip_cut_depth(
       let cy = if st { y0 } else { y1 }
       let jx = if sl { 1.0 } else { -1.0 }
       let jy = if st { 1.0 } else { -1.0 }
-      let sr = own[i]
+      let sr = match i {
+        0 => r.0
+        1 => r.1
+        2 => r.2
+        _ => r.3
+      }
+      let si = match i {
+        0 => sm.0
+        1 => sm.1
+        2 => sm.2
+        _ => sm.3
+      }
       if sr <= 0.0 {
         if cx >= zx0 && cx <= zx1 && cy >= zy0 && cy <= zy1 {
-          most = dmax(most, past(cx, cy))
+          most = dmax(most, clip_past(cx, cy, x0, y0, x1, y1, r, sm, kx, ky, ix, iy, vx, vy, rr, ss))
         }
         continue
       }
@@ -400,14 +436,14 @@ fn[A : ClipNumbers] clip_cut_depth(
       if cx == kx && cy == ky && sr >= rr {
         continue
       }
-      let sreach = sr * (1.0 + (smooth_scale - 1.0) * owns[i])
+      let sreach = sr * (1.0 + (smooth_scale - 1.0) * si)
       // (its curve's square, met by that one)
       let (ax0, ax1) = if sl { (cx, cx + sreach) } else { (cx - sreach, cx) }
       let (ay0, ay1) = if st { (cy, cy + sreach) } else { (cy - sreach, cy) }
       if ax1 < zx0 || ax0 > zx1 || ay1 < zy0 || ay0 > zy1 {
         continue
       }
-      let e = 2.0 / (2.0 + (smooth_exponent - 2.0) * owns[i])
+      let e = 2.0 / (2.0 + (smooth_exponent - 2.0) * si)
       for q in 0..=clip_arc_steps {
         let ux = sreach * det_pow(clip_arc_cos[q], e)
         let uy = sreach * det_pow(clip_arc_sin[q], e)
@@ -415,12 +451,42 @@ fn[A : ClipNumbers] clip_cut_depth(
         let px = cx + jx * (sreach - ux)
         let py = cy + jy * (sreach - uy)
         if px >= x0 && px <= x1 && py >= y0 && py <= y1 {
-          most = dmax(most, past(px, py))
+          most = dmax(most, clip_past(px, py, x0, y0, x1, y1, r, sm, kx, ky, ix, iy, vx, vy, rr, ss))
         }
       }
     }
   }
   most
+}
+
+///|
+/// How far past the curve of a clip's corner (at `kx` `ky`, inwards `ix` `iy`, its reach `vx` `vy`, radius `rr` as
+/// smooth as `ss`) the point (`px`, `py`) of a shape (x0 y0 x1 y1, corners `r` as smooth as `sm`) is (clip_cut_depth):
+/// none of it where the shape's own curves cut it away (a square corner beside a frame's corner it shares). A function
+/// of its own, not a closure: one made for each corner measured.
+fn clip_past(
+  px : Double,
+  py : Double,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  r : (Double, Double, Double, Double),
+  sm : (Double, Double, Double, Double),
+  kx : Double,
+  ky : Double,
+  ix : Double,
+  iy : Double,
+  vx : Double,
+  vy : Double,
+  rr : Double,
+  ss : Double,
+) -> Double {
+  if sd_clip(px, py, x0, y0, x1, y1, r, sm) > clip_cut_least {
+    -1.0e9
+  } else {
+    sd_corner(dmax(vx - (px - kx) * ix, 0.0), dmax(vy - (py - ky) * iy, 0.0), vx, vy, rr, ss)
+  }
 }
 
 ///|
@@ -447,15 +513,25 @@ fn push_circle_clip(cx : Double, cy : Double, r : Double) -> Unit {
 ///|
 /// Node `n`'s clip pushed: its rect, its corners rounded as it draws them (radius_at), within the clip it is in.
 fn push_round_clip(n : Node) -> Unit {
-  push_box_clip(n.x, n.y, n.fw, n.fh, fn(j) { n.radius_at(j) })
+  push_box_clip(n.x, n.y, n.fw, n.fh, n.radius_at(0), n.radius_at(1), n.radius_at(2), n.radius_at(3))
 }
 
 ///|
 /// A clip pushed for what a box `w` by `h` at (x, y) holds, its corners `radius_at` each (top left, then round it),
-/// within the clip it is in: at the box's own edge, where its border is, which takes no room (what is laid out to its
+/// within the clip it is in (its corners' radii given each, not asked of a function: a closure made for each box clipped): at
+/// the box's own edge, where its border is, which takes no room (what is laid out to its
 /// edge is all of it there, under its border, drawn over it: paint's border_over), as a layer's border over what it
 /// masks. An old view's box's (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
-fn push_box_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double) -> Unit {
+fn push_box_clip(
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
+) -> Unit {
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -467,19 +543,26 @@ fn push_box_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (In
   // card mostly past the window's edge: its far corners as round as its line, sd_clip)
   let room = dmin(w, h) / 2.0
   // where a corner is both's, the rounder
-  let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
-    let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(radius_at(j), room), 0.0)
-    if r > 0.0 && cx == ox && cy == oy && r >= pr {
-      (r, smoothness(r, room))
-    } else {
-      (pr, ps)
-    }
-  }
-  let (tl, stl) = corner(0, x0, y0, x, y)
-  let (tr, s_tr) = corner(1, x1, y0, x + w, y)
-  let (br, sbr) = corner(2, x1, y1, x + w, y + h)
-  let (bl, sbl) = corner(3, x0, y1, x, y + h)
+  let r0 = box_corner_r(r0, room)
+  let r1 = box_corner_r(r1, room)
+  let r2 = box_corner_r(r2, room)
+  let r3 = box_corner_r(r3, room)
+  let own0 = r0 > 0.0 && x0 == x && y0 == y
+  let own1 = r1 > 0.0 && x1 == x + w && y0 == y
+  let own2 = r2 > 0.0 && x1 == x + w && y1 == y + h
+  let own3 = r3 > 0.0 && x0 == x && y1 == y + h
+  let p0 = clip_corner_radius(k, 0, x0, y0)
+  let p1 = clip_corner_radius(k, 1, x1, y0)
+  let p2 = clip_corner_radius(k, 2, x1, y1)
+  let p3 = clip_corner_radius(k, 3, x0, y1)
+  let tl = if own0 && r0 >= p0 { r0 } else { p0 }
+  let tr = if own1 && r1 >= p1 { r1 } else { p1 }
+  let br = if own2 && r2 >= p2 { r2 } else { p2 }
+  let bl = if own3 && r3 >= p3 { r3 } else { p3 }
+  let stl = if own0 && r0 >= p0 { smoothness(r0, room) } else { clip_corner_smooth(k, 0, x0, y0) }
+  let s_tr = if own1 && r1 >= p1 { smoothness(r1, room) } else { clip_corner_smooth(k, 1, x1, y0) }
+  let sbr = if own2 && r2 >= p2 { smoothness(r2, room) } else { clip_corner_smooth(k, 2, x1, y1) }
+  let sbl = if own3 && r3 >= p3 { smoothness(r3, room) } else { clip_corner_smooth(k, 3, x0, y1) }
   push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
 }
 
@@ -571,13 +654,14 @@ fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 /// How far the old view painted now is carried off the pixels from where it was laid out (an old view hosted in a node
 /// drawn off its place by its tree, old_frame): its words set on the pixels where they are laid out, then carried with
 /// it, as an old view's look sets them before it moves and scales them (draw.mbt); none (0, 0) for the rest.
-// kept across runs: (0, 0) but while what is in such an old view is painted (Ctx::paint, Ctx::glyphs_carried_of)
-let glyphs_carried : Ref[(Double, Double)] = Ref((0.0, 0.0))
+// (across, down: two numbers set in place, not a pair made for each node painted)
+// kept across runs: (0, 0) but while what is in such an old view is painted (Ctx::paint, Ctx::carry_glyphs)
+let glyphs_carried : FixedArray[Double] = [0.0, 0.0]
 
 ///|
 /// Where a glyph's picture goes across, `x` as painted: on the pixels where it is laid out (glyphs_carried).
 fn glyph_x(x : Double, sc : Double) -> Double {
-  let m = glyphs_carried.val.0
+  let m = glyphs_carried[0]
   on_pixels(x - m, sc) + m
 }
 
@@ -585,7 +669,7 @@ fn glyph_x(x : Double, sc : Double) -> Double {
 /// Where a glyph's picture goes down, its line's baseline `base` as painted, then its own offset `oy` (on_glyph_row): on
 /// the pixels where it is laid out (glyphs_carried).
 fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
-  let m = glyphs_carried.val.1
+  let m = glyphs_carried[1]
   on_glyph_row(base - m, oy, sc) + m
 }
 
@@ -593,7 +677,7 @@ fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 /// Where a line of words (struck through, underlined) goes down, `y` as painted: on the pixels where it is laid out
 /// (glyphs_carried).
 fn glyph_y(y : Double, sc : Double) -> Double {
-  let m = glyphs_carried.val.1
+  let m = glyphs_carried[1]
   on_pixels(y - m, sc) + m
 }
 
@@ -1172,10 +1256,12 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   // (its words set on the pixels where the old view it is in is laid out, carried with that to where it is drawn,
   // whenever and from wherever it is painted: glyphs_carried)
-  let carried_was = glyphs_carried.val
-  glyphs_carried.val = self.glyphs_carried_of(i)
+  let carried_x = glyphs_carried[0]
+  let carried_y = glyphs_carried[1]
+  self.carry_glyphs(i)
   // (what comes after it as faint as before it: its own ground may have been drawn as its look's surface)
-  let (words_was, surface_was) = (words_alpha.val, look_surface.val)
+  let words_was = words_alpha.val
+  let surface_was = look_surface.val
   let rec_was = rec_node_now.val
   if rec_whole.val {
     rec_node(self.ninst, i)
@@ -1186,7 +1272,8 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   words_alpha.val = words_was
   look_surface.val = surface_was
-  glyphs_carried.val = carried_was
+  glyphs_carried[0] = carried_x
+  glyphs_carried[1] = carried_y
   match glyphs_was {
     Some((f, n, cut)) => {
       glyph_look.val = f
