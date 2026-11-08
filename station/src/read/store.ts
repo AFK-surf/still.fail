@@ -453,6 +453,14 @@ export function threadsOfSessions(s: Store, keys: string[]): number[] {
   return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
 }
 
+/// Of these sessions' threads, those on the station's own surface or those on an external surface.
+export function threadsOfSessionsOnSurface(s: Store, keys: string[], own: boolean): number[] {
+  if (keys.length === 0) return [];
+  // Starting from the surface would inspect every station chat even when these sessions have only one.
+  return all(s, `SELECT DISTINCT t.id FROM thread_sessions m CROSS JOIN threads t ON t.id = m.thread
+    WHERE m.session IN (SELECT value FROM json_each(?1)) AND t.surface ${own ? "=" : "IS NOT"} ?2`, JSON.stringify(keys), STILLFAIL_SURFACE).map((r) => r.id as number);
+}
+
 /// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
 export function threadsActiveSince(s: Store, threads: number[], since: number): number[] {
   if (threads.length === 0 || since <= 0) return threads;

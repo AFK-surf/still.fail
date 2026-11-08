@@ -364,6 +364,33 @@ export function scopeOf(s: Store, sessions: string[], threads: number[]): Scope 
   return { rows, sessions: agents, threads: [...new Set([...touched, ...theirs, ...store.threadsOfSessions(s, [...agents])])] };
 }
 
+/// Only what can name a job's chat: its sessions' own chats, and external origins when one of those chats or a
+/// standalone session actually needs a name from them. A shared chat can take its name from any of its members.
+export function scopeOfJobNames(s: Store, keys: string[]): Scope {
+  const rows = new Set(keys), agents = new Set(keys), origins = new Set<string>(), hasChat = new Set<string>();
+  const target = new Map(keys.map((key) => [key, store.getSession(s, key)]));
+  const chats = store.threadsOfSessionsOnSurface(s, keys, true);
+  for (const id of chats) {
+    const thread = store.getThread(s, id);
+    if (thread === null) continue;
+    const members = store.threadSessions(s, id);
+    for (const member of members) {
+      rows.add(member.session);
+      agents.add(member.session);
+      const session = target.get(member.session);
+      if (session && (thread.hiddenAt !== null) === (session.archivedAt !== null)) hasChat.add(member.session);
+      if (given(thread) === null) origins.add(member.session);
+    }
+  }
+  for (const [key, session] of target) {
+    if (session && (session.title === null || trim(session.title) === "") && !hasChat.has(key)) origins.add(key);
+  }
+  const external = store.threadsOfSessionsOnSurface(s, [...origins], false);
+  // An origin can include a missing member; its other members still make it visible to the shared reader.
+  for (const id of external) for (const member of store.threadSessions(s, id)) agents.add(member.session);
+  return { rows, sessions: agents, threads: [...chats, ...external] };
+}
+
 /// The sidebar items of `viewer` a change of `sessions` and `threads` can touch (`scopeOf`), as the whole sidebar has
 /// them, and the ids of those that can be touched (one not among the items now is gone from the sidebar).
 export function chatRows(station: Store, viewer: Viewer, sessions: string[], threads: number[]): Json {
