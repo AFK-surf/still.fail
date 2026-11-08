@@ -500,12 +500,12 @@ pub fn panel(
 }
 
 ///|
-/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `gone`, `focus`, `ruled`, `form`, `side`,
+/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `gone`, `focus`, `ruled`, `form`, `grows`, `side`,
 /// `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
 /// tree, each in the node the panel gives it, laid out there as the old frame's body and foot are (beside what opened
 /// it: panel_node; in the middle of the window, opened by nothing or a form: panel_centred_node), given what closes it.
-/// The window's tree draws it on every screen (on 小屏 too, till the tree draws sheets: there beside what opened it, or in
-/// the middle, as on the others). Beside @sf.panel only while panels with old bodies are left (detlint's old-panel):
+/// The window's tree draws it on every screen: on 小屏 a sheet from the window's foot (sheet_node), as the host draws an
+/// old-bodied panel there. Beside @sf.panel only while panels with old bodies are left (detlint's old-panel):
 /// as the last goes, the old body's path goes and this takes the name `panel`.
 pub fn panel_nodes(
   title : String,
@@ -519,6 +519,7 @@ pub fn panel_nodes(
   focus? : Bool = true,
   ruled? : Bool = false,
   form? : Bool = false,
+  grows? : Bool = false,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
@@ -534,7 +535,7 @@ pub fn panel_nodes(
       wide,
       live: None,
       tall: 0.0,
-      grows: false,
+      grows,
       focus,
       ruled,
       lists: false,
