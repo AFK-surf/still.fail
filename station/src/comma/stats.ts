@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
+import { installStatsAge, statsAgeCandidates, statsAgeReady, statsAgeStep } from "./stats-age.ts";
 
 type Json = any;
 
@@ -172,7 +173,8 @@ export class RevIndex {
 
   /// The rows `given`, written where they changed; a row not given is tombstoned where `drop` says. Inside the
   /// caller's transaction; how many rows changed.
-  write(given: Map<string, { kind: string; json: string }>, drop: (row: Json) => boolean): number {
+  write(given: Map<string, { kind: string; json: string }>, drop: (row: Json) => boolean,
+    candidates?: () => { key: Uint8Array; json: string }[]): number {
     let rev = this.rev();
     let changed = 0;
     const get = this.#db.prepare(`SELECT json, removed FROM ${this.#name} WHERE key = ?`);
@@ -187,7 +189,7 @@ export class RevIndex {
     }
     // Node's SQLite text reader stops at NUL. Compare and update using the actual stored UTF-8 bytes instead.
     const keys = new Set([...given.keys()].map((key) => Buffer.from(key).toString("hex")));
-    const kept = this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, json FROM ${this.#name} WHERE removed = 0`).all() as { key: Uint8Array; json: string }[];
+    const kept = candidates?.() ?? this.#db.prepare(`SELECT CAST(key AS BLOB) AS key, json FROM ${this.#name} WHERE removed = 0`).all() as { key: Uint8Array; json: string }[];
     const tombstone = this.#db.prepare(`UPDATE ${this.#name} SET removed = 1, rev = ? WHERE key = CAST(? AS TEXT)`);
     for (const k of kept) {
       if (keys.has(Buffer.from(k.key).toString("hex")) || !drop(JSON.parse(k.json))) continue;
@@ -220,6 +222,8 @@ export class CommaStats {
   #building: Promise<void> | null = null;
   #again = false;
   #stops: (() => void)[] | null = null;
+  #closed = false;
+  #stopRetry: (() => void) | null = null;
   readonly #read: Read;
   readonly #changes: (changed: () => void) => () => void;
 
@@ -260,7 +264,7 @@ export class CommaStats {
 
   /// Once Comma is connected first: builds now, a minute after a change, and every hour, until close.
   start(): void {
-    if (this.#stops !== null) return;
+    if (this.#closed || this.#stops !== null) return;
     let settle: (() => void) | null = null;
     const stopChanges = this.#changes(() => {
       if (settle !== null) return;
@@ -279,6 +283,9 @@ export class CommaStats {
   }
 
   close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#stopRetry?.();
     for (const stop of this.#stops ?? []) stop();
     this.#stops = null;
     this.#db.close();
@@ -286,17 +293,18 @@ export class CommaStats {
 
   /// A build, after the one under way when there is one.
   build(): void {
+    if (this.#closed) return;
     if (this.#building !== null) {
       this.#again = true;
       return;
     }
     const now = wall.now();
     this.#building = this.#read(now - BUILD_DAYS * DAY_MS, now)
-      .then(({ stations, unread }) => void this.apply(stations, unread, now - BUILD_DAYS * DAY_MS))
+      .then(({ stations, unread }) => this.#applyBuild(stations, unread, now - BUILD_DAYS * DAY_MS))
       .catch((e) => log.info("comma", "the statistics were not read this time", { error: (e as Error).message }))
       .finally(() => {
         this.#building = null;
-        if (this.#again) {
+        if (this.#again && !this.#closed) {
           this.#again = false;
           this.build();
         }
@@ -308,10 +316,41 @@ export class CommaStats {
     while (this.#building !== null) await this.#building;
   }
 
+  // Prepare only as a build needs it. Each batch commits and yields so a first build on an old database does not
+  // parse its whole history in one turn; another station's older writer is followed by the index's triggers.
+  async #applyBuild(stations: StationRows[], unread: string[], from: number): Promise<void> {
+    let installed = false;
+    let retryMs = 25;
+    while (!this.#closed) {
+      try {
+        if (!installed) { installStatsAge(this.#db); installed = true; }
+        if (!statsAgeReady(this.#db, 0)) statsAgeStep(this.#db);
+        else if (this.#apply(stations, unread, from, true) !== null) return;
+        retryMs = 25;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      } catch (error) {
+        const code = (error as { errcode?: number }).errcode;
+        if (code === undefined || ((code & 0xff) !== 5 && (code & 0xff) !== 6)) throw error;
+        // A previous station can still have the database locked during handover. Retrying the finite work after a
+        // backoff keeps that lock from making this build silently disappear.
+        await new Promise<void>((resolve) => {
+          const finish = () => { this.#stopRetry = null; resolve(); };
+          const stop = wall.after(retryMs, finish);
+          this.#stopRetry = () => { stop(); finish(); };
+        });
+        retryMs = Math.min(retryMs * 2, 2_000);
+      }
+    }
+  }
+
   /// The stations' rows from the day of `from` on, written where they changed. A usage row of those days no longer
   /// given is tombstoned, and so is a chat no longer among them, but not one of a station not read this time. How many
   /// rows of each index changed.
   apply(stations: StationRows[], unread: string[], from: number): { stats: number; tasks: number } {
+    return this.#apply(stations, unread, from, false)!;
+  }
+
+  #apply(stations: StationRows[], unread: string[], from: number, indexed: boolean): { stats: number; tasks: number } | null {
     const fromDay = new Date(Math.floor(from / DAY_MS) * DAY_MS).toISOString().slice(0, 10);
     const stats = new Map<string, { kind: string; json: string }>();
     const tasks = new Map<string, { kind: string; json: string }>();
@@ -324,8 +363,15 @@ export class CommaStats {
     let changed = { stats: 0, tasks: 0 };
     this.#db.exec("BEGIN");
     try {
+      // The other writer may have changed rows after preparation. Check this transaction's snapshot before using
+      // the index; classify any changed rows in another batch without writing a partial build.
+      if (indexed && !statsAgeReady(this.#db, 0)) {
+        this.#db.exec("ROLLBACK");
+        return null;
+      }
       changed = {
-        stats: this.stats.write(stats, (row) => row.day !== undefined && row.day >= fromDay && read(row)),
+        stats: this.stats.write(stats, (row) => row.day !== undefined && row.day >= fromDay && read(row),
+          indexed ? () => statsAgeCandidates(this.#db, fromDay) : undefined),
         tasks: this.tasks.write(tasks, read),
       };
       this.#db.exec("COMMIT");
