@@ -500,6 +500,9 @@ struct Node {
   /// came to (as it was placed, or as what it reads changed)
   mut moved_by : ((Double, Double, Double) -> (Double, Double))?
   mut moved : (Double, Double)
+  /// when that move is over at the size it is laid out, where it holds what is leaving that holds it till then
+  /// (View::moved_by's `holds_leaving`)
+  mut moved_holds : ((Double, Double) -> Double)?
   /// what it draws, as last made
   mut content : Content?
   /// leaving (View::going): since when it goes as from its start (-1: not leaving), how long all of it takes; coming
@@ -567,6 +570,8 @@ pub struct Tree {
   /// step of what goes by steps (View::steps); and how many were ever told (each one's place among those due together)
   timeline : Array[Due]
   mut told : Int
+  /// the nodes whose move holds what is leaving that holds them till it is over (View::moved_by's `holds_leaving`)
+  leave_holders : Array[NodeId]
   /// what is due being done (Tree::advance)
   mut advancing : Bool
   /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
@@ -865,6 +870,7 @@ pub fn Tree::new(
     pulls_made: 0,
     pulls_marked: [],
     timeline: [],
+    leave_holders: [],
     told: 0,
     advancing: false,
     logic: start,
@@ -1058,6 +1064,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.drawn_off = (0.0, 0.0, 0.0, 0.0)
       n.moved_by = None
       n.moved = (0.0, 0.0)
+      n.moved_holds = None
       n.went = None
       n.parent = parent
       n.allow_ellipsis = false
@@ -1245,6 +1252,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drawn_off: (0.0, 0.0, 0.0, 0.0),
         moved_by: None,
         moved: (0.0, 0.0),
+        moved_holds: None,
         content: None,
         left_at: -1.0,
         span: 0.0,
@@ -2767,16 +2775,25 @@ pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
 /// it out another size places it by that size. `ends`: the moment its move is over at that size (said, as a motion's
 /// end is: Anim::over), worked out as `f` is; the clock followed till then, each frame drawn placing it again, and from
 /// then on not (nothing to draw anew for it: what hosts the tree asks for no frames for it), `f` asked at the moment
-/// drawn as what else it reads changes (a move said again: followed again till its own end). `f` reads no clock
+/// drawn as what else it reads changes (a move said again: followed again till its own end). `holds_leaving`: what is
+/// leaving that holds it (View::show's, View::leave) is let go no sooner than its move is over, `ends` asked at the
+/// size it is laid out as that leaving's end is worked out (a sheet sinking away by its own height: its layer gone as
+/// it is out of sight, however tall it is). `f` reads no clock
 /// itself; it gives the same for the same state, time and size, however often asked. Ctx::moved_by's, a node's: what
 /// that becomes once old views go.
 pub fn View::moved_by(
   self : View,
   f : (Double, Double, Double) -> (Double, Double),
   ends : (Double, Double) -> Double,
+  holds_leaving? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.moved_by = Some(f)
+  // (what is leaving that holds it kept till its move is over, its end said: Tree::leave_ends)
+  n.moved_holds = if holds_leaving { Some(ends) } else { None }
+  if holds_leaving && !self.tree.leave_holders.contains(self.id()) {
+    self.tree.leave_holders.push(self.id())
+  }
   let tree = self.tree
   let at = self.at
   self.bind(
@@ -5417,6 +5434,8 @@ fn View::drop(self : View, v : View) -> Unit {
 
 ///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
+/// `leave`: it leaves over that long first (View::leave), and no shorter than a move it holds that holds its leaving
+/// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out.
 pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot()
@@ -5699,10 +5718,23 @@ pub fn View::going(self : View) -> Double {
 pub fn View::leaves_at(self : View) -> Double {
   guard self.live() is Some(n) else { return -1.0 }
   if n.left_at >= 0.0 {
-    leave_ends(n)
+    self.tree.leave_ends(self.at)
   } else {
     -1.0
   }
+}
+
+///|
+/// Whether node `holder` is node `at` or holds it.
+fn Tree::holds_at(self : Tree, holder : Int, at : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    if i == holder {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
 }
 
 ///|
@@ -5789,10 +5821,24 @@ fn Tree::leaving_at(self : Tree, at : Int) -> Bool {
 }
 
 ///|
-/// When node `n`'s leaving or coming back ends (-1: neither).
-fn leave_ends(n : Node) -> Double {
+/// When node `at`'s leaving or coming back ends (-1: neither): its leaving no sooner than the moves it holds that hold
+/// it are over (View::moved_by's `holds_leaving`), each as it ends at the size it is laid out.
+fn Tree::leave_ends(self : Tree, at : Int) -> Double {
+  let n = self.nodes[at]
   if n.left_at >= 0.0 {
-    n.left_at + n.span
+    let mut end = n.left_at + n.span
+    if self.leave_holders.length() > 0 {
+      self.leave_holders.retain(fn(id) { self.alive_id(id) && self.nodes[id.at].moved_holds is Some(_) })
+      for id in self.leave_holders {
+        let m = self.nodes[id.at]
+        guard m.moved_holds is Some(ends) && self.holds_at(at, id.at) else { continue }
+        let e = @signals.untracked(fn() { ends(m.flex.width, m.flex.height) })
+        if e > end {
+          end = e
+        }
+      }
+    }
+    end
   } else if n.back_at >= 0.0 {
     n.back_at + n.back_from * n.span
   } else {
@@ -6033,7 +6079,7 @@ fn Tree::due_at(self : Tree, d : Due) -> Double {
     Leaves(id, _) => {
       let n = self.nodes[id.at]
       if n.live && n.gen == id.gen {
-        leave_ends(n)
+        self.leave_ends(id.at)
       } else {
         -1.0
       }
