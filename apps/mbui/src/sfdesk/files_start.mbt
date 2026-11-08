@@ -49,8 +49,10 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
           } else {
             @sf.empty(c, fn() {
               c.text(@sf.t("web-main.rail.filesNone"), style=fs_empty_words) |> ignore
-              if can.length() > 0 && @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-home/pick", tone=Primary) {
-                add_favorite_folder(src, w.id, can, picked=fn(f) { files_go({ station: f.station, root: Some(f.root), path: f.path }) })
+              if can.length() > 0 {
+                @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-home/pick", tone=Primary, on_press=fn() {
+                  add_favorite_folder(src, w.id, can, picked=fn(f) { files_go({ station: f.station, root: Some(f.root), path: f.path }) })
+                }) |> ignore
               }
             })
           }
