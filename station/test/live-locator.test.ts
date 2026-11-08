@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -144,4 +144,25 @@ test("a short live location can finish while a longer one is being resolved", as
     store.close();
     rmSync(data, { recursive: true, force: true });
   }
+});
+
+test("cancelling a blocked locator lets another session proceed", async () => {
+  const data = mkdtempSync(join(tmpdir(), "live-locator-"));
+  const locator = new LiveLocator(data, () => null, () => [], new URL("./live-locator-stall-worker.ts", import.meta.url));
+  try {
+    const stop = new AbortController();
+    const slow = locator.locate("slow", stop.signal);
+    const deadline = Date.now() + 5000;
+    while (!existsSync(join(data, "blocked")) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(existsSync(join(data, "blocked")), "the first lookup entered its blocking operation");
+    const quick = locator.locate("quick");
+    stop.abort();
+    await assert.rejects(slow, /cancelled/);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      assert.equal(await Promise.race([quick, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("another session is still waiting for the cancelled lookup")), 3000);
+      })]), null);
+    } finally { if (timer !== undefined) clearTimeout(timer); }
+  } finally { await locator.close(); rmSync(data, { recursive: true, force: true }); }
 });

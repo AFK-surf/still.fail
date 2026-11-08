@@ -19,4 +19,5 @@ export type LocateMessage =
   | { type: "hints"; id: number; sources: LiveSource[] }
   | { type: "batch"; id: number; paths: { path: string; runtime: RuntimeKind }[]; current: boolean; hints: TranscriptLocationHints }
   | { type: "done"; id: number; identity: LiveLocationIdentity | null; runtime: RuntimeKind | null; current: boolean }
+  | { type: "cancelled"; id: number }
   | { type: "error"; id: number; error: string };

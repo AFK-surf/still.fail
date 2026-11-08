@@ -1,6 +1,8 @@
 // The live view's source and path lookup, off the main thread. Only a bounded batch of source ids and path hints crosses
 // back at a time; the worker's source snapshot is taken before it starts touching the filesystem.
 import { Worker } from "node:worker_threads";
+import type { Clock } from "effect";
+import { Fibers } from "../ops/fibers.ts";
 import { onTranscriptHintsChanged, transcriptLocationHints } from "../read/transcript.ts";
 import { locationIdentity, type LiveLocation, type LiveLocationIdentity, type LiveLocationProfile, type LiveSession, type LiveSource, type LocateMessage, type LocateReply, type LocateRequest } from "./live-location-protocol.ts";
 
@@ -12,6 +14,7 @@ type Pending = {
 };
 const IDLE_MS = 60_000;
 const RESTARTS = 3;
+const CANCEL_GRACE_MS = 100;
 // A long history yields between batches so a small one can finish without waiting behind it. Limit simultaneous
 // snapshots and messages; the worker itself still runs on just one thread.
 const IN_FLIGHT = 4;
@@ -25,7 +28,8 @@ export class LiveLocator {
   private worker: Worker | null = null;
   private active = new Map<number, Pending>();
   private waiting: Pending[] = [];
-  private idle: ReturnType<typeof setTimeout> | null = null;
+  private cancelling = new Map<number, { worker: Worker; stop: () => void }>();
+  private idle: (() => void) | null = null;
   private retiring: Promise<void> | null = null;
   private closed = false;
   private next = 0;
@@ -35,10 +39,12 @@ export class LiveLocator {
   private readonly session: (key: string) => LiveSession | null;
   private readonly profiles: () => readonly LiveLocationProfile[];
   private readonly workerFile: URL | undefined;
+  private readonly time: Fibers;
 
   constructor(data: string, session: (key: string) => LiveSession | null,
-    profiles: () => readonly LiveLocationProfile[], workerFile?: URL) {
+    profiles: () => readonly LiveLocationProfile[], workerFile?: URL, clock?: Clock.Clock) {
     this.data = data; this.session = session; this.profiles = profiles; this.workerFile = workerFile;
+    this.time = new Fibers("live locator", clock);
     this.unlisten = onTranscriptHintsChanged((id) => {
       for (const request of this.active.values()) {
         if (request !== this.merging && request.ids.has(id)) request.stale = true;
@@ -54,8 +60,13 @@ export class LiveLocator {
       request.abort = () => {
         if (this.active.delete(request.id)) {
           this.finish(request, cancelled());
-          try { this.worker?.postMessage({ type: "cancel", id: request.id } satisfies LocateReply); }
-          catch (error) { this.retire(error instanceof Error ? error : new Error(String(error))); }
+          const worker = this.worker;
+          if (worker !== null) {
+            const stop = this.time.after(CANCEL_GRACE_MS, () => { if (this.worker === worker) this.restart(worker); });
+            this.cancelling.set(request.id, { worker, stop });
+            try { worker.postMessage({ type: "cancel", id: request.id } satisfies LocateReply); }
+            catch (error) { this.retire(error instanceof Error ? error : new Error(String(error))); }
+          }
           this.pump();
         } else {
           const at = this.waiting.indexOf(request);
@@ -89,18 +100,17 @@ export class LiveLocator {
     while (this.active.size < IN_FLIGHT) {
       const request = this.waiting.shift();
       if (request === undefined) break;
-      if (this.idle !== null) { clearTimeout(this.idle); this.idle = null; }
+      if (this.idle !== null) { this.idle(); this.idle = null; }
       this.active.set(request.id, request);
       if (!this.ask(request)) return;
     }
     if (this.active.size === 0 && this.waiting.length === 0) {
       if (this.worker !== null && this.idle === null) {
         const worker = this.worker;
-        this.idle = setTimeout(() => {
+        this.idle = this.time.after(IDLE_MS, () => {
           this.idle = null;
           if (this.worker === worker && this.active.size === 0) { this.worker = null; void worker.terminate(); }
-        }, IDLE_MS);
-        this.idle.unref();
+        });
       }
     }
   }
@@ -115,7 +125,13 @@ export class LiveLocator {
   }
 
   private heard(message: LocateMessage) {
-    const request = this.active.get(message.id), worker = this.worker;
+    const worker = this.worker;
+    if (message.type === "cancelled") {
+      const stopping = this.cancelling.get(message.id);
+      if (stopping?.worker === worker) { stopping.stop(); this.cancelling.delete(message.id); }
+      return;
+    }
+    const request = this.active.get(message.id);
     if (request === undefined || worker === null) return;
     try {
       if (message.type === "error") return this.retire(new Error(message.error));
@@ -154,6 +170,8 @@ export class LiveLocator {
   private retire(error: Error) {
     const worker = this.worker, requests = [...this.active.values()];
     this.worker = null; this.active.clear();
+    this.clearCancellationTimers();
+    if (this.idle !== null) { this.idle(); this.idle = null; }
     for (const request of requests) this.finish(request, error);
     if (worker === null) return this.pump();
     const stopped = worker.terminate().then(() => undefined, () => undefined);
@@ -161,16 +179,37 @@ export class LiveLocator {
     void stopped.then(() => { if (this.retiring === stopped) this.retiring = null; this.pump(); });
   }
 
+  // A synchronous filesystem call may not reach its next cancellation point. Retire the worker then and restart the
+  // other requests from their snapshots, so cancelling one subscription does not strand unrelated sessions.
+  private restart(worker: Worker) {
+    if (this.worker !== worker) return;
+    const requests = [...this.active.values()];
+    this.worker = null; this.active.clear();
+    this.waiting.unshift(...requests);
+    this.clearCancellationTimers();
+    if (this.idle !== null) { this.idle(); this.idle = null; }
+    const stopped = worker.terminate().then(() => undefined, () => undefined);
+    this.retiring = stopped;
+    void stopped.then(() => { if (this.retiring === stopped) this.retiring = null; this.pump(); });
+  }
+
+  private clearCancellationTimers() {
+    for (const { stop } of this.cancelling.values()) stop();
+    this.cancelling.clear();
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
     this.unlisten();
-    if (this.idle !== null) clearTimeout(this.idle);
+    this.clearCancellationTimers();
+    if (this.idle !== null) this.idle();
     const active = [...this.active.values()], worker = this.worker;
     this.active.clear(); this.worker = null;
     for (const request of active) this.finish(request, cancelled());
     for (const request of this.waiting.splice(0)) this.finish(request, cancelled());
     if (worker !== null) await worker.terminate();
     await this.retiring;
+    await this.time.close();
   }
 }

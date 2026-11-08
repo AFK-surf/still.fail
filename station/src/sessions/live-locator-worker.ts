@@ -62,7 +62,10 @@ async function locate(ask: LocateRequest): Promise<void> {
 
 parentPort!.on("message", (message: LocateRequest | LocateReply) => {
   if (message.type !== "locate") {
-    if (!running.has(message.id)) return;
+    if (!running.has(message.id)) {
+      if (message.type === "cancel") parentPort!.postMessage({ type: "cancelled", id: message.id } satisfies LocateMessage);
+      return;
+    }
     if (message.type === "cancel") cancelled.add(message.id);
     const done = waiting.get(message.id);
     waiting.delete(message.id);
@@ -73,5 +76,8 @@ parentPort!.on("message", (message: LocateRequest | LocateReply) => {
   running.add(message.id);
   void locate(message).catch((error) => {
     if (!cancelled.has(message.id)) parentPort!.postMessage({ type: "error", id: message.id, error: String(error) } satisfies LocateMessage);
-  }).finally(() => { running.delete(message.id); waiting.delete(message.id); cancelled.delete(message.id); });
+  }).finally(() => {
+    running.delete(message.id); waiting.delete(message.id);
+    if (cancelled.delete(message.id)) parentPort!.postMessage({ type: "cancelled", id: message.id } satisfies LocateMessage);
+  });
 });
