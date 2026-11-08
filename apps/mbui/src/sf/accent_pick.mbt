@@ -8,106 +8,239 @@
 /// (@ui.room_least: 36, 44 with touch; what each reaches, overlapping none). 自定义 last: chosen, a dot in its hue's
 /// accent and a slider of hues under the dots, as wide as they are (`hue`: what a screen reader calls it), its track
 /// every hue's accent, its knob the one's; not chosen, a ＋ in an outline, which takes the hue it had last
-/// (custom_hue_kept). `on_pick`: what choosing another does, given its key, as it is chosen (a dot pressed, the hue
-/// moved), outside any build. Answers the key chosen (a press's, a drag's, this frame).
-pub fn accent_pick(
-  c : @ui.Ctx,
-  key : String,
-  names : Array[String],
-  custom : String,
-  hue : String,
-  chosen : String,
-  on_pick? : (String) -> Unit,
-) -> String {
-  let told = fn(k : String) {
-    match on_pick {
-      Some(f) if k != chosen => f(k)
-      _ => ()
-    }
-  }
-  let t = theme()
-  // (a dot 24 across with keyboard and mouse, 28 with touch, the gap between the rest of a press's least room)
-  let (dot, row_gap) = if t.touch { (accent_dot_touch, accent_row_touch) } else { (accent_dot_mouse, accent_row_mouse) }
-  let mut picked = chosen
-  let own = custom_hue(chosen)
-  match own {
-    Some(h) => custom_hue_kept.val = h
-    None => ()
-  }
-  // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; true on the frame it is pressed
-  let a_dot = fn(n : Int, ink : Int64?, on : Bool, name : String, picks : () -> String) -> Bool {
-    let id = c.id(key + "/" + n.to_string())
-    c.on_press(id, fn() { told(picks()) })
-    let lit = c.lit(id)
-    let ring = if ink is None { alpha(t.p.text, accent_open_line) } else if lit && !on { alpha(t.p.text, accent_lit_line) } else { accent_no_ring }
-    let b = c.box(style=dot.then(@ui.style(bg=Data(ink.unwrap_or(accent_no_ring)), border_color=Data(ring))), id~, fn() {
-      let mark = if t.touch { accent_check_touch } else { accent_check_mouse }
-      if on {
-        icon(c, "check", size=mark, color=0xFFFFFFFFL) |> ignore
-      } else if ink is None {
-        icon(c, "plus", size=mark, color=t.p.muted) |> ignore
-      }
-    })
-    c.semantics(b, Radio, id~, label=name, selected=on)
-    c.clicked(id)
-  }
-  // (narrow, a section's own: in from the page's edge as far as its heading's words, as its note is)
-  let column = if look() is Narrow && in_card.val == 0 { accent_column.then(accent_row_narrow) } else { accent_column }
-  c.box(style=column, fn() {
-    let row = c.box(style=row_gap, fn() {
-      for i, a in accents {
-        if a_dot(i, Some(if t.dark { a.dark } else { a.light }), chosen == a.key, names.get(i).unwrap_or(a.key), fn() { a.key }) {
-          picked = a.key
-        }
-      }
-      let ink = own.map(fn(h) {
-        let a = custom_tone(h)
-        if t.dark {
-          a.dark
-        } else {
-          a.light
-        }
-      })
-      // (pressed while chosen: it stays as it is)
-      let mine = fn() { if own is None { "custom:" + custom_hue_kept.val.to_string() } else { chosen } }
-      if a_dot(accents.length(), ink, own is Some(_), custom, mine) && own is None {
-        picked = "custom:" + custom_hue_kept.val.to_string()
-      }
-    })
-    c.semantics(row, RadioGroup)
-    // 自定义's hues, as wide as the dots
-    match own {
-      Some(h) => {
-        let n = (accents.length() + 1).to_double()
-        let wide = n * dot_side(t) + (n - 1.0) * (@ui.room_least() - dot_side(t))
-        c.box(style=@ui.style(w=Fixed(wide)), fn() {
-          let now = @kit.slider(
-            c,
-            key + "/hue",
-            h.to_double(),
-            min=0.0,
-            max=custom_hue_most,
-            step=custom_hue_step,
-            w=Fill(1.0),
-            label=hue,
-            look=hue_look,
-            on_change=fn(v) { told("custom:" + v.to_int().to_string()) },
-          ).value.to_int()
-          if now != h {
-            picked = "custom:" + now.to_string()
-          }
-        })
-        |> ignore
-      }
+/// (custom_hue_kept). `choose` told the key a person chooses (a press's, a step's or a drag's along the hues; the
+/// caller says it chosen then: `chosen` follows it).
+pub fn accent_pick_node(
+  parent : @view.View,
+  names : () -> Array[String],
+  custom : () -> String,
+  hue : () -> String,
+  chosen : () -> String,
+  choose : (String) -> Unit,
+) -> Unit {
+  let own = fn() { custom_hue(chosen()) }
+  // (the hue 自定义 takes as it is pressed: the one it has while it is chosen)
+  parent.reacts(own, fn(h) {
+    match h {
+      Some(h) => custom_hue_kept.val = h
       None => ()
     }
   })
+  let ink_of = fn(a : AccentTone) { if theme().dark { a.dark } else { a.light } }
+  // a dot: in `ink` (an outline round a ＋ where none), with a check where `on`; `press` done as it is pressed
+  let a_dot = fn(row : @view.View, ink : () -> Int64?, on : () -> Bool, name : () -> String, press : () -> Unit) {
+    row.box(fn(d) {
+      let side = dot_side(theme())
+      let mark = side * accent_check_part
+      let ring = fn() {
+        if ink() is None {
+          alpha(theme().p.text, accent_open_line)
+        } else if lit_node(d) && !on() {
+          alpha(theme().p.text, accent_lit_line)
+        } else {
+          accent_no_ring
+        }
+      }
+      d
+      .width(Is(Some(side)))
+      .height(Is(Some(side)))
+      // (round as a pill is said to be, Full: as round as it can be)
+      .radius(Is(1.0e6))
+      .lines_up(Is(Some(Middle)))
+      .lies_along(Is(Middle))
+      .ground(By(fn() { ink().unwrap_or(accent_no_ring) }))
+      .edge(By(fn() { (2.0, ring()) }))
+      .says(By(fn() { Some(@view.said(Radio, label=name(), selected=on())) }))
+      |> ignore
+      presses_node(d, press)
+      d.show(on, fn(c) { icon_node(c, "check", mark, Is(0xFFFFFFFFL)) |> ignore })
+      d.show(fn() { !on() && ink() is None }, fn(c) { icon_node(c, "plus", mark, By(fn() { theme().p.muted })) |> ignore })
+    })
+    |> ignore
+  }
+  parent.box(fn(col) {
+    // (narrow, a section's own: in from the page's edge as far as its heading's words, as its note is)
+    let start = if look_node(col) is Narrow { accent_narrow_in } else { 0.0 }
+    col.gap(Is(accent_column_gap)).padding(Is((start, 0.0, 0.0, 0.0))) |> ignore
+    col.box(fn(row) {
+      row
+      .row(Is(true))
+      .gap(By(fn() { @ui.room_least() - dot_side(theme()) }))
+      .lines_up(Is(Some(Middle)))
+      .says(Is(Some(@view.said(RadioGroup))))
+      |> ignore
+      for i, a in accents {
+        let key = a.key
+        a_dot(row, fn() { Some(ink_of(a)) }, fn() { chosen() == key }, fn() { names().get(i).unwrap_or(key) }, fn() {
+          choose(key)
+        })
+      }
+      a_dot(row, fn() { own().map(fn(h) { ink_of(custom_tone(h)) }) }, fn() { own() is Some(_) }, custom, fn() {
+        if @signals.untracked(own) is None {
+          choose("custom:" + custom_hue_kept.val.to_string())
+        }
+      })
+    })
+    |> ignore
+    // 自定义's hues, as wide as the dots
+    col.show(fn() { own() is Some(_) }, fn(s) {
+      hue_slider_node(s, fn() { own().unwrap_or(custom_hue_kept.val) }, hue, fn(h) {
+        custom_hue_kept.val = h
+        choose("custom:" + h.to_string())
+      })
+    })
+  })
   |> ignore
-  picked
 }
 
 ///|
-/// A dot's side (accent_dot_mouse, accent_dot_touch).
+/// The hues' slider (@kit.slider's geometry, the look the old view's hue_look gave it), as wide as the dots over it: a track 6 high of every hue's
+/// accent as the theme draws it, 10 in from each end, round; the knob, 24 across, the hue's accent ringed 2 in the
+/// card's ground, its middle running from half the slider's thumb room in to as far from the end. A drag along it, an
+/// arrow with the keyboard's focus on it, a screen reader's step (View::on_step) each `step_to` a hue (0 to 355, 5
+/// apart), read out as `label`'s slider.
+fn hue_slider_node(parent : @view.View, now : () -> Int, label : () -> String, step_to : (Int) -> Unit) -> Unit {
+  let n = (accents.length() + 1).to_double()
+  let wide = fn() {
+    let side = dot_side(theme())
+    n * side + (n - 1.0) * (@ui.room_least() - side)
+  }
+  let at = fn() { hue_clamp(now().to_double() / custom_hue_most, 0.0, 1.0) }
+  let to_hue = fn(h : Double) {
+    let k = (hue_clamp(h, 0.0, custom_hue_most) / custom_hue_step).round()
+    (k * custom_hue_step).to_int()
+  }
+  let go = fn(h : Int) {
+    if h != @signals.untracked(now) {
+      step_to(h)
+    }
+  }
+  parent.box(fn(s) {
+    s
+    .width(By(fn() { Some(wide()) }))
+    .height(Is(Some(hue_slider_h)))
+    .lies_along(Is(Middle))
+    .focusable(Is(true))
+    .presses(Is(true))
+    .says(By(fn() {
+      let h = now().to_double()
+      Some(
+        @view.said(Slider, label=label(), value=now().to_string(), range=(0.0, h, custom_hue_most), actions=[
+          Increment, Decrement,
+        ]),
+      )
+    }))
+    .on_step(fn(by) { go(to_hue(@signals.untracked(now).to_double() + by.to_double() * custom_hue_step)) })
+    // (held and dragged along: the hue where the hand is, its knob's middle from half its room in to as far from the
+    // end)
+    .on_drag(fn(d) {
+      match d.kind {
+        Down | Moved if d.w > hue_thumb_room =>
+          go(to_hue(hue_clamp((d.x - hue_thumb_room / 2.0) / (d.w - hue_thumb_room), 0.0, 1.0) * custom_hue_most))
+        _ => ()
+      }
+    })
+    // (with the keyboard's focus on it: ← and ↓ a step down, → and ↑ a step up, Home and End its ends)
+    .on_key(fn(k) {
+      if !s.focused() || k.mods != 0 {
+        return false
+      }
+      let h = @signals.untracked(now).to_double()
+      let to = if k.code == @ui.key_code_left || k.code == @ui.key_code_down {
+        Some(h - custom_hue_step)
+      } else if k.code == @ui.key_code_right || k.code == @ui.key_code_up {
+        Some(h + custom_hue_step)
+      } else if k.code == @ui.key_code_home {
+        Some(0.0)
+      } else if k.code == @ui.key_code_end {
+        Some(custom_hue_most)
+      } else {
+        None
+      }
+      match to {
+        Some(t) => {
+          go(to_hue(t))
+          true
+        }
+        None => false
+      }
+    })
+    |> ignore
+    // its track, every hue's accent
+    s.box(fn(t) {
+      t
+      .height(Is(Some(hue_track_h)))
+      .margin(Is((hue_track_in, 0.0, hue_track_in, 0.0)))
+      .radius(Is(hue_track_h / 2.0))
+      .clips(Is(true))
+      .image(By(fn() { Some((hue_strip(theme().dark), "", hue_strip_most)) }))
+      |> ignore
+    })
+    |> ignore
+    // its knob, over the track where the hue is along it
+    s.box(fn(o) {
+      o.over(Is(true)).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+      o.box(fn(b) { b.grow(By(at)) |> ignore }) |> ignore
+      o.box(fn(k) {
+        k
+        .width(Is(Some(hue_knob_d)))
+        .height(Is(Some(hue_knob_d)))
+        .radius(Is(hue_knob_d / 2.0))
+        .ground(By(fn() { ink_of_hue(now()) }))
+        .edge(By(fn() { (2.0, theme().p.canvas) }))
+        |> ignore
+      })
+      |> ignore
+      o.box(fn(b) { b.grow(By(fn() { 1.0 - at() })) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Hue `h`'s accent as the theme draws it now (light or dark).
+fn ink_of_hue(h : Int) -> Int64 {
+  let a = custom_tone(h)
+  if theme().dark {
+    a.dark
+  } else {
+    a.light
+  }
+}
+
+///|
+/// How much of the slider's width its knob's middle does not run along (@kit.slider's thumb_room: half at each end).
+let hue_thumb_room : Double = 22.0
+
+///|
+/// The slider's height (h=S7), its track's (h=S1_5) and how far in from each end it is (mx=S2_5), the knob's side
+/// (w=S6).
+let hue_slider_h : Double = 28.0
+
+///|
+let hue_track_h : Double = 6.0
+
+///|
+let hue_track_in : Double = 10.0
+
+///|
+let hue_knob_d : Double = 24.0
+
+///|
+/// The check on the chosen dot (and 自定义's ＋): 0.6 of its side.
+let accent_check_part : Double = 0.6
+
+///|
+/// The dots and 自定义's hues under them, 8 apart (gap=S2); narrow, a section's own, its first dot as far in as the
+/// heading's words (pl=S3).
+let accent_column_gap : Double = 8.0
+
+///|
+let accent_narrow_in : Double = 12.0
+
+///|
+/// A dot's side: 24 across with keyboard and mouse, 28 with touch (w=S6, w=S7).
 fn dot_side(t : Theme) -> Double {
   if t.touch {
     28.0
@@ -152,84 +285,6 @@ fn hue_strip(dark : Bool) -> String {
 }
 
 ///|
-/// The hues' slider's look (@kit.slider's geometry: its knob's middle from 11 in to 11 from the end): a track 6 high of every hue's accent as the theme draws it, round at its ends; the knob the hue's accent,
-/// ringed in the card's ground.
-fn hue_look(c : @ui.Ctx, s : @kit.SliderState) -> Unit {
-  let t = theme()
-  let f = if s.t < 0.0 { 0.0 } else if s.t > 1.0 { 1.0 } else { s.t }
-  let ink_of = fn(h : Double) {
-    let a = custom_tone(h.to_int())
-    if t.dark {
-      a.dark
-    } else {
-      a.light
-    }
-  }
-  c.box(style=hue_slider_box, fn() {
-    c.box(style=hue_track, fn() {
-      c.image(hue_strip(t.dark), w=Fill(1.0), h=Fill(1.0), fit=FitFill, bg=accent_no_ring, fade=false) |> ignore
-    })
-    |> ignore
-    c.layer(fn() {
-      c.box(style=hue_knob_row, fn() {
-        c.box(style=@ui.style(w=Grow(f)), fn() {  }) |> ignore
-        let ink = ink_of(f * custom_hue_most)
-        c.box(style=hue_knob.then(@ui.style(bg=Data(ink), border_color=Data(t.p.canvas))), fn() {  }) |> ignore
-        let rest = 1.0 - f
-        c.box(style=@ui.style(w=Grow(rest)), fn() {  }) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The slider's height, its track 10 in from each end (about half the knob), 6 high and round.
-// kept across runs: a value (no field of it changes)
-let hue_slider_box : @ui.Style = @ui.css("w=Full h=S7 justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let hue_track : @ui.Style = @ui.css("row w=Full h=S1_5 mx=S2_5 radius=Full clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let hue_knob_row : @ui.Style = @ui.css("row w=Full h=Full align=ACenter")
-
-///|
-/// The knob, 24 across, ringed 2 in the card's ground.
-// kept across runs: a value (no field of it changes)
-let hue_knob : @ui.Style = @ui.css("w=S6 h=S6 radius=Full border=B2")
-
-///|
-/// A dot with keyboard and mouse (24 across), and with touch (28).
-// kept across runs: a value (no field of it changes)
-let accent_dot_mouse : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter border=B2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let accent_dot_touch : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter border=B2")
-
-///|
-/// The dots' row with keyboard and mouse (12 apart: 24 and 12, a pointer's least room, 36), and with touch (16: 28 and
-/// 16, a finger's 44).
-// kept across runs: a value (no field of it changes)
-let accent_row_mouse : @ui.Style = @ui.css("row gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let accent_row_touch : @ui.Style = @ui.css("row gap=S4 align=ACenter")
-
-///|
-/// The check on the chosen dot, 0.6 of its side.
-let accent_check_mouse : Double = 14.4
-
-///|
-let accent_check_touch : Double = 16.8
-
-///|
 /// The outline round 自定义's ＋ while it is not chosen: the ink at 24%.
 let accent_open_line : Double = 0.24
 
@@ -241,11 +296,16 @@ let accent_lit_line : Double = 0.3
 let accent_no_ring : Int64 = 0L
 
 ///|
-/// The dots, and 自定义's hues under them.
-// kept across runs: a value (no field of it changes)
-let accent_column : @ui.Style = @ui.css("gap=S2")
+/// The most pixels the hues' picture is asked at (mark_node's pictures').
+let hue_strip_most : Int = 8192
 
 ///|
-/// Narrow, a section's own: its first dot as far in as the heading's words.
-// kept across runs: a value (no field of it changes)
-let accent_row_narrow : @ui.Style = @ui.css("pl=S3")
+fn hue_clamp(x : Double, lo : Double, hi : Double) -> Double {
+  if x < lo {
+    lo
+  } else if x > hi {
+    hi
+  } else {
+    x
+  }
+}

@@ -327,10 +327,9 @@
       "src/sfdesk/frame.mbt": 2,
       "src/sfdesk/places.mbt": 2,
       "src/sfpages/account.mbt": 1,
-      "src/sfpages/appearance.mbt": 2,
-      "src/sfpages/automatic_decisions.mbt": 1,
+      "src/sfpages/appearance.mbt": 1,
       "src/sfpages/connects.mbt": 14,
-      "src/sfpages/local_station.mbt": 6,
+      "src/sfpages/local_station.mbt": 4,
       "src/sfpages/memory_doc.mbt": 2,
       "src/sfpages/new_connect.mbt": 11,
       "src/sfpages/notifications.mbt": 2,
@@ -471,7 +470,6 @@
       "src/sfpages/things.mbt": 1
     },
     "click-read": {
-      "src/sf/accent_pick.mbt": 1,
       "src/sf/files.mbt": 7,
       "src/sf/markdown.mbt": 1,
       "src/sf/media.mbt": 2,

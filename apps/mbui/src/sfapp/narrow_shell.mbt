@@ -355,7 +355,7 @@ fn narrow_made(src : Source, page : Page) -> (String, (@view.View, () -> Page, P
     Place(name) =>
       match @settings.route_of(name) {
         // (those whose old view is gone: every frame makes them once, as a page or a place)
-        Some(r) if r is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions) =>
+        Some(r) if @settings.made_once(r) =>
           narrow_made_as(src, Setting(r), true).map(fn(m) { ("place/" + m.0, m.1) })
         _ => None
       }
@@ -582,6 +582,12 @@ fn narrow_made_as(
       made("memory-doc/" + address + "/" + skill + "/" + at.to_string(), fn(p, core, here, frame, _stint, _acts) {
         @sfpages.memory_doc_node(p, core, here, address, skill, at, on_back=core.pop, frame~)
       })
+    Setting(AutoPolicy(st)) =>
+      made("auto-policy/" + st, fn(p, core, here, frame, _stint, _acts) { @sfpages.policy_node(p, core, here, st, on_back=core.pop, frame~) })
+    Setting(Appearance) =>
+      made("appearance", fn(p, core, _here, frame, _stint, _acts) { @sfpages.appearance_node(p, core, on_back=core.pop, frame~) })
+    Setting(LocalStation) =>
+      made("local-station", fn(p, core, _here, frame, _stint, _acts) { @sfpages.local_station_node(p, core, on_back=core.pop, frame~) })
     Setting(Permissions) =>
       made("permissions", fn(p, core, _here, frame, _stint, _acts) { @sfpages.permissions_node(p, core, on_back=core.pop, frame~) })
     Setting(UsagePrices(days)) =>

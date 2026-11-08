@@ -1,4 +1,4 @@
-// A change of theme shown spreading from where it was asked (Telegram's): the window as it was drawn (Ctx::reveal_from:
+// A change of theme shown spreading from where it was asked (Telegram's): the window as it was drawn (reveal_from:
 // its last frame's instances, kept as they were painted) drawn again under; the window as it is now comes over it in a
 // circle growing from that point till it covers it all (reveal_ms, easing out). Asked by what changes the theme (a
 // person's pick of it, at the point they picked it), it sets out in the first frame whose view is drawn in another
@@ -95,9 +95,11 @@ impl Moving for RevealRun with rest_at(self, now, frame) {
 ///|
 /// The theme is about to change (a person picked another), shown spreading from (`x`, `y`) in the window: the window as
 /// it is drawn now kept as a picture, the next one coming over it from there once the theme it is drawn in changes.
-/// `dark` says whether the view is drawn dark, read as its build ends (the Ctx's theme's by default; an app that themes
-/// its view itself, `with_theme` in it, says its own).
-pub fn Ctx::reveal_from(self : Ctx, x : Double, y : Double, dark? : () -> Bool) -> Unit {
+/// `dark` says whether the view is drawn dark, read as its build ends (the window's theme's by default; an app that
+/// themes its view itself, `with_theme` in it, says its own). Asked as a person picks (a press's handler, a node's or
+/// an old view's told), the window's last frame as it was painted.
+pub fn reveal_from(x : Double, y : Double, dark? : () -> Bool) -> Unit {
+  let self = g()
   let dark_now = match dark {
     Some(f) => f
     None => fn() { self.theme.dark }

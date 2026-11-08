@@ -751,28 +751,6 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
 }
 
 ///|
-/// A setting turned on or off. Wide: a switch row with its note; narrow: the switch at the end of the section's
-/// heading, with the note using the full width below it. Only the switch takes the press.
-pub fn setting_switch(c : @ui.Ctx, key : String, title : String, on : Bool, note? : String = "") -> Bool {
-  match look() {
-    Wide => {
-      let mut now = on
-      setting(c, title, note~, fn() { now = switch(c, key, on, label=title, small=true) })
-      now
-    }
-    Narrow => {
-      let mut now = on
-      section(c, title, actions=fn() { now = switch(c, key, on, label=title, small=true) }, fn() {
-        if note != "" {
-          page_note(c, note)
-        }
-      })
-      now
-    }
-  }
-}
-
-///|
 /// A narrow card's setting's control: between its title and its note, 8 from each.
 // kept across runs: a value (no field of it changes)
 let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
@@ -781,39 +759,6 @@ let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 /// A wide setting's title, using the shared row-title weight at the input's text size.
 fn setting_title() -> @ui.TextStyle {
   theme().rows.title.then(row_title_weight)
-}
-
-///|
-/// A setting kept on a page of its own (字体: the faces chosen): its `title`, what it is for (`note`) and what it is
-/// now (`value`), pressed to open its page. Wide: a row of its list card (`group`), a link's (link_row): its title
-/// with its note under it at its start, what it is now and the chevron at its end; narrow: as a `setting`, its title
-/// over the control (a row of a card of its own saying what it is now, the chevron at its end), what it is for under
-/// it. True on the frame it is pressed.
-pub fn setting_link(c : @ui.Ctx, key : String, title : String, value : String, note? : String = "") -> Bool {
-  match look() {
-    Wide => link_row(c, key, title, value~, note~, title_style=setting_title())
-    Narrow => {
-      let mut pressed = false
-      section(c, title, heads=true, fn() {
-        group(c, fn() { pressed = link_row(c, key, value) })
-        if note != "" {
-          page_note(c, note)
-        }
-      })
-      pressed
-    }
-  }
-}
-
-///|
-/// A page's settings (each drawing a `setting`) as the page's blocks: wide, the rows of one list card; narrow, a block
-/// each, its title over its control.
-pub fn settings(c : @ui.Ctx, each : Array[() -> Unit]) -> Array[() -> Unit] {
-  // (by the width it is drawn in: a page's blocks are made before its frame says how it is laid out, look())
-  match look_for(c.width) {
-    Wide => [fn() { group(c, fn() { each.each(fn(f) { f() }) }) }]
-    Narrow => each
-  }
 }
 
 ///|

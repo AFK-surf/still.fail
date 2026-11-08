@@ -481,11 +481,57 @@ let nav_back_icon : Double = 22.0
 let nav_back_ripple : Double = 8.0
 
 ///|
-/// A heading over a group (heading's, narrow: SectionHeader, 12 in, its words strong, 14 over it and 6 under).
-pub fn heading_node(parent : @view.View, title : () -> String) -> Unit {
+/// A heading over a group (heading's, narrow: SectionHeader, 12 in, its words strong, 14 over it and 6 under). `ends`:
+/// what is done on its title's line, at its end, 8 apart across the line's middle and no taller than it (heading's
+/// `actions`: their room for a finger past it into the heading's own over and under it).
+pub fn heading_node(parent : @view.View, title : () -> String, ends? : (@view.View) -> Unit) -> Unit {
   parent.box(fn(l) {
     l.row(Is(true)).padding(Is((12.0, 14.0, 8.0, title_card_narrow))).gap(Is(8.0)).lines_up(Is(Some(End))) |> ignore
-    l.box(fn(w) { styled_words(w, title, fn() { pg_heading }) |> ignore }) |> ignore
+    l.box(fn(w) {
+      if ends is Some(_) {
+        w.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      }
+      styled_words(w, title, fn() { pg_heading }) |> ignore
+    })
+    |> ignore
+    match ends {
+      Some(make) =>
+        l.box(fn(e) {
+          e
+          .row(Is(true))
+          .gap(Is(8.0))
+          .lines_up(Is(Some(Middle)))
+          .height(By(fn() { Some(node_sp(e, @ui.tree_theme().text_size(Body).1)) }))
+          |> ignore
+          make(e)
+        })
+        |> ignore
+      None => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// What stands at the end of a line of words (line_end's, as a node), made by `make` in a row in `parent`: as high as
+/// that line is in the arrangement it is in (narrow the body's, wide the list's), what it holds 12 apart, lined up in
+/// its middle, so a control there makes the line no taller than its words do.
+pub fn line_end_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
+  parent.box(fn(l) {
+    l
+    .row(Is(true))
+    .gap(Is(12.0))
+    .lines_up(Is(Some(Middle)))
+    .height(By(fn() {
+      let th = @ui.tree_theme()
+      let line = match look_node(l) {
+        Narrow => th.text_size(Body).1
+        Wide => th.leading(L6).unwrap_or(th.text_size(Ui).1)
+      }
+      Some(node_sp(l, line))
+    }))
+    |> ignore
+    make(l)
   })
   |> ignore
 }
@@ -551,7 +597,9 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// title on its line while `title_after_shown` says (a tag: whose it is), its title cut short where the line has not
 /// the room for both. `folds`: it
 /// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `tail` after what it
-/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). Its words as they are said.
+/// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). One that `adds` one more to the list
+/// it ends (添加): one that acts, after a ＋ in the link's ink. `wide_title`: its title's look on a wide page (a
+/// setting's: setting_link_node). Its words as they are said.
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -576,7 +624,13 @@ pub fn link_row_node(
   folds? : () -> Bool,
   tail? : (@view.View) -> Unit,
   tail_shown? : () -> Bool = fn() { true },
+  adds? : Bool = false,
+  wide_title? : () -> @ui.TextStyle,
 ) -> Unit {
+  // (one that adds: one that acts, after a ＋ in the link's ink, link_row's `adds`)
+  let acts = acts || adds
+  let lead = if adds { LeadIcon("plus") } else { lead }
+  let lead_ink = fn() { if adds { link_ink() } else { theme().p.muted } }
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
   let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
@@ -597,8 +651,8 @@ pub fn link_row_node(
       None => note
     }
     wide_link_row_node(
-      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, goes, ends, mark, acts, below, below_open,
-      note_cut, title_after, title_after_shown, folds, tail, tail_shown,
+      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, lead_ink, goes, ends, mark, acts, below,
+      below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown, wide_title,
     )
     return
   }
@@ -639,7 +693,7 @@ pub fn link_row_node(
             }
           }))
           |> ignore
-          icon_node(l, name, row_icon, By(fn() { theme().p.muted })) |> ignore
+          icon_node(l, name, row_icon, By(lead_ink)) |> ignore
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
@@ -798,13 +852,18 @@ pub fn switch_node(
 ) -> Unit {
   parent.box(fn(at) {
     at.lines_up(Is(Some(Start))) |> ignore
-    at.box(fn(v) {
+    // (its press's room: as wide as a press's least room where it is drawn narrower, reached from round it as the old
+    // view's press_room has a small target's, laid out as wide as it is drawn: what is by it moves none)
+    at.box(fn(room) {
+    let out = fn() { dmax(0.0, (theme().items.least - switch_size(small).0) / 2.0) }
+    room.padding(By(fn() { (out(), 0.0, out(), 0.0) })).margin(By(fn() { (-out(), 0.0, -out(), 0.0) })) |> ignore
+    room.box(fn(v) {
       // (its track in the middle of that room, up and down: switch_reach's)
       v.min_height(By(fn() { Some(theme().items.least) })).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
       let knob = EdgeWay::new(if @signals.untracked(on) { 1.0 } else { 0.0 })
       let held = EdgeWay::new(0.0)
       v.reacts(on, fn(now) { knob.go(v, if now { 1.0 } else { 0.0 }, @kit.switch_ms) })
-      v.reacts(fn() { v.pressed() && @ui.pointing() is Finger }, fn(down) {
+      v.reacts(fn() { room.pressed() && @ui.pointing() is Finger }, fn(down) {
         held.go_by(v, if down { 1.0 } else { 0.0 }, @motion.lift_spring)
       })
       let press = fn() {
@@ -814,15 +873,13 @@ pub fn switch_node(
         }
         turn(to)
       }
+      room.presses(By(fn() { !disabled() })).focusable(By(fn() { !disabled() })).on_press(press) |> ignore
       v
-      .presses(By(fn() { !disabled() }))
-      .focusable(By(fn() { !disabled() }))
       .alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } }))
       .says(By(fn() { Some(@view.said(Switch, label=label(), check=if on() { On } else { Off })) }))
-      .on_press(press)
       |> ignore
-      let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
-      v.gesture(
+      let on_it = fn(d : @view.Drag) { room.finger_target(d.wx, d.wy) }
+      room.gesture(
         @ui.touch_slop(),
         tap=fn(d) { if on_it(d) && !disabled() { press() } },
         hold=(@ui.long_press_ms, fn(_) {  }),
@@ -887,7 +944,7 @@ pub fn switch_node(
           |> ignore
         })
         // (the keyboard's focus on it: a ring round it, its gap and width the theme's)
-        track.show(fn() { v.focus_shown() }, fn(ring) {
+        track.show(fn() { room.focus_shown() }, fn(ring) {
           let out = fn() {
             let t = @ui.tree_theme()
             t.focus_gap + t.focus_w
@@ -901,6 +958,8 @@ pub fn switch_node(
         })
       })
       |> ignore
+    })
+    |> ignore
     })
     |> ignore
   })
@@ -917,7 +976,7 @@ let switch_disabled_alpha : Double = 0.5
 
 ///|
 /// A row on a group's card that turns something on or off (switch_row's; narrow, in a card: its title, `note` quieter
-/// under it, its switch at its end across their middle; wide: wide_switch_row_node's); the switch alone answers. `on`,
+/// under it, its switch at its end across their middle; wide: wide_control_row_node's); the switch alone answers. `on`,
 /// `turn`: switch_node's. `in_words`: on a page's card of words (page_card_node), where narrow it is a row of its words
 /// (16 between them and the switch), not a group's row.
 pub fn switch_row_node(
@@ -930,23 +989,20 @@ pub fn switch_row_node(
   lead? : (@view.View) -> Unit,
   in_words? : Bool = false,
 ) -> Unit {
+  let control = fn(r : @view.View) { switch_node(r, on, turn, title, disabled~) }
   if look_node(parent) is Wide {
     // (among a card's words, its title as strong as a setting's: switch_row's wide)
     if in_words {
-      wide_switch_row_node(parent, title, on, turn, note, disabled, lead, looks=(fn() { setting_title() }, fn() {
-        theme().rows.note
-      }))
+      wide_control_row_node(parent, title, note, lead, control, looks=(fn() { setting_title() }, fn() { theme().rows.note }))
     } else {
-      wide_switch_row_node(parent, title, on, turn, note, disabled, lead)
+      wide_control_row_node(parent, title, note, lead, control)
     }
     return
   }
   // (narrow, among a card's words: a row of words with its switch, no row's ground or room of its own, switch_row's
   // in_words)
   if in_words {
-    wide_switch_row_node(parent, title, on, turn, note, disabled, lead, looks=(fn() { pg_switch_title }, fn() {
-      meta.then(full_words)
-    }))
+    wide_control_row_node(parent, title, note, lead, control, looks=(fn() { pg_switch_title }, fn() { meta.then(full_words) }))
     return
   }
   parent.box(fn(r) {
@@ -965,7 +1021,7 @@ pub fn switch_row_node(
       words.show(fn() { note() != "" }, fn(n) { styled_words(n, note, fn() { meta.then(full_words) }) |> ignore })
     })
     |> ignore
-    switch_node(r, on, turn, title, disabled~)
+    control(r)
   })
   |> ignore
 }

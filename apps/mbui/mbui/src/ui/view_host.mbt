@@ -4246,6 +4246,11 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
         }
         // (words put in a field of its own in place of what it held: as an old view's editor takes them, tree_field.mbt)
         SetText(_) if free => tree.event(view_moment(), fn() { tree_field_asked(nid, action) |> ignore })
+        // (a step up or down: what the node does with it, as a slider's does (View::on_step), at the moment it is asked)
+        Increment | Decrement if free =>
+          if tree.step_at(nid, if action is Increment { 1 } else { -1 }, view_moment()) {
+            h_frame_owed()
+          }
         _ => ()
       }
       true

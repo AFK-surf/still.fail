@@ -310,6 +310,8 @@ struct Node {
   /// its properties' bindings, by property: what stops each
   props : Map[Prop, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// what a step up (1) or down (-1) asked of it does (View::on_step: a slider's, as a screen reader moves it)
+  mut on_step : ((Int) -> Unit)?
   /// whether it is a top row of the app's own (View::moves_window: a press on it its own), and whether a press on it
   /// moves the window now
   mut top_row : Bool
@@ -1059,6 +1061,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.fault_to = None
       n.hosted = false
       n.on_press = None
+      n.on_step = None
       n.top_row = false
       n.moves_window = false
       n.on_menu = None
@@ -1146,6 +1149,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drop_next: 0,
         props: {},
         on_press: None,
+        on_step: None,
         top_row: false,
         moves_window: false,
         on_menu: None,
@@ -5114,6 +5118,7 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.on_step = None
   n.top_row = false
   n.moves_window = false
   n.on_menu = None
@@ -7918,6 +7923,36 @@ pub fn Tree::activate_at(self : Tree, id : NodeId, at : Double) -> Bool {
     }
   })
   pressed.val
+}
+
+///|
+/// What a step up (`by` 1) or down (-1) asked of it does (a slider's, as a screen reader moves it: its Increment and
+/// Decrement): run outside any tracking, as one change, as a press is (View::on_press).
+pub fn View::on_step(self : View, f : (Int) -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_step = Some(f)
+  self
+}
+
+///|
+/// A step `by` asked of node `id` at moment `at` (a screen reader's Increment, 1, or Decrement, -1), done as its
+/// press would be (Tree::activate_at): where it takes it now. Whether it was taken.
+pub fn Tree::step_at(self : Tree, id : NodeId, by : Int, at : Double) -> Bool {
+  let stepped = Ref(false)
+  self.event(at, fn() {
+    self.pull()
+    if !self.takes_presses(id) || !self.allows(id) || self.leaving_at(id.at) || !self.said_now(id.at) {
+      return
+    }
+    match self.nodes[id.at].on_step {
+      Some(f) => {
+        stepped.val = true
+        f(by)
+      }
+      None => ()
+    }
+  })
+  stepped.val
 }
 
 ///|

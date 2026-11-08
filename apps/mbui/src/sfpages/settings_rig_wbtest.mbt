@@ -40,7 +40,7 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions | MemoryDoc(_, _, _))
+  let made = @settings.made_once(route)
   let t = @ui.Tester::new(
     fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
@@ -116,6 +116,9 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
       shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stay }, width~)
     }
     Notifications => notify_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    AutoPolicy(st) => policy_node(p, core, here, st, on_back=core.pop, frame~, width~)
+    Appearance => appearance_node(p, core, on_back=core.pop, frame~, width~)
+    LocalStation => local_station_node(p, core, on_back=core.pop, frame~, width~)
     Permissions => permissions_node(p, core, on_back=core.pop, frame~, width~)
     MemoryDoc(a, skill, at) => memory_doc_node(p, core, here, a, skill, at, on_back=core.pop, frame~, width~)
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
@@ -138,7 +141,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
   @settings.frame(core, here)
   let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
   match route {
-    Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
     BarSettings => bars_page(c, core, frame)
     Me => me_page(c, core, here, frame)
@@ -152,8 +154,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
-    LocalStation => local_station_page(c, core, frame)
-    AutoPolicy(st) => policy_page(c, core, here, frame, st)
     _ => ()
   }
 }

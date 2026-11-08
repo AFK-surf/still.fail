@@ -603,6 +603,13 @@ pub fn reset() -> Unit {
 }
 
 ///|
+/// Whether every frame makes `r`'s page once as nodes of the window's tree (narrow_made, pane_made, tape_made), as a page
+/// of the stack and as a place: its old view gone.
+pub fn made_once(r : Route) -> Bool {
+  r is (About | Changelog | Memories | Memory(_) | MemoryDoc(_, _, _) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions | AutoPolicy(_) | Appearance | LocalStation)
+}
+
+///|
 /// A page by its name, for opening one from the start (MBUI_FIXTURE=settings-<name>, a scripted run): home, me,
 /// appearance, fonts, workspace, security, vault, vault-items, stations, station:<address>, profiles, connects, memories, memory:<address>,
 /// usage, archive.

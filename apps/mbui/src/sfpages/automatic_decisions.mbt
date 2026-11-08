@@ -412,54 +412,69 @@ fn form_view_sample() -> Json {
 }
 
 ///|
-/// A station's archive policy (AutomaticDecisionPolicy, ArchivePolicy): its words (pressed, edited in a dialog), its
-/// options in their two groups, each with how many chats the checks put there (pressed, edited in a dialog: its name,
-/// what it means, which group, the chats it got; 删除), 添加选项 under each; what changed and what the checks said under
-/// them. Each dialog edits the core's draft (`policyForm`), back to the station's first.
-pub fn policy_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, station : String) -> Unit {
-  let s = station_of(core, here, station)
-  let view = if flag(s, "online") { field(field(s, "overview"), "automaticDecisions") } else { None }
-  let policy = field(view, "policy")
-  let name = text(s, "name")
-  let title = if name == "" {
-    @sf.t("web-pages.archivePolicy.title")
-  } else {
-    @sf.t("web-pages.archivePolicy.title") + " · " + name
+/// A station's archive policy (AutomaticDecisionPolicy, ArchivePolicy) made once as nodes in node `v`, laid out by the
+/// `width` its frame gives it: its words (pressed, edited in a dialog), its options in their two groups, each with how
+/// many chats the checks put there (pressed, edited in a dialog: its name, what it means, which group, the chats it got;
+/// 删除), 添加选项 under each; what changed and what the checks said under them. Each dialog edits the core's draft
+/// (`policyForm`, opened as the page is made the first time for the station), back to the station's first. Offline, too
+/// old, or not the viewer's to change: that, alone. All as the core says it now.
+pub fn policy_node(
+  v : @view.View,
+  core : Core,
+  here : () -> Here,
+  station : String,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let s = fn() { station_of(core, here(), station) }
+  let view = fn() { if flag(s(), "online") { field(field(s(), "overview"), "automaticDecisions") } else { None } }
+  let policy = fn() { field(view(), "policy") }
+  let title = fn() {
+    match text(s(), "name") {
+      "" => @sf.t("web-pages.archivePolicy.title")
+      name => @sf.t("web-pages.archivePolicy.title") + " · " + name
+    }
   }
-  let body : Array[() -> Unit] = []
-  if policy is Some(Object(_)) && flag(view, "canEdit") {
-    body.push(fn() { policy_body(c, core, station, policy) })
-  } else {
-    body.push(fn() {
-      c.text(
-        @sf.t(
-          if !flag(s, "online") {
-            "web-pages.automaticDecisions.offlineNote"
-          } else if view is Some(Object(_)) && !flag(view, "canEdit") {
-            "web-pages.automaticDecisions.adminOnly"
-          } else {
-            "web-pages.automaticDecisions.upgrade"
-          },
-        ),
-        style=desk_note,
-      )
-      |> ignore
-    })
-  }
-  @sf.page(c, on_back=core.pop, frame~, "auto-policy/" + station, title, lead=@sf.t("web-pages.archivePolicy.textLead"), body)
+  let usable = fn() { policy() is Some(Object(_)) && flag(view(), "canEdit") }
+  @sf.page_node(
+    v,
+    title,
+    on_back~,
+    frame~,
+    said?,
+    width?,
+    lead=fn() { @sf.t("web-pages.archivePolicy.textLead") },
+    fn() { if usable() { ["policy"] } else { ["why"] } },
+    fn(b, key) {
+      if key == "policy" {
+        policy_body_node(b, core, station, policy)
+      } else {
+        @sf.page_note_node(b, fn() {
+          @sf.t(
+            if !flag(s(), "online") {
+              "web-pages.automaticDecisions.offlineNote"
+            } else if view() is Some(Object(_)) && !flag(view(), "canEdit") {
+              "web-pages.automaticDecisions.adminOnly"
+            } else {
+              "web-pages.automaticDecisions.upgrade"
+            },
+          )
+        })
+      }
+    },
+  )
 }
 
 ///|
-/// The policy's draft (`policyForm`), opened once (by the frame's builds' end) and kept by station.
-fn policy_form(c : @ui.Ctx, core : Core, station : String) -> String {
+/// The policy's draft for `station` (`policyForm`), opened the first time it is asked for (kept by station after).
+fn policy_form_opened(core : Core, station : String) -> String {
   match policy_forms.get(station) {
     Some(f) => f
     None => {
       let f = policy_form_name(station)
-      // (opened once the frame's builds are over: the build that first comes to it alone)
-      c.tell("policy-open/" + f, fn() {
-        @settings.act(core, @sf.t("web-pages.archivePolicy.readAction"), "automaticDecisions.policy.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
-      })
+      @settings.act(core, @sf.t("web-pages.archivePolicy.readAction"), "automaticDecisions.policy.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
       f
     }
   }
@@ -485,10 +500,9 @@ fn policy_form_name(station : String) -> String {
 pub let fx_policy_up : Ref[String] = Ref("")
 
 ///|
-/// The policy (ArchivePolicy): see policy_page.
-fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Unit {
-  let t = @sf.theme()
-  let form = policy_form(c, core, station)
+/// The policy (ArchivePolicy) in node `v`, as `policy` says it now: see policy_node.
+fn policy_body_node(v : @view.View, core : Core, station : String, policy : () -> Json?) -> Unit {
+  let form = policy_form_opened(core, station)
   let call = fn(action : String, input : Array[(String, Json)], then : (Json) -> Unit) {
     (core.call)("automaticDecisions.policy." + action, obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(r) {
       match r {
@@ -497,84 +511,85 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
       }
     })
   }
-  let d = (core.topic)("policyForm", { "station": str(station), "form": str(form) }).get().value
-  let busy = !(d is Some(Object(_))) || flag(d, "pending")
-  let saving = is_doing(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
-  let failed = failed_of(core, ["automaticDecisions.policy.save"], [("station", station), ("form", form)])
+  let d = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).get().value }
+  // (as it is when pressed: what it reads not followed by what pressed it)
+  let busy = fn() { @signals.untracked(fn() { !(d() is Some(Object(_))) || flag(d(), "pending") }) }
+  let on_form = [("station", station), ("form", form)]
+  let saving = fn() { is_doing(core, ["automaticDecisions.policy.save"], on_form) }
+  let failed = fn() { failed_of(core, ["automaticDecisions.policy.save"], on_form) }
   // back to the station's first (what an earlier dialog left unsaved is gone), then the dialog
   let open = fn(id : String, ov : Json?) {
-    call("edit", [("reset", Json::boolean(true))], fn(_) { policy_dialog(core, station, form, policy, id, "", ov) })
+    call("edit", [("reset", Json::boolean(true))], fn(_) { policy_dialog(core, station, form, @signals.untracked(policy), id, "", ov) })
   }
   let add = fn(archive : Bool) {
     call("edit", [("reset", Json::boolean(true))], fn(_) {
       call("edit", [("add", Json::boolean(archive))], fn(made) {
         match items(Some(made), "options").last() {
-          Some(o) => policy_dialog(core, station, form, policy, "", text(Some(o), "key"), None)
+          Some(o) => policy_dialog(core, station, form, @signals.untracked(policy), "", text(Some(o), "key"), None)
           None => ()
         }
       })
     })
   }
-  // a fixture's dialog (MBUI_FIXTURE=settings-policy-text, settings-policy-option), once the page is built: taken when
-  // it is put up, not while it is built (a frame built again lets go of what its earlier builds said: Ctx::after_build)
+  // a fixture's dialog (MBUI_FIXTURE=settings-policy-text, settings-policy-option), once the page is made: put up at
+  // the moment it is made, taken then
   if fx_policy_up.val != "" {
     let what = fx_policy_up.val
-    c.after_build("policy-fixture", fn() {
-      fx_policy_up.val = ""
+    fx_policy_up.val = ""
+    v.at_moment(v.logic_at(), fn() {
+      let p = @signals.untracked(policy)
       if what == "text" {
-        policy_dialog(core, station, form, policy, "", "", None)
+        policy_dialog(core, station, form, p, "", "", None)
       } else {
-        match items(policy, "options") {
-          [o, ..] => policy_dialog(core, station, form, policy, text(Some(o), "id"), "", Some(o))
+        match items(p, "options") {
+          [o, ..] => policy_dialog(core, station, form, p, text(Some(o), "id"), "", Some(o))
           _ => ()
         }
       }
     })
+    |> ignore
   }
-  if saving {
-    @sf.page_note(c, @sf.t("common.saving"))
-  }
-  match failed {
-    Some(why) => @sf.page_note(c, why, bad=true)
-    None => ()
-  }
+  v.show(saving, fn(n) { @sf.page_note_node(n, fn() { @sf.t("common.saving") }) })
+  v.show(fn() { failed() is Some(_) }, fn(n) { @sf.page_note_node(n, fn() { failed().unwrap_or("") }, bad=fn() { true }) })
   // its words, on a card: pressed, edited
-  @sf.page_card(c, fn() {
-    let wid = c.id("policy-text")
-    if !busy {
-      c.on_press(wid, fn() { open("", None) })
-    }
-    c.box(style=pol_words_box, id=wid, fn() { c.text(text(policy, "text"), style=pol_words) |> ignore }) |> ignore
+  @sf.page_card_node(v, fn(k) {
+    k.box(fn(w) {
+      @sf.style_node(w, fn() { pol_words_box })
+      @sf.presses_node(w, fn() { if !busy() { open("", None) } })
+      w.says(By(fn() { Some(@view.said(Button, label=text(policy(), "text"))) })) |> ignore
+      @sf.words_node(w, fn() { text(policy(), "text") }, fn() { pol_words }) |> ignore
+    })
+    |> ignore
   })
   // its options in their two groups, each a row with how many chats the checks put there; 添加 under them
   for archive in [true, false] {
-    @sf.section(c, @sf.t(if archive { "web-pages.archivePolicy.archive" } else { "web-pages.archivePolicy.keep" }), fn() {
-      @sf.group(c, fn() {
-        for o in items(policy, "options").filter(fn(x) { flag(Some(x), "archive") == archive }) {
-          let ov = Some(o)
-          let key = "policy-option/" + text(ov, "id")
-          @sf.link_row(c, key, text(ov, "name"), note=text(ov, "rubric"), value=count(ov, "count").to_string(), chevron=false, on_press=fn() {
-            if !busy {
-              open(text(ov, "id"), ov)
-            }
-          })
-          |> ignore
-        }
-        let akey = "policy-add/" + archive.to_string()
-        @sf.link_row(c, akey, @sf.t("web-pages.archivePolicy.add"), adds=true, on_press=fn() {
-          if !busy {
-            add(archive)
-          }
+    @sf.section_node(v, fn() { @sf.t(if archive { "web-pages.archivePolicy.archive" } else { "web-pages.archivePolicy.keep" }) }, fn(sec) {
+      @sf.group_node(sec, fn(g) {
+        g.each(fn() { items(policy(), "options").filter(fn(x) { flag(Some(x), "archive") == archive }) }, fn(o) { text(Some(o), "id") }, fn(
+          row,
+          o,
+        ) {
+          let ov = fn() { Some(o.get()) }
+          @sf.link_row_node(
+            row,
+            fn() { text(ov(), "name") },
+            fn() { if !busy() { open(text(@signals.untracked(ov), "id"), @signals.untracked(ov)) } },
+            note=fn() { text(ov(), "rubric") },
+            value=fn() { count(ov(), "count").to_string() },
+            chevron=false,
+          )
         })
-        |> ignore
+        @sf.link_row_node(g, fn() { @sf.t("web-pages.archivePolicy.add") }, fn() { if !busy() { add(archive) } }, adds=true)
       })
     })
   }
-  let change = text(policy, "changeText")
-  @sf.page_note(
-    c,
-    (if change != "" { change + " · " } else { "" }) + text(policy, "summaryText"),
-    bad=count(policy, "failed") > 0,
+  @sf.page_note_node(
+    v,
+    fn() {
+      let change = text(policy(), "changeText")
+      (if change != "" { change + " · " } else { "" }) + text(policy(), "summaryText")
+    },
+    bad=fn() { count(policy(), "failed") > 0 },
   )
 }
 

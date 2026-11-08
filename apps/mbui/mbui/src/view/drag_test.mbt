@@ -873,3 +873,35 @@ test "held through: what a cover hands on as the finger moves told as it is let 
   let handed = let_go_speed(true)
   assert_eq((handed - direct).abs() < 1.0e-9, true, msg="\{direct} \{handed}")
 }
+
+///|
+test "a step asked of a node (a screen reader's Increment, Decrement): its on_step told up or down; none where its presses are off" {
+  let on = @signals.signal(true, same=fn(x, y) { x == y })
+  let steps : Array[Int] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      node.val = Some(
+        root.box(fn(b) {
+          b
+          .width(Is(Some(80.0)))
+          .height(Is(Some(40.0)))
+          .presses(By(fn() { on.get() }))
+          .on_step(fn(by) { steps.push(by) })
+          .says(Is(Some(@view.said(Slider, label="色相", actions=[Increment, Decrement]))))
+          |> ignore
+        }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = node.val.unwrap().id()
+  assert_true(t.step_at(id, 1, 10.0))
+  assert_true(t.step_at(id, -1, 20.0))
+  assert_eq(steps, [1, -1])
+  t.event(30.0, fn() { on.set(false) })
+  t.frame(390.0, 844.0) |> ignore
+  assert_false(t.step_at(id, 1, 40.0))
+  assert_eq(steps, [1, -1])
+}
