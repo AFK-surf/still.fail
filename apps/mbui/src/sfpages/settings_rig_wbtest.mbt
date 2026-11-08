@@ -154,7 +154,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     Station(a) => station_page(c, core, here, frame, a)
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
-    LocalStation => local_station_page(c, core, frame)
     _ => ()
   }
 }

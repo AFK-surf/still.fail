@@ -61,9 +61,8 @@ pub fn local_station_node(
 fn local_none_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, asked : () -> Unit) -> Unit {
   let doing = fn() { text(s(), "doing") }
   let adds = fn() { doing() == "" && @settings.local_station_managed() }
-  b.box(fn(k) {
-    // (添加这台 Mac last, in the card's foot corner: concentric with it, out past its words: @sf.card_foot_in)
-    @sf.style_node(k, fn() { if adds() { @sf.desk_card.then(@sf.foot_pad(@sf.button_height())) } else { @sf.desk_card } })
+  // (添加这台 Mac last, in the card's foot corner: concentric with it, out past its words: the library's footed card)
+  b.pick(adds, fn(c, footed) { @sf.page_card_node(c, footed~, fn(k) {
     k.pick(fn() { doing() }, fn(w, d) {
       if d != "" {
         local_progress_node(w, s, fn() { d })
@@ -89,8 +88,7 @@ fn local_none_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
       })
       |> ignore
     })
-  })
-  |> ignore
+  }) })
 }
 
 ///|
@@ -116,27 +114,15 @@ fn local_card_node(b : @view.View, core : Core, s : () -> Json?, pc : Bool, aske
       @sf.state_dot_node(head, fn() { if working() { "busy" } else if running() { "online" } else { "offline" } })
       head.box(fn(title) {
         @sf.style_node(title, fn() { ls_title }, in_row=true)
-        @sf.words_node(title, fn() { local_name(s(), pc) }, fn() { ls_name }) |> ignore
+        @sf.words_node(title, fn() { local_station_name(s(), pc) }, fn() { ls_name }) |> ignore
         @sf.words_node(title, fn() { local_state(s()) }, fn() { ls_state }) |> ignore
       })
       |> ignore
       // (words alone, on its name's line: the line as high as with none, its ⋯ concentric in the card's corner)
       head.show(fn() { !running() && !working() && local_startable(s()) }, fn(e) {
-        e.box(fn(l) {
-          l
-          .row(Is(true))
-          .lines_up(Is(Some(Middle)))
-          .height(By(fn() {
-            let line = match @sf.look_node(l) {
-              Narrow => @ui.tree_theme().text_size(Body).1
-              Wide => @ui.tree_theme().leading(L6).unwrap_or(@ui.tree_theme().text_size(Ui).1)
-            }
-            Some(@sf.node_sp(l, line))
-          }))
-          |> ignore
+        @sf.line_end_node(e, fn(l) {
           @sf.button_node(l, fn() { @sf.t("web-pages.localStation.start") }, fn() { act("start") }, tone=Ghost) |> ignore
         })
-        |> ignore
       })
       local_more_node(head, s, act)
     })
@@ -175,24 +161,24 @@ fn local_more_node(head : @view.View, s : () -> Json?, act : (String) -> Unit) -
     let working = text(now, "doing") != ""
     let running = text(now, "runner") != "none"
     let items : Array[@sf.MenuItem?] = []
-    let item = fn(key : String, label : String, icon : String, disabled? : Bool = false) {
+    let item = fn(key : String, label : String, icon : String, disabled : Bool) {
       items.push(Some(@sf.menu_item_of(label, icon~, disabled~, fn() { act(key) })))
     }
     if running {
-      item("stop", @sf.t("web-pages.localStation.stop"), "stop", disabled=working)
+      item("stop", @sf.t("web-pages.localStation.stop"), "stop", working)
       if text(now, "runner") != "other" {
-        item("restart", @sf.t("web-pages.localStation.restart"), "refresh", disabled=working)
+        item("restart", @sf.t("web-pages.localStation.restart"), "refresh", working)
       }
     } else {
-      item("start", @sf.t("web-pages.localStation.start"), "play", disabled=working || !local_startable(now))
+      item("start", @sf.t("web-pages.localStation.start"), "play", working || !local_startable(now))
     }
     // brought up to the latest release (the installer), not one started by hand
     if text(now, "runner") != "other" && @settings.local_station_managed() {
-      item("update", @sf.t("web-pages.localStation.update"), "refresh", disabled=working)
+      item("update", @sf.t("web-pages.localStation.update"), "refresh", working)
     }
     items.push(None)
-    item("log", @sf.t("web-pages.localStation.openLog"), "file-text")
-    item("folder", @settings.local_folder_label(), "folder")
+    item("log", @sf.t("web-pages.localStation.openLog"), "file-text", false)
+    item("folder", @settings.local_folder_label(), "folder", false)
     let (x, y, w, h) = m.placed_window_now()
     local_menu.val = true
     open.set(true)
@@ -231,7 +217,7 @@ fn local_past_dot_node(k : @view.View, body : (@view.View) -> Unit) -> Unit {
 
 ///|
 /// Its name: its station's in its workspace, else this machine's.
-fn local_name(s : Json?, pc : Bool) -> String {
+fn local_station_name(s : Json?, pc : Bool) -> String {
   match text(field(s, "workspace"), "stationName") {
     "" => @sf.t(if pc { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
     n => n

@@ -513,6 +513,30 @@ pub fn heading_node(parent : @view.View, title : () -> String, ends? : (@view.Vi
 }
 
 ///|
+/// What stands at the end of a line of words (line_end's, as a node), made by `make` in a row in `parent`: as high as
+/// that line is in the arrangement it is in (narrow the body's, wide the list's), what it holds 12 apart, lined up in
+/// its middle, so a control there makes the line no taller than its words do.
+pub fn line_end_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
+  parent.box(fn(l) {
+    l
+    .row(Is(true))
+    .gap(Is(12.0))
+    .lines_up(Is(Some(Middle)))
+    .height(By(fn() {
+      let th = @ui.tree_theme()
+      let line = match look_node(l) {
+        Narrow => th.text_size(Body).1
+        Wide => th.leading(L6).unwrap_or(th.text_size(Ui).1)
+      }
+      Some(node_sp(l, line))
+    }))
+    |> ignore
+    make(l)
+  })
+  |> ignore
+}
+
+///|
 /// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
 /// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words).
 pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false) -> Unit {
