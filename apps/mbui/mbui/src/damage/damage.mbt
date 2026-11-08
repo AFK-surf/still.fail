@@ -195,7 +195,8 @@ pub fn Damage::forget(self : Damage) -> Unit {
 /// The parts of the frame `inst` (`count` instances, a window `w` × `h` points at `scale`, its ground `r`, `g`, `b`)
 /// that differ from the frame given before it, in points: each (x, y, w, h), at most `most_parts`, apart; one with w < 0
 /// all of it; none, nothing. The frame is kept, the next compared with it. `groups`: it holds headers (kind 13), each
-/// compared as itself, a group's number never another's, the room after it its group's.
+/// compared as itself, a group's number never another's, the room after it its group's. `known`: what is drawn anew
+/// whatever the instances say (x0, y0, x1, y1: where a list scrolled shows), parts from the start.
 pub fn Damage::next(
   self : Damage,
   inst : FixedArray[Double],
@@ -207,6 +208,7 @@ pub fn Damage::next(
   g : Double,
   b : Double,
   groups? : Bool = false,
+  known? : Array[(Double, Double, Double, Double)] = [],
 ) -> Array[(Double, Double, Double, Double)] {
   let (inst, count) = if groups { self.units_of(inst, count) } else { (inst, count) }
   self.stamp = self.stamp + 1
@@ -225,7 +227,7 @@ pub fn Damage::next(
     0
   }
   let out = if same_frame {
-    self.changed(inst, count, w, h)
+    self.changed(inst, count, w, h, known)
   } else {
     [(0.0, 0.0, -1.0, -1.0)]
   }
@@ -685,16 +687,27 @@ fn Damage::changed(
   count : Int,
   w : Double,
   h : Double,
+  known : Array[(Double, Double, Double, Double)],
 ) -> Array[(Double, Double, Double, Double)] {
   let prev = self.prev
   let n_old = self.n
   self.seen.clear()
-  let seg = pieces_from(inst, count)
-  let seg_old = pieces_from(prev, n_old)
   let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
   let parts : Array[Rect] = []
   // (the parts past whole_share of the window: the frame drawn whole, nothing more of it compared)
   let most_area = whole_share * w * h
+  // (what is known drawn anew, parts from the start: past whole_share of it, nothing compared)
+  for r in known {
+    let (x0, y0, x1, y1) = r
+    let p = { x0, y0, x1, y1 }
+    p.cut_to(window)
+    if add_part(parts, p) && parts_area(parts) > most_area {
+      self.why = 5
+      return [(0.0, 0.0, -1.0, -1.0)]
+    }
+  }
+  let seg = pieces_from(inst, count)
+  let seg_old = pieces_from(prev, n_old)
   let mut whole = false
   // instance `k_old` of the last frame against `k` of this one: the same, a band's pieces too, a stream's picture
   // not (it changes under the same numbers)

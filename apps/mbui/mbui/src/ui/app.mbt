@@ -115,6 +115,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   frame_serial.val += 1
   paint_phase.val = 0
   scroll_paint_uncompared.val = false
+  lists_scrolled.clear()
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()

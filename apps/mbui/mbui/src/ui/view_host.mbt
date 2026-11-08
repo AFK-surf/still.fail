@@ -961,6 +961,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if tree.take_scrolled() {
     scroll_paint_uncompared.val = true
   }
+  // (each that scrolled drawn anew where it shows, all of it: told to what works out what a host draws again, h_present)
+  let scrolled = tree.take_scrolled_nodes()
   dr.targets_said = true
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
   view_glyphs_held(tree, self.scale / words_zoom.val)
@@ -1086,6 +1088,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 {
       return false
+    }
+    if scrolled.length() > 0 && scrolled.contains(c.id) && !shooting.val {
+      let k = clip_top()
+      damage_known.push(
+        (
+          dmax(x, clip_stack[k]),
+          dmax(y, clip_stack[k + 1]),
+          dmin(x + c.w * s, clip_stack[k + 2]),
+          dmin(y + c.h * s, clip_stack[k + 3]),
+        ),
+      )
     }
     // (a list's row: drawn as kept, moved, where nothing of it changed since and it is only moved (Ctx::ride_kept_for),
     // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again)
