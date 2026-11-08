@@ -199,6 +199,21 @@ fn lint_mbt(
       }
     }
   }
+  // a frame's or a build's number asked (`c.frame_number()`, `c.build_number()`) outside mbui's ui, which counts them,
+  // and outside the tests
+  if !f.rel.has_prefix("src/ui/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "frame_number" || tk.text == "build_number") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("frame-number", k, f.line_text(k))
+      }
+    }
+  }
   // a page reading the shell's own state by its fields (`wide.tape`): the shell's files alone do (not in a page's tests)
   if under(f.rel, cfg.pages) && !under(f.rel, cfg.shell) && cfg.shell_state.length() > 0 {
     for k, tk in toks {
