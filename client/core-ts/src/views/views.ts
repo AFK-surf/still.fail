@@ -1036,8 +1036,8 @@ export class Views implements Owner {
   #linkedStations(station: string, entries: J[]): string[] {
     const out: string[] = [];
     for (const e of entries) {
+      if (!mayLink(e)) continue;
       const text = str(get(e, "text")) ?? "";
-      if (!text.includes("/chats/") && !text.includes("/o/")) continue;
       for (const c of chatsLinked(text, station)) {
         if (out.includes(c.station)) continue;
         if (c.station === station || (this.stations(ofAddress(c.station)) ?? []).some((s) => s.address === c.station && s.online)) out.push(c.station);
@@ -2822,6 +2822,19 @@ function asShaped(ty: Ty, value: J): J {
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
 /// `held`: whether a file's picture (an image's thumbnail, a video's still) is kept on the device, by its owner and
 /// name (`held: true` on it: the app's first page waits for it as for the rest of what it shows, a decode away).
+/// Whether a message's or an entry's words may link to a chat, kept with it (its words looked through once, not on
+/// each change of its chat: 50 replies' words read through on each, 2026-11-08).
+const linking = new WeakMap<object, boolean>();
+function mayLink(m: J): boolean {
+  if (!isObject(m)) return false;
+  let may = linking.get(m);
+  if (may === undefined) {
+    const text = str(m.text) ?? "";
+    linking.set(m, (may = text.includes("/chats/") || text.includes("/o/")));
+  }
+  return may;
+}
+
 /// A message as drawn (`drawn`), by the message shown: what it was drawn with, and how.
 const drawnMade = new WeakMap<object, { parts: unknown[]; out: J }>();
 
@@ -2858,7 +2871,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     if (!isObject(m)) return m;
     const files = own(m.attachments, m.authorKind === "agent" ? str(m.author) : null);
     // The chats it links to, each with its title (one linked bare reads as it) and whether it is archived.
-    const chats = linked?.(str(m.text) ?? "") ?? [];
+    const chats = linked !== undefined && mayLink(m) ? linked(str(m.text) ?? "") : [];
     const by = here(m.by);
     // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
     // Markdown, read here (once: markdown.ts keeps it by the words; read again as its reader changes); still.fail's

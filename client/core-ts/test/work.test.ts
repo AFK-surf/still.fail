@@ -14,19 +14,25 @@ const said = (n: number) =>
     : { thread: 7, n, kind: "message", target: null, ts: `${n}.0`, authorKind: "person", author: "a@x.com", text: `第 ${n} 条：再看一下`, at: n };
 const run = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => said(from + i));
 
-/// A chat of `n` entries shown (its latest page, `back` pages before it brought into view) while 10 new messages come.
+/// A chat of `n` entries shown (its latest page, `back` pages before it brought into view) while 10 new messages come;
+/// and what opening it took.
 async function arriving(n: number, back: number) {
   const answers: Record<string, unknown> = { ...base(), "GET /threads": [threadView(7, n)], "GET /threads/7/entries?limit=50": { last: n, entries: run(n - 49, n) } };
   for (let to = n - 50; to >= 1; to -= 50) answers[`GET /threads/7/entries?from=${Math.max(1, to - 49)}&to=${to}`] = { last: n, entries: run(Math.max(1, to - 49), to) };
   const { host, core, push } = await started(answers);
   const ui = core.connect();
-  subscribe(core, ui, 1, { topic: "chat", station: ST, session: "k1" });
+  // (every entry on the device before it is opened, as a chat read before is)
+  for (let from = 1; from <= n; from += 500) push("thread", { id: 7, entries: run(from, Math.min(n, from + 499)) });
   await host.time.pass(1_000, 50);
+  const opening = { ...work };
+  subscribe(core, ui, 1, { topic: "chat", station: ST, session: "k1", compact: true });
+  await host.time.pass(1_000, 50);
+  const opened = workSince(opening);
   for (let i = 0; i < back; i++) {
     call(core, ui, 10 + i, "chat.older", { station: ST, thread: 7 });
     await host.time.pass(500, 50);
   }
-  const shown = (core.inner.store.get({ topic: "chat", station: ST, session: "k1" }) as { messages: unknown[] }).messages.length;
+  const shown = (core.inner.store.get({ topic: "chat", station: ST, session: "k1", compact: true }) as { messages: unknown[] }).messages.length;
   const from = { ...work };
   for (let k = 1; k <= 10; k++) {
     push("thread", { id: 7, entries: [said(n + k)] });
@@ -34,7 +40,7 @@ async function arriving(n: number, back: number) {
   }
   const counted = workSince(from);
   core.close();
-  return { shown, counted };
+  return { shown, counted, opened };
 }
 
 test("a_new_message_costs_the_same_in_a_chat_of_2000_entries_as_in_one_of_1000", async () => {
@@ -42,6 +48,13 @@ test("a_new_message_costs_the_same_in_a_chat_of_2000_entries_as_in_one_of_1000",
   assert.ok(small.counted.shaped > 0, "what came went out");
   const large = await arriving(2000, 0);
   assert.deepEqual(large.counted, small.counted, JSON.stringify({ large: large.counted, small: small.counted }));
+});
+
+test("opening_a_chat_of_2000_entries_costs_what_opening_one_of_1000_does", async () => {
+  const small = await arriving(1000, 0);
+  assert.ok(small.opened.shaped > 0, "it went out");
+  const large = await arriving(2000, 0);
+  assert.deepEqual(large.opened, small.opened, JSON.stringify({ large: large.opened, small: small.opened }));
 });
 
 test("a_new_message_costs_the_same_with_150_messages_shown_as_with_50", async () => {
