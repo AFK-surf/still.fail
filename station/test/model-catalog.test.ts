@@ -67,13 +67,14 @@ test("the overview says who made each model its profiles run, as the catalog say
   }
 });
 
-test("the catalog is kept across a restart and asked for again with its ETag, a device's connecting at most once a minute", async () => {
+test("the catalog is kept across a restart and asked for again with its ETag, by the one the cloud says it changed to", async () => {
   const file = join(mkdtempSync(join(tmpdir(), "model-catalog-")), "model-catalog.json");
-  let now = 0;
+  const now = 0;
   const asked: (string | null)[] = [];
   let answer = () => new Response(JSON.stringify({ models: MODELS }), { headers: { etag: '"one"' } });
+  const urls: string[] = [];
   const get = async (url: string, init: RequestInit) => {
-    assert.equal(url, "https://cloud.test/v1/models");
+    urls.push(url);
     asked.push((init.headers as Record<string, string>)["if-none-match"] ?? null);
     return answer();
   };
@@ -90,10 +91,11 @@ test("the catalog is kept across a restart and asked for again with its ETag, a 
     assert.equal(price("claude-haiku-5-5")?.input, 0.1);
     answer = () => new Response(null, { status: 304 });
     await again.refresh();
-    await again.refresh(true);
-    now += 60_000;
-    await again.refresh(true);
+    // The cloud says it changed to the one held: nothing asked; to another, asked for by it.
+    await again.refresh('"one"');
+    await again.refresh('"two"');
     assert.deepEqual(asked, [null, '"one"', '"one"']);
+    assert.deepEqual(urls.slice(1), ["https://cloud.test/v1/models", "https://cloud.test/v1/models?v=%22two%22"]);
     assert.equal(price("claude-haiku-5-5")?.input, 0.1);
 
     // The cloud failing changes nothing; in no still.fail cloud, nothing is asked.

@@ -24,7 +24,7 @@ import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
@@ -233,6 +233,47 @@ export class Directory extends DurableObject<Env> {
         }
       }
     }
+  }
+
+  /** Tells every connected device of every account `event`, and every connected station `station` (a release out). */
+  tellAll(event: AccountEvent, station: StationEvent | null): void {
+    const frames = [JSON.stringify(event), station === null ? null : JSON.stringify(station)];
+    for (const ws of this.ctx.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as Attachment;
+      const frame = "station" in attachment ? frames[1] : frames[0];
+      if (frame === null || ws.readyState !== WebSocket.OPEN) continue;
+      try {
+        ws.send(frame);
+      } catch {
+        // Closing already; it reads what it needs as it connects again.
+      }
+    }
+  }
+
+  /** Tells every connected station `event` (the models' catalog changed). */
+  tellStations(event: StationEvent): void {
+    const frame = JSON.stringify(event);
+    for (const ws of this.ctx.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as Attachment;
+      if (!("station" in attachment) || attachment.dropped || ws.readyState !== WebSocket.OPEN) continue;
+      try {
+        ws.send(frame);
+      } catch {}
+    }
+  }
+
+  /** The models' catalog the cron made (models.ts `checkModels`): told to every connected station when it changed. */
+  async modelsMade(etag: string): Promise<void> {
+    const before = await this.ctx.storage.get<string>("models-etag");
+    if (before === etag) return;
+    await this.ctx.storage.put("models-etag", etag);
+    this.tellStations({ type: "models", etag });
+  }
+
+  /** Tells the operator's connected devices `event` (their console reads it again). */
+  tellAdmins(event: AccountEvent): void {
+    const admins = this.#rows("SELECT sub, email FROM users").filter((r) => isAdmin(this.env, r.email as string)).map((r) => r.sub as string);
+    this.#tell(admins, event);
   }
 
   #members(workspace: string): string[] {

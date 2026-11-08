@@ -6,6 +6,7 @@
 // is known to be wrong, CORRECTIONS says what is right. Made at most once an hour in each of Cloudflare's locations
 // (the Cache API), and answered 304 to a station that has it already (its ETag).
 import { reply } from "./auth";
+import type { Env } from "./env";
 
 const CANONICAL = "https://models.dev/models.json";
 const PROVIDERS = "https://models.dev/api.json";
@@ -141,9 +142,23 @@ async function made(): Promise<Response> {
   return new Response(body, { headers: { "content-type": "application/json", etag, "cache-control": `public, max-age=${KEPT_SECONDS}` } });
 }
 
+/**
+ * The catalog made afresh (the cron's, hourly): kept for this place's askers, and when it changed, every station told,
+ * naming its ETag (they ask for it by that: `serveModels` makes it afresh where a place keeps an older one).
+ */
+export async function checkModels(env: Env): Promise<void> {
+  const answer = await made();
+  const etag = answer.headers.get("etag");
+  await (caches as unknown as { default: Cache }).default.put(KEPT, answer);
+  if (etag !== null) await env.DIRECTORY.getByName("primary").modelsMade(etag);
+}
+
 export async function serveModels(request: Request): Promise<Response> {
   const cache = (caches as unknown as { default: Cache }).default;
   let answer = await cache.match(KEPT);
+  // Asked for by the catalog stations were told it changed to: one this place keeps from before is made afresh.
+  const wanted = new URL(request.url).searchParams.get("v");
+  if (answer && wanted !== null && answer.headers.get("etag") !== wanted) answer = undefined;
   if (!answer) {
     try {
       answer = await made();

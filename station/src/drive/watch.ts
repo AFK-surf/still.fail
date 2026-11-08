@@ -1,7 +1,8 @@
-// Folders of the drive shown in a client, watched while they are: a client asks (`GET /drive/watch`) and is answered as
-// soon as something in the folder changes (an agent wrote a file there, one was renamed on the machine), else after a
-// while with nothing; it then reads the folder again and asks anew. Each client's asking has its own watch (`id`),
-// kept a minute past its last asking: a change between two askings is told at the next one, not lost.
+// Folders of the drive shown in a client, watched while they are: a client follows `GET /drive/watch` as events, told
+// `changed` each time something in the folder changes (an agent wrote a file there, one was renamed on the machine),
+// for as long as it keeps the stream open (`follow`). A client from before asks it again and again instead, answered
+// as soon as something changes, else after a while with nothing (`changed`): each such asking has its own watch
+// (`id`), kept a minute past its last asking, so a change between two askings is told at the next one, not lost.
 import { type FSWatcher, watch } from "node:fs";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
@@ -23,6 +24,7 @@ export class FolderWatches {
   readonly #kept: number;
   readonly #time: Fibers;
   readonly #open: (dir: string) => FSWatcher;
+  #followers = 0;
 
   constructor(held = HELD_MS, kept = KEPT_MS, clock?: Clock.Clock, open: (dir: string) => FSWatcher = (dir) => watch(dir, { persistent: false })) {
     this.#held = held;
@@ -61,6 +63,22 @@ export class FolderWatches {
     if (told) watched.changed = false;
     this.#letGo(key, watched);
     return told;
+  }
+
+  /// Tells `told` each time the folder at `dir` changes (a burst of writes once), and once more if it goes, until the
+  /// returned function is called; null when it cannot be watched (none left, or no such folder).
+  follow(dir: string, told: () => void): (() => void) | null {
+    const key = `\u0001${++this.#followers}\u0000${dir}`;
+    const w = this.#watch(key, dir);
+    if (!w) return null;
+    w.drop?.();
+    w.drop = null;
+    const wake = () => told();
+    w.waiting.add(wake);
+    return () => {
+      w.waiting.delete(wake);
+      this.#close(key, w);
+    };
   }
 
   /// Every watch closed (the station stopping).

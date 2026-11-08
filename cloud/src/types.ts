@@ -33,10 +33,17 @@ export interface DeviceView { sub: string; email: string; device: string; base: 
 /** A device waiting to be confirmed into a locked workspace. */
 export interface LockRequestView { base: string; sub: string; email: string; kind: string; label: string; sign_key: string | null; endpoints: string[]; code: string; created_at: number }
 
-/** What `/v1/events` pushes: what changed, for the device to refetch. */
+/** What `/v1/events` pushes: what changed, for the device to refetch. `release`: a release is out (its feeds read
+ * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again). */
 export type AccountEvent =
   | { type: "workspaces" }
-  | { type: "workspace"; id: string };
+  | { type: "workspace"; id: string }
+  | { type: "release" }
+  | { type: "relays" };
+
+/** What a station's presence socket is told besides its state: a release is out (its feed, and its reporters' fixed
+ * reports, read again); the models' catalog changed (read again). */
+export type StationEvent = { type: "release" } | { type: "models"; etag: string };
 
 // ── the operator's console (/v1/admin/*, the admin account only) ──────────
 

@@ -20,9 +20,6 @@ type J = any;
 
 /// still.fail cloud under its names: the released app's, the test channel's (youdid.wtf), ember's from before the rename.
 const CLOUD_HOSTS = ["app.still.fail", "app.youdid.wtf", "ember.3720.org"];
-/// A newer build asked for again as the app is back on screen at most this often (2026-11-02 user: each time the phone
-/// comes back to it, five minutes apart at least); the person's own check is asked at once.
-const UPDATE_EVERY_MS = 5 * 60 * 1000;
 const PICTURES = 256;
 /// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be
 /// reached, waited 15 s each time it was drawn, about half of a phone's.
@@ -97,19 +94,28 @@ export class Asks {
     );
   }
 
+  /// still.fail cloud says a release is out: the newest of each feed is read again when next asked.
+  released(): void {
+    this.#releases.clear();
+  }
+
   #newest(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[]): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const feed = beta ? `${platform}/beta` : platform;
       const newer = (release: J) => (release !== null && release !== undefined && typeof release.versionCode === "number" && release.versionCode > version ? release : null);
       const time = this.#host.nowMs();
       const kept = this.#releases.get(feed);
-      if (kept && !now && time - kept[0] < UPDATE_EVERY_MS) return newer(kept[1]);
+      // What was read is kept until still.fail cloud says a release is out (`released`); the person's own check asks.
+      if (kept && !now) return newer(kept[1]);
       this.#releases.set(feed, [time, kept?.[1] ?? null]);
       const url = `${this.#host.cloudOrigin()}/releases/${feed}/latest.json`;
       const response = yield* Effect.result(this.#host.fetch({ method: "GET", url, headers: [["cache-control", "no-cache"]], body: null }));
       if (response._tag === "Failure") {
+        // Not read: asked again the next time it is asked for.
+        if (kept) this.#releases.set(feed, kept);
+        else this.#releases.delete(feed);
         if (now) return yield* Effect.fail(CoreError.plainly("app_update", response.failure, t("core-misc.ask.update_failed", { error: CoreError.host(response.failure).message })));
-        return newer(this.#releases.get(feed)![1]);
+        return newer(kept?.[1] ?? null);
       }
       const raw = response.success.status === 200 ? parseJson(response.success.body) : undefined;
       const shaped = raw !== undefined ? conform("AppRelease", raw) : null;

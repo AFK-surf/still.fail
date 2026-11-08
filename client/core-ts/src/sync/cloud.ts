@@ -49,6 +49,10 @@ export class CloudSync {
   onRelays: ((relays: string[], entries: string[], targets: Record<string, string>) => void) | null = null;
   /// Told when the stations each account reaches may have changed (the station sync follows).
   onReach: (() => void) | null = null;
+  /// Told when still.fail cloud says a release is out (asks.ts reads the newest again when next asked).
+  onRelease: () => void = () => {};
+  /// Told when still.fail cloud says it sampled its relays, to an operator's account (sync/admin-relays.ts).
+  onRelayLoad: (sub: string) => void = () => {};
   /// The lock entries a hello to a station of the workspace brings (views/lock.ts `carried`): none, null.
   carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
@@ -538,6 +542,8 @@ export class CloudSync {
     const event = parseJson(text);
     if (!isObject(event)) return;
     if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#account(sub));
+    else if (event.type === "release") this.onRelease();
+    else if (event.type === "relays") this.onRelayLoad(sub);
     else if (event.type === "workspace" && typeof event.id === "string") {
       if (core.workspaces.owner(event.id) !== null) core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {

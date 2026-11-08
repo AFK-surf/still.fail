@@ -48,9 +48,10 @@ export const FeedbackLive = Layer.effectDiscard(
     parts.overview("feedback", () => cloud.state !== null);
     const tellingFixed = () =>
       void tellFixed(fixed, (session, text) => hub.notify(session, text)).catch((error) => log.warn("feedback", "fixed bug reports not read", { error: (error as Error).message }));
-    // On the hub's clock, ended with the station.
+    // What was fixed and came out while the station was not running, a while after it starts; then as each release is
+    // out (a fix is out only with one). On the hub's clock, ended with the station.
     const time = yield* Effect.acquireRelease(Effect.sync(() => new Fibers("feedback", hub.clock)), (t) => Effect.promise(() => t.close()));
     time.after(300_000, tellingFixed);
-    time.every(3_600_000, tellingFixed);
+    plane.told("release", tellingFixed);
   }),
 );

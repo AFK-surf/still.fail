@@ -17,7 +17,7 @@ import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
-import { receiveIncidents, serveStatus } from "./status";
+import { receiveIncidents, receiveReleased, serveStatus } from "./status";
 import { receiveLogs, receiveTraces } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 import { servePicture } from "./pictures";
@@ -171,6 +171,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // What still.fail/status shows (status.ts).
   if (path === "/v1/status" && method === "GET") return serveStatus(env);
   if (path === "/v1/status/incidents" && method === "POST") return receiveIncidents(request, env);
+  // A release is out (status.ts): every device and station is told.
+  if (path === "/v1/releases/out" && method === "POST") return receiveReleased(request, env);
 
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
   if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);

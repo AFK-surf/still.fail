@@ -467,8 +467,9 @@ export const AgentsLive = (control: Control) =>
         ...computerTools(computer),
         ...forwardTools(forwards),
       ];
-      // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
-      // itself while nothing runs and nothing is asked of it (auto update), watched or not.
+      // The station's and the runtimes' versions, read at start, the station's again as the cloud says a release is out
+      // and the runtimes' (other registries') every few hours; updated from the pages, or by itself while nothing runs
+      // and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
         app,
         data,
@@ -479,6 +480,7 @@ export const AgentsLive = (control: Control) =>
       });
       codexIncomplete = () => { void updates.check().catch((error) => log.warn("updates", "Codex installation not checked", { error: String(error) })); };
       updates.start();
+      plane.told("release", () => void updates.check().catch((error) => log.warn("updates", "the release not read", { error: String(error) })));
       // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).
       control.on("hup", () => updates.answerChannelAsk());
 

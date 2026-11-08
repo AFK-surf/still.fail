@@ -88,8 +88,8 @@ export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
 /// times a second, each search asked again a search of the machine's files there.
 export const SEARCH_STALE_MS = 2_000;
-/// How often a shown resources page asks a station from before telling them again (the station, asked, looks as often
-/// itself); and how long one that tells them is waited on after its last before the stream is taken for gone.
+/// How long after a station's resources stream ended it is opened again; and how long one that tells them is waited on
+/// after its last before the stream is taken for gone.
 export const RESOURCES_EVERY_MS = 5_000;
 const RESOURCES_SILENT_MS = 4 * RESOURCES_EVERY_MS;
 
@@ -132,8 +132,9 @@ export function stepShown(step: unknown, held: number): boolean {
   return typeof at === "number" && held <= at;
 }
 
-/// How long a folder's watch waits before asking again, the station not reached or its asking failed.
-const WATCH_AGAIN_MS = 5_000;
+/// How long a folder's watch waits before opening its stream again after it failed: doubling, up to WATCH_AGAIN_MAX_MS.
+const WATCH_AGAIN_MS = 1_000;
+const WATCH_AGAIN_MAX_MS = 30_000;
 
 export class StationsSync {
   /// Reads held on the device that their station has not taken yet (`read`), by `<address>\u0001<thread>`.
@@ -160,6 +161,24 @@ export class StationsSync {
   onChange(address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string): void {
     this.seen.touch(address, what === "errors" ? "log" : what, key);
     this.onTouched(address, what, key);
+    if (what === "link") {
+      const waiting = this.#linkWaits.get(address);
+      this.#linkWaits.delete(address);
+      if (waiting) Deferred.doneUnsafe(waiting, Effect.void);
+    }
+  }
+
+  /// Those waiting for a station's link to change (`#linkChange`).
+  readonly #linkWaits = new Map<string, Deferred.Deferred<void>>();
+
+  /// Until the station's link changes (it came up, say).
+  #linkChange(address: string): Effect.Effect<void> {
+    let waiting = this.#linkWaits.get(address);
+    if (!waiting) {
+      waiting = Deferred.makeUnsafe<void>();
+      this.#linkWaits.set(address, waiting);
+    }
+    return Deferred.await(waiting);
   }
   /// The loopback relays of logins this device takes the callback of.
   readonly relays: Relays;
@@ -886,12 +905,13 @@ export class StationsSync {
   }
 
   /// A folder of the drive shown, kept as it is on the station's disk (an agent writing there, a file renamed on the
-  /// machine): the station answers GET /drive/watch once something in it changes (else after a while), and it is read
-  /// again. A station from before watching, or a folder gone, answers 4xx: then it is read only as it is shown.
+  /// machine): the station tells of each change on a stream (GET /drive/watch as events), and the folder is read again.
+  /// The stream is opened as the station is reached; one that ended is opened again, the folder read then for what
+  /// changed meanwhile. A station from before streaming it, or a folder gone, refuses it: then it is read only as shown.
   /// What still.fail uses of the station's machine now (GET /resources), while shown (a fiber of the topic's,
   /// topics.ts) and a page of the app is in view: the station tells it as it looks, on a stream of its own (asked as
-  /// events). A station from before answers it once instead: asked again every RESOURCES_EVERY_MS. One that has none
-  /// says so (its refusal), asked again as often.
+  /// events), opened again RESOURCES_EVERY_MS after it ends. A station from before answers it once instead, and one
+  /// that has none says so (its refusal): either is what is shown, not asked again on a timer.
   resourcesWatch(address: string): Effect.Effect<void, never> {
     const key = topicKey({ topic: "stationResources", station: address });
     const attend = this.#core.attention?.attend;
@@ -900,18 +920,20 @@ export class StationsSync {
       link.memory.set(key, value);
       this.onChange(address, "log", key);
     };
+    /// Follows the station's stream; false once there is nothing to follow (a refusal, a station from before streams).
     const follow = Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const link = this.#links.get(address);
-        if (!link || !this.reachable(address)) return;
+        if (!link || !this.reachable(address)) return true;
         const opened = yield* Effect.result(this.requests.stream(link.addr, "/resources", null));
         if (opened._tag === "Failure") {
           const status = opened.failure.status;
           if (status !== undefined && status < 500) {
             link.errors.set(key, opened.failure);
             this.onChange(address, "errors", key);
+            return false;
           }
-          return;
+          return true;
         }
         const reply = opened.success;
         // From before: what it is now, once.
@@ -919,13 +941,13 @@ export class StationsSync {
           const bytes = yield* Effect.result(readAll(reply.body));
           const value = bytes._tag === "Success" ? parseJson(bytes.success) : undefined;
           if (value !== undefined) told(link, value);
-          return;
+          return false;
         }
         const parser = new SseParser();
         const silent = Effect.sleep(RESOURCES_SILENT_MS).pipe(Effect.as(null));
         for (;;) {
           const next = yield* Effect.raceFirst(Effect.result(reply.body.take), silent);
-          if (next === null || next._tag === "Failure" || next.success === null) return;
+          if (next === null || next._tag === "Failure" || next.success === null) return true;
           for (const [name, data] of parser.feed(next.success)) {
             const value = name === "resources" ? parseJson(data) : undefined;
             if (value !== undefined) told(link, value);
@@ -934,28 +956,49 @@ export class StationsSync {
       }),
     );
     // (not while no page of the app is in view: a phone in a pocket asks nothing)
-    const whileShown = attend ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.suspend(() => attend.untilHidden()))) : follow;
-    return Effect.forever(Effect.andThen(whileShown, Effect.sleep(RESOURCES_EVERY_MS)));
+    const whileShown = attend
+      ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.as(Effect.suspend(() => attend.untilHidden()), true)))
+      : follow;
+    return Effect.gen(function* () {
+      while (yield* whileShown) yield* Effect.sleep(RESOURCES_EVERY_MS);
+    });
   }
 
   driveWatch(address: string, root: string, path: string): Effect.Effect<void, never> {
-    const id = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(16).padStart(2, "0")).join("");
-    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}&id=${id}`;
+    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}`;
+    // (asked when it runs: `ask` asks as it is called)
+    const read = Effect.suspend(() => Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" }));
     return Effect.gen({ self: this }, function* () {
+      let wait = WATCH_AGAIN_MS;
+      let opened = 0;
       for (;;) {
         const link = this.#links.get(address);
         if (!link || !this.reachable(address)) {
-          yield* Effect.sleep(WATCH_AGAIN_MS);
+          yield* this.#linkChange(address);
           continue;
         }
-        const answer = yield* Effect.result(this.requests.call(link.addr, "GET", asked, null, { quiet: true }));
-        if (answer._tag === "Failure") {
-          const status = answer.failure.status;
-          if (status !== undefined && status >= 400 && status < 500) return;
-          yield* Effect.sleep(WATCH_AGAIN_MS);
-          continue;
-        }
-        if (get(answer.success, "changed") === true) yield* Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" });
+        const ended = yield* Effect.scoped(
+          Effect.gen({ self: this }, function* () {
+            const reply = yield* Effect.result(this.requests.stream(link.addr, asked, null));
+            if (reply._tag === "Failure") {
+              const status = reply.failure.status;
+              return status !== undefined && status >= 400 && status < 500 ? ("refused" as const) : ("failed" as const);
+            }
+            if (!(replyHeader(reply.success, "content-type") ?? "").startsWith("text/event-stream")) return "refused" as const;
+            wait = WATCH_AGAIN_MS;
+            // Opened again: what changed while none was open is read now.
+            if (opened++ > 0) yield* read;
+            const parser = new SseParser();
+            for (;;) {
+              const next = yield* Effect.result(reply.success.body.take);
+              if (next._tag === "Failure" || next.success === null) return "ended" as const;
+              if (parser.feed(next.success).some(([name]) => name === "changed")) yield* read;
+            }
+          }),
+        );
+        if (ended === "refused") return;
+        yield* Effect.raceFirst(Effect.sleep(wait), this.#linkChange(address));
+        wait = Math.min(wait * 2, WATCH_AGAIN_MAX_MS);
       }
     });
   }
