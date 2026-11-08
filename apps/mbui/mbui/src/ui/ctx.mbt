@@ -273,6 +273,9 @@ struct EditorState {
   mut focus_asked : Bool
   mut placed_x : Double
   mut placed_y : Double
+  /// the box it was last placed in (x, y, w, h, in the terms st.ox, st.oy are in), by whichever holds it (an old
+  /// view's editor or a field of the window's tree): the room its words show in (EditorState::placed_in)
+  mut room : (Double, Double, Double, Double)
   /// what its words are told as, as they change (a Field's: Field::text followed), none for an editor of its own
   mut said_words : @signals.Signal[String]?
   /// its words with what the input method composes in them told as, as that changes (Field::composed_said), once

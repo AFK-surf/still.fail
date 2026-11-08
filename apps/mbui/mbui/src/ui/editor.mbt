@@ -1471,10 +1471,11 @@ fn Node::field_box(self : Node) -> FieldBox {
 }
 
 ///|
-/// Its words' origin (st.ox, st.oy) where field `st` is placed as `b`, scrolled as it is.
+/// Its words' origin (st.ox, st.oy) and the room they show in where field `st` is placed as `b`, scrolled as it is.
 fn EditorState::placed_in(self : EditorState, b : FieldBox) -> Unit {
   self.ox = b.x + b.pad_l - self.scroll_x
   self.oy = b.y + b.pad_t - self.scroll
+  self.room = (b.x, b.y, b.w, b.h)
 }
 
 ///|
@@ -1799,6 +1800,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     focus_asked: false,
     placed_x: 0.0,
     placed_y: 0.0,
+    room: (0.0, 0.0, 0.0, 0.0),
     said_words: None,
     said_composed: None,
     said_composing: None,
