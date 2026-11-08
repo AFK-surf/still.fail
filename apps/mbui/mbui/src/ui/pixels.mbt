@@ -22,13 +22,20 @@ let pixels_read : Map[String, ImagePixels] = {}
 /// long side (a larger original made smaller; a smaller one as it is): coming until it is decoded, a frame asked for
 /// as it is.
 pub fn Ctx::image_pixels(self : Ctx, src : String, px : Int) -> ImagePixels {
+  pixels_for(src, px, self.frame_no, self.clock)
+}
+
+///|
+/// Ctx::image_pixels's, by whoever asks (image_entry_for's `used` and `at`): one decoder, one read back, for an old
+/// view's build and a node alike.
+fn pixels_for(src : String, px : Int, used : Int, at : Double) -> ImagePixels {
   let want = bucket(px.to_double())
   let key = "\{want} \{src}"
   match pixels_read.get(key) {
     Some(p) => return p
     None => ()
   }
-  let p = match self.image_for(src, px.to_double()) {
+  let p = match image_entry_for(src, px.to_double(), used, at) {
     Some(e) if e.state == 1 && e.px == want => {
       let w = e.w.to_int()
       let h = e.h.to_int()
@@ -49,6 +56,38 @@ pub fn Ctx::image_pixels(self : Ctx, src : String, px : Int) -> ImagePixels {
     pixels_read[key] = p
   }
   p
+}
+
+///|
+/// The pixels of the image at `src` decoded to at most `px` on its long side (Ctx::image_pixels's), for node `v` of the
+/// window's tree, as it is made: its decode asked for then, at `v`'s moment (View::logic_at), as Ctx::image_pixels asks
+/// it (the same decoder, the same pixels read back once and kept). None while it is coming; then its pixels (or
+/// PixelsFailed: it did not decode, or cannot be read back here), set as what it waits on comes to hold: its decode to
+/// that size done or failed (image_decoded: its DecodeState), or its bytes here where they were still on their way
+/// (add_image). Nothing asked again till then. Read where `v` binds or reacts to it, followed. Another `px`, another
+/// decode, another value.
+pub fn tree_image_pixels(v : @view.View, src : String, px : Int) -> () -> ImagePixels? {
+  let asked = fn() {
+    match pixels_for(src, px, g().frame_no, v.logic_at()) {
+      PixelsComing => None
+      p => Some(p)
+    }
+  }
+  let got : @signals.Signal[ImagePixels?] = @signals.signal(asked())
+  if @signals.untracked(fn() { got.get() }) is None {
+    let bytes = image_said(src).bytes
+    let state = decode_state(src, bucket(px.to_double()))
+    // (asked again as what it waits on comes to hold: its bytes here, its decode to this size done or failed)
+    v.reacts(fn() { (bytes.get(), state.get()) }, fn(_) {
+      if @signals.untracked(fn() { got.get() }) is None {
+        match asked() {
+          None => ()
+          p => got.set(p)
+        }
+      }
+    })
+  }
+  fn() { got.get() }
 }
 
 ///|

@@ -139,6 +139,7 @@ pub fn Ctx::image_bytes(self : Ctx, key : String, data : Bytes) -> Unit {
   if !add_gif(key, data) {
     image_data[key] = data
   }
+  image_bytes_here(key)
 }
 
 ///|
@@ -150,6 +151,7 @@ pub fn add_image(key : String, data : Bytes) -> Unit {
   if !add_gif(key, data) {
     image_data[key] = data
   }
+  image_bytes_here(key)
 }
 
 ///|
@@ -162,6 +164,7 @@ pub fn add_vector_image(
 ) -> Unit {
   image_data[key] = data
   image_vector_drawers[key] = draw
+  image_bytes_here(key)
 }
 
 ///|
@@ -219,6 +222,7 @@ pub fn redraw_vector_pictures() -> Unit {
     }
     let said = image_said(src)
     said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+    sizes_told(src, said)
   }
   @signals.end_batch()
 }
@@ -278,6 +282,14 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
 /// GPU's bilinear sample of a texture without mipmaps, shrunk several
 /// times over, is jagged.)
 fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
+  image_entry_for(src, px, self.frame_no, self.clock)
+}
+
+///|
+/// Ctx::image_for's decode of `src` at `px`, by whoever asks: what asks it marked as using it as of frame `used`, a
+/// decode it starts done as of `at` where the host has it done at once (the moment it was asked: a build's clock, a
+/// node's moment).
+fn image_entry_for(src : String, px : Double, used : Int, at : Double) -> ImageEntry? {
   // (followed: which of its decodes is ready changes as the host says one is, or failed)
   image_decodes_read(src)
   // bytes still on their way: nothing to load yet
@@ -340,7 +352,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       h: 0.0,
       ow: 0.0,
       oh: 0.0,
-      used: self.frame_no,
+      used,
       ready_at: 0.0,
       follows: fallback.map(fn(f) { f.ready_at }),
       mover: Mover::new(),
@@ -355,7 +367,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
     image_added(src, e)
     // (done at once, as the host decoded it, or failed, while asked: so at the moment it was asked, this build's, said
     // as a word of the host's that it is done is, image_decoded)
-    image_done(src, e, self.clock)
+    image_done(src, e, at)
     if e.state == 1 {
       good = Some(e)
     }
@@ -363,7 +375,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   let r = if good is Some(_) { good } else { fallback }
   match r {
     Some(e) => {
-      e.used = self.frame_no
+      e.used = used
       built_used(fn() { e.used = g().frame_no })
     }
     None => ()
@@ -759,7 +771,20 @@ fn Ctx::draw_image(
 priv struct ImageSaid {
   size : @signals.Signal[(Double, Double)?]
   decodes : @signals.Signal[Int]
+  /// whether its bytes are here to decode (always, but for a `mem:` key before they are handed over: add_image)
+  bytes : @signals.Signal[Bool]
+  /// how its decode to each size followed stands, by bucket (decode_state)
+  sizes : Map[Int, @signals.Signal[DecodeState]]
 }
+
+///|
+/// How the decode of a picture to one size (bucket) stands: coming (or not yet started), done, or failed (it, or one
+/// at least as large: pixels_for's). Told as the host's word on one of its decodes comes (image_done).
+priv enum DecodeState {
+  DecodeComing
+  DecodeDone
+  DecodeFailed
+} derive(Eq)
 
 ///|
 // kept across runs: what is said of the pictures kept, gone with them (image_forget, Tester's reset)
@@ -770,7 +795,12 @@ fn image_said(src : String) -> ImageSaid {
   match images_said.get(src) {
     Some(s) => s
     None => {
-      let s = { size: @signals.signal(None, same=fn(a, b) { a == b }), decodes: @signals.signal(0) }
+      let s = {
+        size: @signals.signal(None, same=fn(a, b) { a == b }),
+        decodes: @signals.signal(0),
+        bytes: @signals.signal(!src.has_prefix("mem:") || image_data.contains(src), same=fn(a, b) { a == b }),
+        sizes: {},
+      }
       images_said[src] = s
       s
     }
@@ -780,7 +810,15 @@ fn image_said(src : String) -> ImageSaid {
 ///|
 /// Whether something follows what is said of a picture.
 fn ImageSaid::watched(self : ImageSaid) -> Bool {
-  self.size.watched() || self.decodes.watched()
+  if self.size.watched() || self.decodes.watched() || self.bytes.watched() {
+    return true
+  }
+  for _, s in self.sizes {
+    if s.watched() {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -789,6 +827,55 @@ fn image_decodes_read(src : String) -> Unit {
   image_said(src).decodes.get() |> ignore
 }
 
+
+///|
+/// The bytes of the picture `key` handed over (add_image): said to be here, where something follows whether they are
+/// (a node waiting on its pixels, whose decode could not start before them: tree_image_pixels).
+fn image_bytes_here(key : String) -> Unit {
+  match images_said.get(key) {
+    Some(s) => s.bytes.set(true)
+    None => ()
+  }
+}
+
+///|
+/// How the decode of `src` to the size `want` (a bucket) stands, as its cache has it now.
+fn decode_state_now(src : String, want : Int) -> DecodeState {
+  match image_cache.get(src) {
+    Some(list) =>
+      if list.iter().any(fn(e) { e.state == 1 && e.px == want }) {
+        DecodeDone
+      } else if list.iter().any(fn(e) { e.state == -1 && e.px >= want }) {
+        DecodeFailed
+      } else {
+        DecodeComing
+      }
+    None => DecodeComing
+  }
+}
+
+///|
+/// How the decode of `src` to the size `want` (a bucket) stands, followed: told as it changes (sizes_told).
+fn decode_state(src : String, want : Int) -> @signals.Signal[DecodeState] {
+  let said = image_said(src)
+  match said.sizes.get(want) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(decode_state_now(src, want), same=fn(a, b) { a == b })
+      said.sizes[want] = s
+      s
+    }
+  }
+}
+
+///|
+/// The states of `src`'s decodes to the sizes followed, told as its cache now has them (one done or failed, as the host
+/// says; or let go to be drawn again).
+fn sizes_told(src : String, said : ImageSaid) -> Unit {
+  for want, s in said.sizes {
+    s.set(decode_state_now(src, want))
+  }
+}
 
 ///|
 /// What is said of the picture `src`, let go with its decodes: unless something follows it still (its signal, the one it
@@ -829,6 +916,7 @@ fn image_done(src : String, e : ImageEntry, at : Double) -> Unit {
     said.size.set(Some((e.ow, e.oh)))
   }
   said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+  sizes_told(src, said)
   @signals.end_batch()
 }
 
