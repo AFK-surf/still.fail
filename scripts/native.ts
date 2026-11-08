@@ -943,10 +943,13 @@ async function download(part: string, target: Target, k: string): Promise<string
   let bytes: Buffer | null = null;
   // (each place in turn: one that answers and then breaks off is said so, and the next one asked: a body cut short
   // failed the whole job with only the socket's error, 39431384793)
-  for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`]) {
+  // (and, last, the same asset through GitHub's API: on 2026-11-08 the release's download page answered 504 for every
+  // asset for an hour, runners and machines alike, while the API's asset by its id was given at once)
+  for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, API_ASSETS]) {
     let answered = false;
     try {
-      const r = await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+      const r = at === API_ASSETS ? await assetByApi(name) : await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+      if (r === null) continue;
       if (!r.ok) {
         if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
         continue;
@@ -1140,6 +1143,28 @@ async function published(): Promise<Set<string> | null> {
   }
   const out = gh(["api", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", ".assets[].name"], { allowFail: true });
   return out ? new Set(out.split("\n").filter(Boolean)) : null;
+}
+const API_ASSETS = `https://api.github.com/repos/${REPO}/releases/assets`;
+/// A release asset through GitHub's API (its id from the release's list, then the asset as bytes), with the job's
+/// token where there is one; null when the release has no such asset or the list is not given.
+async function assetByApi(name: string): Promise<Response | null> {
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const auth: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+  const list = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${RELEASE}`, {
+    headers: { ...auth, accept: "application/vnd.github+json" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!list.ok) {
+    log(`${name}: GitHub's API answered ${list.status} for the release's list`);
+    return null;
+  }
+  const id = ((await list.json()) as { assets: { id: number; name: string }[] }).assets.find((a) => a.name === name)?.id;
+  if (id === undefined) return null;
+  return fetch(`${API_ASSETS}/${id}`, {
+    headers: { ...auth, accept: "application/octet-stream" },
+    redirect: "follow",
+    signal: AbortSignal.timeout(300_000),
+  });
 }
 async function exists(name: string): Promise<boolean> {
   const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { method: "HEAD", redirect: "manual" });
