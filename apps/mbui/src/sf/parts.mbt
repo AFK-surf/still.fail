@@ -106,7 +106,10 @@ fn button_part(
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
   // strength, its spinner what to look at (2026-10-31 the user: 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字;
   // it faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
-  let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
+  // (told as it is built, read where it is painted: the spinner built while it is busy or on its way back, up to
+  // its declared end)
+  let turning = @motion.told(c, "sf-btn-busy/\{id}", if busy { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let spun = busy || !turning.over()
   // (faded as it is drawn)
   let seen = @motion.told(c, "sf-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
   // its ground `h` of the way to the one under the hand (no outline: where a tone has a line, it is its ground), and
@@ -178,11 +181,11 @@ fn button_part(
           // taking none, so the two ends look alike)
           let drawn = c.box(fn() { draw_icon(c, icon, button_icon, ink, by_ink=true) })
           // (the spinner over it, in its place and its size: the icon's room kept, nothing beside it moved)
-          if turning > 0.0 {
-            c.look(drawn, @ui.look(alpha=1.0 - turning))
+          if spun {
+            c.look_by(drawn, fn() { @ui.look(alpha=1.0 - turning.get()) })
             c.layer(fn() {
               let s = c.box(style=button_turning, turn)
-              c.look(s, @ui.look(alpha=turning))
+              c.look_by(s, fn() { @ui.look(alpha=turning.get()) })
             })
             |> ignore
           }
@@ -215,7 +218,9 @@ fn button_part(
           if busy || over > 0.0 {
             c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
               let s = c.box(style=button_spin, fn() { turn() })
-              c.look(s, @ui.look(alpha=turning * seen_at(over), scale=over, ox=0.0))
+              c.look(s, @ui.look(scale=over, ox=0.0))
+              let grown = seen_at(over)
+              c.look_by(s, fn() { @ui.look(alpha=turning.get() * grown) })
             })
             |> ignore
           }
@@ -4217,8 +4222,11 @@ pub fn options_card(
         let k = key + "/" + i.to_string()
         // (faded as it is drawn)
         let there = @motion.told(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
-        let ticked = @motion.animate(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
-        let turning = @motion.animate(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
+        // (told as they are built, read where they are painted: the check and the spinner built while they are there
+        // or on their way, up to their declared ends)
+        let ticked = @motion.told(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
+        let turning = @motion.told(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
+        let disc_off = alpha(t.p.text, 0.09)
         let row = c.box(
           dir=Row,
           w=Fill(1.0),
@@ -4232,11 +4240,11 @@ pub fn options_card(
           bg=if hot { t.p.hover } else { 0L },
           id~,
           fn() {
-            c.box(
+            let disc = c.box(
               w=Px(ot.disc),
               h=Px(ot.disc),
               radius=ot.disc / 2.0,
-              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked, alpha(t.p.text, 0.09)) },
+              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked.target(), disc_off) },
               align=ACenter,
               justify=JCenter,
               fn() {
@@ -4246,19 +4254,21 @@ pub fn options_card(
                 } else {
                   c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false)
                 }
-                if ticked > 0.0 {
-                  c.look(number, @ui.look(alpha=1.0 - ticked))
+                if picked_here || !ticked.over() {
+                  c.look_by(number, fn() { @ui.look(alpha=1.0 - ticked.get()) })
                   c.layer(fn() {
                     let mark = c.box(style=option_check_room, fn() {
                       icon(c, "check", size=ot.disc * option_check_share, color=0xFFFFFFFFL) |> ignore
                     })
-                    c.look(mark, @ui.look(alpha=ticked))
+                    c.look_by(mark, fn() { @ui.look(alpha=ticked.get()) })
                   })
                   |> ignore
                 }
               },
             )
-            |> ignore
+            if !o.2 {
+              c.bg_by(disc, fn() { mix_seen(t.p.accent, ticked.get(), disc_off) })
+            }
             c.box(w=Fill(1.0), fn() {
               c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
               if o.1 != "" {
@@ -4267,12 +4277,12 @@ pub fn options_card(
             })
             |> ignore
             // (turning over the row's end, in what it leaves at the end of the words: never narrowing them)
-            if turning > 0.0 {
+            if busy == Some(i) || !turning.over() {
               c.layer(fn() {
                 let s = c.box(style=@ui.style(w=Full, align=AEnd, pt=room_of(ot.pad_in), pr=room_of(option_row_end)), fn() {
                   c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore }) |> ignore
                 })
-                c.look(s, @ui.look(alpha=turning))
+                c.look_by(s, fn() { @ui.look(alpha=turning.get()) })
               })
               |> ignore
             }
@@ -4430,7 +4440,12 @@ pub fn update_key(
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
-  let progress = ease_to(c, "update/coming/" + key, coming is Some(_))
+  // (told as it is built, read where it is painted: the ring built while it comes or is on its way back, up to its
+  // declared end)
+  let progress = @motion.told(c, "update/coming/" + key, if coming is Some(_) { 1.0 } else { 0.0 }, spec=@motion.tween(
+      dur_ms,
+      ease=Out,
+    ))
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
@@ -4443,15 +4458,15 @@ pub fn update_key(
             icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
           }
         })
-        c.look(ready, @ui.look(alpha=1.0 - progress))
-        if progress > 0.0 {
+        c.look_by(ready, fn() { @ui.look(alpha=1.0 - progress.get()) })
+        if coming is Some(_) || !progress.over() {
           c.layer(fn() {
             let part = match coming {
               Some(part) => part
               None => Some(1.0)
             }
             let downloading = c.box(style=update_ring_at, fn() { coming_mark(c, key, part, mark, t.p.text) })
-            c.look(downloading, @ui.look(alpha=progress))
+            c.look_by(downloading, fn() { @ui.look(alpha=progress.get()) })
           })
           |> ignore
         }

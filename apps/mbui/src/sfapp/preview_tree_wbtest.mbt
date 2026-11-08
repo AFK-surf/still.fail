@@ -3962,7 +3962,7 @@ test "viewer on the tree: closed, the chat moved under it on the way back, then 
   let kept = v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) })
   assert_eq(kept, Some((moved.x, moved.y, moved.w, moved.h)), msg="kept where it is now, in the frame it moved")
   let to = v.zoom.rect().unwrap()
-  let (x, y, w, h) = flight_picture_at(moved, v.lifted(), to, v.flying())
+  let (x, y, w, h) = flight_picture_at(moved, v.lifted_at(t.ctx().moment()), to, v.flying())
   let shown = drawn_of(t, main)
   assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="from where it is now, once: \{shown}, \{(x, y, w, h)}")
   // (its thumbnail off the screen: the chat scrolled far)
@@ -3982,7 +3982,7 @@ test "viewer on the tree: closed, the chat moved under it on the way back, then 
   for at in [t.time() + @ui.frame_period_default, end - @ui.frame_period_default] {
     t.frame_at(at)
     assert_eq(v.fly_from.map(fn(f) { (f.x, f.y, f.w, f.h) }), Some((last.x, last.y, last.w, last.h)), msg="\{at}: where it was last seen")
-    let (x, y, w, h) = flight_picture_at(last, v.lifted(), to, v.flying())
+    let (x, y, w, h) = flight_picture_at(last, v.lifted_at(t.ctx().moment()), to, v.flying())
     let shown = drawn_of(t, main)
     assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="\{at}: on to where it was last, once: \{shown}, \{(x, y, w, h)}")
   }

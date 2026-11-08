@@ -77,8 +77,9 @@ fn page_switch_said(v : @view.View, holds : () -> Bool) -> Unit {
 /// The new chat left for a chat, leaving over it by its own way (its scene fading where it is, its choices
 /// fading where they are: fresh.mbt), drawn only, its composer gone to the chat's.
 fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let gone = new_leave(c).get()
-  if gone >= 1.0 || !page_switch.from_new || fresh.became.get() is Some(_) {
+  // (gone once its way out has come to the end it declared: built till then)
+  let leave = new_leave(c)
+  if (leave.target() >= 1.0 && leave.over()) || !page_switch.from_new || fresh.became.get() is Some(_) {
     return
   }
   let v = page_switch.new_view

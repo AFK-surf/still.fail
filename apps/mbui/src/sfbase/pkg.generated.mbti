@@ -3596,7 +3596,7 @@ pub fn Viewer::id(Self) -> String
 pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
-pub fn Viewer::lifted(Self) -> Double
+pub fn Viewer::lifted_at(Self, Double) -> Double
 pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@text.Run]?, String?, markdown? : String?) -> Bool
 pub fn Viewer::listed_size(Self) -> Double
 pub fn Viewer::markable(Self) -> Bool
