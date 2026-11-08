@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
+import { MbBackfill, mbReaderBinary } from "../read/mb-reader.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
@@ -13,7 +14,7 @@ export class SigninSaveBuilder {
   readonly #answer: (pending: PendingSigninSave, body: string | null) => void;
   readonly #workerFile: URL | undefined;
   readonly #timers = new Fibers("signin save index");
-  #worker: Worker | null = null;
+  #worker: Worker | MbBackfill | null = null;
   #current: string | null = null;
   #last: string | null = null;
   #closed = false;
@@ -90,8 +91,13 @@ export class SigninSaveBuilder {
     }
     if (this.#worker === null) {
       const file = this.#workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./signin-save-worker.ts" : "./vault/signin-save-worker.js", import.meta.url);
-      let worker: Worker;
-      try { worker = new Worker(file, { workerData: { path: this.#path, priority: this.#options.priority } }); }
+      // (by the MoonBit builder, station/mb's src/signin, where its program is there: `MbBackfill`)
+      const mb = this.#workerFile === undefined ? mbReaderBinary() : null;
+      let worker: Worker | MbBackfill;
+      try {
+        worker = mb !== null ? new MbBackfill(mb, ["--builder", "signin-save", "--db", this.#path], this.#options.priority, 20)
+          : new Worker(file, { workerData: { path: this.#path, priority: this.#options.priority } });
+      }
       catch (error) {
         log.warn("signin", "the sign-in index worker could not start", { error: (error as Error).message });
         this.#schedule(this.#retryMs); this.#retryMs = Math.min(this.#retryMs * 2, 30_000); return;

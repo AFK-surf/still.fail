@@ -23,6 +23,7 @@ import {
   "station/jobs",
   "station/posts",
   "station/usagefill",
+  "station/signin",
   "moonbitlang/core/json",
 }
 
