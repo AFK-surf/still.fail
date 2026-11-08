@@ -8,8 +8,8 @@ import { MbProcess } from "./mb-reader.ts";
 /// A builder in MoonBit (read/mb-reader.ts): its program and arguments. It knows nothing of the backfill permit, which
 /// the builder here takes for it around each batch it asks, and gives back when the batch is answered; or (`lazy`) it
 /// asks for the permit itself when it is about to write, as a worker that reads without it takes it: a line
-/// `{"take": true}` answered `{"permit": …}`, `{"give": true}` when it is done with it before its answer. A lazy one
-/// is told of what is let go (`cancel`), as a worker is. One that answers `{"fallback": true}` (a store in a state it
+/// `{"take": true}` answered `{"permit": …}`, `{"give": true}` when it is done with it before its answer. Each is told
+/// of what is let go (`cancel`), as a worker is. One that answers `{"fallback": true}` (a store in a state it
 /// does not build for, such as a legacy lookup) is let go, and the worker asked instead from then on.
 export type MbBuilder = { binary: string; args: string[]; lazy?: boolean };
 /// What stands for a MoonBit builder in the permit (a worker's thread id there): never a thread's.
@@ -134,7 +134,7 @@ export class RequestedBuilder<K extends number | string> {
       else if (waiters) { this.#waiting.delete(item); this.#waiting.set(item, waiters); }
       this.#retryMs = 250;
     }
-    if (!this.#waiting.has(item) && !result.done && (!(this.#worker instanceof MbProcess) || this.#mb?.lazy)) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
+    if (!this.#waiting.has(item) && !result.done) this.#worker?.postMessage(this.#message?.(item, true) ?? { [this.#field]: item, cancel: true });
     this.#pump();
   }
 

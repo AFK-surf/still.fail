@@ -220,6 +220,49 @@ async fn said_builder(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The builder of the sessions' copy destinations, chat names' order and latest conversation (cc-index-worker.ts):
+/// `{"session"}` with `name` or `latest` for the last two; one let go (`cancel`) forgets where its lanes' turn was.
+async fn cc_builder(host : @host.Host, db_path : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=250)
+  db.exec("PRAGMA synchronous = NORMAL")
+  let cc = @cc.Cc::new()
+  let names = @cc.Cc::new()
+  while host.line() is Some(line) {
+    if line == "" {
+      continue
+    }
+    let ask : Json = @json.parse(line) catch { _ => Json::null() }
+    guard ask is { "session": String(session), .. } else {
+      let invalid : Json = { "done": false, "error": "invalid session conversation preparation request" }
+      host.say(invalid.stringify())
+      continue
+    }
+    let named = ask is { "name": True, .. }
+    let latest = ask is { "latest": True, .. }
+    if ask is { "cancel": True, .. } {
+      if !latest {
+        (if named { names } else { cc }).cancel(session)
+      }
+      continue
+    }
+    let answer : Json = try {
+      let done = if latest {
+        @cc.latest_step(db, session)
+      } else if named {
+        names.names_step(db, session)
+      } else {
+        // (as the worker asks it: a session not there is tracked all the same)
+        cc.step(db, session, existing=false)
+      }
+      { "done": Json::boolean(done) }
+    } catch {
+      e => if @sql.busy(e) { { "done": false } } else { { "done": false, "error": Json::string(message(e)) } }
+    }
+    host.say(answer.stringify())
+  }
+}
+
+///|
 /// A step of what is built whole (`{"scope": "all"}`).
 fn all(step : (@sql.Db) -> Bool raise) -> (@sql.Db, Json) -> Bool? raise {
   (db, ask) => if ask is { "scope": "all", .. } { Some(step(db)) } else { None }
@@ -345,6 +388,8 @@ fn main {
           }
         })
       })
+    (Some("cc-index"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => cc_builder(host, db))
     (Some("turn-counts"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => turn_builder(host, db))
     (Some("session-list"), Some(db), _) =>
@@ -366,7 +411,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index --db <file>")
       2
     }
   }
