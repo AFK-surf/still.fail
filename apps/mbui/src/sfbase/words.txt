@@ -1945,6 +1945,16 @@ web-pages.connect.ownerChanged
 web-pages.connect.ownerEmail
 web-pages.connect.ownerLabel
 web-pages.connect.ownerLead
+web-pages.connect.startsOn
+web-pages.connect.startsOnLead
+web-pages.connect.startsHere
+web-pages.connect.startsOnSaved
+web-pages.connect.station
+web-pages.connect.move
+web-pages.connect.moveLead
+web-pages.connect.moveNone
+web-pages.connect.moveDo
+web-pages.connect.moved
 web-pages.connect.person
 web-pages.connect.previous
 web-pages.connect.recent

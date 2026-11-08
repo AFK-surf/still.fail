@@ -116,6 +116,7 @@ export const PARAMS: Record<string, string> = {
   "connect.put": "id:string input?:json",
   "connect.delete": "id:string",
   "connect.reconnect": "id:string",
+  "connect.move": "id:string to:string",
   "connect.bindSession": "connect:string session?:string title?:string",
   "connect.putSlackApp": "connect:string input?:json from?:json",
   "feishu.register": "domain?:string name?:string bind?:json mode?:string requireMention?:boolean threads?:boolean",
@@ -486,6 +487,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("DELETE", () => `/connects/${p.at("id")}`, null, connect("id"));
     case "connect.reconnect":
       return op("POST", () => `/connects/${p.at("id")}/reconnect`, null, connect("id"));
+    // To another station of its workspace (station/src/connects/workspace.ts), which runs it from then on.
+    case "connect.move":
+      return op("POST", () => `/connects/${p.at("id")}/move`, { station: p.str("to") }, connect("id"));
     case "connect.bindSession":
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
     // `from`: the app's settings the form started from; only what differs from them is written (and a new icon).

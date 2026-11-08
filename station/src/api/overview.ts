@@ -133,6 +133,10 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       createdBy: c.createdBy?.id ? c.createdBy : null,
       sessions: sessionsOf(c.id),
       session: mode === "single-session" ? d.store.binding(c.id) : null,
+      // The station of its workspace its new conversations run on (null: this one), and that it can be moved to
+      // another (connects/workspace.ts; a station from before says neither).
+      startsOn: nonEmpty(c.station),
+      moves: true,
     };
     const own = d.connectKinds?.get(kind);
     return own === undefined ? shown : { ...shown, ...own.shown(c), connection: own.connection(c) ?? shown.connection };

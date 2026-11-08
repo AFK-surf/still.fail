@@ -4,7 +4,7 @@
 // the person or channel, and the pages are told to read again then.
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { NAMES_FILE, channelKey, personKey } from "../connects/keys.ts";
+import { NAMES_FILE, REMOTE_FILE, channelKey, personKey } from "../connects/keys.ts";
 import type { Json, Store } from "./store.ts";
 
 type Cached<T> = { stamp: string; value: T };
@@ -34,7 +34,7 @@ function readJson<T>(path: string, empty: T, shape: (v: Json) => T): T {
 /// company its team. `book`: the platform whose names book has them.
 type Team = { id: string; name: string; book: keyof typeof NAMES_FILE };
 function teams(s: Store): Map<string, Team> {
-  return readJson(join(s.dataDir, "config.json"), new Map(), (raw) => {
+  const own = readJson(join(s.dataDir, "config.json"), new Map<string, Team>(), (raw) => {
     const out = new Map<string, Team>();
     for (const c of Array.isArray(raw?.connects) ? raw.connects : []) {
       if (typeof c?.id !== "string") continue;
@@ -51,6 +51,17 @@ function teams(s: Store): Map<string, Team> {
     }
     return out;
   });
+  // And the connects of other stations whose chats run here (connects/remote.ts), as their stations described them.
+  const others = readJson(join(s.dataDir, REMOTE_FILE), new Map<string, Team>(), (raw) => {
+    const out = new Map<string, Team>();
+    for (const [id, r] of Object.entries(raw !== null && typeof raw === "object" ? raw : {}) as [string, any][]) {
+      const d = r?.described;
+      if (d?.kind === "feishu") out.set(id, { id, name: typeof d?.identity?.team === "string" ? d.identity.team : "", book: "feishu" });
+      else if (d?.kind === "slack" && typeof d?.team === "string" && d.team !== "") out.set(id, { id: d.team, name: typeof d?.identity?.team === "string" ? d.identity.team : "", book: "slack" });
+    }
+    return out;
+  });
+  return others.size === 0 ? own : new Map([...others, ...own]);
 }
 
 /// The names book a connect's are in: Slack's (<data>/slack-names.json), Feishu's (feishu-names.json) or Comma's.

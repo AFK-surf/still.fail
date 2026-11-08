@@ -5,5 +5,8 @@
 // them; the readers read them (read/slack-known.ts).
 export const NAMES_FILE = { slack: "slack-names.json", feishu: "feishu-names.json", comma: "comma-names.json" } as const;
 
+/// The connects of other stations whose chats run on this one, as their stations described them (connects/remote.ts).
+export const REMOTE_FILE = "remote-connects.json";
+
 export const personKey = (place: string, user: string) => `u:${place}:${user}`;
 export const channelKey = (place: string, channel: string) => `c:${place}:${channel}`;

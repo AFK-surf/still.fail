@@ -56,12 +56,13 @@ import { ChatShareIndexBuilder } from "../xshare/index-builder.ts";
 import { overview } from "../api/overview.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 import { agentsRoutes } from "../api/admin.ts";
-import type { ChatSurface } from "./chat.ts";
+import type { ChatEvent, ChatSurface } from "./chat.ts";
+import type { NameBook } from "../connects/names.ts";
 import { rootViewThrough } from "../drive/drive.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import { stationLang, tr, type Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
-import { hubConfig } from "./config.ts";
+import { type Connect, hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
 import { followLatestThreadRequests } from "../read/latest-thread-requests.ts";
 import { ColdRooms } from "./cold.ts";
@@ -110,6 +111,19 @@ export type AgentsParts = {
   /// The connects' chats the hub takes and posts to (Slack's, slack/module.ts; Feishu's, feishu/module.ts): each part
   /// says those of its connects, and a connect's chat is whichever part has it.
   surfaces(chats: (connect: string) => ChatSurface | undefined): void;
+  /// Connects the hub has besides config.json's: those of other stations whose chats run here (connects/remote.ts).
+  connects(more: () => Connect[]): void;
+  /// Takes what a connect's platform says: the hub's, or the route a part set (`route`, connects/remote.ts: to the
+  /// station a chat of its thread runs on).
+  receive(connect: string, event: ChatEvent): Promise<void>;
+  route(f: (connect: string, event: ChatEvent) => Promise<void>): void;
+  /// Each platform's names book (connects/names.ts), by its kind, as its part made it.
+  nameBook(kind: string, book: NameBook): void;
+  nameBooks: Map<string, NameBook>;
+  /// The station of workspace `ws` a connect of `kind` with this part (its tokens) runs on already, by its name (null:
+  /// none): a connect runs on one station (connects/workspace.ts says how it is asked).
+  heldBy(ws: string | null, kind: string, own: unknown): Promise<string | null>;
+  connectHeld(f: (ws: string | null, kind: string, own: unknown) => Promise<string | null>): void;
   /// How a kind of connect (config.json's `kind`) shows, is edited and is connected again, as its part says
   /// (connects/part.ts); and those said.
   connectKind(kind: string, view: ConnectKind): void;
@@ -188,7 +202,13 @@ export const AgentsLive = (control: Control) =>
 
       // Each profile running the models its last check found besides those config.json names (the accounts, once made).
       let found = (_: string): readonly string[] | null => null;
-      const settings = () => hubConfig(config.raw(), data, (id) => found(id));
+      // config.json's connects and those of other stations whose chats run here (connects/remote.ts), said by the parts.
+      const moreConnects: (() => Connect[])[] = [];
+      const settings = () => {
+        const read = hubConfig(config.raw(), data, (id) => found(id));
+        for (const more of moreConnects) read.connects.push(...more());
+        return read;
+      };
       // The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper: the drive's and
       // the directories people and agents name (ops/places.ts), never touched on the station's thread.
       const helperFiles = yield* HelperFolders;
@@ -219,6 +239,10 @@ export const AgentsLive = (control: Control) =>
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
       // as the station takes its sessions up and as its workspaces change, in the order the agents need.
       const surfaceChats: ((connect: string) => ChatSurface | undefined)[] = [];
+      // What a connect's platform says goes to the hub, unless a part routes it elsewhere first (connects/remote.ts).
+      let receive = (connect: string, event: ChatEvent) => hub.receive(connect, event);
+      const nameBooks = new Map<string, NameBook>();
+      let connectHeld = async (_ws: string | null, _kind: string, _own: unknown): Promise<string | null> => null;
       const connectKinds = new Map<string, ConnectKind>();
       const along: Along[] = [];
       const cold = new ColdRooms(() => hub);
@@ -851,7 +875,7 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      const self = Agents.of({ pageOf, previousGone: previous, cardOutcomes, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      const self = Agents.of({ pageOf, previousGone: previous, cardOutcomes, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connects: (more) => void moreConnects.push(more), receive: (connect, event) => receive(connect, event), route: (f) => void (receive = f), nameBook: (kind, book) => void nameBooks.set(kind, book), nameBooks, heldBy: (ws, kind, own) => connectHeld(ws, kind, own), connectHeld: (f) => void (connectHeld = f), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
       // The admin API asks for the agents' side as a request comes (services.ts AgentsSide); its routes are a part.
       (yield* AgentsSide).current = self;
       // And what the mesh asks of it (services.ts MeshSide).

@@ -94,6 +94,8 @@ export type SlackRoutesDeps = {
   apps?: SlackService;
   /// Tells the pages the overview changed (an install is in).
   overviewChanged?: () => void;
+  /// Where a connect being added runs already (routes/connects.ts `ConnectEditDeps`).
+  heldBy?: (ws: string | null, kind: string, own: unknown) => Promise<string | null>;
 };
 
 /// A Slack connect's part of its config entry (`slack`): its tokens as given (blank ones stay as they were), its app, and
