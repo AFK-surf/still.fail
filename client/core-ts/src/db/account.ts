@@ -319,6 +319,9 @@ export class AccountDb {
   readonly #cache = new Cache(4096);
   readonly #logCache = new Cache(8192);
   readonly #logIndices = new LogIndices();
+  /// Each log's span (`logSpan`) as read, kept as items are put in it (putLog), let go as anything else changes it:
+  /// a long chat's count was read from SQLite again on every view of it (four times to open one, 2026-11-08).
+  readonly #logSpans = new Map<string, { min: number; max: number; count: number } | null>();
   readonly #lists = new Map<string, Collection>();
   #closed = false;
   /// Told after each burst is written, with what it changed.
@@ -438,6 +441,7 @@ export class AccountDb {
       this.#cache.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
+      this.#logSpans.clear();
       this.#lists.clear();
       this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
@@ -517,6 +521,7 @@ export class AccountDb {
 
   #tellLog(table: string, station: string, id: string): void {
     this.#logIndices.delete(K(table, station, id));
+    this.#logSpans.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
     if (table === "slack") this.#slackNames.delete(station);
   }
@@ -1553,6 +1558,7 @@ export class AccountDb {
     if (hit) return hit.numbers;
     const [key, col] = logColumns(table);
     const numbers = this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, logId(table, id)]).map((r) => r[0] as number);
+    work.logNumbers += numbers.length;
     this.#logIndices.set(cacheKey, new LogIndex(numbers));
     return numbers;
   }
@@ -1561,11 +1567,14 @@ export class AccountDb {
   logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, J> {
     const [key, col] = logColumns(table);
     const out = new Map<number, J>();
-    // Which numbers it holds, read once and kept as it is written (putLog), so a window read again is read from what is
-    // parsed: a chat's window read from SQLite on each of its new messages was much of what one cost (2026-11-08).
-    const numbers = this.logNumbers(table, station, id);
-    const first = lowerBound(numbers, from);
-    const end = upperBound(numbers, to);
+    // Which numbers it holds there: from its index where one is kept, else asked of SQLite (the numbers alone, not their
+    // JSON), so a window read again is read from what is parsed (a chat's window read from SQLite on each of its new
+    // messages was much of what one cost, 2026-11-08) and a long log's every number is not read to open it.
+    const index = this.#logIndices.get(K(table, station, id));
+    const numbers = index ? index.numbers : this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, logId(table, id), from, to]).map((r) => r[0] as number);
+    if (!index) work.logNumbers += numbers.length;
+    const first = index ? lowerBound(numbers, from) : 0;
+    const end = index ? upperBound(numbers, to) : numbers.length;
     const missing: number[] = [];
     for (let i = first; i < end; i++) {
       const n = numbers[i]!;
@@ -1610,11 +1619,17 @@ export class AccountDb {
 
   /// The highest and lowest numbers a log holds, and how many (null when it holds none).
   logSpan(table: LogTable, station: string, id: string): { min: number; max: number; count: number } | null {
-    const index = this.#logIndices.get(K(table, station, id));
+    const cacheKey = K(table, station, id);
+    const index = this.#logIndices.get(cacheKey);
     if (index) return index.span;
+    const kept = this.#logSpans.get(cacheKey);
+    if (kept !== undefined) return kept === null ? null : { ...kept };
     const [key, col] = logColumns(table);
     const r = this.sql.all(`SELECT min(${col}), max(${col}), count(*) FROM ${table} WHERE station = ? AND ${key} = ?`, [station, logId(table, id)])[0];
-    return r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
+    const span = r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
+    work.logSpans += span?.count ?? 0;
+    this.#logSpans.set(cacheKey, span);
+    return span === null ? null : { ...span };
   }
 
   /// How many of `from ..= to` a log holds.
@@ -1632,8 +1647,11 @@ export class AccountDb {
     this.#write(() => {
       const cacheKey = K(table, station, id);
       const index = this.#logIndices.get(cacheKey);
-      // A failed SQL write must never leave a cached index of a different transaction state.
+      const span = this.#logSpans.get(cacheKey);
+      // A failed SQL write must never leave a cached index (or span) of a different transaction state.
       this.#logIndices.delete(cacheKey);
+      this.#logSpans.delete(cacheKey);
+      const added: number[] = [];
       const [key, col] = logColumns(table);
       const k: SqlValue = logId(table, id);
       let changed = false;
@@ -1653,6 +1671,7 @@ export class AccountDb {
           if (was === json || (keep && was !== undefined)) continue;
           this.sql.run(`INSERT OR REPLACE INTO ${table} (station, ${key}, ${col}, json) VALUES (?, ?, ?, ?)`, [station, k, n, json]);
           this.#logCache.delete(K(table, station, id, n));
+          if (was === undefined) added.push(n);
           written.push([n, value]);
           changed = true;
         }
@@ -1671,6 +1690,12 @@ export class AccountDb {
       if (index) {
         index.put(written.map(([n]) => n), cutAfter);
         this.#logIndices.set(cacheKey, index);
+      }
+      // (only what was put in: a cut is read again)
+      if (span !== undefined && cutAfter === null) {
+        let next = span === null ? null : { ...span };
+        for (const n of new Set(added)) next = next === null ? { min: n, max: n, count: 1 } : { min: Math.min(next.min, n), max: Math.max(next.max, n), count: next.count + 1 };
+        this.#logSpans.set(cacheKey, next);
       }
     });
   }
@@ -2016,6 +2041,7 @@ export class AccountDb {
       this.#cache.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
+      this.#logSpans.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
       this.#tell({ topic: "$station-reset", station });
       for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });

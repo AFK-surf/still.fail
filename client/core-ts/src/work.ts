@@ -15,6 +15,10 @@ export const work = {
   shaped: 0,
   /// Rows of a log (a thread's entries) read from the database rather than taken as parsed (db/account.ts).
   logRows: 0,
+  /// Numbers of a log's items read from the database (which it holds, to find what to read).
+  logNumbers: 0,
+  /// Items a log's span (its first, its last, how many) was counted over in the database rather than kept.
+  logSpans: 0,
   /// Records a chat list made into rows, and rows it put into its days (views.ts #chats): those that changed, where
   /// the list is made from the last one.
   listed: 0,
