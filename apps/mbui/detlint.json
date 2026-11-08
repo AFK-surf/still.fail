@@ -336,7 +336,7 @@
       "src/sfpages/permissions.mbt": 8,
       "src/sfpages/security.mbt": 25,
       "src/sfpages/slack_app.mbt": 6,
-      "src/sfpages/vault.mbt": 5,
+      "src/sfpages/vault.mbt": 4,
       "src/sfpages/vault_dialogs.mbt": 6,
       "src/sfpages/vault_item.mbt": 10
     },

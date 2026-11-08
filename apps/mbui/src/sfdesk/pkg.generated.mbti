@@ -290,6 +290,8 @@ pub fn setting_route(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @settings.Route
 
 pub fn settings_beside(@settings.Route) -> Unit
 
+pub fn settings_fixture(@sfbase.Source, @settings.Core) -> Unit
+
 pub let settings_landing : @settings.Route
 
 pub fn share_entry(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry) -> Unit
