@@ -1015,22 +1015,6 @@ async function download(part: string, target: Target, k: string): Promise<string
     const fromApi = await releaseThroughApi(name);
     if (fromApi !== null) { bytes = fromApi.bytes; url = fromApi.url; }
   }
-  // The release's own download answered 504 for an hour on 2026-11-08 (every job of every branch building what it
-  // could not fetch) while GitHub's API served the same asset: asked there last.
-  if (!bytes) {
-    const at = await assetThroughApi(name);
-    if (at !== null) {
-      try {
-        const r = await fetch(at.url, { headers: at.headers, redirect: "follow", signal: AbortSignal.timeout(300_000) });
-        if (r.ok) {
-          bytes = Buffer.from(await r.arrayBuffer());
-          url = at.url;
-        } else log(`${part} ${target}: GitHub's API answered ${r.status} for ${name}`);
-      } catch (e) {
-        log(`${part} ${target}: GitHub's API did not send ${name} (${(e as Error).message})`);
-      }
-    }
-  }
   if (!bytes) return null;
   const tgz = join(tmpdir(), `${name}.${process.pid}`);
   writeFileSync(tgz, bytes);
@@ -1193,19 +1177,6 @@ function upload(file: string): void {
     }
   }
 }
-/// Where GitHub's API serves a release asset (its id, from the release's list, asked once a run), with the job's
-/// token where there is one.
-let releaseAssets: Promise<Map<string, number> | null> | null = null;
-async function assetThroughApi(name: string): Promise<{ url: string; headers: Record<string, string> } | null> {
-  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-  const auth: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
-  releaseAssets ??= fetch(`https://api.github.com/repos/${REPO}/releases/tags/${RELEASE}`, { headers: { ...auth, accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(30_000) })
-    .then(async (r) => (r.ok ? new Map(((await r.json()) as { assets: { name: string; id: number }[] }).assets.map((a) => [a.name, a.id] as const)) : null))
-    .catch(() => null);
-  const id = (await releaseAssets)?.get(name);
-  return id === undefined ? null : { url: `https://api.github.com/repos/${REPO}/releases/assets/${id}`, headers: { ...auth, accept: "application/octet-stream" } };
-}
-
 async function published(): Promise<Set<string> | null> {
   // (one request, by fetch with the job's token where there is one: the release's own answer lists every asset, 180 of
   // them as they are kept. Through gh it was 21-35 s of Windows mbui runs with nothing missing, its first call in the job
