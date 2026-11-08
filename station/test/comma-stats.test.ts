@@ -159,7 +159,7 @@ test("connected, the station sends Comma what it lacks of the statistics, and ag
     assert.ok(f());
   };
   try {
-    await surface.start(() => {});
+    await surface.start(async () => {});
     await until(() => metadata !== null && held.through > 0);
     assert.equal(metadata.capabilities.stats_index, 1);
     assert.equal(builds, 1, "connected: built once");
