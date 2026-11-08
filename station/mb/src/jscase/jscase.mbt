@@ -193,3 +193,9 @@ pub fn split_by(s : String, space : (Int) -> Bool) -> Array[String] {
   out.push(s.view(start_offset=start, end_offset=n).to_owned())
   out
 }
+
+///|
+/// Whether a word has a character whose upper and lower case differ (search/sources.ts `finder`).
+pub fn has_cases(s : String) -> Bool {
+  points(s).iter().any(c => in_ranges(changing_ranges, c))
+}

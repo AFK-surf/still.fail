@@ -28,6 +28,7 @@ import {
   "station/locate",
   "station/searchscope",
   "station/search",
+  "station/history",
   "moonbitlang/core/json",
 }
 

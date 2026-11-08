@@ -1,6 +1,5 @@
 // What the station finds for a search: looked for by the MoonBit program (station/mb, src/search; `--builder search`)
-// where it is built, else by a thread of its own (search/worker.ts), in the station's data as it is then. The program
-// does not look through the execution histories: a search for them asks the worker for those alone beside it. A prepared candidate scope avoids unrelated chats; their contents are read as asked.
+// where it is built, else by a thread of its own (search/worker.ts), in the station's data as it is then. A prepared candidate scope avoids unrelated chats; their contents are read as asked.
 // The thread is started with the station and stays; one that dies is started again when next asked. The machine's
 // files are asked beside it (search/files.ts).
 import { Worker } from "node:worker_threads";
@@ -133,17 +132,11 @@ export class Search {
     }).finally(() => { if (this.#preparingSessions === pending) this.#preparingSessions = null; });
   }
 
-  async #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
-    if (this.#mb === null) return this.#ask(this.#worker ?? this.#spawn(), query, asker, options);
-    const history = options.kinds?.includes("history") === true;
-    const [found, histories] = await Promise.all([
-      this.#ask(this.#program ?? this.#spawnProgram(), query, asker, options),
-      history ? this.#ask(this.#worker ?? this.#spawn(), query, asker, { ...options, historyOnly: true }) : Promise.resolve(null),
-    ]);
-    return histories === null ? found : { ...found, groups: [...found.groups, ...histories.groups] };
+  #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
+    return this.#ask(this.#mb === null ? this.#worker ?? this.#spawn() : this.#program ?? this.#spawnProgram(), query, asker, options);
   }
 
-  #ask(looker: Looker | null, query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean; historyOnly?: boolean }): Promise<Found> {
+  #ask(looker: Looker | null, query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
     if (!looker) return Promise.reject(new Error("the search is stopped"));
     const id = this.#next++;
     const program = looker instanceof MbProcess;

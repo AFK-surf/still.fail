@@ -286,9 +286,16 @@ fn homes_first(profiles : Array[(String, String)], first : String?) -> Array[Str
 }
 
 ///|
-/// transcript.ts `transcriptPaths` for one id, `anywhere` false as the live locator asks it: its path, if found.
-fn Finder::transcript_path(self : Finder, runtime : String, data : String, homes : Array[String], id : String, places : Array[String]) -> String? {
-  let anywhere = false
+/// transcript.ts `transcriptPaths` for one id: its path, if found (`anywhere` false: a Claude one in its places alone).
+fn Finder::transcript_path(
+  self : Finder,
+  runtime : String,
+  data : String,
+  homes : Array[String],
+  id : String,
+  places : Array[String],
+  anywhere : Bool,
+) -> String? {
   let shared = self.join([data, "transcripts", runtime])
   let ways = homes.map(home => self.join([home, transcript_dir(runtime)]))
   let said_dirs = if runtime == "codex" { [shared, ..ways] } else { [] }
@@ -371,14 +378,15 @@ pub(all) struct Source {
 }
 
 ///|
-/// transcript.ts `transcriptSources` with `anywhere` false: each source's path with its runtime, and whether the last
-/// one's was found.
+/// transcript.ts `transcriptSources`: each source's path with its runtime, and whether the last one's was found
+/// (`anywhere` false, as the live locator asks: a Claude one looked for in its places alone).
 pub fn Finder::sources(
   self : Finder,
   data : String,
   profiles : Array[(String, String)],
   sources : Array[Source],
   places : Array[String],
+  anywhere? : Bool = false,
 ) -> (Array[(String, String)], Bool) {
   let paths = []
   let mut current = false
@@ -387,7 +395,7 @@ pub fn Finder::sources(
       current = false
       continue
     }
-    let found = self.transcript_path(source.runtime, data, homes_first(profiles, source.profile), source.id, places)
+    let found = self.transcript_path(source.runtime, data, homes_first(profiles, source.profile), source.id, places, anywhere)
     current = found is Some(_)
     if found is Some(path) {
       paths.push((path, source.runtime))
