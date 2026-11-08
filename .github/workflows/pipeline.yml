@@ -792,6 +792,17 @@ jobs:
           bash .github/mac-release-prebuild.sh ready
       - name: Finish the Mac app build
         run: bash .github/mac-release-prebuild.sh wait
+      - name: Report an interrupted Mac build
+        if: failure() || cancelled()
+        run: |
+          for log in "$RUNNER_TEMP/mac-prebuild/log" apps/mbui/out/mbc.log apps/mbui/out/moon.log; do
+            if [ -f "$log" ]; then
+              echo "::group::$log"
+              tail -n 80 "$log"
+              echo '::endgroup::'
+            fi
+          done
+          ps -axo pid,ppid,etime,time,%cpu,comm
       - name: Hand over the compiled program and runtime
         run: bash .github/mac-release-prebuild.sh pack "$RUNNER_TEMP/mac-compiled.tar"
       - uses: actions/upload-artifact@v4
