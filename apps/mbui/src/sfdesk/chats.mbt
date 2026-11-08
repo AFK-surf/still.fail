@@ -293,14 +293,14 @@ fn filter_button(
   let t = @sf.theme()
   let id = c.id("side/filter")
   // its menu (sfpages' filter_menu): a filter its list, 已归档 the archive's list (rail_go)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sfpages.filter_menu(Of(id), if shown == "chats" { "all" } else { shown }, fn(f) {
       match f {
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }
     })
-  }
+  })
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
   let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, transition=nav_fade)
   let ground = @sf.alpha(t.p.hover, hot)

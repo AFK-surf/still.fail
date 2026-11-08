@@ -1623,9 +1623,9 @@ pub fn tool_button(
     key,
     drop,
     draw: fn() {
-      if icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~, shortcut~) {
+      icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~, shortcut~, on_press=fn() {
         on_press()
-      }
+      }) |> ignore
     },
     instead: [menu_item_of(label, on_press, icon~, disabled~)],
   }
@@ -1710,9 +1710,11 @@ pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? :
   let t = theme()
   let id = c.id(key)
   let finger = @ui.pointing() is Finger
-  if finger && c.clicked(id) {
-    about_open.val = if about_open.val == key { "" } else { key }
-  } else if about_open.val == key && c.tapped_anywhere() is Some(_) {
+  if finger {
+    c.on_press(id, fn() { about_open.val = if about_open.val == key { "" } else { key } })
+  }
+  // (a tap elsewhere lets it go: its own is its press's, as its tip sees it, Ctx::watch_press)
+  if about_open.val == key && c.tapped_anywhere() is Some(_) && !c.watch_press(id) {
     about_open.val = ""
   }
   let b = c.box(style=about_box, id~, fn() {
@@ -1905,18 +1907,14 @@ pub fn check_row(
   note? : String = "",
   disabled? : Bool = false,
   lead? : (@ui.Ctx) -> Unit,
-) -> Bool {
+  on_change~ : (Bool) -> Unit,
+) -> Unit {
   let id = c.id(key + "/row")
-  let mut now = on
-  let mut ticked = false
   let r = theme().rows
   c.box(style=check_row_box.then(@ui.style(min_h=Fixed(theme().items.least))), id=if disabled { 0 } else { id }, fn() {
     let look = @kit.checkbox_look_of(size=r.check, radius=r.check_corner)
-    let v = @kit.checkbox(c, key, if on { On } else { Off }, label~, disabled~, look~).value
-    if (v == On) != on {
-      ticked = true
-      now = v == On
-    }
+    @kit.checkbox(c, key, if on { On } else { Off }, label~, disabled~, look~, on_change=fn(v) { on_change(v == On) })
+    |> ignore
     match lead {
       Some(draw) => draw(c)
       None => ()
@@ -1931,10 +1929,9 @@ pub fn check_row(
     |> ignore
   })
   |> ignore
-  if !ticked && !disabled && c.clicked(id) {
-    !on
-  } else {
-    now
+  // (the row pressed, past its box: ticked or not as its box would be)
+  if !disabled {
+    c.on_press(id, fn() { on_change(!on) })
   }
 }
 
@@ -2307,7 +2304,7 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
 /// `scrim`: what the page under it is dimmed with (the theme's where not said; none, 0, where what is under it is
 /// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1: dialog_veil).
-/// Whether it is open now (closed by its close button too).
+/// Whether it is open now; `on_close`: what its close button does, as it is pressed (its owner's open let go).
 pub fn dialog(
   c : @ui.Ctx,
   key : String,
@@ -2325,8 +2322,8 @@ pub fn dialog(
   on_escape? : () -> Bool,
   scrim? : Int64,
   veil? : Double = 0.0,
+  on_close? : () -> Unit = fn() {  },
 ) -> Bool {
-  let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
   let d = @kit.dialog(
     c,
@@ -2371,9 +2368,7 @@ pub fn dialog(
           }
           if close_label != "" {
             c.box(style=dialog_close_at(), fn() {
-              if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
-                closed.val = true
-              }
+              icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label, on_press=on_close) |> ignore
             })
             |> ignore
           }
@@ -2415,9 +2410,7 @@ pub fn dialog(
           c.layer(fn() {
             c.box(style=dialog_close_row, fn() {
               c.box(style=dialog_close_corner(), fn() {
-                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
-                  closed.val = true
-                }
+                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label, on_press=on_close) |> ignore
               })
               |> ignore
             })
@@ -2432,7 +2425,7 @@ pub fn dialog(
     },
     body,
   )
-  d.value && !closed.val
+  d.value
 }
 
 ///|
@@ -2876,14 +2869,16 @@ pub fn select(
     },
   )
   c.semantics(b, Button, id~, label=if label == "" { words } else { label + ": " + words }, disabled~)
-  if !disabled && c.clicked(id) {
-    pick(
-      label,
-      options.map(fn(o) { choice(o.0, o.1, value=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
-      value,
-      choose,
-      from=Of(id),
-    )
+  if !disabled {
+    c.on_press(id, fn() {
+      pick(
+        label,
+        options.map(fn(o) { choice(o.0, o.1, value=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
+        value,
+        choose,
+        from=Of(id),
+      )
+    })
   }
 }
 
@@ -3514,11 +3509,11 @@ pub fn copy_command(c : @ui.Ctx, key : String, text : String, copy~ : String, co
   let just = c.within(id, copied_ms)
   c.box(style=command_box, bg=theme().p.paper, fn() {
     c.box(style=command_words_at, fn() { c.text(text, style=command_words) |> ignore }) |> ignore
-    if icon_button(c, if just { "check" } else { "copy" }, key=key + "/copy", label=if just { copied } else { copy }) {
+    icon_button(c, if just { "check" } else { "copy" }, key=key + "/copy", label=if just { copied } else { copy }, on_press=fn() {
       @ui.clipboard_set(text)
       c.mark(id)
       c.wake_in(copied_ms, later=true)
-    }
+    }) |> ignore
   })
   |> ignore
 }
@@ -3686,8 +3681,9 @@ let handlings : Map[Int, Handling] = {}
 /// or a scroll that passes over it is what it passes over's): pressed and gone past the slop from where it went down,
 /// the width it is
 /// dragged to (the width it had then, the pointer's way on the right edge, the other way on the left, between `min`
-/// and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the second of two clicks.
-/// A width that changes builds the frame again (Ctx::built_from_changed): the page takes it there, the column and its
+/// and `max` on whole pixels); let go, the width it ends at. A press without moving does `pressed`, the second of two
+/// clicks `twice` in its place, as they are let go (Ctx::on_press, on_double_press). A width that changes builds the
+/// frame again (Ctx::built_from_changed): the page takes it there, the column and its
 /// edge under the pointer at once.
 pub fn handle_drag(
   c : @ui.Ctx,
@@ -3696,11 +3692,20 @@ pub fn handle_drag(
   min~ : Double,
   max~ : Double,
   edge? : @ui.Side = Right,
+  pressed? : () -> Unit,
+  twice? : () -> Unit,
 ) -> Resized {
   c.drag_on(id, axis=Horizontal, hold=true)
-  // (read whatever comes of it: it takes presses in every build of a frame alike, the one that let it go, its end
-  // taken, and one built again after it)
-  let clicked = c.clicked(id)
+  // (a press on it, and a second, where they do something; the handle takes its presses whichever: Ctx::drag_on)
+  c.takes_presses(id)
+  match pressed {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
+  match twice {
+    Some(f) => c.on_double_press(id, f)
+    None => ()
+  }
   let at = fn(h : Handling, x : Double) {
     let d = if edge is Left { h.x0 - x } else { x - h.x0 }
     dmax(min, dmin(max, (h.w0 + d).round()))
@@ -3743,16 +3748,12 @@ pub fn handle_drag(
   // (pressed, moved and let go before a frame saw it: from the width it has)
   let h = handlings.get(id).unwrap_or({ x0: d.x0, w0: width, at_end: 0 })
   handlings.remove(id)
-  if c.double_clicked(id) {
-    Twice
-  } else if d.take_end() {
+  if d.take_end() {
     let w = at(h, d.x)
     if w != width {
       c.built_from_changed("a column's edge let go")
     }
     Dropped(w)
-  } else if clicked {
-    Pressed
   } else {
     Untouched
   }
@@ -3931,7 +3932,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
 /// press without moving does), follow the pointer along it, gone as it is pressed until the pointer comes onto it
 /// again. Drawn last in its column's box (it is put by its edges, out of the column's flow). What was done with it
 /// comes back: the page keeps the width (the web's keptWidth and setKeptWidth: where it keeps what it keeps on the
-/// device), and a press or the second of two clicks is the page's.
+/// device), and a press (`pressed`) or the second of two clicks (`twice`) is the page's.
 pub fn resize_handle(
   c : @ui.Ctx,
   key : String,
@@ -3943,10 +3944,12 @@ pub fn resize_handle(
   press? : String = "",
   over? : Bool = false,
   active? : Bool = false,
+  pressed? : () -> Unit,
+  twice? : () -> Unit,
 ) -> Resized {
   let id = c.id(key)
   c.cursor(id, ResizeX)
-  let said = handle_drag(c, id, width, min~, max~, edge~)
+  let said = handle_drag(c, id, width, min~, max~, edge~, pressed?, twice?)
   let held = active || (said is Dragging(_)) || c.pressed(id)
   let on = c.lit(id) || c.focus_shown(id) || held
   let words = if press == "" { label } else { label + " · " + press }
@@ -4079,14 +4082,15 @@ pub fn ask_line_start(icon : Double) -> @ui.Style {
 /// the press's room as least as the native input's), its ground under the hand or the finger concentric with the row's
 /// end corner (capsule_in), its words where they stood, as far in as the row's start mark `mark` wide is from its start; on the
 /// first of the row's lines, however many the words before it take. `disabled`: there and faded, taking no press.
-/// True on the frame after it was pressed.
+/// `on_press` as it is pressed.
 pub fn ask_line_button(
   c : @ui.Ctx,
   label : String,
   key~ : String,
   mark~ : Double,
   disabled? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let h = button_height()
   let pad = option_type().pad_in
   let inset = @ui.capsule_in(option_row_corner, h)
@@ -4121,7 +4125,10 @@ pub fn ask_line_button(
   )
   c.look(b, @ui.look(alpha=seen))
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
-  live && c.clicked(id)
+  match on_press {
+    Some(f) if live => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -4163,8 +4170,8 @@ let ask_line_column : @ui.Style = @ui.css("w=Full align=AStart")
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
 /// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, where it is at most, on the
 /// text at 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
-/// with a check beside the chosen one; its presenter supplies the only ground and padding. The option tapped, on the frame
-/// after.
+/// with a check beside the chosen one; its presenter supplies the only ground and padding. `on_pick`: what an option
+/// pressed does, given its index, as it is pressed.
 pub fn options_card(
   c : @ui.Ctx,
   key : String,
@@ -4174,10 +4181,10 @@ pub fn options_card(
   chosen? : Int? = None,
   wide? : Bool = false,
   history? : Bool = false,
-) -> Int? {
+  on_pick? : (Int) -> Unit,
+) -> Unit {
   let t = theme()
   let free = enabled && busy is None && !history
-  let mut picked : Int? = None
   let ot = option_type()
   let ground = if history { 0L } else if wide { alpha(t.p.text, 0.05) } else { t.p.chip }
   let padding = if history { 0.0 } else { options_card_pad }
@@ -4188,8 +4195,9 @@ pub fn options_card(
       // 
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
-        if free && c.clicked(id) {
-          picked = Some(i)
+        match on_pick {
+          Some(f) if free => c.on_press(id, fn() { f(i) })
+          _ => ()
         }
         // under a mouse's pointer its row's ground, in any layout
         let mouse = @ui.pointing() is Mouse
@@ -4278,7 +4286,6 @@ pub fn options_card(
     |> ignore
   })
   |> ignore
-  picked
 }
 
 ///|
@@ -4398,7 +4405,7 @@ let sign_in_side_w : Double = 30.0
 ///|
 /// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
 /// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
-/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. True on its
+/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. `on_press` on its
 /// press, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
@@ -4410,7 +4417,8 @@ pub fn update_key(
   busy : Bool,
   coming? : Double?? = None,
   offered? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
@@ -4450,7 +4458,10 @@ pub fn update_key(
   if why != "" {
     tip(c, key + "/tip", id, why, side=Bottom)
   }
-  !busy && c.clicked(id)
+  match on_press {
+    Some(f) if !busy => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -4701,7 +4712,7 @@ let sync_out_ms : Double = 400.0
 /// A key of a bar for what comes by itself (what comes to this device: sfdesk transfers.mbt), as update_key draws one:
 /// round, `side` across, its `glyph` `mark` big in its middle, in its place while something comes how far it has come
 /// (`coming`: coming_mark; None while nothing comes), update_key's dot, red's, where something `failed`; pressed, what
-/// comes (the page's). True on its press.
+/// comes (the page's): `on_press`.
 pub fn progress_key(
   c : @ui.Ctx,
   key : String,
@@ -4711,7 +4722,8 @@ pub fn progress_key(
   label : String,
   coming : Double?,
   failed~ : Bool,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   let id = c.id(key)
   let b = c.box(
@@ -4737,7 +4749,10 @@ pub fn progress_key(
     },
   )
   c.semantics(b, Button, id~, label~)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|

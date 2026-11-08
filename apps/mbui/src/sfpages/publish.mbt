@@ -444,7 +444,12 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
             !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
           // (复制 in the band, beside 保存到相册 on a picture's own page: 复制图片 there cut the row short in English)
           let copy_label = if shown { @sf.t("common.copied") } else { @sf.t("common.copy") }
-          let (closed, acted, copied) = @sf.viewer_frame_act(
+          let go = fn(copy : Bool) {
+            if p is Some(_) && publish_kept(p) > 0 {
+              publish_go(c, copy~)
+            }
+          }
+          @sf.viewer_frame_act(
             c,
             "publish",
             if r.title != "" { r.title } else { @sf.t("common.close") },
@@ -456,13 +461,10 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
             busy=publishing.busy.get(),
             busy_copy=publishing.copying && @sf.picture_to_album(),
             disabled=p is None || publish_kept(p) == 0,
+            on_close=publish_close,
+            on_act=fn() { go(false) },
+            on_copy=fn() { go(true) },
           )
-          if (acted || copied) && p is Some(_) && publish_kept(p) > 0 {
-            publish_go(c, copy=copied)
-          }
-          if closed {
-            publish_close()
-          }
         })
         |> ignore
       })
@@ -777,12 +779,16 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
       }
     },
   )
-  if hung || c.clicked(id) {
+  let flip = fn() {
     if on {
       publishing.off[k] = true
     } else {
       publishing.off.remove(k)
     }
+  }
+  c.on_press(id, flip)
+  if hung {
+    flip()
   }
 }
 

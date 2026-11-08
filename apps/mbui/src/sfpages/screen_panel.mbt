@@ -276,15 +276,16 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     let copied = u.diag_copies > 0 &&
       !@kit.after(c, "screen-diag/\{u.diag_copies}", true, diag_said_ms, later=true)
     c.box(style=@ui.style(w=Full, align=ACenter), fn() {
-      if @sf.panel_button(
-          c,
-          "screen-diag",
-          @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
-          tone=Quiet,
-        ) {
-        @ui.clipboard_set(diagnosis(s, u, net, os).stringify(), label="still.fail")
-        u.diag_copies += 1
-      }
+      @sf.panel_button(
+        c,
+        "screen-diag",
+        @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.stat.copy" }),
+        tone=Quiet,
+        on_press=fn() {
+          @ui.clipboard_set(diagnosis(s, u, net, os).stringify(), label="still.fail")
+          u.diag_copies += 1
+        },
+      ) |> ignore
     }) |> ignore
   })
   |> ignore
@@ -347,7 +348,7 @@ let diag_said_ms : Double = 1500.0
 fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
   let id = c.id(key)
-  round_button(c, key, "sliders", @sf.t("web-pages.screen.panel"), does=fn() { center_open(s, u, id, close) })
+  round_button(c, key, "sliders", @sf.t("web-pages.screen.panel"), on_press=fn() { center_open(s, u, id, close) })
   // (a fixture's, asked as it is built)
   if center_asked(u) {
     center_open(s, u, id, close)
@@ -381,9 +382,13 @@ fn center_open(s : ScreenSess, u : ScreenUi, id : Int, close : () -> Unit) -> Un
 /// 控制中心 in the viewer's bar: one of its tools (@sf.viewer_tool, its mark, named on hover); pressed, its panel under it.
 fn center_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
-  if @sf.viewer_tool(c, key, "sliders", @sf.t("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
-    center_asked(u) {
-    center_open(s, u, c.id(key), close)
+  let id = c.id(key)
+  @sf.viewer_tool(c, key, "sliders", @sf.t("web-pages.screen.panel"), @sf.page_viewer_ink(), on_press=fn() {
+    center_open(s, u, id, close)
+  })
+  // (asked from elsewhere: opened as it is seen)
+  if center_asked(u) {
+    center_open(s, u, id, close)
   }
 }
 

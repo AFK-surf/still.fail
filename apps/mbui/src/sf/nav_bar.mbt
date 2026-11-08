@@ -58,8 +58,8 @@ let nav_trailing : @ui.Style = @ui.css("row h=S8 align=ACenter")
 /// itself, a fill's, was 2.8 to 1 there: mbui ui/contrast.mbt). Its word no wider than `max_w`
 /// (when that is said): there whole or not at all (Ctx::box drop), the chevron alone where it has not the room, as
 /// iOS's back button gives way; never cut short past knowing (the user, 2026-10-25). It is still what the button is
-/// called. True on the frame after it was tapped.
-pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0) -> Bool {
+/// called. `on_press` as it is pressed.
+pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0, on_press? : () -> Unit) -> Unit {
   let t = theme()
   let id = c.id(key)
   c.box(style=nav_back_box, id~, label=label, fn() {
@@ -76,13 +76,16 @@ pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0
     @motion.ripple(c, id, 8.0)
   })
   |> ignore
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
 /// The bar (NavBar): back (`back_key` its id, `back` its word, `back_max` how wide the word may be), `title` in the
 /// middle and `sub` under it, `trailing` at the end; on `bg` when it is said, from `top` above it down (the status
-/// bar's height, the view under it: NavBar's windowInsetsPadding(statusBars)). True on the frame after back was tapped.
+/// bar's height, the view under it: NavBar's windowInsetsPadding(statusBars)). `on_press` when back is tapped.
 pub fn nav_bar(
   c : @ui.Ctx,
   back_key : String,
@@ -93,8 +96,9 @@ pub fn nav_bar(
   back_max? : Double = 0.0,
   bg? : Int64 = 0L,
   top? : Double = 0.0,
-) -> Bool {
-  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~, top~)
+  on_press? : () -> Unit,
+) -> Unit {
+  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~, top~, on_press?)
 }
 
 ///|
@@ -108,8 +112,8 @@ fn nav_bar_in(
   back_max~ : Double,
   bg~ : Int64,
   top~ : Double,
-) -> Bool {
-  let mut went = false
+  on_press? : () -> Unit,
+) -> Unit {
   // det-ok(box-loose): the page's own ground (still.fail's palette, not one of mbui's theme roles yet), as the page has it
   c.box(style=nav_bar_box, bg~, fn() {
     // under the status bar
@@ -130,7 +134,7 @@ fn nav_bar_in(
       // back and what is at the end, on the 32 line at its top
       c.layer(fn() {
         c.box(style=nav_ends, fn() {
-          went = nav_back(c, back_key, back, max_w=back_max)
+          nav_back(c, back_key, back, max_w=back_max, on_press?)
           c.spacer()
           match trailing {
             Some(f) => c.box(style=nav_trailing, fn() { f() }) |> ignore
@@ -144,5 +148,4 @@ fn nav_bar_in(
     |> ignore
   })
   |> ignore
-  went
 }

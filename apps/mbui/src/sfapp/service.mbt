@@ -92,9 +92,9 @@ pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -
 /// 是不是上面也应该少一点).
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
   let said = if station == "" { title } else { title + " · " + station }
-  if @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), said, top=status_top()) {
+  @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), said, top=status_top(), on_press=fn() {
     @sfbase.go_back() |> ignore
-  }
+  })
 }
 
 ///|

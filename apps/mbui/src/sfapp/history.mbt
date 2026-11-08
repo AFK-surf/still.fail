@@ -13,9 +13,9 @@
 /// A page's compact bar: back, with where it goes back to, in the accent; the title in the middle;
 /// what is at its end.
 fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
-  if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top()) {
+  @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top(), on_press=fn() {
     @sfbase.go_back() |> ignore
-  }
+  })
 }
 
 ///|
@@ -48,8 +48,10 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     page_bar(c, "history", tr("common.back"), tr("android-chat.history.title"), fn() {
-      if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy", said=tr("web-mobile.history.copyLink")) {
-        copy_chat_link(title, link)
+      if title != "" && link != "" {
+        nav_button(c, "copy", 18.0, key="history/copy", said=tr("web-mobile.history.copyLink"), on_press=fn() {
+          copy_chat_link(title, link)
+        })
       }
     })
     history_body(c, src, r, key, entry, chat)
@@ -256,9 +258,10 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
       agent_notes(c, card, 10.0)
       c.box(h=Px(6.0), fn() {  }) |> ignore
       // How it runs is picked in the same panel as elsewhere in the app.
-      if run_row(c, a) {
-        @sfpages.open_triple_panel(src, r.station, "session:" + key, Of(c.id("history-run-row")), saved=@sf.t("web-pages.chat.pickSaved"))
-      }
+      let from = c.id("history-run-row")
+      run_row(c, a, on_press=fn() {
+        @sfpages.open_triple_panel(src, r.station, "session:" + key, Of(from), saved=@sf.t("web-pages.chat.pickSaved"))
+      })
       c.box(w=Fill(1.0), pt=12.0, pb=10.0, gap=8.0, fn() {
         detail(tr("android-chat.history.detail.runtime"), text(s, "runtimeText"), false)
         match text(s, "processText") {
@@ -319,8 +322,8 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
 
 ///|
 /// How it runs, in one line: the model (never cut short), how hard it thinks, the account; a
-/// hairline round it. True on the frame after a tap (the model picker opened).
-fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
+/// hairline round it. `on_press` as it is tapped (the model picker opened).
+fn run_row(c : @ui.Ctx, a : Json?, on_press? : () -> Unit) -> Unit {
   let t = @sf.theme()
   let s = field(a, "session")
   let name = text(field(a, "account"), "name")
@@ -379,7 +382,10 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
     |> ignore
   })
   |> ignore
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|

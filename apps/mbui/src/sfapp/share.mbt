@@ -523,34 +523,35 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
         let agent = items(it, "agents").get(0)
         let ago = text(field(field(it, "time"), "lastActiveAt"), "ago")
         lines.push(fn() {
-          if share_row(
-              c,
-              look,
-              "share-in/row/" + station + "/" + id,
-              text(it, "title"),
-              sub,
-              if look.wide { ago } else { "" },
-              opening == Some((station, id)),
-              opening is None,
-              fn() {
-                match agent {
-                  Some(a) => {
-                    let maker = text(field(Some(a), "maker"), "id")
-                    let runtime = text(Some(a), "runtime")
-                    if look.wide {
-                      @sf.maker_mark(c, maker, runtime, look.model) |> ignore
-                    } else {
-                      model_mark_big(c, maker, runtime, look.model, "", t.p.bg)
-                    }
+          share_row(
+            c,
+            look,
+            "share-in/row/" + station + "/" + id,
+            text(it, "title"),
+            sub,
+            if look.wide { ago } else { "" },
+            opening == Some((station, id)),
+            opening is None,
+            fn() {
+              match agent {
+                Some(a) => {
+                  let maker = text(field(Some(a), "maker"), "id")
+                  let runtime = text(Some(a), "runtime")
+                  if look.wide {
+                    @sf.maker_mark(c, maker, runtime, look.model) |> ignore
+                  } else {
+                    model_mark_big(c, maker, runtime, look.model, "", t.p.bg)
                   }
-                  // (no agent yet: still.fail's mark wide, the phone's 新建对话 mark)
-                  None if look.wide => @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 16.0) |> ignore
-                  None => @sf.icon(c, "compose", size=look.icon, color=t.p.muted) |> ignore
                 }
-              },
-            ) {
-            share_open(c, src, w, station, Some(id), session=text(it, "session"))
-          }
+                // (no agent yet: still.fail's mark wide, the phone's 新建对话 mark)
+                None if look.wide => @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 16.0) |> ignore
+                None => @sf.icon(c, "compose", size=look.icon, color=t.p.muted) |> ignore
+              }
+            },
+            on_press=fn() {
+              share_open(c, src, w, station, Some(id), session=text(it, "session"))
+            },
+          )
         })
       }
       if rows.length() == 0 && searching {
@@ -567,19 +568,20 @@ fn share_parts(c : @ui.Ctx, src : Source, w : Workspace, look : ShareLook) -> Un
         Some(s) if !searching => {
           let on_station = text(Some(s), "station")
           lines.push(fn() {
-            if share_row(
-                c,
-                look,
-                "share-in/new",
-                sh("web-main.sidebar.newChat"),
-                "",
-                "",
-                opening == Some((on_station, "")),
-                opening is None,
-                fn() { @sf.icon(c, "compose", size=look.icon, color=t.p.muted) |> ignore },
-              ) {
-              share_open(c, src, w, on_station, None)
-            }
+            share_row(
+              c,
+              look,
+              "share-in/new",
+              sh("web-main.sidebar.newChat"),
+              "",
+              "",
+              opening == Some((on_station, "")),
+              opening is None,
+              fn() { @sf.icon(c, "compose", size=look.icon, color=t.p.muted) |> ignore },
+              on_press=fn() {
+                share_open(c, src, w, on_station, None)
+              },
+            )
           })
         }
         _ => ()
@@ -679,7 +681,8 @@ fn share_row(
   busy : Bool,
   enabled : Bool,
   lead : () -> Unit,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let lit = enabled && c.lit(id)
@@ -717,7 +720,10 @@ fn share_row(
     |> ignore
   })
   |> ignore
-  enabled && c.clicked(id)
+  match on_press {
+    Some(f) if enabled => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|

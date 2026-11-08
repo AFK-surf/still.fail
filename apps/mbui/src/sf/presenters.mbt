@@ -1822,6 +1822,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     },
     wide=x.wide,
     close_label=t("common.close"),
+    on_close=close,
     step~,
     column_in=panel_words - dialog_pad,
     scrim?=scrim_of(p, false),
@@ -1859,6 +1860,7 @@ fn steps_centred(
     },
     wide=x.wide,
     close_label=t("common.close"),
+    on_close=close,
     column_in=column,
     bare=true,
     on_escape=fn() { steps_escape(p) },
@@ -1940,7 +1942,6 @@ fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   }
   let room_w = ww - 2.0 * stage_margin - bars.left - bars.right
   let room_h = wh - 2.0 * stage_margin - bars.top - bars.bottom - foot_h - stage_gap
-  let mut closed = false
   let d = @kit.dialog(
     c,
     key,
@@ -1965,9 +1966,7 @@ fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
           None => ()
         }
         c.box(style=stage_foot, fn() {
-          if button(c, t("common.close"), key=key + "/stage-close") {
-            closed = true
-          }
+          button(c, t("common.close"), key=key + "/stage-close", on_press=close) |> ignore
           match x.foot {
             Some(f) => f(c, close)
             None => ()
@@ -1979,7 +1978,7 @@ fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       |> ignore
     },
   )
-  (d.value && !closed && p.open, dialog_built(c, key, p.open))
+  (d.value && p.open, dialog_built(c, key, p.open))
 }
 
 ///|
@@ -2319,7 +2318,6 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
                   disabled=item.disabled,
                   on_press=fn() { done_with(p, item.select) },
                 )
-                |> ignore
               }
           }
         }
@@ -2364,7 +2362,6 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           sheet_row(c, key + "/" + x.key, x.label, note=x.note, value=x.value, icon=x.icon, mark?=x.mark, on=x.key == chosen, on_press=fn() {
             done_with(p, fn() { choose(x.key) })
           })
-          |> ignore
         }
       }
       if many {
@@ -2679,9 +2676,9 @@ fn step_head(
     match back {
       Some(f) =>
         c.box(style=in_line(step_back_side - line).then(@ui.style(ml=room(-step_back_in))), fn() {
-          if icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back")) {
+          icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back"), on_press=fn() {
             f()
-          }
+          }) |> ignore
         })
         |> ignore
       None => ()
@@ -2737,11 +2734,13 @@ fn sheet_row(
   on? : Bool = false,
   danger? : Bool = false,
   disabled? : Bool = false,
-  on_press? : () -> Unit,
-) -> Bool {
+  on_press~ : () -> Unit,
+) -> Unit {
   let th = theme()
   let id = c.id(key)
-  press_does(c, id, !disabled, on_press)
+  if !disabled {
+    c.on_press(id, on_press)
+  }
   let ink = if disabled {
     th.p.subtle
   } else if danger {
@@ -2786,7 +2785,6 @@ fn sheet_row(
     }
   })
   |> ignore
-  !disabled && c.clicked(id)
 }
 
 ///|

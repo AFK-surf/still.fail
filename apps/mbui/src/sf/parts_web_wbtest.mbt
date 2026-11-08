@@ -124,6 +124,7 @@ test "a dialog: 520 wide, its title and its lead, what it holds; its close butto
         fn() { c.text("路径", size=13.0) |> ignore },
         description="输入路径",
         close_label="关闭",
+        on_close=fn() { open.val = false },
       )
     }),
     w=1280.0,
@@ -186,7 +187,9 @@ fn edge_view(width : Ref[Double], said : Array[Resized]) -> (@ui.Ctx) -> Unit {
   wide_view(fn(c) {
     c.box(dir=Row, h=Fill(1.0), fn() {
       c.box(w=Px(width.val), h=Fill(1.0), fn() {
-        let r = resize_handle(c, "column", width.val, min=160.0, max=640.0, label="调整列宽", over=true)
+        let r = resize_handle(c, "column", width.val, min=160.0, max=640.0, label="调整列宽", over=true, pressed=fn() {
+          said.push(Pressed)
+        }, twice=fn() { said.push(Twice) })
         match r {
           Dragging(w) | Dropped(w) => width.val = w
           _ => ()
@@ -236,7 +239,7 @@ test "a column's edge: 7 wide, 4 past the column; dragged past the slop, the wid
 }
 
 ///|
-test "a column's edge pressed without moving is Pressed, the second of two clicks Twice" {
+test "a column's edge pressed without moving does `pressed`, the second of two clicks `twice` in its place" {
   let width = Ref(240.0)
   let said : Array[Resized] = []
   let t = @ui.Tester::new(edge_view(width, said), w=1280.0, h=800.0)

@@ -38,8 +38,8 @@ pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook
     for i, name in steps {
       let last = i == n - 1
       let id = c.id(key + "/\{i}")
-      if (!last || last_link) && c.clicked(id) {
-        go(i)
+      if !last || last_link {
+        c.on_press(id, fn() { go(i) })
       }
       // (the last: always there, its words kept whole while another may leave, cut short only after)
       if last {

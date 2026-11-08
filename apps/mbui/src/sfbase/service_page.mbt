@@ -57,7 +57,6 @@ pub(all) struct ServicePage {
   mut moving : Bool
   mut placed : Placed?
   mut hold : StageHold?
-  mut tapped_at : Double
   /// its name and its chat's agent (marks go into that chat's draft: none, nothing to mark for), its marks
   mut name : String
   mut session : String
@@ -157,7 +156,6 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
         moving: false,
         placed: None,
         hold: None,
-        tapped_at: -1.0e9,
         name: "",
         session: "",
         marks: page_marks_new(),
@@ -691,11 +689,10 @@ pub(all) struct Placed {
 
 ///|
 /// A finger (or two) on the stage, from where it went down: where they were the frame
-/// before (or when one came or went), how far one finger went, when it went down, whether on the page.
+/// before (or when one came or went), how far one finger went, whether on the page.
 pub(all) struct StageHold {
   mut was : Array[(Double, Double)]
   mut travelled : Double
-  down_at : Double
   on_page : Bool
 }
 

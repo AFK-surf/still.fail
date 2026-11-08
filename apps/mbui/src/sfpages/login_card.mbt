@@ -137,7 +137,7 @@ fn login_said(c : @ui.Ctx, words : String, red? : Bool = false, busy? : Bool = f
 
 ///|
 /// A step's button (StepButton): the card's width, solid while it is the next thing to do, a plain grey one once it has
-/// been; a spinner while it is under way, ↗ for a page opened elsewhere. True as it is pressed.
+/// been; a spinner while it is under way, ↗ for a page opened elsewhere. `on_press` as it is pressed.
 fn login_step(
   c : @ui.Ctx,
   key : String,
@@ -147,7 +147,8 @@ fn login_step(
   external? : Bool = false,
   more? : Array[@sf.MenuItem] = [],
   last? : Bool = true,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let p = @sf.theme().p
   let id = if busy { 0 } else { c.id(key) }
   let ink = if solid { p.on_primary } else { p.text }
@@ -181,7 +182,10 @@ fn login_step(
     })
     |> ignore
   }
-  id != 0 && c.clicked(id)
+  match on_press {
+    Some(f) if id != 0 => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -217,13 +221,13 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
         u => u
       }
       // one press: the code copied first, then its page; the code stays on show for a clipboard that refused it
-      if login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=login_page_ways(page, elsewhere)) {
+      login_step(c, "login-main/" + id, @sf.t("web-main.logins.copyOpen"), !pressed, more=login_page_ways(page, elsewhere), on_press=fn() {
         @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
           logins_here.pressed[id] = true
           @sfbase.copy_out(code)
           login_open(core, page)
         })
-      }
+      })
     }
     // this device cannot take the browser's callback (a web page), or its port was taken just now: the station's
     // browser, which can, is the step (this device's again in its ⋯), else what is wrong is said; the page's host all
@@ -245,9 +249,9 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       } else {
         []
       }
-      if login_step(c, "login-station/" + id, text(l, "browserText"), true, busy~, more=again) {
+      login_step(c, "login-station/" + id, text(l, "browserText"), true, busy~, more=again, on_press=fn() {
         login_station_pressed(c, core, station, l)
-      }
+      })
     }
     "loopback" if !relay => {
       login_said(c, @sf.t("web-main.logins.needsDesktop"), last=domain == "")
@@ -269,25 +273,25 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       }
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
-      if login_step(c, "login-main/" + id, label, !opened, busy~, more=elsewhere) {
+      login_step(c, "login-main/" + id, label, !opened, busy~, more=elsewhere, on_press=fn() {
         // (confirmed first for Claude: done as it is confirmed; else told once the frame's builds are over)
         if text(l, "name") == "claude" {
           @settings.confirm_claude_auth(true, fn() { login_relay_now(core, station, id, text(l, "title")) })
         } else {
           login_relay(c, core, station, id, text(l, "title"))
         }
-      }
+      })
     }
     "open" if url != "" => {
       if domain != "" {
         login_said(c, domain)
       }
-      if login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=login_page_ways(url, elsewhere)) {
+      login_step(c, "login-main/" + id, @sf.t("web-main.logins.signIn"), !pressed, more=login_page_ways(url, elsewhere), on_press=fn() {
         @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
           logins_here.pressed[id] = true
           login_open(core, url)
         })
-      }
+      })
     }
     _ => login_said(c, text(l, "statusText"), busy=true, last=true)
   }
@@ -443,12 +447,12 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?, place : St
     Some(way) => [way]
     None => []
   }
-  if login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=login_page_ways(text(l, "url"), elsewhere), last=false) {
+  login_step(c, "login-paste-open/" + id, @sf.t("web-main.logins.openPage"), !opened && !typed && !busy, external=true, more=login_page_ways(text(l, "url"), elsewhere), last=false, on_press=fn() {
     @settings.confirm_claude_auth(text(l, "name") == "claude", fn() {
       logins_here.pressed[id] = true
       login_open(core, text(l, "url"))
     })
-  }
+  })
   // sent, nothing is left to type: the keyboard goes (the code stays in the field as it is checked)
   let send = fn(code : String) {
     c.blur()

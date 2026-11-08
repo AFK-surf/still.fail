@@ -387,12 +387,13 @@ fn new_controls(
     text(v, "runtime") == "" ||
     field(v, "model") is None {
     // nothing to run it with: the way to where models are enabled
-    if new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
-        c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
-      }) &&
-      !going {
-      open_page(Place("profiles"))
-    }
+    new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
+      c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
+    }, on_press=fn() {
+      if !going {
+        open_page(Place("profiles"))
+      }
+    })
   } else {
     // (asked from elsewhere, opened here: not by what is drawn in a page's bones)
     if !c.in_bones() && take_asked("model") {
@@ -415,28 +416,33 @@ fn new_station_control(
   going : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  if (new_capsule(
-      c,
-      "new/station",
-      text(station, "name"),
-      floating,
-      fn() {
-        @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
-        // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
-        c.box(style=new_station_name, drop=new_drop_station_name, fn() {
-          c.text(text(station, "name"), style=new_capsule_words) |> ignore
-        })
-        |> ignore
-        @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
-      },
-    ) &&
-    !going) ||
-    (!c.in_bones() && take_asked("station")) {
-    @sf.panel(
-      @sf.t("android-chat.new.station.pick"),
-      fn(c, close) { station_rows(c, src, w, v, close) },
-      from=Of(c.id("new/station")),
-    )
+  let from = c.id("new/station")
+  let open = fn() {
+    @sf.panel(@sf.t("android-chat.new.station.pick"), fn(c, close) { station_rows(c, src, w, v, close) }, from=Of(from))
+  }
+  new_capsule(
+    c,
+    "new/station",
+    text(station, "name"),
+    floating,
+    fn() {
+      @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
+      // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
+      c.box(style=new_station_name, drop=new_drop_station_name, fn() {
+        c.text(text(station, "name"), style=new_capsule_words) |> ignore
+      })
+      |> ignore
+      @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
+    },
+    on_press=fn() {
+      if !going {
+        open()
+      }
+    },
+  )
+  // (asked from elsewhere: opened as it is seen)
+  if !c.in_bones() && take_asked("station") {
+    open()
   }
 }
 
@@ -444,7 +450,7 @@ fn new_station_control(
 /// A control of the page's (where it runs, the way to models): over the composer a capsule of its glass (mChooser,
 /// NewChat.kt Chooser), in its row as the composer's other controls; what it holds
 /// `body`. True on the frame after it was pressed.
-fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit) -> Bool {
+fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = if floating {
     c.box(style=glass_chooser_box, glass=@sf.glass_floating(), id~, fn() {
@@ -455,7 +461,10 @@ fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body 
     c.box(style=new_capsule_in_row, id~, body)
   }
   c.semantics(b, Button, id~, label~)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -478,10 +487,10 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
   for s in items(v, "stations") {
     let st = Some(s)
     let id = c.id("pick-station/" + text(st, "station"))
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
       close()
-    }
+    })
     // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in)
     let row = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
       c.box(style=station_row_mark_box, fn() {
@@ -806,14 +815,14 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
       fn() {
         match blocked {
           "profile" =>
-            if @sf.button(c, @sf.t("web-main.newChat.addProfile"), key="new/add-profile", tone=Primary, icon="plus") {
+            @sf.button(c, @sf.t("web-main.newChat.addProfile"), key="new/add-profile", tone=Primary, icon="plus", on_press=fn() {
               open_page(Setting(@settings.Route::NewProfile(address)))
-            }
+            }) |> ignore
           "shared" => ()
           _ =>
-            if @sf.button(c, @sf.t("web-main.newChat.goPickModels"), key="new/pick-models", tone=Primary) {
+            @sf.button(c, @sf.t("web-main.newChat.goPickModels"), key="new/pick-models", tone=Primary, on_press=fn() {
               open_page(Setting(@settings.Route::Profiles(address)))
-            }
+            }) |> ignore
         }
         if items(v, "stations").length() > 1 {
           new_station_control(c, src, w, v, station, false, false)

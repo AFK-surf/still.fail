@@ -11,12 +11,12 @@ let bones_note : Int = 60
 /// The sample as an old view's (what `waiting` is given).
 fn bones_sample_old(c : @ui.Ctx, pressed : Ref[Int]) -> Unit {
   group(c, fn() {
-    if link_row(c, "b1", sample_words(6), note=sample_words(bones_note)) {
+    link_row(c, "b1", sample_words(6), note=sample_words(bones_note), on_press=fn() {
       pressed.val += 1
-    }
-    if link_row(c, "b2", sample_words(4), value=sample_words(3)) {
+    }) |> ignore
+    link_row(c, "b2", sample_words(4), value=sample_words(3), on_press=fn() {
       pressed.val += 1
-    }
+    }) |> ignore
   })
   c.box(dir=Row, gap=8.0, align=ACenter, fn() {
     icon(c, "bell", size=20.0, color=theme().p.muted) |> ignore

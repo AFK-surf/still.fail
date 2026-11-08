@@ -182,7 +182,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                       None,
                       chosen=list.search_by(fn(o) { Some(o.label) == chosen }),
                       history=true,
-                    ) |> ignore
+                    )
                   })
                 }) |> ignore
               }
@@ -427,32 +427,27 @@ pub fn decision_options(
   }
   // as wide as what it says, as wide as where it is at most
   c.box(style=options_room, fn() {
-    match
-      @sf.options_card(
-        c,
-        "options/" + m.ts,
-        options.map(fn(o) { (o.label, o.detail, o.recommended) }),
-        !resolved,
-        if resolved { None } else { busy },
-        chosen~,
-        wide=true,
-      ) {
-      Some(i) if !resolved => {
+    @sf.options_card(
+      c,
+      "options/" + m.ts,
+      options.map(fn(o) { (o.label, o.detail, o.recommended) }),
+      !resolved,
+      if resolved { None } else { busy },
+      chosen~,
+      wide=true,
+      on_pick=fn(i) {
         let label = options[i].label
         on_pick(i)
-        c.tell("options/" + m.ts, fn() {
-          // picked, felt as something done (a no as something refused: act)
-          @ui.haptic(Confirm)
-          act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
-            "station": Json::string(here.station),
-            "thread": Json::number(thread),
-            "seq": Json::number(m.seq),
-            "option": Json::string(label),
-          })
+        // picked, felt as something done (a no as something refused: act)
+        @ui.haptic(Confirm)
+        act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
+          "station": Json::string(here.station),
+          "thread": Json::number(thread),
+          "seq": Json::number(m.seq),
+          "option": Json::string(label),
         })
-      }
-      _ => ()
-    }
+      },
+    )
   })
   |> ignore
 }

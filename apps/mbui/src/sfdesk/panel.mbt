@@ -533,10 +533,12 @@ fn side_panel(
         // the station's screen in front: to a window of its own (a desktop's), its tab closed here (station_tabs.mbt)
         match station_tab_page(r, front) {
           Some(p) if @sfbase.window_opens_for(p) =>
-            if @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window")) &&
-              @sfbase.open_window(p) {
-              side_change(src, r, "close", Some(front))
-            }
+            @sf.icon_button(c, "external", key="side/window", round=true, label=@sf.t("web-pages.screen.window"), on_press=fn() {
+              if @sfbase.open_window(p) {
+                side_change(src, r, "close", Some(front))
+              }
+            })
+            |> ignore
           _ => ()
         }
         // the panel's switch stays in its top right corner, open or closed; in the short column, the column's
@@ -600,11 +602,11 @@ fn side_panel(
         label=@sf.t("web-pages.chat.resizePanel"),
         edge=Left,
         press=@sf.t("web-pages.chat.closePanel"),
+        pressed=fn() { side_change(src, r, "clear", None) },
+        twice=fn() { panel_own.width.set(None) },
       ) {
       Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
-      Pressed => side_change(src, r, "clear", None)
-      Twice => panel_own.width.set(None)
-      Untouched => ()
+      Pressed | Twice | Untouched => ()
     }
   })
   |> ignore

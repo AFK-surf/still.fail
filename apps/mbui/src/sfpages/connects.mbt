@@ -270,14 +270,18 @@ fn cn_add(
   primary : Bool,
   round? : Bool = false,
 ) -> Unit {
-  let pressed = if round {
-    @sf.icon_button(c, "plus", key~, round=true, label~)
+  let from = c.id(key)
+  let go = fn() { cn_add_go(src, core, here, targets, from, primary) }
+  if round {
+    @sf.icon_button(c, "plus", key~, round=true, label~, on_press=go) |> ignore
   } else {
-    @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus")
+    @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus", on_press=go) |> ignore
   }
-  if !pressed {
-    return
-  }
+}
+
+///|
+/// What 添加 does: the one station's new connect, else which station it is on asked first.
+fn cn_add_go(src : Source, core : Core, here : Here, targets : Array[Json], from : Int, primary : Bool) -> Unit {
   if targets.length() == 1 {
     new_connect_dialog(src, core, here, text(Some(targets[0]), "station"))
     return
@@ -287,7 +291,7 @@ fn cn_add(
     let station = text(Some(s), "station")
     items.push(Some(@sf.menu_item_of(text(Some(s), "name"), fn() { new_connect_dialog(src, core, here, station) })))
   }
-  @sf.menu(items, from=Of(c.id(key)), title=@sf.t("web-pages.connects.whichStation"), along=if primary { Middle } else { End })
+  @sf.menu(items, from=Of(from), title=@sf.t("web-pages.connects.whichStation"), along=if primary { Middle } else { End })
 }
 
 ///|
@@ -320,36 +324,37 @@ fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name 
       })
     None => None
   }
-  if @sf.link_row(
-      c,
-      "connect/" + station + "/" + id,
-      text(cv, "name"),
-      note=how,
-      note_cut=true,
-      chevron=false,
-      lead=fn() { cn_avatar(c, core, cv) },
-      // (its own picture a face across the row's middle; what it connects to a mark by its first line)
-      face=pictured,
-      title_after?=team,
-      tail=fn() {
-        // (wide: where it runs and who made it, dropped before its name where the line has not the room)
-        if look == Wide {
-          c.box(style=cn_facts, drop=cn_drop_facts, fn() {
-            cn_station_tag(c, station_name, s)
-            cn_owner(c, core, station + "/" + id, field(cv, "createdBy"))
-          })
-          |> ignore
-        }
-        doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
-        c.box(style=cn_narrow_state, fn() {
-          @sf.status_dot(c, text(cv, "presence"))
-          c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+  @sf.link_row(
+    c,
+    "connect/" + station + "/" + id,
+    text(cv, "name"),
+    note=how,
+    note_cut=true,
+    chevron=false,
+    lead=fn() { cn_avatar(c, core, cv) },
+    // (its own picture a face across the row's middle; what it connects to a mark by its first line)
+    face=pictured,
+    title_after?=team,
+    tail=fn() {
+      // (wide: where it runs and who made it, dropped before its name where the line has not the room)
+      if look == Wide {
+        c.box(style=cn_facts, drop=cn_drop_facts, fn() {
+          cn_station_tag(c, station_name, s)
+          cn_owner(c, core, station + "/" + id, field(cv, "createdBy"))
         })
         |> ignore
-      },
-    ) {
-    (core.push)(Connect(station, id))
-  }
+      }
+      doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+      c.box(style=cn_narrow_state, fn() {
+        @sf.status_dot(c, text(cv, "presence"))
+        c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+      })
+      |> ignore
+    },
+    on_press=fn() {
+      (core.push)(Connect(station, id))
+    },
+  ) |> ignore
 }
 
 ///|
@@ -477,12 +482,13 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
     },
     control?=if online {
       Some(fn() {
-        let go = match look {
-          Wide => @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id)
-          Narrow => tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink())
-        }
-        if go {
-          new_connect_dialog(src, core, here, station, resume=app_id)
+        let go = fn() { new_connect_dialog(src, core, here, station, resume=app_id) }
+        match look {
+          Wide => @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id, on_press=go) |> ignore
+          Narrow =>
+            if tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink()) {
+              go()
+            }
         }
         // dropped from under ⋯ (its menu), asked again first; it stays in Slack
         if !dropping {

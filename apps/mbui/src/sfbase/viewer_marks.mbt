@@ -864,9 +864,9 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
       c.text(pv("common.cancel"), size=@sf.theme().t.meta, color=ink, wrap=false) |> ignore
     })
     c.semantics(cancel_box, Button, id=cancel, label=pv("common.cancel"))
-    if picture_button(c, "marks/download", "download", ink, true, enabled=ready, said=pv("android-chat.marks.downloadMarked")) {
+    picture_button(c, "marks/download", "download", ink, true, enabled=ready, said=pv("android-chat.marks.downloadMarked"), on_press=fn() {
       go(false)
-    }
+    })
     if can_draft {
       let put = c.id("marks/put")
       c.on_press(put, fn() {

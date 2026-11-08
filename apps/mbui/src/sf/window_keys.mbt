@@ -127,33 +127,35 @@ pub fn window_keys(c : @ui.Ctx) -> Unit {
   c.box(style=@ui.style(row=true, w=Full, pt=room(top), pr=room(side), justify=JEnd, align=AStart), fn() {
     c.box(style=@ui.style(row=true, align=ACenter, gap=room(window_keys_gap)), fn() {
       c.box(style=window_rule, fn() {  }) |> ignore
-      if icon_button(c, "minus", key="window/minimize", round=true, linked=link, label=t("desktop.menu.minimize")) {
+      icon_button(c, "minus", key="window/minimize", round=true, linked=link, label=t("desktop.menu.minimize"), on_press=fn() {
         @ui.window_act(1)
-      }
+      }) |> ignore
       // (pressed with the keys alone: the pointer's press on it is the host's)
-      if icon_button(
-          c,
-          if zoomed { "copy" } else { "square" },
-          key="window/zoom",
-          round=true,
-          linked=link,
-          on=snap == 2,
-          lit=snap == 1,
-          label=t(if zoomed { "desktop.window.restore" } else { "desktop.window.maximize" }),
-        ) {
-        @ui.window_act(2)
-      }
-      if icon_button(
-          c,
-          "close",
-          key="window/close",
-          round=true,
-          linked=link,
-          ink=p.red,
-          label=t("desktop.menu.close"),
-        ) {
-        @ui.window_act(3)
-      }
+      icon_button(
+        c,
+        if zoomed { "copy" } else { "square" },
+        key="window/zoom",
+        round=true,
+        linked=link,
+        on=snap == 2,
+        lit=snap == 1,
+        label=t(if zoomed { "desktop.window.restore" } else { "desktop.window.maximize" }),
+        on_press=fn() {
+          @ui.window_act(2)
+        },
+      ) |> ignore
+      icon_button(
+        c,
+        "close",
+        key="window/close",
+        round=true,
+        linked=link,
+        ink=p.red,
+        label=t("desktop.menu.close"),
+        on_press=fn() {
+          @ui.window_act(3)
+        },
+      ) |> ignore
     })
     |> ignore
   })

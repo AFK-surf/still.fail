@@ -20,13 +20,13 @@ pub fn narrow_bare() -> NarrowOf {
 
 ///|
 /// The narrow bar (NavBar): back where the frame says (its words), the title in the middle, what it does at its end;
-/// true on the frame back was pressed.
-fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) -> Bool {
+/// `on_press` as back is pressed.
+fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit, on_press~ : () -> Unit) -> Unit {
   // (in a panel of its own on the tape: a chat's bar, as a settings page's there; back only where there is somewhere
   // to go)
   if @sf.in_pane() {
     pane_bar(c, n.frame.back.map(fn(label) { (label, n.back) }), title, actions=trailing)
-    return false
+    return
   }
   @sf.nav_bar(
     c,
@@ -41,6 +41,7 @@ fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) 
     },
     bg=@sf.theme().p.bg,
     top=n.frame.top,
+    on_press~,
   )
 }
 
@@ -80,7 +81,7 @@ fn narrow_empty(c : @ui.Ctx, words : String, action : (String, () -> Unit)?) -> 
     @sf.icon(c, "folder", size=narrow_empty_icon, color=t.p.subtle) |> ignore
     c.text(words, style=narrow_empty_words) |> ignore
     match action {
-      Some((label, go)) => if @sf.button(c, label, key="files/narrow/empty", tone=Ghost) { go() }
+      Some((label, go)) => @sf.button(c, label, key="files/narrow/empty", tone=Ghost, on_press=go) |> ignore
       None => ()
     }
   })

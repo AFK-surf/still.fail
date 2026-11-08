@@ -368,13 +368,15 @@ fn attention_foot(c : @ui.Ctx, src : Source, w : Workspace, close : () -> Unit) 
     .filter(fn(i) { text(Some(i), "kind") == "done" && number(Some(i), "thread") > 0.0 && field(Some(i), "seq") is Some(Number(_, ..)) })
     .collect()
   c.box(style=att_foot, fn() {
-    if unread.length() > 0 && attention_link(c, "attention/read-all", @sf.t("web-main.attention.readAll")) {
-      attention_read_all(src, unread)
+    if unread.length() > 0 {
+      attention_link(c, "attention/read-all", @sf.t("web-main.attention.readAll"), on_press=fn() {
+        attention_read_all(src, unread)
+      })
     }
-    if attention_link(c, "attention/settings", @sf.t("web-main.attention.settings")) {
+    attention_link(c, "attention/settings", @sf.t("web-main.attention.settings"), on_press=fn() {
       close()
       open_settings_at(@settings.Route::Notifications)
-    }
+    })
   })
   |> ignore
 }
@@ -437,11 +439,14 @@ fn attention_item(
 
 ///|
 /// Words to press at 待处理's foot, quiet, in ink pointed at.
-fn attention_link(c : @ui.Ctx, key : String, label : String) -> Bool {
+fn attention_link(c : @ui.Ctx, key : String, label : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(id~, fn() { c.text(label, style=if c.lit(id) { att_link_on } else { att_link }) |> ignore })
   c.semantics(b, Link, id~, label~)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 

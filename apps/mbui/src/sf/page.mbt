@@ -393,9 +393,9 @@ fn narrow_page(
     Some(label) if !back_in_head =>
       blocks.push(fn() {
         c.box(style=pg_back_line, fn() {
-          if nav_back(c, "settings-back", label) {
+          nav_back(c, "settings-back", label, on_press=fn() {
             on_back()
-          }
+          })
         })
         |> ignore
       })
@@ -435,9 +435,9 @@ fn narrow_page(
     (Some(h), Some(label)) if back_in_head =>
       blocks.push(fn() {
         own_head_back.val = Some(fn() {
-          if nav_back(c, "settings-back", label) {
+          nav_back(c, "settings-back", label, on_press=fn() {
             on_back()
-          }
+          })
         })
         c.box(style=pg_card_room, h) |> ignore
         own_head_back.val = None

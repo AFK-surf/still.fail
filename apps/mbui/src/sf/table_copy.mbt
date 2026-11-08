@@ -80,18 +80,19 @@ fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Uni
     // (faded as its icon's ink: the button's own colours, so far on)
     let th = theme()
     let icon = if copied { "check" } else { "copy" }
-    if icon_button(
-        c,
-        icon,
-        key=key + "/copy",
-        size=table_key_size,
-        round=true,
-        label~,
-        ink=alpha(th.p.text, seen),
-        quiet=alpha(th.p.muted, seen),
-      ) {
-      self.table_menu(shot, table, id)
-    }
+    icon_button(
+      c,
+      icon,
+      key=key + "/copy",
+      size=table_key_size,
+      round=true,
+      label~,
+      ink=alpha(th.p.text, seen),
+      quiet=alpha(th.p.muted, seen),
+      on_press=fn() {
+        self.table_menu(shot, table, id)
+      },
+    ) |> ignore
   })
   |> ignore
 }

@@ -100,19 +100,13 @@ fn peek_read(
 /// file's path is copied (file_foot).
 fn link_copy(c : @ui.Ctx, href : String) -> Unit {
   let key = "link-peek/copy/" + href
-  let said = copied_paths.contains(href) &&
-    (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-      copied_paths.remove(href)
-      false
-    } else {
-      true
-    })
+  let said_id = c.id(key + "/said")
+  let said = c.within(said_id, @sf.copied_ms)
   // (its words, as a file's path's copy: the user, 2026-10-29: 图标改成文字复制链接吧)
-  if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet) {
+  @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet, on_press=fn() {
     c.copy_text(href)
-    @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-    copied_paths.add(href)
-  }
+    c.mark(said_id)
+  }) |> ignore
 }
 
 ///|
@@ -699,19 +693,12 @@ fn file_foot(c : @ui.Ctx, path : String, what : String) -> Unit {
     c.box(style=peek_ref, fn() { c.text(what, style=peek_meta_words) |> ignore }) |> ignore
     let key = "file-peek/copy/" + path
     // (saying so a moment once copied: code_block's copied)
-    let said = copied_paths.contains(path) &&
-      (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-        copied_paths.remove(path)
-        false
-      } else {
-        true
-      })
-    if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "web-main.preview.copyPath" }), tone=Quiet) {
+    let said_id = c.id(key + "/said")
+    let said = c.within(said_id, @sf.copied_ms)
+    @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "web-main.preview.copyPath" }), tone=Quiet, on_press=fn() {
       c.copy_text(path)
-      // pressed again while it says so: its time starts again
-      @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-      copied_paths.add(path)
-    }
+      c.mark(said_id)
+    }) |> ignore
   })
   |> ignore
 }
@@ -721,11 +708,6 @@ fn file_foot(c : @ui.Ctx, path : String, what : String) -> Unit {
 fn mono(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
   c.rich([@ui.span(words, mono=true)], style~) |> ignore
 }
-
-///|
-/// The paths (and web links) copied from a card a moment ago (saying so: 已复制).
-// kept across runs: a moment's words, gone as the moment is
-let copied_paths : Set[String] = Set::new()
 
 // ── a chat's ───────────────────────────────────
 

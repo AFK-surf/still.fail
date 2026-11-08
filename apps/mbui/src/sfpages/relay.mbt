@@ -84,10 +84,10 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
       c.box(style=relay_scopes, fn() {
         for b in bots {
           let id = text(Some(b), "id")
-          if relay_scope(c, src, id, text(Some(b), "label"), id == on) {
+          relay_scope(c, src, id, text(Some(b), "label"), id == on, on_press=fn() {
             relaying.bot.set(id)
             relaying.all.set(false)
-          }
+          })
         }
       })
       |> ignore
@@ -105,10 +105,10 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
         })
       (None, Some(row)) =>
         relay_list(c, fn() {
-          if relay_place(c, "relay/picked", text(Some(row), "kind"), text(Some(row), "name"), Some(text(Some(row), "note")), true, true) {
+          relay_place(c, "relay/picked", text(Some(row), "kind"), text(Some(row), "name"), Some(text(Some(row), "note")), true, true, on_press=fn() {
             relaying.picked.set(None)
             relay_focus.val = "relay/search"
-          }
+          })
           relay_via(c, src, text(Some(row), "connect"))
         })
       (None, None) =>
@@ -152,10 +152,10 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     }
     for row in rows {
       let key = "relay/place/" + text(Some(row), "connect") + "/" + text(field(Some(row), "place"), "id")
-      if relay_place(c, key, text(Some(row), "kind"), text(Some(row), "name"), opt_text(Some(row), "aside"), false, false) {
+      relay_place(c, key, text(Some(row), "kind"), text(Some(row), "name"), opt_text(Some(row), "aside"), false, false, on_press=fn() {
         relaying.picked.set(Some(row))
         relay_focus.val = "relay/note"
-      }
+      })
     }
     match text(view, "empty") {
       "noPlaces" => relay_said(c, @sf.t("web-main.relay.noPlaces"), relay_empty)
@@ -195,8 +195,8 @@ fn relay_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// A place to pick (place): its platform's mark, its name, what relaying there does at its end (`note`, with 更换 after
-/// it where `change`); picked (`on`), on the accent's ground. True on the frame after a press.
-fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : String?, on : Bool, change : Bool) -> Bool {
+/// it where `change`); picked (`on`), on the accent's ground. `on_press` as it is pressed.
+fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : String?, on : Bool, change : Bool, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=if on { relay_place_on } else { relay_place_box }, id~, fn() {
     relay_mark(c, kind)
@@ -217,7 +217,10 @@ fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : S
     }
   })
   c.semantics(b, Button, id~, label=name)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -431,9 +434,9 @@ fn relay_avatar(c : @ui.Ctx, src : Source, conn : Json) -> Unit {
 }
 
 ///|
-/// A bot to go on through (scope): its picture and name; the one gone on through filled. True on the frame after a
-/// press.
-fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Bool) -> Bool {
+/// A bot to go on through (scope): its picture and name; the one gone on through filled; `on_press` as it is
+/// pressed.
+fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Bool, on_press? : () -> Unit) -> Unit {
   let id = c.id("relay/bot/" + bot)
   let lit = !on && c.lit(id)
   let b = c.box(style=if on { relay_scope_on } else { relay_scope_box }, id~, fn() {
@@ -444,7 +447,10 @@ fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Boo
     c.text(label, style=if on { relay_scope_name_on } else if lit { relay_scope_name_lit } else { relay_scope_name }) |> ignore
   })
   c.semantics(b, Button, id~, label~, selected=on)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|

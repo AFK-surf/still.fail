@@ -123,8 +123,10 @@ fn passkey_sign(c : @ui.Ctx, s : ScreenSess) -> Unit {
         }
         c.box(style=drop_words, fn() { c.text(title, style=if step == "said" { drop_path_words } else { drop_name }) |> ignore })
         |> ignore
-        if step == "said" && screen_row_key(c, "passkey-close", "close", @sf.t("common.close")) {
-          s.passkey_stop()
+        if step == "said" {
+          screen_row_key(c, "passkey-close", "close", @sf.t("common.close"), on_press=fn() {
+            s.passkey_stop()
+          })
         }
       }, fn() {
         if step == "" {
@@ -134,9 +136,7 @@ fn passkey_sign(c : @ui.Ctx, s : ScreenSess) -> Unit {
             None => ()
           }
           c.box(style=drop_buttons, fn() {
-            if soft_button(c, "passkey", @sf.t("android-misc.screen.passkey.button")) {
-              c.tell("screen-passkey-start/" + s.view, fn() { s.passkey_start() })
-            }
+            soft_button(c, "passkey", @sf.t("android-misc.screen.passkey.button"), on_press=fn() { s.passkey_start() })
           })
           |> ignore
         }

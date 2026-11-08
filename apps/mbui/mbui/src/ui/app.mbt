@@ -1365,15 +1365,21 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       c.click_at = Some((x, y))
       // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click
-      if was == c.active && t - at <= double_click_ms && (x - ax).abs() <= double_click_slop &&
-        (y - ay).abs() <= double_click_slop {
+      let second = was == c.active &&
+        t - at <= double_click_ms &&
+        (x - ax).abs() <= double_click_slop &&
+        (y - ay).abs() <= double_click_slop
+      if second {
         c.double_clicked.push(c.active)
         c.last_click = (0, 0.0, 0.0, 0.0)
       } else {
         c.last_click = (c.active, t, x, y)
       }
-      // (what was said a press on it does, done as it is let go, where it was let go: Ctx::on_press, made.mbt)
-      made_pressed(c.active)
+      // (what was said a press on it does, done as it is let go, where it was let go: Ctx::on_press,
+      // on_double_press, made.mbt)
+      if !(second && made_double_pressed(c.active)) {
+        made_pressed(c.active)
+      }
     }
     // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
     if !c.dragging && c.taken_at != c.press_at {

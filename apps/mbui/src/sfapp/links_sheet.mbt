@@ -168,18 +168,19 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     c.box(style=invite_body, fn() {
       lead(fill("android-misc.signIn.invited", [("app", "still.fail")]))
       buttons(fn() {
-        if @sf.button(c, tr("common.cancel"), key="invite/cancel") {
+        @sf.button(c, tr("common.cancel"), key="invite/cancel", on_press=fn() {
           lower_sheet()
-        }
-        if @sf.button(
-            c,
-            tr("android-misc.signIn.google"),
-            key="invite/sign-in",
-            tone=Primary,
-            busy=(src.signing_in)(),
-          ) {
-          (src.sign_in)()
-        }
+        }) |> ignore
+        @sf.button(
+          c,
+          tr("android-misc.signIn.google"),
+          key="invite/sign-in",
+          tone=Primary,
+          busy=(src.signing_in)(),
+          on_press=fn() {
+            (src.sign_in)()
+          },
+        ) |> ignore
       })
     })
     |> ignore
@@ -219,32 +220,35 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
         )
         |> ignore
         buttons(fn() {
-          if @sf.button(c, tr("common.cancel"), key="invite/cancel") {
+          @sf.button(c, tr("common.cancel"), key="invite/cancel", on_press=fn() {
             invite.field.take() |> ignore
             lower_sheet()
-          }
+          }) |> ignore
           let token = invitation_token(words)
-          if @sf.button(
-              c,
-              tr("android-misc.invite.view"),
-              key="invite/view",
-              tone=Primary,
-              disabled=token is None,
-            ) {
-            invite.field.take() |> ignore
-            invite.token.set(token)
-          }
+          @sf.button(
+            c,
+            tr("android-misc.invite.view"),
+            key="invite/view",
+            tone=Primary,
+            disabled=token is None,
+            on_press=fn() {
+              invite.field.take() |> ignore
+              invite.token.set(token)
+            },
+          ) |> ignore
         })
       }
       (Some(_), Some(Err(why))) => {
         lead(why)
         buttons(fn() {
-          if invite.given.get() is None && @sf.button(c, tr("android-misc.invite.otherLink"), key="invite/other") {
-            invite.token.set(None)
+          if invite.given.get() is None {
+            @sf.button(c, tr("android-misc.invite.otherLink"), key="invite/other", on_press=fn() {
+              invite.token.set(None)
+            }) |> ignore
           }
-          if @sf.button(c, tr("common.close"), key="invite/close", tone=Primary) {
+          @sf.button(c, tr("common.close"), key="invite/close", tone=Primary, on_press=fn() {
             lower_sheet()
-          }
+          }) |> ignore
         })
       }
       (Some(_), None) => @sf.wait_line(c, tr("common.reading"), key="invite")
@@ -269,9 +273,9 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=@sf.full_width, fn() {
             for a in list {
               let s = text(Some(a), "sub")
-              if @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email")) {
+              @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email"), on_press=fn() {
                 invite.chosen.set(s)
-              }
+              }) |> ignore
             }
           })
           |> ignore
@@ -284,19 +288,20 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
           None => ""
         }
         buttons(fn() {
-          if @sf.button(c, tr("common.cancel"), key="invite/cancel") {
+          @sf.button(c, tr("common.cancel"), key="invite/cancel", on_press=fn() {
             lower_sheet()
-          }
-          if @sf.button(
-              c,
-              fill("android-misc.invite.joinAs", [("email", as_email)]),
-              key="invite/join",
-              tone=Primary,
-              busy=invite.accepting.get(),
-              disabled=sub == "",
-            ) {
-            accept_invite(src, tok, sub, text(Some(p), "name"))
-          }
+          }) |> ignore
+          @sf.button(
+            c,
+            fill("android-misc.invite.joinAs", [("email", as_email)]),
+            key="invite/join",
+            tone=Primary,
+            busy=invite.accepting.get(),
+            disabled=sub == "",
+            on_press=fn() {
+              accept_invite(src, tok, sub, text(Some(p), "name"))
+            },
+          ) |> ignore
         })
       }
     }
