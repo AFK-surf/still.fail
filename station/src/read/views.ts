@@ -508,6 +508,12 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
   // Only the chats of the viewer's workspace.
   const rows = sharedChats(station, archived, scope, titlesOnly).filter((row) => sees(viewer, row.ws));
+  const words = { untitled: untitled(), directMessage: tr("station.chat.directMessage"), quotedOnly: tr("station.chat.quotedOnly") };
+  if (titlesOnly) {
+    // Jobs only use each row's id, title and agents. The viewer's marks do not change any of those.
+    const own: chatRow.Own = { mine: () => false, reads: new Map(), dismissed: new Set(), kept: new Set(), pins: new Map() };
+    return rows.map((row) => chatRow.rowFor(row, own, words));
+  }
   const api = apiOf(station);
   const s = api.store;
   const threads = rows.flatMap((row) => (typeof row.thread === "number" ? [row.thread as number] : []));
@@ -522,7 +528,6 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     // When the viewer pinned each to the top of their list.
     pins: store.pins(s, viewer.email, scope === null ? null : keys),
   };
-  const words = { untitled: untitled(), directMessage: tr("station.chat.directMessage"), quotedOnly: tr("station.chat.quotedOnly") };
   return rows.map((row) => chatRow.rowFor(row, own, words));
 }
 
@@ -554,7 +559,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     return t.sessions.filter((m) => (alone ? all.has(m.session) : shown.has(m.session))).map((m) => m.session);
   };
   const archivedOf = (x: store.SessionRow) => ({ at: x.archivedAt ?? 0, by: x.archivedBy ?? store.MANUAL, alone: false });
-  const watches = store.watching(s, scope === null ? null : [...scope.sessions]);
+  const watches = titlesOnly ? new Map<string, Json>() : store.watching(s, scope === null ? null : [...scope.sessions]);
   const agent = (key: string): Json => {
     const x = all.get(key)!;
     const stat = stats.get(key);
@@ -741,6 +746,8 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     if (archived) row.archived = archivedOf(x);
     rows.push(row);
   }
+  // A job uses only the name and agents; its chat's links and shares are not part of that answer.
+  if (titlesOnly) return scope === null ? rows : rows.filter((row) => scope.rows.has(String(row.id)));
   // Of the items read alone (a change's), theirs alone.
   const ids = scope === null ? null : rows.flatMap((row) => (typeof row.id === "string" && scope.rows.has(row.id) ? [row.id as string] : []));
   // When a viewer pinned it is theirs (chat-row.ts).
