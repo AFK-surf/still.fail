@@ -339,6 +339,10 @@ case $CMD in
     code=0
     run "MBUI_TEXTCHECK=$NAME" $O/text.log || code=$?
     tr -d '\r' < $O/text.log | grep -a "TEXTCHECK" | head -40
+    if grep -aq "TEXTCHECK zero-width" $O/text.log; then
+      echo "text contract ($H): a zero width character is not shaped as none (textcheck.mbt's zero_width_check: the host's shaping, src/host/apple_text.m's offset_at), not a run to record again"
+      exit 1
+    fi
     if [ $code != 0 ] || ! grep -aq "TEXTCHECK done $NAME: [1-9][0-9]* answers, 0 differ" $O/text.log; then
       echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：scripts/chk textrec --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/gallery/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
       exit 1
