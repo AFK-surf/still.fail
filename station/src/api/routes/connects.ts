@@ -67,6 +67,9 @@ export type ConnectEditDeps = {
   place?: () => { origin: string; workspace: string; station: string } | null;
   /// How a kind's part of a connect is edited (none: a kind this station does not know, kept as it was).
   entry: (kind: string) => EntryEdit | undefined;
+  /// The station of workspace `ws` a connect of `kind` with this part (its tokens) runs on already, by its name (null:
+  /// none): one being added there is refused (connects/workspace.ts). Absent: none is asked.
+  heldBy?: (ws: string | null, kind: string, own: unknown) => Promise<string | null>;
 };
 
 export function connectEdits(deps: ConnectEditDeps) {
@@ -103,6 +106,13 @@ export function connectEdits(deps: ConnectEditDeps) {
   /// next turn on, as a chat's own change does (lifecycle.ts `configure`).
   const putConnect = async (r: Request, id: string, i: Input) => {
     const hub = deps.hub();
+    // A connect runs on one station of its workspace: one added here that runs on another already is refused.
+    const adding = !(Array.isArray(raw().connects) ? raw().connects : []).some((c: Json) => c?.id === id);
+    const addedKind = str(i.kind) ?? "slack";
+    if (adding && deps.heldBy !== undefined) {
+      const held = await deps.heldBy(r.viewer.workspace || home(), addedKind, deps.entry(addedKind)?.(i[addedKind], null) ?? null);
+      if (held !== null) throw new Refused(409, tr(r.lang, "station.connect.heldElsewhere", { station: held }));
+    }
     const follow: { session?: string; run?: SessionChange } = {};
     change(r, `connect ${id}`, (raw) => {
       const lang = r.lang;
@@ -161,6 +171,9 @@ export function connectEdits(deps: ConnectEditDeps) {
         if (own !== null) next[next.kind] = own;
       }
       if (owner !== null) next.createdBy = owner;
+      // The station of its workspace a new conversation of it runs on (connects/workspace.ts); null: this one.
+      if (typeof i.station === "string" && i.station !== "") next.station = i.station;
+      else if (i.station === undefined && typeof existing?.station === "string") next.station = existing.station;
       // Added in a workspace the station joined: that workspace's (one of the home workspace says none, as before).
       if (existing === undefined && home() !== null && r.viewer.workspace !== home()) next.workspace = r.viewer.workspace;
       const b: Json = { runtime };
@@ -182,7 +195,7 @@ export function connectEdits(deps: ConnectEditDeps) {
         }
       }
       // What this station does not know of it is kept (but its kind's part, and the part of a kind it was).
-      const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "createdBy", "bind", next.kind, typeof existing?.kind === "string" ? existing.kind : "slack"]);
+      const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "createdBy", "bind", "station", next.kind, typeof existing?.kind === "string" ? existing.kind : "slack"]);
       for (const [k, v] of Object.entries(existing ?? {})) if (!known.has(k)) next[k] = v;
       const at = connects.findIndex((c) => c?.id === id);
       if (at >= 0) connects[at] = next;

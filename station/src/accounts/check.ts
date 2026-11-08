@@ -17,6 +17,8 @@ const CONNECT_KINDS = ["slack", "feishu", "comma"];
 
 /// config.rs `id_ok`: a lowercase letter or digit, then those and dashes.
 export const idOk = (id: string) => /^[a-z0-9][a-z0-9-]*$/.test(id);
+/// A connect's: its id where it was added, and after a move to another station that station's id (connects/remote.ts).
+const connectIdOk = (id: string) => /^[a-z0-9][a-z0-9-]*(@[a-z0-9]+)?$/.test(id);
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 
@@ -130,7 +132,7 @@ export function checkConfig(raw: any, _data: string): void {
     if (c.mode !== undefined && c.mode !== null) variant(c.mode, MODES, "a connect mode");
     for (const f of ["model", "effort", "profile"]) optional(c.bind[f], "string", "a string");
 
-    if (!idOk(c.id)) throw new Error(`connect id ${JSON.stringify(c.id)}: use lowercase letters, digits and dashes`);
+    if (!connectIdOk(c.id)) throw new Error(`connect id ${JSON.stringify(c.id)}: use lowercase letters, digits and dashes`);
     const kind = c.kind ?? "slack";
     if (!CONNECT_KINDS.includes(kind)) throw new Error(`connect ${c.id}: unknown kind ${kind}`);
     const runtime: string = c.bind.runtime;

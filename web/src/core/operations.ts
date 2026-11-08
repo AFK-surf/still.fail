@@ -53,6 +53,7 @@ export interface OperationParams {
   "connect.put": { id: string; input?: unknown };
   "connect.delete": { id: string };
   "connect.reconnect": { id: string };
+  "connect.move": { id: string; to: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
   "connect.putSlackApp": { connect: string; input?: unknown; from?: unknown };
   "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; threads?: boolean | null | undefined };
@@ -231,6 +232,7 @@ export function bindStationOperations(call: Call) {
     connectPut: <T = unknown>(params: OperationParams["connect.put"]) => call("connect.put", params) as Promise<T>,
     connectDelete: <T = unknown>(params: OperationParams["connect.delete"]) => call("connect.delete", params) as Promise<T>,
     connectReconnect: <T = unknown>(params: OperationParams["connect.reconnect"]) => call("connect.reconnect", params) as Promise<T>,
+    connectMove: <T = unknown>(params: OperationParams["connect.move"]) => call("connect.move", params) as Promise<T>,
     connectBindSession: <T = unknown>(params: OperationParams["connect.bindSession"]) => call("connect.bindSession", params) as Promise<T>,
     connectPutSlackApp: <T = unknown>(params: OperationParams["connect.putSlackApp"]) => call("connect.putSlackApp", params) as Promise<T>,
     feishuRegister: <T = unknown>(params: OperationParams["feishu.register"] = {}) => call("feishu.register", params) as Promise<T>,

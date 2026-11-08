@@ -45,6 +45,8 @@ export type Connect = {
   bind: { runtime: Runtime; profile?: string; model?: string; effort?: string };
   /// The workspace it was added in, whose chats its sessions are; absent: the home one.
   workspace?: string;
+  /// One of another station whose chats run here (connects/remote.ts), not config.json's.
+  remote?: true;
 };
 
 /// decision.rs `DecisionRule`: the completion review after all_done, and the model it asks.
