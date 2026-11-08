@@ -22,6 +22,12 @@ export class Output {
   #c: present.Clock = { now: 0, offsetMin: 0 };
   /// What keeps the items' computeds (and so what they made) while they are the ones that went out.
   #keep: (() => void) | null = null;
+  /// Told as what went out is out of date (the clock moved on past what an item's words say): it goes out again.
+  readonly #again: () => void;
+
+  constructor(again: () => void = () => {}) {
+    this.#again = again;
+  }
 
   /// The value as it goes out, or the shape's error (`path: what`).
   shape(topic: Topic, raw: unknown, c: present.Clock, shapes: boolean): { ok: unknown } | { error: string } {
@@ -40,7 +46,7 @@ export class Output {
         const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", next) : input;
         const v = present.decorate(topic, copy(skeleton), c);
         out = ty === undefined ? { ok: v } : conformTy(ty, v);
-      }, () => {});
+      }, () => this.#again());
       if ("ok" in out) {
         this.#keep = keep;
         was?.();

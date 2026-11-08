@@ -52,7 +52,6 @@ export class Workspaces {
   readonly #owners = new Map<string, Source<string | null>>();
   readonly #allChanged = signal(0);
   #allRevision = 0;
-  #statusChanged: ((id: string) => void) | null = null;
   #names: NameOf | null = null;
 
   /// `waited`: the device's count every workspace's requests are counted in.
@@ -62,16 +61,13 @@ export class Workspaces {
     this.#waited = waited;
   }
 
-  /// What a workspace's status changing calls, and the names its status says.
-  wireStatus(changed: (id: string) => void, names: NameOf): void {
-    this.#statusChanged = changed;
+  /// The names a workspace's status says.
+  wireStatus(names: NameOf): void {
     this.#names = names;
     for (const w of this.all()) this.#wire(w);
   }
 
   #wire(w: Workspace): void {
-    const changed = this.#statusChanged;
-    if (changed) w.status.onChange(() => changed(w.id));
     if (this.#names) w.status.setNames(this.#names);
   }
 

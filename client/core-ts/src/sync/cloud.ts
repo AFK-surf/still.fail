@@ -3,6 +3,7 @@
 // reaches), each workspace it reaches, its signed-in devices, and an operator's lists. The topics that show them only
 // read the records (data.ts). Every time a socket opens, the account is read again (nothing is replayed); its events
 // say what changed. A write to still.fail cloud answers once what it changed is read again.
+import { SignalMap } from "../reactive.ts";
 import { record, said } from "../record.ts";
 import { Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
@@ -33,11 +34,11 @@ export const ADMIN_LISTS = ["users", "workspaces", "invite-codes", "feedback"];
 export class CloudSync {
   readonly #core: Inner;
   /// Whether each account's latest `/v1/me` answered this run (null), or why it failed.
-  readonly mes = new Map<string, CoreError | null>();
+  readonly mes = new SignalMap<string, CoreError | null>();
   /// Told each time an account's events socket opens (what else is read again then).
   onOpen: () => void = () => {};
   /// What a workspace read last failed with, while nothing is held of it.
-  readonly errors = new Map<string, CoreError>();
+  readonly errors = new SignalMap<string, CoreError>();
   /// Each account's socket, while it is signed in.
   readonly #sockets = new Map<string, Fiber.Fiber<void, never>>();
   /// The relays the mesh uses, as the first `/v1/me` of this run or the kept one said.
@@ -190,10 +191,6 @@ export class CloudSync {
       }
       this.recomputeOwners();
       this.forgetUnreachable();
-      core.store.invalidate({ topic: "workspaces" });
-      core.store.invalidateAll((t) => t.topic === "workspace");
-      // (the notifications page lists them, a notice of another says its name)
-      core.store.invalidateAll((t) => t.topic === "notify");
     });
   }
 
@@ -289,7 +286,6 @@ export class CloudSync {
       }
     }
     core.workspaces.setOwners(owners);
-    core.store.invalidateAll((t) => t.topic === "status" && typeof t.workspace === "string");
     this.onReach?.();
   }
 
@@ -510,10 +506,6 @@ export class CloudSync {
     core.shownAccounts = list;
     this.recomputeOwners();
     this.forgetUnreachable();
-    core.store.invalidate({ topic: "accounts" });
-    core.store.invalidate({ topic: "workspaces" });
-    core.store.invalidateAll((t) => t.topic === "workspace");
-    core.store.invalidateAll((t) => t.topic === "notify");
     this.syncSockets();
     void before;
     // Someone signed in: their devices hear pushes too.

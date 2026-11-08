@@ -223,19 +223,12 @@ export class Core {
           for (const t of store.liveTopics()) if (holds(t)) store.changed(t);
         } else store.changed(topic);
       });
-      inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
       // Why a station down is not reached is said again as still.fail cloud is reached, or no longer is.
       inner.status.onCloud = () => inner.stations?.recause();
       inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
       inner.cloudSync = new CloudSync(inner);
       inner.status.setNames((address) => inner.cloudSync.nameOf(address));
-      inner.workspaces.wireStatus(
-        (id) => {
-          store.invalidateAll((t) => t.topic === "status" && (t.workspace === undefined || t.workspace === id));
-          store.invalidate({ topic: "doing" });
-        },
-        (address) => inner.cloudSync.nameOf(address),
-      );
+      inner.workspaces.wireStatus((address) => inner.cloudSync.nameOf(address));
       inner.router = new Router(inner);
       store.setSource(inner.router);
       inner.iroh = options.iroh ?? null;
@@ -252,7 +245,7 @@ export class Core {
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
       // What agents said lately read ahead, kept on the device: a chat opens with its Markdown read (md-ahead.ts).
-      const ahead = new MdAhead(inner.data, inner.runner, () => inner.host.nowMs(), (station, of) => inner.views.mdChanged(station, of));
+      const ahead = new MdAhead(inner.data, inner.runner, () => inner.host.nowMs(), (station, of) => inner.data.mdChanged(station, of));
       inner.data.onOldMd = (station, of, text) => ahead.refresh(station, of, text);
       inner.data.onLogChange((table, station, id) => {
         if (table === "entry") ahead.thread(station, Number(id));
@@ -292,7 +285,7 @@ export class Core {
           cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
-          changed: () => inner.store.invalidate({ topic: "adbShare" }),
+          changed: () => inner.adb.touched(),
         }),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
@@ -482,7 +475,6 @@ export class Core {
     let doing: number | null = null;
     if (asked !== null && counts(call, name)) {
       doing = inner.doing.start(name, asked, inner.host.nowMs());
-      inner.store.invalidate({ topic: "doing" });
     }
     // Each call is a trace: what it asks of stations and still.fail cloud are its spans. One that asks nothing and
     // answers at once is not sent (trace.ts QUIET_MS).
@@ -493,7 +485,6 @@ export class Core {
     // A preview's resource: its page's progress counts it (preview-load.ts).
     const loads = call.kind === "stationPreview" ? inner.workspaces.ofStation(call.station).part("previewLoad", () => new Loads()) : null;
     const resource = loads !== null && call.kind === "stationPreview" ? loads.start(call.station, call.port, call.method, call.path, call.headers, inner.host.nowMs()) : null;
-    if (resource) inner.store.invalidate(resource[0]);
     const progress: Progress = (value, bytes) => {
       const head = isObject(value) && isObject(value.head) ? value.head : null;
       if (loads && resource && head && typeof head.status === "number") {
@@ -501,7 +492,6 @@ export class Core {
         // Event streams stay open after they have connected.
         const stream = Array.isArray(head.headers) && head.headers.some((h) => Array.isArray(h) && typeof h[0] === "string" && h[0].toLowerCase() === "content-type" && typeof h[1] === "string" && h[1].startsWith("text/event-stream"));
         if (stream) loads.end(resource, inner.host.nowMs(), null);
-        inner.store.invalidate(resource[0]);
       }
       inner.host.emit(client, bytes === undefined ? { id, value } : { id, value, bytes });
     };
@@ -518,11 +508,9 @@ export class Core {
           // Its resource ends with it: the page's progress counts it as failed.
           if (loads && resource) {
             loads.end(resource, inner.host.nowMs(), cancelled.message);
-            inner.store.invalidate(resource[0]);
           }
           if (doing !== null) {
             inner.doing.end(doing);
-            inner.store.invalidate({ topic: "doing" });
           }
           inner.host.emit(client, answer(id, { err: cancelled }));
         }),
@@ -538,7 +526,6 @@ export class Core {
             const status = isObject(said) ? said.status : undefined;
             if (typeof status === "number") loads.head(resource, status);
             loads.end(resource, inner.host.nowMs(), "err" in result ? result.err.message : null);
-            inner.store.invalidate(resource[0]);
           }
           span.end();
           let failed: number | null = null;
@@ -547,13 +534,11 @@ export class Core {
               inner.doing.fail(doing, result.err.message);
               failed = doing;
             } else inner.doing.end(doing);
-            inner.store.invalidate({ topic: "doing" });
           }
           inner.host.emit(client, answer(id, result));
           if (failed !== null) {
             yield* Effect.sleep(FAILED_SHOWN_MS);
             inner.doing.end(failed);
-            inner.store.invalidate({ topic: "doing" });
           }
         }),
       ),

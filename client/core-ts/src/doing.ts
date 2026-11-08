@@ -1,6 +1,7 @@
 // What a person set going on this device and the core has not finished (the `doing` topic): every call that
 // changes something, from the moment it is asked until its answer. One that failed stays a few seconds more, with why.
 import { t } from "./i18n.ts";
+import { Marks } from "./reactive.ts";
 
 type Entry = { id: number; call: string; params: Map<string, string>; since: number; failed: string | null };
 
@@ -10,6 +11,8 @@ export const FAILED_SHOWN_MS = 6_000;
 export class Doing {
   #next = 0;
   #list: Entry[] = [];
+  /// What reads it (the topic) is made again as it changes.
+  readonly #seen = new Marks();
 
   /// One begun; `end` it with what this gives.
   start(call: string, params: unknown, now: number): number {
@@ -22,20 +25,24 @@ export class Doing {
       }
     }
     this.#list.push({ id, call, params: plain, since: now, failed: null });
+    this.#seen.touch();
     return id;
   }
 
   end(id: number): void {
     this.#list = this.#list.filter((e) => e.id !== id);
+    this.#seen.touch();
   }
 
   fail(id: number, why: string): void {
     const e = this.#list.find((e) => e.id === id);
     if (e) e.failed = why;
+    this.#seen.touch();
   }
 
   /// The topic's value: what is under way, oldest first.
   value(rechecking: (params: Map<string, string>) => boolean): unknown {
+    this.#seen.read();
     const doing = this.#list.map((e) => {
       const stage = e.failed !== null ? "failed" : rechecking(e.params) ? "rechecking" : "running";
       const item: Record<string, unknown> = { call: e.call, params: Object.fromEntries(e.params), since: Math.trunc(e.since), stage };

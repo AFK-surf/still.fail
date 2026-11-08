@@ -92,9 +92,8 @@ export class Attention implements Owner {
     const store = this.#core.store;
     if (!this.#stations().includes(station)) return;
     const added = this.notices.changed(station, rows, first);
-    if (added.length > 0) store.invalidateAll((t) => t.topic === "notices");
     const listened = store.liveTopics().some((t) => t.topic === "notify" && store.subscribed(t));
-    if (this.attend.noticed(added, listened)) store.invalidateAll((t) => t.topic === "notify");
+    this.attend.noticed(added, listened);
   }
 
   /// A chat as its UIs attend to it: its unread line; read, when due.
@@ -144,16 +143,11 @@ export class Attention implements Owner {
             // (what was typed written now, not a moment after its last change: the app leaving a chat or the front may
             // be gone before that moment)
             core.data.flushSoon();
-            store.invalidateAll((t) => t.topic === "chat");
-            store.invalidateAll((t) => t.topic === "notify");
             return null;
           });
         case "set":
           return Effect.gen(function* () {
             yield* attend.set(c.on, c.asked, c.kinds, c.preview, c.workspaces);
-            store.invalidateAll((t) => t.topic === "notify");
-            // (a workspace turned off adds nothing to the app's badge)
-            if (c.workspaces !== null) store.invalidateAll((t) => t.topic === "workspaceMarks");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             // what it shows changed: its registration given again (pushes made so), not waited on
             else if ((c.kinds !== null || c.preview !== null || c.workspaces !== null) && attend.on()) core.runner.fork(Effect.ignore(core.cloudSync.pushRegistered(), { log: "Unhandled", message: "push registration sent" }));
@@ -161,14 +155,12 @@ export class Attention implements Owner {
           });
         case "permission":
           return Effect.sync(() => {
-            if (attend.permit(c.state)) store.invalidateAll((t) => t.topic === "notify");
+            attend.permit(c.state);
             return null;
           });
         case "claim":
           return Effect.sync(() => {
-            const show = attend.claim(c.id);
-            if (show) store.invalidateAll((t) => t.topic === "notify");
-            return { show };
+            return { show: attend.claim(c.id) };
           });
         case "pushed": {
           // (the title as a notice of it shows: of a workspace the viewer is not in, its name first)

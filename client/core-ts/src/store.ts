@@ -269,7 +269,8 @@ export class Store {
     this.#shaped = true;
   }
 
-  /// Starts the minute clock: times in words go out fresh each minute while anything is shown.
+  /// Starts the minute clock: times in words go out fresh each minute while anything is shown. The clock's signals
+  /// move on (present.ts `clockAt`); only what read a grain that changed is made again.
   setClock(): void {
     this.#clockOn = true;
     this.#tick();
@@ -285,14 +286,21 @@ export class Store {
         Effect.andThen(
           Effect.sync(() => {
             this.#clock = false;
-            const shown = [...this.#topics.values()].filter((e) => e.subscribers.length > 0 && present.ticks(e.topic)).map((e) => e.topic);
-            if (shown.length === 0) return;
-            for (const topic of shown) this.invalidate(topic);
+            if (![...this.#topics.values()].some((e) => e.subscribers.length > 0 && present.ticks(e.topic))) return;
+            const at = this.host.nowMs();
+            present.clockAt({ now: at, offsetMin: this.host.utcOffsetMin(at) });
             this.#tick();
           }),
         ),
       ),
     );
+  }
+
+  /// What went out of a topic is out of date though its value is not (output.ts): it goes out again, shaped anew.
+  #again(entry: Entry): void {
+    if (this.#topics.get(topicKey(entry.topic)) !== entry || entry.emitScheduled) return;
+    entry.emitScheduled = true;
+    this.#scheduleEmit(entry.topic);
   }
 
   unsubscribe(client: ClientId, id: RequestId): void {
@@ -663,7 +671,7 @@ export class Store {
     let value: Value = now.value;
     if ("ok" in value) {
       // What is decorated is a copy (output.ts): not what is kept.
-      now.output ??= new Output();
+      now.output ??= new Output(() => this.#again(now));
       const output = now.output;
       const ok = value.ok;
       const out = timed(`${topic.topic}.shape`, () => output.shape(topic, ok, c, this.#shaped));

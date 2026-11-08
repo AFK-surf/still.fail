@@ -6,7 +6,7 @@ import { CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 import type { ClientId, Topic } from "./protocol.ts";
 import { topicKey } from "./protocol.ts";
-import type { Store, Watch } from "./store.ts";
+import type { Store } from "./store.ts";
 import { get, isObject } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -74,7 +74,7 @@ function savedText(store: Store, station: string): string | null {
 }
 
 /// `saving`: the station's text when a save began, kept till the station tells what it has now (not shown back meanwhile).
-type Draft = { owner: ClientId; text: string; dirty: boolean; pending: boolean; saving: string | null; watch: Watch };
+type Draft = { owner: ClientId; text: string; dirty: boolean; pending: boolean; saving: string | null };
 
 /// The drafts of the pages that edit a station's variables (`agentEnvForm`), each its UI's.
 export class AgentEnvForms {
@@ -88,7 +88,6 @@ export class AgentEnvForms {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
       this.#drafts.delete(k);
     }
   }
@@ -113,15 +112,13 @@ export class AgentEnvForms {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.agentEnv.notYours"));
     if (action === "drop") {
-      existing?.watch.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
-      d = { owner, text: savedText(this.#store, station) ?? "", dirty: false, pending: false, saving: null, watch };
+      d = { owner, text: savedText(this.#store, station) ?? "", dirty: false, pending: false, saving: null };
       this.#drafts.set(key, d);
     }
     if (action === "edit" && isObject(patch)) {

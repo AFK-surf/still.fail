@@ -93,9 +93,4 @@ function run(inner: Inner, c: Of): Effect.Effect<unknown, CoreError> {
 export function install(inner: Inner): void {
   handlers.browse = (core, call) => run(core, call as Of);
   inner.router.owners.push(owner(inner));
-  // A folder read again changes what the places that show it show; the prefs, the order and the tabs.
-  inner.data.onChange((topic) => {
-    if (topic.topic === "drive") inner.store.invalidateAll((x) => x.topic === "driveBrowse" && x.station === topic.station && x.root === topic.root);
-    else if (topic.topic === "prefs" || topic.topic === "*") inner.store.invalidateAll((x) => x.topic === "driveBrowse" || x.topic === "filesTabs");
-  });
 }
