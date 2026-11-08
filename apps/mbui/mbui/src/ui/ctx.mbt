@@ -404,6 +404,8 @@ pub struct Ctx {
   mut press_chain : Array[Int]
   mut claimed : Bool
   mut dragging : Bool
+  /// the press drags a list or a pager by the finger, a second finger the newest leading it (old_pointer_now)
+  mut following : Bool
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
   mut press_at : Double
@@ -763,6 +765,7 @@ fn Ctx::new() -> Ctx {
     press_chain: [],
     claimed: true,
     dragging: false,
+    following: false,
     press_x: 0.0,
     press_at: -1.0,
     press_strayed: false,

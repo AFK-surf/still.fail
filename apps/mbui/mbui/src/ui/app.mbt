@@ -916,6 +916,24 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens; 8 the first let go, the second the first from
   // here), for a pinch (native.mbt `second_pointer`)
   if (kind >= 4 && kind <= 6) || kind == 8 {
+    // a list or a pager being dragged follows the newest finger, as Android's RecyclerView (the first's moves meanwhile
+    // move nothing)
+    if kind == 5 && second_ptr[2] > 0.0 && c.down && c.dragging && c.following {
+      if pagers.contains(c.drag_scroll) {
+        c.pager_drag(c.drag_scroll, x - second_ptr[0]) |> ignore
+      } else {
+        c.list_drag(c.drag_scroll, -(y - second_ptr[1]))
+      }
+      h_frame_owed()
+    }
+    // the first let go: the second's moves come as the first's from where the second is, the press's slop measured as
+    // far as the first had gone (from where the first was, the list would jump by the two fingers' distance)
+    if kind == 8 && second_ptr[2] > 0.0 {
+      c.press_x += second_ptr[0] - c.last_x
+      c.press_y += second_ptr[1] - c.last_y
+      c.last_x = second_ptr[0]
+      c.last_y = second_ptr[1]
+    }
     on_second(if kind == 8 { 6 } else { kind }, x, y)
     // one of two lifted: the moves from here may be the other's, its own track
     if kind == 6 || kind == 8 {
@@ -1021,6 +1039,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.last_t = t
     c.vel = 0.0
     c.dragging = false
+    c.following = false
     track_x.reset()
     track_y.reset()
     track_x.add(t, x)
@@ -1241,6 +1260,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           let slop = touch_slop()
           if moved.abs() > slop {
             c.dragging = true
+            c.following = true
             c.active = 0
             if !pager {
               c.scroll_lets_go(c.drag_scroll)
@@ -1257,6 +1277,9 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
             // (within the slop: nothing moves)
             quiet = true
           }
+        } else if second_ptr[2] > 0.0 && c.following {
+          // (a second finger down: the list follows it, above)
+          quiet = true
         } else if pager {
           c.pager_drag(c.drag_scroll, x - c.last_x) |> ignore
         } else {
