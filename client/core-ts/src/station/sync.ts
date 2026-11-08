@@ -135,6 +135,8 @@ export function stepShown(step: unknown, held: number): boolean {
 const WATCH_AGAIN_MS = 5_000;
 
 export class StationsSync {
+  /// Reads held on the device that their station has not taken yet (`read`), by `<address>\u0001<thread>`.
+  readonly #heldReads = new Map<string, number>();
   readonly #core: Inner;
   readonly requests: Requests;
   /// What its stations hold that is only added to (threads' entries, sessions' transcripts), kept in sync by number.
@@ -2333,9 +2335,18 @@ export class StationsSync {
   /// Records how far the viewer has read a thread; nothing is sent when it is read that far already.
   read(address: string, thread: number, n: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const key = `${address}\u0001${thread}`;
       const position = this.readPosition(address, thread);
-      if (position !== null && position >= n) return;
+      // (read so far as the station has it: not as far as a read held here that it has not taken yet)
+      const held = this.#heldReads.get(key);
+      if (position !== null && position >= n && !(held !== undefined && held >= n)) return;
+      // Held read here as it is asked, not once the station answers: the list's row and its workspace's mark were
+      // unread for that round trip, and read again after it (2026-11-08). The station's next summary says otherwise
+      // if it does not take it, and the read is asked again (attend.ts `failed`).
+      this.#heldReads.set(key, Math.max(held ?? 0, n));
+      this.putRead(address, thread, n);
       const answer = yield* this.requests.call(StationAddr.parse(address), "PUT", `/threads/${thread}/read`, { n }, { ctx });
+      if ((this.#heldReads.get(key) ?? 0) <= n) this.#heldReads.delete(key);
       this.putRead(address, thread, u64(get(answer, "n")) ?? n);
     });
   }

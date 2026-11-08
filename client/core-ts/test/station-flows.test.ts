@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { Effect, Queue } from "effect";
 import { dbName } from "../src/data.ts";
 import { Core } from "../src/core.ts";
-import { CoreError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { encode, request } from "../src/ops.ts";
 import { topicKey } from "../src/protocol.ts";
 import { StationAddr } from "../src/station/addr.ts";
@@ -2664,6 +2664,60 @@ test("chat_rows_come_from_the_station_and_follow_its_events", async () => {
   const before = gets(host, "/admin/api/chats");
   await run(core.inner.stations.perform(op("slack.identity", { user: "U7", bound: true }), null));
   assert.equal(gets(host, "/admin/api/chats"), before + 1);
+  core.close();
+});
+
+test("a_read_is_held_on_the_device_as_it_is_asked_not_once_the_station_answers", async () => {
+  // A message come into a chat looked at was the list's unread, and its workspace's, for a round trip to the station:
+  // marked, and unmarked as the station answered (2026-11-08).
+  const row = (last: number, unread: boolean) => ({ id: "7", thread: 7, session: "k1", title: "7", agents: [], lastActiveAt: 1, last: { seq: last, text: "…" }, unread });
+  const { host, core } = await started({ ...base(), "GET /chats": [row(13, true)] });
+  await host.settle();
+  const rows = () => core.inner.data.get({ topic: "chatRows", station: ST }) as J[];
+  assert.equal(rows()[0].unread, true);
+  // the station slow to answer
+  stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/read") ? new Promise(() => {}) : undefined));
+  core.inner.runner.fork(Effect.ignore(core.inner.stations.read(ST, 7, 13, null)));
+  await host.settle();
+  const puts = () => host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/threads/7/read")).length;
+  assert.equal(puts(), 1);
+  assert.equal(rows()[0].unread, false);
+  // one the station did not take is asked again, though it is held read here
+  stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/read") ? Promise.reject(new HostError("连不上")) : undefined));
+  const failed = await run(Effect.result(core.inner.stations.read(ST, 7, 14, null)));
+  assert.equal(failed._tag, "Failure");
+  assert.equal(puts(), 2);
+  stationLater(host, () => undefined);
+  await run(Effect.ignore(core.inner.stations.read(ST, 7, 14, null)));
+  assert.equal(puts(), 3);
+  core.close();
+});
+
+test("a_message_read_in_a_chat_looked_at_is_read_on_the_list_at_once_not_after_its_stations_answer", async () => {
+  // Words sent and answered at once: the answer came while the list was still taking the words sent (its end not in
+  // view), was the list's and the workspace's unread, and was read on them only once the station took the read, a
+  // round trip later (2026-11-08).
+  const row = (last: number, unread: boolean) => ({ id: "7", thread: 7, session: "k1", title: "部署", agents: [], lastActiveAt: last, last: { seq: last, text: "…" }, unread });
+  const { host, core, push, values, read } = await ui({ ...base(), "GET /chats": [row(3, false)] });
+  // the station slow to take the read
+  stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/read") ? new Promise(() => {}) : undefined));
+  subscribe(core, 1, 1, { topic: "chat", station: ST, thread: 7 });
+  subscribe(core, 1, 2, { topic: "chats", scope: "ws" });
+  call(core, 1, 3, "client.focus", { visible: true, focused: true, chat: { station: ST, thread: 7, end: false } });
+  await read();
+  const unread = () => (v(values, 2).days as J[]).flatMap((d) => d.items).find((i: J) => i.id === "7")?.unread;
+  push("thread", { id: 7, entries: [entry(4, "来了")] });
+  push("thread-view", threadView(7, 4, 3, 1));
+  push("chat", row(4, true));
+  await read();
+  assert.equal(unread(), true);
+  // its end in view: read, on the list too, while the station has not answered
+  call(core, 1, 4, "client.focus", { chat: { station: ST, thread: 7, end: true } });
+  // (the chat made again, its read held, the list made again: an emission's window each)
+  await read();
+  await read();
+  assert.equal(host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/threads/7/read")).length, 1);
+  assert.equal(unread(), false);
   core.close();
 });
 
