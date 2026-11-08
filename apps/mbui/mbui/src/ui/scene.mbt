@@ -369,6 +369,32 @@ let clip_arc_sin : FixedArray[Double] = FixedArray::makei(clip_arc_steps + 1, fn
 })
 
 ///|
+/// The curve's points (clip_arc_cos, clip_arc_sin) each to the power `e` (det_pow), for the `e` last asked: a curve as
+/// smooth as the one before it (most are not smooth at all) not worked out again.
+fn clip_arc_powers(e : Double) -> Unit {
+  if e == clip_arc_e.val {
+    return
+  }
+  clip_arc_e.val = e
+  for q in 0..=clip_arc_steps {
+    clip_arc_cos_e[q] = det_pow(clip_arc_cos[q], e)
+    clip_arc_sin_e[q] = det_pow(clip_arc_sin[q], e)
+  }
+}
+
+///|
+// kept across runs: worked out again only for another power (clip_arc_powers)
+let clip_arc_e : Ref[Double] = Ref::new(-1.0)
+
+///|
+// kept across runs: as clip_arc_e
+let clip_arc_cos_e : FixedArray[Double] = FixedArray::make(clip_arc_steps + 1, 0.0)
+
+///|
+// kept across runs: as clip_arc_e
+let clip_arc_sin_e : FixedArray[Double] = FixedArray::make(clip_arc_steps + 1, 0.0)
+
+///|
 /// How far the clip of 12 numbers at `o` in `at` (its rect, its corners, how smooth) cuts into a shape of rect (x0 y0
 /// x1 y1), corners `r` as smooth as `sm`: the most of the shape past that clip's curves (≤ 0: none of it). Only its
 /// corners count (sd_clip's, each against its own corner point). Its distance is a convex shape's, convex: across the
@@ -451,9 +477,10 @@ fn[A : ClipNumbers] clip_cut_depth(
         continue
       }
       let e = 2.0 / (2.0 + (smooth_exponent - 2.0) * si)
+      clip_arc_powers(e)
       for q in 0..=clip_arc_steps {
-        let ux = sreach * det_pow(clip_arc_cos[q], e)
-        let uy = sreach * det_pow(clip_arc_sin[q], e)
+        let ux = sreach * clip_arc_cos_e[q]
+        let uy = sreach * clip_arc_sin_e[q]
         // from its curve's middle out towards the corner; what of it is past the shape's rect is none of it
         let px = cx + jx * (sreach - ux)
         let py = cy + jy * (sreach - uy)
