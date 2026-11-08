@@ -212,6 +212,8 @@ struct EditorState {
   /// what typing in it does (Ctx::editor's `on_change`), as its words change by the person's edit (a key, the input
   /// method's text, a paste, an undo): said by its last build
   mut on_change : ((String) -> Unit)?
+  /// what the person's edit of its words or its selection does (Ctx::editor's `on_edit`): said by its last build
+  mut on_edit : ((FieldEdit) -> Unit)?
   mut pref_x : Double
   /// the caret, where one line wraps into the next at it, shows at the end of the line before (a move to a line's end
   /// or the pointer past it put it there), not at the next one's start: while the caret is at this offset; -1 none

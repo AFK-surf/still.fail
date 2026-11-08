@@ -67,10 +67,10 @@ fn EditorState::forget_edits(self : EditorState) -> Unit {
 /// The field's last edit undone, as it was before it, what was picked then picked again (Undo); or the last undone
 /// done again (Redo). Nothing while the input method composes (its keys are its own then), nor when there is none.
 fn EditorState::step(self : EditorState, s : Step, now : Double) -> Unit {
-  let before = self.text
+  let (before, anchor, caret) = (self.text, self.anchor, self.caret)
   self.step_edit(s, now)
   self.words_told()
-  self.typed_told(before)
+  self.typed_told(before, anchor, caret, Undone)
 }
 
 ///|

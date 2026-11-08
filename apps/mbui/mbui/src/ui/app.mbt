@@ -907,6 +907,36 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
 
 ///|
 fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
+  // (what the event does to the fields' selections, the old view's and the tree's: told each field's as the event
+  // is taken, EditorState::typed_told)
+  pointed_edits(fn() { pointer_event_now(kind, x, y, button, mods, by~) })
+}
+
+///|
+/// What `f`, the pointer's (an event of it, a hold it made at its moment), does to the selection of each field (the
+/// old view's and the tree's, each among the editors): told as `f` is done, for each whose selection it moved in the
+/// words it had, from the selection it had. A field whose words `f` changed is not told so: an edit of them by the
+/// person told already, as it was made (words let go on it), and what the app put in it as it answered (a chat picked
+/// from a menu put in: Field::set, its caret with it) no one's edit.
+fn pointed_edits(f : () -> Unit) -> Unit {
+  let had : Array[(EditorState, String, Int, Int)] = []
+  for _, st in g().editors {
+    // (one Field's held by two ids, its old editor's and its node's: once)
+    if !had.iter().any(fn(e) { physical_equal(e.0, st) }) {
+      had.push((st, st.text, st.anchor, st.caret))
+    }
+  }
+  f()
+  for e in had {
+    let (st, words, anchor, caret) = e
+    if st.text == words {
+      st.typed_told(words, anchor, caret, Pointed)
+    }
+  }
+}
+
+///|
+fn pointer_event_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
   let args = [kind.to_double(), x, y, button.to_double(), mods.to_double()]
   if by >= 0 {
     args.push(by.to_double())
