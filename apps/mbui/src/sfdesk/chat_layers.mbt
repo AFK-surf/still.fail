@@ -5,27 +5,9 @@
 // chat's own keys.
 
 ///|
-/// What the chat's pane keeps of its own: the composer to take the keyboard at its next drawing (回到输入框).
-priv struct LayersOwn {
-  mut focus : Bool
-}
-
-///|
-let layers_own : LayersOwn = { focus: false }
-
-///|
-fn layers_reset() -> Unit {
-  layers_own.focus = false
-}
-
-///|
 /// Over chat `r`'s pane `pane` (its draft `draft`; `room`, what the composer keeps at its foot), after its composer:
 /// what is picked in its messages, what is carried over it.
 fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
-  if layers_own.focus {
-    layers_own.focus = false
-    c.focus_editor(@sfpages.composer_field_key)
-  }
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {
       writing_quote(src, writing(src, draft), {
@@ -93,9 +75,10 @@ fn inside(r : (Double, Double, Double, Double)?, x : Double, y : Double) -> Bool
 }
 
 ///|
-/// The composer to take the keyboard at the pane's next drawing (Space with no field focused: 回到输入框).
-fn composer_focus() -> Unit {
-  layers_own.focus = true
+/// Chat `r`'s composer given the keyboard (Space with no field focused: 回到输入框), its draft's field (writing's), as
+/// the key is pressed.
+fn composer_focus(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  c.focus_field(writing(src, r.station + ":" + r.session).field)
 }
 
 ///|

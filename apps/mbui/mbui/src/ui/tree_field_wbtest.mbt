@@ -1600,3 +1600,41 @@ test "a mouse press in either kind of field lets go of page words picked before 
     assert_true(f.text().contains("X"), msg="field edited, tree=\{tree}")
   }
 }
+
+///|
+test "Field::focused: whether the editor holding it has the focus, an old view's or the tree's, followed as the focus comes and goes" {
+  let held = Field::new()
+  let later = Field::new()
+  let told : Array[Bool] = []
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
+      old(h, fn(c) { c.box(w=Px(200.0), h=Px(20.0), fn() { c.editor("held", field=held, font_size=10.0, max_lines=1, plain=true) |> ignore }) |> ignore })
+      .grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((20.0, 80.0))).width(Is(Some(200.0))) |> ignore
+      field(h, later, font_size=10.0, max_lines=1) |> ignore
+      // (what reads it in the tree: told as it changes)
+      h.reacts(fn() { later.focused() }, fn(on) { told.push(on) }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let none = (held.focused(), later.focused())
+  g().focus_field(held)
+  t.draw()
+  let old_one = (held.focused(), later.focused())
+  later.focus()
+  t.draw()
+  let tree_one = (held.focused(), later.focused())
+  later.let_go()
+  t.draw()
+  assert_eq(
+    (none, old_one, tree_one, later.focused(), told),
+    ((false, false), (true, false), (false, true), false, [false, true, false]),
+  )
+}
