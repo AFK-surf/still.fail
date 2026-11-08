@@ -465,6 +465,12 @@ fn main {
           Some(@posts.step(db, thread.to_int64(), after.to_int64()))
         _ => None
       }))
+    (Some("usage-retire"), Some(db), _) =>
+      // (asked a step at a time: `{"drop": true}` the retired indexes, else the fill; each answers whether it is done)
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "usage retirement", (db, ask) => match ask {
+        { "drop": True, .. } => Some(@usagefill.drop_step(db))
+        _ => Some(@usagefill.fill_step(db))
+      }))
     (Some("outflow-chats"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "outflow chat index", (db, ask) => match ask {
         { "scope": String(scope), .. } => {
@@ -558,7 +564,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts|session-list|outflow-chats|turn-counts|said|archive-last|page-letters|cc-index|usage-check|recent-chat|closed-cards|people-since|legacy-edits|legacy-said|session-counts|session-backfill|post-blocks|usage-retire --db <file>")
       2
     }
   }
