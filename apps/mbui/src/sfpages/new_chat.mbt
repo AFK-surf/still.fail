@@ -104,7 +104,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
 ///|
 /// The new chat of view `v` as it is left (data-made-leave): as it was but for its composer
 /// (the chat's now, its place kept), its scene `up` of the way faded where it is, what is under the composer `fade` of
-/// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
+/// the way faded where it is, each read as it is drawn. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
 /// words sent, what is under the composer 80 ms: @sfbase.new_chat_leaving_of), or over the chat it was left for, in a
 /// layer drawn only.
 pub fn new_chat_left(
@@ -113,8 +113,8 @@ pub fn new_chat_left(
   w : Workspace,
   frame : NewChatFrame,
   v : Json?,
-  up : Double,
-  fade : Double,
+  up : @motion.Anim,
+  fade : @motion.Anim,
 ) -> Unit {
   c.box(style=new_frame_box, fn() {
     // its bar gone at once (the chat has its own), its room kept
@@ -129,11 +129,11 @@ pub fn new_chat_left(
 ///|
 /// What the page on a station is: here (`Here`); its stations not read yet (`Held`: why they could not be, "" while
 /// they are read), the station it last started on in its place; become its chat (`Going`: how far its scene and what is
-/// under its composer have faded, 0 … 1 each).
+/// under its composer have faded, 0 … 1 each, read as it is drawn).
 priv enum NewState {
   Here
   Held(String)
-  Going(Double, Double)
+  Going(@motion.Anim, @motion.Anim)
 }
 
 ///|
@@ -194,10 +194,6 @@ fn new_narrow(
   state : NewState,
 ) -> Unit {
   let address = new_address(w, v, station, state)
-  let (up, fade) = match state {
-    Going(u, f) => (u, f)
-    _ => (0.0, 0.0)
-  }
   let going = state is Going(_, _)
   // the page the new chat again after its first words were sent (the chat not made): its scene and choices coming back
   let (sending_up, sending_fade) = if going { (0.0, 0.0) } else { @sfbase.new_sending(c) }
@@ -208,10 +204,10 @@ fn new_narrow(
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
         let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
-        // fading where it is; back, the chat not made
-        let gone = if going { up } else { sending_up }
-        if gone > 0.0 {
-          c.look(scene, @ui.look(alpha=1.0 - gone))
+        // fading where it is (as it is drawn); back, the chat not made
+        match state {
+          Going(up, _) => c.look_by(scene, fn() { @ui.look(alpha=1.0 - up.get()) })
+          _ => if sending_up > 0.0 { c.look(scene, @ui.look(alpha=1.0 - sending_up)) }
         }
         list_space(c, clear)
       })
@@ -275,8 +271,9 @@ fn new_narrow(
     @motion.measure(c, foot, "new/foot")
     // over the scene: its scroll bar keeps clear of it
     c.floats_over(foot)
-    if going {
-      c.look(foot, @ui.look(alpha=1.0 - fade))
+    match state {
+      Going(_, fade) => c.look_by(foot, fn() { @ui.look(alpha=1.0 - fade.get()) })
+      _ => ()
     }
   })
   |> ignore
@@ -611,8 +608,8 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
 /// the composer does. While it stays, as it is.
 fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
   match state {
-    Going(u, _) if up => c.look(i, @ui.look(alpha=1.0 - u))
-    Going(_, f) => c.look(i, @ui.look(alpha=1.0 - f))
+    Going(u, _) if up => c.look_by(i, fn() { @ui.look(alpha=1.0 - u.get()) })
+    Going(_, f) => c.look_by(i, fn() { @ui.look(alpha=1.0 - f.get()) })
     Here => {
       // the page the new chat again after its first words were sent (the chat not made): coming back
       let (u, f) = @sfbase.new_sending(c)

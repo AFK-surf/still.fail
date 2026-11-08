@@ -169,6 +169,8 @@ priv struct Drawn {
   mut bg_by : (() -> Int64)?
   /// each glyph of the words it holds drawn with what this gives as it is painted (Ctx::glyphs_by)
   mut glyphs_by : ((GlyphAt) -> GlyphLook)?
+  /// the ink its words, lines and shapes are drawn in, worked out as it is painted (Ctx::ink_by), in place of theirs
+  mut ink_by : (() -> Int64)?
   /// its notch (Ctx::box notch_y, notch_r, notch_fillet) worked out as it is painted (Ctx::notch_by), in place of its own
   mut notch_by : (() -> (Double, Double, Double))?
   /// where across it is drawn, worked out as it is painted (Ctx::cut_across_by): from and to, in its own terms
@@ -424,6 +426,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     look_by: None,
     bg_by: None,
     glyphs_by: None,
+    ink_by: None,
     notch_by: None,
     cut_by: None,
   }
@@ -547,6 +550,16 @@ pub fn Ctx::glyphs_by(self : Ctx, i : Int, f : (GlyphAt) -> GlyphLook) -> Unit {
 /// nothing built or laid out (frame_watch.mbt). `f` works out the same for the same state and time.
 pub fn Ctx::bg_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
   self.drawn_of(i).bg_by = Some(f)
+}
+
+///|
+/// What node `i` holds drawn in the ink `f` gives as it is painted (RRGGBBAA): its words' glyphs (not a colour emoji's),
+/// its lines and its shapes (an icon's), in place of the ink each was built with; its grounds, edges, shadows and
+/// pictures as they are. Read as it is drawn, not as it is built, as Ctx::bg_by (words or an icon easing to another ink
+/// as the pointer comes and goes, motion in what is made once): what `f` reads paints the frame again as it changes,
+/// nothing built or laid out; `f` works out the same for the same state and time.
+pub fn Ctx::ink_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
+  self.drawn_of(i).ink_by = Some(f)
 }
 
 ///|

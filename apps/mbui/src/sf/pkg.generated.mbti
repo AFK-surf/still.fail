@@ -170,7 +170,7 @@ pub fn box_fit(Double, Double, Double) -> (Double, Double)
 
 pub let breath_ms : Double
 
-pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, share? : Double) -> Unit
+pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, share? : @motion.Anim) -> Unit
 
 pub let bubble_raised : Raised
 
@@ -310,7 +310,7 @@ pub fn composer_round_in() -> Double
 
 pub fn confirm(String, String, String, () -> Unit, danger? : Bool, warning? : String, from? : Anchor) -> Unit
 
-pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool, warning? : String, scrim? : Int64, veil? : Double, on_confirm? : () -> Unit) -> Confirmed
+pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool, warning? : String, scrim? : Int64, on_confirm? : () -> Unit) -> Confirmed
 
 pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> String, Bool, () -> Unit, () -> Unit, warning? : String, shown? : () -> Unit, gone? : () -> Unit, dims? : () -> Bool, covered? : () -> Bool) -> Unit
 
@@ -432,7 +432,7 @@ pub let desk_strong : @ui.TextStyle
 
 pub let desk_words : @ui.TextStyle
 
-pub fn dialog(@ui.Ctx, String, Bool, String, () -> Unit, description? : String, footer? : () -> Unit, wide? : Bool, w? : Double, close_label? : String, step? : String, column_in? : Double, bare? : Bool, on_escape? : () -> Bool, scrim? : Int64, veil? : Double) -> Bool
+pub fn dialog(@ui.Ctx, String, Bool, String, () -> Unit, description? : String, footer? : () -> Unit, wide? : Bool, w? : Double, close_label? : String, step? : String, column_in? : Double, bare? : Bool, on_escape? : () -> Bool, scrim? : Int64, veil? : @motion.Anim) -> Bool
 
 pub fn dialog_body_most(@ui.Ctx, String, Int32) -> Double?
 
@@ -2348,7 +2348,7 @@ pub fn window_keys_w() -> Double
 
 pub let window_page_in : @motion.Trans
 
-pub fn with_corner_remove(@ui.Ctx, String, String, Double, () -> Unit, w? : Double, turn? : Double) -> Bool
+pub fn with_corner_remove(@ui.Ctx, String, String, Double, () -> Unit, w? : Double, turn? : () -> Double) -> Bool
 
 pub fn with_ground(@ui.Ctx, Int64, () -> Unit) -> Unit
 

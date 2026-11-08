@@ -679,9 +679,10 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           if !taking && publishing.aim && publishing.picked == Some(m.seq) {
             @motion.measure(c, said, publish_aim_measure(m.seq))
           }
-          let out = if taking { 0.0 } else { publish_out(c, k, on) }
-          if out > 0.0 {
-            c.look(content.val, @ui.look(alpha=publish_faded(out)))
+          // (faded as it is drawn)
+          if !taking {
+            let out = publish_out(c, k, on)
+            c.look_by(content.val, fn() { @ui.look(alpha=publish_faded(out.get())) })
           }
         })
         |> ignore
@@ -758,7 +759,7 @@ fn publish_file(
 /// Attachment `k` on the page, drawn by `draw` (`w` wide; None: as wide as there is), with its ✕ (publish_file).
 fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> Unit {
   let on = !publishing.off.contains(k)
-  // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes)
+  // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes, each as it is drawn)
   let out = publish_out(c, k, on)
   let id = c.id("publish/file/" + k)
   let hung = @sf.with_corner_remove(
@@ -767,16 +768,14 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
     @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
     @sf.message_file_corner,
     w?=w,
-    turn=out * publish_plus_turn,
+    turn=fn() { out.get() * publish_plus_turn },
     fn() {
       // (pressed anywhere, as its mark is: what the chat would open it by does not here)
       let card = c.box(style=publish_file_box, fn() {
         draw()
         c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
       })
-      if out > 0.0 {
-        c.look(card, @ui.look(alpha=publish_faded(out)))
-      }
+      c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get())) })
     },
   )
   let flip = fn() {
@@ -865,9 +864,9 @@ let publish_off_alpha : Double = 0.45
 
 ///|
 /// How far what `k` names is out of the picture (0 in it, 1 out), moving as its tick or its ✕ is pressed: as long as a
-/// control's change takes (vars.dur), easing out.
-fn publish_out(c : @ui.Ctx, k : String, on : Bool) -> Double {
-  @motion.animate(c, "publish/out/" + k, if on { 0.0 } else { 1.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+/// control's change takes (vars.dur), easing out. Told as it is built, read where it is drawn.
+fn publish_out(c : @ui.Ctx, k : String, on : Bool) -> @motion.Anim {
+  @motion.told(c, "publish/out/" + k, if on { 0.0 } else { 1.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
 }
 
 ///|

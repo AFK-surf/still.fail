@@ -94,52 +94,40 @@ fn button_part(
   press_does(c, id, live, on_press)
   // Quiet actions keep their usual look at rest, and show their own ground while doing what was pressed.
   let quiet_busy = busy && (tone == Ghost || tone == GhostDanger)
-  let h = ease_to(c, "sf-btn-h/\{id}", quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)))
+  // (its ground eased as it is painted: told as it is built, read where it is drawn, Ctx::bg_by)
+  let h = @motion.told(
+    c,
+    "sf-btn-h/\{id}",
+    if quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)) { 1.0 } else { 0.0 },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
   // strength, its spinner what to look at (2026-10-31 the user: 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字;
   // it faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
   let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
-  let seen = @motion.animate(
-    c,
-    "sf-btn-seen/\{id}",
-    if disabled {
-      0.45
-    } else {
-      1.0
-    },
-    spec=@motion.tween(dur_ms, ease=Out),
-  )
-  let (ground, line, tone_ink) = if on_night.val {
+  // (faded as it is drawn)
+  let seen = @motion.told(c, "sf-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // its ground `h` of the way to the one under the hand (no outline: where a tone has a line, it is its ground), and
+  // its words' ink
+  let (ground_at, tone_ink) = if on_night.val {
     // (on a stage: the night under it whatever the theme)
     match tone {
-      Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
-      _ => (mix(stage_plain_lit, h, stage_plain), 0L, share_ink)
+      Primary | DangerSolid => (fn(h : Double) -> Int64 { mix(0xFFFFFFFFL, h, share_ink) }, share_ground)
+      _ => (fn(h) { mix(stage_plain_lit, h, stage_plain) }, share_ink)
     }
   } else {
     // the phone's: the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
     // solid ground a step towards the page and a quiet one the hover's step darker (mbui ui/hand_moves.mbt)
     match tone {
-      Primary => {
-        let g = mix(p.primary_hover, h, p.primary)
-        (g, g, p.bg)
-      }
+      Primary => (fn(h : Double) -> Int64 { mix(p.primary_hover, h, p.primary) }, p.bg)
       // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
-      DangerSolid => {
-        let g = mix(mix(p.red, 0.85, p.canvas), h, p.red)
-        (g, g, if t.dark { p.bg } else { 0xFFFFFFFFL })
-      }
-      Danger => {
-        let g = over(p.chip, alpha(p.hover, h))
-        (g, g, p.red)
-      }
-      Ghost => (alpha(p.hover, h), 0L, p.text)
-      GhostDanger => (alpha(p.hover, h), 0L, p.red)
-      Plain => {
-        let g = over(p.chip, alpha(p.hover, h))
-        (g, g, p.text)
-      }
+      DangerSolid => (fn(h) { mix(mix(p.red, 0.85, p.canvas), h, p.red) }, if t.dark { p.bg } else { 0xFFFFFFFFL })
+      Danger => (fn(h) { over(p.chip, alpha(p.hover, h)) }, p.red)
+      Ghost => (fn(h) { alpha(p.hover, h) }, p.text)
+      GhostDanger => (fn(h) { alpha(p.hover, h) }, p.red)
+      Plain => (fn(h) { over(p.chip, alpha(p.hover, h)) }, p.text)
     }
   }
   let ink = ink_override.unwrap_or(tone_ink)
@@ -170,11 +158,8 @@ fn button_part(
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
-    bg=ground,
+    bg=ground_at(h.target()),
     radius=height / 2.0,
-    border=if line != 0L && line != ground { 1.0 } else { 0.0 },
-    border_color=line,
-    opacity=seen,
     id=if live { id } else { 0 },
     fn() {
       let turn = fn() {
@@ -245,6 +230,8 @@ fn button_part(
       }
     },
   )
+  c.bg_by(b, fn() { ground_at(h.get()) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get()) })
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
   // the curve a thing reshaped is moved by, not at once (the user, 2026-10-30: 按钮的变长应该也有过渡; their cause,
   // its words: sf/motion.mbt 3)
@@ -352,13 +339,15 @@ pub fn icon_button(
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
   press_does(c, id, !disabled, on_press)
-  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (lit || c.lit(id) || c.pressed(id)))
-  let ground = if on {
-    alpha(ink, 0.08)
-  } else {
-    // the page's hover, as a tint of the ink it sits with
-    alpha(ink, 0.065 * h)
-  }
+  // (its ground and its icon's ink eased as they are painted: told as it is built, read where it is drawn)
+  let h = @motion.told(
+    c,
+    "sf-ib-h/\{id}",
+    if !disabled && (lit || c.lit(id) || c.pressed(id)) { 1.0 } else { 0.0 },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
+  // the page's hover, as a tint of the ink it sits with
+  let ground_at = fn(h : Double) { if on { alpha(ink, 0.08) } else { alpha(ink, 0.065 * h) } }
   let corner : @ui.Radius = match linked {
     Some(link) => Linked(link)
     None => rounded(if round { size / 2.0 } else { corner })
@@ -369,13 +358,19 @@ pub fn icon_button(
     h=Px(size),
     align=ACenter,
     justify=JCenter,
-    bg=ground,
+    bg=ground_at(h.target()),
     opacity=if disabled { 0.35 } else { 1.0 },
     id=if disabled { 0 } else { id },
     fn() {
-      draw_icon(c, icon, icon_size, if on || h > 0.5 { ink } else { quiet })
+      draw_icon(c, icon, icon_size, if on || h.target() > 0.5 { ink } else { quiet })
     },
   )
+  c.bg_by(b, fn() { ground_at(h.get()) })
+  // (its icon quiet, in the ink once its ground is half way to the hover's, as it is painted; a runtime's mark in its
+  // maker's own colours)
+  if !on && !icon.has_prefix("runtime:") {
+    c.ink_by(b, fn() { if h.get() > 0.5 { ink } else { quiet } })
+  }
   // named (IconButton's label): what a screen reader calls it, and its tip
   if label != "" {
     c.semantics(b, Button, id~, label~, disabled~)
@@ -403,7 +398,8 @@ pub fn chip(
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
   press_does(c, id, !disabled, on_press)
-  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.lit(id))
+  // (its ground eased as it is painted)
+  let h = @motion.told(c, "sf-chip-h/\{id}", if !disabled && c.lit(id) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
   let b = c.box(
     dir=Row,
     h=Px(30.0),
@@ -412,7 +408,7 @@ pub fn chip(
     gap=2.0,
     align=ACenter,
     justify=JCenter,
-    bg=alpha(ink, 0.07 + 0.05 * h),
+    bg=alpha(ink, 0.07 + 0.05 * h.target()),
     style=if inner { chip_inner } else { @ui.style() },
     radius?=if inner { None } else { Some(10.0) },
     opacity=if disabled { 0.35 } else { 1.0 },
@@ -426,6 +422,7 @@ pub fn chip(
       }
     },
   )
+  c.bg_by(b, fn() { alpha(ink, 0.07 + 0.05 * h.get()) })
   c.bone_whole(b)
   if said != "" {
     c.semantics(b, Button, id=if disabled { 0 } else { id }, label=said, disabled~)
@@ -2303,7 +2300,8 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// goes in steps, each sliding in whole: panel_centred), untitled, none of the room round a body (its close button in
 /// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
 /// `scrim`: what the page under it is dimmed with (the theme's where not said; none, 0, where what is under it is
-/// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1: dialog_veil).
+/// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1, read as it is
+/// drawn: dialog_veil).
 /// Whether it is open now; `on_close`: what its close button does, as it is pressed (its owner's open let go).
 pub fn dialog(
   c : @ui.Ctx,
@@ -2321,7 +2319,7 @@ pub fn dialog(
   bare? : Bool = false,
   on_escape? : () -> Bool,
   scrim? : Int64,
-  veil? : Double = 0.0,
+  veil? : @motion.Anim,
   on_close? : () -> Unit = fn() {  },
 ) -> Bool {
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -2418,7 +2416,10 @@ pub fn dialog(
           })
           |> ignore
         }
-        dialog_veil(c, veil)
+        match veil {
+          Some(v) => dialog_veil(c, v)
+          None => ()
+        }
         },
       )
       c.surface(panel)
@@ -2430,13 +2431,18 @@ pub fn dialog(
 
 ///|
 /// A dialog dimmed over all of itself `f` of the way (0 … 1) as the window under it is (the theme's scrim), another over
-/// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is 0.
-fn dialog_veil(c : @ui.Ctx, f : Double) -> Unit {
-  if f <= 0.0 {
+/// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is not going from 0. Dimmed
+/// as it is drawn (Ctx::bg_by), not built again as it goes; built while it dims or comes back, till its declared end.
+fn dialog_veil(c : @ui.Ctx, f : @motion.Anim) -> Unit {
+  if f.target() <= 0.0 && f.over() {
     return
   }
-  let ink = @ui.alpha(c.theme().scrim, f)
-  c.layer(fn() { c.box(style=dialog_veil_at.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore }) |> ignore
+  let scrim = c.theme().scrim
+  c.layer(fn() {
+    let v = c.box(style=dialog_veil_at, fn() {  })
+    c.bg_by(v, fn() { @ui.alpha(scrim, dmax(0.0, f.get())) })
+  })
+  |> ignore
 }
 
 ///|
@@ -3166,9 +3172,8 @@ pub(all) struct Confirmed {
 /// 13 red, 12 over the buttons, it stays open), an optional red `warning`, then `cancel` (its words alone) and `action`
 /// (solid red, the primary's when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back
 /// and `cancel` close it.
-/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already); `veil`:
-/// how far another over it dims it over itself (0 … 1: dialog_veil); `on_confirm`: what its action does, as it is
-/// pressed (press_does).
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already);
+/// `on_confirm`: what its action does, as it is pressed (press_does).
 pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
@@ -3182,7 +3187,6 @@ pub fn confirm_dialog(
   danger? : Bool = true,
   warning? : String = "",
   scrim? : Int64,
-  veil? : Double = 0.0,
   on_confirm? : () -> Unit,
 ) -> Confirmed {
   let mut confirmed = false
@@ -3214,7 +3218,6 @@ pub fn confirm_dialog(
             c.text(warning, style=confirm_warning) |> ignore
           }
           inner()
-          dialog_veil(c, veil)
         },
       )
       c.surface(panel)
@@ -4097,8 +4100,10 @@ pub fn ask_line_button(
   let out = pad - inset
   let id = c.id(key)
   let live = !disabled
-  let lit = ease_to(c, "sf-ask-line-btn/\{id}", live && (c.lit(id) || c.pressed(id)))
-  let seen = @motion.animate(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // (its ground and its words' ink eased, and it faded, as it is painted: told as it is built, read where it is drawn)
+  let ease = @motion.tween(dur_ms, ease=Out)
+  let lit = @motion.told(c, "sf-ask-line-btn/\{id}", if live && (c.lit(id) || c.pressed(id)) { 1.0 } else { 0.0 }, spec=ease)
+  let seen = @motion.told(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=ease)
   let look = theme().chat_list
   // (its words as far in from its end as the bell's from the row's start: the bell's room in its disc's column)
   let side = (ask_line_disc() - mark) / 2.0
@@ -4111,19 +4116,22 @@ pub fn ask_line_button(
     mr=room(-out),
     radius=Full,
     align=ACenter,
-    bg=Data(alpha(theme().p.hover, lit)),
   )
+  let hover = theme().p.hover
   let b = c.box(
     style=room_of,
     id=if live { id } else { 0 },
     fn() {
-      // (its ink the quiet one's, the line's own under the hand, over dur_ms)
-      let ink = mix(theme().p.text, lit, theme().p.muted)
+      // (its ink the quiet one's, the line's own under the hand, over dur_ms, as it is painted)
+      let (text, muted) = (theme().p.text, theme().p.muted)
+      let ink = mix(text, lit.target(), muted)
       let words = look.state_quiet.then(ask_line_button_words).then(@ui.text_style(color=Data(ink)))
-      c.text(label, style=ask_line_words(words)) |> ignore
+      let w = c.text(label, style=ask_line_words(words))
+      c.ink_by(w, fn() { mix(text, lit.get(), muted) })
     },
   )
-  c.look(b, @ui.look(alpha=seen))
+  c.bg_by(b, fn() { alpha(hover, lit.get()) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get()) })
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
   match on_press {
     Some(f) if live => c.on_press(id, f)
@@ -4207,10 +4215,11 @@ pub fn options_card(
         let picked_here = !history && chosen == Some(i)
         let ease = @motion.tween(dur_ms, ease=Out)
         let k = key + "/" + i.to_string()
-        let there = @motion.animate(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
+        // (faded as it is drawn)
+        let there = @motion.told(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
         let ticked = @motion.animate(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
         let turning = @motion.animate(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
-        c.box(
+        let row = c.box(
           dir=Row,
           w=Fill(1.0),
           pl=ot.pad_in,
@@ -4221,7 +4230,6 @@ pub fn options_card(
           align=AStart,
           radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
-          opacity=there,
           id~,
           fn() {
             c.box(
@@ -4280,7 +4288,7 @@ pub fn options_card(
             }
           },
         )
-        |> ignore
+        c.look_by(row, fn() { @ui.look(alpha=there.get()) })
       }
     })
     |> ignore

@@ -218,7 +218,8 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
                   if a.target() != 1.0 {
                     a.animate(1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
                   }
-                  c.look(at, @ui.look(alpha=a.get()))
+                  // (faded in as it is drawn)
+                  c.look_by(at, fn() { @ui.look(alpha=a.get()) })
                 } else {
                   // (built again as they land)
                   if f.placed && lands < @double.infinity {

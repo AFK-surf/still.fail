@@ -67,10 +67,16 @@ pub fn ask_words(c : @ui.Ctx, title : String, note : String, centred? : Bool = f
 /// that line even if the words wrap or the font is scaled. The press room grows without moving its neighbours.
 pub fn ask_history_trigger(c : @ui.Ctx, key : String, words : Array[@ui.Run], style : @ui.TextStyle, line : Double) -> Int {
   let id = c.id("ask-history/" + key)
-  let lit = @motion.animate(c, "ask-history-lit/" + key, if c.lit(id) || c.has_focus(id) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // (its mark's ink eased as it is painted)
+  let lit = @motion.told(c, "ask-history-lit/" + key, if c.lit(id) || c.has_focus(id) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
   let b = c.box(style=ask_history_line, id~, fn() {
     c.rich(words, style~) |> ignore
-    c.box(style=ask_history_mark.then(@ui.style(h=Fixed(line))), fn() { icon(c, "chevron-right", size=12.0, color=mix(theme().p.text, lit, theme().p.muted)) |> ignore }) |> ignore
+    c.box(style=ask_history_mark.then(@ui.style(h=Fixed(line))), fn() {
+      let (text, muted) = (theme().p.text, theme().p.muted)
+      let mark = icon(c, "chevron-right", size=12.0, color=mix(text, lit.target(), muted))
+      c.ink_by(mark, fn() { mix(text, lit.get(), muted) })
+    })
+    |> ignore
   })
   c.semantics(b, Button, id~, label=words.map(fn(w) { w.text }).join("") + " · " + t("web-main.history.details"))
   c.focusable(id, node=b)

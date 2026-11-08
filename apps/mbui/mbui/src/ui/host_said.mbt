@@ -2,7 +2,8 @@
 // built, laid out or painted again as it changes (a list's row or a part kept as its own watch follows it too).
 //
 // The host's settings (the system's dark, its size of words, whether something reads the widgets out, reduced motion,
-// solid glass, what decodes a stream, the window's buttons in the top row): each asked of the host as each frame begins
+// solid glass, what decodes a stream, the window's buttons in the top row, the window maximized and how the pointer
+// stands on its maximize button the app draws): each asked of the host as each frame begins
 // (host_settings_arrive), and as it is asked between frames. What the frame is drawn on (the window's size, its pixels,
 // what the host measures words in, where the old views are laid out): as frame_drawn begins it (frame_settings_arrive).
 
@@ -44,6 +45,16 @@ fn[T : Eq] HostSaid::now(self : HostSaid[T]) -> T {
 /// Whether the window's buttons are in the app's top row (window_inset).
 // kept across runs: put back by each Tester (host_settings_arrive as its first frame begins)
 let inset_said : HostSaid[Bool] = host_said(false, fn() { @hostapi.window_inset() })
+
+///|
+/// Whether the window is maximized (window_zoomed).
+// kept across runs: put back by each Tester (host_settings_arrive as its first frame begins)
+let zoomed_said : HostSaid[Bool] = host_said(false, fn() { @hostapi.window_zoomed() })
+
+///|
+/// How the pointer stands on the window's maximize button the app draws (window_snap_state).
+// kept across runs: put back by each Tester (host_settings_arrive as its first frame begins)
+let snap_said : HostSaid[Int] = host_said(0, fn() { @hostapi.window_snap_state() })
 
 ///|
 /// Whether the system is set to dark (system_dark).
@@ -100,6 +111,8 @@ let layers_said : HostSaid[Bool] = host_said(false, fn() { @hostapi.stream_layer
 /// that changed is told.
 fn host_settings_arrive() -> Unit {
   inset_said.arrive()
+  zoomed_said.arrive()
+  snap_said.arrive()
   dark_said.arrive()
   words_size_said.arrive()
   reads_out_said.arrive()

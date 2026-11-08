@@ -1194,6 +1194,7 @@ pub fn Ctx::image_ready(Self, String, Double) -> Bool
 pub fn Ctx::ime_inset(Self) -> Double
 pub fn Ctx::in_bones(Self) -> Bool
 pub fn Ctx::in_frame(Self) -> Bool
+pub fn Ctx::ink_by(Self, Int32, () -> Int64) -> Unit
 pub fn Ctx::interact(Self, Int32, node? : Int32, focusable? : Bool, disabled? : Bool, keys? : Int32, focus_on_press? : Bool, holds? : Bool) -> Response
 pub fn Ctx::keep_drawing(Self, Int32, Int32, Drawing) -> Unit
 pub fn Ctx::keeps_selection(Self, Int32) -> Unit

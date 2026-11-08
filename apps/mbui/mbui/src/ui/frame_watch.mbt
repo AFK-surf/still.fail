@@ -656,6 +656,7 @@ fn tree_sig(c : Ctx) -> Int64 {
     h = hash_mix(h, (if e.look_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.bg_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.glyphs_by is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.ink_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.notch_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.cut_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.cycle is Some(_) { 1 } else { 0 }).to_int64())
