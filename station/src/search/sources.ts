@@ -19,6 +19,7 @@ import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
 import { given, titleOf } from "../read/views.ts";
 import { type Asker, type Doc, type Group, type Hit, excerpt, has, sees } from "./match.ts";
+import { readSearchScopePage } from "./scope-read.ts";
 
 /// The workspace documents of nothing in particular are in (`ws` null: the station's home one).
 type Ws = string | null;
@@ -503,13 +504,15 @@ export function profileDocs(profiles: Profiles): Doc[] {
 /// The documents of the kinds asked for; undefined gives the worker a chance to handle another request. When words
 /// are supplied, a nonmatching chat may be omitted before its message times are read.
 export function* stationDocSteps(s: Store, data: string, config: unknown, kinds: Set<string> | null, asker?: Asker,
-  onlyArchived = false, words?: string[]): Generator<Doc | undefined> {
+  onlyArchived = false, words?: string[], onScopeUnavailable?: () => void): Generator<Doc | undefined> {
   const wants = (k: string) => kinds === null || kinds.has(k);
   if (wants("chat") || wants("message")) {
     const end = (s.db.prepare("SELECT MAX(id) AS id FROM threads").get() as { id: number | null }).id;
     let after: number | null = null;
     while (end !== null) {
-      const rows = after === null
+      const scoped = asker ? readSearchScopePage(s.db, asker, after, end, MESSAGE_BATCH) : null;
+      if (asker && scoped === null) onScopeUnavailable?.();
+      const rows = scoped !== null ? scoped.map((id) => ({ id })) : after === null
         ? all(s, "SELECT id FROM threads WHERE id <= ? ORDER BY id LIMIT ?", end, MESSAGE_BATCH)
         : all(s, "SELECT id FROM threads WHERE id > ? AND id <= ? ORDER BY id LIMIT ?", after, end, MESSAGE_BATCH);
       if (rows.length === 0) break;
@@ -526,7 +529,9 @@ export function* stationDocSteps(s: Store, data: string, config: unknown, kinds:
       }
       after = rows.at(-1)!.id as number;
       yield undefined;
-      if (rows.length < MESSAGE_BATCH) break;
+      // A ready page can become dirty while its chats are read. Check again before ending, and resume the original
+      // walk from this cursor if a concurrent membership or session change needs repair.
+      if (scoped === null && rows.length < MESSAGE_BATCH) break;
     }
   }
   if (wants("job")) {
