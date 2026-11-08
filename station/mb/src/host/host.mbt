@@ -156,3 +156,22 @@ extern "C" fn exit_ffi(code : Int) = "exit"
 pub fn exit(code : Int) -> Unit {
   exit_ffi(code)
 }
+
+///|
+extern "C" fn args_ffi() -> Bytes = "sfh_args"
+
+///|
+/// The program's arguments, its own name first (as the system gives them, whatever the target the program was made
+/// for: host.c `sfh_args`).
+pub fn args() -> Array[String] {
+  let all = args_ffi()
+  let out = []
+  let mut start = 0
+  for i = 0; i < all.length(); i = i + 1 {
+    if all[i] == b'\x00' {
+      out.push(@utf8.decode_lossy(all[start:i]))
+      start = i + 1
+    }
+  }
+  out
+}

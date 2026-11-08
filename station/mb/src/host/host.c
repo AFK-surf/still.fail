@@ -8,6 +8,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 typedef SRWLOCK lock_t;
 typedef CONDITION_VARIABLE cond_t;
 #define LOCK_INIT SRWLOCK_INIT
@@ -20,6 +21,10 @@ static void signal_one(cond_t *c) { WakeConditionVariable(c); }
 #include <time.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdio.h>
+#ifdef __APPLE__
+#include <crt_externs.h>
+#endif
 typedef pthread_mutex_t lock_t;
 typedef pthread_cond_t cond_t;
 #define LOCK_INIT PTHREAD_MUTEX_INITIALIZER
@@ -199,5 +204,49 @@ moonbit_bytes_t sfh_shell_sync(moonbit_bytes_t op, moonbit_bytes_t json) {
   moonbit_bytes_t out = moonbit_make_bytes((int32_t)n, 0);
   if (n) memcpy(out, answer, n);
   sf_free(answer, n);
+  return out;
+}
+
+/// The program's arguments in UTF-8, each ended by a NUL: as the system has them, not as the MoonBit runtime takes them
+/// (its strings of the system are its platform's, fixed where the program's C was made: on the Mac for every target).
+moonbit_bytes_t sfh_args(void) {
+  size_t len = 0;
+  char *all = NULL;
+#if defined(_WIN32)
+  int argc = 0;
+  LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+  for (int i = 0; argv != NULL && i < argc; i++) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, argv[i], -1, NULL, 0, NULL, NULL);
+    if (n <= 0) continue;
+    all = realloc(all, len + (size_t)n);
+    WideCharToMultiByte(CP_UTF8, 0, argv[i], -1, all + len, n, NULL, NULL);
+    len += (size_t)n;
+  }
+  if (argv != NULL) LocalFree(argv);
+#elif defined(__APPLE__)
+  int argc = *_NSGetArgc();
+  char **argv = *_NSGetArgv();
+  for (int i = 0; i < argc; i++) {
+    size_t n = strlen(argv[i]) + 1;
+    all = realloc(all, len + n);
+    memcpy(all + len, argv[i], n);
+    len += n;
+  }
+#else
+  FILE *f = fopen("/proc/self/cmdline", "rb");
+  if (f != NULL) {
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof buf, f)) > 0) {
+      all = realloc(all, len + n);
+      memcpy(all + len, buf, n);
+      len += n;
+    }
+    fclose(f);
+  }
+#endif
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)len, 0);
+  if (len) memcpy(out, all, len);
+  free(all);
   return out;
 }
