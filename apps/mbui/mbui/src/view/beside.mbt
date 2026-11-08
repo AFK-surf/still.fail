@@ -350,24 +350,32 @@ pub(all) enum Pivot {
 ///|
 /// Where node `self` is drawn bigger or smaller about, in points where it is its own, laid out `w` by `h`.
 fn Node::pivot_at(self : Node, w : Double, h : Double) -> (Double, Double) {
-  let (sx, sy) = match (self.look.pivot, self.beside) {
-    (At(x, y), _) => (x, y)
-    (FromBeside, Some(b)) => {
-      let across = match b.along {
-        Start => 0.0
-        Middle => 0.5
-        End => 1.0
+  // (matched one after the other, no pair made: asked of every node drawn turned or scaled, each frame)
+  match self.look.pivot {
+    At(x, y) => (x * w, y * h)
+    Drawn => (0.5 * w, 0.5 * h)
+    FromBeside =>
+      match self.beside {
+        None => (0.5 * w, 0.5 * h)
+        Some(b) => {
+          let across = match b.along {
+            Start => 0.0
+            Middle => 0.5
+            End => 1.0
+          }
+          let side = match self.went {
+            Some(s) => s
+            None => b.side
+          }
+          match side {
+            Bottom => (across * w, 0.0)
+            Top => (across * w, h)
+            Right => (0.0, across * h)
+            Left => (w, across * h)
+          }
+        }
       }
-      match self.went.unwrap_or(b.side) {
-        Bottom => (across, 0.0)
-        Top => (across, 1.0)
-        Right => (0.0, across)
-        Left => (1.0, across)
-      }
-    }
-    (FromBeside, None) | (Drawn, _) => (0.5, 0.5)
   }
-  (sx * w, sy * h)
 }
 
 ///|
