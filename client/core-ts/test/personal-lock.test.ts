@@ -12,6 +12,7 @@ import { PersonalLock, checkChain, grantHolds } from "../src/personal-lock.ts";
 import { Runner } from "../src/runtime.ts";
 import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
+import { forgetVerifiedHere, keepVerified, verifies } from "../src/vault/verified.ts";
 import { personalStub } from "./adb-personal-stub.ts";
 
 const SUB = "s1";
@@ -108,6 +109,33 @@ test("a grant holds only for what was signed, by a key on the lock, in its time,
   } finally {
     a.runner.shutdown();
     b.runner.shutdown();
+  }
+});
+
+test("a lock's entries and grants checked on this device are not checked again as the app starts", async () => {
+  // Each start checked every entry and grant again in Hermes, on the core's one thread, before what the first page waits
+  // for (0.1.7684, 2026-11-08).
+  const kept = new Map<string, unknown>();
+  forgetVerifiedHere();
+  keepVerified({ get: (k) => kept.get(k), put: (k, ok) => void kept.set(k, ok) });
+  const c = cloud();
+  const a = device(c, "a");
+  try {
+    const before = verifies.count;
+    const signed = await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    assert.ok(checkChain([...c.kept.entries], SUB) !== null);
+    const { devices } = a.lock.chain(SUB)!;
+    assert.equal(grantHolds(grantOf(signed), STATION, SUB, devices, NOW), 2_000_000_000);
+    const checked = verifies.count - before;
+    assert.ok(checked > 0);
+    // the app started anew: what this run found is gone, what is kept answers
+    forgetVerifiedHere();
+    assert.ok(checkChain([...c.kept.entries], SUB) !== null);
+    assert.equal(grantHolds(grantOf(signed), STATION, SUB, devices, NOW), 2_000_000_000);
+    assert.equal(verifies.count - before, checked, "checked once");
+  } finally {
+    keepVerified(null);
+    a.runner.shutdown();
   }
 });
 
