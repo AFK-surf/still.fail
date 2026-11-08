@@ -461,6 +461,21 @@ export function threadsOfSessionsOnSurface(s: Store, keys: string[], own: boolea
     WHERE m.session IN (SELECT value FROM json_each(?1)) AND t.surface ${own ? "=" : "IS NOT"} ?2`, JSON.stringify(keys), STILLFAIL_SURFACE).map((r) => r.id as number);
 }
 
+/// Whether a member has an external thread visible to the shared chat reader. A thread containing only missing
+/// sessions cannot name a chat. Reuse the prepared lookup for members of the same job read.
+export const HAS_NAMING_ORIGIN = `SELECT 1 FROM thread_sessions origin
+  CROSS JOIN threads t ON t.id = origin.thread
+  WHERE origin.session = ?1 AND t.surface IS NOT ?2 AND EXISTS (
+    SELECT 1 FROM thread_sessions member
+    CROSS JOIN sessions live ON live.key = member.session
+    WHERE member.thread = t.id
+  ) LIMIT 1`;
+
+export function namingOriginProbe(s: Store): (session: string) => boolean {
+  const lookup = s.db.prepare(HAS_NAMING_ORIGIN);
+  return (session) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
+}
+
 /// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
 export function threadsActiveSince(s: Store, threads: number[], since: number): number[] {
   if (threads.length === 0 || since <= 0) return threads;
