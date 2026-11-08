@@ -11,7 +11,7 @@ test "what a page read is let go of as it ends, once, and nothing it never read"
     { "station": Json::string("s"), "job": Json::string(job), "lines": Json::number(1.0) }
   }
   // read each frame: held once
-  held_build(1)
+  held_build()
   ignore(hold(src, jobs_scope("s"), "jobLog", log("a")))
   ignore(hold(src, jobs_scope("s"), "jobLog", log("a")))
   ignore(hold(src, jobs_scope("s"), "jobLog", log("b")))
@@ -22,7 +22,7 @@ test "what a page read is let go of as it ends, once, and nothing it never read"
   assert_eq(left, [])
   ignore(hold(src, jobs_scope("s"), "jobLog", log("a")))
   ignore(hold(src, jobs_scope("s"), "jobLog", log("b")))
-  held_build(2)
+  held_build()
   let_go(src, chat_scope("s", "x"))
   assert_eq(left, [])
   let_go(src, jobs_scope("s"))

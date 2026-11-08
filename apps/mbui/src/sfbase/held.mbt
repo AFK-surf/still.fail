@@ -9,24 +9,21 @@
 let held_topics : Map[String, Map[String, (String, Map[String, Json])]] = {}
 
 ///|
-/// The build each topic was last read in, and the build going on (held_build): what is read in the build its thing
-/// ended in is still shown by another (a chat that took a new one's place, its agent's line the same), and stays.
-let held_read : Map[String, Int] = {}
+/// The topics read since the build going on began (held_build): what is read in the build its thing ended in is still
+/// shown by another (a chat that took a new one's place, its agent's line the same), and stays.
+let held_read : Set[String] = Set::new()
 
 ///|
-let held_now : Ref[Int] = Ref::new(0)
-
-///|
-/// A build begins (the app's view, each frame it builds).
-pub fn held_build(n : Int) -> Unit {
-  held_now.val = n
+/// A build begins (the app's view, each time it is built): what the one before read, read by none now.
+pub fn held_build() -> Unit {
+  held_read.clear()
 }
 
 ///|
 /// The topic `name` with `params`, read for `scope` (let go of with it: let_go).
 pub fn hold(src : Source, scope : String, name : String, params : Map[String, Json]) -> Topic {
   let key = name + "\u{1}" + Json::object(params).stringify()
-  held_read[key] = held_now.val
+  held_read.add(key)
   match held_topics.get(scope) {
     Some(m) => if !m.contains(key) { m[key] = (name, params) }
     None => {
@@ -45,7 +42,7 @@ pub fn let_go(src : Source, scope : String) -> Unit {
     Some(m) => {
       held_topics.remove(scope)
       for key, t in m {
-        if held_read.get(key) == Some(held_now.val) {
+        if held_read.contains(key) {
           continue
         }
         held_read.remove(key)
@@ -73,7 +70,6 @@ pub fn let_go_all(src : Source, prefix : String) -> Unit {
 fn held_reset() -> Unit {
   held_topics.clear()
   held_read.clear()
-  held_now.val = 0
 }
 
 ///|

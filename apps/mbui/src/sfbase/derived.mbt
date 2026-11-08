@@ -6,22 +6,22 @@
 // the chats' list, a folder's entries, an agent's history, a job's output) is a computed here (Kept, Derived), worked
 // out again only as what it read changed, and then from what it made last: the core's deltas keep what they do not
 // touch (the same JSON), and what is made of that is kept as it was made (a chat's messages, the chats' rows: one row
-// changed, one row made). Kept while a frame reads it: one no frame read since the last is let go.
+// changed, one row made). Kept while something follows it (the frames' watch that read it as the window was last built,
+// a part kept as it was drawn, a computed of it): one nothing follows is let go as another is made.
 
 ///|
 /// Computeds kept by a key each (a chat's view by its chat, a folder's entries by its folder): each a computed made of
 /// the getter its first read gave (given what it made last, none the first time), read as a computed is (worked out
-/// again only as what it read changed), let go of (Computed::dispose) once a frame has gone by that did not read it.
+/// again only as what it read changed), let go of (Computed::dispose) once nothing follows it, as another is made.
 pub struct Kept[T] {
   priv kept : Map[String, KeptOne[T]]
-  /// listed with what a frame's beginning goes over (kept_lists), once it keeps anything
+  /// listed with what a new one made goes over (kept_lists), once it keeps anything
   priv mut listed : Bool
 }
 
 ///|
 struct KeptOne[T] {
   value : @signals.Computed[T]
-  mut read : Int
 }
 
 ///|
@@ -34,25 +34,38 @@ pub fn[T] Kept::new() -> Kept[T] {
 /// read changed since; what reads it told only where that comes out otherwise than before, by `same` where given (else
 /// as signals compare).
 pub fn[T] Kept::read(self : Kept[T], key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
-  let frame = kept_frame()
   let one = match self.kept.get(key) {
     Some(k) => k
     None => {
-      let k = { value: @signals.computed(getter, same?), read: frame }
+      // (a new one: those nothing follows let go first, where no getter is working one out, whose own is not
+      // followed yet)
+      if kept_working.val == 0 {
+        for l in kept_lists {
+          (l.sweep)()
+        }
+      }
+      let k = { value: @signals.computed(getter, same?) }
       self.kept[key] = k
       if !self.listed {
         self.listed = true
-        kept_lists.push({ sweep: fn(f) { self.sweep(f) }, clear: fn() { self.clear() } })
+        kept_lists.push({ sweep: fn() { self.sweep() }, clear: fn() { self.clear() } })
       }
       k
     }
   }
-  one.read = frame
-  one.value.get()
+  kept_working.val += 1
+  let v = one.value.get()
+  kept_working.val -= 1
+  v
 }
 
 ///|
-/// What was made last for `key`, if a frame read it since the last: not worked out again, nothing it reads asked for.
+/// How many Kepts' reads are under way (a getter reading another Kept): none let go meanwhile.
+// kept across runs: back to 0 as each read ends
+let kept_working : Ref[Int] = Ref(0)
+
+///|
+/// What was made last for `key`, if it is kept: not worked out again, nothing it reads asked for.
 pub fn[T] Kept::peek(self : Kept[T], key : String) -> T? {
   match self.kept.get(key) {
     Some(k) => k.value.peek()
@@ -75,12 +88,13 @@ fn[T] Kept::forget(self : Kept[T], key : String) -> Unit {
 }
 
 ///|
-/// Those no frame read since the last (neither `frame` nor the one before) let go, but what something follows (a part
-/// kept as it was drawn reads it no more each frame, and holds it: mbui's Ctx::kept_part).
-fn[T] Kept::sweep(self : Kept[T], frame : Int) -> Unit {
+/// Those nothing follows let go: what the frames' watch read as the window was last built, or as this one is, is
+/// followed by it till it reads anew without it (mbui/signals' Watch::read); a part kept as it was drawn, which reads it
+/// no more each frame, holds it (mbui's Ctx::kept_part); a computed that read it, as long as it is itself kept.
+fn[T] Kept::sweep(self : Kept[T]) -> Unit {
   let gone = []
   for key, k in self.kept {
-    if k.read != frame && k.read != frame - 1 && !k.value.watched() {
+    if !k.value.watched() {
       gone.push(key)
     }
   }
@@ -102,9 +116,9 @@ fn[T] Kept::clear(self : Kept[T]) -> Unit {
 }
 
 ///|
-/// What a frame's beginning does with a Kept that kept anything, and what reset does.
+/// What a new one made does with a Kept that kept anything, and what reset does.
 priv struct KeptList {
-  sweep : (Int) -> Unit
+  sweep : () -> Unit
   clear : () -> Unit
 }
 
@@ -113,36 +127,9 @@ priv struct KeptList {
 let kept_lists : Array[KeptList] = []
 
 ///|
-/// The frame whose first read went over the Kepts, and the run (its Ctx) it is in.
-priv struct KeptRun {
-  mut frame : Int
-  mut ctx : @ui.Ctx?
-}
-
-///|
-// kept across runs: a run anew (another Ctx: another test's) lets go of everything
-let kept_run : KeptRun = { frame: -1, ctx: None }
-
-///|
-/// This frame's number; its first read lets go of what no frame read since the last; a run anew (a Ctx of its own:
-/// another test's) of all of it.
-fn kept_frame() -> Int {
-  let c = @ui.current()
-  let frame = c.frame_number()
-  match kept_run.ctx {
-    Some(was) if physical_equal(was, c) => ()
-    _ => {
-      kept_reset()
-      kept_run.ctx = Some(c)
-    }
-  }
-  if kept_run.frame != frame {
-    kept_run.frame = frame
-    for l in kept_lists {
-      (l.sweep)(frame)
-    }
-  }
-  frame
+fn init {
+  // a run anew (a Tester begun: another test's) lets go of everything, whatever the source it reads
+  @ui.on_reset(kept_reset)
 }
 
 ///|
@@ -151,7 +138,7 @@ fn kept_reset() -> Unit {
   for l in kept_lists {
     (l.clear)()
   }
-  kept_run.frame = -1
+  kept_working.val = 0
 }
 
 ///|
@@ -188,7 +175,7 @@ pub fn[T] Derived::read(self : Derived[T], src : Source, params : Map[String, Js
 }
 
 ///|
-/// What was last made of topic `name` with `params`, if a frame read it since the last (Kept::peek): the topic not
+/// What was last made of topic `name` with `params`, if it is kept (Kept::peek): the topic not
 /// asked for.
 pub fn[T] Derived::kept(self : Derived[T], params : Map[String, Json]) -> T? {
   match self.kept.peek(Json::object(params).stringify()) {

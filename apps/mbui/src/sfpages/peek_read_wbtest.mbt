@@ -22,11 +22,9 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
       read.push("left")
     },
   }
-  let build = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
-      build.val += 1
-      @sfbase.held_build(build.val)
+      @sfbase.held_build()
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
         c.column(pad=40.0, fn() {
@@ -65,7 +63,6 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
 /// A chat's link's card alone, with the core's reading of links, for what `said` says of a message.
 fn chat_card_tester(href : String, linked : LinkedChat?, said : (Map[String, Json]) -> Json?) -> @ui.Tester {
   @sfbase.reset()
-  let build = Ref(0)
   let made = @sffixture.fixture("rich-chat")
   let src : Source = {
     ..made,
@@ -82,8 +79,7 @@ fn chat_card_tester(href : String, linked : LinkedChat?, said : (Map[String, Jso
   }
   @ui.Tester::new(
     fn(c) {
-      build.val += 1
-      @sfbase.held_build(build.val)
+      @sfbase.held_build()
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() { c.column(pad=40.0, fn() { chat_card(c, src, "card", "ws1/st1", href, linked) }) |> ignore })
     },
@@ -156,11 +152,9 @@ test "a file is read on every entry, including while its card is still open" {
     },
     leave: fn(name, _) { if name == "filePeek" { active.val = false } },
   }
-  let build = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
-      build.val += 1
-      @sfbase.held_build(build.val)
+      @sfbase.held_build()
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() {
         c.column(pad=40.0, fn() {

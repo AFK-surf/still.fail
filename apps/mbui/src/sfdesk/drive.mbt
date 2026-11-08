@@ -39,13 +39,14 @@ pub(all) struct FolderOf {
 }
 
 ///|
-/// The name being changed in place and whether its field had the focus (it is done once it leaves); the row whose menu
-/// is presented (its key, the presenter's serial: @sf.last_presented), marked while it is drawn.
+/// The name being changed in place and whether its field had the focus (it is done once it leaves); the row last
+/// pressed or asked for its menu (its id and its open's: row_took); the row whose menu is presented (its key, the
+/// presenter's serial: @sf.last_presented), marked while it is drawn.
 priv struct DriveHeld {
   naming : @signals.Signal[String]
   mut naming_had : Bool
   refreshing : @sf.LiveMap[String, Bool]
-  mut row_frame : Int
+  mut row_ids : (Int, Int)
   mut menu_row : String
   mut menu_serial : Int
   menu_items : Array[@sf.MenuItem?]
@@ -56,7 +57,7 @@ let held : DriveHeld = {
   naming: @signals.signal("", same=fn(a, b) { a == b }),
   naming_had: false,
   refreshing: @sf.LiveMap::new(),
-  row_frame: -1,
+  row_ids: (0, 0),
   menu_row: "",
   menu_serial: 0,
   menu_items: [],
@@ -67,7 +68,7 @@ fn drive_reset() -> Unit {
   held.naming.set("")
   held.naming_had = false
   held.refreshing.clear()
-  held.row_frame = -1
+  held.row_ids = (0, 0)
   held.menu_row = ""
   held.menu_serial = 0
 }
@@ -115,10 +116,12 @@ fn drive_row_menu_drawn(key : String) -> Bool {
 }
 
 ///|
-/// Whether a row took this frame's press or right click (what holds the rows leaves it to them: a click on a row is
-/// not one where there is no row).
+/// Whether a row took the press or right click the list sees now (what holds the rows leaves it to them: a click on a
+/// row is not one where there is no row): the row that took one last, asked whether it is its (as what stands beside
+/// it asks: nothing of it marked again).
 pub fn row_took(c : @ui.Ctx) -> Bool {
-  held.row_frame == c.frame_number()
+  let (id, did) = held.row_ids
+  id != 0 && (c.watch_press(id) || c.watch_press(did) || c.right_clicked(id) is Some(_) || c.held_long(id))
 }
 
 ///|
@@ -841,7 +844,7 @@ pub fn drive_row(
     let asked = c.menu_asked(id)
     match asked {
       Some((x, y)) => {
-        held.row_frame = c.frame_number()
+        held.row_ids = (id, did)
         (row.menu)()
         // (had by holding it, its menu says what it is of: a sheet over the row it was held on)
         drive_row_menu(key, (row.items)(), @sf.at_point(x, y), title=if held_more { e.name } else { "" })
@@ -849,7 +852,7 @@ pub fn drive_row(
       None => ()
     }
     if c.clicked(id) || c.clicked(did) {
-      held.row_frame = c.frame_number()
+      held.row_ids = (id, did)
     }
     if asked is Some(_) {
       ()
