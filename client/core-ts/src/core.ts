@@ -370,7 +370,9 @@ export class Core {
       inner.adb.accountsKnown();
       inner.tracer.setExport((body) => {
         const account = inner.accounts.list()[0];
-        return account ? Effect.ignore(inner.provider.traces(account.sub, body)) : Effect.void;
+        // Sent again when the network or the cloud was down; not one the cloud refused (it would be refused again).
+        const refused = (e: CoreError) => e.status !== undefined && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
+        return account ? Effect.catch(inner.provider.traces(account.sub, body), (e) => (refused(e) ? Effect.void : Effect.fail(e))) : Effect.void;
       });
       // An account signed in has its database opened; one signed out, removed (before what it reached is let go).
       inner.accounts.onChange(() => {
