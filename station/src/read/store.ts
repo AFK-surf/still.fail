@@ -543,6 +543,20 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   return summaries;
 }
 
+/// The members and message times needed to select chat names for jobs. Message bodies and edits are not needed to
+/// order them; an external thread's first text is read only if that thread actually supplies a name.
+export function threadsForChatNames(s: Store, ids: number[] | null): { thread: ThreadRow; sessions: Membership[]; lastAt: number }[] {
+  if (ids !== null && ids.length === 0) return [];
+  const selected = ids === null ? all(s, "SELECT * FROM threads")
+    : all(s, `SELECT * FROM threads WHERE id IN (${ids.map(() => "?").join(", ")})`, ...ids);
+  const threads = selected.map((row) => {
+    const thread = toThread(row);
+    return { thread, sessions: threadSessions(s, thread.id), lastAt: lastSaidAt(s, thread.id) ?? 0 };
+  });
+  threads.sort((a, b) => b.lastAt - a.lastAt || b.thread.createdAt - a.thread.createdAt || b.thread.id - a.thread.id);
+  return threads;
+}
+
 export const LAST_MESSAGE_PENDING = "last message pending: ";
 export class LastMessageUnavailable extends Refused {
   readonly threads: number[];
