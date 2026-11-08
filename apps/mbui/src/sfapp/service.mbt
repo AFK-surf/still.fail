@@ -34,7 +34,7 @@ fn station_name(src : Source, station : String) -> String {
     Some(i) => station.view(end_offset=i).to_owned()
     None => station
   }
-  match stations_of((src.topic)("stations", { "scope": Json::string(scope) }).value).iter().find_first(fn(s) {
+  match station_marks(src, scope).iter().find_first(fn(s) {
     s.address == station
   }) {
     Some(s) => s.name

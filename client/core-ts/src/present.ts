@@ -158,6 +158,7 @@ export function ticks(topic: Topic): boolean {
 /// it does not allow is an error naming the field.
 /// A topic's shape; undefined for one that goes out as it is.
 export function shapeOf(topic: Topic): Ty | undefined {
+  if (topic.topic === "stations" && topic.brief === true) return { vec: "StationBrief" };
   return TOPIC_SHAPES[topic.topic];
 }
 

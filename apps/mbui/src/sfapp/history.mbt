@@ -305,7 +305,7 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
     Some(i) => r.station.view(end_offset=i).to_owned()
     None => r.station
   }
-  match stations_of((src.topic)("stations", { "scope": Json::string(scope) }).value).iter().find_first(fn(
+  match station_marks(src, scope).iter().find_first(fn(
     s,
   ) {
     s.address == r.station

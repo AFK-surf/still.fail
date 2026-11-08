@@ -787,6 +787,32 @@ test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {
   assert.ok(choices(ov, s, 0).some((c: J) => c.model === "m" && c.accounts.codex.length === 2));
 });
 
+test("chats_asked_with_a_limit_have_their_first_rows_and_say_how_many_more", async () => {
+  // A list of 1400 chats went whole to the app as it opened, a screen of them shown (2026-11-08).
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws", limit: 2 });
+  t.set(workspace(), oneStation());
+  await t.read(u, 1);
+  const now = t.host.nowMs();
+  t.set(link("ws/st"), { state: "online" });
+  t.set(rows("ws/st"), [row("1", now - 1000), row("2", now - 2000), row("3", now - 3 * 86_400_000)]);
+  await t.read(u, 1);
+  assert.deepEqual(ids(u.value), ["1", "2"]);
+  assert.equal(u.value.more, 1);
+  // a new one on top: the last of the first two goes, one more past them
+  t.set(rows("ws/st"), [row("4", now), row("1", now - 1000), row("2", now - 2000), row("3", now - 3 * 86_400_000)]);
+  await t.read(u, 1);
+  assert.deepEqual(ids(u.value), ["4", "1"]);
+  assert.equal(u.value.more, 2);
+  // all of them in it: no `more`
+  const all = ui();
+  t.subscribe(2, { topic: "chats", scope: "ws", limit: 10 });
+  await t.read(all, 2);
+  assert.deepEqual(ids(all.value), ["4", "1", "2", "3"]);
+  assert.equal(all.value.more ?? null, null);
+});
+
 test("chats_puts_together_the_online_stations", async () => {
   const t = setup();
   const u = ui();
@@ -1299,6 +1325,29 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   const again = (list.value as J[]).find((s) => s.station === "ws/b");
   assert.deepEqual([again.summary, again.blocked], ["连不上", undefined]);
   assert.equal(chats.value.trouble.text, "无法连接 beta");
+});
+
+test("stations_asked_brief_say_what_names_each_and_how_it_is_reached_not_its_overview", async () => {
+  // A chat's bar asked the whole list for its station's name and mark: each station's overview came, and each of its
+  // changes (2026-11-08).
+  const t = setup();
+  const full = ui();
+  const brief = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(2, { topic: "stations", scope: "ws", brief: true });
+  t.set(workspace(), stations(t.nowS()));
+  await t.readAll([[full, 1], [brief, 2]]);
+  t.set(link("ws/a"), { state: "online" });
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 3, running: 2, warm: 0 } });
+  await t.readAll([[full, 1], [brief, 2]]);
+  const a = (brief.value as J[]).find((s) => s.station === "ws/a");
+  assert.deepEqual(Object.keys(a).sort(), ["id", "name", "online", "reconnecting", "running", "station"]);
+  assert.deepEqual([a.name, a.online, a.running], ["alpha", true, 2]);
+  assert.ok((full.value as J[]).find((s) => s.station === "ws/a").overview !== undefined);
+  // what only the overview says changes: nothing goes to the brief
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 4, running: 2, warm: 1 } });
+  await t.host.time.pass(100);
+  assert.equal(t.host.takeEmitted().filter(([, m]) => (m as J).id === 2).length, 0);
 });
 
 test("a_stopped_view_lets_its_topics_go", async () => {

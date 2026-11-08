@@ -132,6 +132,8 @@ pub fn chat_kept(ChatRef) -> ChatView?
 
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
 
+pub fn chat_limits_reset() -> Unit
+
 pub fn chat_link(String, String) -> String
 
 pub fn chat_params(ChatRef) -> Map[String, Json]
@@ -156,7 +158,19 @@ pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : 
 
 pub fn chat_view_made(Json) -> ChatView
 
+pub fn chats_ask_more(Source, String, String, Int) -> Unit
+
+pub fn chats_limit(String, String) -> Int
+
+pub fn chats_more(Source, String, String) -> Int
+
 pub fn chats_of(Source, String, String) -> (ChatsView?, String?)
+
+pub let chats_page : Int
+
+pub fn chats_scrolled(@ui.Ctx, Source, String, String, Int, Int) -> Unit
+
+pub fn chats_topic(Source, String) -> Topic
 
 pub fn chats_view_made(Json) -> ChatsView
 
@@ -1517,6 +1531,8 @@ pub fn stage_zoom() -> @kit.Zoom
 pub fn stamp_of(Json?, String) -> Stamp?
 
 pub let station_files_asked : @ref.Ref[(Source, String) -> Unit]
+
+pub fn station_marks(Source, String) -> Array[Station]
 
 pub fn stations_at_glance(Source, String) -> (@sf.GlyphCounts, String)
 

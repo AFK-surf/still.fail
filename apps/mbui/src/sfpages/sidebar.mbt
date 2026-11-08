@@ -320,6 +320,11 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   }
   let open = open_chat()
   let l = @sf.theme().chat_list
+  // (scrolled near the last of the rows the core sent: a page more of them asked for)
+  match (view, c.list_info(key)) {
+    (Some(_), Some(info)) => @sfbase.chats_scrolled(c, src, w.id, filter, info.last, count)
+    _ => ()
+  }
   c.box(style=lists_fill, id=pane, fn() {
     c.list(key, count, l.row_h, fn(i) {
       let n = c.box(style=@sf.list_line(frame.at), fn() {

@@ -2100,7 +2100,8 @@ pub fn list_after(
     // the core told the chat shows, and whether its end does (what is read follows): not on a read-only run
     // (its end in view: not while it glides to rows that came, as Android's Chat.kt has it (endInView, lastLaidOut):
     // rows not in view yet are not read)
-    // (nor while a row come at its end still opens its room: not wholly in view yet, its rest read once it is)
+    // (nor while a row come at its end still opens its room: not wholly in view yet, its rest read once it is; read as
+    // it opened, what the read changes of the chat (its agent's line) came while the rows moved, and moved them back)
     let opening = rd.rows.opening(c)
     let seen = match info {
       Some(i) => !v.newer && i.at_end && !opening
