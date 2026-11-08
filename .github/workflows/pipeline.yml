@@ -201,7 +201,7 @@ jobs:
           $since = (Get-Process -Id $PID).StartTime.AddMinutes(-10)
           Get-Process | Where-Object { $_.StartTime -gt $since } | Sort-Object StartTime | Format-Table -AutoSize Id, ProcessName, StartTime, Path | Out-String -Width 200
 
-  # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
+  # main: the prebuilt natives in the releases bucket's natives/ (what `prebuild --release` put in the release
   # native-artifacts, the prebuild workflow's or a Mac's, copied over: nothing is built here), once the API (which serves
   # natives/) is out. Seconds when the store has them.
   natives-store:
