@@ -115,16 +115,3 @@ test "大屏: a panel whose body is nodes: drawn by the window's tree, read out 
   t.run_for(@kit.pop_out_ms)
   assert_eq((@sf.presenting(), @sf.presenter_visible(), gone.val), (false, false, 1))
 }
-
-///|
-test "小屏: a panel whose body is nodes: drawn by the window's tree there too (till the tree draws sheets), in the middle of the window where opened by nothing" {
-  let t = menu_tester(390.0, 844.0, 2)
-  @sf.panel_nodes("节点面板", from=Unanchored, fn(v, _) { ink_node(v, 40.0, 36.0, body_ink) })
-  t.run_for(@ui.move_most_ms)
-  assert_true(tree_said(Dialog, "节点面板") is Some(_))
-  let (x, _, w, _) = painted_at(t, body_ink)
-  assert_true(x > 0.0 && x + w < 390.0, msg="in the window: \{x}")
-  t.key(@ui.key_escape)
-  t.run_for(@kit.pop_out_ms)
-  assert_false(@sf.presenter_visible())
-}
