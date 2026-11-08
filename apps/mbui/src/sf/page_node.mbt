@@ -599,7 +599,12 @@ let row_tag : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle
 /// folds open what follows it, its chevron down, up while that is open (as it says), read out so. `tail` after what it
 /// says, before its chevron while `tail_shown` says (a spinner, a mark: link_row's). One that `adds` one more to the list
 /// it ends (添加): one that acts, after a ＋ in the link's ink. `wide_title`: its title's look on a wide page (a
-/// setting's: setting_link_node). Its words as they are said.
+/// setting's: setting_link_node). Its words as they are said. `value_lit`: what it says in the link's ink (what it does
+/// pressed); `danger`: its title in red, where it takes something away (离开, 删除); `lacks`: its note in amber, where it
+/// says what is not as it should be. `control`: what is done at its end, last (a button, a switch: what is done here, no
+/// chevron), on its first line where lines are under it, as high as that line; `face`: its `lead` a round picture (a
+/// person's), which stands across the row's middle, and its control too where lines are under its first (wide under a
+/// finger, so is a control with lines under it: the row is wide enough for its lines beside it).
 pub fn link_row_node(
   parent : @view.View,
   title : () -> String,
@@ -607,11 +612,15 @@ pub fn link_row_node(
   value? : () -> String = fn() { "" },
   value_bad? : () -> Bool = fn() { false },
   value_dot? : () -> Bool = fn() { false },
+  value_lit? : Bool = false,
   note? : () -> String = fn() { "" },
   wide_note? : () -> String,
   trouble? : () -> String = fn() { "" },
   strong? : Bool = false,
+  danger? : Bool = false,
+  lacks? : Bool = false,
   lead? : RowLead = NoLead,
+  face? : Bool = false,
   goes? : Bool = true,
   chevron? : Bool = true,
   out? : Bool = false,
@@ -624,6 +633,7 @@ pub fn link_row_node(
   folds? : () -> Bool,
   tail? : (@view.View) -> Unit,
   tail_shown? : () -> Bool = fn() { true },
+  control? : (@view.View) -> Unit,
   adds? : Bool = false,
   wide_title? : () -> @ui.TextStyle,
 ) -> Unit {
@@ -633,7 +643,11 @@ pub fn link_row_node(
   let lead_ink = fn() { if adds { link_ink() } else { theme().p.muted } }
   // (words under its first line: a note, what is wrong, what may be below it, open or not: link_row's `under`)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
-  let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
+  let titled = match (strong, danger) {
+    (_, true) => pg_row_title.then(bad)
+    (true, false) => pg_row_title.then(row_strong)
+    (false, false) => pg_row_title
+  }
   let titled_in = if strong { pg_row_title_in.then(row_strong) } else { pg_row_title_in }
   // (its chevron: down where it folds what follows it, up while that is open, as link_row's `folds`)
   let mark = fn() {
@@ -643,16 +657,23 @@ pub fn link_row_node(
       (false, None) => "chevron-right"
     }
   }
-  let ends = goes && (out || (chevron && !acts))
+  let ends = goes && (out || (chevron && !acts && control is None))
+  // (what it says, its note: in the link's ink, in amber, where it says so)
+  let value_look = fn(base : @ui.TextStyle) { if value_lit { base.then(lit_words) } else { base } }
+  let note_look = fn(base : @ui.TextStyle) { if lacks { base.then(lacking) } else { base } }
   if look_node(parent) is Wide {
     // (its note as a wide page says it, where it says it otherwise: `wide_note`)
     let note = match wide_note {
       Some(w) => w
       None => note
     }
+    // (wide under a finger, a control with lines under its first by the whole row's side, as a face's: a wide row's
+    // first line is too low for a finger's least room, and the row is wide enough for its lines beside it)
+    let face = face || (control is Some(_) && native_input() is Finger)
     wide_link_row_node(
-      parent, title, press, value, value_bad, value_dot, note, trouble, strong, lead, lead_ink, goes, ends, mark, acts, below,
-      below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown, wide_title,
+      parent, title, press, value, value_bad, value_dot, note, trouble, strong, danger, value_look, note_look, lead, face,
+      lead_ink, goes, ends, mark, acts, below, below_open, note_cut, title_after, title_after_shown, folds, tail, tail_shown,
+      control, wide_title,
     )
     return
   }
@@ -666,7 +687,7 @@ pub fn link_row_node(
     .padding(Is(if lead is LeadTile(_) { (text_in, corner_inset, text_in, corner_inset) } else { (text_in, text_in, text_in, text_in) }))
     .radius(Is(@ui.concentric(group_corner, list_pad)))
     .min_height(By(fn() { Some(theme().items.least) }))
-    .lines_up(By(fn() { Some(if under() && !(lead is LeadTile(_)) { Start } else { Middle }) }))
+    .lines_up(By(fn() { Some(if under() && !(lead is LeadTile(_)) && !face { Start } else { Middle }) }))
     |> ignore
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
@@ -754,7 +775,7 @@ pub fn link_row_node(
             said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
             said.show(value_dot, fn(d) { status_dot_node(d) })
             said.box(fn(w) {
-              styled_words(w, value, fn() { if value_bad() { pg_value.then(bad) } else { pg_value } }) |> ignore
+              styled_words(w, value, fn() { value_look(if value_bad() { pg_value.then(bad) } else { pg_value }) }) |> ignore
             })
             |> ignore
           })
@@ -764,10 +785,13 @@ pub fn link_row_node(
         if ends {
           icon_node(first, mark(), pg_chevron, By(fn() { theme().p.subtle }), name_now=mark) |> ignore
         }
+        // (what is done here, at its end: on its first line where lines are under it, as high as that line; a face's
+        // by the whole row's side there, below)
+        row_control_node(first, control, under, face, false)
       })
       |> ignore
       words.show(fn() { note() != "" }, fn(n) {
-        styled_words(n, note, fn() { if note_cut { pg_link_note.then(cut_words) } else { pg_link_note } }) |> ignore
+        styled_words(n, note, fn() { note_look(if note_cut { pg_link_note.then(cut_words) } else { pg_link_note }) }) |> ignore
       })
       // (what is wrong, in red under it: link_row's `trouble`)
       words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { pg_link_note.then(bad) }) |> ignore })
@@ -777,6 +801,7 @@ pub fn link_row_node(
       }
     })
     |> ignore
+    row_control_node(r, control, under, face, true)
   })
   |> ignore
 }
@@ -793,6 +818,48 @@ fn row_tail_node(first : @view.View, tail : ((@view.View) -> Unit)?, shown : () 
       })
     None => ()
   }
+}
+
+///|
+/// What is done at a row's end (link_row's `control`), made in `at`: on its first line (`by_row` false) where it is
+/// not a face's with lines under it, as high as that line where lines are under it (line_end_node), else as it is; by
+/// the whole row's side, across its middle (`by_row`), where it is a face's with lines under it. Each while that says.
+fn row_control_node(at : @view.View, control : ((@view.View) -> Unit)?, under : () -> Bool, face : Bool, by_row : Bool) -> Unit {
+  guard control is Some(make) else { return }
+  if by_row {
+    at.show(fn() { face && under() }, fn(e) {
+      e.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+      make(e)
+    })
+    return
+  }
+  at.pick(fn() { if face && under() { 0 } else if under() { 1 } else { 2 } }, fn(e, k) {
+    e.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+    match k {
+      1 => line_end_node(e, make)
+      2 => make(e)
+      _ => ()
+    }
+  })
+}
+
+///|
+/// What a row says in the link's ink (link_row's `value_lit`: what it does, pressed).
+// kept across runs: a value (no field of it changes)
+let lit_words : @ui.TextStyle = @ui.text_style(color=AccentText)
+
+///|
+/// A button of words alone at a row's end (link_row's `control`, row_end's): quiet (Ghost), its words where the row's
+/// value would end, its ground reaching out past them by its own room (button's at_row_end); `busy`, `disabled`,
+/// `press`: button_node's.
+pub fn row_end_button_node(
+  parent : @view.View,
+  label : () -> String,
+  press : () -> Unit,
+  busy? : () -> Bool = fn() { false },
+  disabled? : () -> Bool = fn() { false },
+) -> @view.View {
+  button_node(parent, label, press, tone=Ghost, busy~, disabled~).margin(Is((0.0, 0.0, -button_padx, 0.0)))
 }
 
 ///|

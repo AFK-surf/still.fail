@@ -304,6 +304,10 @@ fn pane_made(
       made("security-open", fn(a, core, here, _stint, frame, width) {
         @sfpages.security_open_node(a, core, here, on_back=core.pop, frame~, width~)
       })
+    Setting(Workspace) =>
+      made("workspace", fn(a, core, here, stint, frame, width) {
+        @sfpages.workspace_node(a, core, here, on_back=core.pop, frame~, stint~, width~, tips~)
+      })
     Setting(AutoCompletion) =>
       made("auto-completion", fn(a, core, here, _stint, frame, width) {
         @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)

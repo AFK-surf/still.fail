@@ -393,7 +393,11 @@ fn wide_link_row_node(
   note : () -> String,
   trouble : () -> String,
   strong : Bool,
+  danger : Bool,
+  value_look : (@ui.TextStyle) -> @ui.TextStyle,
+  note_look : (@ui.TextStyle) -> @ui.TextStyle,
   lead : RowLead,
+  face : Bool,
   lead_ink : () -> Int64,
   goes : Bool,
   ends : Bool,
@@ -407,6 +411,7 @@ fn wide_link_row_node(
   folds : (() -> Bool)?,
   tail : ((@view.View) -> Unit)?,
   tail_shown : () -> Bool,
+  control : ((@view.View) -> Unit)?,
   title_look : (() -> @ui.TextStyle)?,
 ) -> Unit {
   let at = part_of(parent)
@@ -418,7 +423,13 @@ fn wide_link_row_node(
       None => desk_list_title
     }
   }
-  let titled = fn() { if strong { title_base().then(row_strong) } else { title_base() } }
+  let titled = fn() {
+    match (strong, danger) {
+      (_, true) => title_base().then(bad)
+      (true, false) => title_base().then(row_strong)
+      (false, false) => title_base()
+    }
+  }
   // (in a panel's card, pressed: its ground reaching `link_pane_out` past the row over and under, to the card's rows'
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
@@ -440,8 +451,14 @@ fn wide_link_row_node(
     .padding(Is((text_in, wide_row_over, text_in, wide_row_over)))
     .radius(By(fn() { if at.list { if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) } } else { @ui.tree_theme().corner(Xl2) } }))
     .min_height(By(fn() { Some(theme().items.least) }))
-    .lines_up(By(fn() { Some(if under() { Start } else { Middle }) }))
+    // (a face across its middle, as its words: the old view's, row_top only where it is not a face)
+    .lines_up(By(fn() { Some(if under() && !face { Start } else { Middle }) }))
     |> ignore
+    // (a face's row not pressed holds its face as the old view's row did, by its corner: its picture across its middle,
+    // in no corner of the card it is in; wide_list_row_ground's InnerOr, a container to the corner rule)
+    if face && !goes {
+      r.clips(Is(true)) |> ignore
+    }
     if goes {
       (if reach { o } else { r }).ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
       presses_node(r, press)
@@ -510,17 +527,18 @@ fn wide_link_row_node(
         first.show(fn() { value() != "" }, fn(said) {
           said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
           said.show(value_dot, fn(d) { status_dot_node(d) })
-          said.box(fn(w) { styled_words(w, value, fn() { if value_bad() { wide_value.then(bad) } else { wide_value } }) |> ignore })
+          said.box(fn(w) { styled_words(w, value, fn() { value_look(if value_bad() { wide_value.then(bad) } else { wide_value }) }) |> ignore })
           |> ignore
         })
         row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
         }
+        row_control_node(first, control, under, face, false)
       })
       |> ignore
       words.show(fn() { note() != "" }, fn(n) {
-        styled_words(n, note, fn() { if note_cut { wide_list_note.then(cut_words) } else { wide_list_note } }) |> ignore
+        styled_words(n, note, fn() { note_look(if note_cut { wide_list_note.then(cut_words) } else { wide_list_note }) }) |> ignore
       })
       words.show(fn() { trouble() != "" }, fn(n) { styled_words(n, trouble, fn() { desk_note_bad }) |> ignore })
       match below {
@@ -529,6 +547,7 @@ fn wide_link_row_node(
       }
     })
     |> ignore
+    row_control_node(r, control, under, face, true)
     })
     |> ignore
   })

@@ -600,6 +600,8 @@ fn narrow_made_as(
       made("security-open", fn(p, core, here, frame, _stint, _acts) {
         @sfpages.security_open_node(p, core, here, on_back=core.pop, frame~)
       })
+    Setting(Workspace) =>
+      made("workspace", fn(p, core, here, frame, stint, _acts) { @sfpages.workspace_node(p, core, here, on_back=core.pop, frame~, stint~) })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)
