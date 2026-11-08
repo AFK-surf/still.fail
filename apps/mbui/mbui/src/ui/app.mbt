@@ -97,9 +97,9 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
 let frame_afters : Ref[Array[() -> Unit]] = Ref([])
 
 ///|
-/// Run at the end of the current frame, or immediately when no frame is being drawn.
+/// Run at the end of the current frame, or of the current outside event between frames; otherwise run now.
 pub fn after_frame(f : () -> Unit) -> Unit {
-  if frame_running.val {
+  if frame_running.val || event_depth.val > 0 {
     frame_afters.val.push(f)
   } else {
     f()

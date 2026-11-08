@@ -219,7 +219,7 @@ fn followed_topic(src : Source, name : String, params : Map[String, Json], indep
       let lifetime = @signals.signal(0)
       let token = Ref(true)
       lifetime.on_unwatched(fn() {
-        // Another reader may take over in this signal flush or this frame. Check again once both have finished.
+        // Another reader may take over in this signal flush, outside event or frame. Check once it is finished.
         @signals.after_flush(fn() {
           @ui.after_frame(fn() {
             match followed_topics.val.search_by(fn(t) { physical_equal(t.token, token) }) {
