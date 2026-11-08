@@ -176,12 +176,10 @@ priv struct SourceKept[T] {
 priv struct SourceKeptOne[T] {
   source : Source
   value : @signals.Computed[T]
-  mut read : Int
 }
 
 ///|
 fn[T] SourceKept::read(self : SourceKept[T], source : Source, key : String, getter : (T?) -> T, same? : (T, T) -> Bool) -> T {
-  let frame = kept_frame()
   let entries = match self.kept.get(key) {
     Some(entries) => entries
     None => {
@@ -200,17 +198,28 @@ fn[T] SourceKept::read(self : SourceKept[T], source : Source, key : String, gett
       found
     }
     None => {
-      let made = { source, value: @signals.computed(getter, same?), read: frame }
+      // (as Kept::read's: those nothing follows let go once there are twice as many as were left the last time)
+      if kept_working.val == 0 && kept_count.made >= 2 * kept_count.left &&
+        kept_count.made >= kept_sweep_least {
+        for l in kept_lists {
+          (l.sweep)()
+        }
+        kept_count.left = kept_count.made
+      }
+      let made = { source, value: @signals.computed(getter, same?) }
       entries.push(made)
+      kept_count.made += 1
       if !self.listed {
         self.listed = true
-        kept_lists.push({ sweep: fn(f) { self.sweep(f) }, clear: fn() { self.clear() } })
+        kept_lists.push({ sweep: fn() { self.sweep() }, clear: fn() { self.clear() } })
       }
       made
     }
   }
-  one.read = frame
-  one.value.get()
+  kept_working.val += 1
+  let v = one.value.get()
+  kept_working.val -= 1
+  v
 }
 
 ///|
@@ -245,6 +254,7 @@ fn[T] SourceKept::forget_from(self : SourceKept[T], source : Source, key : Strin
           let entry = entries[i]
           if !entry.value.watched() { entry.value.dispose() }
           entries.remove(i) |> ignore
+          kept_count.made -= 1
           if entries.length() == 0 { self.kept.remove(key) |> ignore }
         }
         None => ()
@@ -260,6 +270,7 @@ fn[T] SourceKept::forget(self : SourceKept[T], key : String) -> Unit {
       for entry in entries {
         if !entry.value.watched() { entry.value.dispose() }
       }
+      kept_count.made -= entries.length()
       self.kept.remove(key) |> ignore
     }
     None => ()
@@ -267,11 +278,12 @@ fn[T] SourceKept::forget(self : SourceKept[T], key : String) -> Unit {
 }
 
 ///|
-fn[T] SourceKept::sweep(self : SourceKept[T], frame : Int) -> Unit {
+/// Those nothing follows let go (as Kept::sweep).
+fn[T] SourceKept::sweep(self : SourceKept[T]) -> Unit {
   let gone : Array[(String, SourceKeptOne[T])] = []
   for key, entries in self.kept {
     for entry in entries {
-      if entry.read != frame && entry.read != frame - 1 && !entry.value.watched() {
+      if !entry.value.watched() {
         gone.push((key, entry))
       }
     }
@@ -283,6 +295,7 @@ fn[T] SourceKept::sweep(self : SourceKept[T], frame : Int) -> Unit {
           Some(i) => {
             entry.value.dispose()
             entries.remove(i) |> ignore
+            kept_count.made -= 1
             if entries.length() == 0 { self.kept.remove(key) |> ignore }
           }
           None => ()

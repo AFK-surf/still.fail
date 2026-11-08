@@ -14,7 +14,7 @@ test "what a page read is let go of as it ends, once, and nothing it never read"
     { "station": Json::string("s"), "job": Json::string(job), "lines": Json::number(1.0) }
   }
   // read each frame: held once
-  held_build(1)
+  held_build()
   ignore(hold(src, jobs_scope("s"), "jobLog", log("a")).get().snapshot())
   ignore(hold(src, jobs_scope("s"), "jobLog", log("a")).get().snapshot())
   ignore(hold(src, jobs_scope("s"), "jobLog", log("b")).get().snapshot())
@@ -25,7 +25,7 @@ test "what a page read is let go of as it ends, once, and nothing it never read"
   assert_eq(left, [])
   ignore(hold(src, jobs_scope("s"), "jobLog", log("a")).get().snapshot())
   ignore(hold(src, jobs_scope("s"), "jobLog", log("b")).get().snapshot())
-  held_build(2)
+  held_build()
   let_go(src, chat_scope("s", "x"))
   assert_eq(left, [])
   let_go(src, jobs_scope("s"))
@@ -44,10 +44,10 @@ test "the same scope and topic read a changed source" {
   held_reset()
   let first = made_source(topic=fn(_, _) { Some({ "value": "first" }) })
   let second = made_source(topic=fn(_, _) { Some({ "value": "second" }) })
-  held_build(1)
+  held_build()
   assert_eq(text(hold(first, "scope", "topic", {}).get().value, "value"), "first")
   assert_eq(text(hold(second, "scope", "topic", {}).get().value, "value"), "second")
-  held_build(2)
+  held_build()
   let_go(second, "scope")
   held_reset()
 }
