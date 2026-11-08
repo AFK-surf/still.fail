@@ -1505,7 +1505,7 @@ pub fn share_face_whole(Source, Int32) -> Unit
 
 pub fn share_face_whole_files(Int32) -> Array[(String, Int32)]
 
-pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String, String, String)?]
+pub let share_offered : @ref.Ref[(Double, Double, () -> Unit, String, String, String)?]
 
 pub let share_offered_told : @signals.Signal[Int32]
 

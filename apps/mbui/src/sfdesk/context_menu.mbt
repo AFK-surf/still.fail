@@ -6,11 +6,10 @@
 // The library's menu (@sf.dropdown) at the pointer.
 
 ///|
-/// The menu while it is open: where (the pointer), the link right clicked ("" none), the image (its source, "" none),
-/// the field (its id, 0 none), the words picked then ("" none), and the frame something in the page opened it in (the
-/// page's right click under it, the same, opens nothing else), and what shares the turn of the message right clicked
-/// (None: none). What is under way once chosen: the clipboard read for 粘贴 (into that field), the image's pixels read
-/// for 复制图片.
+/// The menu while it is open: where (the pointer: the right click's place, which says the right click it is open for:
+/// context_opened_at), the link right clicked ("" none), the image (its source, "" none), the field (its id, 0 none),
+/// the words picked then ("" none), and what shares the turn of the message right clicked (None: none). What is under
+/// way once chosen: the clipboard read for 粘贴 (into that field), the image's pixels read for 复制图片.
 pub struct ContextMenu {
   mut open : Bool
   mut x : Double
@@ -19,7 +18,6 @@ pub struct ContextMenu {
   mut image : String
   mut field : Int
   mut words : String
-  mut frame : Int
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String
@@ -36,12 +34,21 @@ pub let context : ContextMenu = {
   image: "",
   field: 0,
   words: "",
-  frame: -1,
   copying: "",
   share: None,
   share_link: "",
   share_words: "",
   share_key: "",
+}
+
+///|
+/// Whether the menu is open for the right click made at (x, y): opened there by what else that right click asked (the
+/// page's right click under an image's, a message's turn offered with the words picked in it), whichever part said it
+/// first, and wherever in the frame each is built (a chat's list after the overlays). One right click, one place, as
+/// each that reads it has it (Ctx::menu_asked, Ctx::right_clicked, Ctx::field_right_clicked: the same); another made
+/// there while the menu shows is the same menu's, what is under it the same.
+fn context_opened_at(x : Double, y : Double) -> Bool {
+  context.open && context.x == x && context.y == y
 }
 
 ///|
@@ -60,7 +67,6 @@ fn context_asked(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image
 ///|
 fn context_reset() -> Unit {
   context.open = false
-  context.frame = -1
   context.copying = ""
   context.share = None
   context.share_link = ""
@@ -74,7 +80,7 @@ fn context_reset() -> Unit {
 pub fn context_link(c : @ui.Ctx, href : String) -> Unit {
   let (x, y, _) = c.pointer()
   // (in an image's link too: the image's said with it)
-  let image = if context.frame == c.frame_number() { context.image } else { "" }
+  let image = if context_opened_at(x, y) { context.image } else { "" }
   context_asked(c, x, y, link=href, image~)
 }
 
@@ -83,7 +89,7 @@ pub fn context_link(c : @ui.Ctx, href : String) -> Unit {
 pub fn context_image(c : @ui.Ctx, id : Int, src : String) -> Unit {
   match c.right_clicked(id) {
     Some((x, y)) if src != "" && src != "!" => {
-      let link = if context.frame == c.frame_number() { context.link } else { "" }
+      let link = if context_opened_at(x, y) { context.link } else { "" }
       context_asked(c, x, y, link~, image=src)
     }
     _ => ()
@@ -99,7 +105,6 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
   context.image = image
   context.field = 0
   context.words = c.selected_text()
-  context.frame = c.frame_number()
   context.share = None
   context.share_link = ""
   context.share_words = ""
@@ -111,7 +116,7 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
 /// that has a menu of its own was right clicked (Ctx::menu_asked: a message's image is its own menu's alone).
 pub fn context_page(c : @ui.Ctx, page : Int) -> Unit {
   match c.menu_asked(page) {
-    Some((x, y)) if context.frame != c.frame_number() && c.selected_text().trim(chars=" \n\t") != "" =>
+    Some((x, y)) if !context_opened_at(x, y) && c.selected_text().trim(chars=" \n\t") != "" =>
       context_asked(c, x, y)
     _ => ()
   }
@@ -126,7 +131,7 @@ pub fn context_node(v : @view.View) -> Unit {
   @ui.words_picked(v)
   v.on_menu(fn(m) {
     let c = @ui.current()
-    if context.frame != c.frame_number() && c.selected_text().trim(chars=" \n\t") != "" {
+    if !context_opened_at(m.wx, m.wy) && c.selected_text().trim(chars=" \n\t") != "" {
       context_asked(c, m.wx, m.wy)
     }
   })
@@ -149,7 +154,6 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       context.image = ""
       context.field = id
       context.words = ""
-      context.frame = c.frame_number()
       context.share = None
       context.share_link = ""
       context.share_words = ""
@@ -157,15 +161,15 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     }
     None => ()
   }
-  // a message right clicked: its turn offered with what else is there (its link, its picture, the words picked: told
-  // the menu in the same frame), or alone. (A chat's list is built after the frame's overlays: an offer of the frame
-  // before is taken as it comes.)
+  // a message right clicked: its turn offered with what else that right click opened the menu for (its link, its
+  // picture, the words picked: context_opened_at), or alone. (A chat's list is built after the frame's overlays: its
+  // offer is taken as it is told, share_offered_told, the menu's then, built again for it.)
   match @sfbase.share_offered.val {
-    Some((at, x, y, go, link, words, key)) => {
+    Some((x, y, go, link, words, key)) => {
       @sfbase.share_offered.val = None
       // (not over a field right clicked)
-      if (at == c.frame_number() || at == c.frame_number() - 1) && !(context.frame == at && context.field != 0) {
-        if context.frame != at {
+      if !(context_opened_at(x, y) && context.field != 0) {
+        if !context_opened_at(x, y) {
           context_at(c, x, y)
         }
         context.share = Some(go)

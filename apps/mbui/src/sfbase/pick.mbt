@@ -76,9 +76,9 @@ fn pick_told_gone() -> Unit {
 }
 
 ///|
-/// A message right clicked: the frame, where, its share, link and complete text, and its row's key, for the window's
-/// menu. None once taken.
-pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String, String, String)?] = Ref(None)
+/// A message right clicked: where (the right click's place, which says the right click it is: sfdesk's
+/// context_opened_at), its share, link and complete text, and its row's key, for the window's menu. None once taken.
+pub let share_offered : Ref[(Double, Double, () -> Unit, String, String, String)?] = Ref(None)
 
 ///|
 /// The message whose right click's menu is open (its row's key, as share_offered says it; "" none), told by what shows
@@ -100,8 +100,8 @@ pub let share_offered_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// The turn of a message right clicked offered (share_offered), told.
-fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
-  share_offered.val = Some((at, x, y, go, link, words, key))
+fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
+  share_offered.val = Some((x, y, go, link, words, key))
   share_offered_told.set(@signals.untracked(fn() { share_offered_told.get() }) + 1)
 }
 
@@ -112,7 +112,7 @@ fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String,
 /// bar over its selection instead (pick_layer), not from every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, words : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
-    Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words, key)
+    Some((x, y)) => share_offer(x, y, go, link, words, key)
     None => ()
   }
   let menu = key + "/message-menu"
@@ -298,7 +298,7 @@ pub fn pickable(
     match share {
       Some(go) =>
         match c.menu_asked(id) {
-          Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words, "m:" + ts)
+          Some((x, y)) => share_offer(x, y, go, link, words, "m:" + ts)
           None => ()
         }
       None => ()
