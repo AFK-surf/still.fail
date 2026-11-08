@@ -35,7 +35,7 @@ async function answer(told: Told): Promise<Group[]> {
   const limit = Math.max(1, Math.min(told.limit ?? 8, 200));
   const offset = Math.max(0, told.offset ?? 0);
   const cancelled = told.cancel ? new Int32Array(told.cancel) : null;
-  const groups = await pickAsync(stationDocSteps(s, data, config(), kinds, told.asker, told.archived === true), words, told.asker, { limit, offset }, () => cancelled !== null && Atomics.load(cancelled, 0) !== 0);
+  const groups = await pickAsync(stationDocSteps(s, data, config(), kinds, told.asker, told.archived === true, words), words, told.asker, { limit, offset }, () => cancelled !== null && Atomics.load(cancelled, 0) !== 0);
   if (kinds?.has("history")) {
     const found = await historyHits(s, profilesOf(config(), data), words, told.asker, { limit, offset, ms: HISTORY_MS, now: () => wall.now(), cancelled: () => cancelled !== null && Atomics.load(cancelled, 0) !== 0 });
     const group = historyGroup(found);
