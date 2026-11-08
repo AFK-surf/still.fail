@@ -17,6 +17,10 @@ yet and you can add one, add it.
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
   off by its cause, never found by comparing frames (a laid-out box or a measured size that differs from last frame's),
   and never by a time window.
+- What is built never asks which frame or build it is (`Ctx::frame_number`, `Ctx::build_number`, a counter of its
+  own): "this frame", "the frame before" or "this build" is no cause. Say it by its cause, recorded where the cause is
+  taken, or by the moment (`Ctx::moment`). detlint's `frame-number` counts what is left and only lets it fall; the two
+  go from mbui's API once none is.
 - Never wait for things to settle or for a motion to end, under any name: `rest`, `at_rest` used as a wait,
   `settle`, "until it stops moving", "until the animation landed", a fixed `wait`/`sleep`, a retry, a longer
   timeout. `assert_idle` / `at_rest` are assertions only. An end-to-end step waits only for its own named event that

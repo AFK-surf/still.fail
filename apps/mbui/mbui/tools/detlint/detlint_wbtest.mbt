@@ -2050,3 +2050,19 @@ test "tester-branch" {
   )
   |> ignore
 }
+
+///|
+test "frame-number" {
+  // a frame's or a build's number asked outside mbui's ui: counted; in ui, in a test, a field of that name not
+  found(
+    [
+      ("src/sfdesk/drag.mbt", "fn d(c : Ctx) -> Unit {\n  if f.frame == c.frame_number() {\n    return\n  }\n  let b = c.build_number()\n}\n"),
+      ("src/ui/draw.mbt", "fn n(c : Ctx) -> Int {\n  c.frame_number()\n}\n"),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  ignore(c.frame_number())\n}\n"),
+      ("src/kit/y.mbt", "fn y() -> Int {\n  s.frame_number\n}\n"),
+    ],
+    "frame-number",
+    2,
+  )
+  |> ignore
+}
