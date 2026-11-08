@@ -1796,7 +1796,7 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             let list = marked_into.get(key).unwrap_or([])
             list.push((marking.job_name, png, quotes, "image"))
             marked_into[key] = list
-            draft_given()
+            draft_given(key)
             marks_leave()
             // (closed back to the chat, where the picture and its quotes show in the composer: nothing said of it)
             self.shut(c)

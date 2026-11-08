@@ -83,8 +83,20 @@ fn pick_told_gone() -> Unit {
 
 ///|
 /// A message right clicked: where (the right click's place, which says the right click it is: sfdesk's
-/// context_opened_at), its share, link and complete text, and its row's key, for the window's menu. None once taken.
-pub let share_offered : Ref[(Double, Double, () -> Unit, String, String, String)?] = Ref(None)
+/// context_opened_at), its share, link and complete text, and its row's key, for the window's menu. None once its menu
+/// closes, or another right click elsewhere opens it. What shows the menu (built apart from the message: another old
+/// view's) follows it: told as another is offered, not as the same one is offered again (its turn's action aside).
+// kept across runs: none as a run begins (pick_reset)
+pub let share_offered : @signals.Signal[(Double, Double, () -> Unit, String, String, String)?] = @signals.signal(
+  None,
+  same=fn(a, b) {
+    match (a, b) {
+      (Some(a), Some(b)) => a.0 == b.0 && a.1 == b.1 && a.3 == b.3 && a.4 == b.4 && a.5 == b.5
+      (None, None) => true
+      _ => false
+    }
+  },
+)
 
 ///|
 /// The message whose right click's menu is open (its row's key, as share_offered says it; "" none), told by what shows
@@ -99,16 +111,9 @@ pub fn message_menu_on(key : String) -> Bool {
 }
 
 ///|
-/// Told as a message offers its turn (share_offered): what shows the menu, built apart from the message (another old
-/// view's), follows it.
-// kept across runs: a count told, nothing reads what it is (only that it changed)
-pub let share_offered_told : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-/// The turn of a message right clicked offered (share_offered), told.
+/// The turn of a message right clicked offered (share_offered).
 fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
-  share_offered.val = Some((x, y, go, link, words, key))
-  share_offered_told.set(@signals.untracked(fn() { share_offered_told.get() }) + 1)
+  share_offered.set(Some((x, y, go, link, words, key)))
 }
 
 ///|
@@ -192,7 +197,7 @@ pub fn pick_reset() -> Unit {
   pk.role = ""
   pk.share = None
   pk.link = ""
-  share_offered.val = None
+  share_offered.set(None)
   message_menu.set("")
   pk.taken_at = -1
   pk.sel.reset()
