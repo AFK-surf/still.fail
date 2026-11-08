@@ -40,7 +40,21 @@ pub(all) enum Live[T] {
 pub(all) struct NodeId {
   at : Int
   gen : Int
-} derive(Eq, Hash, Debug)
+} derive(Eq, Debug)
+
+///|
+/// (looked up by its id in maps each frame, many times: its two numbers mixed at once, not through a Hasher made for
+/// each)
+pub impl Hash for NodeId with hash_combine(self, hasher) {
+  hasher.combine_int(self.at)
+  hasher.combine_int(self.gen)
+}
+
+///|
+pub impl Hash for NodeId with hash(self) {
+  let x = (self.at ^ (self.gen << 20)) * -2048144789
+  x ^ (x >> 15)
+}
 
 ///|
 /// What a node is drawn as, kept by the node: its ground (0: none), its words and their ink, how opaque, and how far it
