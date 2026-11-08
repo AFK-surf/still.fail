@@ -460,6 +460,13 @@ fn wide_link_row_node(
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
+      // (in the row's corner, out from its words to the ladder's inset from its start and top)
+      LeadTile(f) =>
+        r.box(fn(l) {
+          l.margin(Is((corner_inset - text_in, corner_inset - text_in, 0.0, corner_inset - text_in))) |> ignore
+          f(l)
+        })
+        |> ignore
     }
     r.box(fn(words) {
       words.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).gap(Is(desk_list_gap)) |> ignore
