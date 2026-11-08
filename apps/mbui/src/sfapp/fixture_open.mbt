@@ -233,7 +233,8 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         r.contents_put = false
       }
       if mode == "reader-layout" {
-        r.panel = @sf.ReaderPanel::Layout
+        // (the layout's panel, nodes of the window's tree, told it is open)
+        @sf.reader_panel_set(r, @sf.ReaderPanel::Layout)
         r.contents_put = false
       }
     }

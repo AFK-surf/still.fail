@@ -63,9 +63,10 @@ pub(all) struct ViewerHost {
 }
 
 ///|
-/// The layout kept here while no page keeps it.
+/// The layout kept here while no page keeps it (told as it changes: what reads it, an old view's build or a node,
+/// follows it).
 // kept across runs: the default host's own, put back by viewer_reset
-let style_here : Ref[ReaderStyle] = Ref(reader_style_default)
+let style_here : @signals.Signal[ReaderStyle] = @signals.signal(reader_style_default)
 
 ///|
 /// The host with none told.
@@ -74,8 +75,8 @@ fn viewer_host_default() -> ViewerHost {
     room: fn() { (0.0, 0.0) },
     sheet: None,
     on_link: fn(_) {  },
-    reader_style: fn() { style_here.val },
-    set_reader_style: fn(change) { style_here.val = style_here.val.changed(change) },
+    reader_style: fn() { style_here.get() },
+    set_reader_style: fn(change) { style_here.set(@signals.untracked(fn() { style_here.get() }).changed(change)) },
     // (no core: the text as it is, nothing found in it)
     read_book: fn(text, _, done) { done(Ok({ id: 0, text, wrapped: 0, chapters: [], heads: [], md: [] })) },
     search_book: fn(_, _, done) { done([]) },
@@ -109,5 +110,5 @@ pub fn viewer_host() -> ViewerHost {
 pub fn viewer_reset() -> Unit {
   readings_reset()
   players_reset()
-  style_here.val = reader_style_default
+  style_here.set(reader_style_default)
 }
