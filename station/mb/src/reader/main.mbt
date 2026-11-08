@@ -426,6 +426,14 @@ fn main {
           @activity.share_install(db)
           Some(@activity.share_step(db))
         }
+        { "kind": "sandbox", .. } => {
+          @activity.sandbox_enable(db)
+          Some(@activity.sandbox_step(db))
+        }
+        { "kind": "sandbox-off", .. } => {
+          @activity.sandbox_disable(db)
+          Some(true)
+        }
         { "kind": "process-jobs", .. } => {
           @jobs.install(db)
           Some(@jobs.step(db))
