@@ -37,7 +37,7 @@ esac
     file("mock-bin/pnpm", `#!/bin/sh
 set -eu
 for name in main.js read/worker.js read/said-worker.js read/recent-chat-worker.js search/worker.js search/scope-worker.js vault/use-index-worker.js vault/signin-save-worker.js \\
-  usage/minute-worker.js sessions/workspace-activity-worker.js sessions/post-block-worker.js outflow/chat-index-worker.js future/another-worker.js \\
+  usage/minute-worker.js sessions/workspace-activity-worker.js sessions/post-block-worker.js read/chat-index-worker.js future/another-worker.js \\
   skills/example.md dsh-bridge.mjs cursor-bridge.mjs sandbox-bridge.mjs scrcpy-server linux-portal.py linux-x11.py; do
   mkdir -p "dist/$(dirname "$name")"
   printf '%s' "$name" > "dist/$name"
@@ -51,7 +51,7 @@ done
       execFileSync("/bin/sh", [join(root, "scripts/station-bundle.sh"), join(root, "out"), platform], { env });
       const station = join(root, "out/stillfail/station");
       for (const worker of ["read/worker.js", "read/said-worker.js", "read/recent-chat-worker.js", "search/worker.js", "search/scope-worker.js", "vault/use-index-worker.js", "vault/signin-save-worker.js",
-        "usage/minute-worker.js", "sessions/workspace-activity-worker.js", "sessions/post-block-worker.js", "outflow/chat-index-worker.js", "future/another-worker.js"]) {
+        "usage/minute-worker.js", "sessions/workspace-activity-worker.js", "sessions/post-block-worker.js", "read/chat-index-worker.js", "future/another-worker.js"]) {
         assert.equal(readFileSync(join(station, worker), "utf8"), worker, `${platform}: ${worker}`);
       }
       assert.equal(existsSync(join(station, "stale/old-worker.js")), false, `${platform}: nothing left from an earlier build`);

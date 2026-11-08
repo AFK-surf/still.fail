@@ -70,7 +70,6 @@ pub fn reset() -> Unit {
   vault_item_reset()
   mine_filter_open.clear()
   connect_reset()
-  outflow_left.clear()
   new_connect_reset()
   station_cards_reset()
   station_page_reset()

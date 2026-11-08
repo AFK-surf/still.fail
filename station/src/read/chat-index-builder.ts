@@ -82,7 +82,7 @@ export class OutflowChatIndex {
       return;
     }
     if (this.#worker === null) {
-      const file = this.#workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./chat-index-worker.ts" : "./outflow/chat-index-worker.js", import.meta.url);
+      const file = this.#workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./chat-index-worker.ts" : "./read/chat-index-worker.js", import.meta.url);
       let worker: Worker;
       try { worker = new Worker(file, { workerData: { path: this.#path, priority: this.#options.priority }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } }); }
       catch (error) { this.#fail(error instanceof Error ? error : new Error(String(error))); return; }

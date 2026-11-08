@@ -20,15 +20,6 @@ priv struct SettingsFixture {
   mut afresh_above : Double
   /// the station sending its log to still.fail
   mut logs : Bool
-  /// a program granted Willow's data and another asking for it (its overview's
-  /// `outflowGrants`), as a test sets it
-  mut outflow : Bool
-  /// what an admin answered the program asking (`outflow.answer`'s params)
-  mut outflow_answer : Json?
-  /// Willow's Tailcat link as an admin sees it (its overview's `outflowTailcat`), as a test sets it; none: not shown
-  mut outflow_link : Json?
-  /// what an admin turned the link to (`outflow.tailcat`'s `on`)
-  mut outflow_link_set : Bool?
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
@@ -116,10 +107,6 @@ let fx : SettingsFixture = {
   afresh: false,
   afresh_above: 1.0,
   logs: true,
-  outflow: false,
-  outflow_answer: None,
-  outflow_link: None,
-  outflow_link_set: None,
   elevation: None,
   gpus: false,
   more_gpus: false,
@@ -230,10 +217,6 @@ fn fixture_reset() -> Unit {
   fx.afresh = false
   fx.afresh_above = 1.0
   fx.logs = true
-  fx.outflow = false
-  fx.outflow_answer = None
-  fx.outflow_link = None
-  fx.outflow_link_set = None
   fx.elevation = None
   fx.gpus = false
   fx.more_gpus = false
@@ -363,31 +346,6 @@ pub fn fixture_key_ask_ended() -> String {
 }
 
 ///|
-/// Willow with a program granted its data and one asking for it (its page's 数据外流), or not.
-pub fn fixture_outflow(on : Bool) -> Unit {
-  fx.outflow = on
-}
-
-///|
-/// What an admin answered the program asking for Willow's data, if they did.
-pub fn fixture_outflow_answer() -> Json? {
-  fx.outflow_answer
-}
-
-///|
-/// Willow's Tailcat link of data outflow as an admin sees it (the core's `OutflowTailcat`), or none.
-pub fn fixture_outflow_link(v : Json?) -> Unit {
-  fx.outflow_link = v
-  fx_changed()
-}
-
-///|
-/// What an admin turned Willow's Tailcat link to, if they did.
-pub fn fixture_outflow_link_set() -> Bool? {
-  fx.outflow_link_set
-}
-
-///|
 /// Willow a Windows station, running as administrator as `v` says (the core's `StationElevation`), or not.
 pub fn fixture_elevation(v : Json?) -> Unit {
   fx.elevation = v
@@ -437,12 +395,6 @@ pub fn fixture_page(mode : String) -> String {
     }
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
-    // its 设置 with data outflow's cards all there: the link, on, a program asking and one granted
-    "settings-station-outflow" => {
-      station_parts["ws1/st1"] = "settings"
-      fx.outflow = true
-      fx.outflow_link = Some({ "on": true, "state": "running", "address": "tcADDRESS", "port": 7480 })
-    }
     // its 设置 while it is away: only what can be changed then
     "settings-stations-incompatible" => fx.willow_incompatible = true
     "settings-station-away" => {
@@ -557,7 +509,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-outflow" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-network" | "settings-station-away" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-network" | "settings-station-away" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1355,9 +1307,6 @@ fn fx_station(address : String) -> Json {
           ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh)), ("afreshAbove", Json::number(fx.afresh_above))])),
           ("diagnostics", obj([("logs", Json::boolean(fx.logs))])),
           ("network", obj([("congestion", str(fx.congestion))])),
-          ("outflowGrants", Json::number(if fx.outflow { 2.0 } else { 0.0 })),
-          ("outflowAnswers", Json::boolean(true)),
-          ("outflowTailcat", fx.outflow_link.unwrap_or(Json::null())),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
@@ -1862,54 +1811,6 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
-    // Willow's programs granted its data (sfpages/station_outflow.mbt): Comma's; and Comma for
-    // Teams asking for the whole workspace's, until answered
-    "outflowGrants" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
-      Some(
-        obj([
-          ("supported", Json::boolean(true)),
-          (
-            "requests",
-            if fx.outflow_answer is Some(_) {
-              []
-            } else {
-              [
-                obj([
-                  ("id", str("q1")),
-                  ("program", str("Comma for Teams")),
-                  ("signed", Json::boolean(true)),
-                  ("signedText", str("签名：Developer ID Application: AFK Inc. (D9AAN3VJK8)")),
-                  ("said", str("Comma — 按团队算 token 的 ROI")),
-                  (
-                    "scopes",
-                    [
-                      obj([("id", str("usage")), ("text", str("token 用量和金额")), ("why", str("不含消息。"))]),
-                      obj([("id", str("chats")), ("text", str("chat 和它们的状态")), ("why", str("不含消息。"))]),
-                    ],
-                  ),
-                  ("reach", str("workspace")),
-                  ("reachText", str("整个 workspace 的所有 station")),
-                  ("askedText", str("今天 10:12 申请")),
-                ]),
-              ]
-            },
-          ),
-          (
-            "grants",
-            [
-              obj([
-                ("id", str("g1")),
-                ("program", str("Comma")),
-                ("signed", Json::boolean(true)),
-                ("signedText", str("签名：Developer ID Application: AFK Inc. (D9AAN3VJK8)")),
-                ("scopes", [obj([("id", str("usage")), ("text", str("token 用量和金额"))]), obj([("id", str("chats")), ("text", str("chat 和它们的状态"))])]),
-                ("grantedText", str("昨天 14:02 授权")),
-                ("lastReadText", str("最近读取 今天 09:30")),
-              ]),
-            ],
-          ),
-        ]),
-      )
     // Willow's logins (station_logins.mbt): codex's under way, gh's done yesterday
     // (the settings' own pages only: a chat's login cards are the chats' fixture's)
     "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" => {
@@ -2678,18 +2579,6 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           ]),
         ),
       )
-    // an admin turning Willow's Tailcat link on or off
-    "outflow.tailcat" => {
-      fx.outflow_link_set = Some(flag(Some(params), "on"))
-      fx_changed()
-      Some(Ok(obj([])))
-    }
-    // an admin's answer to the program asking for Willow's data
-    "outflow.answer" => {
-      fx.outflow_answer = Some(params)
-      fx_changed()
-      Some(Ok(obj([])))
-    }
     // lin's secrets from before security mode encrypted into their vault
     "vault.migrate" => {
       fx.plain_left = 0
