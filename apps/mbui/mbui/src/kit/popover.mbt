@@ -77,7 +77,8 @@ pub let tip_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(120.
 
 ///|
 /// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id; or by the rectangle `at`, a
-/// Radix Popover.Anchor apart from its trigger), on its `side` (lined up `along` it, `offset` away), named `label` for
+/// Radix Popover.Anchor apart from its trigger; its trigger a node of the window's tree, `anchor_node`, a press there
+/// none outside it: Ctx::overlay's), on its `side` (lined up `along` it, `offset` away), named `label` for
 /// the semantics tree; `modal`: the page under it takes no press and Tab stays in it; not `focus`: the focus stays
 /// where it is as it opens (Radix's onOpenAutoFocus prevented: what a field offers as it is typed in, the field keeping
 /// the keys). It comes by `enter` and goes by `exit`. Whether it is open now.
@@ -94,13 +95,14 @@ pub fn popover(
   focus? : Bool = true,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
   at? : (Double, Double, Double, Double),
+  anchor_node? : @view.View,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
   let mut now = open
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
-    let o = c.overlay(key, modal~, anchor~, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
+    let o = c.overlay(key, modal~, anchor~, anchor_node?, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
       beside(c, key, anchor, side, along, offset, shows, Dialog, label, look, body, at?)
     })
     if o.dismissed is Some(_) {

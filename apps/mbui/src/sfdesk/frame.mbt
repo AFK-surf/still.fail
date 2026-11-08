@@ -76,7 +76,7 @@ pub(all) struct Wide {
   /// the rail's menu (from its right click): the place right clicked ("" the rail), where; a place dragged to another
   /// place in it: which, where the pointer went down, how far it went; the rail being changed (自定义侧边条); the ＋'s
   /// menu over the workspaces open
-  rail_menu : @signals.Signal[(String, Double, Double)?]
+  rail_menu : @signals.Signal[(String, (Double, Double, Double, Double)?)?]
   rail_drag : @signals.Signal[(String, Double, Double)?]
   editing : @signals.Signal[Bool]
   /// 待处理's panel, the services' panel from the lists' foot, ⌘/'s shortcuts open
@@ -213,6 +213,9 @@ fn wide_reset() -> Unit {
   wide.landed.set("")
   wide.rail_menu.set(None)
   wide.rail_drag.set(None)
+  attention_from.val = None
+  workspace_add_from.val = None
+  transfers_from.val = None
   wide.editing.set(false)
   wide.attention_open.set(false)
   wide.jobs_open.set(false)
@@ -457,16 +460,18 @@ fn dock_edge_node(n : @view.View, at : () -> SideAt) -> Unit {
 ///|
 /// The block (shell.css.ts dock: the rail and the sidebar on one ground) as nodes in `n` (as large as what holds the
 /// block, over it), where `at` says it is: a node with its ground and its shadow, as round as its corners are
-/// (dock_round_node), holding, cut to it, one old view: the rail (`rail`, as wide as the rail is drawn: as narrow as a
-/// point beside the system's tabs, where it holds nothing but what its build says of the block) and beside it the
-/// sidebar of a place not made once over the block (side_made: `side`, as wide as the sidebar is laid out, built only
-/// while what is in it is drawn). Its line is drawn over all it holds by dock_edge_node, its chats' lists by side_node.
-/// That old view's node (what a list's thumb of it is shown by: pane_edge).
+/// (dock_round_node), holding, cut to it, the rail (`rail`'s nodes: rail_node, as wide as the rail is drawn; none
+/// beside the system's tabs) and the sidebar of a place not made once over the block (side_made: `side`'s old view, as
+/// wide as the sidebar is laid out, built only while what is in it is drawn; `before` built in it first, each build,
+/// whether or not the sidebar is: what the frame works out of the block before its sidebar builds). Its line is drawn
+/// over all it holds by dock_edge_node, its chats' lists by side_node. The sidebar's old view's node (what a list's
+/// thumb of it is shown by: pane_edge).
 fn dock_node(
   n : @view.View,
   at : () -> SideAt,
-  rail : (@ui.Ctx) -> Unit,
+  rail : (@view.View) -> Unit,
   side : (@ui.Ctx, Bool) -> Unit,
+  before? : (@ui.Ctx) -> Unit = fn(_) {  },
 ) -> @view.View {
   let held : Ref[@view.View?] = Ref(None)
   n.box(fn(o) {
@@ -485,34 +490,52 @@ fn dock_node(
       .row(Is(true))
       |> ignore
       dock_round_node(g, at)
-      // the rail and the sidebar of a place not made once over the block, one old view as yet (as the block's was): as
-      // wide as the rail is drawn (its box's own width: rail's) and the sidebar is laid out (held_w, the same through
-      // the block's move between showing it and not), the block's height, cut to the block; in it the rail, then the
-      // sidebar beside it, built only while what is in it is drawn
-      g.box(fn(i) {
-        i
+      // (whether the pointer is on it, for the closed bar's peek: block_pointed)
+      dock_made.val = Some(g)
+      g.owns(fn() {
+        match dock_made.val {
+          Some(d) if physical_equal(d, g) => dock_made.val = None
+          _ => ()
+        }
+      })
+      |> ignore
+      // the rail, as wide as it is drawn (its box's own width: rail_node's), the block's height; its places' marks
+      // reach past it under the sidebar (nothing of it cut there)
+      g.box(fn(r) {
+        r
         .width(By(fn() {
           let a = at()
-          // (beside the system's tabs no rail: only as wide as that margin, its build what it says of the block)
-          Some(a.box.0 - a.block.0 + a.held_w)
+          Some(a.box.0 - a.block.0)
         }))
         .height(By(fn() { Some(at().block.3) }))
         .shrink(Is(0.0))
         |> ignore
+        // (beside the system's tabs none; else all of its height)
+        r.show(fn() { !@sf.native_on() }, fn(m) {
+          m.grow(Is(1.0)) |> ignore
+          rail(m)
+        })
+      })
+      |> ignore
+      // the sidebar of a place not made once over the block, as wide as it is laid out, beside the rail
+      g.box(fn(s) {
+        s
+        .width(By(fn() { Some(at().held_w) }))
+        .height(By(fn() { Some(at().block.3) }))
+        .shrink(Is(0.0))
+        // (where the rail is drawn narrower than nothing, under the sidebar: from where the sidebar starts)
+        .margin(By(fn() {
+          let a = at()
+          (dmin(0.0, a.box.0 - a.block.0), 0.0, 0.0, 0.0)
+        }))
+        |> ignore
         held.val = Some(
-          @ui.old(i, fn(c) {
+          @ui.old(s, fn(c) {
+            before(c)
             let a = at()
-            let rail_w = a.box.0 - a.block.0
-            c.box(style=dock_row, fn() {
-              c.box(style=@ui.style(w=Fixed(rail_w), h=Full), fn() { rail(c) }) |> ignore
-              c.box(style=@ui.style(w=Fixed(a.held_w), h=Full), fn() {
-                if a.shown && !side_made(side_place()) {
-                  side(c, a.bar)
-                }
-              })
-              |> ignore
-            })
-            |> ignore
+            if a.shown && !side_made(side_place()) {
+              side(c, a.bar)
+            }
           }, key=tape_island_key)
           .over(Is(true))
           |> @ui.old_takes_own,
@@ -525,11 +548,6 @@ fn dock_node(
   |> ignore
   held.val.unwrap_or(n)
 }
-
-///|
-/// The block's old view: the rail and the sidebar side by side, its whole height (dock_node).
-// kept across runs: a value (no field of it changes)
-let dock_row : @ui.Style = @ui.css("row h=Full")
 
 ///|
 /// Node `v` as round as the block where `at` says it is (dock_radius): its corners linked as the block's are, to the
@@ -1175,15 +1193,37 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
     }
     return
   }
-  // on it, or on its edge at its right (the edge, what pops up from it)
-  let over = (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
+  // on it, or on its edge at its right (the edge, what pops up from it); the block and its rail nodes of the window's
+  // tree, where the old views are not told the pointer: whether it is within them, as the tree has it
+  let (on_block, on_rail) = block_pointed()
+  let over = on_block ||
+    (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
     (wide.peeking.get() && px >= bar_r - 2.0 && px < bar_r + 10.0)
-  if over && !wide.peeking.get() && px < bar_x + rail_closed_w {
+  if over && !wide.peeking.get() && (on_rail || (px >= 0.0 && px < bar_x + rail_closed_w)) {
     wide.peeking.set(true)
   }
   if @kit.after(c, "side/peek-away", wide.peeking.get() && !over && !held, peek_leave_ms) {
     wide.peeking.set(false)
   }
+}
+
+///|
+/// The block's ground as dock_node made it last, while it is: what the closed bar's peek asks the pointer of
+/// (block_pointed).
+// kept across runs: let go with the node it holds
+let dock_made : Ref[@view.View?] = Ref(None)
+
+///|
+/// Whether the pointer (a mouse's) is within the block's ground and within its rail, as the window's tree has it
+/// (View::pointer_within: followed, what reads it built again as it comes in or goes out).
+fn block_pointed() -> (Bool, Bool) {
+  let within = fn(v : @view.View?) {
+    match v {
+      Some(n) if n.alive() => n.pointer_within()
+      _ => false
+    }
+  }
+  (within(dock_made.val), within(rail_col.val))
 }
 
 ///|

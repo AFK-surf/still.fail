@@ -1,7 +1,8 @@
 // The frame's keys (still.fail web/src/keymap.ts useShortcut, Switcher.tsx GlobalShortcuts, Sidebar.tsx goToNeighbour,
-// brand.tsx's sidebar.toggle): ⌘K the switcher, ⌘N a new chat, ⌥↑ / ⌥↓ the chat before or after, ⌘\ the sidebar, ⌘,
-// settings, ⌘/ the shortcuts, ⌘[ / ⌘] back and forward, Esc what the frame opened closed; the keys as the core's prefs
-// keep them on this device (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them.
+// brand.tsx's sidebar.toggle): ⌘K the switcher, ⌘N a new chat, ⌥↑ / ⌥↓ the chat before or after, ⌃1 … ⌃9 a workspace,
+// ⌘\ the sidebar, ⌘, settings, ⌘/ the shortcuts, ⌘[ / ⌘] back and forward, Esc what the frame opened closed; the keys
+// as the core's prefs keep them on this device (settings' 快捷键: prefs.keymap). The page in the pane answers its own
+// after them.
 
 ///|
 /// The app's keys, read as its frame is built in every tier (before the page's: Esc goes to what the frame opened over
@@ -53,6 +54,19 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // A menu action remains asked through the frame's builds. Opening a chat can cause another build, so doing this
     // here would handle the same action again and skip rows. Tell it once after the builds, as for an input.
     c.tell("chat/neighbour", fn() { neighbour(src, w, way) })
+  }
+  // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place at the rail's foot, as the web's keys (keymap.ts
+  // workspaceIndexOf); where the rail shows them (told once after the builds, as the chat before or after is)
+  if framed && !@sf.native_on() {
+    let all = @sfbase.workspace_in_view(src).1
+    let held = if @ui.keys_system() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
+    let n = if all.length() < 9 { all.length() } else { 9 }
+    for k in 0..<n {
+      let to = all[k].id
+      if c.key_pressed(@ui.key_of_char((49 + k).unsafe_to_char()), mods=held, in_field=true) && to != w.id {
+        c.tell("rail/workspace-key", fn() { @sfpages.switch_workspace(src, to) })
+      }
+    }
   }
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
   let left = escape && !frame_escape(c)

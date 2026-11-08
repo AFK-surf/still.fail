@@ -467,7 +467,7 @@ pub fn quota_dials(@ui.Ctx, Array[@json.Json]) -> Unit
 
 pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool, at? : String) -> Unit
 
-pub fn rail_card(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, String) -> Unit
+pub fn rail_card_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, String) -> Unit
 
 pub fn reader_page(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
@@ -665,15 +665,17 @@ pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : 
 
 pub fn work_mark(@ui.Ctx, @sfbase.Source, String, String, @ui.TextStyle, @ui.TextStyle, lead? : String, smallest? : Bool) -> Unit
 
+pub fn workspace_add_pressed() -> Unit
+
 pub fn workspace_mark(@ui.Ctx, @sfbase.Workspace, Double, Int64, @ui.TextStyle, still? : Bool) -> Unit
 
 pub fn workspace_marked(@sfbase.Workspace) -> Bool
 
+pub fn workspace_menu(@ui.Ctx, @sfbase.Source, (Double, Double, Double, Double)) -> Unit
+
 pub fn workspace_menu_open() -> Bool
 
 pub fn workspace_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
-
-pub fn workspace_squares(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace], SquareParts) -> Unit
 
 pub let ws_more_icon : Double
 
@@ -822,11 +824,6 @@ pub(all) struct SettingsRow {
   value : String
   bad : Bool
   dot : Bool
-}
-
-pub(all) struct SquareParts {
-  square : (Int64, () -> Unit, Int32) -> Int32
-  corner : (String) -> Unit
 }
 
 type SrCover
