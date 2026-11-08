@@ -2688,6 +2688,31 @@ pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double
 }
 
 ///|
+/// How round its corners are said to be now, each (top left, then round it; its radius at each where it says none
+/// each: View::radius, View::corners), as what it is laid out to be is drawn: for what draws its ground on its way to
+/// it, read as that is drawn.
+pub fn View::corners_said(self : View) -> (Double, Double, Double, Double) {
+  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  match n.look.corners {
+    Some(k) => k
+    None => (n.look.radius, n.look.radius, n.look.radius, n.look.radius)
+  }
+}
+
+///|
+/// How round its corners were drawn as it was last drawn, each (top left, then round it), as corners_said has them;
+/// as they are said now where it was never drawn: what its ground goes from as a change told now sets it off, said
+/// once at that moment.
+pub fn View::corners_drawn(self : View) -> (Double, Double, Double, Double) {
+  guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
+  match n.content {
+    Some({ corners: Some(k), .. }) => k
+    Some({ radius, .. }) => (radius, radius, radius, radius)
+    None => self.corners_said()
+  }
+}
+
+///|
 /// The edge drawn round its ground, inside it (how wide, its colour; 0 wide: none), as an old view's box's border is
 /// drawn with its ground (one rect, filled and edged), its corners its ground's: paint's.
 pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
@@ -3051,7 +3076,7 @@ pub fn Tree::cut_soft_of(self : Tree, id : NodeId) -> (Double, Double, Double)? 
 ///|
 /// How far it, and what it holds with it, is drawn off where it is laid out (points), as it changes: where it is drawn
 /// only, pressed and found where it is laid out (a thing on its way from where its cause found it to where it is laid
-/// out now: @motion's moves_together). Place's: nothing of it laid out or made again.
+/// out now: @motion's Moves::moves_with). Place's: nothing of it laid out or made again.
 pub fn View::drawn_off(self : View, d : Live[(Double, Double)]) -> View {
   self.bind(DrawnOff, d, Place, fn(d) { self.tree.nodes[self.at].look.drawn_off = d })
   self
@@ -3246,6 +3271,14 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
     i = m.parent
   }
   (x, y, n.lw, n.lh)
+}
+
+///|
+/// Whether it was ever placed: where it stood before a change told now (placed_window_now) is somewhere, not nowhere
+/// (none of what is made for that change, or since the last was placed).
+pub fn View::was_placed(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  n.placed
 }
 
 ///|

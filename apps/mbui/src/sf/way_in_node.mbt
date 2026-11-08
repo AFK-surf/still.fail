@@ -117,7 +117,7 @@ pub fn way_in_note_node(body : @view.View, note : () -> String) -> @view.View {
 /// on a desktop's; `solid` the ink's, the one thing to do, a step towards the page under the pointer or pressed, else
 /// the quiet ground of the words' colour, a step darker so; `busy` while what it does is under way: a spinner's room
 /// opening before its words (a Move, as a button's), the spinner turning in it, not pressed. A press's ripple from
-/// where it went down, the pill sinking under it. Its words changed, they go to their new place (moves_together, by
+/// where it went down, the pill sinking under it. Its words changed, they go to their new place (moves_for, by
 /// its words). `press` done as it is pressed. Read out a button. The node.
 pub fn way_in_button_node(
   body : @view.View,
@@ -227,8 +227,7 @@ pub fn way_in_button_node(
     )
     |> ignore
     // (its words changed, 登录或注册 to 正在登录: gone to their new place, not at once)
-    let g = @motion.moves_together(v, label, spec=button_reshape)
-    g.add(words)
+    @motion.moves_for(v, label, spec=button_reshape).moves_with(words)
   })
 }
 

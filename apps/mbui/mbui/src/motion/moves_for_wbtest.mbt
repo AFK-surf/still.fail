@@ -1,4 +1,4 @@
-// A button's ground and its words going together for its words' change (moves_together: the ground changing shape,
+// A button's ground and its words going together for its words' change (moves_for: the ground changing shape,
 // the words going), as an old view's do (reshape and layout with the same cause, a Move together as
 // long as the furthest goes): on the way and at its end; frames drawn all along or none; turned back half way; changed
 // twice with no frame between; moved by nothing it moves for, at once; at rest, the clock read no more.
@@ -22,12 +22,12 @@ fn button_seen(t : @ui.Tester) -> (Double, Double, Double) {
 
 ///|
 /// A button at the window's top, in its middle across, its words as `words` says: an old view's (reshape and layout by
-/// its words) or the tree's (moves_together). The Tester.
+/// its words) or the tree's (moves_for). The Tester.
 fn button_pair(
   words : @signals.Signal[String],
   node : Bool,
   w? : @signals.Signal[Double] = @signals.signal(400.0),
-  group? : Ref[MoveGroup?] = Ref(None),
+  group? : Ref[Moves?] = Ref(None),
   half? : Bool = false,
 ) -> @ui.Tester {
   let t = @ui.Tester::new(
@@ -60,9 +60,9 @@ fn button_pair(
           let words_at = b.box(fn(k) {
             k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
           })
-          let g = moves_together(b, fn() { words.get() })
-          g.add(b, reshapes=true)
-          g.add(words_at)
+          let g = moves_for(b, fn() { words.get() })
+          g.reshapes(b)
+          g.moves_with(words_at)
           group.val = Some(g)
         })
         |> ignore
@@ -134,7 +134,7 @@ test "a button's words longer: at each moment the same, frames drawn all along o
 /// it is over: frames drawn every 16 all along, or none till 90. What is drawn then, and the group.
 fn three_changes(stepped : Bool) -> ((Double, Double, Double), (Double, Double, Double), Bool) {
   let words = @signals.signal(short_words, same=fn(a, b) { a == b })
-  let group : Ref[MoveGroup?] = Ref(None)
+  let group : Ref[Moves?] = Ref(None)
   let t = button_pair(words, true, group~)
   let t0 = t.time()
   let tree = @ui.view_tree().unwrap()
@@ -183,21 +183,36 @@ test "a button's words longer, the short ones 70 after and others 80 after, no f
 ///|
 test "a button's words longer, then the short ones at 70: each way set off from where the one before had it at 70, as fast as it went then" {
   let words = @signals.signal(short_words, same=fn(a, b) { a == b })
-  let group : Ref[MoveGroup?] = Ref(None)
+  let group : Ref[Moves?] = Ref(None)
   let t = button_pair(words, true, group~)
   let t0 = t.time()
   let tree = @ui.view_tree().unwrap()
   tree.event(t0, fn() { words.set(long_words) })
   let g = group.val.unwrap()
-  // (each way of each as the first change set it off: where it is at 70 and how fast)
-  let before = g.movers.map(fn(m) { m.ways.map(fn(w) { w.way.at(t0 + turned_back_ms) }) })
+  // (each way of each as the first change set it off: where it is at 70 and how fast, in the window's terms: its
+  // ground's edges where they are, its words' offsets from where they are laid out)
+  let at = t0 + turned_back_ms
+  let ways_at = fn() {
+    let out = g.shapes.map(fn(s) { s.ways.map(fn(w) { w.way.at(at) }) })
+    for p in g.parts {
+      let (lx, ly, _, _) = p.v.laid_window_now()
+      out.push(
+        [(p.x, lx), (p.y, ly)].map(fn(w) {
+          let (x, v) = w.0.way.at(at)
+          (w.1 + x, v)
+        }),
+      )
+    }
+    out
+  }
+  let before = ways_at()
   t.advance(t0 + turned_back_ms - t.time())
   tree.event(t.time(), fn() { words.set(short_words) })
-  let after = g.movers.map(fn(m) { m.ways.map(fn(w) { w.way.at(t0 + turned_back_ms) }) })
+  let after = ways_at()
   // (the same where each was and as fast, in the window's terms, whatever its layout did meanwhile: nothing here)
   let near = fn(a : (Double, Double), b : (Double, Double)) { (a.0 - b.0).abs() <= 1.0e-9 && (a.1 - b.1).abs() <= 1.0e-9 }
-  let same = Array::makei(before.length(), fn(i) { Array::makei(4, fn(k) { near(before[i][k], after[i][k]) }) })
-  assert_eq(same, Array::make(before.length(), Array::make(4, true)), msg="\{before}\n\{after}")
+  let same = Array::makei(before.length(), fn(i) { Array::makei(before[i].length(), fn(k) { near(before[i][k], after[i][k]) }) })
+  assert_eq(same, before.map(fn(m) { Array::make(m.length(), true) }), msg="\{before}\n\{after}")
 }
 
 ///|
@@ -272,16 +287,16 @@ test "a button growing for its words while what holds it is made narrower, then 
 test "a button's words let go of while it goes: from that moment no more of it, not counted, its group set off again without it; at rest, the clock read no more" {
   let words = @signals.signal(short_words, same=fn(a, b) { a == b })
   let shown = @signals.signal(true, same=fn(a, b) { a == b })
-  let group : Ref[MoveGroup?] = Ref(None)
+  let group : Ref[Moves?] = Ref(None)
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0)
   @ui.set_view_app(fn(root) {
     root.box(fn(b) {
       b.row(Is(true)).height(Is(Some(36.0))).ground(Is(0x3366CCFFL)) |> ignore
-      let g = moves_together(b, fn() { words.get() })
-      g.add(b, reshapes=true)
+      let g = moves_for(b, fn() { words.get() })
+      g.reshapes(b)
       b.show(fn() { shown.get() }, fn(k) {
         k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
-        g.add(k)
+        g.moves_with(k)
       })
       group.val = Some(g)
     })
@@ -294,13 +309,13 @@ test "a button's words let go of while it goes: from that moment no more of it, 
   // (on its way, both of it)
   tree.event(t0, fn() { words.set(long_words) })
   t.frame_at(t0 + 40.0)
-  let both = g.movers.length()
+  let both = (g.shapes.length() + g.parts.length())
   // (its words let go of on the way: no more of it as that is told)
   tree.event(t.time(), fn() { shown.set(false) })
-  let left = g.movers.length()
+  let left = (g.shapes.length() + g.parts.length())
   // (set off again: only what is left of it goes)
   tree.event(t.time(), fn() { words.set(short_words) })
-  let going = g.movers.length()
+  let going = (g.shapes.length() + g.parts.length())
   t.run_for(past_all_ms)
   assert_eq((both, left, going, tree.clock_read()), (2, 1, 1, false))
 }
@@ -308,7 +323,7 @@ test "a button's words let go of while it goes: from that moment no more of it, 
 ///|
 /// A row 3.3 in from its sides at the window's top, in its middle: room `room.get()` wide, a box of its own (2.7 in, its
 /// words "Hi"), and a dot 10.5 across that is not said to go; the row and the box going for `room` (an old view's layout,
-/// or the tree's moves_together, the box said first where `box_first`). The Tester.
+/// or the tree's moves_for, the box said first where `box_first`). The Tester.
 fn nested_pair(room : @signals.Signal[Double], node : Bool, box_first? : Bool = false) -> @ui.Tester {
   let t = @ui.Tester::new(
     fn(c) {
@@ -343,13 +358,13 @@ fn nested_pair(room : @signals.Signal[Double], node : Bool, box_first? : Bool = 
             b.box(fn(k) { k.words(Is("Hi"), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore }) |> ignore
           })
           row.box(fn(d) { d.width(Is(Some(10.5))).height(Is(Some(10.5))).ground(Is(0xCC3333FFL)) |> ignore }) |> ignore
-          let g = moves_together(row, fn() { room.get() })
+          let g = moves_for(row, fn() { room.get() })
           if box_first {
-            g.add(inner)
-            g.add(row)
+            g.moves_with(inner)
+            g.moves_with(row)
           } else {
-            g.add(row)
-            g.add(inner)
+            g.moves_with(row)
+            g.moves_with(inner)
           }
         })
         |> ignore
@@ -540,9 +555,9 @@ fn two_buttons(words : @signals.Signal[String], second_first : Bool) -> @ui.Test
       let first = make(0x3366CCFFL)
       let second = make(0x20A040FFL)
       let group = fn(p : (@view.View, @view.View)) {
-        let g = moves_together(p.0, fn() { words.get() })
-        g.add(p.0, reshapes=true)
-        g.add(p.1)
+        let g = moves_for(p.0, fn() { words.get() })
+        g.reshapes(p.0)
+        g.moves_with(p.1)
       }
       if second_first {
         group(second)
@@ -615,9 +630,9 @@ fn room_and_button(open : @signals.Signal[Bool], words : @signals.Signal[String]
         let k = b.box(fn(k) {
           k.words(By(fn() { words.get() }), ink=0xFFFFFFFFL, look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
         })
-        let g = moves_together(b, fn() { words.get() })
-        g.add(b, reshapes=true)
-        g.add(k)
+        let g = moves_for(b, fn() { words.get() })
+        g.reshapes(b)
+        g.moves_with(k)
       }
       if button_first {
         button()
@@ -704,9 +719,9 @@ test "a button that goes for its words given another colour, then its words chan
     root.box(fn(b) {
       b.row(Is(true)).height(Is(Some(36.0))).ground(By(fn() { ground.get() })) |> ignore
       let k = b.box(fn(k) { k.words(By(fn() { words.get() }), look={ size: 13.0, weight: 400, line: 18.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore })
-      let g = moves_together(b, fn() { words.get() })
-      g.add(b, reshapes=true)
-      g.add(k)
+      let g = moves_for(b, fn() { words.get() })
+      g.reshapes(b)
+      g.moves_with(k)
     })
     |> ignore
   })
