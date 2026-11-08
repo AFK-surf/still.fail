@@ -6,6 +6,16 @@
 let rise_ms_per_point : Double = 2.0
 
 ///|
+/// Where a box `h` tall is at moment `t` rising from its own height below to where it is laid out over
+/// rise_ms_per_point a point of its height, from moment 0.
+fn rise(w : Double, h : Double, t : Double) -> (Double, Double) {
+  ignore(w)
+  let ms = h * rise_ms_per_point
+  let gone = if ms <= 0.0 || t >= ms { 1.0 } else { t / ms }
+  (0.0, h * (1.0 - gone))
+}
+
+///|
 /// A box `height()` tall rising from its own height below to where it is laid out over rise_ms_per_point a point of
 /// its height, by the clock; the tree, the box.
 fn rising(height : @signals.Signal[Double]) -> (@view.Tree, Ref[@view.View?]) {
@@ -16,12 +26,7 @@ fn rising(height : @signals.Signal[Double]) -> (@view.Tree, Ref[@view.View?]) {
         s
         .width(Is(Some(100.0)))
         .height(By(fn() { Some(height.get()) }))
-        .moved_by(fn(_, h) {
-          let ms = h * rise_ms_per_point
-          let t = s.drawn_at()
-          let gone = if ms <= 0.0 || t >= ms { 1.0 } else { t / ms }
-          (0.0, h * (1.0 - gone))
-        })
+        .moved_by(rise, fn(_, h) { h * rise_ms_per_point })
         |> ignore
       }),
     )
@@ -80,7 +85,7 @@ test "its height changed while it moves: placed by the new height, its time the 
 }
 
 ///|
-test "what moves it reads the clock only once it is laid out some size: followed from the frame it is, risen as the clock goes" {
+test "its end worked out at the size it is laid out: from the first frame laying it out, risen as the clock goes" {
   let sheet : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
     sheet.val = Some(
@@ -88,16 +93,7 @@ test "what moves it reads the clock only once it is laid out some size: followed
         s
         .width(Is(Some(100.0)))
         .height(Is(Some(100.0)))
-        .moved_by(fn(_, h) {
-          // (nothing to go before it has a height: the clock not read)
-          if h <= 0.0 {
-            return (0.0, 0.0)
-          }
-          let ms = h * rise_ms_per_point
-          let t = s.drawn_at()
-          let gone = if t >= ms { 1.0 } else { t / ms }
-          (0.0, h * (1.0 - gone))
-        })
+        .moved_by(rise, fn(_, h) { h * rise_ms_per_point })
         |> ignore
       }),
     )
@@ -114,4 +110,31 @@ test "what moves it reads the clock only once it is laid out some size: followed
   assert_eq(tree.drawn_of(id).unwrap().y, 0.0)
   assert_eq(tree.work().structure - before.structure, 0)
   assert_eq(tree.work().computes - before.computes, 0)
+}
+
+///|
+test "its move over at its end: the clock no longer followed, nothing woken for, a frame doing nothing" {
+  let height = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let (tree, sheet) = rising(height)
+  tree.frame(390.0, 844.0) |> ignore
+  let id = sheet.val.unwrap().id()
+  // (while it moves, the clock followed: what hosts the tree draws frame after frame)
+  tree.at(100.0 * rise_ms_per_point / 2.0)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_true(tree.clock_read(), msg="followed while it moves")
+  // (at its end: there, and from then on idle)
+  tree.at(100.0 * rise_ms_per_point)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq(tree.drawn_of(id).unwrap().y, 0.0)
+  assert_false(tree.clock_read(), msg="the clock followed past its end")
+  assert_eq(tree.wake(), None)
+  let before = tree.work()
+  tree.at(100.0 * rise_ms_per_point * 2.0)
+  assert_false(tree.frame(390.0, 844.0), msg="a frame past its end draws nothing")
+  assert_eq(tree.work().bound - before.bound, 0)
+  // (taller now: it is where it is laid out, still idle, its end past at that size too)
+  height.set(150.0)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq(tree.drawn_of(id).unwrap().y, 0.0)
+  assert_false(tree.clock_read(), msg="idle at the new size")
 }
