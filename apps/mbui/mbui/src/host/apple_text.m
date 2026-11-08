@@ -376,6 +376,21 @@ static int ascii_key(unichar c, double size, int weight, int style) {
   return ids[c];
 }
 
+// Whether `c` takes no room and draws nothing (zero width space, joiners, word joiner, the byte order mark). Where one
+// ends the line, Core Text answers 0 as its offset (macOS 27.2): a composer's mark (`@[…]` drawn with one in each
+// bracket's place, refs_look) at the end of its words had its last letter at no width and its closing bracket as wide
+// as the whole line, the caret after it twice as far as the words went (2026-11-08). A caret before one stands where
+// the next character that takes room starts.
+static int takes_no_room(unichar c) {
+  return c == 0x200B || c == 0x200C || c == 0x200D || c == 0x2060 || c == 0xFEFF;
+}
+
+// Where a caret before character `i` of `s` stands in `line` (takes_no_room: those skipped).
+static double offset_at(CTLineRef line, NSString *s, NSUInteger len, NSUInteger i) {
+  while (i < len && takes_no_room([s characterAtIndex:i])) i++;
+  return CTLineGetOffsetForStringIndex(line, (CFIndex)i, NULL);
+}
+
 // Every string is shaped by Core Text as a whole line. A fast path for printable ASCII (each character's advance and
 // each pair's kerning learned once) was given up: Core Text kerns a letter by what is on both sides of it (macOS 27's
 // system font: the "a" of "fail" 0.09 narrower than of "ail", the "v" of "hover" than of "ver"), so words laid out by
@@ -420,13 +435,13 @@ static int32_t shape_line(moonbit_string_t text, int32_t len, double size, int32
   int32_t k = 0;
   NSUInteger i = 0;
   // a cluster starts where the one before it ended
-  double x0 = CTLineGetOffsetForStringIndex(line, 0, NULL);
+  double x0 = offset_at(line, s, (NSUInteger)len, 0);
   while (i < (NSUInteger)len && k < cap) {
     NSRange r = [s rangeOfComposedCharacterSequenceAtIndex:i];
     unichar c = [s characterAtIndex:r.location];
-    if (r.location != i) x0 = CTLineGetOffsetForStringIndex(line, r.location, NULL);
+    if (r.location != i) x0 = offset_at(line, s, (NSUInteger)len, r.location);
     double start_x = x0;
-    double x1 = CTLineGetOffsetForStringIndex(line, r.location + r.length, NULL);
+    double x1 = offset_at(line, s, (NSUInteger)len, r.location + r.length);
     double adv = x1 - x0;
     x0 = x1;
     if (any_rtl) {
