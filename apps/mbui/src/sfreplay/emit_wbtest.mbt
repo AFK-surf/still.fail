@@ -21,6 +21,23 @@ test "emission waits for explicit machine session requests, not cached offers" {
 }
 
 ///|
+test "emission waits for an explicit chat place report, not incidental frame reports" {
+  let lines : Array[String] = []
+  script.val = Some(lines)
+  emit_answered(["chat.place", "chat.pin", "chat.place"])
+  assert_eq(lines, ["answered chat.pin"])
+  emit_answered_to("chat.place", 1)
+  assert_eq(lines, ["answered chat.pin", "answered chat.place"])
+  let next : Array[String] = []
+  script.val = Some(next)
+  emit_wait(125.0)
+  emit_answered(["chat.place"])
+  emit("until result")
+  assert_eq(next, ["wait 125", "now until result"])
+  script.val = None
+}
+
+///|
 test "a recording script is complete only after the flow ends" {
   let lines : Array[String] = []
   script.val = Some(lines)
