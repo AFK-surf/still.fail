@@ -6,6 +6,8 @@ import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "../store/backfill.ts";
 import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
 import { initializeReboxIndex } from "./rebox-index.ts";
+import { mbReaderBinary } from "../read/mb-reader.ts";
+import { MbUseReader } from "./use-reader-mb.ts";
 
 // JSON paths use the first duplicate key and truncate keys at NUL; JavaScript does neither. A lone UTF-16
 // surrogate also cannot round-trip through SQLite TEXT. Only these exceptional bodies need JavaScript indexing.
@@ -289,7 +291,7 @@ export class UseIndex {
   readonly #path: string | null;
   readonly #previousGone: Promise<void> | null;
   readonly #priority: SharedArrayBuffer | undefined;
-  #worker: Worker | null = null;
+  #worker: Worker | MbUseReader | null = null;
   #closed = false;
   #stopped!: () => void;
   readonly #whenStopped = new Promise<void>((resolve) => { this.#stopped = resolve; });
@@ -311,10 +313,13 @@ export class UseIndex {
     }
   }
 
-  #start(): Worker {
+  #start(): Worker | MbUseReader {
     if (this.#worker !== null) return this.#worker;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./use-index-worker.ts" : "./vault/use-index-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { path: this.#path, priority: this.#priority } });
+    // (by the MoonBit program, station/mb's src/vaultuses, where it is there; else by the worker)
+    const mb = mbReaderBinary();
+    const worker = mb !== null ? new MbUseReader(mb, this.#path!, this.#priority)
+      : new Worker(file, { workerData: { path: this.#path, priority: this.#priority } });
     const owner = worker.threadId;
     worker.once("exit", () => releaseStoppedBackfill(this.#priority, owner));
     this.#worker = worker;
