@@ -1220,20 +1220,6 @@ export interface StationElevation {
 	canChange: boolean;
 }
 
-/** A station's Tailcat link of data outflow (`Overview.outflowTailcat`). */
-export interface OutflowTailcat {
-	/** An admin turned it on (`outflow.tailcat`). */
-	on: boolean;
-	/** off | starting (getting tailcat, its key or its address) | running | failed (why in `error`) */
-	state: string;
-	/** Running: the Tailcat address to give the program on the other machine. */
-	address?: string;
-	/** Running: the port to ask at, at that address. */
-	port?: number;
-	/** Failed: why. */
-	error?: string;
-}
-
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -1303,21 +1289,6 @@ export interface Overview {
 	 * then shows nothing).
 	 */
 	elevation?: StationElevation;
-	/**
-	 * How many programs of its machine hold or ask for a grant of its data: its page reads
-	 * them (`outflowGrants`) only when there are some. None from a station older than them.
-	 */
-	outflowGrants?: number;
-	/**
-	 * The viewer answers those asking (an owner or admin of its home workspace); none from a station older than
-	 * that.
-	 */
-	outflowAnswers?: boolean;
-	/**
-	 * Its Tailcat link, which lets programs of other machines ask for its data: for an
-	 * admin of its home workspace only. None for others, or from a station older than it.
-	 */
-	outflowTailcat?: OutflowTailcat;
 }
 
 /** What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), the viewer's hidden chats (已隐藏), or archived chats (已归档). */

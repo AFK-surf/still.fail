@@ -24,8 +24,6 @@ export type Effect =
   | { kind: "memory" }
   /// The workspace's presets on the station (the `presets` topic): read again.
   | { kind: "presets" }
-  /// The programs granted the station's data (the `outflowGrants` topic): read again.
-  | { kind: "outflowGrants" }
   | { kind: "identity" }
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
@@ -181,9 +179,6 @@ export const PARAMS: Record<string, string> = {
   "signin.self": "id:string done?:boolean",
   "signin.deny": "id:string",
   "memory.get": "",
-  "outflow.revoke": "id:string",
-  "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
-  "outflow.tailcat": "on:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
@@ -657,17 +652,6 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/browser/sign-ins/${p.at("id")}/deny`, null, NONE);
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
-    // A program's grant of the station's data revoked: its next read is refused.
-    case "outflow.revoke":
-      return op("DELETE", () => `/outflow/grants/${p.at("id")}`, null, { kind: "outflowGrants" });
-    // An admin's answer to a program's request for the station's data: allowed with the kinds and reach they left, or
-    // refused. Its program takes the token the next time it asks.
-    case "outflow.answer":
-      return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
-    // Programs of other machines let ask through Tailcat, or no longer: an admin's switch; how
-    // it is, with the address to give, comes back in the overview (`outflowTailcat`).
-    case "outflow.tailcat":
-      return op("POST", () => "/outflow/tailcat", p.pick(["on"]), OVERVIEW);
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);

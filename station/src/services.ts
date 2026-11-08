@@ -10,6 +10,7 @@ import { Host } from "./api/host.ts";
 import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
 import { outputAt, tail } from "./read/jobs.ts";
 import { Store as StationStore } from "./store/store.ts";
+import { sees } from "./store/rows.ts";
 import { buildLegacyEntryLookups } from "./store/legacy-said-builder.ts";
 import { type StationKey, loadKey } from "./cloud/key.ts";
 import { Cloud as CloudState } from "./cloud/state.ts";
@@ -245,6 +246,7 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         tail,
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
+        liveSeen: (viewer, key) => { const row = store.getSession(key); return row !== null && sees(viewer, row.ws); },
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
         handover: { file: eventsHandoverFile(data), previous },
       });

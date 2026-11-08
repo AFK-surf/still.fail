@@ -767,6 +767,28 @@ test("a stream from before asked nothing new: the sessions it names, as before",
   reader(answer.body as AsyncIterable<Buffer>).close();
 });
 
+test("a named live stream only receives a delayed result while its viewer can still see the session", async () => {
+  const { events } = setup(testClock().clock);
+  let visible = true;
+  let exists = true;
+  let send: (message: unknown) => void = () => {};
+  (events as any).deps.seen = () => visible;
+  (events as any).deps.sessionExists = () => exists;
+  events.follow({ live: (_key, _from, _last, tell) => { send = tell; return () => {}; } });
+  const stream = reader((await events.open(viewer("a@x"), "zh", false, [["k", 0, null]], [])).body as AsyncIterable<Buffer>);
+  try {
+    send({ type: "timeline", entries: [{ text: "visible" }] });
+    visible = false;
+    send({ type: "timeline", entries: [{ text: "hidden" }] });
+    visible = true;
+    send({ type: "timeline", entries: [{ text: "visible again" }] });
+    exists = false;
+    send({ type: "timeline", entries: [{ text: "deleted" }] });
+    await settle();
+    assert.deepEqual(stream.got.filter((e) => e.event === "live").map((e) => e.data.entries[0].text), ["visible", "visible again"]);
+  } finally { await stream.close(); }
+});
+
 test("one person's streams in two languages are read for together: once a change, the sidebar and the thread alike", async () => {
   // One a viewer, the same chats were read again for each language and workspace a person's devices follow in (four on
   // a station, 2026-11-02), each from the disk while memory was short, after every message.

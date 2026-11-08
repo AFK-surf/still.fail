@@ -118,14 +118,6 @@ pub fn fixture_machine_sessions(Core) -> Unit
 
 pub fn fixture_motion(Int32) -> Unit
 
-pub fn fixture_outflow(Bool) -> Unit
-
-pub fn fixture_outflow_answer() -> @json.Json?
-
-pub fn fixture_outflow_link(@json.Json?) -> Unit
-
-pub fn fixture_outflow_link_set() -> Bool?
-
 pub fn fixture_page(String) -> String
 
 pub fn fixture_pair_ended() -> String
