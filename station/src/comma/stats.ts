@@ -495,6 +495,13 @@ export function taskWire(row: IndexRow): Json | null {
 /// The next page to send after Comma answered `held`; null once it holds all of the index.
 export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json | null = statsWire,
   resetIf?: (floor: number, rev: number, epoch: string) => boolean): Page | null {
+  return readNextPage(index, held, wire, resetIf, PAGE_ROWS).page;
+}
+
+/// One snapshot per page, with an optional lower row limit for a sender that has recently seen large wire rows.
+function readNextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => Json | null,
+  resetIf: ((floor: number, rev: number, epoch: string) => boolean) | undefined, requestedRows: number):
+  { page: Page | null; limit: number; taken: number; bytes: number; byteLimited: boolean; rowLimited: boolean } {
   // A different connection can prune between reads. The floor, revision and rows must describe the same database
   // snapshot; release it before parsing and encoding the bodies, so those operations do not hold a SQLite read lock.
   const slice = index.snapshot(() => {
@@ -505,19 +512,28 @@ export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => J
     const forced = resetIf?.(floor, rev, epoch) === true;
     const reset = held.epoch !== epoch || forced;
     const since = reset ? 0 : held.through;
-    return { epoch, rev, reset, since, changed: !reset && since >= rev ? null :
-      index.since(since, PAGE_ROWS + 1, wire === statsWire || wire === taskWire) };
+    let limit = reset ? PAGE_ROWS : requestedRows;
+    const omitRemoved = wire === statsWire || wire === taskWire;
+    let changed = !reset && since >= rev ? null : index.since(since, limit + 1, omitRemoved);
+    // Do not introduce an earlier boundary within equal revisions: the receiver acknowledges only a revision.
+    // Fall back in this same snapshot to the original page size when the adaptive boundary would split one.
+    if (changed !== null && limit < PAGE_ROWS && changed.length > limit && changed[limit - 1].rev === changed[limit].rev) {
+      limit = PAGE_ROWS;
+      changed = index.since(since, limit + 1, omitRemoved);
+    }
+    return { epoch, rev, reset, since, limit, changed };
   });
-  const { epoch, rev, reset, since, changed } = slice;
-  if (changed === null) return null;
+  const { epoch, rev, reset, since, limit, changed } = slice;
+  if (changed === null) return { page: null, limit, taken: 0, bytes: 0, byteLimited: false, rowLimited: false };
   const rows: Json[] = [];
   let bytes = 2;
   let taken = 0;
   let last = since;
-  for (const row of changed.slice(0, PAGE_ROWS)) {
+  let byteLimited = false;
+  for (const row of changed.slice(0, limit)) {
     const sent = wire(row);
     const size = sent === null ? 0 : Buffer.byteLength(JSON.stringify(sent)) + 1;
-    if (rows.length > 0 && bytes + size > PAGE_BYTES) break;
+    if (rows.length > 0 && bytes + size > PAGE_BYTES) { byteLimited = true; break; }
     if (sent !== null) rows.push(sent);
     bytes += size;
     taken += 1;
@@ -525,7 +541,8 @@ export function nextPage(index: RevIndex, held: Held, wire: (row: IndexRow) => J
   }
   // A page short of the end brings Comma to its last row; the last page to the index's rev, past pruned tombstones.
   const through = taken < changed.length ? last : rev;
-  return { epoch, reset, since, through, rows };
+  return { page: { epoch, reset, since, through, rows }, limit, taken, bytes, byteLimited,
+    rowLimited: !byteLimited && taken === limit && changed.length > limit };
 }
 
 /// One socket following an index. A reset clears the receiver only on its first page; while it is paging, the socket
@@ -536,6 +553,7 @@ export class IndexSync {
   readonly #token: symbol;
   #resetting = false;
   #resetFloor = 0;
+  #pageRows = PAGE_ROWS;
 
   constructor(index: RevIndex, wire: (row: IndexRow) => Json | null = statsWire) {
     this.#index = index;
@@ -547,11 +565,23 @@ export class IndexSync {
     const index = this.#index;
     index.observed(this.#token, held.epoch === index.epoch() ? held.through : 0);
     let floor = 0;
-    const page = nextPage(index, held, this.#wire, (seen, rev, epoch) => {
+    const result = readNextPage(index, held, this.#wire, (seen, rev, epoch) => {
       floor = seen;
       return held.epoch === epoch && (held.through > rev ||
         (held.through < seen && (!this.#resetting || seen > this.#resetFloor)));
-    });
+    }, this.#pageRows);
+    const page = result.page;
+    if (this.#wire === statsWire || this.#wire === taskWire) {
+      // Learn from wire size, not stored JSON size: a large Task body can make a small wire row.
+      if (result.byteLimited) this.#pageRows = Math.min(PAGE_ROWS, Math.max(8, 2 * (result.taken + 1)));
+      else if (result.rowLimited) {
+        // A run of small rows should quickly return to full pages. Use the current page's wire size as an estimate;
+        // if a later row is larger, the byte limit will still stop it and the next page will learn again.
+        this.#pageRows = Math.min(PAGE_ROWS, Math.max(result.limit * 2,
+          Math.ceil(result.limit * PAGE_BYTES / Math.max(1, result.bytes))));
+      }
+      else this.#pageRows = PAGE_ROWS;
+    }
     if (page?.reset === true) {
       this.#resetting = true;
       this.#resetFloor = floor;
