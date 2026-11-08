@@ -434,6 +434,7 @@ fn main {
           @activity.sandbox_disable(db)
           Some(true)
         }
+        { "kind": "active-jobs", .. } => Some(@jobs.active_step(db))
         { "kind": "process-jobs", .. } => {
           @jobs.install(db)
           Some(@jobs.step(db))
