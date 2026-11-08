@@ -1,6 +1,7 @@
 // A search's words marked in the message it opened a chat at: the chat opens with the message's top under the bar, its
 // first word put in the list's middle when it lies low (past 80% of the page); each of the words in it is bold with a
-// hand-drawn stroke under it, drawn in one after another, kept for as long as the chat shows. Nothing flashes.
+// hand-drawn stroke under it, drawn in one after another, kept for as long as the chat shows. In the chat's own find,
+// other matches keep a faint stroke and the current occurrence gets a stronger stroke and a highlighter behind it.
 
 ///|
 /// The last staggered stroke; any further strokes draw in with it.
@@ -12,10 +13,11 @@ pub let found_draw_ms : Double = @sf.strokes_ms(found_last_step)
 
 ///|
 /// The strokes start being drawn in (the message gone to).
-fn found_start(rd : @sfbase.Reading) -> Unit {
+fn found_start(rd : @sfbase.Reading, finding : Bool) -> Unit {
   rd.found_centre = true
   rd.found_drawn.snap(0.0)
-  rd.found_drawn.animate(found_draw_ms, @motion.tween(found_draw_ms, ease=Linear))
+  let duration = if finding { @sf.stroke_ms } else { found_draw_ms }
+  rd.found_drawn.animate(duration, @motion.tween(duration, ease=Linear))
 }
 
 ///|
@@ -53,8 +55,8 @@ fn found_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : Int, pi
 ///|
 /// The strokes under the words a search opened the chat at in message `ts`'s words (box `key`, as laid out), drawn
 /// in a layer of the box at `(bx, by)` in the window, behind its words: each of its paragraphs' own, one a line of a
-/// word that wraps, 4 under the baseline, 2 past the word's ends, 2.5 wide. `faint`: ⌘F's in a message
-/// other than the one the reader is at, drawn whole and lighter.
+/// word that wraps, 4 under the baseline, 2 past the word's ends, 2.5 wide. `faint`: the chat find's strokes drawn
+/// whole and lighter. `current` keeps just that occurrence's stroke strong.
 fn found_strokes(
   c : @ui.Ctx,
   key : String,
@@ -63,6 +65,7 @@ fn found_strokes(
   bx : Double,
   by : Double,
   faint? : Bool = false,
+  current? : Int = -1,
 ) -> Unit {
   let w = match c.words_of(key) {
     Some(w) => w
@@ -70,6 +73,7 @@ fn found_strokes(
   }
   let t = @sf.theme()
   let (cx, cy) = @sf.stroke_corner(@sf.message_stroke)
+  let active = if current >= 0 { @sf.find_words(w.text, words).get(current) } else { None }
   for p in w.pieces {
     let lay = p.layout
     let mut i = 0
@@ -93,7 +97,8 @@ fn found_strokes(
         // Each stroke is positioned from the same box origin, rather than laid out below the one before it.
         c.layer(fn() {
           c.box(tx=left - cx, ty=y - cy, fn() {
-            let ink = if faint { @sf.alpha(t.p.accent, find_faint) } else { t.p.accent }
+            let selected = active == Some((p.start + r.0, p.start + r.1))
+            let ink = if faint && !selected { @sf.alpha(t.p.accent, find_faint) } else { t.p.accent }
             @sf.hand_stroke(c, @sf.message_stroke, right - left, part, ink) |> ignore
           })
           |> ignore
@@ -102,4 +107,52 @@ fn found_strokes(
       }
     }
   }
+}
+
+///|
+/// The chat find's current occurrence: a highlighter swept across its text, behind the glyphs. The selected index is
+/// in the whole message, not per paragraph or line. A wrapped match is drawn a line at a time, from start to end.
+fn found_marker(
+  c : @ui.Ctx,
+  key : String,
+  words : Array[String],
+  current : Int,
+  drawn : Double,
+  bx : Double,
+  by : Double,
+) -> Unit {
+  let w = match c.words_of(key) {
+    Some(w) => w
+    None => return
+  }
+  let ranges = @sf.find_words(w.text, words)
+  let (a, b) = match ranges.get(current) {
+    Some(range) => range
+    None => return
+  }
+  let rects = w.rects(a, b)
+  let total = rects.fold(init=0.0, fn(sum, r) { sum + r.2 + 4.0 })
+  let mut left_to_draw = total * @sf.stroke_part(drawn, 0)
+  let ink = find_marker_ink(@sf.theme().dark)
+  for (x, y, width, height) in rects {
+    let whole = width + 4.0
+    let part = dmax(0.0, dmin(whole, left_to_draw))
+    left_to_draw = left_to_draw - whole
+    if part <= 0.0 {
+      continue
+    }
+    let mark_height = height * 0.76
+    let mark_style = @ui.style(w=Fixed(part), h=Fixed(mark_height), bg=Data(ink)).then(@ui.css("radius=Sm"))
+    c.layer(fn() {
+      c.box(style=mark_style, tx=x - bx - 2.0, ty=y - by + height * 0.12, fn() {  })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+/// Yellow on the light theme, orange in the dark: translucent so the message's own ink stays legible.
+fn find_marker_ink(dark : Bool) -> Int64 {
+  if dark { 0xFF700043L } else { 0xFFF12DB3L }
 }
