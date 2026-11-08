@@ -65,6 +65,7 @@ let dropping : Dropping = { words: None, paths: None }
 
 ///|
 fn drop_reset() -> Unit {
+  tree_drops.clear()
   files_on.clear()
   files_on_held.val = 0
   dropping.words = None
@@ -101,7 +102,21 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
       place_caret_at(st, x, y, h_now())
       st.text_input(text_paste, words, 0, 0, h_now())
     }
-    None => dropping.words = Some((drop_within(c, x, y), words, c.frame_no))
+    None =>
+      // (on a field of the window's tree: in where they were let go; beside one on a node of the tree's that takes
+      // them for it, words_into: there at once, at that field's caret; else left for this frame's build)
+      match tree_drop_at(x, y) {
+        Some((Some(st), _)) => {
+          place_caret_at(st, x, y, h_now())
+          tree_words_into(c, st, words)
+        }
+        Some((None, at)) =>
+          match tree_drops_on(at, fn(d) { d.words is Some(_) }) {
+            Some({ words: Some(f), .. }) => tree_words_into(c, f.st, words)
+            _ => ()
+          }
+        None => dropping.words = Some((drop_within(c, x, y), words, c.frame_no))
+      }
   }
   // (taken as the frame begins: what reads what the hand did is built again in it, the field's words, a box that takes
   // them for its field)
@@ -116,8 +131,118 @@ fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) 
   old_input_brought()
   let c = g()
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
-  dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
+  // (on a node of the window's tree: taken there at once, not read, by the innermost that takes them by their paths
+  // (paths_into: on its field, or beside any); on a field, else, their paths in where they were let go; beside any on
+  // one that takes words for its field (words_into), their paths there at its caret; else left for this frame's build)
+  match tree_drop_at(x, y) {
+    Some((on, at)) => {
+      forget_drop(pick)
+      let on_field = fn(f : Field) { match on { Some(st) => physical_equal(st, f.st); None => true } }
+      match tree_drops_on(at, fn(d) { d.paths is Some((f, _)) && on_field(f) }) {
+        Some({ paths: Some((_, take)), .. }) => take(paths)
+        _ =>
+          match on {
+            Some(st) => {
+              place_caret_at(st, x, y, h_now())
+              tree_words_into(c, st, paths_words(paths))
+            }
+            None =>
+              match tree_drops_on(at, fn(d) { d.words is Some(_) }) {
+                Some({ words: Some(f), .. }) => tree_words_into(c, f.st, paths_words(paths))
+                _ => ()
+              }
+          }
+      }
+    }
+    None => dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })
+  }
   hand_event()
+}
+
+///|
+/// What a node of the window's tree takes of what is let go on it from outside beside any field in it: words for field
+/// `words` (words_into), files with their paths for `paths`' field and its taker (paths_into).
+priv struct TreeDrops {
+  mut words : Field?
+  mut paths : (Field, (Array[DroppedPath]) -> Unit)?
+}
+
+///|
+/// What each node of the tree's takes of what is let go on it (TreeDrops), by its node.
+// kept across runs: each let go with its node; a run's start clears it (drop_reset)
+let tree_drops : Map[@view.NodeId, TreeDrops] = Map([])
+
+///|
+/// What node `v` takes, made as it is first said, let go with it.
+fn tree_drops_of(v : @view.View) -> TreeDrops {
+  let id = v.id()
+  match tree_drops.get(id) {
+    Some(d) => d
+    None => {
+      let d : TreeDrops = { words: None, paths: None }
+      tree_drops[id] = d
+      v.owns(fn() { tree_drops.remove(id) }) |> ignore
+      d
+    }
+  }
+}
+
+///|
+/// What of the window's tree is at (`x`, `y`) in the window, where a press there would go to one of its nodes (not one
+/// hosting an old view): the field's state where it is a field, and the node. None: not the tree's.
+fn tree_drop_at(x : Double, y : Double) -> (EditorState?, @view.NodeId)? {
+  guard view_app.val is Some(tree) else { return None }
+  match tree.target_at(x, y) {
+    Pressed(id) | Dragged(id) => Some((tree_fields.get(id).map(fn(tf) { tf.st }), id))
+    _ => None
+  }
+}
+
+///|
+/// The innermost of node `at` of the window's tree and what holds it whose drops `takes` says take what is let go
+/// there; None: none of them.
+fn tree_drops_on(at : @view.NodeId, takes : (TreeDrops) -> Bool) -> TreeDrops? {
+  guard view_app.val is Some(tree) else { return None }
+  let mut v = tree.view_of(at)
+  while v is Some(n) {
+    match tree_drops.get(n.id()) {
+      Some(d) if takes(d) => return Some(d)
+      _ => ()
+    }
+    v = n.parent()
+  }
+  None
+}
+
+///|
+/// Words let go in the field of the window's tree `st` holds (beside it, on what takes them for it: at its caret; on it,
+/// where they were let go): put in there as a paste's, the field taking the focus (Ctx::words_into's).
+fn tree_words_into(c : Ctx, st : EditorState, words : String) -> Unit {
+  st.text_input(text_paste, words, 0, 0, h_now())
+  c.focus_visible = false
+  c.focus_field(Field::{ st, })
+  tree_field_redraw()
+}
+
+///|
+/// Words from outside let go on node `v` or what it holds beside any field (one let go on a field the field took, where
+/// it was let go): put in `field` at its caret, as a paste's, at the moment they are let go, the field taking the focus,
+/// as a press on `v` is its field's (a composer's capsule: its padding, its buttons); files let go there with their paths
+/// that nothing takes by their paths (paths_into), their paths so, a line each, not read. What holds a node of the tree's
+/// takes what it holds does not (the innermost first); an old view's box, Ctx::words_into. `v`.
+pub fn words_into(v : @view.View, field : Field) -> @view.View {
+  tree_drops_of(v).words = Some(field)
+  v
+}
+
+///|
+/// Files from outside let go with their paths (the Finder's) on node `v` or what it holds, on `field` or beside any field
+/// (one let go on another field is that field's): given to `take` at the moment they are let go, as where they are,
+/// not read (a chat's composer naming them by the station they are on). The innermost of what takes them first; an old
+/// view's box, Ctx::paths_into. `v`.
+pub fn paths_into(v : @view.View, field : Field, take : (Array[DroppedPath]) -> Unit) -> @view.View {
+  tree_drops_of(v).paths = Some((field, take))
+  v
 }
 
 ///|
