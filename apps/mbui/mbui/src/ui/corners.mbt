@@ -238,7 +238,10 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     i
   }
   tree_pictures.clear()
-  let held = if laid { tree.laid_held() } else { tree.drawn_held() }
+  // (laid out, for what the old views hold worked out against what holds them: only what holds an old view, and what
+  // lies laid out where that does, as big (a ground laid beside it as a layer, Ctx::layer_grounds); what else of the
+  // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them)
+  let held = if laid { tree.laid_held_toward(fn(c) { c.hosted }) } else { tree.drawn_held() }
   // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
   let at : Array[Int] = Array::make(held.length(), -1)
   let last : Map[Int, Int] = Map([])

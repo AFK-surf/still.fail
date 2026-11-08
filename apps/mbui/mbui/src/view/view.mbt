@@ -7200,6 +7200,55 @@ pub fn Tree::laid_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
 }
 
 ///|
+/// The scene as Tree::laid_held has it, but only what `wanted` names, what holds each, and what lies laid out where
+/// one of those does, as big (what holds it so, a ground laid beside it as a layer): what is worked out of an old view
+/// hosted in it against what holds it (ui's corners said Inner), not all of the tree made into nodes for the few.
+pub fn Tree::laid_held_toward(self : Tree, wanted : (Content) -> Bool) -> Array[(Drawn, Int, Bool)] {
+  let len = self.order.length()
+  let keep : Array[Bool] = Array::make(len, false)
+  for i in 0..<len {
+    match self.nodes[self.order[i]].content {
+      Some(c) if wanted(c) => {
+        let mut j = i
+        while j >= 0 && !keep[j] {
+          keep[j] = true
+          j = self.order_holder[j]
+        }
+      }
+      _ => ()
+    }
+  }
+  let out : Array[(Drawn, Int, Bool)] = []
+  let at_out : Array[Int] = Array::make(len, -1)
+  self.each_drawn_in_order(fn(i, c, x, y, a, _, _, _) {
+    let h0 = self.order_holder[i]
+    let (lx, ly) = if keep[i] || (h0 >= 0 && at_out[h0] >= 0) {
+      self.laid_origin(c.id).unwrap_or((x, y))
+    } else {
+      return false
+    }
+    // (one not wanted nor holding one: kept only laid out as its holder is, kept, as big)
+    if !keep[i] {
+      let (hd, _, _) = out[at_out[h0]]
+      if (hd.x - lx).abs() > 0.5 ||
+        (hd.y - ly).abs() > 0.5 ||
+        (hd.w - c.w).abs() > 0.5 ||
+        (hd.h - c.h).abs() > 0.5 {
+        return false
+      }
+    }
+    let mut h = h0
+    while h >= 0 && at_out[h] < 0 {
+      h = self.order_holder[h]
+    }
+    at_out[i] = out.length()
+    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+    false
+  })
+  out
+}
+
+///|
 /// Whether node `id` holds a node of its own in the scene now (one living, not left out of its row): what is drawn over
 /// its ground, under the edge round it (an old view's box's border_over: drawn after what it holds).
 pub fn Tree::holds_drawn(self : Tree, id : NodeId) -> Bool {
