@@ -1337,8 +1337,11 @@ fn narrow_reader_chrome(
     None => 0.0
   }
   let pct = "\{(share * 100.0).round().to_int()}%"
-  // the bars coming (140 ms) or going (240 ms), eased out, a step up or down as they fade
-  let k = @motion.animate(c, "reader-bars", if r.chrome { 1.0 } else { 0.0 }, spec=@motion.tween(
+  // the bars coming (140 ms) or going (240 ms), eased out, a step up or down as they fade: told as it is built, read
+  // as it is painted (each is built while it comes or goes, till its declared end; what was found laid out where they
+  // go and drawn moved from there as they come or go)
+  let to = if r.chrome { 1.0 } else { 0.0 }
+  let k = @motion.told(c, "reader-bars", to, spec=@motion.tween(
       if r.chrome { narrow_bars_in_ms } else { reader_bars_ms },
       ease=Out,
     ))
@@ -1349,7 +1352,7 @@ fn narrow_reader_chrome(
     c.layer(fn() { c.box(style=@ui.style(w=Full, h=Fixed(room_top), bg=Data(p.ground)), fn() {  }) |> ignore }) |> ignore
   }
   // how far through it is while they are away
-  if k < 1.0 {
+  if !r.chrome || !k.over() {
     let n = c.layer(fn() {
       c.box(style=desk_hairline_place, fn() {
         c.box(style=desk_hairline.then(@ui.style(bg=Data(alpha(p.ink, desk_hairline_share)))), fn() {
@@ -1362,14 +1365,14 @@ fn narrow_reader_chrome(
       })
       |> ignore
     })
-    c.look(n, @ui.look(alpha=desk_whole - k))
+    c.look_by(n, fn() { @ui.look(alpha=desk_whole - k.get()) })
   }
   let title = match book {
     Some(b) =>
       joined([if chapter >= 0 && chapters.length() >= 2 { chapters[chapter].0 } else { "" }, pct], " · ")
     None => ""
   }
-  if k > 0.0 {
+  if r.chrome || !k.over() {
     c.layer(fn() {
       c.box(style=desk_found_place, fn() {
         c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off)), fn() {  }) |> ignore
@@ -1431,7 +1434,10 @@ fn narrow_reader_chrome(
             })
             |> ignore
           })
-          c.look(n, @ui.look(alpha=k, dy=-narrow_bars_step * (desk_whole - k)))
+          c.look_by(n, fn() {
+            let k = k.get()
+            @ui.look(alpha=k, dy=-narrow_bars_step * (desk_whole - k))
+          })
         })
         |> ignore
       })
@@ -1443,14 +1449,15 @@ fn narrow_reader_chrome(
   if r.hit >= 0 && r.matches.length() > 0 {
     c.layer(fn() {
       c.box(style=desk_found_place, fn() {
-        c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off + narrow_found_down * k)), fn() {  }) |> ignore
-        c.box(style=narrow_bar_row, fn() { desk_found(c, r, p) }) |> ignore
+        c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off + narrow_found_down * to)), fn() {  }) |> ignore
+        let found = c.box(style=narrow_bar_row, fn() { desk_found(c, r, p) })
+        c.moved_by(found, fn(_, _) { (0.0, narrow_found_down * (k.get() - to)) })
       })
       |> ignore
     })
     |> ignore
   }
-  if k > 0.0 {
+  if r.chrome || !k.over() {
     c.layer(fn() {
       c.box(style=narrow_foot_place, fn() {
         c.box(style=narrow_bar_row, fn() {
@@ -1506,7 +1513,10 @@ fn narrow_reader_chrome(
             })
             |> ignore
           })
-          c.look(n, @ui.look(alpha=k, dy=narrow_bars_step * (desk_whole - k)))
+          c.look_by(n, fn() {
+            let k = k.get()
+            @ui.look(alpha=k, dy=narrow_bars_step * (desk_whole - k))
+          })
         })
         |> ignore
         c.box(style=@ui.style(h=Fixed(room_foot + narrow_foot_off)), fn() {  }) |> ignore
