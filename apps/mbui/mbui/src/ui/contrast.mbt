@@ -687,6 +687,18 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   // view_host.mbt); its shapes at their strongest piece, as an old view's icon or line)
   let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map::new()
   let tree_order : Array[(@view.NodeId, Int)] = []
+  // (what a node of the window's tree said disabled holds, as an old view's in a widget said disabled: asked nothing;
+  // its own presses off, not what a modal layer over it takes them from)
+  let tree_off : Array[@view.NodeId] = match view_app.val {
+    Some(tree) => tree.said_order().filter(fn(s) { s.disabled && s.allowed }).map(fn(s) { s.id })
+    None => []
+  }
+  let tree_off_holds = fn(id : @view.NodeId) {
+    match view_app.val {
+      Some(tree) => tree_off.iter().any(fn(o) { tree.holds(o, id) })
+      None => false
+    }
+  }
   for k in 0..<self.ninst {
     let b = k * inst_size
     match inst_by(k) {
@@ -696,6 +708,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         // (a shape's piece: checked as the whole shape it is of is, an icon or a line, as made: inst_owners' `mark`)
         let mark = if !is_words && kind == 11.0 { inst_mark_of(k) } else { 0 }
         if !is_words && mark == 0 {
+          continue
+        }
+        if tree_off_holds(id) {
           continue
         }
         // (a picture in its own colours (View::picture: a maker's mark, a logo), its owner's, as an old view's own_colours
