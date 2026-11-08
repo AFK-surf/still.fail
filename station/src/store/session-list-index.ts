@@ -39,7 +39,7 @@ const matches = (index: string, row: string) => `${index}.kind = ${kind(row)} AN
 const see = (key: string) => `INSERT INTO session_list_rows (session, kind, ws, archived, connect)
   SELECT ${values("s")} FROM sessions s WHERE s.key = ${key}
     AND NOT EXISTS (SELECT 1 FROM session_list_rows i WHERE ${matches("i", "s")});`;
-// Keep session keys in SQLite: Node's text reader truncates them at an embedded NUL.
+// Keep session keys in SQLite: some Node text readers truncate them at an embedded NUL.
 export const SESSION_LIST_SEE_POSITION = see("(SELECT key FROM sessions WHERE rowid = CAST(? AS INTEGER))");
 const reconcile = `DELETE FROM session_list_rows WHERE (kind, ws, archived, connect, session) IN
     (SELECT kind, ws, archived, connect, session FROM session_list_replaced)

@@ -7,7 +7,7 @@ import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 import { makeStore, openStore } from "../src/read/store.ts";
 import { JOB_SCOPE_NUL_WORKSPACES, JOB_SCOPE_SESSIONS, smallJobScope } from "../src/search/job-scope.ts";
-import { pick, type Asker } from "../src/search/match.ts";
+import { pick, sees, type Asker } from "../src/search/match.ts";
 import { Search } from "../src/search/search.ts";
 import { stationDocs, stationDocSteps } from "../src/search/sources.ts";
 import { auditSessionListStep, sessionListStep } from "../src/store/session-list-index.ts";
@@ -129,7 +129,13 @@ test("a workspace with a NUL suffix keeps the visibility seen by JavaScript", ()
     assert.deepEqual(smallJobScope(db, asker, "zzzz"), ["mine", "mine-nul", "public-nul"]);
     const actual = pick(stationDocs(read, ".", {}, new Set(["job"]), asker), ["needle"], asker);
     assert.deepEqual(actual, pick(stationDocs(read, ".", {}, new Set(["job"])), ["needle"], asker));
-    assert.deepEqual(actual.flatMap((group) => group.hits.map((hit) => hit.session)).sort(), ["mine", "mine-nul", "public-nul"]);
+    // Node's SQLite versions differ on whether the returned workspace text retains the suffix.
+    const workspace = db.prepare("SELECT ws FROM sessions WHERE key=?");
+    const expected = ["mine", "mine-nul", "public-nul", "other"].filter((key) => {
+      const row = workspace.get(key) as { ws: string | null };
+      return sees({ ws: row.ws }, asker);
+    }).sort();
+    assert.deepEqual(actual.flatMap((group) => group.hits.map((hit) => hit.session)).sort(), expected);
   } finally { writer.close(); }
 });
 

@@ -440,7 +440,7 @@ function jobDoc(j: Pick<JobRow, "id" | "name" | "command" | "cwd" | "port" | "st
 
 type JobSessionPosition = { session_key: string; bytes: Uint8Array; storage: string };
 const JOB_SESSION_POSITION = "session_key, CAST(session_key AS BLOB) AS bytes, typeof(session_key) AS storage";
-// SQLite's Node reader truncates text at an embedded NUL. Keep the original bytes for the ordered cursor; when they
+// Some Node SQLite readers truncate text at an embedded NUL. Keep the original bytes for the ordered cursor; when they
 // are valid UTF-8, use the full decoded key for session and job lookups as well.
 function jobSessionKey(row: JobSessionPosition): string {
   if (row.storage !== "text") return row.session_key;

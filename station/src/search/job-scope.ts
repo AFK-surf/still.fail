@@ -7,8 +7,8 @@ const LIMIT = 64;
 const ascii = (value: unknown): value is string => typeof value === "string" && /^[\x20-\x7e]*$/.test(value);
 export const JOB_SCOPE_SESSIONS = `SELECT session, instr(session, char(0)) AS nul FROM session_list_rows WHERE kind = ? AND ws = ?
   ORDER BY archived, connect, session LIMIT ?`;
-// Node reads SQLite text only up to its first NUL. Include those workspace values whose visible prefix is the asked
-// workspace, so the existing JavaScript visibility check makes the final decision on the same values as before.
+// Some Node SQLite versions read text only up to its first NUL. Include those workspace values whose visible prefix is
+// the asked workspace, so JavaScript visibility makes the final decision on the same values as before.
 export const JOB_SCOPE_NUL_WORKSPACES = `SELECT session, instr(session, char(0)) AS nul FROM session_list_rows
   WHERE kind = 1 AND ws >= (?1 || char(0)) AND ws < (?1 || char(1)) ORDER BY ws, archived, connect, session LIMIT ?2`;
 
