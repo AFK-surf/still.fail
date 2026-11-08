@@ -2059,7 +2059,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   assert.equal(sent.length, 1);
   const delta = (sent[0][1] as J).delta;
   assert.ok(delta, JSON.stringify(sent[0]));
-  const appended: J[] = merge([entry(41, "新的")]);
+  const appended: J[] = merge([entry(41, "新的")]).map((m) => ({ ...m }));
   appended[0].mine = false;
   appended[0].system = false;
   appended[0].words = [{ text: "新的" }];

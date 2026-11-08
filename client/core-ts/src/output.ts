@@ -5,12 +5,13 @@
 // reads the clock at the grain its times in words change by (present.ts `clockAt`): a new minute makes again only the
 // items that said a minute's words, one of days ago only at local midnight. What went out is marked in `shaped`
 // (util.ts), and frozen when shared values are checked: nothing changes it after.
-import { type Spec, keyOf, specOf } from "./collections.ts";
+import { type Spec, specOf, textOf } from "./collections.ts";
 import { conformTy, type Ty } from "./conform.ts";
 import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
 import { computed, observe, type Derived } from "./reactive.ts";
 import { equal, isObject, shaped, sharedValue } from "./util.ts";
+import { work } from "./work.ts";
 
 /// An item as it goes out: what it was made from, and what is made of it.
 type Memo = { raw: unknown; out: Derived<unknown> };
@@ -73,11 +74,12 @@ export class Output {
       const itemTy = ty === undefined ? undefined : present.itemOf(ty);
       return raw.map((item, i) => {
         const here = `${path}[${i}]`;
-        const place = `${at}\u0001${JSON.stringify(keyOf(item, spec.key!))}`;
+        const place = `${at}\u0001${textOf(item, spec.key!)}`;
         // Items holding keyed lists of their own are put together anew around them (cheap: their items are done).
         const leaf = !spec.item;
         const was = leaf ? this.#memo.get(place) : undefined;
-        if (was && ((was.raw === item && Object.isFrozen(item)) || equal(was.raw, item))) {
+        // (the store keeps what did not change as the same object, never changed after: collections.ts share)
+        if (was && (was.raw === item || equal(was.raw, item))) {
           next.set(place, was);
           return was.out.get();
         }
@@ -93,9 +95,9 @@ export class Output {
           freeze(out);
           return out;
         });
-        // What it was made from, as it was: a frozen item is kept as it is, another copied (it may be changed in place),
-        // what in it went out as it is (a message's Markdown) shared, not cloned.
-        if (leaf) next.set(place, { raw: Object.isFrozen(item) ? item : copy(item), out: made });
+        // What it was made from: the item itself (a store's value is never changed in place: frozen where that is checked).
+        if (leaf) next.set(place, { raw: item, out: made });
+        work.shaped++;
         const out = made.get();
         return out;
       });

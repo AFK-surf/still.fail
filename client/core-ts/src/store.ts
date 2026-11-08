@@ -9,7 +9,7 @@
 // is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
 import { Effect } from "effect";
 import { computed, observe, signal, tracking, untracked, type Derived, type Source as ReactiveSource } from "./reactive.ts";
-import { type AnyOp, diffKeyed, heavier, specOf } from "./collections.ts";
+import { type AnyOp, diffKeyed, heavier, share, specOf } from "./collections.ts";
 import { diff, largerThan, type Op } from "./delta.ts";
 import { Output } from "./output.ts";
 import { CoreError } from "./error.ts";
@@ -632,7 +632,14 @@ export class Store {
     const now = this.#topics.get(topicKey(topic));
     if (!now) return;
     let changed: (() => void)[] = [];
-    if (computed !== undefined && !sameValue(now.value, computed)) {
+    // What equals the last value is the last value's (collections.ts share): what did not change goes on as the same
+    // objects, which the diff and the items' shaping step over.
+    // (only what goes out: what reads a topic in the core reads what its source made)
+    if (now.subscribers.length > 0 && computed !== undefined && "ok" in computed && now.value !== undefined && "ok" in now.value && now.value.ok !== computed.ok) {
+      const kept = share(now.value.ok, computed.ok, specOf(topic));
+      computed = kept === now.value.ok ? now.value : { ok: sharedValue(kept) };
+    }
+    if (computed !== undefined && computed !== now.value && !sameValue(now.value, computed)) {
       // What is held tells its watchers as it changes (changed): only an error is news to them here.
       const news = !isHeld || "err" in computed || (now.value !== undefined && "err" in now.value);
       now.value = computed;
