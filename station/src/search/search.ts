@@ -1,6 +1,7 @@
 // What the station finds for a search: looked for by a thread of its own (search/worker.ts) in the
-// station's data as it is then; nothing indexed. The thread is started with the station and stays; one that dies is
-// started again when next asked. The machine's files are asked beside it (search/files.ts).
+// station's data as it is then. A prepared candidate scope avoids unrelated chats; their contents are read as asked.
+// The thread is started with the station and stays; one that dies is started again when next asked. The machine's
+// files are asked beside it (search/files.ts).
 import { Worker } from "node:worker_threads";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { wall } from "../ops/fibers.ts";
 import { type Asker, type Group, terms } from "./match.ts";
 import type { FileSearch } from "./files.ts";
 import type { Answered, Told } from "./worker.ts";
+import { SearchScopeBuilder } from "./scope-builder.ts";
 
 /// How long a search may take before it is answered with nothing.
 const QUERY_MS = 30_000;
@@ -22,12 +24,15 @@ export class Search {
   #next = 0;
   #waiting = new Map<number, { resolve: (found: Found) => void; reject: (error: Error) => void; timer: () => void }>();
   #closed = false;
+  readonly #scope: SearchScopeBuilder;
+  #preparingScope: Promise<void> | null = null;
   /// The machine's files (none: not searched here).
   #files: FileSearch | null;
 
-  constructor(options: { data: string; files?: FileSearch | null }) {
+  constructor(options: { data: string; files?: FileSearch | null; backfill?: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } }) {
     this.#data = options.data;
     this.#files = options.files ?? null;
+    this.#scope = new SearchScopeBuilder(join(options.data, "stillfail.db"), options.backfill);
   }
 
   start(): void {
@@ -43,6 +48,7 @@ export class Search {
     const worker = new Worker(file, { workerData: { data: this.#data }, resourceLimits: { maxOldGenerationSizeMb: 384 } });
     this.#worker = worker;
     worker.on("message", (answer: Answered) => {
+      if ("scopePending" in answer) { if (!this.#closed) this.#prepareScope(); return; }
       const waiter = this.#waiting.get(answer.id);
       if (!waiter) return;
       this.#waiting.delete(answer.id);
@@ -75,6 +81,16 @@ export class Search {
     return found === null ? looked : { ...looked, groups: [...looked.groups, found] };
   }
 
+  // Preparation is shared and never holds up the current search. A later query retries after a failure or change.
+  #prepareScope(): void {
+    if (this.#preparingScope !== null) return;
+    const pending = this.#scope.prepare();
+    this.#preparingScope = pending;
+    void pending.catch((error: unknown) => {
+      if (!this.#closed) log.warn("search", "the candidate scope could not be prepared", { error: (error as Error).message });
+    }).finally(() => { if (this.#preparingScope === pending) this.#preparingScope = null; });
+  }
+
   #looked(query: string, asker: Asker, options: { kinds?: string[]; limit?: number; offset?: number; archived?: boolean }): Promise<Found> {
     const worker = this.#worker ?? this.#spawn();
     if (!worker) return Promise.reject(new Error("the search is stopped"));
@@ -93,7 +109,7 @@ export class Search {
 
   async stop(): Promise<void> {
     this.#closed = true;
-    await this.#worker?.terminate();
+    await Promise.all([this.#worker?.terminate(), this.#scope.close()]);
     this.#worker = null;
   }
 }
