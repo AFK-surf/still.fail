@@ -319,6 +319,27 @@ fn edits_drain(db : @sql.Db) -> Int raise {
 }
 
 ///|
+/// One batch of the edit lookup's upkeep, as the store keeps it after a handover (`legacyEditsMaintenanceStep`): the
+/// scan, then the changed keys; whether nothing is left then.
+pub fn edits_maintenance(db : @sql.Db) -> Bool raise {
+  if !has_legacy_edits(db) {
+    return true
+  }
+  if int(meta(db, "legacy_edit_meta"), "scanned") != 1 {
+    ignore(
+      scan_step(
+        db,
+        "legacy_edit_meta",
+        "INSERT INTO legacy_edit_build(thread,target,n) SELECT e.thread,e.target,e.n FROM entries e WHERE e.thread=CAST(?1 AS INTEGER) AND e.n=CAST(?2 AS INTEGER) AND e.target IS NOT NULL AND NOT EXISTS (SELECT 1 FROM legacy_edit_dirty d WHERE d.thread=e.thread AND d.n=e.n) ON CONFLICT(thread,target,n) DO NOTHING",
+        _ => "unsupported legacy edit preparation",
+      ),
+    )
+    return false
+  }
+  edits_drain(db) < batch
+}
+
+///|
 /// One step of the edit lookup's upkeep (said-worker.ts `legacyEdits`); whether a merged message can be read then.
 /// A store whose merged view must be switched first raises `Fallback`.
 pub fn edits_step(db : @sql.Db) -> Bool raise {
@@ -328,21 +349,7 @@ pub fn edits_step(db : @sql.Db) -> Bool raise {
   if needs_repair(db) {
     raise Fallback
   }
-  // (`legacyEditsMaintenanceStep`: the scan, then the changed keys)
-  if has_legacy_edits(db) {
-    if int(meta(db, "legacy_edit_meta"), "scanned") != 1 {
-      ignore(
-        scan_step(
-          db,
-          "legacy_edit_meta",
-          "INSERT INTO legacy_edit_build(thread,target,n) SELECT e.thread,e.target,e.n FROM entries e WHERE e.thread=CAST(?1 AS INTEGER) AND e.n=CAST(?2 AS INTEGER) AND e.target IS NOT NULL AND NOT EXISTS (SELECT 1 FROM legacy_edit_dirty d WHERE d.thread=e.thread AND d.n=e.n) ON CONFLICT(thread,target,n) DO NOTHING",
-          _ => "unsupported legacy edit preparation",
-        ),
-      )
-    } else {
-      ignore(edits_drain(db))
-    }
-  }
+  ignore(edits_maintenance(db))
   edits_ready(db)
 }
 
@@ -378,14 +385,61 @@ fn said_scanned(db : @sql.Db) -> Bool raise {
 /// One batch of the said lookup's old scan (said-worker.ts `legacySaid`); whether it is done (or the store has none).
 pub fn said_step(db : @sql.Db) -> Bool raise {
   if has_legacy_said(db) && !said_scanned(db) {
-    ignore(
-      scan_step(
-        db,
-        "legacy_said_meta",
-        "INSERT INTO legacy_said_build(thread,n,author_kind,author) SELECT thread,n,author_kind,author FROM entries WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER) AND kind='message' AND letter IS NULL ON CONFLICT(thread,n) DO UPDATE SET author_kind=excluded.author_kind,author=excluded.author",
-        v => "legacy said version \{v.stringify()} is incompatible with \{version}",
-      ),
-    )
+    ignore(said_scan(db))
   }
   !has_legacy_said(db) || said_scanned(db)
+}
+
+///|
+fn said_scan(db : @sql.Db) -> Int raise {
+  scan_step(
+    db,
+    "legacy_said_meta",
+    "INSERT INTO legacy_said_build(thread,n,author_kind,author) SELECT thread,n,author_kind,author FROM entries WHERE thread=CAST(?1 AS INTEGER) AND n=CAST(?2 AS INTEGER) AND kind='message' AND letter IS NULL ON CONFLICT(thread,n) DO UPDATE SET author_kind=excluded.author_kind,author=excluded.author",
+    said_incompatible,
+  )
+}
+
+///|
+let said_incompatible : (Json) -> String = v => "legacy said version \{v.stringify()} is incompatible with \{version}"
+
+///|
+/// The keys older writers changed folded back into the said lookup, at most a batch (`legacySaidDrain`).
+fn said_drain(db : @sql.Db) -> Int raise {
+  write(db, () => {
+    let m = meta(db, "legacy_said_meta")
+    if int(m, "version") != version {
+      raise Failure(said_incompatible(get(m, "version")))
+    }
+    let keys = db.all(
+      "SELECT CAST(d.thread AS TEXT) thread,CAST(d.n AS TEXT) n FROM legacy_said_dirty d ORDER BY d.thread,d.n LIMIT ?",
+      [Json::number(batch.to_double())],
+    )
+    for key in keys {
+      let k = [get(key, "thread"), get(key, "n")]
+      ignore(db.run("DELETE FROM legacy_said_build WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)", k))
+      ignore(
+        db.run(
+          "INSERT INTO legacy_said_build(thread,n,author_kind,author) SELECT thread,n,author_kind,author FROM entries WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER) AND kind='message' AND letter IS NULL",
+          k,
+        ),
+      )
+      ignore(db.run("DELETE FROM legacy_said_dirty WHERE thread=CAST(? AS INTEGER) AND n=CAST(? AS INTEGER)", k))
+    }
+    keys.length()
+  })
+}
+
+///|
+/// One batch of the said lookup's upkeep after a handover (`legacySaidMaintenanceStep`): the scan, then the changed
+/// keys; whether nothing is left then.
+pub fn said_maintenance(db : @sql.Db) -> Bool raise {
+  if !has_legacy_said(db) {
+    return true
+  }
+  if !said_scanned(db) {
+    ignore(said_scan(db))
+    return false
+  }
+  said_drain(db) < batch
 }

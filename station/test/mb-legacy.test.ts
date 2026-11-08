@@ -10,7 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { MbProcess, mbReaderBinary } from "../src/read/mb-reader.ts";
 import { legacyEditsMaintenanceStep, legacyMergedReadReady } from "../src/store/legacy-edits-build.ts";
-import { hasLegacySaid, installLegacySaid, legacySaidScanReady, legacySaidStep } from "../src/store/legacy-said-build.ts";
+import { hasLegacySaid, installLegacySaid, legacySaidMaintenanceStep, legacySaidScanReady, legacySaidStep } from "../src/store/legacy-said-build.ts";
 import { repairMergedEditLookup } from "../src/store/schema.ts";
 import { Store } from "../src/store/store.ts";
 
@@ -101,6 +101,35 @@ for (const [kind, prefix] of [["legacy-edits", "legacy_edit"], ["legacy-said", "
       for (const f of [ts, mb]) assert.deepEqual(
         f.store.db.prepare("SELECT thread, n, text FROM merged ORDER BY thread, n").all(),
         ts.store.db.prepare("SELECT thread, n, text FROM merged ORDER BY thread, n").all());
+    } finally {
+      await builder.terminate();
+      ts.close(); mb.close();
+    }
+  });
+}
+
+for (const [kind, prefix, step] of [["legacy-said", "legacy_said", legacySaidMaintenanceStep], ["legacy-edits", "legacy_edit", legacyEditsMaintenanceStep]] as const) {
+  test(`the MoonBit session backfill keeps ${kind} up after a handover as the TypeScript does`, async () => {
+    assert.notEqual(binary, null);
+    const ts = old(), mb = old();
+    const builder = new MbProcess(binary!, ["--builder", "session-backfill", "--db", mb.path]);
+    try {
+      let n = 0, done = false, dirty = 0;
+      for (; n < 40 && !(done && n > 7); n++) {
+        writes(ts, n); writes(mb, n);
+        // (more changed keys than a batch, for the said lookup too)
+        if (n === 5) for (const f of [ts, mb]) f.writer.prepare("UPDATE entries SET author = 'again' WHERE thread IN (?, ?) AND n > 1").run(f.threads[1], f.threads[2]);
+        dirty = Math.max(dirty, (mb.store.db.prepare(`SELECT COUNT(*) AS n FROM ${prefix}_dirty`).get() as { n: number }).n);
+        const answered = new Promise<{ done: boolean; error?: string; fallback?: boolean }>((resolve) => builder.once("message", resolve));
+        builder.postMessage({ kind });
+        const ours = await answered;
+        assert.equal(ours.error, undefined);
+        assert.equal(ours.fallback, undefined);
+        done = step(ts.store.db).done;
+        assert.equal(ours.done, done, `batch ${n}`);
+        assert.equal(tables(mb.store.db, prefix), tables(ts.store.db, prefix), `batch ${n}`);
+      }
+      assert.ok(done && dirty > 64, `${n} batches, ${dirty} changed keys at most`);
     } finally {
       await builder.terminate();
       ts.close(); mb.close();

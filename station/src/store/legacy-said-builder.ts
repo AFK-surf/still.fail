@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { MbBackfill, mbReaderBinary } from "../read/mb-reader.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { releaseStoppedBackfill } from "./backfill.ts";
@@ -17,7 +18,9 @@ type Kind = "legacy-said" | "legacy-agent" | "legacy-login" | "legacy-edits" | "
 type Lookup = { kind: Kind; needsWork: () => boolean; step: () => { done: boolean; visited: number } };
 
 /// Keep an old store readable during handover. One worker takes turns preparing its missing entry lookups, so one
-/// steadily changing lookup cannot starve another and their transactions still yield to foreground writes.
+/// steadily changing lookup cannot starve another and their transactions still yield to foreground writes. By the
+/// MoonBit builder (station/mb, src/legacy) where its program is there, the worker taking over a kind it leaves to it
+/// (`MbBackfill`); a worker of its own given, by that one.
 function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kind[], workerFile?: URL): {
   ready: Promise<boolean>; waitForDecisionSessions: () => Promise<boolean>;
   wake: () => void; close: () => Promise<void>;
@@ -65,7 +68,8 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     finishDecisionSessions(false);
   const path = store.db.location();
   const work = new Fibers("old message lookup", store.clock);
-  let worker: Worker | null = null;
+  const mb = workerFile === undefined ? mbReaderBinary() : null;
+  let worker: Worker | MbBackfill | null = null;
   let retryCancel: (() => void) | null = null, memoryCancel: (() => void) | null = null;
   let allowed = false, handoverFailed = false, closed = false, requested = false, retryMs = 250, next = 0;
   let off: () => void = () => {}, periodicCancel: () => void = () => {};
@@ -128,8 +132,9 @@ function buildLookups(store: Store, previous: Promise<void>, kinds: readonly Kin
     if (path === null) { memoryStep(); return; }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts")
       ? "../sessions/workspace-activity-worker.ts" : "./sessions/workspace-activity-worker.js", import.meta.url);
-    let current: Worker;
-    try { current = new Worker(file, { workerData: { path, priority: store.backfillPriority } }); }
+    let current: Worker | MbBackfill;
+    const thread = () => new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+    try { current = mb !== null ? new MbBackfill(mb, ["--builder", "session-backfill", "--db", path], store.backfillPriority, 20, thread) : thread(); }
     catch (error) {
       log.warn("store", "the old message lookup worker could not start", { error: (error as Error).message });
       retry();
