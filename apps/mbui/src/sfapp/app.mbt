@@ -627,6 +627,7 @@ fn page_view(
   all : Array[Workspace],
   invited : Bool,
   page : Page,
+  barred? : Bool = false,
 ) -> Unit {
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side); the
   // page at the stack's root is so with a page sliding in over it or back off it too (where it stands, not how deep
@@ -648,7 +649,7 @@ fn page_view(
         // (made once: narrow_shell.mbt's Home)
         Home => ()
         Chat(r) => {
-          chat_page(c, src, w, r)
+          chat_page(c, src, w, r, barred~)
           new_chat_leaving(c, src, w, r)
         }
         NewChat => new_chat_page(c, src, w)

@@ -159,6 +159,29 @@ test "a live view-owned reader resubscribes when the client resets" {
 }
 
 ///|
+test "an event of a view reads a topic its graph holds as it is then, held no longer than the graph holds it" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  let src = signal_client_source(client)
+  let owner : Ref[Source?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
+  tree.frame(300.0, 300.0) |> ignore
+  let page = owner.val.unwrap()
+  // (what the page shows reads it in the graph)
+  let graph = @signals.watch(fn() {  })
+  graph.read(fn() { page.topic("doing", {}).get() }) |> ignore
+  let sub = client.peek_topic("doing").unwrap()
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": { "text": "now" } })
+  // (a press on it: outside any build, untracked)
+  assert_eq(@sfbase.text(page.topic("doing", {}).get().value, "text"), "now", msg="the event reads it as it is then")
+  graph.stop()
+  assert_true(client.peek_topic("doing") is None, msg="gone with the graph, the view still alive: the event held none")
+  assert_eq(sent.filter(fn(s) { s.contains("\"unsubscribe\":true") }).length(), 1)
+  tree.dispose()
+}
+
+///|
 test "a view-owned untracked frame read leaves no extra manual hold" {
   new_run()
   let client = @core.Client::new(fn(_) {  })

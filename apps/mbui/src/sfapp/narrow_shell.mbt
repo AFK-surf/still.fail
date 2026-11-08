@@ -196,13 +196,13 @@ fn narrow_island_key(src : Source) -> String {
 ///|
 /// Page `page` of the narrow shell's stack as its island builds it: picked words with a mouse (a finger holds to pick:
 /// pick.mbt), the pictures it waits for said afresh (image_item, video_item).
-fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
+fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barred? : Bool = false) -> Unit {
   @sfbase.held_pictures_waiting.val = false
   // (the page is its island, kept as its nodes by what it reads and its key (narrow_page_key): no part of its own)
   let built = fn() {
     let whole = c.box(style=page_whole, fn() {
       let (now, all, _, invited) = workspace_in_view(src)
-      page_view(c, src, now.unwrap_or(w), all, invited, page)
+      page_view(c, src, now.unwrap_or(w), all, invited, page, barred~)
     })
     @motion.scope(c, whole, bottom=true)
   }
@@ -490,18 +490,21 @@ fn narrow_made_as(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) {
+          fn(v, _page, _under, stint, k) {
             @sfbase.chat_page_made(
               v,
               src,
               k,
               fn(c, s, p) {
                 match workspace_in_view(s).0 {
-                  Some(w) => narrow_page_held(c, s, w, p)
+                  Some(w) => narrow_page_held(c, s, w, p, barred=true)
                   None => ()
                 }
               },
               key=fn() { narrow_island_key(src) },
+              // (its bar the page's node's, over its old view: chat_bar_node)
+              over=chat_bar_node,
+              stint~,
             )
           },
         ),

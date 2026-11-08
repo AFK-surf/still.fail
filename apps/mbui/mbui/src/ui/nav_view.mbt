@@ -68,7 +68,7 @@ fn[P] Nav::top_beside(self : Nav[P]) -> (NavPage[P], NavPage[P]?) {
 
 ///|
 /// Whether page `serial` shows: the top, or the one beside it as one moves (read: told as it changes).
-fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
+pub fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
   self.said.get() |> ignore
   self.shown.get() |> ignore
   let (top, beside) = self.top_beside()

@@ -145,7 +145,7 @@ pub fn chat_open_is_pending(Int32) -> Bool
 
 pub fn chat_page_is(Page) -> Bool
 
-pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String) -> Unit
+pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String, over? : (@view.View, Source, () -> Page?, () -> Int32) -> Unit, stint? : () -> Int32) -> Unit
 
 pub fn chat_params(ChatRef) -> Map[String, @json.Json]
 
@@ -1017,7 +1017,7 @@ pub let note_ground : Int64
 
 pub let note_ink : Int64
 
-pub fn note_list(@ui.Ctx, Int32, String, Double, Double) -> Unit
+pub fn note_list(@ui.Ctx, Int32, String, Double, Double, slot? : Int32) -> Unit
 
 pub let note_muted : Int64
 
@@ -1721,6 +1721,8 @@ pub let viewer : @signals.Signal[Viewer?]
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
 pub fn viewer_moved(String, Array[ChatDay]) -> Bool
+
+pub fn viewer_flight_slot(@view.View, Source, Int32, () -> (Double, Double)) -> Unit
 
 pub fn viewer_node(@view.View, Source, () -> (Double, Double)) -> Unit
 

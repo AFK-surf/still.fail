@@ -57,8 +57,8 @@ fn unread_lead() -> Double {
 }
 
 ///|
-/// The chat's page.
-fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+/// The chat's page; `barred`: its bar the page's node's over it (chat_bar_node), none here.
+fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, barred? : Bool = false) -> Unit {
   let t = @sf.theme()
   let (view, list, error) = view_of_chat(src, r)
   // (named to know where it is, not pressed: what is pressed in it is what holds it's)
@@ -84,7 +84,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       None => {
         // until the core has it, already a chat's page: its bar with the title it was opened by (a row's, a new
         // chat's), the messages to come in their bones
-        bar_frame(c, r.title, fn() {  }, fn() {  }, false)
+        if !barred {
+          bar_frame(c, r.title, fn() {  }, fn() {  }, false)
+        }
         let failed = match error {
           Some(e) =>
             Some(
@@ -122,6 +124,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
           lead=unread_lead(),
           bar=bar_foot(),
           foot=list_foot(),
+          // (its bar the page's node's: a picture flying from it drawn under that bar in the page's slot)
+          slotted=barred,
         )
         let foot = c.layer(fn() { chat_foot(c, src, w, r, Some(v)) })
         // (over the viewer's picture as it flies from the list or back into it)
@@ -131,9 +135,20 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         // and the files sent with them, from their tiles to their places (flight.mbt)
         flight_files(c, draft_key(r))
         // the bar over all of it (@ui.Stratum's Bar): what flies to the list goes under it, as the list does
-        let bar = c.layer(fn() { chat_bar(c, src, w, r, v) })
-        c.stratum(bar, Bar)
-        over_flight(c, bar)
+        if !barred {
+          let bar = c.layer(fn() { chat_bar(c, src, w, r, v) })
+          c.stratum(bar, Bar)
+          over_flight(c, bar)
+        } else {
+          // (the bar's room, the page node's bar laid over it (chat_bar_node): what runs under it keeps clear of it,
+          // as of chat_bar's; the page's Bar all the same, so that what flies in it lands under it, in the page and
+          // cut to it, not at the frame's end over whatever is beside the page as it goes)
+          let room = c.layer(fn() {
+            let room = c.box(style=@ui.style(w=Full, h=Fixed(top_bar_h())), fn() {  })
+            c.floats_over(room)
+          })
+          c.stratum(room, Bar)
+        }
         // a passage picked: its handles and its bar over the list (pick.mbt)
         pick_layer(c, src, r)
       }
