@@ -141,6 +141,16 @@ fn main {
         { "session": String(session), .. } => Some(@upjobs.step(db, session))
         _ => None
       }))
+    (Some("widget-sources"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "widget source", (db, ask) => match ask {
+        { "thread": Number(thread, ..), .. } => Some(@widgets.step(db, thread.to_int64()))
+        _ => None
+      }))
+    (Some("card-posts"), Some(db), _) =>
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "card post", (db, ask) => match ask {
+        { "thread": Number(thread, ..), .. } => Some(@cards.step(db, thread.to_int64()))
+        _ => None
+      }))
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
         let reader = { host, db: data + "/stillfail.db", writer: None }
@@ -153,7 +163,7 @@ fn main {
         }
       })
     _ => {
-      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs --db <file>")
+      @host.note("usage: stillfail-reader --data <dir> | --builder archive-marks|session-bindings|session-up-jobs|widget-sources|card-posts --db <file>")
       2
     }
   }
