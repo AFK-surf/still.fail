@@ -9,7 +9,8 @@ import { MbProcess } from "./mb-reader.ts";
 /// the builder here takes for it around each batch it asks, and gives back when the batch is answered; or (`lazy`) it
 /// asks for the permit itself when it is about to write, as a worker that reads without it takes it: a line
 /// `{"take": true}` answered `{"permit": …}`, `{"give": true}` when it is done with it before its answer. A lazy one
-/// is told of what is let go (`cancel`), as a worker is.
+/// is told of what is let go (`cancel`), as a worker is. One that answers `{"fallback": true}` (a store in a state it
+/// does not build for, such as a legacy lookup) is let go, and the worker asked instead from then on.
 export type MbBuilder = { binary: string; args: string[]; lazy?: boolean };
 /// What stands for a MoonBit builder in the permit (a worker's thread id there): never a thread's.
 let nextOwner = 0x40000000;
@@ -27,7 +28,7 @@ export class RequestedBuilder<K extends number | string> {
   readonly #message: ((item: K, cancel: boolean) => Record<string, unknown>) | undefined;
   readonly #waiting = new Map<K, Set<Waiter>>();
   #worker: Worker | MbProcess | null = null;
-  readonly #mb: MbBuilder | null;
+  #mb: MbBuilder | null;
   /// The MoonBit builder's own in the permit, and whether it holds it for the batch it was asked.
   #owner = 0;
   #holding = false;
@@ -63,7 +64,16 @@ export class RequestedBuilder<K extends number | string> {
 
   /// The MoonBit builder's answer: the permit given back, and a batch that did not finish everything followed by the
   /// pause a worker makes before it answers.
-  #answeredMb(process: MbProcess, result: { done: boolean; error?: string; take?: boolean; give?: boolean }): void {
+  #answeredMb(process: MbProcess, result: { done: boolean; error?: string; take?: boolean; give?: boolean; fallback?: boolean }): void {
+    if (result.fallback === true) {
+      if (this.#holding) { this.#holding = false; giveBackfill(this.#priority(), this.#owner); }
+      log.info("readers", "a MoonBit builder left this store to the worker", { args: this.#mb?.args.slice(0, 2) ?? [] });
+      this.#mb = null;
+      this.#worker = null;
+      this.#current = null;
+      void process.terminate();
+      return void this.#pump();
+    }
     if (result.take === true) {
       if (!this.#holding) this.#holding = takeBackfill(this.#priority(), this.#owner);
       return void process.postMessage({ permit: this.#holding });
