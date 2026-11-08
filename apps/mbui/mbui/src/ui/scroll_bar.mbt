@@ -298,16 +298,38 @@ fn Ctx::bar_owner(self : Ctx, id : Int) -> (Bar, Double, Theme)? {
 }
 
 ///|
-/// The bars as the hand has them (near the pointer, held, let go), told as that changes (Ctx::bar_moved): what draws
-/// them (Ctx::bar_at, as the frame is painted) reads it, painted again as it changes.
-// kept across runs: only counts on
-let bars_said : @signals.Signal[Int] = @signals.signal(0)
+/// Each bar as the hand has it (the pointer near it, its thumb held), by the id of what it is for, told as that
+/// changes (Ctx::bar_moved): what draws one (Ctx::side_bar, Ctx::bar_where, as the frame is painted) reads its own,
+/// painted again as it changes, not as another's does.
+// kept across runs: put back as a run begins (reset_globals)
+let bars_hand : Map[Int, @signals.Signal[(Bool, Bool)]] = {}
+
+///|
+/// How the hand has the bar of `id` (near, held), read: its signal made as it is first read.
+fn Ctx::bar_hand(self : Ctx, id : Int) -> (Bool, Bool) {
+  let s = match bars_hand.get(id) {
+    Some(s) => s
+    None => {
+      let now = match self.bar_owner(id) {
+        Some((b, _, _)) => (b.near, b.held)
+        None => (false, false)
+      }
+      let s = @signals.signal(now, same=fn(a, b) { a == b })
+      bars_hand[id] = s
+      s
+    }
+  }
+  s.get()
+}
 
 ///|
 /// What shows the bar of `id` (its list's or box's motion) told again: when it is at rest has changed. What it was
 /// said to be stays (a fling, a glide: what moves with the bar).
 fn Ctx::bar_moved(self : Ctx, id : Int) -> Unit {
-  bars_said.set(@signals.untracked(fn() { bars_said.get() }) + 1)
+  match (bars_hand.get(id), self.bar_owner(id)) {
+    (Some(s), Some((b, _, _))) => s.set((b.near, b.held))
+    _ => ()
+  }
   let again = fn(who : Mover, m : &Moving, what : String) {
     let mut said = what
     for e in self.movers {
@@ -370,8 +392,8 @@ fn Ctx::side_bar(
   off : Double,
   floated : () -> (Double, Double),
 ) -> BarAt? {
-  // (where the hand has the bars: read so)
-  bars_said.get() |> ignore
+  // (where the hand has its bar: read so)
+  self.bar_hand(id) |> ignore
   let ((cx0, cy0, cx1, cy1), (_, r_tr, r_br, _), _) = clip_at(clip_top())
   let x0 = dmax(x, cx0)
   let y0 = dmax(y, cy0)
@@ -412,8 +434,8 @@ fn Ctx::side_bar(
 /// Where the bar of what scrolls in node `n` runs (Ctx::bar_at), nothing kept of it: what its thumb is a target where
 /// (Ctx::bar_target), as the frame's targets are found.
 fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
-  // (where the hand has the bars: read so)
-  bars_said.get() |> ignore
+  // (where the hand has its bar: read so)
+  self.bar_hand(n.id) |> ignore
   let side = fn(content : Double, off : Double) -> BarAt? {
     self.side_bar(n.id, n.x, n.y, n.fw, n.fh, content, off, fn() { self.floated(Some(n), n.x, n.y, n.x + n.fw, n.y + n.fh) })
   }

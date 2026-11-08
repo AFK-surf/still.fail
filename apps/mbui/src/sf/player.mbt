@@ -1405,7 +1405,7 @@ fn desk_play_controls(
       }
       // what left the row, in its ⋯ (there only while something did), opened over it as the speeds are
       let more = key + "/more"
-      let open = menu_now() == more
+      let open = menu_is(more)
       c.box(more=true, fn() {
         media_key(c, more, "more", t("web-main.menu.more"), on, small=true, lit=open, ink~) |> ignore
         // (pressed as it is let go, while it can be: open or not as it is then)

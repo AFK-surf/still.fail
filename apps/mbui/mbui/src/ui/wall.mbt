@@ -4,12 +4,13 @@
 // lets it be read only as a source's `now`).
 
 ///|
-/// How many times the time of day was set otherwise than its clock went on (Tester::set_wall: a run replayed at the time
-/// it was made, as each of its steps was taken), read by what reads it as it is built: built again as it is, kept as it
-/// was drawn (a list's row, a part: kept_part.mbt) or not. (Unread, what showed it drew the time of day of before:
-/// a clock's second, its row's width, until something else built it again.)
-// kept across runs: it only counts on
-let wall_moved : @signals.Signal[Int] = @signals.signal(0)
+/// How far a Tester's time of day is ahead of its frames' clock (its fake host's `wall`, Tester::set_wall: a run
+/// replayed at the time it was made, as each of its steps was taken), read by what reads the time of day as it is
+/// built: built again as it is set otherwise, kept as it was drawn (a list's row, a part: kept_part.mbt) or not.
+/// (Unread, what showed it drew the time of day of before: a clock's second, its row's width, until something else
+/// built it again.) A host's own never changes it.
+// kept across runs: said as each Tester begins (Tester::new) and as its test sets it
+let wall_ahead : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
 /// What a Tester's time of day is at its start, unless the test sets it: 2026-09-21 14:13:20 UTC.
@@ -25,7 +26,7 @@ pub fn wall_ms() -> Double {
   // (read as a view is built: said where a frame of its looks alone parts from it built whole, frame_watch.mbt)
   if @signals.active_sub() is Some(_) {
     wall_read.val = true
-    wall_moved.get() |> ignore
+    wall_ahead.get() |> ignore
   }
   h_wall_ms()
 }
@@ -41,7 +42,7 @@ fn clock_at_wall(ms : Double) -> Double {
   // (read as a view is built: what reads it reads the time of day, as wall_ms)
   if @signals.active_sub() is Some(_) {
     wall_read.val = true
-    wall_moved.get() |> ignore
+    wall_ahead.get() |> ignore
   }
   h_clock_at_wall(ms)
 }
@@ -59,8 +60,6 @@ pub fn utc_offset_min(at_ms : Double) -> Int {
 pub fn Tester::set_wall(self : Tester, ms : Double) -> Unit {
   let wall = ms - self.fake.time
   // (what shows the time of day built again where it changed: a clock's words, a list's row kept as drawn too)
-  if wall != self.fake.wall {
-    wall_moved.set(@signals.untracked(fn() { wall_moved.get() }) + 1)
-  }
   self.fake.wall = wall
+  wall_ahead.set(wall)
 }

@@ -144,6 +144,8 @@ fn reset_globals() -> Unit {
   pagers.clear()
   code_fields.clear()
   code_clears.clear()
+  bars_hand.clear()
+  perf_bytes_said.set(-1.0)
   image_data.clear()
   image_vector_drawers.clear()
   moving_images.clear()
@@ -466,6 +468,7 @@ pub fn Tester::new(
     f.image_sizes[im.0] = (im.1, im.2)
   }
   fake.val = Some(f)
+  wall_ahead.set(f.wall)
   // (what the app asks of its host directly, the fake's too: fake_host.mbt)
   @hostapi.set_host(f)
   reset_globals()

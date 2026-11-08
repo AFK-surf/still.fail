@@ -94,7 +94,7 @@ pub fn about_node(
               on,
               fn(now) {
                 @hostapi.set_perf(now)
-                perf_turned.set(@signals.untracked(fn() { perf_turned.get() }) + 1)
+                perf_turned.set(Some(now))
               },
               note=fn() {
                 @sf.t(
@@ -193,10 +193,10 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
 let version_bar_room : Double = 9.0
 
 ///|
-/// How many times 性能记录 was turned here: what its row reads, so it is built again as it is (the host's state is no
-/// signal).
-// kept across runs: only counts on
-let perf_turned : @signals.Signal[Int] = @signals.signal(0)
+/// What 性能记录 was last turned to here (None: not turned here yet): what its row reads, so it is built again as it is
+/// turned otherwise (the host's state is no signal).
+// kept across runs: said as it is turned; changelog_reset puts it back
+let perf_turned : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
 
 ///|
 /// The changelog's part in view ("" the first), and the news last told read (as the core says it: told once, not again
@@ -212,6 +212,7 @@ let changelog_seen : Ref[String] = Ref("")
 fn changelog_reset() -> Unit {
   changelog_part.set("")
   changelog_seen.val = ""
+  perf_turned.set(None)
 }
 
 ///|

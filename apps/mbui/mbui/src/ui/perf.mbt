@@ -281,21 +281,22 @@ fn perf_log(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
 }
 
 ///|
-/// How many times the host said it wrote to the performance record (hostcall.mbt's on_outside: outside_perf).
-// kept across runs: counted on (what reads it follows it), never put back
-let perf_written : @signals.Signal[Int] = @signals.signal(0)
+/// How many bytes the performance record's files hold as the host last said it wrote them (hostcall.mbt's on_outside:
+/// outside_perf; -1: not said yet): what reads it (perf_size) follows a write that changed it, none that did not.
+// kept across runs: said as the host tells a write, put back as a run begins (reset_globals)
+let perf_bytes_said : @signals.Signal[Double] = @signals.signal(-1.0, same=fn(a, b) { a == b })
 
 ///|
-/// The host wrote to the performance record: what reads how much it holds told (perf_size).
+/// The host wrote to the performance record: how much it holds now, told what reads it (perf_size).
 fn perf_told() -> Unit {
-  perf_written.set(@signals.untracked(fn() { perf_written.get() }) + 1)
+  perf_bytes_said.set(@hostapi.perf_size())
 }
 
 ///|
 /// How many bytes the performance record's files hold (@hostapi.perf_size), as the host last said it wrote them: what
-/// reads it follows each write the host tells (outside_perf), nothing asked of the host on a clock; read again where
-/// the record is turned on or off (what turns it says so).
+/// reads it follows each write the host tells (outside_perf) that changed it, nothing asked of the host on a clock;
+/// read again where the record is turned on or off (what turns it says so).
 pub fn perf_size() -> Double {
-  perf_written.get() |> ignore
+  perf_bytes_said.get() |> ignore
   @hostapi.perf_size()
 }
