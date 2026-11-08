@@ -453,9 +453,9 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     None => ()
     Some(s) => {
       let id = c.id("msg-time/" + key)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         absolute_times.val = !absolute_times.val
-      }
+      })
       @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
       c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
@@ -729,9 +729,9 @@ fn is_viz(name : String) -> Bool {
 fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   let station = here.station
   let id = c.id("notice/" + m.ts)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     notices_open[m.ts] = !notices_open.get(m.ts).unwrap_or(false)
-  }
+  })
   let open = notices_open.get(m.ts).unwrap_or(false)
   let failed = m.notice_failed
   let said = m.notice_words

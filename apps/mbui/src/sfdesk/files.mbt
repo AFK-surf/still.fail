@@ -183,9 +183,9 @@ pub fn files_shell(
         ) {
         show("split", None, None, None)
       }
-      if @sf.icon_button(c, "plus", key="files/new-tab", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.files.newTab")) {
+      @sf.icon_button(c, "plus", key="files/new-tab", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.files.newTab"), on_press=fn() {
         show("open", Some(here), None, None)
-      }
+      }) |> ignore
     })
     |> ignore
     // the tab shown: a side each, split the one in front lined at its top

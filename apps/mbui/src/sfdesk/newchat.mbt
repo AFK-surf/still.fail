@@ -51,9 +51,9 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         c.layer(fn() {
           c.box(style=if @sf.in_pane() { new_files_bar_tape() } else { new_files_bar_wide(files) }, id=bar, fn() {
-            if @sf.icon_button(c, "folder", key="new/files", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.files")) {
+            @sf.icon_button(c, "folder", key="new/files", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.files"), on_press=fn() {
               toggle()
-            }
+            }) |> ignore
             // (its end by the window's while the page is moved aside for the sidebar shown a while)
             page_bar_end(c)
           })
@@ -167,9 +167,9 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
     c.box(style=if side_on_tape.val || @sf.in_pane() { side_bar_tape() } else { side_bar() }, fn() {
       c.box(style=side_tab_list, fn() {
         let close = c.id("new/files-tab-close")
-        if c.clicked(close) {
+        c.on_press(close, fn() {
           new_files_set(src, w.id, false)
-        }
+        })
         c.box(style=side_tab_in_front, fn() {
           @sf.icon(c, "folder", size=new_tab_icon, color=@sf.theme().p.text) |> ignore
           c.text(@sf.t("web-pages.chat.files"), style=side_tab_front) |> ignore
@@ -182,9 +182,9 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
         |> ignore
       })
       |> ignore
-      if @sf.icon_button(c, "panel-close", key="new/files-close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
+      @sf.icon_button(c, "panel-close", key="new/files-close", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close", on_press=fn() {
         new_files_set(src, w.id, false)
-      }
+      }) |> ignore
     })
     |> ignore
     c.box(style=side_pane, fn() { files_tab(c, src, w.id, "new:" + w.id, address) }) |> ignore

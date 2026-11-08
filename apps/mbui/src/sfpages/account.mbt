@@ -98,9 +98,9 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           } else {
             @sf.t("android-settings.me.signOutOnly")
           }
-          if @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost) {
+          @sf.button(c, words, key="sign-out/" + here.sub, tone=Ghost, on_press=fn() {
             sign_out(here.sub, here.email)
-          }
+          }) |> ignore
         },
       )
       |> ignore
@@ -111,15 +111,15 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
         // each with their face, changed by pressing it as the one in view's
         let lead = fn() { own_face(c, core, sub, email, shown, text(Some(a), "picture")) }
         @sf.link_row(c, "", email, goes=false, lead~, control=fn() {
-          if @sf.button(c, @sf.t("android-settings.me.signOut"), key="sign-out/" + sub, tone=Ghost) {
+          @sf.button(c, @sf.t("android-settings.me.signOut"), key="sign-out/" + sub, tone=Ghost, on_press=fn() {
             sign_out(sub, email)
-          }
+          }) |> ignore
         })
         |> ignore
       }
-      if @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false, lead=fn() { @sf.row_lead_mark(c, "plus") }) {
+      @sf.link_row(c, "add-account", @sf.t("android-settings.me.addAccount"), chevron=false, lead=fn() { @sf.row_lead_mark(c, "plus") }, on_press=fn() {
         (core.sign_in)()
-      }
+      }) |> ignore
     })
   })
   blocks.push(fn() {
@@ -130,9 +130,9 @@ pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   // deleting the account in view, at the foot, in red
   blocks.push(fn() {
     @sf.group(c, fn() {
-      if @sf.link_row(c, "delete-account", @sf.t("android-settings.me.delete"), danger=true, chevron=false) {
+      @sf.link_row(c, "delete-account", @sf.t("android-settings.me.delete"), danger=true, chevron=false, on_press=fn() {
         delete()
-      }
+      }) |> ignore
     })
   })
   @sf.page(c, on_back=core.pop, frame~, "me", @sf.t("android-settings.me.title"), blocks)
@@ -249,7 +249,7 @@ fn devices_list(c : @ui.Ctx, core : Core, here : Here, list : Array[Json]) -> Un
         } else {
           Some(fn() {
             let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
-            if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
+            @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking, on_press=fn() {
               @settings.act(
                 core,
                 @sf.t("web-pages.settings.account.revoke"),
@@ -257,7 +257,7 @@ fn devices_list(c : @ui.Ctx, core : Core, here : Here, list : Array[Json]) -> Un
                 obj([("id", str(id)), ("account", str(here.sub))]),
                 done=@sf.t("web-pages.settings.account.revoked"),
               )
-            }
+            }) |> ignore
           })
         },
       )

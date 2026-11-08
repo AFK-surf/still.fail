@@ -388,9 +388,9 @@ fn load_of(src : Source, station : String, port : Int, fixed : Bool) -> Json? {
 fn load_key(c : @ui.Ctx, src : Source, station : String, port : Int, load : Json?) -> Unit {
   let t = @sf.theme()
   let ring = c.id("service/load")
-  if c.clicked(ring) {
+  c.on_press(ring, fn() {
     service_load_panel(src, station, port, Of(ring))
-  }
+  })
   let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
   // (in words, to a screen reader)
   c.box(style=ring_box.then(@ui.style(w=Fixed(t.bars.key), h=Fixed(t.bars.key))), id=ring, label=load_label(load), fn() {
@@ -470,13 +470,13 @@ fn size_said(p : ServicePage) -> String {
 fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
   let t = @sf.theme()
   let sid = c.id("service/size")
-  if c.clicked(sid) {
+  c.on_press(sid, fn() {
     if p.moving {
       p.moving = false
     } else {
       service_sizes_panel(service_key(p.station, p.job), Of(sid))
     }
-  }
+  })
   let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
     @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
     // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
@@ -887,7 +887,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
   c.box(style=sizes_room, fn() {
     let option = fn(k : String, checked : Bool, name : String, note : String, v : Viewport?) {
       let id = c.id("service/size/" + k)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         match p {
           Some(x) => {
             // a size chosen is fitted anew; the page no longer moved by a finger
@@ -899,7 +899,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
           None => ()
         }
         close()
-      }
+      })
       c.box(style=size_option.then(@sf.panel_row_in()).then(@ui.style(min_h=Fixed(@sf.theme().items.least))), id~, fn() {
         c.box(style=@ui.style(w=Fixed(r.check), align=ACenter), fn() {
           if checked {
@@ -1124,17 +1124,19 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
       None => false
     }
     let turn = c.id("service/custom-turn")
-    if turnable && c.clicked(turn) {
-      match p.viewport {
-        Some({ width, height: Some(h) }) => {
-          let v : Viewport = { width: h, height: Some(width) }
-          p.view.fit_now()
-          p.viewport = Some(v)
-          keep_size(key, Some(v))
+    c.on_press(turn, fn() {
+      if turnable {
+        match p.viewport {
+          Some({ width, height: Some(h) }) => {
+            let v : Viewport = { width: h, height: Some(width) }
+            p.view.fit_now()
+            p.viewport = Some(v)
+            keep_size(key, Some(v))
+          }
+          _ => ()
         }
-        _ => ()
       }
-    }
+    })
     let tb = c.box(style=if turnable { custom_turn } else { custom_turn_off }, id=if turnable { turn } else { 0 }, fn() {
       @sf.icon(c, "landscape", size=custom_turn_icon, color=t.p.text) |> ignore
     })

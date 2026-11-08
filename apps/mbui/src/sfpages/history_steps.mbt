@@ -620,13 +620,13 @@ fn thought_md(c : @ui.Ctx, rk : String, content : Json?) -> Unit {
 fn one_line(c : @ui.Ctx, key : String, lead : () -> Unit, line : String, tone : String, whole : () -> Unit) -> Unit {
   let id = c.id("history-one/" + key)
   let open = steps_own.opened.contains(key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     if open {
       steps_own.opened.remove(key)
     } else {
       steps_own.opened[key] = true
     }
-  }
+  })
   let hot = c.lit(id)
   c.box(style=h_one.then(@sf.row_least_h()), id~, fn() {
     lead()
@@ -668,13 +668,13 @@ fn fold(c : @ui.Ctx, key : String, lines : Int, line : Double, body : () -> Unit
     c.box(style=room, fn() { c.box(style=h_fold_inner, id=inner, body) |> ignore }) |> ignore
     if long {
       let id = c.id("history-fold-toggle/" + key)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         if open {
           steps_own.opened.remove(key)
         } else {
           steps_own.opened[key] = true
         }
-      }
+      })
       let more = dmax(1.0, ((tall - most) / line).round()).to_int()
       let words = if open {
         @sf.t("web-main.fold")
@@ -744,14 +744,14 @@ fn place_view(c : @ui.Ctx, station : String, key : String, place : Json?) -> Uni
   let session = text(place, "session")
   let goes = url != "" || session != ""
   if goes {
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       if url != "" {
         @sfbase.open_slack(text(place, "app"), url) |> ignore
       } else {
         @sfbase.history_push()
         app.nav.push(Chat({ station, session, title: text(place, "name"), station_name: "" }))
       }
-    }
+    })
   }
   let hot = goes && c.lit(id)
   c.box(style=if hot { h_place_hot } else { h_place }, id~, fn() {
@@ -775,7 +775,7 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
   let id = c.id("history-slack/" + key)
   if !saying {
     // its menu, the presenters' (a sheet with a finger short of Large, else at the name)
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       let words = if bound { @sf.t("web-main.history.notMe") } else { @sf.t("web-main.history.isMe") }
       @sf.menu(
         [
@@ -792,7 +792,7 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
         ],
         from=Of(id),
       )
-    }
+    })
   }
   c.box(style=h_person, id~, fn() {
     c.rich([@ui.span(name, underline=c.lit(id) && !saying)], style=h_strong) |> ignore
@@ -901,13 +901,13 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
   let gk = ik + "/group"
   let open = steps_own.opened.contains(gk)
   let id = c.id("history-group/" + gk)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     if open {
       steps_own.opened.remove(gk)
     } else {
       steps_own.opened[gk] = true
     }
-  }
+  })
   let failures = number(g, "failures").to_int()
   let pending = number(g, "pending").to_int()
   let rows = items(g, "rows")
@@ -1006,13 +1006,13 @@ fn opened(
   ignore(failed)
   let id = c.id("history-step/" + rk)
   let open = steps_own.opened.contains(rk)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     if open {
       steps_own.opened.remove(rk)
     } else {
       steps_own.opened[rk] = true
     }
-  }
+  })
   c.box(style=h_step, fn() {
     let b = c.box(style=h_step_summary.then(@sf.row_least_h()), id~, summary)
     c.semantics(b, Button, id~, expanded=open)

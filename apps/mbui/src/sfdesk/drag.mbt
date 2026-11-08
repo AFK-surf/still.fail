@@ -688,10 +688,10 @@ fn clash_body(c : @ui.Ctx) -> Unit {
       let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
       if left.length() > 1 {
         let id = c.id("files-clash/all")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           a.all = !a.all
           clash_changed()
-        }
+        })
         c.box(style=fclash_all, id~, fn() {
           @sf.icon(c, if a.all { "check-circle" } else { "square" }, size=drag_icon, color=if a.all { t.p.accent } else { t.p.muted })
           |> ignore
@@ -709,15 +709,15 @@ fn clash_body(c : @ui.Ctx) -> Unit {
 fn clash_foot(c : @ui.Ctx) -> Unit {
   match clash_now() {
     (Some(a), Some(n)) => {
-      if @sf.button(c, @sf.t("web-pages.files.skip"), key="files-clash/skip", tone=Ghost) {
+      @sf.button(c, @sf.t("web-pages.files.skip"), key="files-clash/skip", tone=Ghost, on_press=fn() {
         clash_answer(a, n, "skip")
-      }
-      if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key="files-clash/keep") {
+      }) |> ignore
+      @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key="files-clash/keep", on_press=fn() {
         clash_answer(a, n, "keep")
-      }
-      if @sf.button(c, @sf.t("web-pages.drive.replace"), key="files-clash/replace", tone=Primary, icon="trash") {
+      }) |> ignore
+      @sf.button(c, @sf.t("web-pages.drive.replace"), key="files-clash/replace", tone=Primary, icon="trash", on_press=fn() {
         clash_answer(a, n, "replace")
-      }
+      }) |> ignore
     }
     _ => ()
   }

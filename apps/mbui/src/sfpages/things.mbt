@@ -305,9 +305,9 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
   let a = @sfbase.attachment_of(field(t, "file").unwrap_or(Json::object({})))
   let owner = if a.owner != "" { a.owner } else { r.session }
   let id = c.id("things/tile/" + text(t, "key"))
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sfbase.open_preview(r.station, owner, a, steps=InChat(Some(thread), r.session))
-  }
+  })
   thing_menu(c, id, number(t, "seq"), "", away)
   let video = file_kind(a.name) == "video"
   let picture = if video {
@@ -371,14 +371,14 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
       }
     }
   }
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     if kind == "files" {
       let a = @sfbase.attachment_of(field(t, "file").unwrap_or(Json::object({})))
       @sfbase.open_preview(r.station, if a.owner != "" { a.owner } else { r.session }, a)
     } else {
-      c.tell("things/open", fn() { @sfbase.open_link_in(src, url) })
+      @sfbase.open_link_in(src, url)
     }
-  }
+  })
   thing_menu(c, id, seq, url, away)
   // pointed at, a link's card over it, a pull request's as a message's link to it shows it (peeks.mbt)
   if kind != "files" {
@@ -386,9 +386,9 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
     web_peek(c, src, r.station, url, name, id, side=Left, peek=text(t, "peek"))
   }
   let show = c.id("things/show/" + kind + "/" + text(t, "key"))
-  if c.clicked(show) {
+  c.on_press(show, fn() {
     away(seq)
-  }
+  })
   let b = c.box(style=things_row, id~, fn() {
     c.box(style=things_row_mark, fn() {
       match kind {
@@ -405,9 +405,9 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
       }
     })
     |> ignore
-    if @sf.icon_button(c, "chat", key="things/show/" + kind + "/" + text(t, "key"), round=true, label=@sf.t("web-main.things.show")) {
+    @sf.icon_button(c, "chat", key="things/show/" + kind + "/" + text(t, "key"), round=true, label=@sf.t("web-main.things.show"), on_press=fn() {
       away(seq)
-    }
+    }) |> ignore
   })
   c.semantics(b, Button, id~, label=name)
 }

@@ -306,9 +306,9 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       for i, r in rows {
         let (label, _, target) = r
         let id = c.id("files-goto/row/" + label)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           open(target)
-        }
+        })
         if c.lit(id) {
           go.at.set(i)
         }
@@ -375,7 +375,7 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
       _ => ()
     }
   }
-  if c.clicked(chip) {
+  c.on_press(chip, fn() {
     front_it()
     // the stations with a drive (this machine, the one shown, one away said beside each), the one shown chosen: the
     // library's pick under it
@@ -397,7 +397,7 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
     })
     @sf.pick(@sf.t("web-pages.files.switchNote"), choices, at.station, picked, from=Of(chip))
     go.switching.set(@sf.last_presented())
-  }
+  })
   let b = c.box(style=switch_button, id=chip, fn() {
     @sf.station_icon(c, f.st.emoji, f.st.icon, switch_icon, t.p.muted, here=f.st.station == here)
     c.text(f.st.name, style=switch_words) |> ignore

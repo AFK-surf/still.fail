@@ -1078,9 +1078,9 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
   let t = @sf.theme()
   let head = fn(by : String, words : String, style : @ui.Style) {
     let id = c.id("files/head/" + by)
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       on_sort(by)
-    }
+    })
     let on = a.by == by
     let b = c.box(style=style.then(@ui.style(min_h=Fixed(@ui.room_least()))), id~, fn() {
       c.text(words, style=if on || c.lit(id) { head_words_on } else { head_words }) |> ignore
@@ -1118,19 +1118,21 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
     dv_pump(src)
   }
   let keys = fn() {
-    if u.state.get() == "failed" && @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry")) {
-      u.state.set("waiting")
-      u.error.set("")
-      u.sent.set(0)
-      dv_pump(src)
+    if u.state.get() == "failed" {
+      @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry"), on_press=fn() {
+        u.state.set("waiting")
+        u.error.set("")
+        u.sent.set(0)
+        dv_pump(src)
+      }) |> ignore
     }
-    if @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel")) {
+    @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel"), on_press=fn() {
       ups.uploads.retain(fn(x) { x.serial != u.serial })
       if u.state.get() == "going" {
         ups.pumping.set(false)
         dv_pump(src)
       }
-    }
+    }) |> ignore
   }
   c.box(style=entry_room, fn() {
     c.box(style=entry_plain, fn() {
@@ -1178,12 +1180,12 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
                 c.box(style=upload_ask, fn() {
                   c.box(drop=upload_drop_note, fn() { c.text(@sf.t("web-pages.drive.taken"), style=items.meta) |> ignore })
                   |> ignore
-                  if @sf.button(c, @sf.t("web-pages.drive.replace"), key=k + "/replace", tone=Ghost) {
+                  @sf.button(c, @sf.t("web-pages.drive.replace"), key=k + "/replace", tone=Ghost, on_press=fn() {
                     replace()
-                  }
-                  if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost) {
+                  }) |> ignore
+                  @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost, on_press=fn() {
                     dv_keep_both(src, u)
-                  }
+                  }) |> ignore
                 })
                 |> ignore
               "failed" =>
@@ -1224,9 +1226,9 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
 /// An answer to what is asked of a file going up, under its name: its words in the link's ink, 600.
 fn upload_answer(c : @ui.Ctx, key : String, words : String, act : () -> Unit) -> Unit {
   let id = c.id(key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     act()
-  }
+  })
   let b = c.box(style=upload_answer_box, id~, fn() { c.text(words, style=@sf.theme().items.meta.then(upload_answer_words)) |> ignore })
   c.semantics(b, Button, id~, label=words)
 }

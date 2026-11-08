@@ -75,10 +75,10 @@ pub fn add_favorite_folder(src : Source, ws : String, stations : Array[DvStation
           c.box(style=roots_list.then(list), fn() {
             for s in stations {
               let id = c.id("drive/which/" + s.station)
-              if c.clicked(id) {
+              c.on_press(id, fn() {
                 close()
                 picker_open(src, ws, s.station, picked)
-              }
+              })
               let b = c.box(style=pick_row.then(row), id~, fn() {
                 @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
                 c.text(s.name, style=pick_name) |> ignore
@@ -152,10 +152,10 @@ fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) 
       let v = dialogs.value.get()
       let path = text(v, "path")
       let taken = v is Some(_) && favorite_has(favorites(src, ws), station, path, "")
-      if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost, on_press=fn() {
         close()
         picker_close()
-      }
+      }) |> ignore
       if @sf.button(
           c,
           @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
@@ -239,9 +239,9 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
   let wanted = dialogs.filter.text().trim(chars=" ").to_owned()
   let row = fn(name : String, p : String, unreadable : Bool, disk : Bool, here : Bool) {
     let id = c.id("drive/picker/row/" + p)
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       picker_go(c, src, station, Some(p))
-    }
+    })
     let b = c.box(style=if here { pick_row_here } else { pick_row }, id~, fn() {
       @sf.icon(c, if disk { "disk" } else { "folder" }, size=pick_icon, color=t.p.muted) |> ignore
       c.box(style=root_text, fn() {

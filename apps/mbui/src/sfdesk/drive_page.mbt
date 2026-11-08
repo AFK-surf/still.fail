@@ -112,9 +112,9 @@ fn head_retry(c : @ui.Ctx, words : String, bad : Bool, retry : () -> Unit) -> Un
   c.box(style=head_problem, fn() {
     c.text(words, style=if bad { note.then(head_bad) } else { note.then(head_wraps) }) |> ignore
     let id = c.id("files/retry")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       retry()
-    }
+    })
     let b = c.box(style=head_link, id~, fn() { c.text(@sf.t("web-pages.drive.retry"), style=note.then(head_link_words)) |> ignore })
     c.semantics(b, Button, id~, label=@sf.t("web-pages.drive.retry"))
   })

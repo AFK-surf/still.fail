@@ -221,10 +221,10 @@ fn head(c : @ui.Ctx, pad : Double, meta : String) -> Unit {
 fn cell(c : @ui.Ctx, src : Source, it : Item, index : Int, side : Double) -> Unit {
   let t = @sf.theme()
   let id = c.id("cell-" + it.id)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     state.open = Some(index)
     state.bars = true
-  }
+  })
   let radius = if small(c) { 0.0 } else { 6.0 }
   c.box(w=Px(side), h=Px(side), radius~, clip=true, bg=t.p.neutral_bg, id~, fn() {
     match thumbhash_image(it.thumbhash) {

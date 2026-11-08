@@ -46,9 +46,9 @@ fn workspace_shown(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, loo
     actions?=if manager {
       Some(fn() {
         let id = c.id("ws-add-people")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           open_add_people(core, here, v, from=Of(id))
-        }
+        })
         let b = c.box(style=ws_add_box, id~, fn() { @sf.icon(c, "user-plus", size=ws_add_icon, color=@sf.link_ink()) |> ignore })
         c.semantics(b, Button, id~, label=@sf.t("web-pages.settings.members.add"))
       })
@@ -77,7 +77,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
   // its name and its mark: renamed, picked by its managers
   blocks.push(fn() {
     @sf.group(c, fn() {
-      if @sf.link_row(c, "ws-name", @sf.t("android-settings.workspace.name"), value=name, chevron=manager, goes=manager) {
+      @sf.link_row(c, "ws-name", @sf.t("android-settings.workspace.name"), value=name, chevron=manager, goes=manager, on_press=fn() {
         ask(@sf.t("android-settings.workspace.name"), name, @sf.t("android-settings.workspace.namePlaceholder"), @sf.t("common.save"), fn(
           line,
         ) {
@@ -89,7 +89,7 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
             done=@sf.t("android-settings.renamed"),
           )
         })
-      }
+      }) |> ignore
       if manager {
         let emoji = text(v, "emoji")
         let icon = text(v, "icon")
@@ -198,16 +198,17 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
   if manager || relays.length() > 0 || off > 0.0 {
     blocks.push(fn() {
       @sf.group(c, fn() {
-        if @sf.link_row(c, "ws-ways", @sf.t("android-settings.ways.title"), value=text(ways, "offLabel")) {
-          ws_ways_panel(core, here, Of(c.id("ws-ways")))
-        }
+        let from = c.id("ws-ways")
+        @sf.link_row(c, "ws-ways", @sf.t("android-settings.ways.title"), value=text(ways, "offLabel"), on_press=fn() {
+          ws_ways_panel(core, here, Of(from))
+        }) |> ignore
       })
     })
   }
   // leaving or deleting it, in red at the foot, asked first
   blocks.push(fn() {
     @sf.group(c, fn() {
-      if @sf.link_row(c, "ws-leave", @sf.t("android-settings.workspace.leaveRow"), danger=true, chevron=false) {
+      @sf.link_row(c, "ws-leave", @sf.t("android-settings.workspace.leaveRow"), danger=true, chevron=false, on_press=fn() {
         confirm(
           @sf.t("android-settings.workspace.leaveTitle", args=[("name", name)]),
           @sf.t("android-settings.workspace.leaveText"),
@@ -224,24 +225,26 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
             )
           },
         )
-      }
-      if role == "owner" && @sf.link_row(c, "ws-delete", @sf.t("android-settings.workspace.delete"), danger=true, chevron=false) {
-        confirm(
-          @sf.t("android-settings.workspace.deleteTitle", args=[("name", name)]),
-          @sf.t("android-settings.workspace.deleteText", args=[("n", items(v, "stations").length().to_string()), ("app", "still.fail")]),
-          @sf.t("android-settings.workspace.delete"),
-          danger=true,
-          fn() {
-            ws_gone(
-              core,
-              ws,
-              @sf.t("android-settings.workspace.deleteWhat"),
-              "workspace.delete",
-              obj([("workspace", str(ws)), ("account", str(here.sub))]),
-              @sf.t("android-settings.workspace.deleted"),
-            )
-          },
-        )
+      }) |> ignore
+      if role == "owner" {
+        @sf.link_row(c, "ws-delete", @sf.t("android-settings.workspace.delete"), danger=true, chevron=false, on_press=fn() {
+          confirm(
+            @sf.t("android-settings.workspace.deleteTitle", args=[("name", name)]),
+            @sf.t("android-settings.workspace.deleteText", args=[("n", items(v, "stations").length().to_string()), ("app", "still.fail")]),
+            @sf.t("android-settings.workspace.delete"),
+            danger=true,
+            fn() {
+              ws_gone(
+                core,
+                ws,
+                @sf.t("android-settings.workspace.deleteWhat"),
+                "workspace.delete",
+                obj([("workspace", str(ws)), ("account", str(here.sub))]),
+                @sf.t("android-settings.workspace.deleted"),
+              )
+            },
+          )
+        }) |> ignore
       }
     })
   })
@@ -364,7 +367,7 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
     if text(v, "role") == "owner" {
       let setting = is_doing(core, ["workspace.setRole"], [("workspace", ws), ("member", sub)])
       for r in ["owner", "admin", "member"] {
-        if @sf.choice_row(c, "role/" + r, text(mv, "role") == r, role_label(r), note=@sf.t("android-misc.role." + r + ".hint"), disabled=!(!setting)) {
+        @sf.choice_row(c, "role/" + r, text(mv, "role") == r, role_label(r), note=@sf.t("android-misc.role." + r + ".hint"), disabled=!(!setting), on_press=fn() {
           close()
           if r != text(mv, "role") {
             @settings.act(
@@ -375,10 +378,10 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
               done=@sf.t("android-settings.members.roleSet"),
             )
           }
-        }
+        }) |> ignore
       }
     }
-    if @sf.choice_row(c, "move-out", false, @sf.t("android-settings.members.moveOutRow"), ink=t.p.red) {
+    @sf.choice_row(c, "move-out", false, @sf.t("android-settings.members.moveOutRow"), ink=t.p.red, on_press=fn() {
       close()
       confirm(
         @sf.t("android-settings.members.moveOutTitle", args=[("email", email), ("name", text(v, "name"))]),
@@ -395,7 +398,7 @@ fn ws_member_panel(core : Core, here : Here, v : Json?, m : Json, name : String,
           )
         },
       )
-    }
+    }) |> ignore
   })
 }
 
@@ -441,14 +444,16 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
       ws_way_label(c, @sf.t("android-settings.ways.own"))
       for url in relays {
         ws_way_row(c, host(url), "", fn() {
-          if manager && @sf.button(c, @sf.t("android-settings.members.remove"), key="relay/" + url, tone=Ghost, disabled=setting) {
-            @settings.act(
-              core,
-              @sf.t("android-settings.relays.removeWhat"),
-              "workspace.setRelays",
-              obj([("workspace", str(ws)), ("relays", Json::array(relays.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
-              done=@sf.t("android-settings.relays.removed"),
-            )
+          if manager {
+            @sf.button(c, @sf.t("android-settings.members.remove"), key="relay/" + url, tone=Ghost, disabled=setting, on_press=fn() {
+              @settings.act(
+                core,
+                @sf.t("android-settings.relays.removeWhat"),
+                "workspace.setRelays",
+                obj([("workspace", str(ws)), ("relays", Json::array(relays.filter(fn(r) { r != url }).map(str))), ("account", str(here.sub))]),
+                done=@sf.t("android-settings.relays.removed"),
+              )
+            }) |> ignore
           }
         })
       }

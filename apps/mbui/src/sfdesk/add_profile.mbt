@@ -135,10 +135,10 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
               }
             }
             c.text(why, style=desk_note_bad) |> ignore
-            if @sf.button(c, @sf.t("web-pages.profiles.restart"), key="add-profile-restart/" + form) {
+            @sf.button(c, @sf.t("web-pages.profiles.restart"), key="add-profile-restart/" + form, on_press=fn() {
               // let go, then asked again as the step is drawn
               @settings.drop_login(core, station, n)
-            }
+            }) |> ignore
           })
           |> ignore
         } else {
@@ -249,9 +249,9 @@ fn provider_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
             }
             let pv = Some(providers[i])
             let id = c.id("add-profile-provider/" + text(pv, "id"))
-            if c.clicked(id) {
+            c.on_press(id, fn() {
               pick(text(pv, "id"))
-            }
+            })
             let b = c.box(style=ap_tile, id~, fn() {
               c.box(style=ap_tile_mark, fn() {
                 @sf.provider_logo(
@@ -290,9 +290,9 @@ fn connect_methods(c : @ui.Ctx, d : Json?, choose : (String) -> Unit) -> Unit {
     for ch in items(d, "choices") {
       let cv = Some(ch)
       let id = c.id("add-profile-method/" + text(cv, "id"))
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         choose(text(cv, "id"))
-      }
+      })
       let b = c.box(style=ap_method, id~, fn() {
         c.text(text(cv, "title"), style=desk_strong) |> ignore
         c.text(text(cv, "hint"), style=desk_muted) |> ignore
@@ -456,9 +456,9 @@ fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> 
         // (last on its card: its button in its foot corner, concentric with it)
         c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
           @sf.card_foot_words(fn() {
-            if @sf.button(c, action, key="add-profile-install/" + runtime, tone=Primary, busy~) {
+            @sf.button(c, action, key="add-profile-install/" + runtime, tone=Primary, busy~, on_press=fn() {
               @settings.act(core, action, "software.update", obj([("station", str(station)), ("id", str(runtime))]))
-            }
+            }) |> ignore
           })
         })
         |> ignore
@@ -526,7 +526,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
           let busy = is_doing(core, ["profile.useMachineLogin"], [("station", station), ("runtime", rt)])
           let reach = @sf.foot_across(@sf.button_height())
           if flag(lv, "usable") {
-            if @sf.button(c, @sf.t("web-pages.profiles.useThis"), key="add-profile-machine/" + rt, busy~, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.useMachineTip")) {
+            @sf.button(c, @sf.t("web-pages.profiles.useThis"), key="add-profile-machine/" + rt, busy~, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.useMachineTip"), on_press=fn() {
               (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
                 match r {
                   Ok(v) => {
@@ -536,7 +536,7 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
                   Err(e) => (core.say)(@settings.error_text(e))
                 }
               })
-            }
+            }) |> ignore
           } else if @sf.button(c, @sf.t("web-pages.profiles.signIn"), key="add-profile-machine/" + rt, w=Fill(1.0), reach~, hint=@sf.t("web-pages.profiles.keychainTip", args=[("name", "still.fail")])) {
             sign_in(rt)
           }
