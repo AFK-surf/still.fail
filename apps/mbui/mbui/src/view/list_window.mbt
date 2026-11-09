@@ -33,10 +33,10 @@ priv struct Laid[K] {
 /// so it is laid out as it changes wherever the column is). `holds`: whether a block holds what shows where it is as
 /// what is over it changes (none that does not: the first after it that does; a head that stands over what comes in
 /// under it, which goes on down with what shows). `follows`: while it says so, a column at its foot (made there, or
-/// scrolled back to it) is kept there as what it holds grows, till it is moved off it (a chat's newest end). `centres`:
-/// the block to bring to the middle of where the column shows as this comes to name it (its cause: what asks it, an
-/// entry gone to), its middle there as tall as it is counted then; held there as what is over it is laid out, till the
-/// column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
+/// scrolled back to it) is kept there as what it holds grows, till it is moved off it (a chat's newest end). `place`:
+/// what asks it to show a block or its foot at a cause (ListPlace: a block brought to the middle or to its top, back
+/// to its foot, its foot followed no further than a block), done as it is next laid out; held there as what is over it
+/// is laid out, till the column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
 /// column moved first for what came or changed over it (how near its top the reader has got). `near_foot`: (screens,
 /// wanting, ask): `ask` done as it is scrolled to within so many of its heights of its foot while `wanting()` holds, as
 /// that comes to be, and again as its keys change while it is (a page more asked of what has more): how far its foot is
@@ -58,7 +58,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   foot_room? : () -> Double = fn() { 0.0 },
   holds? : (K) -> Bool = fn(_) { true },
   follows? : () -> Bool = fn() { false },
-  centres? : () -> K? = fn() { None },
+  place? : ListPlace[K],
   first_told? : (K) -> Unit = fn(_) {  },
   near_foot? : (Double, () -> Bool, () -> Unit),
   reused? : (K) -> Int?,
@@ -200,8 +200,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let anchor : Ref[(K, Double)?] = Ref(None)
   // (where the scroll was as the anchor was last put: what it moved by since, carried to the anchor)
   let anchor_x : Ref[Double?] = Ref(None)
-  // (the block `centres` last brought to the middle: once each time it names one)
-  let centred : Ref[K?] = Ref(None)
   let first_was : Ref[K?] = Ref(None)
   // (the column marked laid out again: not while it is laid out, its fill going on to what that changed itself)
   let laid_again = fn() {
@@ -215,8 +213,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     (@double.neg_infinity, @double.infinity, @double.neg_infinity, @double.infinity),
     same=fn(a, b) { a == b },
   )
-  // (another block named to be brought to the middle: the column laid out again, which brings it there)
-  self.reacts(centres, fn(_) { laid_again() }, at_start=false)
   // (following its foot, scrolled back to it by the hand or the wheel, at rest there: at its foot again, kept there
   // however far that comes to be as what it holds grows, till it is moved off it; told as that comes to be so, not each
   // time the column is scrolled)
@@ -298,6 +294,43 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       blocks_h + foot_room() + s.tuck_room.get()
     })
+  }
+  // (what is asked of it at a cause: done as the column is laid out again, or at once where it glides there)
+  match place {
+    Some(p) => {
+      p.laid_again = laid_again
+      p.glide = fn(ask) {
+        let all = @signals.untracked(fn() { laid.get() })
+        let vh = match @signals.untracked(fn() { s.seen.get() }) {
+          Some((_, vh)) => vh
+          None => 0.0
+        }
+        let most = dmax(0.0, whole_now() - vh)
+        let to = match ask {
+          Bring(k, off) =>
+            match laid_at.get(k) {
+              Some(i) if i < all.length() => Some(all[i].top + off)
+              _ => None
+            }
+          ToEnd => Some(most)
+          Centre(_) => None
+        }
+        match to {
+          // (far from there, more than two of its heights: there at once, as an old view's list's glide far)
+          Some(to) if (to - @signals.untracked(at)).abs() <= glide_most * vh => {
+            s.glide_to(self, self.cause_at(), dclamp(to, 0.0, most))
+            true
+          }
+          _ => false
+        }
+      }
+      self.owns(fn() {
+        p.laid_again = fn() {  }
+        p.glide = fn(_) { false }
+      })
+      |> ignore
+    }
+    None => ()
   }
   // (which show, as the fill last left them)
   let shown_now : Array[K] = []
@@ -438,7 +471,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       return
     }
     let x = @signals.untracked(at)
-    let follows_foot = @signals.untracked(follows) && s.at_foot()
+    let mut follows_foot = @signals.untracked(follows) && s.at_foot()
     // (the anchor as the scroll moved it since; none yet, where the scroll is)
     let start = {
       let all = @signals.untracked(fn() { laid.get() })
@@ -489,20 +522,49 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
       _ => ()
     }
-    // (another block named to be brought to the middle, once: its middle there as tall as it is counted)
+    // (a block asked to be brought to the middle or its top (ListPlace), once, as soon as it is among its keys: its
+    // middle there as tall as it is counted; off its foot then)
     let mut centring = false
-    match @signals.untracked(centres) {
-      Some(k) if centred.val != Some(k) =>
-        match laid_at.get(k) {
-          Some(i) => {
-            centred.val = Some(k)
-            ai = i
-            centring = true
+    let mut to_end = false
+    // (asked: put there, what it was on by itself stopped; else moved by as much as the anchor says)
+    let mut asked = false
+    match place {
+      Some(p) =>
+        match p.asked {
+          Some(ToEnd) => {
+            p.asked = None
+            to_end = true
+            asked = true
+          }
+          Some(ask) => {
+            let (k, off) = match ask {
+              Bring(k, off) => (k, Some(off))
+              Centre(k) => (k, None)
+              ToEnd => panic()
+            }
+            match laid_at.get(k) {
+              Some(i) => {
+                p.asked = None
+                asked = true
+                ai = i
+                follows_foot = false
+                match off {
+                  Some(off) => aoff = off
+                  None => centring = true
+                }
+              }
+              None => ()
+            }
           }
           None => ()
         }
-      Some(_) => ()
-      None => centred.val = None
+      None => ()
+    }
+    // (its foot followed no further than a block's top `margin` under where it shows from: held there, off its foot,
+    // once it would go further, and followed no further after)
+    let from = match place {
+      Some(p) => p.from.bind(fn(f) { laid_at.get(f.0).map(fn(i) { (i, f.1) }) })
+      None => None
     }
     let mut top = 0.0
     let mut vh = 0.0
@@ -523,7 +585,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         aoff = all[ai].h / 2.0 - vh / 2.0
       }
       let most = dmax(0.0, whole_now() - vh)
-      top = if follows_foot { most } else { dclamp(all[ai].top + aoff, 0.0, most) }
+      top = if follows_foot || to_end { most } else { dclamp(all[ai].top + aoff, 0.0, most) }
+      match from {
+        Some((i, margin)) if follows_foot && i < all.length() && all[i].top - margin < most => {
+          top = dmax(0.0, all[i].top - margin)
+          follows_foot = false
+          // (held by it from now, as it is measured anew in this fill too)
+          ai = i
+          aoff = -margin
+          asked = true
+          match place {
+            Some(p) => p.from = None
+            None => ()
+          }
+        }
+        _ => ()
+      }
       // (what meets where it shows, made: one never measured as it is measured, those under it only once it is, where
       // they start known then, none made that comes out past where it shows)
       let now = []
@@ -576,7 +653,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (the scroll put where the anchor says: moved by as much, a fling under way with it; at its foot where it follows
     // it there, as it is)
     if !follows_foot && (top - x).abs() > 0.000001 {
-      if s.as_list {
+      if s.as_list && !asked {
         s.grew_above(top - x)
       } else {
         s.put(top)
@@ -752,3 +829,80 @@ pub fn[K : Hash + Eq] View::scrolls_window(
 /// How many blocks of one kind a list keeps put by (View::scrolls_window's `reused`): as many as come to show at once
 /// as it is scrolled, the rest let go.
 let spare_most : Int = 4
+
+///|
+/// Further than this many of its heights from where it is asked to go, a page's list goes there at once, not gliding
+/// (an old view's list's list_glide_rows).
+let glide_most : Double = 2.0
+
+///|
+/// What a page's list is asked to show at a cause (ListPlace), done as its column is next laid out: a block brought to
+/// its top (`off` under it) or to the middle.
+priv enum ListAsk[K] {
+  Bring(K, Double)
+  Centre(K)
+  ToEnd
+}
+
+///|
+/// What asks a page's list (View::scrolls_window's `place`) to show a block or its foot, as a press or what comes in
+/// asks it (a cause, in its handler): each asked once, done as the column is next laid out (in that layout, by its
+/// anchor: what is over it measured anew moves none of it), or gliding there from where it is, at that moment. One
+/// asked before the block is among its keys waits for it; a later one in its place.
+pub struct ListPlace[K] {
+  priv mut asked : ListAsk[K]?
+  /// its foot followed no further than this block's top so far under where it shows from (ListPlace::follow_from)
+  priv mut from : (K, Double)?
+  priv mut laid_again : () -> Unit
+  priv mut glide : (ListAsk[K]) -> Bool
+}
+
+///|
+/// One for a page's list, asking nothing yet.
+pub fn[K] ListPlace::new() -> ListPlace[K] {
+  { asked: None, from: None, laid_again: fn() {  }, glide: fn(_) { false } }
+}
+
+///|
+/// Block `key` brought to the top of where the list shows (`offset` above it: its top that far over the list's, under
+/// it where less than 0), as far as the list goes (Ctx::list_scroll_to's): gliding there where `glide` and it is near.
+pub fn[K] ListPlace::bring(self : ListPlace[K], key : K, offset? : Double = 0.0, glide? : Bool = false) -> Unit {
+  self.from = None
+  if glide && (self.glide)(Bring(key, offset)) {
+    self.asked = None
+    return
+  }
+  self.asked = Some(Bring(key, offset))
+  (self.laid_again)()
+}
+
+///|
+/// Block `key` brought to the middle of where the list shows, its middle there as tall as it is counted then (an entry
+/// gone to).
+pub fn[K] ListPlace::centre(self : ListPlace[K], key : K) -> Unit {
+  self.from = None
+  self.asked = Some(Centre(key))
+  (self.laid_again)()
+}
+
+///|
+/// Back to the list's foot (Ctx::list_to_end's): gliding there where `glide` and it is near (else at once), followed
+/// there from then where its list follows its foot.
+pub fn[K] ListPlace::to_end(self : ListPlace[K], glide? : Bool = true) -> Unit {
+  self.from = None
+  self.asked = None
+  if glide && (self.glide)(ToEnd) {
+    return
+  }
+  self.asked = Some(ToEnd)
+  (self.laid_again)()
+}
+
+///|
+/// Its foot, where its list follows it, followed no further than block `key`'s top `margin` under the top of where it
+/// shows (Ctx::list_follow_from's: a message come while it is at its foot read from its start); held there, off its
+/// foot, once it would go further. None: followed all the way again.
+pub fn[K] ListPlace::follow_from(self : ListPlace[K], key : K?, margin? : Double = 0.0) -> Unit {
+  self.from = key.map(fn(k) { (k, margin) })
+  (self.laid_again)()
+}

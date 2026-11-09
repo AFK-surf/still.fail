@@ -512,6 +512,21 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
 }
 
 ///|
+/// Sent to `to` from `t` (a page's list asked there: ListPlace), eased in from where it is as a wheel's notch is (ui's
+/// Ctx::ease_list), what it was on by itself stopped there; at rest there at the ease's end.
+fn Scroll::glide_to(self : Scroll, v : View, t : Double, to : Double) -> Unit {
+  let x = self.stopped(t)
+  if to == x {
+    return
+  }
+  (self.settle_off)()
+  self.settle_off = fn() {  }
+  self.notch.set(Some({ x0: x, total: to - x, v0: 0.0, t0: t }))
+  self.scrolled_at(t)
+  self.list_settles(v, t)
+}
+
+///|
 /// What it does by itself, set out at `t`, told to what hosts the tree (Tree::on_glides) and at rest at its end, said
 /// on the timeline: then where its fling ended, nothing past an end.
 fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
