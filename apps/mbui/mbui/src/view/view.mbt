@@ -5795,6 +5795,74 @@ fn View::drop(self : View, v : View) -> Unit {
 }
 
 ///|
+/// Node `v` (one this holds) taken out of it, not let go: held by nothing, so not laid out, placed, drawn or pressed,
+/// to be held again by another (View::take_in) or let go (a list's block kept to be made another's:
+/// View::scrolls_window's `reused`). What the hand or the focus had in it lets go, as it would were it let go. What it
+/// and what it holds bind is at rest (@signals.rest): following nothing, so what is held while it is read (a core's
+/// topic) is held for none of them and nothing of it is worked out again meanwhile; what this gives wakes it, each
+/// binding worked out anew, as it is held again.
+fn View::park(self : View, v : View) -> () -> Unit {
+  guard self.live() is Some(n) && v.live() is Some(m) else { return fn() {  } }
+  let wakes : Array[() -> Unit] = []
+  self.tree.rest_in(v.at, wakes)
+  // (laid out nowhere while held by nothing: no size told, as one just made, till it is laid out where it is held next;
+  // so what reads it there reads that one, not the one it had here)
+  match m.size_cell {
+    Some(c) => c.set(None)
+    None => ()
+  }
+  if self.tree.pointed_within_at(v.at) {
+    self.tree.pointed_to(None)
+  }
+  self.tree.hold_lost_in(v.at)
+  self.tree.focus_lost_in(v.at)
+  self.tree.back_lost_in(v.at)
+  match n.kids.search(v.at) {
+    Some(i) => n.kids.remove(i) |> ignore
+    None => ()
+  }
+  m.parent = -1
+  self.tree.touched(self.at)
+  self.tree.order_marked_in(self.at)
+  self.boxes_again()
+  self.tree.modals_told()
+  fn() {
+    for w in wakes {
+      w()
+    }
+  }
+}
+
+///|
+/// What node `at` and what it holds bind, at rest (View::park), each's waking added to `wakes`.
+fn Tree::rest_in(self : Tree, at : Int, wakes : Array[() -> Unit]) -> Unit {
+  let n = self.nodes[at]
+  match n.owner {
+    Some(o) => wakes.push(@signals.rest(o))
+    None => ()
+  }
+  for k in n.kids {
+    self.rest_in(k, wakes)
+  }
+}
+
+///|
+/// Node `v`, held by nothing (View::park), held by this, after what it holds already: laid out, placed and drawn again
+/// in its place there.
+fn View::take_in(self : View, v : View) -> Unit {
+  guard self.live() is Some(n) && v.live() is Some(m) && m.parent < 0 else { return }
+  m.parent = self.at
+  n.kids.push(v.at)
+  self.box_appended(v.at)
+  if m.size_cell is Some(_) {
+    self.tree.sizes_due = true
+  }
+  self.tree.layout_marked_at(v.at)
+  self.tree.place_marked_at(v.at)
+  self.tree.touched(v.at)
+}
+
+///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
 /// `leave`: it leaves over that long first (View::leave), and no shorter than a move it holds that holds its leaving
 /// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out.

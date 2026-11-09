@@ -887,6 +887,8 @@ priv struct WatchOwn {
   mut marked_by : SourceLoc?
   /// where what it read was set again as its last read ran, the first few (Watch::set_as_read; none: nowhere)
   mut set_by : Array[String]?
+  /// at rest (rest): following nothing, what it reads read untracked, till it is woken
+  mut resting : Bool
 }
 
 ///|
@@ -920,7 +922,7 @@ let watch_reading : WatchReading = { depth: 0, sets: [] }
 /// till the next read.
 pub fn watch(changed : () -> Unit) -> Watch {
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { changed, marked: None, stale: true, gone: false, marked_by: None, set_by: None }
+  let own : WatchOwn = { changed, marked: None, stale: true, gone: false, marked_by: None, set_by: None, resting: false }
   let node = ReactiveNode::new(NONE, WatchNode, own=WatchOwned(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
@@ -940,6 +942,10 @@ pub fn watch(changed : () -> Unit) -> Watch {
 /// was touched as it ran (Watch::touch), which it keeps. What
 /// was reading before it does not read what it reads.
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
+  // (at rest: read, nothing followed, till it wakes and reads anew)
+  if self.own.resting {
+    return untracked(f)
+  }
   let e = self.node
   if watch_reading.depth == 0 {
     watch_reading.sets.clear()
@@ -1023,6 +1029,50 @@ pub fn Watch::gone(self : Watch) -> Bool {
 pub fn Watch::stop(self : Watch) -> Unit {
   effect_scope_oper(self.node)
   self.own.stale = true
+}
+
+///|
+/// What `owner` owns at rest (a scope's watches, and those of each scope it owns): each lets go of what it read, so
+/// what is held while something reads it (a core's topic) is held for none of them, and reads untracked as it is read
+/// meanwhile. What it gives wakes them, each told as though what it read changed, to read anew. For what is put by to
+/// be made another's (a list's block kept for the next to come: mbui's View::park).
+pub fn rest(owner : ReactiveNode) -> () -> Unit {
+  let rested : Array[WatchOwn] = []
+  rest_in(owner, rested)
+  fn() {
+    for o in rested {
+      if o.resting {
+        o.resting = false
+        o.stale = false
+        if !o.gone {
+          o.told()
+        }
+      }
+    }
+  }
+}
+
+///|
+fn rest_in(e : ReactiveNode, rested : Array[WatchOwn]) -> Unit {
+  let mut l = e.deps
+  while l is Some(link) {
+    let d = link.dep
+    l = link.next_dep
+    match d.kind {
+      WatchNode =>
+        match d.own {
+          WatchOwned(o) if !o.gone && !o.resting => {
+            dispose_all_deps_in_reverse(d)
+            o.stale = true
+            o.resting = true
+            rested.push(o)
+          }
+          _ => ()
+        }
+      ScopeNode => rest_in(d, rested)
+      _ => ()
+    }
+  }
 }
 
 ///|

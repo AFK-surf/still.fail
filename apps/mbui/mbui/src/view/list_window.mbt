@@ -21,7 +21,11 @@
 /// the block to bring to the middle of where the column shows as this comes to name it (its cause: what asks it, an
 /// entry gone to), its middle there as tall as it is counted then; held there as what is over it is laid out, till the
 /// column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
-/// column moved first for what came or changed over it (how near its top the reader has got).
+/// column moved first for what came or changed over it (how near its top the reader has got). `reused`: of a block
+/// whose key it gives a kind, what shows is made by `make_reused` with its key as it is now, and as it no more shows put
+/// by, not let go, what it binds following nothing meanwhile (View::park), for the next of its kind to come to show to
+/// take, its key that one's then (what it binds read again for it, what changed set again): a list's rows of one make, as a RecyclerView's views, not made and let go each as
+/// the list is scrolled.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -36,6 +40,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   follows? : () -> Bool = fn() { false },
   centres? : () -> K? = fn() { None },
   first_told? : (K) -> Unit = fn(_) {  },
+  reused? : (K) -> Int?,
+  make_reused? : (View, () -> K) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
   // (its keys worked out once as what they read changes, not again as a block's height is told: what reads them, the
@@ -259,6 +265,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       s.to_foot()
     }
   })
+  // (those of a kind another may take put by as they no more show (`reused`), each with what says its key now and
+  // what wakes what it binds (View::park): so many at most of each, the rest let go; all let go with the list)
+  let spare : Map[Int, Array[(View, @signals.Signal[K], () -> Unit)]] = Map([])
+  let spare_let_go = fn() {
+    for _, all in spare {
+      for b in all {
+        b.0.let_go()
+      }
+      all.clear()
+    }
+  }
   // (whether each shows, by its key: told only to those that come to show or stop, not each block reading the window,
   // all of them run again each time the column is scrolled)
   let shown : Map[K, @signals.Signal[Bool]] = Map([])
@@ -284,7 +301,29 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     @signals.end_batch()
     was.val = now
   })
-  self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
+  // (a block's own as it is made in what shows it (`v`), `key` its key as it is now: as tall as what it holds,
+  // whatever its slot is counted as till that is told; how tall it is told as it is laid out, kept by its key, told
+  // again as it is another's)
+  let block = fn(v : View, key : () -> K, made : (View) -> Unit) {
+    v.shrink(Is(0.0)) |> ignore
+    let k = @signals.untracked(key)
+    showing[k] = true
+    v.owns(fn() { showing.remove(@signals.untracked(key)) }) |> ignore
+    v.reacts(fn() { (key(), v.laid_size_told()) }, fn(now) {
+      match now {
+        (k, Some((_, h))) if heights.get(k) != Some(h) => {
+          heights[k] = h
+          if tall.get(k) is Some(c) {
+            c.set(Some(h))
+          }
+          tell()
+        }
+        _ => ()
+      }
+    })
+    made(v)
+  }
+  let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room()) })) |> ignore
     held.each(keys, fn(k) { k }, fn(slot, item) {
       let k = @signals.untracked(fn() { item.get() })
@@ -305,26 +344,83 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // (as tall as it is counted, as wide as the column: what comes to show in it laid out from it alone)
       .lays_out_alone()
       |> ignore
-      slot.show(shows, fn(v) {
-        // (as tall as what it holds, whatever its slot is counted as till that is told)
-        v.shrink(Is(0.0)) |> ignore
-        showing[k] = true
-        v.owns(fn() { showing.remove(k) }) |> ignore
-        // (how tall it is told as it is laid out, kept by its key)
-        v.reacts(fn() { v.laid_size_told() }, fn(z) {
-          match z {
-            Some((_, h)) if heights.get(k) != Some(h) => {
-              heights[k] = h
-              if tall.get(k) is Some(c) {
-                c.set(Some(h))
+      // (one of a kind another may take: made, or taken from those of its kind put by, as it comes to show; put by as
+      // it no more does, for the next of its kind to show)
+      match (reused, make_reused) {
+        (Some(kind_of), Some(make_by)) if kind_of(k) is Some(kind) => {
+          let mine : Ref[(View, @signals.Signal[K])?] = Ref(None)
+          let stop = slot.tree.structured(shows, fn(on) {
+            guard slot.alive() else { return }
+            match (on, mine.val) {
+              (true, None) => {
+                slot.tree.work.structure = slot.tree.work.structure + 1
+                // (its own if it was put by (gone and come again at once, the window told twice): where it was, as it
+                // was; else the last put by)
+                let taken = match spare.get(kind) {
+                  Some(all) if all.length() > 0 =>
+                    match all.search_by(fn(b) { @signals.untracked(fn() { b.1.get() }) == k }) {
+                      Some(i) => Some(all.remove(i))
+                      None => all.pop()
+                    }
+                  _ => None
+                }
+                match taken {
+                  Some((v, key, wake)) if v.alive() => {
+                    slot.take_in(v)
+                    showing[k] = true
+                    key.set(k)
+                    wake()
+                    mine.val = Some((v, key))
+                  }
+                  _ => {
+                    let key = @signals.signal(k, same=fn(a, b) { a == b })
+                    let v = slot.box(fn(v) { block(v, fn() { key.get() }, fn(v) { make_by(v, fn() { key.get() }) }) })
+                    mine.val = Some((v, key))
+                  }
+                }
               }
-              tell()
+              (false, Some((v, key))) => {
+                slot.tree.work.structure = slot.tree.work.structure + 1
+                mine.val = None
+                showing.remove(k)
+                let all = match spare.get(kind) {
+                  Some(all) => all
+                  None => {
+                    let all = []
+                    spare[kind] = all
+                    all
+                  }
+                }
+                if all.length() < spare_most && v.alive() {
+                  all.push((v, key, slot.park(v)))
+                } else {
+                  slot.drop(v)
+                }
+              }
+              _ => ()
             }
-            _ => ()
-          }
-        })
-        make(v, k)
-      })
+          })
+          // (its slot let go: what shows in it let go with it, as what it holds)
+          slot.owns(fn() {
+            stop()
+            if mine.val is Some(_) {
+              showing.remove(k)
+              mine.val = None
+            }
+          })
+          |> ignore
+        }
+        _ =>
+          slot.show(shows, fn(v) { block(v, fn() { k }, fn(v) { make(v, k) }) })
+      }
     })
   })
+  // (those put by let go with the list: held by nothing, let go by nothing else)
+  self.owns(spare_let_go) |> ignore
+  out
 }
+
+///|
+/// How many blocks of one kind a list keeps put by (View::scrolls_window's `reused`): as many as come to show at once
+/// as it is scrolled, the rest let go.
+let spare_most : Int = 4
