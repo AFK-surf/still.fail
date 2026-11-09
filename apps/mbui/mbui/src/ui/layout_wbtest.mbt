@@ -301,7 +301,7 @@ test "kept layouts: a box moving into the row before it, the same as it was" {
 
 ///|
 /// What a slot held last frame is gone when it holds something else: a
-/// coloured, padded box then a spacer, a pager then a plain box.
+/// coloured, padded box then a spacer, a list then a plain box.
 test "kept layouts: a slot holding another kind of thing" {
   same_both_ways("slot reused", fn() {
     let flip = @signals.signal(false)
@@ -320,7 +320,7 @@ test "kept layouts: a slot holding another kind of thing" {
           if flip.get() {
             c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
           } else {
-            c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+            c.list("p", 3, 40.0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
           }
         })
         |> ignore
@@ -696,33 +696,6 @@ test "kept layouts: pages pushed and popped, mid-slide" {
 }
 
 ///|
-test "kept layouts: a pager dragged and turned, images arriving" {
-  same_both_ways("pager", fn() {
-    let t = Tester::new(
-      fn(c) {
-        c.column(w=Fill(1.0), h=Fill(1.0), fn() {
-          c.image("a.png", w=Px(100.0)) |> ignore
-          c.pager("p", 5, 0, fn(k) {
-            c.column(pad=10.0, fn() { c.text("page \{k}") |> ignore }) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      },
-      w=300.0,
-      h=500.0,
-      images=[("a.png", 400, 200)],
-    )
-    t.draw()
-    t.drag(250.0, 300.0, 120.0, 300.0)
-    t.draw()
-    t.drag(100.0, 300.0, 140.0, 300.0)
-    t.draw()
-  })
-  |> ignore
-}
-
-///|
 test "kept layouts: nothing that did not change is laid out again" {
   let tick = @signals.signal(0)
   let t = Tester::new(
@@ -910,7 +883,7 @@ test "a slot taken by another builder starts afresh" {
         if flip.val {
           c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
         } else {
-          c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+          c.list("p", 3, 40.0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
         }
       })
       |> ignore
@@ -922,7 +895,7 @@ test "a slot taken by another builder starts afresh" {
   assert_eq(g().scroll_ids.length(), 1)
   flip.val = true
   t.frame()
-  // nothing drawn: no colour, no words, no pager to drag
+  // nothing drawn: no colour, no words, no list to drag
   assert_eq(t.drawn_rects().length(), 0)
   assert_eq(t.drawn_glyphs().length(), 0)
   assert_eq(g().scroll_ids.length(), 0)

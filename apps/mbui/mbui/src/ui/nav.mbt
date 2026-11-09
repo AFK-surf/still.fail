@@ -1213,7 +1213,6 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
         self.lists.remove(id)
         self.editors.remove(id)
         self.springs.remove(id)
-        pagers.remove(id)
         drags.remove(id)
         press_followers.remove(id)
         files_on.remove(id)

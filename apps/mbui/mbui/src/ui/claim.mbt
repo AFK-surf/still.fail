@@ -1,8 +1,8 @@
 // Who a press is (Compose's way: no one's as it goes down; whoever's own way it moves past the slop first). What
-// scrolls or is dragged under it, innermost first, waits: a list (up and down), a pager (across), a drag area (along
-// its axis), a sideways box (its own way, while it can go that way). The first of them, from the innermost out, whose
-// way the finger has gone past the slop, and further than across it, takes the press from there; the others let it
-// go (a drag area pressed: no tap, not ended). Whoever holds whom does not matter: a row swiped across in a list, a
+// scrolls or is dragged under it, innermost first, waits: a list (up and down), a drag area (along its axis), a
+// sideways box (its own way, while it can go that way). The first of them, from the innermost out, whose way the finger
+// has gone past the slop, and further than across it, takes the press from there; the others let it go (a drag area
+// pressed: no tap, not ended). Whoever holds whom does not matter: a row swiped across in a list, a
 // card swiped across over the list in it. A press none takes is a tap. Taken at once, as it goes down: a drag area
 // that only holds (Hold: a scrim, a sheet's body), a list moving on its own (caught), or the only one there. A list
 // moving on its own around what waits under the finger (a sideways box, a row swiped across) stops, and the press waits
@@ -54,7 +54,6 @@ fn claim_chain(c : Ctx, x : Double, y : Double) -> Array[Int] {
 /// that stops the wheel (Ctx::stop_wheel), nothing of its own that scrolls or is dragged.
 fn stops_press(c : Ctx, id : Int) -> Bool {
   !c.lists.contains(id) &&
-  !pagers.contains(id) &&
   !drags.contains(id) &&
   !captures.contains(id) &&
   !sideways.contains(id)
@@ -85,12 +84,12 @@ fn claim_in_shape(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// Whether `id` waits for its way to be moved along (a list, a pager, a drag area that moves, a sideways box): else it
+/// Whether `id` waits for its way to be moved along (a list, a drag area that moves, a sideways box): else it
 /// takes the press as it goes down.
 fn claim_waits(c : Ctx, id : Int) -> Bool {
   match drags.get(id) {
     Some(d) => !d.axis.same(Hold)
-    None => c.lists.contains(id) || pagers.contains(id) || sideways.contains(id)
+    None => c.lists.contains(id) || sideways.contains(id)
   }
 }
 
@@ -117,14 +116,7 @@ fn claim_takes(c : Ctx, id : Int, dx : Double, dy : Double) -> Bool {
           let can = if along < 0.0 { st.x < st.max } else { st.x > 0.0 }
           past(along, across) && can
         }
-        None =>
-          if pagers.contains(id) {
-            past(dx, dy)
-          } else if c.lists.contains(id) {
-            past(dy, dx)
-          } else {
-            false
-          }
+        None => c.lists.contains(id) && past(dy, dx)
       }
   }
 }

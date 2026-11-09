@@ -402,7 +402,7 @@ fn Ctx::inset_of(self : Ctx, v : Double, layer : Double, over : Bool, at : Bool,
 /// for the parent: 1 when it must lay out again (this subtree changed), 2
 /// when it is not to be moved as a whole (Ctx::commit): something in it
 /// changed, moved by itself, or is placed anew every frame (lists,
-/// editors, pager pages).
+/// editors).
 ///
 /// A child that changes parents lays both parents out again, as the engine
 /// needs: the one it left with its children changing (every slot in use is
@@ -589,8 +589,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       }
     Cut => if in_row { shrink = 1.0 }
   }
-  // a pager's pages lie over each other, moved sideways as they turn
-  let over = n.pager != 0 || n.layer
+  // a layer lies over what is beside it
+  let over = n.layer
   // put where it is said in its parent (CSS's position: absolute), out of the flow
   let at = !over && n.placed_at()
   match n.h {
@@ -834,7 +834,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       let r = self.flex_tree(c, pd)
       // what it needs across at least, with what is beside it in its row (all of it) or under it (the widest): what it
       // may leave out apart, its ⋯ with it where it may
-      if !(cn.layer || cn.portal || cn.pager != 0 || cn.placed_at()) {
+      if !(cn.layer || cn.portal || cn.placed_at()) {
         let margins = self.on_px(cn.mar_l, whole) + self.on_px(cn.mar_r, whole)
         let need = cn.least + margins
         let fneed = cn.fit_least + margins
@@ -1055,9 +1055,6 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   } else if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
     s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
     ch = true
-  }
-  if n.pager != 0 {
-    up = 2
   }
   if ch {
     f.dirty = true
@@ -1304,9 +1301,6 @@ fn Ctx::commit_at(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> U
       commit_counts[2] = commit_counts[2] + 1
     }
     return
-  }
-  if n.pager != 0 {
-    self.place_pager_slot(i)
   }
   commit_counts[0] = commit_counts[0] + 1
   n.by_size(f.width, f.height)
