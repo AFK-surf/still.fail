@@ -1,4 +1,4 @@
-// The native views' contract (docs/determinism.md, "What is compared, and where"; scripts/host_contract.sh HOST views):
+// The native views' contract ("What is compared, and where"; scripts/host_contract.sh HOST views):
 // on a real host, MBUI_VIEWCHECK=1: a video's view and a page's placed between pixels (a 16:9 picture fitted in 366
 // across, its top 147.3625 down; a page under it at 410.4375, 120.25 tall), each kind the host has (Windows has no
 // video player yet: its page alone), what the app told the host on the log (VIEWTOLD, in device pixels: ui's native.mbt) beside where the

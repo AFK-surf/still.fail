@@ -1163,7 +1163,7 @@ fn fix_recursive_fe_image(fe_images : Array[Int], doc : SDoc) -> Unit {
   }
 }
 
-// ── text (svgtree/text.rs) ────────────────────────────────────────────
+// ── text ────────────────────────────────────────────
 
 ///|
 fn SDoc::xml_space(self : SDoc, id : Int, default : Bool) -> Bool {

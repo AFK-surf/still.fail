@@ -14,77 +14,20 @@ fn dv_reset() -> Unit {
 // ── the bar ──────────────────────────────────────────────────────────────
 
 ///|
-/// A page's compact bar (Parts.kt NavBar): back and where to, the title in the middle, what it does at the right; no
-/// line under it. True on the frame after back was tapped.
-fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit) -> Bool {
-  @sf.nav_bar(c, "dv-nav-back", back, title, trailing~, back_max=dmax(80.0, c.width / 2.0 - 120.0), bg=@sf.theme().p.bg, top=status_top())
+/// A page's compact bar: back and where to, the title in the middle, what it does at the right; no
+/// line under it; `on_press` as back is tapped.
+fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit, on_press~ : () -> Unit) -> Unit {
+  @sf.nav_bar(c, "dv-nav-back", back, title, trailing~, back_max=dmax(80.0, c.width / 2.0 - 120.0), bg=@sf.theme().p.bg, top=status_top(), on_press~)
 }
 
 ///|
-/// A round button in a bar (Parts.kt NavButton), 34 across, the icon alone (18 unless said).
-fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String) -> Bool {
-  nav_button(c, icon, size, key~, said?)
+/// A round button in a bar, 34 across, the icon alone (18 unless said).
+fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String, on_press~ : () -> Unit) -> Unit {
+  nav_button(c, icon, size, key~, said?, on_press~)
 }
 
 ///|
-/// A button (Controls.kt Button): 38 high, a pill; the primary one in ink (red when it is a danger), the other on the
-/// chip's ground. True on the frame after it was tapped (not while busy or off).
-fn dv_button(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  primary~ : Bool,
-  enabled? : Bool = true,
-  busy? : Bool = false,
-  danger? : Bool = false,
-) -> Bool {
-  let t = @sf.theme()
-  let on = enabled && !busy
-  let id = c.id(key)
-  let ink = if primary && danger && enabled {
-    0xFFFFFFFFL
-  } else if primary {
-    t.p.bg
-  } else {
-    t.p.text
-  }
-  let ground = if primary {
-    if !enabled {
-      t.p.line
-    } else if danger {
-      t.p.red
-    } else {
-      t.p.text
-    }
-  } else {
-    t.p.chip
-  }
-  c.box(
-    dir=Row,
-    h=Px(38.0),
-    radius=19.0,
-    padx=16.0,
-    gap=8.0,
-    align=ACenter,
-    bg=ground,
-    id=if on { id } else { 0 },
-    fn() {
-      if busy {
-        @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
-      }
-      c.text(label, size=@sf.theme().t.ui, weight=600, color=ink, wrap=false) |> ignore
-      // Controls.kt Button: clickable over its capsule
-      if on {
-        @motion.ripple(c, id, 19.0)
-      }
-    },
-  )
-  |> ignore
-  on && c.clicked(id)
-}
-
-///|
-/// A sheet from the bottom over the page (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%, a tap beside
+/// A sheet from the bottom over the page (mbui's @kit.sheet): the scrim (black at 28%, a tap beside
 /// it closes it), top corners of 26, frosted over the page and the scrim (@sf.sheet_look; `ground`: on that instead),
 /// only drawn while it closes; `h` tall (most of the screen at most), or with `fit` as tall as what it holds as this
 /// frame lays it out (read back: `h` before it is first laid out; placed by its size, not chased). Its grabber

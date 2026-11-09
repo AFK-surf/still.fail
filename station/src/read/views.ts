@@ -107,13 +107,18 @@ function turnSummary(t: store.TurnSummary): Json {
 }
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
-export function slackConnectOf(t: ThreadSummary): string | null {
+export function slackConnectOf(t: Pick<ThreadSummary, "sessions">): string | null {
   return t.sessions.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null;
 }
 
 /// The name a chat has been given: by people, else by its agent.
 export function given(thread: ThreadRow): string | null {
   return titles.givenTitle(thread);
+}
+
+/// The shared title rule uses the first message only for an unnamed external chat.
+export function titleNeedsFirstText(thread: ThreadRow): boolean {
+  return titles.givenTitle(thread) === null && !titles.isOwnChat(thread);
 }
 
 /// What a thread is called (title_of over a summary).
@@ -172,12 +177,12 @@ function isMine(api: Api, viewer: Viewer): (person: Json | null) => boolean {
   };
 }
 
-/// Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel. No connection is up to name
-/// the workspace, nor knows the channel.
-function origin(t: ThreadSummary): Json {
+/// Where a Slack thread is, for the connect icon's tip: the Slack workspace, the channel, and where its thread lives
+/// (a Feishu or Comma connect's own). No connection is up to name the workspace, nor knows the channel.
+function origin(t: Pick<ThreadSummary, "thread" | "sessions">): Json {
   const connect = slackConnectOf(t);
   const s = currentStore!;
-  return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs };
+  return { teamName: connect === null ? null : teamName(s, connect), channel: t.thread.channel, channelName: knownChannel(s, connect, t.thread.channel), threadTs: t.thread.threadTs, surface: t.thread.surface };
 }
 
 /// An author's name; `picture`, where given, their picture's address (a Slack person's own, as their Slack shows it).
@@ -328,7 +333,12 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 /// ids of the items it can change (an item's id is its first agent's key: the sessions changed, and the agents of the
 /// threads changed or theirs); `sessions` and `threads`, what those items are made of (their chats' agents, and the
 /// threads those take part in, the Slack ones they came from among them).
-export type Scope = { rows: Set<string>; sessions: Set<string>; threads: number[] };
+export type Scope = {
+  rows: Set<string>; sessions: Set<string>; threads: number[];
+  // Only a job-name scope keeps these, for the duration of its reader's snapshot.
+  jobNameMembers?: Map<number, store.Membership[]>;
+  jobNameThreads?: ReturnType<typeof store.threadsForChatNames>;
+};
 
 /// How many of the archive's items a page of it has (`archivedPage`).
 export const ARCHIVE_PAGE = 50;
@@ -357,6 +367,52 @@ export function scopeOf(s: Store, sessions: string[], threads: number[]): Scope 
   const theirs = store.threadsOfSessions(s, [...rows]);
   const agents = new Set([...rows, ...members(theirs)]);
   return { rows, sessions: agents, threads: [...new Set([...touched, ...theirs, ...store.threadsOfSessions(s, [...agents])])] };
+}
+
+/// Only what can name a job's chat: its sessions' own chats, and external origins when one of those chats or a
+/// standalone session actually needs a name from them. A shared chat can take its name from any of its members.
+export function scopeOfJobNames(s: Store, keys: string[]): Scope {
+  const rows = new Set(keys), agents = new Set(keys), origins = new Set<string>(), hasChat = new Set<string>();
+  const jobNameMembers = new Map<number, store.Membership[]>();
+  const target = new Map(keys.map((key) => [key, store.getSession(s, key)]));
+  const owner = keys.length === 1 ? keys[0] : null;
+  const chats = store.threadsOfSessionsOnSurface(s, keys, true);
+  const checked = new Map<string, boolean>();
+  let probe: ((session: string) => boolean) | null = null;
+  for (const id of chats) {
+    const thread = store.getThread(s, id);
+    if (thread === null) continue;
+    const own = owner !== null && thread.home === owner && thread.hiddenAt === null && given(thread) !== null &&
+      target.get(owner)?.archivedAt === null;
+    const members = (own ? store.jobNameFirstMembers(s, owner, id) : null) ?? store.threadSessions(s, id);
+    jobNameMembers.set(id, members);
+    for (const member of members) {
+      rows.add(member.session);
+      agents.add(member.session);
+      const session = target.get(member.session);
+      if (session && (thread.hiddenAt !== null) === (session.archivedAt !== null)) hasChat.add(member.session);
+    }
+    if (given(thread) === null) for (const member of members) {
+      let found = checked.get(member.session);
+      if (found === undefined) {
+        probe ??= store.namingOriginProbe(s);
+        found = probe(member.session);
+        checked.set(member.session, found);
+      }
+      if (found) { origins.add(member.session); break; }
+    }
+  }
+  for (const [key, session] of target) {
+    if (session && (session.title === null || trim(session.title) === "") && !hasChat.has(key)) origins.add(key);
+  }
+  const external = new Set(store.latestNamingOrigins(s, [...origins]));
+  // An origin can include a missing member; its other members still make it visible to the shared reader.
+  for (const id of external) {
+    const members = store.threadSessions(s, id);
+    jobNameMembers.set(id, members);
+    for (const member of members) agents.add(member.session);
+  }
+  return { rows, sessions: agents, threads: [...chats, ...external], jobNameMembers };
 }
 
 /// The sidebar items of `viewer` a change of `sessions` and `threads` can touch (`scopeOf`), as the whole sidebar has
@@ -501,8 +557,14 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 /// `titlesOnly`: the items' ids, titles and agents alone (what names a job's chat, read/jobs.ts `openJobs`): none of their
 /// latest messages, cards, needs, answers or the review's marks read for them.
 export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
-  // Only the chats of the viewer's workspace (docs/multi-workspace.md).
+  // Only the chats of the viewer's workspace.
   const rows = sharedChats(station, archived, scope, titlesOnly).filter((row) => sees(viewer, row.ws));
+  const words = { untitled: untitled(), directMessage: tr("station.chat.directMessage"), quotedOnly: tr("station.chat.quotedOnly") };
+  if (titlesOnly) {
+    // Jobs only use each row's id, title and agents. The viewer's marks do not change any of those.
+    const own: chatRow.Own = { mine: () => false, reads: new Map(), dismissed: new Set(), kept: new Set(), pins: new Map() };
+    return rows.map((row) => chatRow.rowFor(row, own, words));
+  }
   const api = apiOf(station);
   const s = api.store;
   const threads = rows.flatMap((row) => (typeof row.thread === "number" ? [row.thread as number] : []));
@@ -517,7 +579,6 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     // When the viewer pinned each to the top of their list.
     pins: store.pins(s, viewer.email, scope === null ? null : keys),
   };
-  const words = { untitled: untitled(), directMessage: tr("station.chat.directMessage"), quotedOnly: tr("station.chat.quotedOnly") };
   return rows.map((row) => chatRow.rowFor(row, own, words));
 }
 
@@ -531,6 +592,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
+  type ListedThread = { thread: ThreadRow; sessions: ThreadSummary["sessions"]; lastAt: number; summary: ThreadSummary | null };
   // For some items alone, the sessions they are made of alone: each change read every session the station ever had.
   const sessions = (
     scope === null
@@ -542,13 +604,13 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
   const all = new Map(sessions.map((x) => [x.key, x]));
-  const listed = (t: ThreadSummary) => (t.thread.hiddenAt !== null) === archived;
-  const inChat = (t: ThreadSummary): string[] => {
+  const listed = (t: ListedThread) => (t.thread.hiddenAt !== null) === archived;
+  const inChat = (t: ListedThread): string[] => {
     const alone = archived && t.thread.home === null;
     return t.sessions.filter((m) => (alone ? all.has(m.session) : shown.has(m.session))).map((m) => m.session);
   };
   const archivedOf = (x: store.SessionRow) => ({ at: x.archivedAt ?? 0, by: x.archivedBy ?? store.MANUAL, alone: false });
-  const watches = store.watching(s, scope === null ? null : [...scope.sessions]);
+  const watches = titlesOnly ? new Map<string, Json>() : store.watching(s, scope === null ? null : [...scope.sessions]);
   const agent = (key: string): Json => {
     const x = all.get(key)!;
     const stat = stats.get(key);
@@ -562,15 +624,27 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   };
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
-  const threads = store.listThreads(s, "", null, of, "none").filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const jobNameThreads = () => scope?.jobNameMembers === undefined ? store.threadsForChatNames(s, of)
+    : (scope.jobNameThreads ??= store.threadsForChatNames(s, of, scope.jobNameMembers));
+  const selected: ListedThread[] = titlesOnly
+    ? jobNameThreads().map((t) => ({ ...t, summary: null }))
+    : store.listThreads(s, "", null, of, "none").map((t) => ({ thread: t.thread, sessions: t.sessions, lastAt: t.lastMessage?.createdAt ?? 0, summary: t }));
+  const threads = selected.filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const titleTexts = new Map<number, string | null>();
+  const nameText = (t: ListedThread): string | null => {
+    if (t.summary !== null) return t.summary.firstText;
+    if (!titleNeedsFirstText(t.thread)) return null;
+    if (!titleTexts.has(t.thread.id)) titleTexts.set(t.thread.id, store.firstText(s, t.thread.id));
+    return titleTexts.get(t.thread.id) ?? null;
+  };
   const stats: ReturnType<typeof store.sessionActivity> = titlesOnly ? new Map() : store.sessionActivity(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), whether it has an internal chat, and who wrote
   // in its Slack threads (a row is mine for them).
-  const origins = new Map<string, ThreadSummary>();
+  const origins = new Map<string, ListedThread>();
   const chatted = new Set<string>();
   const spoke = new Map<string, Json[]>();
   for (const t of threads) {
-    const writers = t.thread.surface !== STILLFAIL_SURFACE ? people(t.people) : [];
+    const writers = t.thread.surface !== STILLFAIL_SURFACE && t.summary !== null ? people(t.summary.people) : [];
     for (const m of t.sessions) {
       if (t.thread.surface === STILLFAIL_SURFACE) {
         if (listed(t)) chatted.add(m.session);
@@ -614,15 +688,16 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const agents = inChat(t).map(agent);
     const origin_ = from === null ? null : origin(from);
     const creator_ = creator(t.thread.createdBy);
-    const people_ = people(t.people);
+    const people_ = t.summary === null ? [] : people(t.summary.people);
     const names = titlesOnly ? null : authorNames(api, t.thread.id);
-    const lastView = names === null || t.lastMessage === null ? null : messageView(t.lastMessage, names, api.store);
+    const lastMessage = t.summary?.lastMessage ?? null;
+    const lastView = names === null || lastMessage === null ? null : messageView(lastMessage, names, api.store);
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
     // with no name of its own, the Slack thread its agent came from names it
     const named = from !== null && origin_ !== null && given(t.thread) === null
-      ? { thread: from.thread, firstText: from.firstText, channelName: origin_.channelName }
-      : { thread: t.thread, firstText: t.firstText, channelName: null };
+      ? { thread: from.thread, firstText: nameText(from), channelName: origin_.channelName }
+      : { thread: t.thread, firstText: nameText(t), channelName: null };
     let last: Json = null;
     if (lastView !== null) {
       const text0 = trim(typeof lastView.text === "string" ? lastView.text : "");
@@ -647,7 +722,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
       last,
       unread: false,
       mine: false,
-      lastActiveAt: Math.max(t.thread.createdAt, t.lastMessage?.createdAt ?? 0),
+      lastActiveAt: Math.max(t.thread.createdAt, t.lastAt),
       connect: from === null ? null : slackConnectOf(from),
       origin: origin_,
       // Who is in it, for the row's pictures: who started it, and everyone who wrote in it.
@@ -701,7 +776,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const from = origins.get(key) ?? null;
     const origin_ = from === null ? null : origin(from);
     const own = x.title === null ? "" : trim(x.title);
-    const named = own !== "" ? { thread: { surface: STILLFAIL_SURFACE, title: own } } : from !== null && origin_ !== null ? { thread: from.thread, firstText: from.firstText, channelName: origin_.channelName } : { thread: { surface: STILLFAIL_SURFACE } };
+    const named = own !== "" ? { thread: { surface: STILLFAIL_SURFACE, title: own } } : from !== null && origin_ !== null ? { thread: from.thread, firstText: nameText(from), channelName: origin_.channelName } : { thread: { surface: STILLFAIL_SURFACE } };
     const starter = creator(x.createdBy);
     const row: Json = {
       id: key, session: key, thread: null,
@@ -724,6 +799,8 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     if (archived) row.archived = archivedOf(x);
     rows.push(row);
   }
+  // A job uses only the name and agents; its chat's links and shares are not part of that answer.
+  if (titlesOnly) return scope === null ? rows : rows.filter((row) => scope.rows.has(String(row.id)));
   // Of the items read alone (a change's), theirs alone.
   const ids = scope === null ? null : rows.flatMap((row) => (typeof row.id === "string" && scope.rows.has(row.id) ? [row.id as string] : []));
   // When a viewer pinned it is theirs (chat-row.ts).
@@ -742,7 +819,7 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
     const children = opened.get(row.id);
     if (children) row.opened = children.map(named);
   }
-  // Which other workspaces each is shared with (docs/chat-share.md), only those that are.
+  // Which other workspaces each is shared with, only those that are.
   const shares = store.chatShares(s, ids);
   for (const row of rows) {
     const shared = typeof row.id === "string" ? shares.get(row.id) : undefined;

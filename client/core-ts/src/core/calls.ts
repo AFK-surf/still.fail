@@ -1,4 +1,4 @@
-// Named calls and their input validation (core/calls.rs); execution stays in the core (execute.ts).
+// Named calls and their input validation; execution stays in the core (execute.ts).
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
@@ -6,7 +6,6 @@ import { parseScreen, type ScreenCall } from "../screens.ts";
 import type { FontsCall } from "../font-files.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
-import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
 import type { KeepKind } from "../drive-kept.ts";
 import { CALLS as BROWSE_CALLS } from "../drive-browse.ts";
 import { CoreError } from "../error.ts";
@@ -88,7 +87,7 @@ export type Call =
   | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean; stream: boolean; keep: KeepKind | null; mtime: number | null; size: number | null; quiet?: boolean; from?: unknown }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
-  /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
+  /// A login's page to open: a loopback login's callback listened for here first, unless the
   /// station is this machine (`here`).
   | { kind: "machineLoginOpen"; station: string; id: string; here: boolean }
   | { kind: "drivePlace"; station: string; root: string; path: string; at: number; of: number | null }
@@ -126,8 +125,6 @@ export type Call =
   | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
   /// A chat made public (views/publish.ts): what a snapshot would hold, one kept, one revoked.
   | { kind: "chatPublishPreview"; station: string; thread: number; turn: number | null }
-  | { kind: "chatPublish"; station: string; thread: number; upto: number; files: string[] }
-  | { kind: "chatUnpublish"; station: string; thread: number | null; id: string }
   | { kind: "chatRefsKeep"; links: [string, string][] }
   | { kind: "choose"; name: string; params: Record<string, unknown> }
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
@@ -171,8 +168,6 @@ export type Call =
   /// chat's file to load (`fill.want {station, key, name, size, from?}`), one no longer brought (`fill.stop {id}`), or
   /// all (`fill.stopAll`), what was kept of each kept.
   | { kind: "fill"; action: "want" | "stop" | "stopAll"; params: Record<string, unknown> }
-  /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
-  | { kind: "module"; name: string; call: HeldCall };
 
 /// Where a file read was opened (`from`, as KeptFrom has it), as a call has it; none where it says none, or one that
 /// is not that.
@@ -187,7 +182,6 @@ function fromOf(params: unknown): { from?: unknown } {
 /// those that hand it what they read as it comes (`stream`: a player's part of a file, let go of as it seeks elsewhere
 /// or closes), so that nothing no page waits for any more goes on coming over the network.
 export function cancellable(call: Call): boolean {
-  if (call.kind === "module") return call.call.def.cancellable === true;
   return ((call.kind === "stationPreview" || call.kind === "stationFilePart" || call.kind === "driveRead") && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
 }
 
@@ -219,18 +213,14 @@ export function callStation(call: Call): string | null {
     case "connectFlow":
     case "slackTokens":
       return call.topic.station as string;
-    case "module":
-      return call.call.def.station?.(call.call.params) ?? null;
     default:
       return "station" in call && typeof call.station === "string" ? call.station : null;
   }
 }
 
-/// Whether a call is one a person does and waits on (doing.rs `counts`).
+/// Whether a call is one a person does and waits on.
 export function counts(call: Call, name: string): boolean {
   switch (call.kind) {
-    case "module":
-      return call.call.def.counts === true;
     case "decisionForm":
     case "policyForm":
     case "agentEnvForm":
@@ -250,8 +240,6 @@ export function counts(call: Call, name: string): boolean {
     case "chatXshare":
     case "chatXshareAdd":
     case "stationJoin":
-    case "chatPublish":
-    case "chatUnpublish":
     case "chatRetry":
     case "chatRetryIn":
     case "chatDiscard":
@@ -329,9 +317,8 @@ function beside(bytes: Uint8Array | undefined): Uint8Array {
   return bytes;
 }
 
-/// `bytes`: what the call carries beside its JSON, if anything; `modules`: the calls of the app's modules (module.ts),
-/// asked after the core's own.
-export function parseCall(name: string, params: unknown, bytes?: Uint8Array, modules?: Map<string, ModuleCall<any>>): Call {
+/// `bytes`: what the call carries beside its JSON, if anything.
+export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Call {
   const flows: [string, string[], "decisionForm" | "policyForm" | "agentEnvForm" | "profileFlow" | "connectFlow" | "slackTokens", string][] = [
     ["automaticDecisions.form.", ["open", "edit", "save", "drop"], "decisionForm", "decisionForm"],
     ["automaticDecisions.policy.", ["open", "edit", "save", "drop"], "policyForm", "policyForm"],
@@ -732,23 +719,6 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "chatPublishPreview", station: p.station as string, thread: p.thread as number, turn: p.turn as number | null };
     }
-    case "chat.publish": {
-      const p = read(params, [
-        ["station", S, "req"],
-        ["thread", "u64", "req"],
-        ["upto", "u64", "req"],
-        ["files", "strings", "default"],
-      ]);
-      return { kind: "chatPublish", station: p.station as string, thread: p.thread as number, upto: p.upto as number, files: [...new Set(p.files as string[])] };
-    }
-    case "chat.unpublish": {
-      const p = read(params, [
-        ["station", S, "req"],
-        ["thread", "u64", "opt"],
-        ["id", S, "req"],
-      ]);
-      return { kind: "chatUnpublish", station: p.station as string, thread: p.thread as number | null, id: p.id as string };
-    }
     case "chat.refs":
       return { kind: "chatRefsKeep", links: read(params, [["links", "pairs", "req"]]).links as [string, string][] };
     case "prefs.set": {
@@ -941,7 +911,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         keep: p.keep && p.size !== null ? (p.size as number) : null, ...fromOf(params),
       };
     }
-    // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
+    // The station's drive: a part of a file read, a part of one written, a folder read again.
     case "drive.read": {
       const p = read(params, [
         ["station", S, "req"],
@@ -1185,7 +1155,5 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   if (ask) return { kind: "ask", ask };
   const op = ops.request(name, p);
   if (op) return { kind: "op", op };
-  const held = modules ? parseModuleCall(modules, name, params, bytes) : null;
-  if (held) return { kind: "module", name, call: held };
   throw new CoreError("unknown_call", t("core-misc.call.unknown", { name }));
 }

@@ -1,6 +1,6 @@
 // mbc's commands (mbc.mbt says what each does), and one more:
 //
-//     mbc csplit IN.c OUTDIR [--json MANIFEST]   split IN.c into OUTDIR's units (csplit.mbt); files whose text did
+//  mbc csplit IN.c OUTDIR [--json MANIFEST] split IN.c into OUTDIR's units (csplit.mbt); files whose text did
 //                                                not change keep their mtime, .c/.h files no longer made are removed
 
 ///|

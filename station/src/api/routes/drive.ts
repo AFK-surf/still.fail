@@ -26,7 +26,7 @@ export type DriveRouteDeps = {
 const manages = (r: { viewer: { role: string } }) => r.viewer.role === "owner" || r.viewer.role === "admin";
 /// Whether the asker reaches every folder of the machine: a member who may write, whose agents could reach them anyway.
 const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
-/// The drive as the asker's workspace has it: the folders that workspace pinned (docs/multi-workspace.md).
+/// The drive as the asker's workspace has it: the folders that workspace pinned.
 export const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
 
 /// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any). One for a folder macOS
@@ -189,14 +189,24 @@ export function routes({ drive: whole, config, home = homedir(), changed, stage 
       }),
     },
     {
-      // Answered once something in the folder changes (`{changed: true}`), else after a while (`false`), for the client to
-      // read it again (./drive/watch.ts). `id`: the client's own asking, kept between its askings.
+      // Asked as events: a `changed` event each time something in the folder changes, for the client to read it again,
+      // while the stream is open (../../drive/watch.ts). A client from before asks it again and again: answered once
+      // something changes (`{changed: true}`), else after a while (`false`); `id`, its own asking, kept between them.
       method: "GET",
       pattern: /^\/drive\/watch$/,
-      handle: answer(async (r) => {
-        const dir = await driveOf(whole, r).folderToWatch(at(r).root, at(r).path, anywhere(r));
-        return { changed: await watches.changed(dir, param(r, "id") ?? "") };
-      }),
+      handle: async (r: Request): Promise<Answer> => {
+        if ((r.headers["accept"] ?? "").includes("text/event-stream")) {
+          try {
+            return followed(watches, await driveOf(whole, r).folderToWatch(at(r).root, at(r).path, anywhere(r)));
+          } catch (e) {
+            return refused(e, r.lang);
+          }
+        }
+        return answer(async (r) => {
+          const dir = await driveOf(whole, r).folderToWatch(at(r).root, at(r).path, anywhere(r));
+          return { changed: await watches.changed(dir, param(r, "id") ?? "") };
+        })(r);
+      },
     },
     ...(stage
       ? [{
@@ -211,4 +221,36 @@ export function routes({ drive: whole, config, home = homedir(), changed, stage 
         } as Route]
       : []),
   ];
+}
+
+/// GET /drive/watch as events: `changed` each time the folder at `dir` changes, while the stream is open; a folder that
+/// cannot be watched is refused (the client then reads it only as it is shown).
+function followed(watches: FolderWatches, dir: string): Answer {
+  let changed = false;
+  let wake: (() => void) | null = null;
+  let closed = false;
+  const stop = watches.follow(dir, () => {
+    changed = true;
+    wake?.();
+  });
+  if (stop === null) return json(503, JSON.stringify({ error: "the folder cannot be watched now" }));
+  const body: AsyncIterableIterator<Buffer> = {
+    [Symbol.asyncIterator]: () => body,
+    next: async () => {
+      while (!closed && !changed) await new Promise<void>((resolve) => (wake = resolve));
+      wake = null;
+      if (closed) return { done: true, value: undefined };
+      changed = false;
+      return { done: false, value: Buffer.from("event: changed\ndata: {}\n\n") };
+    },
+    return: async () => {
+      if (!closed) {
+        closed = true;
+        stop();
+        wake?.();
+      }
+      return { done: true, value: undefined };
+    },
+  };
+  return { status: 200, headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" }, body };
 }

@@ -59,6 +59,12 @@ priv struct TreeField {
 let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 
 ///|
+/// How many times a field was put in tree_fields or taken out: what view_draws reads besides a node's content
+/// (@view.Tree::each_drawn_laid_or_past's `draws_rev`).
+// kept across runs: only counts
+let tree_fields_rev : Ref[Int] = Ref(0)
+
+///|
 /// The words by which a drawn node is found in tests and drives. An editor is found by its hint as an old editor's
 /// Node.text is; its glyphs are painted by the editor, so Drawn.words is deliberately empty.
 fn view_words_found(d : @view.Drawn) -> String {
@@ -76,8 +82,11 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// Ctx::field_files), as tall as
 /// its words lay out between `min_lines` (one unless said) and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
-/// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
-/// is now, followed (in place of `placeholder`). The node made.
+/// paste of `paste_limit` characters or more, not put in, once, at that paste's; `edited`: its words as the person's
+/// edit changes them (a key, the input method's words, a paste, an undo: Ctx::editor's `on_change`), once, at that
+/// edit's moment, never as the app puts words in it (Field::set, Field::follow). `placeholder_by`: its placeholder as
+/// it is now, followed (in place of `placeholder`). `label`: what a screen reader calls it (none: its
+/// placeholder). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -100,10 +109,12 @@ pub fn field(
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   submitted? : (String) -> Unit = fn(_) {  },
   pasted? : (String) -> Unit = fn(_) {  },
+  edited? : (String) -> Unit,
   files? : (Array[(String, Bytes)]) -> Unit,
   size_by? : () -> Double,
   colors_by? : () -> (Int64, Int64, Int64),
   placeholder_by? : () -> String,
+  label? : String = "",
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
@@ -153,6 +164,10 @@ pub fn field(
     st.words = words
     st.look = look
     st.looked = None
+    // (the person's edit of its words told as it is made, EditorState::typed_told: what an old view's editor is told
+    // as `on_change`)
+    st.on_change = edited
+    tree_fields_rev.val = tree_fields_rev.val + 1
     tree_fields[id] = {
       st,
       font_size: size,
@@ -190,7 +205,7 @@ pub fn field(
     f
     // (laid out as what it shows, a secret's dots, what its look makes of its words, worked out here anew as they or what
     // the look reads change: the one working out its layout and its drawing take (EditorState::look_of's, kept);
-    // where only its look's colours change, a frame for them all the same)
+    // where only its look's colours change, drawn again all the same: View::measured)
     .measured(
       By(fn() {
         let laid = field.laid(font_size=size(), line~, min_lines~, max_lines~, trim~)
@@ -209,7 +224,7 @@ pub fn field(
     // (its words read out, a secret's none: as an old view's editor says them)
     .says(By(fn() {
       let value = field.composed_said()
-      Some(@view.said(TextField, label=hint(), value=if secret { "" } else { value }, actions=[SetText("")]))
+      Some(@view.said(TextField, label=if label != "" { label } else { hint() }, value=if secret { "" } else { value }, actions=[SetText("")]))
     }))
     // (a press on it: taken as it goes down where the field takes it so, else a tap's as it is let go: tree_field_down)
     .on_press(fn() { tree_field_tapped(id) })
@@ -238,6 +253,36 @@ pub fn Field::focus(self : Field) -> Unit {
 }
 
 ///|
+/// The keyboard's focus let go of where field `self` has it (what was written in it done with): no field takes keys,
+/// the keyboard goes, none gives it back (Ctx::blur); a focus asked for it and not given yet, asked no more. Where the
+/// focus is elsewhere, it stays.
+pub fn Field::let_go(self : Field) -> Unit {
+  self.st.focus_asked = false
+  let c = g()
+  let id = match self.st.tree_node {
+    Some(n) if tree_fields.contains(n) => tree_said_of.get(n).unwrap_or(0)
+    _ => self.st.built_id
+  }
+  if id != 0 && c.focus == id {
+    c.blur()
+  }
+}
+
+///|
+/// Whether the editor holding field `self` has the keyboard's focus (a field of the window's tree, or an old view's
+/// editor it was given), followed as Ctx::has_focus is: what reads it told as the focus comes to that editor or leaves
+/// it. Held by none: false (a focus asked for it is the Field's own till one holds it, Field::focus).
+pub fn Field::focused(self : Field) -> Bool {
+  let id = match self.st.tree_node {
+    Some(n) if tree_fields.contains(n) => tree_said_of.get(n).unwrap_or(0)
+    // (an old view's editor by the id it was built at, while that id's editor is this Field's still)
+    _ if g().editors.get(self.st.built_id).map_or(false, fn(e) { physical_equal(e, self.st) }) => self.st.built_id
+    _ => 0
+  }
+  g().has_focus(id)
+}
+
+///|
 /// The keyboard's focus given field `field` by what holds it now: a field of the window's tree, at once (where it can
 /// take it); an old view's editor drawn now, that one (where the old view it is in takes input); none, asked of the one
 /// that comes to hold it, given as it does (a field of the tree's as it is made; an old view's editor as it is built),
@@ -259,7 +304,9 @@ pub fn Ctx::focus_field(self : Ctx, field : Field) -> Unit {
       // (the node by the id it was built at, and that id's editor this Field's still: one built after at the same key
       // with another Field holds that one, not this)
       if n.kind == kind_editor && n.id == st.built_id && self.editors.get(n.id).map_or(false, fn(e) { physical_equal(e, st) }) {
-        if island_allows(self.island_of_id(st.built_id)) {
+        // (under a modal layer of the tree's over the old view built now, kept for the layer to give back, as
+        // Ctx::focus_editor's)
+        if !view_focus_kept_for(self, st.built_id) && island_allows(self.island_of_id(st.built_id)) {
           self.focus_moved(st.built_id)
         }
         return
@@ -284,6 +331,7 @@ fn tree_field_gone(id : @view.NodeId) -> Unit {
   match tree_fields.get(id) {
     Some(tf) => {
       tree_fields.remove(id)
+      tree_fields_rev.val = tree_fields_rev.val + 1
       match tree_said_of.get(id) {
         Some(k) => {
           match g().editors.get(k) {
@@ -296,6 +344,8 @@ fn tree_field_gone(id : @view.NodeId) -> Unit {
       }
       if tf.st.tree_node == Some(id) {
         tf.st.tree_node = None
+        // (what it told of the person's edits let go with it)
+        tf.st.on_change = None
       }
       if tree_field_hovered.val == Some(id) {
         tree_field_hovered.val = None
@@ -327,7 +377,7 @@ fn tree_field_down(id : @view.NodeId, x : Double, y : Double, at : Double) -> Bo
   let st = tf.st
   if h_feel() == 2 {
     // (held still long_press_ms where it went down: at that moment, on the tree's timeline, whatever frames come)
-    tf.hold_off = tf.view.at_moment(at + long_press_ms, fn() { tree_field_held(id) })
+    tf.hold_off = tf.view.at_moment(at + long_press_ms, fn() { pointed_edits(fn() { tree_field_held(id) }) })
     return false
   }
   // (how many presses in a row: one soon after the last and near it counts on from it, as the old frame counts)
@@ -531,9 +581,10 @@ fn tree_field_let_go(id : @view.NodeId, x : Double, y : Double, up : Bool) -> Un
   // (its words scrolled by a finger, let go: flung on at its speed, as an old view's field's are, sideways_up)
   if tf.scrolling {
     if up {
-      tf.track.add(view_moment(), y)
+      tf.track.up(view_moment(), y)
     }
-    sideways_up(c, tree_said_id(id), 0.0, if up { dclamp(tf.track.velocity(), -max_fling, max_fling) } else { 0.0 })
+    let v = if up { dclamp(tf.track.velocity_at(view_moment()), -max_fling, max_fling) } else { 0.0 }
+    sideways_up(c, tree_said_id(id), 0.0, v)
   }
   if tf.handle != 0 {
     c.handle_drag = 0
@@ -560,7 +611,7 @@ let tree_fields_drawn : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// A field of the tree's changed by what is its own: painted again from the next frame (tree_fields_drawn).
 fn tree_field_redraw() -> Unit {
-  tree_fields_drawn.set(@signals.untracked(fn() { tree_fields_drawn.get() }) + 1)
+  tree_fields_drawn.set(tree_fields_drawn.untracked() + 1)
   h_frame_owed()
 }
 
@@ -630,7 +681,7 @@ fn tree_field_bar_near(x : Double, y : Double) -> Int? {
 fn thumb_under(b : BarAt, x : Double, y : Double) -> Bool {
   let gr = scroll_bar_grab
   pointing() is Mouse &&
-  g().bar_shows(b) > 0.002 &&
+  g().bar_shows(b, g().clock) > 0.002 &&
   x >= b.tx - gr &&
   x < b.tx + b.tw + gr &&
   y >= b.ty - gr &&
@@ -685,7 +736,7 @@ fn tree_field_bar_down(id : @view.NodeId, x : Double, y : Double, at : Double) -
   let c = g()
   guard c.bar_drawn(tree_said_id(id)) is Some(b) else { return false }
   // (its thumb a target only as it is drawn at all, as an old view's is only where it shows: Ctx::paint_bar's)
-  guard c.bar_shows(b) > 0.002 else { return false }
+  guard c.bar_shows(b, at) > 0.002 else { return false }
   let gr = scroll_bar_grab
   guard x >= b.tx - gr && x < b.tx + b.tw + gr && y >= b.ty - gr && y < b.ty + b.th + gr && x >= b.x0 && x < b.x1 &&
     y >= b.y0 && y < b.y1 else {

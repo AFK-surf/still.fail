@@ -4,7 +4,7 @@
 // transcript read as a timeline, and a session taken up by a next driver (with a snapshot, and after a crash) with its
 // turn's end told once.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -126,6 +126,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.deepEqual(byId["llm-pi-ai"].config.providers.stillfail, {
       displayName: "OpenCode Go", api: "openai-completions", baseURL: "https://opencode.ai/zen/go/v1", apiKeyEnv: "STILLFAIL_DSH_KEY",
       models: [{ id: "m1", reasoningEfforts: { off: null, max: "max" } }], headers: { "x-opencode-session": `stillfail-${o.route}` }, reasoning: "max",
+      compat: { supportsDeveloperRole: false },
     });
     assert.deepEqual(byId["agent-default-model"].config, { provider: "stillfail", model: "m1" });
     assert.deepEqual(byId["system-prompt"].config, { personaPrefix: "", personaSuffix: "be brief; {\u200b{not a variable}}" }, "no prompt variables: the instructions' braces broken");
@@ -133,7 +134,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
 
     // Opened with the route its agent asks for.
     const sent = stdin(o.dump);
-    assert.deepEqual(sent[0], { id: "open", op: "open", cwd: o.cwd, provider: "stillfail", model: "m1" });
+    assert.deepEqual(sent[0], { id: "open", op: "open", cwd: o.cwd, provider: "stillfail", model: "m1", effort: "max" });
     assert.ok(!readFileSync(run.argv[3], "utf8").includes(o.mcpToken));
     assert.equal(sent[1].op, "prompt");
     assert.equal(sent[1].text, "say:hello");
@@ -278,6 +279,37 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     await assert.rejects(d.open({ ...o, resume: "11111111-1111-4111-8111-111111111111" }, () => {}), /no dsh session/);
   });
 
+  test("the driver plugin selects the route a resumed session is opened with; a new one is created on it", () => {
+    // The plugin under a stand-in for dsh's agents: dsh resumes a session on the route its transcript last used (its
+    // model's recorded selection), so a model or effort changed since takes only by selecting it. FAKE_KEEPS: a dsh that
+    // keeps its route whatever is selected; FAKE_OLD: one from before model selections.
+    const host = `
+      const { apply } = await import(${JSON.stringify(BRIDGE)});
+      const said = (what) => process.stderr.write(JSON.stringify(what) + "\\n");
+      let route = { provider: "stillfail", model: "m1" };
+      const model = {
+        select: (selection) => (said({ select: selection }), process.env.FAKE_KEEPS ? undefined : (route = selection)),
+        current: () => route,
+      };
+      const agent = { session: { id: "s1" }, ...(process.env.FAKE_OLD ? {} : { model }) };
+      const handle = (op, options) => (said({ [op]: options.agentOptions ?? null }), { agent, dispose: async () => {} });
+      apply({ on() {}, agents: { resume: async (o) => handle("resume", o), create: async (o) => handle("create", o) } });
+      process.stdout.on("data", (d) => said({ answer: JSON.parse(String(d)) }));
+    `;
+    const run = (open: Record<string, unknown>, env: Record<string, string> = {}) => {
+      const child = spawnSync(process.execPath, ["--input-type=module", "-e", host], { input: `${JSON.stringify({ id: "open", op: "open", cwd: "/w", ...open })}\n`, encoding: "utf8", env: { ...process.env, ...env } });
+      const lines = [...child.stderr.trim().split("\n"), ...child.stdout.trim().split("\n")].filter(Boolean).map((l) => JSON.parse(l));
+      return lines.map((l) => (l.id === "open" ? { answer: l } : l)).filter((l) => !("answer" in l) || l.answer.id === "open");
+    };
+    const route = { provider: "stillfail", model: "m2", reasoningEffort: "low" };
+    const asked = { resume: "s1", provider: "stillfail", model: "m2", effort: "low" };
+    assert.deepEqual(run(asked), [{ resume: route }, { select: route }, { answer: { id: "open", session: "s1" } }]);
+    assert.deepEqual(run({ provider: "stillfail", model: "m2", effort: "low" }), [{ create: route }, { answer: { id: "open", session: "s1" } }], "a new session starts on it");
+    assert.deepEqual(run({ resume: "s1" }), [{ resume: null }, { answer: { id: "open", session: "s1" } }], "dsh's own route: nothing to select");
+    assert.deepEqual(run(asked, { FAKE_OLD: "1" }), [{ resume: route }, { answer: { id: "open", session: "s1" } }], "a dsh from before selections goes by agentOptions");
+    assert.deepEqual(run(asked, { FAKE_KEEPS: "1" }), [{ resume: route }, { select: route }, { answer: { id: "open", error: "resumed on stillfail/m1, not stillfail/m2" } }], "never run on another model than the station says");
+  });
+
   for (const crashed of [false, true]) {
     test(`a next driver takes the session up ${crashed ? "after a crash (no snapshot)" : "from its snapshot"}: the turn ends once, no live event twice`, async () => {
       const first = driver();
@@ -331,7 +363,7 @@ describe("what a profile runs DeepSeek Harness on", () => {
     const setup = dshSetup(dshRoute(deepseek), "deepseek-v4-pro", "medium", "", "/h", "r", "http://127.0.0.1:1/mcp");
     const byId = Object.fromEntries(setup.patch.map((p) => [p.id, p]));
     assert.deepEqual(byId["llm-deepseek"].config, { apiKeyEnv: "DEEPSEEK_API_KEY", models: [{ id: "deepseek-v4-pro" }], reasoningEffort: "high" });
-    assert.deepEqual([setup.provider, setup.model], ["deepseek-official", "deepseek-v4-pro"]);
+    assert.deepEqual([setup.provider, setup.model, setup.effort], ["deepseek-official", "deepseek-v4-pro", "high"]);
 
     assert.deepEqual(dshRoute(profile({ kind: "api-provider", provider: "moonshotai", key: "k" })), { kind: "pi", name: "Kimi", api: "openai-completions", baseURL: "https://api.moonshot.ai/v1" });
     assert.deepEqual(dshRoute(profile({ kind: "api-provider", provider: "minimax", key: "k" })), { kind: "pi", name: "MiniMax", api: "anthropic-messages", baseURL: "https://api.minimax.io/anthropic" });
@@ -351,6 +383,15 @@ describe("what a profile runs DeepSeek Harness on", () => {
     assert.deepEqual(profileRuntimes(profile({ kind: "subscription" })), [], "no subscription to sign in to");
     assert.deepEqual(profileRuntimes(profile({ kind: "opencode-go", key: "k" }, { runtime: "claude" })), ["claude", "codex", "dsh"]);
     assert.deepEqual(profileRuntimes(profile({ kind: "anthropic-api", key: "k" }, { runtime: "claude" })), ["claude", "dsh"]);
+  });
+
+  test("instructions go as system, not developer, on an OpenAI protocol anywhere but OpenAI's own API", () => {
+    // FB-7: a gateway behind a custom provider refused the "developer" role pi-ai gives a reasoning model's instructions.
+    const compat = (access: Record<string, unknown>) =>
+      dshSetup(dshRoute(profile(access)), "m", "high", "", "/h", "r", "http://127.0.0.1:1/mcp").patch.find((p) => p.id === "llm-pi-ai").config.providers.stillfail.compat;
+    assert.deepEqual(compat({ kind: "api-provider", provider: "custom", key: "k", endpoint: "https://gateway.example/v1", protocol: "chat_completions" }), { supportsDeveloperRole: false });
+    assert.equal(compat({ kind: "api-provider", provider: "openai", key: "k" }), undefined, "OpenAI's own takes it");
+    assert.equal(compat({ kind: "api-provider", provider: "minimax", key: "k" }), undefined, "Anthropic's protocol has no such role");
   });
 
   test("a model dsh is started on declares image input when it reads images, and nothing when it does not", () => {

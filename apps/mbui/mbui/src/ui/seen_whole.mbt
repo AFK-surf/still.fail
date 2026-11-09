@@ -43,6 +43,7 @@ fn Ctx::seen_whole_over(self : Ctx, i : Int) -> Bool {
 ///|
 /// What the frame just drawn draws over a glyph of the words held (seen_whole), not by its stratum: its words, where.
 fn Ctx::seen_whole_faults(self : Ctx, words : String) -> (String, Double, Double)? {
+  self.flat_from(0)
   let a = self.inst
   for k in 0..<self.ninst {
     let b = k * inst_size

@@ -40,7 +40,7 @@ function cursorInteger(r: Request, name: string): bigint | null {
 
 /// A path segment (admin/mod.rs segment_decode): `+` stays itself there.
 
-/// The Rust's `/footprint` for clients from before footprint statistics were retired (admin/footprint.rs `retired`).
+/// The Rust's `/footprint` for clients from before footprint statistics were retired.
 const RETIRED = JSON.stringify({
   checkedAt: null, tookMs: null, scanning: false, manage: false,
   disk: { totalBytes: 0, freeBytes: 0 },
@@ -64,7 +64,7 @@ export const routes = (tools: Tools): Route[] => {
         read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
     },
     // The agents' memory, for the pages to show: the global one, and the shared skills (projects' memories among them).
-    // A member of a workspace the station joined sees that workspace's (docs/multi-workspace.md).
+    // A member of a workspace the station joined sees that workspace's.
     {
       method: "GET",
       pattern: /^\/memory$/,

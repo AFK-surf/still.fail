@@ -1,5 +1,5 @@
 // Laid out Medium with a sidebar to show (or beside the system's bars: rail_native.mbt), the wide frame's tape as nodes
-// of the window's tree (mbui's view package; docs/retained.md, the way there's 4: from the outside in), made once:
+// of the window's tree (mbui's view package, the way there's 4: from the outside in), made once:
 //
 //   - a row as wide as the tape, drawn moved as far as the tape has got (its offset, worked out as it is drawn from the
 //     tape's move, committed once at its cause: tape_goes), holding the panels side by side as the tree lays them out:
@@ -346,7 +346,7 @@ fn tape_put(to : TapeTo) -> Unit {
 ///|
 /// What is committed of the tape's move told (tape_moves_from, tape_put).
 fn tape_said() -> Unit {
-  tape_goes.said.set(@signals.untracked(fn() { tape_goes.said.get() }) + 1)
+  tape_goes.said.set(tape_goes.said.untracked() + 1)
 }
 
 ///|
@@ -640,6 +640,10 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   // (where the system lays out the app's tabs, its bars handed what the tape's frame has for them each frame it shows:
   // rail_native.mbt nav_frame)
   nav_hold(src)
+  // (the window's buttons, a Mac's, as far lower as its panels stand under the window's top: as far below the panel
+  // showing at the window's left as they are in from the window's side, the side panel's edge out of the window there;
+  // the user, 2026-11-09: 红绿灯位置不对. Back where they were as the tape goes; each way moved, not put there: 不要瞬移.)
+  @hostapi.window_buttons_down(bar_in_now(), @ui.move_ms(bar_in_now()))
   // (at rest where it is in use as it is made: no move from wherever another frame left it)
   tape_goes.way.put(1.0)
   tape_goes.rest.set(true)
@@ -661,6 +665,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     wide.tape_drag.set(0.0)
     wide.tape_backing = false
     wide.tape = false
+    @hostapi.window_buttons_down(0.0, @ui.move_ms(bar_in_now()))
   })
   |> ignore
   // what the page's panel shows as the page on top changes, at its cause's moment (page_wait.mbt)
@@ -679,7 +684,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   v.reacts(
     fn() {
       match @sfbase.workspace_in_view(src).0 {
-        Some(w) if (src.topic)("prefs", {}).value is Some(_) => w.id + "\n" + side_group(src, w.id)
+        Some(w) if src.topic("prefs", {}).get().value is Some(_) => w.id + "\n" + side_group(src, w.id)
         _ => ""
       }
     },
@@ -709,7 +714,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         Chat(r) | History(r, _, _) => chat_key(r)
         // a chat's detail asked as a page, on its way to its chat's side panel (main_page): still that chat, not another
         // come (its panel, opening, comes over)
-        p if laid_beside(p) => @signals.untracked(fn() { wide.tape_chat.get() })
+        p if laid_beside(p) => wide.tape_chat.untracked()
         _ => ""
       }
       let open = match (tape_goes.panel_of)() {
@@ -718,7 +723,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }
       // (the chat shown has its view: what its side panel shows is known)
       let known = match app.nav.top() {
-        Chat(r) | History(r, _, _) => (src.topic)("chat", chat_params(r)).value is Some(_)
+        Chat(r) | History(r, _, _) => src.topic("chat", chat_params(r)).get().value is Some(_)
         _ => true
       }
       (chat, open, known, wide.tape_ask.get(), tape_page_ready(), tape_to_of(tape_room_now()))
@@ -732,7 +737,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   // view in one of them says takes back (a page's own stack) taking it before it, what is over them too; whose it is
   // said at the cause that changes it, each step taken at its moment (wide_back_step)
   let held : Ref[WideBack?] = Ref(None)
-  v.show(fn() { wide_takes_back(src) }, fn(b) {
+  v.show(at_once=true, fn() { wide_takes_back(src) }, fn(b) {
     b.follows_back(fn(step) { wide_back_step(src, held, step) }) |> ignore
     // (let go as a gesture goes on to it, as what it takes back by is (told nothing more): what it held of it let go
     // here, the tape back where it was in use)
@@ -766,7 +771,23 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_goes.parts.push(side)
       side.width(By(fn() { Some(tape_col_at(tape_drawn_at(side))) })) |> ignore
       tape_swipes(side, Side)
-      @ui.old(side, fn(c) { tape_side_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
+      // (the block, the tree's: its ground, the rail and a place's sidebar not made once in it, dock_node)
+      side.box(fn(b) {
+        b.over(Is(true)) |> ignore
+        let tips = @sf.TipLayer::new(fn() { tape_goes.node })
+        dock_node(
+          b,
+          fn() { tape_side_at(side) },
+          fn(r) {
+            // (nothing of it read out while the panel is behind the one in use: tape_behind's)
+            r.hides(By(fn() { wide.tape_at.get() != Side })) |> ignore
+            rail_node(r, src, tips, fn() { rail_at_tape(tape_side_at(side).ground) })
+          },
+          fn(c, _) { tape_sidebar_built(c, src) },
+        )
+        |> ignore
+      })
+      |> ignore
       // (the sidebar made once, the tree's, over the panel where it lays its sidebar out; nothing of it read out while
       // the panel is behind the one in use: tape_behind's)
       side.box(fn(sides) {
@@ -811,9 +832,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }))
       |> ignore
       tape_swipes(panel, Panel)
-      tape_panel_box(panel, bar_gap_now(), fn(pane) {
-        @ui.old(pane, fn(c) { tape_panel_built(c, src) }, key=tape_island_key).over(Is(true)) |> ignore
-      })
+      tape_panel_box(panel, bar_gap_now(), fn(pane) { tape_side_node(pane, src) })
       tape_cover(panel, Panel, fn() {
         let (_, t, _, b) = tape_panel_room(panel)
         (bar_gap_now(), t, 0.0, b)
@@ -825,10 +844,11 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     let tips = @sf.TipLayer::new(fn() { Some(v) })
     row.box(fn(edges) {
       edges.over(Is(true)) |> ignore
-      edges.show(fn() { wide.tape_at.get() == Side }, fn(e) {
+      // (the one in the other's place at once: what a finger takes at the tape's edge, nothing that is seen open)
+      edges.show(at_once=true, fn() { wide.tape_at.get() == Side }, fn(e) {
         tape_side_edge(e, edges, src, tips, edges_on.side)
       })
-      edges.show(fn() { wide.tape_at.get() == Panel && tape_shown_side() is Some(_) }, fn(e) {
+      edges.show(at_once=true, fn() { wide.tape_at.get() == Panel && tape_shown_side() is Some(_) }, fn(e) {
         tape_panel_edge(e, edges, tips, edges_on.panel)
       })
     })
@@ -1064,7 +1084,7 @@ fn tape_behind(c : @ui.Ctx, p : TapePane, body : () -> Unit) -> Unit {
   tape_goes.said.get() |> ignore
   tape_goes.way.said()
   let t = if tape_goes.way.goes_at(c.moment()) {
-    tape_goes.way.get() |> ignore
+    tape_goes.way.get(c) |> ignore
     c.moment()
   } else {
     @double.infinity
@@ -1091,37 +1111,16 @@ fn tape_covered(p : TapePane) -> Bool {
 }
 
 ///|
-/// The rail and the sidebar's column on the tape (its island, as wide as the tree lays it out: the sidebar's width where
-/// its move has got): the block apart from the page, in the workspace in view.
-fn tape_side_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, all, _, _) = @sfbase.workspace_in_view(src)
+/// The sidebar of a place not made once over the block on the tape (lists.mbt sidebar), its old view's, as wide as its
+/// box; behind the panel in use on its darker ground (tape_behind).
+fn tape_sidebar_built(c : @ui.Ctx, src : Source) -> Unit {
+  let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
-  let r = tape_room_now()
-  let s = dmax(0.0, c.width - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
-  tape_behind(c, Side, fn() {
-    dock(
-      c,
-      src,
-      w,
-      all,
-      false,
-      false,
-      s,
-      c.width,
-      if side_full_height(false) {
-        0.0
-      } else {
-        r.top
-      },
-      r.foot,
-      0.0,
-      held=true,
-    )
-  })
+  tape_behind(c, Side, fn() { sidebar(c, src, w, c.width) })
 }
 
 ///|
-/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as tape_side_built
+/// Where the sidebar's panel on the tape lays its sidebar out as node `side` (its column) is drawn: as dock_node
 /// lays it out (dock_side_at, the tape's look), in the column's own room.
 fn tape_side_at(side : @view.View) -> SideAt {
   let r = tape_room_now()
@@ -1129,8 +1128,11 @@ fn tape_side_at(side : @view.View) -> SideAt {
   let s = dmax(0.0, col - rail_left() - bar_in_now() - bar_gap_now() - rail_more())
   let top = if side_full_height(false) { 0.0 } else { r.top }
   // (its top row the tape's, its band the bar's, as tape_under says them: side_brand_h)
+  // (behind the panel in use, its ground a step darker as far as the tape's move has got: tape_behind's)
+  let k = tape_behind_at(Side, tape_drawn_at(side))
   {
     ..dock_side_at(false, false, s, col, top, r.foot, 0.0, side.window().1, None),
+    ground: if k <= 0.0 { apart_ground() } else { @sf.behind_ground(k~) },
     brand: side_brand_h(false, r.top),
     band: 1.0,
     tape: true,
@@ -1138,8 +1140,82 @@ fn tape_side_at(side : @view.View) -> SideAt {
 }
 
 ///|
-/// A chat's side panel on the tape (its island, 6 in from the bars, 8 from the page's), closed while in use as it was
-/// as the tape moves off it.
+/// A chat's side panel on the tape in node `pane` (tape_panel_box's, 6 in from the bars, 8 from the page's): an agent's
+/// history in front, the tree's, its ground, corners and line round what is in it as the page's panel's are
+/// (tape_page_pane), the panel's room beside the system's column its ground alone (side_history_node, its top an
+/// island built as tape_panel_built builds); else its island (tape_panel_built).
+fn tape_side_node(pane : @view.View, src : Source) -> Unit {
+  let tips = @sf.TipLayer::new(fn() { tape_goes.node })
+  let history = fn() {
+    match tape_shown_side() {
+      Some(ChatSide(r)) =>
+        match tape_side_shown(src, r).1 {
+          front if side_history_tab(front) => Some((r, front))
+          _ => None
+        }
+      _ => None
+    }
+  }
+  // (its one island, whichever it holds)
+  let island = fn(n : @view.View, build : (@ui.Ctx) -> Unit, natural : Bool) {
+    @ui.old(n, build, key=tape_island_key, natural~)
+  }
+  pane.pick(history, fn(q, shown) {
+    q.grow(Is(1.0)) |> ignore
+    guard shown is Some((r, agent)) else {
+      island(q, fn(c) { tape_panel_built(c, src) }, false).over(Is(true)) |> ignore
+      return
+    }
+    q
+    .clips(Is(true))
+    .ground(By(fn() {
+      let k = tape_behind_at(Panel, tape_drawn_at(q))
+      if k <= 0.0 {
+        @sf.theme().p.bg
+      } else {
+        @sf.behind_ground(k~)
+      }
+    }))
+    .edge(By(fn() { (1.0, @sf.theme().p.line) }))
+    .padding(By(fn() { (0.0, 0.0, tape_room_now().under, 0.0) }))
+    |> ignore
+    @ui.tree_corners_linked(q, fn() { Some(tape_pane_corners(Panel, true)) })
+    // (what it reads its own, let go as the history leaves the front or the panel goes)
+    side_history_node(q, src.owned_by(q), r, agent, tips, fn(n, build, natural) {
+      island(
+        n,
+        fn(c) {
+          tape_behind(c, Panel, fn() {
+            @sf.pane_round.val = Some(beside_column(tape_pane_corners(Panel, true), tape_room_now().under))
+            side_on_tape.val = true
+            build(c)
+            side_on_tape.val = false
+            @sf.pane_round.val = None
+          })
+        },
+        natural,
+      )
+    })
+  })
+}
+
+///|
+/// What chat `r`'s panel on the tape shows: its tabs as its view has them; closed while in use, as the tape moves off
+/// it, what it had.
+fn tape_side_shown(src : Source, r : ChatRef) -> (Array[String], String) {
+  match view_of_chat(src, r).0 {
+    Some(view) =>
+      if (tape_goes.panel_of)() is None {
+        side_leaving(chat_key(r)).unwrap_or(side_of(view))
+      } else {
+        side_of(view)
+      }
+    None => ([], "")
+  }
+}
+
+///|
+/// A chat's side panel on the tape (its island), closed while in use as it was as the tape moves off it.
 fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
@@ -1358,8 +1434,8 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
 
 ///|
 /// Whether the panel is a station's screen alone in a panel of its own on the tape: its top bar the panel's, named by it
-/// and closed from it, or from the system's bars where it has them (bar_chat; the user, 2026-11-05: its name twice, its ×
-/// alone in a row of its own, in the system's bars on a Duo).
+/// and closed from its end (the user, 2026-11-05: its name twice, its × alone in a row of its own; 2026-11-06: its × among
+/// the chat's actions in a Duo's system bars read as another thing's, so there too it is the bar's own).
 fn screen_tab_alone(tabs : Array[String]) -> Bool {
   wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
 }

@@ -483,9 +483,9 @@ fn window_row(node : Bool) -> (Array[Int], Array[Bool], Int) raise {
         let top = c.id("top")
         let key = c.id("key")
         c.window_drag(top)
-        if c.clicked(key) {
+        c.on_press(key, fn() {
           pressed.val += 1
-        }
+        })
         c.box(id=top, w=Fill(1.0), h=Px(44.0), fn() { c.box(id=key, w=Px(40.0), h=Px(44.0), fn() {  }) |> ignore })
         |> ignore
       }
@@ -597,6 +597,77 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   words.set("界面草图")
   alike("short again")
   assert_eq(b.laid_size().0, 150.0, msg="short again: its share")
+}
+
+///|
+test "a row that leaves out what has not the room (View::fits) counts what is kept no narrower than it holds (View::keeps_held) whole: what may leave leaves for it, as the room comes back it is back" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  let w = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
+      let title = row.box(fn(k) {
+        k.min_width(Is(Some(0.0))).keeps_held(Is(true)).words(Is("界面草图界面草图"), ink=0x333333FFL, look~) |> ignore
+      })
+      let goes = row.box(fn(g) { g.width(Is(Some(60.0))).height(Is(Some(20.0))).drops(Is(1)) |> ignore })
+      parts.val = (Some(title), Some(goes))
+    })
+    |> ignore
+  })
+  t.draw()
+  let (title, goes) = (parts.val.0.unwrap(), parts.val.1.unwrap())
+  let whole = title.laid_size().0
+  assert_true(whole > 100.0 && !goes.left_out(), msg="room for both: \{whole}, \{goes.left_out()}")
+  // (as wide as the words and what may leave, less a point: no room for both)
+  w.set(whole + 8.0 + 60.0 - 1.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="no room for both: what may leave left out")
+  assert_eq(title.laid_size().0, whole, msg="no room for both: the words whole")
+  w.set(whole + 8.0 + 60.0)
+  t.frame()
+  assert_true(!goes.left_out(), msg="the room back: what left is back")
+}
+
+///|
+test "kept whole in a row that leaves out what has not the room (View::fit_whole): what may leave leaves for it first, then it is cut short to the room; the room back, whole and what left back" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  let w = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
+      let title = row.box(fn(k) {
+        k.min_width(Is(Some(0.0))).fit_whole(Is(true)).cuts(Is(true)).words(Is("界面草图界面草图"), ink=0x333333FFL, look~)
+        |> ignore
+      })
+      let goes = row.box(fn(g) { g.width(Is(Some(60.0))).height(Is(Some(20.0))).drops(Is(1)) |> ignore })
+      parts.val = (Some(title), Some(goes))
+    })
+    |> ignore
+  })
+  t.draw()
+  let (title, goes) = (parts.val.0.unwrap(), parts.val.1.unwrap())
+  let whole = title.laid_size().0
+  assert_true(whole > 100.0 && !goes.left_out(), msg="room for both: \{whole}, \{goes.left_out()}")
+  // (a point short of both: what may leave goes, the words whole)
+  w.set(whole + 8.0 + 60.0 - 1.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="a point short of both: what may leave left out")
+  assert_eq(title.laid_size().0, whole, msg="a point short of both: the words whole")
+  // (short of the words alone: they are cut to the room)
+  w.set(whole - 30.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="short of the words: what may leave still out")
+  assert_eq(title.laid_size().0, whole - 30.0, msg="short of the words: cut to the room")
+  w.set(whole + 8.0 + 60.0)
+  t.frame()
+  assert_true(!goes.left_out(), msg="the room back: what left is back")
+  assert_eq(title.laid_size().0, whole, msg="the room back: the words whole")
 }
 
 ///|

@@ -46,3 +46,42 @@ test "keyed ops find items by their key" {
     "{\"items\":[{\"id\":\"c\",\"n\":3},{\"id\":\"a\",\"n\":10},{\"id\":\"d\",\"n\":4}]}",
   )
 }
+
+///|
+test "a run of patches on one list is as each applied alone" {
+  let old : Json = {
+    "days": [
+      {
+        "daysAgo": 0,
+        "items": [
+          { "station": "s", "id": "a", "n": 1 },
+          { "station": "s", "id": "b", "n": 2 },
+          { "station": "s", "id": "b", "n": 3 },
+          { "station": "t", "id": "a", "n": 4 },
+        ],
+      },
+    ],
+  }
+  let key : Json = ["station", "id"]
+  let patch = fn(k : Json, ops : Json) -> Json {
+    { "path": ["items"], "key": key, "patch": k, "ops": ops }
+  }
+  let inner : Array[Json] = [
+    patch(["s", "b"], [{ "path": ["n"], "set": 20 }]),
+    patch(["t", "a"], [{ "path": ["id"], "set": "b" }]),
+    patch(["s", "missing"], [{ "path": ["n"], "set": 0 }]),
+    patch(["t", "b"], [{ "path": ["n"], "set": 40 }]),
+    patch(["s", "a"], [{ "path": ["gone"], "set": true }, { "path": ["n"], "remove": true }]),
+  ]
+  let ops : Array[Json] = [{ "path": ["days"], "key": ["daysAgo"], "patch": 0, "ops": Json::array(inner) }]
+  let one_by_one = inner.fold(init=old, fn(v, op) {
+    @core.apply_delta(v, [{ "path": ["days"], "key": ["daysAgo"], "patch": 0, "ops": [op] }])
+  })
+  let before = old.stringify()
+  assert_eq(@core.apply_delta(old, ops).stringify(), one_by_one.stringify())
+  assert_eq(
+    one_by_one.stringify(),
+    "{\"days\":[{\"daysAgo\":0,\"items\":[{\"station\":\"s\",\"id\":\"a\",\"gone\":true},{\"station\":\"s\",\"id\":\"b\",\"n\":20},{\"station\":\"s\",\"id\":\"b\",\"n\":3},{\"station\":\"t\",\"id\":\"b\",\"n\":40}]}]}",
+  )
+  assert_eq(old.stringify(), before)
+}

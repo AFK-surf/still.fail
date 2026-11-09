@@ -13,7 +13,7 @@
 #       reads the app where it is here; run's argument the script, as ios.sh's
 #     PLATFORM=windows: (Git Bash, MSVC) the shell a program of its own, out/wasm-app/windows/stillfail.exe, with the
 #       DLLs and core.hbc beside it
-#     check: the Wasm side of the native calls (x_wasm.mbt beside each x_native.mbt) as their declarations make it
+#  check: the Wasm side of the native calls as their declarations make it
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -21,7 +21,7 @@ cd "$A"
 H=mbui/src/host
 # The files whose `extern "C"` calls the shell answers: mbui's host, the core's engine, the app's own.
 decls="$H/host_native.mbt $H/device_native.mbt $H/stream_native.mbt $H/textref_native.mbt $H/native_native.mbt
-  src/core/native.mbt src/stillfail/link_native.mbt src/pinyin/load_native.mbt src/sfreplay/emit_native.mbt
+  src/core/native.mbt src/stillfail/link_native.mbt src/sfreplay/emit_native.mbt
   src/sfreplay/trace_native.mbt"
 O=$A/out/wasm-app
 mkdir -p "$O"
@@ -35,7 +35,9 @@ esac
 APP=${APP:-stillfail}
 t0=$SECONDS
 log=$O/moon.log
-if ! moon build --target wasm --release src/$APP > "$log" 2>&1; then
+# (--no-strip: the program keeps its functions' names, so that a trap's stack says them: the Android shell's report,
+# wasm_shell.c; without it the name section holds the module's name alone)
+if ! moon build --target wasm --release --no-strip src/$APP > "$log" 2>&1; then
   awk '/^Error/ { n=9 } n>0 { print substr($0,1,300); n-- }' "$log" >&2
   exit 1
 fi
@@ -74,7 +76,17 @@ if [ "${PLATFORM:-mac}" = android ]; then
   wasmtime_cli
   case "${ABI:-arm64-v8a}" in x86_64) target=x86_64-linux-android ;; *) target=aarch64-linux-android ;; esac
   t0=$SECONDS
-  "$WT_CLI" compile $WT_SAME --target $target "$program" -o "$O/app-android.cwasm"
+  # (how its traps are taken, MBUI_WASM_TRAPS: "signals", a phone's development build, as ever (a trap ends the process,
+  # nothing said); "checked", in its code, each said with its stack (an emulator's, hunting a crash: its CPU +15% to
+  # +62%, #4008). Said beside it, app.traps, for the shell to take the same: wasm_shell.c)
+  traps=${MBUI_WASM_TRAPS:-signals}
+  case $traps in
+    signals) sbt=y ;;
+    checked) sbt=n ;;
+    *) echo "wasm-app: MBUI_WASM_TRAPS is signals or checked, not $traps" >&2; exit 2 ;;
+  esac
+  "$WT_CLI" compile $WT_SAME -O signals-based-traps=$sbt --target $target "$program" -o "$O/app-android.cwasm"
+  printf '%s' "$traps" > "$O/app-android.traps"
   echo "wasm-app: compiled for $target in $((SECONDS - t0)) s"
   if [ "${1:-build}" = run ]; then
     shift
@@ -84,6 +96,7 @@ if [ "${PLATFORM:-mac}" = android ]; then
       bash "$D/android.sh" install
       echo "$sum" > "$O/android.installed"
     fi
+    bash "$D/android.sh" put "$O/app-android.traps" app.traps
     bash "$D/android.sh" put "$O/app-android.cwasm" app.cwasm
     INSTALL=0 bash "$D/android.sh" run "$@"
   fi
@@ -104,8 +117,8 @@ if [ "${PLATFORM:-mac}" = windows ]; then
       || { echo 'wasm-app: wasmtime: not the release asked for' >&2; exit 1; }
     (cd "$A/out" && unzip -q -o wasmtime-win.zip && rm -f wasmtime-win.zip)
   fi
-  engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1
-  shell=$(cd "$EMBER" && node scripts/native.ts path shell win32-x64) || exit 1
+  engine=$(cd "$SF_SRC" && node scripts/native.ts path engine win32-x64) || exit 1
+  shell=$(cd "$SF_SRC" && node scripts/native.ts path shell win32-x64) || exit 1
   # WebView2's SDK (win_views.cpp), as mbui's win.sh fetches it
   WV2=$MBUI_DIR/out/webview2/1.0.4258.31
   if [ ! -f "$WV2/build/native/include/WebView2.h" ]; then
@@ -124,7 +137,7 @@ if [ "${PLATFORM:-mac}" = windows ]; then
   objs=()
   pids=()
   for f in $H/win_*.c $H/win_*.cpp $H/wasm_shell.c "$O/thunks.c" src/stillfail/win_engine.c src/core/core_native.c \
-      src/pinyin/read_file.c src/sfreplay/trace_files.c "$moon_root/lib/runtime/runtime.c"; do
+      src/sfreplay/trace_files.c "$moon_root/lib/runtime/runtime.c"; do
     o=$W/obj/$(echo "${f#"$A"/}" | tr '/\\:' '___').obj
     mkdir -p "$W/obj"
     objs+=("$o")
@@ -187,12 +200,13 @@ fi
 bash "$D/core.sh" apple-native aarch64-apple-darwin > "$O/core.log" 2>&1 || { cat "$O/core.log"; exit 1; }
 moon_root=${MOON_HOME:-$(dirname "$(dirname "$(command -v moon)")")}
 host_c=$(ls $H/apple_*.m $H/mac_app.m)
-stubs="src/core/core_native.c src/pinyin/read_file.c src/sfreplay/trace_files.c src/stillfail/core_engine.m"
+stubs="src/core/core_native.c src/sfreplay/trace_files.c src/stillfail/core_engine.m"
 shell_src=$(cat $host_c $H/*.h $H/wasm_shell.c "$O/thunks.c" $stubs "$moon_root/lib/runtime/runtime.c" "$moon_root/include/moonbit.h" \
   out/core/aarch64-apple-darwin/*.a "$WT/lib/libwasmtime.dylib" "$0" | cksum)
 if [ ! -x "$O/shell" ] || [ "$(cat "$O/shell.src" 2>/dev/null)" != "$shell_src" ]; then
   t0=$SECONDS
-  # (each source its own object, side by side)
+  # (each source its own object, side by side; none left of another build's, whose names say another MoonBit's runtime)
+  rm -rf "$O/obj"
   mkdir -p "$O/obj"
   pids=()
   for f in $host_c $H/wasm_shell.c "$O/thunks.c" $stubs "$moon_root/lib/runtime/runtime.c"; do

@@ -1,4 +1,4 @@
-// One station in two workspaces, as its agents see it (docs/multi-workspace.md): a session of workspace W reaches W's
+// One station in two workspaces, as its agents see it: a session of workspace W reaches W's
 // chats and stations only (chat_list, chat_read, session_send, station_list, station_task), what other stations ask
 // reaches that workspace's chats only, sessions run on the profiles allowed there, and each workspace has its own
 // memory and skills. The transport is a direct call that checks what mesh/peer.ts checks (`member`).
@@ -155,11 +155,11 @@ test("what another station asks reaches the chats of the workspace it asked in; 
   await assert.rejects(fromPeer(rig.hub, "A", message, W1), /no session/);
   await assert.rejects(fromPeer(rig.hub, "A", { ...message, to: one }, W2), /no session/);
   assert.equal((await fromPeer(rig.hub, "B", message, W2)).thread.startsWith("CHAT/"), true);
-  const made = createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
+  const made = await createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
   assert.equal(rig.store.getSession(made.session)?.ws, W2);
   assert.ok(made.link.includes(`/o/${W2}/st/`), made.link);
   // The same key asked in the other workspace is not that chat.
-  assert.throws(() => createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
+  await assert.rejects(createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
 }));
 
 test("a session runs on the profiles allowed in its workspace (all but those withheld from it); picking, pinning and changing respect it", () => withTwo(async (t) => {

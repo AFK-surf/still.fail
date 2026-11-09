@@ -52,8 +52,8 @@ fn held_core(
         _ => (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       let made = match params.get("session") {
         Some(String(s)) => s.has_prefix("new:")
         _ => false
@@ -229,9 +229,12 @@ test "a new chat's restored picture travels from its composer into its first mes
       @ui.add_image("mem:test/new-restored", png_head())
       "mem:test/new-restored"
     },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" { return now }
+      // The fixture's draft comes with an in-memory picture, as one picked here. After a restart the app keeps none:
+      // its source is the kept draft's, from the first read of it on.
+      @sfbase.writing_pictures.remove("seed-0")
       let m = match now.value { Some(Object(v)) => v.copy(); _ => return now }
       m["files"] = Json::array(items(now.value, "files").map(fn(file) {
         guard file is Object(o) else { return file }
@@ -252,10 +255,6 @@ test "a new chat's restored picture travels from its composer into its first mes
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
-  // The fixture normally starts with an in-memory picture. Its source after a restart is the kept draft instead.
-  @sfbase.writing_pictures.remove("seed-0")
-  @sfbase.sent_pictures.clear()
-  t.frame()
   t.run_for(@ui.image_fade_ms)
   assert_true(t.locate("img:mem:test/new-restored").length() > 0)
   tap_send(t)
@@ -434,7 +433,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
       }
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "newChat" && reading.get() {
         {
           value: Some({
@@ -450,7 +449,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
           version: 0,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

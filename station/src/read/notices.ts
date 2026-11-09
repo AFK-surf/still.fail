@@ -1,4 +1,4 @@
-// What the people of a chat hear about while no client of theirs runs (admin/notify.rs, docs/notifications.md): an
+// What the people of a chat hear about while no client of theirs runs: an
 // agent's turn ending in one of the station's own chats (done with something said, or blocked), something going wrong
 // there (the station says so, ⚠️ first), and a person saying something there. Worked out here, off the main thread,
 // from a store change the station saw; the station posts them to still.fail cloud (src/cloud/notify.ts).
@@ -59,7 +59,9 @@ function notice(s: Store, thread: number, seq: number | null, session: string, k
   const muted = store.mutedViewers(s, thread, recipients);
   const to = recipients.filter((email) => !muted.has(email));
   if (to.length === 0) return null;
-  return { to, kind, session, thread, seq, title: titleOf(t, store.firstText(s, thread), null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
+  // Our own chats use their given title or the untitled label, never the first message (core's chatTitle rule).
+  const first = t.surface === STILLFAIL_SURFACE ? null : store.firstText(s, thread);
+  return { to, kind, session, thread, seq, title: titleOf(t, first, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }
 
 /// A session changed: its last turn, if it ended since `since` and is not `ended` (the end already told), told to its
@@ -71,10 +73,22 @@ export function turnNotices(s: Store, key: string, since: number, ended: number 
   if (turn === null || typeof at !== "number" || at < since) return { ended, notices: [] };
   if (at === ended) return { ended, notices: [] };
   const api = apiOf(s);
-  const out: Notice[] = [];
+  const missing: number[] = [];
+  const found: { thread: ReturnType<typeof store.sessionThreads>[number]; last: MessageRow | null }[] = [];
   for (const thread of store.sessionThreads(s, key)) {
     if (thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) continue;
-    const last = store.lastMessage(s, thread.id);
+    let last: MessageRow | null;
+    try { last = store.lastMessage(s, thread.id); }
+    catch (error) {
+      if (!(error instanceof store.LastMessageUnavailable)) throw error;
+      missing.push(...error.threads);
+      continue;
+    }
+    found.push({ thread, last });
+  }
+  if (missing.length) throw new store.LastMessageUnavailable([...new Set(missing)]);
+  const out: Notice[] = [];
+  for (const { thread, last } of found) {
     const fresh = turn.declared === "block" && store.blockedAsk(s, thread.id, key, turn)?.fresh === true;
     const told = turnNotice(turn, last, key, translate(lang, "station.notice.file"), fresh);
     if (told === null) continue;
@@ -113,4 +127,3 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   }
   return out;
 }
-

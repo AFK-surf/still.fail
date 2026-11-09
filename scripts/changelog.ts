@@ -1,4 +1,4 @@
-// The changelog people read in the apps (docs/changelog.md), from main's history: each commit's `Changelog:` trailers
+// The changelog people read in the apps, from main's history: each commit's `Changelog:` trailers
 // (a line for people, in Chinese) and `Fixes: FB-<n>` (the bug reports it fixes), with the version it came in (the
 // commits up to it: 0.1.<n>, as every part numbers its builds) and the parts people see it in, as its agent says
 // (`Changelog-parts:`; one from before that did not, by the files it changed: partsOf). docs/changelog-notes.json adds
@@ -6,11 +6,17 @@
 // [...] } }.
 // That is the test channel's. The stable channel's is written once a release, for people who skip the steps between:
 // docs/releases/0.1.<n>.md, which an agent drafts from the test channel's entries since the last one (--draft) and a
-// person reads before the release goes out (docs/changelog.md).
+// person reads before the release goes out (scripts/changelog.ts).
 //   node scripts/changelog.ts [rev]           the test channel's entries as JSON, newest first (CI: changelog.json)
 //   node scripts/changelog.ts --stable        the stable channel's, one entry a release (CI: changelog-stable.json)
 //   node scripts/changelog.ts --draft [rev]   what the next release's notes are written from: the test channel's
 //                                             entries since the last release's, oldest first, as text
+// A stable release's notes are written, not generated: docs/releases/0.1.<n>.md (front matter: version, date, parts;
+// 新功能 / 改进 / 修复), rewritten from `--draft`'s lines since the last stable, shown to a person in the chat and merged
+// into main; `--stable` joins them for the stable channel, and check.sh reads them as CI does. A release is the day
+// before's main commit (version: its commit count) and, when there are any, the serious fixes since, the commits saying
+// `Stable: yes` (the user, 2026-11-09), cherry-picked onto it in a branch (`branch: release/<…>`, `base: <the main
+// commit's count>`; version: the branch's, which a main commit may have too): .github/stable-plan.py.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -210,7 +216,7 @@ export function changelog(root: string, rev = "HEAD"): Entry[] {
 export function stable(root: string, beta: Entry[] = []): Entry[] {
   const dir = join(root, "docs/releases");
   const releases = (existsSync(dir) ? readdirSync(dir) : [])
-    .filter((f) => /^0\.1\.\d+\.md$/.test(f))
+    .filter((f) => /^0\.\d+\.\d+\.md$/.test(f))
     .map((f) => readRelease(readFileSync(join(dir, f), "utf8"), f))
     .sort((a, b) => b.version - a.version);
   return releases.map((release, i) => {
@@ -239,10 +245,21 @@ export function readRelease(file: string, name = "release"): Entry {
   return { version, commit: "", at, text, fixes: [], parts: [...new Set(parts)].sort() };
 }
 
-/** The next release's notes are written from these: the test channel's entries after the last release's, oldest first. */
+/** The main commit the newest release was made from (its `base:`, a release branch's), else its version; 0 before one. */
+export function lastBase(root: string): number {
+  const dir = join(root, "docs/releases");
+  const newest = (existsSync(dir) ? readdirSync(dir) : [])
+    .filter((f) => /^0\.\d+\.\d+\.md$/.test(f))
+    .map((f) => readFileSync(join(dir, f), "utf8"))
+    .map((file) => ({ version: readRelease(file).version, base: Number(/^base:\s*(\d+)\s*$/m.exec(/^---\n([\s\S]*?)\n---/.exec(file)?.[1] ?? "")?.[1] ?? 0) }))
+    .sort((a, b) => b.version - a.version)[0];
+  return newest ? newest.base || newest.version : 0;
+}
+
+/** The next release's notes are written from these: the test channel's entries after the last release's base, oldest first. */
 export function draft(root: string, rev = "HEAD"): string {
   const beta = changelog(root, rev);
-  const last = stable(root)[0]?.version ?? 0;
+  const last = lastBase(root);
   const head = Number(execFileSync("git", ["rev-list", "--count", rev], { cwd: root, encoding: "utf8" }).trim());
   const lines = beta.filter((e) => e.version > last).reverse().map((e) => `0.1.${e.version} [${e.parts.join(",") || "-"}]${e.fixes.length ? ` FB-${e.fixes.join(",FB-")}` : ""}\n${e.text.map((t) => `  ${t}`).join("\n")}`);
   return `# The test channel's changes since the last release (0.1.${last}), up to 0.1.${head}\n\n${lines.join("\n")}\n`;
@@ -256,7 +273,7 @@ if (import.meta.main) {
     const arg = rev!;
     const messages = existsSync(arg) ? [["this commit", readFileSync(arg, "utf8")]]
       : execFileSync("git", ["log", "--format=%h%x1f%B%x1e", arg], { cwd: root, encoding: "utf8" }).split("\x1e").map((r) => r.trim()).filter(Boolean).map((r) => r.split("\x1f"));
-    const refusals = messages.flatMap(([commit, m]) => refused(m!).map((why) => `${commit}: ${why} (docs/changelog.md)`));
+    const refusals = messages.flatMap(([commit, m]) => refused(m!).map((why) => `${commit}: ${why} (scripts/changelog.ts)`));
     for (const why of refusals) console.error(why);
     process.exit(refusals.length ? 1 : 0);
   }

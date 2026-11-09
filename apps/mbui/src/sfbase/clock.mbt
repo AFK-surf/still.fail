@@ -12,7 +12,7 @@ pub fn each_second(c : @ui.Ctx, ms : Double) -> Unit {
 }
 
 ///|
-/// A running clock's reading in short (Chat.kt elapsed): 45s, 3m 20s, 1h 5m.
+/// A running clock's reading in short: 45s, 3m 20s, 1h 5m.
 pub fn elapsed(ms : Double) -> String {
   let s = (if ms > 0.0 { ms / 1000.0 } else { 0.0 }).to_int()
   if s < 60 {

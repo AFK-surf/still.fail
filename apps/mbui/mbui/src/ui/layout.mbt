@@ -216,7 +216,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
 
 ///|
 /// Whether a node is words on one line (Ctx::text's or Ctx::rich's, `wrap` false): never laid wider than a column they
-/// are in, as wide as they are in a row unless they say otherwise (docs/style.md, Short of room).
+/// are in, as wide as they are in a row unless they say otherwise (mbui's ui/squeeze.mbt).
 fn Node::one_line_words(self : Node) -> Bool {
   (self.kind == kind_text || self.kind == kind_rich) && !self.wrap
 }
@@ -325,16 +325,16 @@ pub fn Ctx::fitting_width(self : Ctx, content : Double, lengths : Array[Double])
 /// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
 /// length to pixels, StaticLayout each line; whole_pixel_lines, as the host says of its fonts).
 fn whole_px_layout() -> Bool {
-  match fake.val {
-    // a Tester over a host's kept text: as that host said of its fonts (any of them), asked of nothing new
-    Some(_) =>
-      match text_table.val {
-        Some(t) => t.metrics.values().any(fn(r) { r.length() > 5 && r[5] == 1.0 })
-        None => false
-      }
-    None => whole_pixel_lines(15.0, 400)
+  if lines_on_pixels_said.val < 0 {
+    lines_on_pixels_said.val = if @hostapi.lines_on_pixels() { 1 } else { 0 }
   }
+  lines_on_pixels_said.val == 1
 }
+
+///|
+/// What the host said of its lines on whole pixels (whole_px_layout), asked once (-1 not yet).
+// kept across runs: the host's, the same for the program's life (each Tester's asked anew: reset_globals)
+let lines_on_pixels_said : Ref[Int] = Ref(-1)
 
 ///|
 /// Whether a style's length (its kind and number: @flex.Style's `<name>_k`, `<name>_v`) is not `v` points.
@@ -402,7 +402,7 @@ fn Ctx::inset_of(self : Ctx, v : Double, layer : Double, over : Bool, at : Bool,
 /// for the parent: 1 when it must lay out again (this subtree changed), 2
 /// when it is not to be moved as a whole (Ctx::commit): something in it
 /// changed, moved by itself, or is placed anew every frame (lists,
-/// editors, pager pages).
+/// editors).
 ///
 /// A child that changes parents lays both parents out again, as the engine
 /// needs: the one it left with its children changing (every slot in use is
@@ -416,14 +416,17 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let s = f.style
   // (each length said in points on whole device pixels where the host sets things on them: whole_px_layout)
   let whole = self.whole_px
-  let mut ch = n.lk_epoch != self.epoch || n.lk_kind != n.kind
+  // (laid out on another grid of pixels (the engine's rounding, an image's size in points), or laid out anew every
+  // frame (layout_reuse off): laid out anew)
+  let mut ch = n.lk_scale != self.scale || n.lk_whole != whole || n.lk_kind != n.kind || !layout_reuse.val
   // A slot may have held another kind of leaf: an image also writes lk_text, but does not replace the text's
   // layout. Its words matching those of the next text must not keep the layout of the text before that image.
   if !layout_reuse.val || n.lk_kind != n.kind {
     n.full = None
     n.rl = None
   }
-  n.lk_epoch = self.epoch
+  n.lk_scale = self.scale
+  n.lk_whole = whole
   n.lk_kind = n.kind
   let dir : @flex.FlexDirection = if n.dir == Row {
     if n.rtl {
@@ -586,8 +589,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       }
     Cut => if in_row { shrink = 1.0 }
   }
-  // a pager's pages lie over each other, moved sideways as they turn
-  let over = n.pager != 0 || n.layer
+  // a layer lies over what is beside it
+  let over = n.layer
   // put where it is said in its parent (CSS's position: absolute), out of the flow
   let at = !over && n.placed_at()
   match n.h {
@@ -776,7 +779,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_tabular != n.tabular ||
         n.lk_balance != n.balance ||
         n.lk_max_lines != n.max_lines ||
-        n.lk_shaped != words_shaped_in.val {
+        n.lk_shaped != words_shaped_in.get() {
         n.lk_text = n.text
         n.lk_shorter = n.shorter
         n.lk_size = n.font_size
@@ -788,7 +791,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_tabular = n.tabular
         n.lk_balance = n.balance
         n.lk_max_lines = n.max_lines
-        n.lk_shaped = words_shaped_in.val
+        n.lk_shaped = words_shaped_in.get()
         n.full = None
         ch = true
       }
@@ -831,7 +834,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       let r = self.flex_tree(c, pd)
       // what it needs across at least, with what is beside it in its row (all of it) or under it (the widest): what it
       // may leave out apart, its ⋯ with it where it may
-      if !(cn.layer || cn.portal || cn.pager != 0 || cn.placed_at()) {
+      if !(cn.layer || cn.portal || cn.placed_at()) {
         let margins = self.on_px(cn.mar_l, whole) + self.on_px(cn.mar_r, whole)
         let need = cn.least + margins
         let fneed = cn.fit_least + margins
@@ -982,7 +985,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   fit_least = dmax(fit_least, least)
   n.fit_least = fit_least
-  // what it comes to as a last resort where its row has not the room for every least (docs/style.md, Short of room):
+  // what it comes to as a last resort where its row has not the room for every least (mbui's ui/squeeze.mbt):
   // words on one line in a row that say not how they give, none of them; what holds such words, as it holds them,
   // but for what is pressed (a button, a chip: a control is never cut); else its least
   let mut soft_least = if k == kind_box &&
@@ -1052,9 +1055,6 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   } else if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
     s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
     ch = true
-  }
-  if n.pager != 0 {
-    up = 2
   }
   if ch {
     f.dirty = true
@@ -1131,6 +1131,7 @@ fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
 /// tapped and found there. Read as it is laid out, not followed, and again as the frame is painted, followed there:
 /// what `f` reads (where a motion is: the clock) places it again as the next frame is painted, nothing built nor laid
 /// out (Ctx::moved_place, frame_watch.mbt). `f` gives the same for the same state and time, however often asked.
+/// An old view's, going with Ctx: a node's is View::moved_by, what this becomes once old views go.
 pub fn Ctx::moved_by(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
   self.nodes[i].moved_by = Some(f)
   // (a motion, whatever said it before: Ctx::moved_carries)
@@ -1200,6 +1201,11 @@ fn Ctx::moved_place(self : Ctx) -> Unit {
           self.moved_shift(i, mx - n.moved_x, my - n.moved_y)
           n.moved_x = mx
           n.moved_y = my
+          // (carried a share of a pixel: a list in it has its rows set on the pixels where it is now, as laying it out
+          // there sets them)
+          if n.moved_carries && self.rows_on_grid() {
+            self.rows_carried(i)
+          }
         }
       }
       None => ()
@@ -1295,9 +1301,6 @@ fn Ctx::commit_at(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> U
       commit_counts[2] = commit_counts[2] + 1
     }
     return
-  }
-  if n.pager != 0 {
-    self.place_pager_slot(i)
   }
   commit_counts[0] = commit_counts[0] + 1
   n.by_size(f.width, f.height)

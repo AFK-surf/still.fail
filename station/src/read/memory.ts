@@ -1,13 +1,13 @@
 // The agents' memory, for the pages to show (GET /memory; the agents write it): the global one, and the shared skills
 // (projects' memories among them). admin/mod.rs's route over agent_home.rs `agent_home_paths` and `list_skills`. A
-// workspace the station joined has its own (docs/multi-workspace.md): <agent home>/workspaces/<ws>.
+// workspace the station joined has its own: <agent home>/workspaces/<ws>.
 import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
 import { joinPath } from "../ops/paths.ts";
 import type { Json } from "./store.ts";
 
-/// The skills the station brings (agent_home.rs BUILTIN_SKILLS, and FEEDBACK_SKILL): rewritten at every start, so not
+/// The skills the station brings (and FEEDBACK_SKILL): rewritten at every start, so not
 /// edited on the pages.
-const BUILTIN = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault", "stillfail-cron", "stillfail-feedback"];
+const BUILTIN = ["stillfail-chats", "stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault", "stillfail-cron", "stillfail-github-ci", "stillfail-feedback"];
 /// What a project memory's description starts with.
 const PROJECT_PREFIX = "项目记忆：";
 

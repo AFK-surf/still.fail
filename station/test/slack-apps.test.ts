@@ -1,4 +1,4 @@
-// A connect's Slack app (chat/slack_apps.rs and chat/slack_apps/tests.rs, ported): manifests and their permission
+// A connect's Slack app (ported): manifests and their permission
 // groups, the create-app link, and Slack's app API with a person's configuration tokens against a stand-in for Slack.
 import assert from "node:assert/strict";
 import { test } from "node:test";

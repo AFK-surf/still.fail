@@ -24,6 +24,9 @@ extern "js" fn js_request_frame() -> Unit =
 extern "js" fn js_wake_after(ms : Double) -> Unit =
   #|(ms) => globalThis.__mbhost && globalThis.__mbhost.wakeAfter(ms)
 
+extern "js" fn js_frames_paced(hz : Double) -> Unit =
+  #|(hz) => globalThis.__mbhost && globalThis.__mbhost.framesPaced && globalThis.__mbhost.framesPaced(hz)
+
 extern "js" fn js_font_metrics(
   size : Double,
   weight : Int,
@@ -220,6 +223,13 @@ fn request_frame() -> Unit {
 }
 
 ///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced): a browser's
+/// host that says nothing of it draws the next animation frame.
+fn frames_paced(hz : Double) -> Unit {
+  js_frames_paced(hz)
+}
+
+///|
 fn wake_after(ms : Double) -> Unit {
   js_wake_after(ms)
 }
@@ -319,6 +329,22 @@ fn present(
   b : Double,
 ) -> Unit {
   js_present(buf, count, r, g, b)
+}
+
+///|
+/// (web/host.js keeps no groups: a frame's instances are all written)
+fn groups_here() -> Bool {
+  false
+}
+
+///|
+fn group_set(_id : Int, _inst : FixedArray[Double], _moves : FixedArray[Double], _n : Int) -> Unit {
+  ()
+}
+
+///|
+fn group_drop(_id : Int) -> Unit {
+  ()
 }
 
 ///|
@@ -614,12 +640,15 @@ extern "js" fn js_post(channel : String, json : String) -> Unit =
   #|(c, j) => { const H = globalThis.__mbhost; if (H && H.post) H.post(c, j) }
 
 ///|
-/// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
+/// A scripted run's input given to the host (see host_native.mbt): the browser has only the GL context's (10, 11).
 fn drive(kind : Int, text : String) -> Bool {
-  ignore(kind)
   ignore(text)
-  false
+  js_drive(kind)
 }
+
+///|
+extern "js" fn js_drive(kind : Int) -> Bool =
+  #|(k) => globalThis.__mbhost.drive(k)
 
 ///|
 extern "js" fn js_image_load(src : String, max_px : Int) -> Int =
@@ -1057,8 +1086,8 @@ fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bo
 }
 
 ///|
-/// What a view has to say (see host_native.mbt): the browser opens no site (a page cannot answer another's requests
-/// without a service worker of its own), so only what a page's frame posts its host (`{"said":…}`).
+/// What a view has to say (see host_native.mbt): a site's requests where the page has a frame for them (web/host.js),
+/// what a page's frame posts its host (`{"said":…}`).
 fn view_site_next(id : Int) -> String {
   js_view_site_next(id)
 }
@@ -1078,44 +1107,57 @@ extern "js" fn js_view_tell(id : Int, what : Int, text : String) -> Unit =
   #|(i, w, t) => { const H = globalThis.__mbhost; if (H && H.viewTell) H.viewTell(i, w, t) }
 
 ///|
+extern "js" fn js_view_site_body(id : Int, req : Int) -> Bytes =
+  #|(i, r) => globalThis.__mbhost.viewSiteBody(i, r)
+
+///|
 fn view_site_body(id : Int, req : Int) -> Bytes {
-  ignore(id)
-  ignore(req)
-  Bytes::new(0)
+  js_view_site_body(id, req)
 }
+
+///|
+extern "js" fn js_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit =
+  #|(i, r, s, h) => globalThis.__mbhost.viewSiteHead(i, r, s, h)
 
 ///|
 fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(status)
-  ignore(headers)
+  js_view_site_head(id, req, status, headers)
 }
+
+///|
+extern "js" fn js_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit =
+  #|(i, r, d) => globalThis.__mbhost.viewSiteChunk(i, r, d)
 
 ///|
 fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(data)
+  js_view_site_chunk(id, req, data)
 }
+
+///|
+extern "js" fn js_view_site_end(id : Int, req : Int, error : String) -> Unit =
+  #|(i, r, e) => globalThis.__mbhost.viewSiteEnd(i, r, e)
 
 ///|
 fn view_site_end(id : Int, req : Int, error : String) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(error)
+  js_view_site_end(id, req, error)
 }
+
+///|
+extern "js" fn js_view_site_state(id : Int) -> String =
+  #|(i) => globalThis.__mbhost.viewSiteState(i)
 
 ///|
 fn view_site_state(id : Int) -> String {
-  ignore(id)
-  ""
+  js_view_site_state(id)
 }
 
 ///|
+extern "js" fn js_view_site_load(id : Int, path : String) -> Unit =
+  #|(i, p) => globalThis.__mbhost.viewSiteLoad(i, p)
+
+///|
 fn view_site_load(id : Int, path : String) -> Unit {
-  ignore(id)
-  ignore(path)
+  js_view_site_load(id, path)
 }
 
 ///|
@@ -1213,6 +1255,13 @@ fn full_screen() -> Bool {
 ///|
 fn set_full_screen(on : Bool) -> Unit {
   ignore(on)
+}
+
+///|
+/// A browser's page: no window's buttons in it.
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ignore(by)
+  ignore(ms)
 }
 
 ///|

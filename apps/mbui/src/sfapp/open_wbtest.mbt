@@ -1,5 +1,5 @@
 // Pages open what they open through the shell (sfbase's Shell: @sfbase.open_page, open_detail); where it goes is the
-// layout's at that moment (docs/architecture.md, the pane table), never the page's.
+// layout's at that moment (the pane table), never the page's.
 
 ///|
 /// The fixture's chat open in a window `w` × `h` of `platform`, and what it is over.

@@ -29,6 +29,8 @@ extern "C" fn ffi_platform() -> Int = "mb_host_platform"
 
 extern "C" fn ffi_request_frame() -> Unit = "mb_host_request_frame"
 
+extern "C" fn ffi_frames_paced(hz : Double) -> Unit = "mb_host_frames_paced"
+
 extern "C" fn ffi_wake_after(ms : Double) -> Unit = "mb_host_wake_after"
 
 #borrow(out)
@@ -91,6 +93,16 @@ extern "C" fn ffi_present(
   g : Double,
   b : Double,
 ) -> Unit = "mb_host_present"
+
+///|
+extern "C" fn ffi_groups_here() -> Int = "mb_host_groups_here"
+
+///|
+#borrow(inst, moves)
+extern "C" fn ffi_group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit = "mb_host_group_set"
+
+///|
+extern "C" fn ffi_group_drop(id : Int) -> Unit = "mb_host_group_drop"
 
 ///|
 extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
@@ -276,6 +288,9 @@ extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
 extern "C" fn ffi_set_full_screen(on : Int) -> Unit = "mb_host_set_full_screen"
 
 ///|
+extern "C" fn ffi_window_buttons_down(by : Double, ms : Double) -> Unit = "mb_host_window_buttons_down"
+
+///|
 extern "C" fn ffi_window_corner() -> Double = "mb_host_window_corner"
 
 ///|
@@ -359,6 +374,12 @@ fn full_screen() -> Bool {
 /// The window made to fill the screen, or back (macOS's full screen).
 fn set_full_screen(on : Bool) -> Unit {
   ffi_set_full_screen(if on { 1 } else { 0 })
+}
+
+///|
+/// The window's buttons moved `by` lower in the app's top row over `ms` (macOS's).
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ffi_window_buttons_down(by, ms)
 }
 
 ///|
@@ -532,6 +553,12 @@ fn request_frame() -> Unit {
 }
 
 ///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced).
+fn frames_paced(hz : Double) -> Unit {
+  ffi_frames_paced(hz)
+}
+
+///|
 fn wake_after(ms : Double) -> Unit {
   ffi_wake_after(ms)
 }
@@ -639,6 +666,21 @@ fn present(
   b : Double,
 ) -> Unit {
   ffi_present(buf, count, r, g, b)
+}
+
+///|
+fn groups_here() -> Bool {
+  ffi_groups_here() != 0
+}
+
+///|
+fn group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  ffi_group_set(id, inst, moves, n)
+}
+
+///|
+fn group_drop(id : Int) -> Unit {
+  ffi_group_drop(id)
 }
 
 ///|

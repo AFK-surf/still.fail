@@ -1,5 +1,5 @@
 // Bug reports to the still.fail team as a part of the station (parts.ts): from stations on the stable channel
-// (updates.rs `channel_of`), in still.fail cloud only (feedback is no part of the control plane: another provider's
+// , in still.fail cloud only (feedback is no part of the control plane: another provider's
 // stations send none). The agents' tool to send one, and each session told when one it sent is fixed and out: a few
 // minutes after the start and every hour (the cloud has no way to say so as it happens). A failure notice in a chat
 // reported by a person (its 上报, feedback/notice.ts), and the overview's `feedback` saying the station takes them.
@@ -48,9 +48,10 @@ export const FeedbackLive = Layer.effectDiscard(
     parts.overview("feedback", () => cloud.state !== null);
     const tellingFixed = () =>
       void tellFixed(fixed, (session, text) => hub.notify(session, text)).catch((error) => log.warn("feedback", "fixed bug reports not read", { error: (error as Error).message }));
-    // On the hub's clock, ended with the station.
+    // What was fixed and came out while the station was not running, a while after it starts; then as each release is
+    // out (a fix is out only with one). On the hub's clock, ended with the station.
     const time = yield* Effect.acquireRelease(Effect.sync(() => new Fibers("feedback", hub.clock)), (t) => Effect.promise(() => t.close()));
     time.after(300_000, tellingFixed);
-    time.every(3_600_000, tellingFixed);
+    plane.told("release", tellingFixed);
   }),
 );

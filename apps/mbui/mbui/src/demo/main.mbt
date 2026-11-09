@@ -160,11 +160,12 @@ fn view(c : @ui.Ctx) -> Unit {
       fn() {
         c.text("MoonBit UI", size=17.0, weight=700, wrap=false) |> ignore
         let narrow = c.width < 600.0
-        app.tab = c.segmented(
+        c.segmented(
           "tabs",
           ["全部", "未读", "@我"],
           app.tab,
           item_w=if narrow { 58.0 } else { 76.0 },
+          on_pick=fn(i) { app.tab = i },
         )
         c.spacer()
         if !narrow {
@@ -199,11 +200,15 @@ fn view(c : @ui.Ctx) -> Unit {
       fn() {
         // (Enter sends here with a finger too: the demo says so in its placeholder)
         let r = c.editor("composer", placeholder="输入消息，回车发送", enter_sends=true, field=app.draft)
-        if c.button("发送") || r.submitted is Some(_) {
+        let sends = fn() {
           let st = app.draft.take()
           if st.length() > 0 {
             send(st)
           }
+        }
+        c.button("发送", on_press=sends)
+        if r.submitted is Some(_) {
+          sends()
         }
       },
     )

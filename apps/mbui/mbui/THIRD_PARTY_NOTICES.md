@@ -42,10 +42,9 @@ the one in `LICENSE`, with the copyright line given here.
 ## Motion
 
 - What: the easing functions, utilities, generators (spring, inertia,
-  keyframes), transitions and layout projection in `src/motion`
-  (`easing.mbt`, `utils.mbt`, `generators.mbt`, `transition.mbt`,
-  `projection.mbt`) and their tests (`motion_port_test.mbt`,
-  `projection_port_test.mbt`, from Motion at `ce1d082`), ported from Motion's
+  keyframes) and transitions in `src/motion` (`easing.mbt`, `utils.mbt`,
+  `generators.mbt`, `transition.mbt`) and their tests
+  (`motion_port_test.mbt`, from Motion at `ce1d082`), ported from Motion's
   TypeScript.
 - From: https://github.com/motiondivision/motion (motion.dev)
 - Licence: MIT. Copyright (c) 2024 Motion B.V.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Records a flow's trace again from its test (src/sfreplay/flows/NAME_test.mbt), one command, nothing kept by hand:
+# Records a flow's trace again from its test, one command, nothing kept by hand:
 # the test's steps, as its first order takes them, written as a scripted run (src/sfreplay/emit.mbt: FLOW_EMIT), run
 # in the app against a local still.fail of its own (scripts/e2e-local.sh up, e2e/run.sh with MBUI_CORE_TRACE=1), its
 # conversation made the test's trace again (scripts/trace make) and what changed of its asks said (scripts/trace diff),
@@ -90,8 +90,10 @@ echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'
 # replay's page laid out as the run's was: what the app tells the core of where the list is (client.focus's end,
 # chat.place) the same; TEXT_RECORD=0 leaves them out)
 [ "${TEXT_RECORD:-1}" = 0 ] || export MBUI_TEXT_RECORD=1
-export E2E_STATION=${E2E_STATION:-$station} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
-[ -n "$E2E_STATION" ] || unset E2E_STATION
+# e2e-local's defaults must also reach trace make and the privacy guard in this parent process.
+. "$D/e2e-paths.sh"
+e2e_paths "$A" "$station"
+export E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
 bash scripts/e2e-local.sh down > /dev/null 2>&1
 bash scripts/e2e-local.sh up > "$TMP/up.log" 2>&1 || { tail -30 "$TMP/up.log"; die "the local still.fail did not come up"; }
 bash e2e/run.sh mac 2>&1 | tee "$TMP/run.log" | grep -a '^PASS\|^FAIL\|flows passed\|DRIVE FAIL'
@@ -146,14 +148,18 @@ NODE
   moon_tests "$test" > "$TMP/$name.after.log" 2>&1
   ok=$?
   for _ in 1 2 3 4 5 6 7 8; do
-    [ $ok = 0 ] && break
-    grep -aq 'kept-answers-ask' "$TMP/$name.after.log" || break
+    # A replay can pass while its made-up core still lacks answers. Treat those as unfinished even when moon exits 0.
+    grep -aq 'kept-answers-ask {' "$TMP/$name.after.log" || break
     grep -a 'kept-answers-ask {' "$TMP/$name.after.log" > "$TMP/$name.asks"
     [ -s "$TMP/$name.asks" ] || break
     node "$A/../../client/core-ts/scripts/kept-answers.ts" "$TMP/$name.asks" > /dev/null || break
     moon_tests "$test" > "$TMP/$name.after.log" 2>&1
     ok=$?
   done
+  if grep -aq 'kept-answers-ask {' "$TMP/$name.after.log"; then
+    echo "  $test: core answers are still missing ($TMP/$name.after.log)"
+    ok=1
+  fi
   if [ $ok = 0 ]; then echo "  $test: passes"; else
     echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
     # (the new trace is the run's; the test does not hold over it: the old one back, said; KEEP_NEW=1 keeps the new

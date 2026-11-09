@@ -1,4 +1,4 @@
-// A stack of pages (Nav) held by the window's tree (src/view; docs/retained.md, the way there's 4): the stack a node of
+// A stack of pages (Nav) held by the window's tree (src/view, the way there's 4): the stack a node of
 // its own, each page in it a node made as the page is put on the stack and let go as it leaves it (what the page made
 // for it forgotten then: Nav's on_leave), and in it, while the page shows (the top; the one beside it as one moves),
 // the page itself, an old view (`old`) built the old way. Which pages show and where they are drawn are bindings of
@@ -25,7 +25,7 @@ priv struct NavHosted {
 ///|
 /// What shows of the stack changed (which pages, how they move): what reads it told.
 fn[P] Nav::shown_told(self : Nav[P]) -> Unit {
-  self.shown.set(@signals.untracked(fn() { self.shown.get() }) + 1)
+  self.shown.set(self.shown.untracked() + 1)
 }
 
 ///|
@@ -68,7 +68,7 @@ fn[P] Nav::top_beside(self : Nav[P]) -> (NavPage[P], NavPage[P]?) {
 
 ///|
 /// Whether page `serial` shows: the top, or the one beside it as one moves (read: told as it changes).
-fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
+pub fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
   self.said.get() |> ignore
   self.shown.get() |> ignore
   let (top, beside) = self.top_beside()
@@ -161,6 +161,7 @@ pub fn[P] nav_view(
   ready? : (P) -> Bool,
   most? : Double = 0.0,
   page_key? : (P) -> String = fn(_) { "" },
+  page_for? : (@view.View, Int) -> (@view.View) -> (Ctx, P) -> Unit,
   made? : (P) -> (String, (@view.View, () -> P, P?, () -> Int, Int) -> Unit)? = fn(_) { None },
 ) -> @view.View {
   v.box(fn(s) {
@@ -198,7 +199,7 @@ pub fn[P] nav_view(
       },
       fn(k) { k },
       fn(pv, serial) {
-        let k = @signals.untracked(fn() { serial.get() })
+        let k = serial.untracked()
         let entry = nav.entry(k)
         pv
           .over(Is(true))
@@ -217,17 +218,19 @@ pub fn[P] nav_view(
             }
             g().forget(k)
             match entry {
-              Some(e) => (nav.on_leave)(e.page)
+              Some(e) => nav.entry_left(e)
               None => ()
             }
           }
         })
         |> ignore
+        let draw_for = match page_for { Some(make) => make(pv, k); None => fn(_) { page } }
         // (its old view while it shows, built again as `page_key` of it changes; or, where `made` says so, its nodes made
         // once, as it first shows, and kept as long as it is on the stack, laid out nowhere while it does not show (what they hold, their
         // fields' words, how far they scroll, as they were), its data what it becomes in place followed by them; another
         // kind of page come in its place (Nav::become) the one handed to the other)
         pv.pick(
+          at_once=true,
           fn() {
             nav.said.get() |> ignore
             match nav.entry(k).map(fn(e) { made(e.page) }) {
@@ -243,6 +246,7 @@ pub fn[P] nav_view(
                 // a frame shows it makes nothing; kept from then)
                 let shown = Ref(false)
                 b.show(
+                  at_once=true,
                   fn() {
                     if nav.shows(k) {
                       shown.val = true
@@ -256,8 +260,9 @@ pub fn[P] nav_view(
                 )
               }
               _ =>
-                b.show(fn() { nav.shows(k) }, fn(o) {
+                b.show(at_once=true, fn() { nav.shows(k) }, fn(o) {
                   o.grow(Is(1.0)) |> ignore
+                  let draw_page = draw_for(o)
                   let key = fn() {
                     match nav.entry(k) {
                       // (as the page is built: what it asks of where it stands, Nav::under, its own)
@@ -269,7 +274,7 @@ pub fn[P] nav_view(
                       None => ""
                     }
                   }
-                  old(o, fn(c) { nav.page_built(c, k, page, bg(), edge) }, key~).grow(Is(1.0)) |> ignore
+                  old(o, fn(c) { nav.page_built(c, k, draw_page, bg(), edge) }, key~).grow(Is(1.0)) |> ignore
                 })
             }
           },
@@ -462,6 +467,57 @@ fn[P] Nav::page_built(
     c.back_island_next = before_island
     c.back_chain_next = before_chain
   }
+}
+
+///|
+/// The old view of page `serial` in node `v` of a page made once (nav_view's and nav_flat_view's `made`), while what it
+/// holds is not nodes yet: built as the stack builds a page's old view (Nav::page_built's: what it keeps its own and
+/// forgotten with it, its time on top, the page it was put on from, its widgets' ids its own), as what the page is now
+/// (what it became in place) and as `key` changes (asked as it is built: Nav::under its own); none of the stack's back
+/// (the made page's node has it: Nav::backs_over). One left the stack but kept shown in place (Nav::flat_keep) built
+/// as before. `natural`, `gives`: as tall as what it holds, giving way where it is short of room (old's: the rest of
+/// the page under it nodes).
+pub fn[P] Nav::page_island(
+  self : Nav[P],
+  v : @view.View,
+  serial : Int,
+  build : (Ctx, P) -> Unit,
+  key? : () -> String = fn() { "" },
+  natural? : Bool = false,
+  gives? : Bool = false,
+) -> @view.View {
+  let nav = self
+  old(
+    v,
+    natural~,
+    gives~,
+    fn(c) {
+      nav.said.get() |> ignore
+      nav.shown.get() |> ignore
+      match nav.flat_entry(serial) {
+        Some(e) => {
+          let (owner, stint) = (c.owner, c.stint)
+          c.owner = e.serial
+          c.stint = e.stint
+          nav.built_by(e, fn() { c.scope(e.serial, fn() { build(c, e.page) }) })
+          c.owner = owner
+          c.stint = stint
+        }
+        None => ()
+      }
+    },
+    // (as the page is built: what it asks of where it stands, Nav::under, its own)
+    key=fn() {
+      match nav.flat_entry(serial) {
+        Some(e) => {
+          let said = Ref("")
+          nav.built_by(e, fn() { said.val = key() })
+          said.val
+        }
+        None => ""
+      }
+    },
+  )
 }
 
 ///|
@@ -664,7 +720,7 @@ fn[P] Nav::backs_over(
     }
   })
   |> ignore
-  m.show(fn() { backs(false) }, back_node)
+  m.show(at_once=true, fn() { backs(false) }, back_node)
   build()
-  m.show(fn() { backs(true) }, back_node)
+  m.show(at_once=true, fn() { backs(true) }, back_node)
 }

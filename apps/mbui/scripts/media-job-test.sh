@@ -10,7 +10,7 @@ trap 'rm -rf "$take"' EXIT
 repo="$take/repo"
 mkdir -p "$repo/scripts" "$repo/apps/mbui/scripts" "$repo/apps/mbui/src/example"
 mkdir -p "$repo/apps/mbui/mbui/src/media/devices"
-cp "$source_repo/scripts/native.ts" "$source_repo/scripts/ffmpeg.ts" "$repo/scripts/"
+cp "$source_repo/scripts/native.ts" "$repo/scripts/"
 cp scripts/media-job.sh "$repo/apps/mbui/scripts/"
 cp mbui/.gitignore "$repo/apps/mbui/mbui/.gitignore"
 printf '<svg/>\n' > "$repo/apps/mbui/mbui/src/media/devices/iphone-11-pro.svg"

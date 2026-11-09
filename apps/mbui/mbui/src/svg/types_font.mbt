@@ -1,4 +1,4 @@
-// svgtypes' font families and the `font` shorthand (font.rs).
+// svgtypes' font families and the `font` shorthand.
 
 ///|
 pub(all) enum FontFamily {

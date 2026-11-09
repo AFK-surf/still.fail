@@ -1,12 +1,14 @@
-// What the station posts in Feishu, as message cards (JSON 2.0, docs/feishu.md「发出去的样子」): an agent's words in a
-// markdown element (Feishu's cards read Markdown much as still.fail does), a question's buttons or field, the answer it
-// got, and the line saying what the agent is doing.
+// What the station posts in Feishu (「发出去的样子」): an agent's words as rich-text messages (`post`, an
+// `md` element: Feishu reads Markdown much as still.fail does, and other bots can read them back, as they cannot a
+// card), and as message cards (JSON 2.0) a question's buttons or field, the answer it got, and the line saying what the
+// agent is doing.
 import { type Lang, tr } from "../ops/i18n.ts";
 import { splitForSlack } from "../sessions/chat.ts";
 
 type Json = any;
 
-/// The most of an agent's text one card carries (a card is at most 30 KB of JSON; Chinese is three bytes a character).
+/// The most of an agent's text one message or card carries (a card is at most 30 KB of JSON; Chinese is three bytes a
+/// character).
 export const CARD_CHARS = 6000;
 
 /// What a button or a form says back when pressed: the thread it answers in (`t`), and what was chosen (`l`).
@@ -24,11 +26,15 @@ const markdown = (content: string, id?: string): Json => ({ tag: "markdown", con
 /// A line in grey, under what it is about.
 const note = (content: string): Json => markdown(`<font color='grey'>${content}</font>`);
 
-/// An agent's message as cards: one, or several in order when it is long.
-export function textCards(text: string): Json[] {
+/// An agent's message as rich-text messages' content: one, or several in order when it is long. A mention is written
+/// as in a card (`<at id=ou_xxx></at>`), which `md` writes `<at user_id="ou_xxx"></at>`.
+export function textPosts(text: string): string[] {
   return splitForSlack(text, CARD_CHARS)
     .filter((t) => t.trim() !== "")
-    .map((t) => card([markdown(t)]));
+    .map((t) => {
+      const md = t.replace(/<at id=["']?([^"'\s>]+)["']?>/g, '<at user_id="$1">');
+      return JSON.stringify({ zh_cn: { content: [[{ tag: "md", text: md }]] } });
+    });
 }
 
 /// Words as plain text (a button's label, a field's hint).

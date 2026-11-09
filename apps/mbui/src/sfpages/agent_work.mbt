@@ -41,7 +41,7 @@ pub fn work_mark(
   smallest? : Bool = false,
 ) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let card = (src.topic)("agentCard", params).value
+  let card = src.topic("agentCard", params).get().value
   let mark = text(card, "workMark")
   if mark == "" {
     return
@@ -52,9 +52,9 @@ pub fn work_mark(
   }
   let (whole, least) = (c.id("history/work-mark"), c.id("history/work-mark/least"))
   for id in [whole, least] {
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       open_work(src, params, id)
-    }
+    })
   }
   let counts = text(card, "workMarkShort")
   let count = text(card, "workMarkCount")
@@ -130,7 +130,7 @@ let work_mark_press : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 ///|
 /// All of it in a panel beside what opened it (`from`): its card's tasks and checklist as they are now.
 fn open_work(src : Source, params : Map[String, Json], from : Int) -> Unit {
-  @sf.panel("", fn(c, _) { agent_work(c, src, (src.topic)("agentCard", params).value) }, from=Of(from), w=work_panel_w, along=End)
+  @sf.panel("", fn(c, _) { agent_work(c, src, src.topic("agentCard", params).get().value) }, from=Of(from), w=work_panel_w, along=End)
 }
 
 ///|
@@ -249,3 +249,27 @@ let work_line_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 ///|
 // kept across runs: a value (no field of it changes)
 let work_line_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
+
+///|
+/// A list of things to do, each `{text, status}`: done ✓ struck and muted, under way › in 600,
+/// the rest ·. A plan call's in the history, and an agent's checklist in its card and its history's details
+/// (agent_work).
+pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
+  c.box(style=tool_plan, fn() {
+    for it in list {
+      let iv = Some(it)
+      let status = text(iv, "status")
+      let (mark, mark_ink, words) = match status {
+        "completed" => ("✓", @sf.theme().p.green, tool_plan_done)
+        "in_progress" => ("›", @sf.theme().p.accent, tool_plan_now)
+        _ => ("·", @sf.theme().p.subtle, tool_plan_words)
+      }
+      c.box(style=tool_plan_row, fn() {
+        c.box(style=tool_plan_mark, fn() { c.rich([@ui.span(mark, color=mark_ink)], style=tool_plan_words) |> ignore }) |> ignore
+        c.rich([@ui.span(text(iv, "text"), strike=status == "completed")], style=words) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}

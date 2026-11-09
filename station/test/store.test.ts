@@ -8,10 +8,18 @@ import { constants, DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_SINCE, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
-  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_CARD_AFTER_POSTS, CLOSED_THREAD_SINCE, DELIVERY_INSERT_IF_ABSENT, DELIVERY_INSERT_IF_MEMBER, type EntryRow, HEARD_IN, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, type JobRow, LATEST_DECISIONS, LATEST_DECISIONS_SCOPED_NO_TIME, LEGACY_LATEST_DECISIONS, LEGACY_LATEST_DECISIONS_SCOPED, LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, LIVE_SESSIONS, LOGIN_CARDS, MODELS_USED_BY,
+  MANUAL, MEMBER_JOIN_IF_NEEDED, type NewMessage, OPTIONS_BEFORE, PEOPLE_SAID_AFTER, POST_AFTER_FIRST, POST_AFTER_INDEXED, POST_BLOCKS_READY, ROUTER_WORKSPACE_MISMATCH, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_JOBS, SESSION_OF_RUNTIME, SESSION_THREAD_BY_ID, STATS_OF, Store, type StoreChange, THREAD_INSERT_IF_ABSENT, decisionScopedWithSession, newMessage,
 } from "../src/store/store.ts";
-import { addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
+import { addClientColumn, addListState, firstDelivery, MERGED, SCHEMA } from "../src/store/schema.ts";
+import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, installArchivePolicyIndex } from "../src/store/archive-policy-index.ts";
+import { installDecisionTimeIndex } from "../src/store/legacy-decision-time.ts";
+import { LEGACY_LAST_DECISION_REPAIR, installDecisionSessionIndex } from "../src/store/legacy-decision-session.ts";
+import { installLegacyEdits, legacyEditStep } from "../src/store/legacy-edits-build.ts";
+import { installLegacySaid, LEGACY_SAID_BOUNDARY_TAIL, LEGACY_SAID_DRAIN, LEGACY_SAID_DRAIN_THREAD,
+  LEGACY_SAID_HEAD_FIRST, LEGACY_SAID_HEAD_TAIL, LEGACY_SAID_NEEDS_DRAIN } from "../src/store/legacy-said-build.ts";
+import { ARCHIVE_LAST_FIRST, ARCHIVE_LAST_GUARD, ARCHIVE_LAST_LETTER_AFTER, ARCHIVE_LAST_LETTER_ANY,
+  ARCHIVE_LAST_SAID_KEY, ARCHIVE_LAST_SLICE_BEFORE, ARCHIVE_LAST_SLICE_FIRST, ARCHIVE_LAST_TAIL } from "../src/store/archive-last.ts";
 import { CC_THREADS_SQL } from "../src/store/rows.ts";
 import { LATEST_THREAD_ATTEMPT, LATEST_THREAD_SCOPE } from "../src/store/latest-thread-index.ts";
 import { CARD_POST_AFTER, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE } from "../src/store/card-post-index.ts";
@@ -28,7 +36,9 @@ import { detailQuery } from "../src/store/usage-detail.ts";
 import { installCompactUsage } from "../src/store/usage-compact.ts";
 import { installUsageSummaryBlocks, usageSummaryBlocksRangeScan, usageSummaryBlocksScan } from "../src/store/usage-summary-blocks.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../src/store/remote-runs.ts";
-import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_JOB_SESSIONS, RUNNING_WAIT_JOBS } from "../src/store/active-jobs.ts";
+import { activeJobUpgradeStep, ACTIVE_JOB_CONFLICT, ACTIVE_JOB_END, ACTIVE_JOB_FIRST, ACTIVE_JOB_NEXT, ACTIVE_JOB_NULL_ID,
+  ACTIVE_REMOTE_FIRST, ACTIVE_REMOTE_NEXT, REMOTE_QUEUE_PREPARED } from "../src/store/active-jobs-upgrade.ts";
 import { HAS_SESSION_ACTIVE_WATCH } from "../src/store/watch-jobs.ts";
 import { RECOVER_AWAKE_WAITS, RECOVER_BACKFILL_FIRST, RECOVER_BACKFILL_NEXT, RECOVER_WAITS } from "../src/store/recover-waits.ts";
 import { AWAKE_BACKFILL_FIRST, AWAKE_BACKFILL_NEXT, AWAKE_WAIT_STATUS, reconcileAwakeWaits, syncAwakeWait } from "../src/store/awake-waits.ts";
@@ -53,6 +63,7 @@ import { FIRST_SCOPE_CONNECT, FIRST_SCOPE_HOME_THREADS, FIRST_SCOPE_MEMBER_THREA
 import { FIRST_HOME_CHAT_MEMBERS, NEXT_HOME_CHAT_MEMBERS } from "../src/store/chat-list-home-source.ts";
 import { type CardEnd, cardsEnded } from "../src/connects/card-ends.ts";
 import { fileAway } from "./archived-before.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { PENDING_BACKFILL_AFTER, PENDING_BODIES, PENDING_DUE, PENDING_MEMBER, PENDING_NO_TIME, PENDING_OTHER_TIME, PENDING_OWN, PENDING_SEED, PENDING_SEED_FIRST } from "../src/vault/pending-index.ts";
@@ -62,6 +73,8 @@ import { VaultStore } from "../src/vault/store.ts";
 import { enableSandboxIndex, runnerChoiceFromKeys, RUNNER_SESSION_CANDIDATES, RUNNER_TAKEUP_NAMES, RUNNER_TAKEUP_SESSIONS, SANDBOX_DIRTY_BATCH, SANDBOX_PRUNE_FIRST, SANDBOX_PRUNE_NEXT, SANDBOX_SCAN_FIRST,
   SANDBOX_SCAN_NEXT, SANDBOX_SESSION } from "../src/store/sandbox-index.ts";
 import { installSessionDirectories, sessionDirectoryCandidate, sessionDirectoryChoice, SESSION_DIR_ARGUMENTS, SESSION_DIR_DIRTY, SESSION_DIR_FIRST, SESSION_DIR_INITIAL, SESSION_DIR_LIVE_FEW, SESSION_DIR_LIVE_MANY, SESSION_DIR_NEXT } from "../src/store/session-directory.ts";
+import { installChatShareIndex, SHARE_DIRTY, SHARE_DUE, SHARE_FIRST, SHARE_LAPSED_WORKSPACE, SHARE_LIVE, SHARE_NEXT, SHARE_NEXT_TIME } from "../src/store/chat-share-index.ts";
+import { installProcessJobs, PROCESS_JOBS, PROCESS_JOB_CONFLICT, PROCESS_JOB_END, PROCESS_JOB_FIRST, PROCESS_JOB_NEXT, PROCESS_JOB_NULL_ID } from "../src/store/process-jobs.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -90,6 +103,10 @@ const memory = () => open(":memory:");
 
 function assertSessionJobPlans() {
   const db = memory().db;
+  const work = (db.prepare(`EXPLAIN QUERY PLAN ${RUNNING_JOB_SESSIONS}`).all('["a"]') as { detail: string }[]).map((r) => r.detail).join(" | ");
+  assert.match(work, /SEARCH active_watch_jobs USING COVERING INDEX active_watch_jobs_session .*session=\?/);
+  assert.match(work, /SEARCH active_other_jobs USING PRIMARY KEY .*session=\?/);
+  assert.doesNotMatch(work, /SCAN (active_watch_jobs|active_other_jobs|jobs)\b/);
   const up = (db.prepare(`EXPLAIN QUERY PLAN ${read.PREPARED_UP_JOBS_OF}`).all("a") as { detail: string }[]).map((r) => r.detail);
   const upDetail = up.join(" | ");
   assert.ok(up.some((s) => s.startsWith("SEARCH i USING PRIMARY KEY") && s.includes("session=?")), upDetail);
@@ -101,6 +118,48 @@ function assertSessionJobPlans() {
   assert.ok(watches.some((s) => /^SCAN w\b/.test(s)), watchDetail); // Only running watches are in this lookup.
   assert.ok(watches.some((s) => s.startsWith("SEARCH j ") && s.includes("id=?")), watchDetail);
   assert.ok(watches.every((s) => !/^SCAN (j|jobs)\b/.test(s)), watchDetail);
+}
+
+function assertProcessJobPlans() {
+  const db = memory().db;
+  installProcessJobs(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  const groups = plan(PROCESS_JOBS);
+  assert.match(groups, /SCAN p\b/); // This table contains only running process groups.
+  assert.match(groups, /SEARCH j USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  assert.doesNotMatch(groups, /SCAN (j|jobs)\b/);
+  assert.match(plan(PROCESS_JOB_END), /SEARCH jobs USING COVERING INDEX jobs_state .*state=\?/);
+  assert.match(plan(PROCESS_JOB_FIRST, "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid</);
+  assert.match(plan(PROCESS_JOB_NEXT, "1", "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid>/);
+  assert.match(plan(PROCESS_JOB_NULL_ID), /SEARCH jobs USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  const conflicts = plan(PROCESS_JOB_CONFLICT, "a", "token", 1);
+  assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
+  assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
+  assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
+}
+
+function assertActiveJobUpgradePlans() {
+  const db = memory().db;
+  db.exec("DROP INDEX active_other_remote_jobs");
+  activeJobUpgradeStep(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  assert.match(plan(ACTIVE_JOB_END), /SEARCH jobs USING COVERING INDEX jobs_state .*state=\?/);
+  assert.match(plan(ACTIVE_JOB_FIRST, "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid</);
+  assert.match(plan(ACTIVE_JOB_NEXT, "1", "100", 64), /SEARCH jobs USING COVERING INDEX jobs_state .*rowid>/);
+  assert.match(plan(ACTIVE_JOB_NULL_ID), /SEARCH jobs USING INDEX sqlite_autoindex_jobs_1 .*id=\?/);
+  const conflicts = plan(ACTIVE_JOB_CONFLICT, "a", "token", 1);
+  assert.equal((conflicts.match(/SEARCH jobs USING/g) ?? []).length, 3, conflicts);
+  assert.match(conflicts, /SEARCH j USING INTEGER PRIMARY KEY .*rowid=\?/);
+  assert.doesNotMatch(conflicts, /jobs_up \(state=\?\)/);
+  assert.match(plan(ACTIVE_REMOTE_FIRST, "s", "j", 64), /SEARCH active_other_jobs USING PRIMARY KEY/);
+  assert.match(plan(ACTIVE_REMOTE_NEXT, "a", "j", "z", "j", 64), /SEARCH active_other_jobs USING PRIMARY KEY/);
+  const remote = plan(REMOTE_QUEUE_PREPARED);
+  assert.match(remote, /SEARCH w USING PRIMARY KEY .*job>\?/);
+  assert.match(remote, /SEARCH a USING PRIMARY KEY .*job>\?/);
+  assert.equal(remote.split(" | ").filter((s) => /SEARCH j USING INDEX sqlite_autoindex_jobs_1 .*id=\?/.test(s)).length, 2, remote);
+  assert.doesNotMatch(remote, /SCAN (a|w|j|jobs)\b/);
 }
 
 function assertSandboxPlans() {
@@ -124,6 +183,23 @@ function assertSandboxPlans() {
     assert.match(sql, /LIMIT \?$/);
   assert.match(plan(SANDBOX_SCAN_NEXT, "s", "z", 64), /SEARCH sessions USING COVERING INDEX sqlite_autoindex_sessions_1 .*key>\?/);
   assert.match(plan(SANDBOX_PRUNE_NEXT, "s", "z", 64), /SEARCH sandbox_name_rows USING PRIMARY KEY .*session>\?/);
+}
+
+function assertChatSharePlans() {
+  const db = memory().db;
+  installChatShareIndex(db);
+  const plan = (sql: string, ...args: (string | number)[]) =>
+    (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((row) => row.detail).join(" | ");
+  for (const [sql, args] of [[SHARE_LIVE, [0]], [SHARE_DUE, [0, 1]]] as const) {
+    const p = plan(sql, ...args);
+    assert.match(p, /SEARCH t USING COVERING INDEX chat_share_target_time .*used>\?/);
+    assert.match(p, /SEARCH c USING INDEX sqlite_autoindex_chat_shares_1 .*session=\?/);
+    assert.doesNotMatch(p, /SCAN (?:t|c|chat_shares)\b/);
+  }
+  assert.match(plan(SHARE_NEXT_TIME, 0), /SEARCH t USING COVERING INDEX chat_share_target_time .*used>\?/);
+  assert.match(plan(SHARE_LAPSED_WORKSPACE, "w", 0), /SEARCH t USING COVERING INDEX chat_share_target_workspace .*workspace=\? AND used<\?/);
+  assert.match(plan(SHARE_NEXT, "s", "z", 64), /SEARCH chat_shares USING COVERING INDEX sqlite_autoindex_chat_shares_1 .*session>\?/);
+  for (const sql of [SHARE_FIRST, SHARE_NEXT, SHARE_DIRTY]) assert.match(sql, /LIMIT \?$/);
 }
 
 function assertSessionDirectoryPlans() {
@@ -471,6 +547,19 @@ test("a thread is a log, edits are entries of their own", () => {
   // going back over the whole thread.
   const plan = (store.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread = ? AND n = ?").all(thread.id, 1) as { detail: string }[]).map((r) => r.detail);
   assert.ok(plan.some((d) => d.includes("entries_edits (thread=? AND target=?)")), plan.join(" | "));
+});
+
+test("the prepared old edit lookup seeks one message's edits", () => {
+  const store=memory(),thread=store.openThread("ember","CHAT","old-edit-plan",null,null).id;
+  store.db.exec("CREATE INDEX entries_target ON entries(thread,target) WHERE target IS NOT NULL; DROP INDEX entries_edits");
+  installLegacyEdits(store.db);
+  while (!legacyEditStep(store.db).ready) { /* prepare */ }
+  addClientColumn(store.db);
+  const plan=store.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread=? AND n=?").all(thread,1)
+    .map((r) => String(r.detail)).join(" | ");
+  assert.match(plan,/SEARCH s USING PRIMARY KEY \(thread=\? AND target=\?/,plan);
+  assert.match(plan,/SEARCH t USING PRIMARY KEY \(thread=\? AND target=\?/,plan);
+  assert.doesNotMatch(plan,/SCAN (?:s|t)\b/,plan);
 });
 
 test("a message still pending reaches the agent as it reads at delivery", () => {
@@ -1250,7 +1339,6 @@ test("an options card is kept as options too, and a choice that closes it ends t
   const t2 = store.openThread("ember", "CHAT", "2.1", null, null);
   store.joinThread(t2.id, "a", "ember");
   const [k] = store.insertMessage({ ...newMessage(t2.id, "2.2", "agent", "a", "合并吗？"), card });
-  assert.equal(store.closeCard("local", t2.id, k, "合并"), false, "the agent is still composing (its turn runs)");
   store.setAbout("t1", [t2.id, k, "2.2"]);
   store.endTurn("t1", "completed", null, "need_help", null);
   assert.equal(store.closeCard("local", t2.id, k, "再看"), false, "a reply option does not close");
@@ -1262,9 +1350,33 @@ test("an options card is kept as options too, and a choice that closes it ends t
   assert.equal(store.pendingCard(t2.id), null);
   assert.equal(store.closeCard("local", t2.id, k, "合并"), true, "closing again is no change");
   assert.equal(h.changes.length, 2);
-  const answers = store.answersSince(0);
+  const answers = referenceAnswersSince(store, 0);
   assert.deepEqual(answers.map((a) => [a.question.n, a.by, a.answer]), [[k, "local", null]]);
   h.stop();
+});
+
+test("a card closes while the agent that asked is still in its turn, and that turn ends final", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("ember", "CHAT", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  const card = { type: "options", options: [{ label: "合并", action: "close" }, { label: "再看" }] };
+  store.startTurnFor("t1", "a", "input", { profile: "cc", person: "local", thread: thread.id });
+  const [k] = store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "合并吗？"), card });
+  store.setNeed("t1", "选一个");
+  store.setAbout("t1", [thread.id, k, "1.2"]);
+  store.declareTurn("t1", "need_human", null);
+  assert.equal(store.closeCard("local", thread.id, k, "合并", "en"), true, "its turn still runs");
+  assert.equal(store.pendingCard(thread.id), null);
+  store.endTurn("t1", "completed", null, "need_human", null);
+  const last = store.lastTurn("a")!;
+  assert.deepEqual([last.declared, last.ending, last.need], ["final", "all_done", "Chose “合并”"]);
+  // A later turn needing a person about another card is left as it ends.
+  store.startTurnFor("t2", "a", "input", { profile: "cc", person: "local", thread: thread.id });
+  const [j] = store.insertMessage({ ...newMessage(thread.id, "1.3", "agent", "a", "再来？"), card });
+  store.setAbout("t2", [thread.id, j, "1.3"]);
+  store.endTurn("t2", "completed", null, "need_human", null);
+  assert.equal(store.lastTurn("a")!.declared, "need_human");
 });
 
 test("the cards answered lately of some threads alone are those the whole station's has in them", () => {
@@ -1280,9 +1392,10 @@ test("the cards answered lately of some threads alone are those the whole statio
     return t.id;
   });
   const reader = read.openStore(data);
-  const whole = read.answersSince(reader, 0);
+  const whole = read.answersSince(reader, 0, threads);
   assert.deepEqual(whole.map((a) => a.question.thread).sort(), [...threads].sort());
   assert.deepEqual(read.answersSince(reader, 0, [threads[1]!]), whole.filter((a) => a.question.thread === threads[1]));
+  assert.deepEqual(read.answersSince(reader, 0, [threads[1]!, threads[1]!]), whole.filter((a) => a.question.thread === threads[1]));
   assert.deepEqual(read.answersSince(reader, 0, []), []);
 });
 
@@ -1294,7 +1407,7 @@ test("an agent withdraws its own card only", () => {
   assert.equal(store.withdrawCard("b", thread.id, "1.2"), false);
   assert.equal(store.withdrawCard("a", thread.id, "1.2"), true);
   assert.equal(store.pendingCard(thread.id), null);
-  assert.deepEqual(store.answersSince(0), [], "withdrawn is not answered");
+  assert.deepEqual(referenceAnswersSince(store, 0), [], "withdrawn is not answered");
   assert.ok(n > 0);
 });
 
@@ -1555,10 +1668,79 @@ test("what the station asks again and again is planned by an index, never a scan
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
   assertSessionJobPlans();
+  assertProcessJobPlans();
+  assertActiveJobUpgradePlans();
   assertSandboxPlans();
+  assertChatSharePlans();
   assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
+  const oldSaid = memory();
+  installLegacySaid(oldSaid.db);
+  const oldSaidPlan = (sql: string, ...args: (number | string)[]) =>
+    (oldSaid.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
+  const needsDrain = oldSaidPlan(LEGACY_SAID_NEEDS_DRAIN,1);
+  assert.ok(needsDrain.some((line) => line.includes("legacy_said_dirty USING PRIMARY KEY (thread=?)")), needsDrain.join(" | "));
+  for (const [sql,args] of [
+    [LEGACY_SAID_HEAD_FIRST,[1]], [LEGACY_SAID_HEAD_TAIL,[1]], [LEGACY_SAID_BOUNDARY_TAIL,[1,100,"alice"]],
+  ] as [string,(number | string)[]][]) {
+    const plan = oldSaidPlan(sql,...args);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH ") && line.includes("(thread=?")), plan.join(" | "));
+    assert.ok(!plan.some((line) => /^SCAN (e|entries)\b/.test(line)), plan.join(" | "));
+  }
+  for (const [sql,args] of [[LEGACY_SAID_DRAIN,[64]], [LEGACY_SAID_DRAIN_THREAD,[1,64]]] as [string,number[]][]) {
+    const plan = oldSaidPlan(sql,...args);
+    assert.ok(plan.every((line) => !line.includes("TEMP B-TREE")), plan.join(" | "));
+    if (sql === LEGACY_SAID_DRAIN_THREAD)
+      assert.ok(plan.some((line) => line.includes("SEARCH d USING PRIMARY KEY (thread=?)")), plan.join(" | "));
+  }
+  const pageTail = oldSaidPlan(read.LEGACY_SAID_PAGE_TAIL,1,100,65);
+  assert.ok(pageTail.some((line) => line.startsWith("SEARCH e ") && line.includes("thread=?") && line.includes("n<?")), pageTail.join(" | "));
+  assert.ok(!pageTail.some((line) => line.includes("TEMP B-TREE")), pageTail.join(" | "));
   const store = memory();
+  for (const [sql,args] of [
+    [ARCHIVE_LAST_FIRST,[1]], [ARCHIVE_LAST_TAIL,[1]], [ARCHIVE_LAST_SLICE_FIRST,[1,64]],
+    [ARCHIVE_LAST_SLICE_BEFORE,[1,"100",64]],
+  ] as [string,(number | string)[]][]) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH e ") && line.includes("thread=?")), plan.join(" | "));
+    assert.ok(!plan.some((line) => /^SCAN e\b/.test(line)), plan.join(" | "));
+    if (sql === ARCHIVE_LAST_SLICE_FIRST || sql === ARCHIVE_LAST_SLICE_BEFORE)
+      assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join(" | "));
+    if (sql === ARCHIVE_LAST_SLICE_BEFORE)
+      assert.ok(plan.some((line) => line.startsWith("SEARCH e ") && line.includes("n<?")), plan.join(" | "));
+  }
+  const archiveLastGuard = (store.db.prepare(`EXPLAIN QUERY PLAN ${ARCHIVE_LAST_GUARD}`).all(1) as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(archiveLastGuard.some((line) => line.includes("SEARCH g USING PRIMARY KEY (thread=?)")), archiveLastGuard.join(" | "));
+  for (const [sql, args, index] of [
+    [ARCHIVE_LAST_SAID_KEY, [1], "entries_said"],
+    [ARCHIVE_LAST_LETTER_ANY, [1], "entries_letters"],
+    [ARCHIVE_LAST_LETTER_AFTER, [1, "100"], "entries_letters"],
+  ] as [string, (number | string)[], string][]) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(plan.some((line) => line.startsWith("SEARCH e ") && line.includes(index) && line.includes("thread=?")), plan.join(" | "));
+    assert.ok(!plan.some((line) => line.includes("TEMP B-TREE")), plan.join(" | "));
+    if (sql === ARCHIVE_LAST_LETTER_AFTER)
+      assert.ok(plan.some((line) => line.includes("n>?")), plan.join(" | "));
+  }
+  const lastMessage = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_KEYED}`).all(1, "100") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(lastMessage.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), lastMessage.join(" | "));
+  const pageKeys = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.MESSAGES_FROM_KEYS}`).all(1, '["1","2"]') as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(pageKeys.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), pageKeys.join(" | "));
+  const recentEdit = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_RECENT_EDIT}`).all(1, "100") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(recentEdit.some((line) => line.startsWith("SEARCH entries ") && line.includes("thread=?")), recentEdit.join(" | "));
+  assert.ok(!recentEdit.some((line) => /^SCAN entries\b/.test(line)), recentEdit.join(" | "));
+  const selectedEdit = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_WITH_EDIT}`).all(1, "100", "101") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(selectedEdit.some((line) => line.startsWith("SEARCH m ") && line.includes("thread=?") && line.includes("n=?")), selectedEdit.join(" | "));
+  assert.ok(selectedEdit.some((line) => line.startsWith("SEARCH e ") && line.includes("thread=?") && line.includes("n=?")), selectedEdit.join(" | "));
+  store.db.exec("CREATE INDEX entries_target ON entries(thread,target) WHERE target IS NOT NULL");
+  const oldEdits = (store.db.prepare(`EXPLAIN QUERY PLAN ${read.LAST_MESSAGE_OLD_EDITS}`).all(1, "100") as { detail: string }[])
+    .map((r) => r.detail);
+  assert.ok(oldEdits.some((line) => line.startsWith("SEARCH x ") && line.includes("entries_target") && line.includes("target=?")), oldEdits.join(" | "));
   for (const [sql, value, table, key] of [[ARCHIVE_PIN_EXISTS, "s", "archive_pin_rows", "session"], [ARCHIVE_KEEP_EXISTS, 1, "archive_keep_rows", "thread"]] as const) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(value) as { detail: string }[]).map((r) => r.detail);
     assert.ok(plan.some((s) => s.includes(`SEARCH ${table} USING PRIMARY KEY (${key}=?)`)), plan.join(" | "));
@@ -1637,7 +1819,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [HAS_SESSION_ACTIVE_WATCH, ["a"]], [RUNNING_WAIT_JOBS, ["a"]], [SESSION_THREAD_BY_ID, [1, "a"]],
     [LATEST_THREAD_ATTEMPT, ["a"]], [LATEST_THREAD_SCOPE, ["a"]],
     [THREAD_INSERT_IF_ABSENT, ["slack", "C", "1", null, null, 1, null]],
-    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]],
+    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]], [DELIVERY_INSERT_IF_MEMBER, [1, 1, "a", MANUAL]], [ROUTER_WORKSPACE_MISMATCH, [1, "home", "home"]],
     [STATS_OF, ["a"]], [SESSION_COUNT_TOTAL, [1, "ws"]], [SESSION_COUNT_CONNECT, [1, "ws", "a"]],
     [SESSION_COUNT_FIRST, ["100", 64]], [SESSION_COUNT_NEXT, ["1", "100", 64]],
     [SESSION_LIST_FIRST, ["100", 64]], [SESSION_LIST_NEXT, ["1", "100", 64]],
@@ -1647,7 +1829,7 @@ test("what the station asks again and again is planned by an index, never a scan
     [SESSION_UP_JOBS_END, ["a"]],
     [SESSION_UP_JOBS_FIRST, ["a", "100", 64]], [SESSION_UP_JOBS_NEXT, ["a", "1", "100", 64]],
     [WIDGET_SOURCE_POSITIONS_FIRST, [1, "100", 64]], [WIDGET_SOURCE_POSITIONS_NEXT, [1, "1", "100", 64]],
-    [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
+    [LATEST_DECISIONS, [0]], [ARCHIVE_POLICY, ["ws"]], [CLOSED_THREAD_SINCE, [1, 0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
     [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
     [HEARD_IN, ["a", 1]], [MODELS_USED_BY, ["a@x", 0]], [REMOTE_RUNS_OF, ["ws", 0]], [REMOTE_RUNS_ALL, [0]],
     [detail.sql, detail.args], [HISTORY_DAYS, ["ws", 0n, 100n, 480n]], [HISTORY_AFTER, ["ws", 100n]], [HISTORY_TOTAL, ["ws"]],
@@ -1687,6 +1869,11 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(THREAD_INSERT_IF_ABSENT)!.some((d) => d.includes("(surface=? AND channel=? AND thread_ts=?)")));
   assert.ok(plans.get(MEMBER_JOIN_IF_NEEDED)!.some((d) => d.includes("(thread=? AND session=?)")));
   assert.ok(plans.get(DELIVERY_INSERT_IF_ABSENT)!.some((d) => d.includes("(thread=? AND n=? AND session=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_MEMBER)!.some((d) => d.includes("(thread=? AND session=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_MEMBER)!.some((d) => d.includes("(thread=? AND n=?)")));
+  assert.ok(plans.get(DELIVERY_INSERT_IF_MEMBER)!.some((d) => d.includes("(thread=? AND n=? AND session=?)")));
+  assert.ok(plans.get(ROUTER_WORKSPACE_MISMATCH)!.some((d) => d.includes("(thread=?)")));
+  assert.ok(plans.get(ROUTER_WORKSPACE_MISMATCH)!.some((d) => d.includes("(key=?)")));
   assert.ok(plans.get(SESSION_COUNT_TOTAL)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=?)")));
   assert.ok(plans.get(SESSION_COUNT_CONNECT)!.some((d) => d.includes("PRIMARY KEY (kind=? AND ws=? AND connect=?)")));
   assert.ok(plans.get(SESSION_COUNT_FIRST)!.some((d) => d.includes("INTEGER PRIMARY KEY (rowid<?)")));
@@ -1732,6 +1919,50 @@ test("what the station asks again and again is planned by an index, never a scan
   assert.ok(plans.get(CLOSED_THREAD_SINCE)!.some((d) => d.includes("closed_cards_thread_at (thread=? AND at>?)")), plans.get(CLOSED_THREAD_SINCE)!.join(" | "));
   // Each session's latest check of the last days: from the index of their times alone.
   assert.ok(plans.get(LATEST_DECISIONS)!.some((d) => d.includes("COVERING INDEX decision_checks_lately")), plans.get(LATEST_DECISIONS)!.join(" | "));
+  // An old store's ready branch also reads times and sessions from a covering index; the small workspace path seeks
+  // its sessions and their checks. The no-time fallback uses those same seeks if a time index disappears.
+  const decisionOld = memory();
+  decisionOld.db.exec("CREATE INDEX decision_checks_at ON decision_checks(created_at)");
+  const putDecision = decisionOld.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES('old',1,'{}')");
+  for (let n = 0; n < 64; n++) putDecision.run();
+  decisionOld.db.exec("DROP INDEX decision_checks_lately");
+  installDecisionTimeIndex(decisionOld.db);
+  for (const [sql, args] of [[LEGACY_LATEST_DECISIONS, [0]], [LEGACY_LATEST_DECISIONS_SCOPED, [0, "ws", 0]],
+    [LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK, [0, "ws", 1]]] as [string, unknown[]][]) {
+    const oldPlan = (decisionOld.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(oldPlan.some((d) => d.includes("COVERING INDEX legacy_decision_time_at (created_at>?)")), oldPlan.join(" | "));
+    if (sql === LEGACY_LATEST_DECISIONS_SCOPED) {
+      assert.ok(oldPlan.some((d) => d.includes("sessions_by_connect") && d.includes("connect=?") && d.includes("ws=?")), oldPlan.join(" | "));
+      assert.ok(oldPlan.some((d) => d.includes("decision_checks_session") && d.includes("session=?")), oldPlan.join(" | "));
+    }
+  }
+  const noTimePlan = (decisionOld.db.prepare(`EXPLAIN QUERY PLAN ${LATEST_DECISIONS_SCOPED_NO_TIME}`).all(0, "ws", 0) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(noTimePlan.some((d) => d.includes("sessions_by_connect") && d.includes("connect=?") && d.includes("ws=?")), noTimePlan.join(" | "));
+  assert.ok(noTimePlan.some((d) => d.includes("decision_checks_session") && d.includes("session=?")), noTimePlan.join(" | "));
+  const decisionRepair = memory();
+  const putRepair = decisionRepair.db.prepare("INSERT INTO decision_checks(session,created_at,result) VALUES('old',1,'{}')");
+  for (let n = 0; n < 64; n++) putRepair.run();
+  decisionRepair.db.exec("DROP INDEX decision_checks_session");
+  installDecisionSessionIndex(decisionRepair.db);
+  decisionRepair.db.exec("DROP INDEX legacy_decision_session_by_session");
+  installDecisionSessionIndex(decisionRepair.db);
+  const repairLast = (decisionRepair.db.prepare(`EXPLAIN QUERY PLAN ${LEGACY_LAST_DECISION_REPAIR}`).all("old") as { detail: string }[]).map((r) => r.detail);
+  assert.ok(repairLast.some((d) => d.includes("legacy_decision_session_repair_by_session") && d.includes("session=?")), repairLast.join(" | "));
+  assert.ok(repairLast.some((d) => d.includes("INTEGER PRIMARY KEY (rowid=?)")), repairLast.join(" | "));
+  const repairScope = (decisionRepair.db.prepare(`EXPLAIN QUERY PLAN ${decisionScopedWithSession(false, false, "repair")}`)
+    .all(0, "ws", 0) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(repairScope.some((d) => d.includes("legacy_decision_session_repair_by_session") && d.includes("session=?")), repairScope.join(" | "));
+  // Current policy: seek this workspace's most recent change. An old store keeps the original scan only until its
+  // background lookup is prepared; its ready branch must seek the workspace, then the chosen row by primary key.
+  assert.ok(plans.get(ARCHIVE_POLICY)!.some((d) => d.includes("archive_policy_by_ws (ws=?)")), plans.get(ARCHIVE_POLICY)!.join(" | "));
+  const policyOld = memory();
+  policyOld.db.exec("DROP INDEX archive_policy_by_ws");
+  const putPolicy = policyOld.db.prepare("INSERT INTO archive_policy(at,policy,author,summary,ws) VALUES(0,'{}','{}','','ws')");
+  for (let n=0;n<64;n++) putPolicy.run();
+  installArchivePolicyIndex(policyOld.db);
+  const oldPolicyPlan = (policyOld.db.prepare(`EXPLAIN QUERY PLAN ${LEGACY_ARCHIVE_POLICY}`).all("ws") as { detail: string }[]).map((r) => r.detail);
+  assert.ok(oldPolicyPlan.some((d) => d.includes("archive_policy_lookup_ws (ws=?)")), oldPolicyPlan.join(" | "));
+  assert.ok(oldPolicyPlan.some((d) => d.includes("INTEGER PRIMARY KEY (rowid=?)")), oldPolicyPlan.join(" | "));
   // The turns the usage counter reads at each part of a transcript: those of its calls' time alone.
   assert.ok(plans.get(TURNS_BETWEEN)!.some((d) => d.includes("turns_by_session (session_key=? AND started_at>? AND started_at<?)")), plans.get(TURNS_BETWEEN)!.join(" | "));
   assert.ok(plans.get(TAKEN_SINCE)!.some((d) => d.includes("deliveries_taken (session=? AND delivered_at>?)")), plans.get(TAKEN_SINCE)!.join(" | "));
@@ -1769,19 +2000,22 @@ test("what is told as chats change is planned by the size of what it finds, not 
   assertRecoveryWaitPlans();
   assertAwakeJobPlan();
   assertSessionJobPlans();
+  assertProcessJobPlans();
+  assertActiveJobUpgradePlans();
   assertSandboxPlans();
+  assertChatSharePlans();
   assertSessionDirectoryPlans();
   assertRemoteQueuePlan();
   const store = memory();
   // As node's SQLite plans each, over the file the readers read: a chat's unread messages counted from the index of its
   // messages alone; an agent's message during a turn by the index of theirs by time; a session's turns as counted, its
   // undelivered messages by the index of those alone, its latest turn by its index; the Slack threads a chat copies to,
-  // by their last entry; and of the items a change touched, or of a chat, their own shares, openers and snapshots. Each
+  // by their last entry; and of the items a change touched, or of a chat, their own shares and openers. Each
   // as it was read every message of a chat, every turn or delivery of a session, or every row of its table: a notice of
   // a chat of many messages read many pages, 3 to 16 s on a station short of memory (2026-11-02), every telling after it waiting.
   const planned: [string, unknown[]][] = [
     [read.UNREAD, [1, 0, "[]"]], [read.ASKED_DURING, [1, 0, 9]], [`${read.SESSION_STATS} WHERE s.key = ?`, ["a"]], [`${read.SESSION_ACTIVITY} WHERE s.key = ?`, ["a"]], [read.LAST_TURN, ["a"]], [read.LATEST_TURNS, ["a", 1]], [CC_THREADS_SQL, [1]],
-    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PUBLISHED_OF, ["[1]"]], [read.PINS_OF, ["a@x", '["a"]']],
+    [read.SHARES_OF, ['["a"]']], [read.OPENERS_OF, ['["a"]']], [read.OPENED_OF, ['["a"]']], [read.PINS_OF, ["a@x", '["a"]']],
     [`${read.SEEN_OF} WHERE key IN (SELECT value FROM json_each(?))`, ['["a"]']], [read.TOLD_BLOCKED, ["a", 0, 9]], [read.RUNNING_OF, ['["a"]']],
     [SESSION_COUNT_DISPLACED, ["a", "token", 1]],
     [SESSION_LIST_DISPLACED, ["a", "token", 1]],
@@ -1792,7 +2026,7 @@ test("what is told as chats change is planned by the size of what it finds, not 
     [SESSION_THREAD_BY_ID, [1, "a"]],
     [LATEST_THREAD_ATTEMPT, ["a"]], [LATEST_THREAD_SCOPE, ["a"]],
     [THREAD_INSERT_IF_ABSENT, ["slack", "C", "1", null, null, 1, null]],
-    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]],
+    [MEMBER_JOIN_IF_NEEDED, [1, "a", "slack", 1]], [DELIVERY_INSERT_IF_ABSENT, [1, 1, "a"]], [DELIVERY_INSERT_IF_MEMBER, [1, 1, "a", MANUAL]], [ROUTER_WORKSPACE_MISMATCH, [1, "home", "home"]],
     [WIDGET_SOURCE, ["a", "/w/item.html"]], [WIDGET_SOURCE_MISSING, ["a"]], [WIDGET_SOURCE_UNUSUAL, ["a"]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|json_each VIRTUAL TABLE\b)/;
@@ -1826,6 +2060,11 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(THREAD_INSERT_IF_ABSENT, "(surface=? AND channel=? AND thread_ts=?)");
   has(MEMBER_JOIN_IF_NEEDED, "(thread=? AND session=?)");
   has(DELIVERY_INSERT_IF_ABSENT, "(thread=? AND n=? AND session=?)");
+  has(DELIVERY_INSERT_IF_MEMBER, "(thread=? AND session=?)");
+  has(DELIVERY_INSERT_IF_MEMBER, "(thread=? AND n=?)");
+  has(DELIVERY_INSERT_IF_MEMBER, "(thread=? AND n=? AND session=?)");
+  has(ROUTER_WORKSPACE_MISMATCH, "(thread=?)");
+  has(ROUTER_WORKSPACE_MISMATCH, "(key=?)");
   has(read.UNREAD, "COVERING INDEX entries_said (thread=? AND n>?)");
   has(read.ASKED_DURING, "entries_agent_at (thread=? AND at>? AND at<?)");
   const stats = `${read.SESSION_STATS} WHERE s.key = ?`;
@@ -1853,7 +2092,6 @@ test("what is told as chats change is planned by the size of what it finds, not 
   has(read.SHARES_OF, "chat_shares USING INDEX sqlite_autoindex_chat_shares_1 (session=?)");
   has(read.OPENERS_OF, "o USING INDEX sqlite_autoindex_opened_chats_1 (child_station=? AND child=?)");
   has(read.OPENED_OF, "o USING INDEX opened_chats_by_key (parent_station=? AND parent=?)");
-  has(read.PUBLISHED_OF, "published USING INDEX published_by_thread (thread=?)");
   has(read.PINS_OF, "pins USING INDEX sqlite_autoindex_pins_1 (viewer=? AND session=?)");
   has(read.TOLD_BLOCKED, "turns_by_end (session_key=? AND ended_at>? AND ended_at<?)");
   // The jobs running of some sessions: by an index (of those running, or of their sessions' jobs), never every job.

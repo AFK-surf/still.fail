@@ -86,3 +86,34 @@ test "a page made once whose back is its stack's down to a floor of its own: the
   t.run_for(move_most_ms)
   assert_eq(nav.depth(), 2, msg="the system's back")
 }
+
+///|
+test "a wide page's edge swipe goes back past back_far, short of a third of its width; short of back_far it stays" {
+  for case in [(150.0, 1), (100.0, 2)] {
+    let (dx, depth) = case
+    let nav = Nav::new("a")
+    nav.push("b")
+    nav.settle()
+    nav.finger.set(0.0)
+    let t = Tester::new(fn(_c) {  }, w=1000.0, h=400.0, platform=1)
+    set_view_app(fn(root) {
+      root.box(fn(m) {
+        m.width(Is(Some(900.0))).height(Is(Some(300.0))) |> ignore
+        nav.backs_over(m, nav.pages[1].serial, 20.0, fn() {  })
+      })
+      |> ignore
+    })
+    t.draw()
+    t.touch(0, 5.0, 50.0)
+    t.advance(input_step_ms)
+    for i in 1..=5 {
+      t.touch(1, 5.0 + dx * i.to_double() / 5.0, 50.0)
+      t.advance(input_step_ms)
+    }
+    // (held still before it was let go, not flung: only how far it went decides)
+    t.advance(input_step_ms * 20.0)
+    t.touch(2, 5.0 + dx, 50.0)
+    t.run_for(move_most_ms)
+    assert_eq(nav.depth(), depth, msg="\{dx} across a page 900 wide")
+  }
+}

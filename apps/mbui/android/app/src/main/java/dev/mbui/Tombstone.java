@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * A native crash's tombstone as the system hands it (ApplicationExitInfo.getTraceInputStream on Android 12+), as
- * still.fail's Android app reads it (Tombstone.kt): the protobuf of AOSP's system/core/debuggerd/proto/tombstone.proto,
+ * still.fail's Android app reads it: the protobuf of AOSP's system/core/debuggerd/proto/tombstone.proto,
  * read here into the text a tombstone file has, the crashing thread first and the process's last log lines after. Only
  * the fields used are read; what cannot be read (an older format, a cut-off stream) falls back to the printable
  * strings in it.

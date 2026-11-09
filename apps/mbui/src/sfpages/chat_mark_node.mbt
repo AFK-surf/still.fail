@@ -19,7 +19,7 @@ pub fn chat_mark_node(parent : @view.View, tone : () -> String) -> Unit {
         pop.go_from(m, 0.0, 1.0, @motion.tween(mark_pop_ms, ease=Out))
       }
     })
-    m.scale(By(fn() { pop_scale(pop.shown(m)) })) |> ignore
+    m.alpha(By(fn() { @sf.seen_at(pop_scale(pop.shown(m))) })).scale(By(fn() { pop_scale(pop.shown(m)) })) |> ignore
     m.says(By(fn() {
       match tone() {
         "busy" | "done" | "alert" | "wait" => Some(@view.said(Image, label=@sf.t("web-main.chatMark." + tone())))
@@ -227,7 +227,7 @@ pub fn row_aside_node(
         g.says(By(fn() { Some(@view.said(Image, label=said())) })) |> ignore
         let key = fn(x : @sfbase.RowAgent) { x.maker + "\u{1}" + x.runtime }
         g.each(fn() { groups().iter().take(aside_most).map(key).collect() }, fn(k) { k }, fn(slot, k) {
-          let k = @signals.untracked(fn() { k.get() })
+          let k = k.untracked()
           guard groups().search_by(fn(x) { key(x) == k }).map(fn(i) { groups()[i] }) is Some(x) else { return }
           slot.box(fn(m) {
             @sf.style_node(m, fn() { aside_agent }, in_row=true)
@@ -257,7 +257,7 @@ pub fn row_aside_node(
           }
         }
         g.each(fn() { shown().map(fn(p) { p.id }) }, fn(id) { id }, fn(slot, id) {
-          let id = @signals.untracked(fn() { id.get() })
+          let id = id.untracked()
           let blank : @sfbase.Person = { id, email: "", name: "", display: "", picture: "", mine: false }
           let p = fn() { shown().iter().find_first(fn(q) { q.id == id }).unwrap_or(blank) }
           let first = fn() { shown().search_by(fn(q) { q.id == id }) == Some(0) }

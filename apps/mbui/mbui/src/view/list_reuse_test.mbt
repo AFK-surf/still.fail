@@ -1,0 +1,151 @@
+// A column's blocks of one kind taken by those that come to show as others no more do (View::scrolls_window's
+// `reused`): 100 tall, 30 blocks of 40, 50 or 60 (by their keys) counted as 80 before they are first laid out; how many
+// are made, which block holds which key, and where.
+
+///|
+priv struct ReuseCase {
+  tree : @view.Tree
+  scroll : @view.Scroll
+  on : @signals.Signal[Bool]
+  /// how many blocks were made, how many live now
+  made : Ref[Int]
+  live : Ref[Int]
+  /// each live block with what says its key now
+  blocks : Array[(@view.View, () -> Int)]
+  /// what each block's width reads besides, and how many times one was worked out of it
+  outside : @signals.Signal[Int]
+  reads : Ref[Int]
+}
+
+///|
+fn reuse_case() -> ReuseCase {
+  let scroll = @view.Scroll::list()
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let made = Ref(0)
+  let live = Ref(0)
+  let blocks : Array[(@view.View, () -> Int)] = []
+  let outside = @signals.signal(0, same=fn(a, b) { a == b })
+  let reads = Ref(0)
+  let tree = @view.Tree::new(fn(root) {
+    root.show(at_once=true, fn() { on.get() }, fn(s) {
+      s.box(fn(o) {
+        o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+        o.scrolls_window(
+          scroll,
+          fn() { Array::makei(30, fn(i) { i }) },
+          est=80.0,
+          fn(_, _) { abort("every block is of a kind another may take") },
+          reused=fn(_) { Some(0) },
+          make_reused=fn(b, key) {
+            made.val = made.val + 1
+            live.val = live.val + 1
+            blocks.push((b, key))
+            b.owns(fn() {
+              live.val = live.val - 1
+              match blocks.search_by(fn(x) { physical_equal(x.1, key) }) {
+                Some(i) => blocks.remove(i) |> ignore
+                None => ()
+              }
+            })
+            |> ignore
+            b.height(By(fn() { Some(reuse_tall(key())) })) |> ignore
+            b.width(By(fn() {
+              reads.val = reads.val + 1
+              Some(200.0 + outside.get().to_double())
+            }))
+            |> ignore
+          },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  { tree, scroll, on, made, live, blocks, outside, reads }
+}
+
+///|
+/// How tall block `k` is.
+fn reuse_tall(k : Int) -> Double {
+  40.0 + (k % 3).to_double() * 10.0
+}
+
+///|
+/// Where block `k` stands in the column.
+fn reuse_top(k : Int) -> Double {
+  let mut y = 0.0
+  for i in 0..<k {
+    y = y + reuse_tall(i)
+  }
+  y
+}
+
+///|
+/// The blocks that show (held by the column, a key each), their keys in order, each where its key's block is.
+fn ReuseCase::placed(self : ReuseCase) -> (Array[Int], Bool) {
+  let at = self.scroll.at(self.tree)
+  let keys = []
+  let mut placed = true
+  for b in self.blocks {
+    let (v, key) = b
+    guard v.parent() is Some(_) else { continue }
+    let k = key()
+    keys.push(k)
+    let (_, y, _, h) = v.rect()
+    if y != reuse_top(k) - at || h != reuse_tall(k) {
+      placed = false
+    }
+  }
+  keys.sort()
+  (keys, placed)
+}
+
+///|
+test "scrolls_window reused: scrolled down a block at a time, those that leave taken by those that come, each where its key's is" {
+  let c = reuse_case()
+  let first = (c.made.val, c.placed())
+  // (a wheel's twelve turns of 40, each at its moment, each drawn)
+  for t in [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0] {
+    c.tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, t) |> ignore
+    c.tree.frame(390.0, 844.0) |> ignore
+  }
+  let (keys, placed) = c.placed()
+  // (made: those that showed first, and no more than one put by for each that came at once)
+  assert_true(c.made.val <= 6, msg="made \{c.made.val}")
+  assert_eq((first.1, placed, keys.length() >= 2, keys[0] <= 11 && keys[keys.length() - 1] >= 10), (([0, 1, 2], true), true, true, true))
+}
+
+///|
+test "scrolls_window reused: those put by and those that show let go with the column" {
+  let c = reuse_case()
+  // (a wheel's six turns of 120, each at its moment, each drawn)
+  for t in [10.0, 20.0, 30.0, 40.0, 50.0, 60.0] {
+    c.tree.wheel_at(150.0, 50.0, 0.0, 120.0, 0, t) |> ignore
+    c.tree.frame(390.0, 844.0) |> ignore
+  }
+  assert_true(c.live.val > 0)
+  c.on.set(false)
+  c.tree.frame(390.0, 844.0) |> ignore
+  assert_eq(c.live.val, 0)
+}
+
+///|
+test "scrolls_window reused: those put by follow nothing, those that show what they bind" {
+  let c = reuse_case()
+  // (a wheel's turn of 40: the first, 40 tall, no more shows, put by)
+  c.tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, 10.0) |> ignore
+  c.tree.frame(390.0, 844.0) |> ignore
+  // (those in sight: those put by are left where they were, out of it)
+  let showing = c.blocks
+    .filter(fn(b) {
+      let (_, y, _, h) = b.0.rect()
+      y + h > 0.0 && y < 100.0
+    })
+    .length()
+  let before = c.reads.val
+  c.outside.set(1)
+  c.tree.frame(390.0, 844.0) |> ignore
+  // (worked out again for the two that show, none for the one put by)
+  assert_eq((c.reads.val - before, showing, c.live.val), (2, 2, 3))
+}

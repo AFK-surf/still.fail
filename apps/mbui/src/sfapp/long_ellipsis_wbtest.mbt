@@ -93,6 +93,8 @@ test "a long profile check keeps its refresh button beside it" {
 ///|
 test "a long chat and activity time both have room on their row" {
   let t = screen_in("settings-connect", corner_windows[1], "zh", said=true)
+  // (its recent chats last on the page: scrolled to)
+  t.scroll_all_to_end() |> ignore
   let chat = t.lines_of("Slack 里问的报销流程 — 后面")
   let time = t.lines_of("昨天 — 后面")
   assert_eq(chat.length(), 1, msg="\{chat}")

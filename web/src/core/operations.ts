@@ -4,8 +4,6 @@ export interface OperationParams {
   "session.cancelRetry": { key: string; thread: number; seq: number };
   "tools.access": {  };
   "tools.setAccess": { access: string };
-  "station.modules": {  };
-  "station.module.set": { id: string; enabled: boolean };
   "agentEnv.set": { env?: unknown; text?: string | null | undefined };
   "search.setPersonal": { personal: boolean };
   "network.setCongestion": { congestion: string };
@@ -55,13 +53,15 @@ export interface OperationParams {
   "connect.put": { id: string; input?: unknown };
   "connect.delete": { id: string };
   "connect.reconnect": { id: string };
+  "connect.move": { id: string; to: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
   "connect.putSlackApp": { connect: string; input?: unknown; from?: unknown };
-  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
+  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; threads?: boolean | null | undefined };
   "feishu.cancelRegistration": { id: string };
   "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };
   "feishu.createConnect": { feishu: unknown; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; owner?: unknown };
   "feishu.putSecret": { id: string; appSecret: string };
+  "comma.createConnect": { line: string; bind?: unknown };
   "slack.verify": { connect?: string | null | undefined; install?: string | null | undefined; appToken?: string | null | undefined; botToken?: string | null | undefined };
   "slack.makeApp": { team?: string | null | undefined; settings?: unknown; icon?: string | null | undefined };
   "slack.dropApp": { appId: string };
@@ -117,9 +117,6 @@ export interface OperationParams {
   "signin.self": { id: string; done?: boolean | null | undefined };
   "signin.deny": { id: string };
   "memory.get": {  };
-  "outflow.revoke": { id: string };
-  "outflow.answer": { id: string; allow: boolean; scopes?: string[] | null | undefined; workspace?: boolean | null | undefined };
-  "outflow.tailcat": { on: boolean };
   "process.end": { pid: number; session: string };
   "footprint.scan": {  };
   "footprint.rebuild": { keys?: string[] | null | undefined };
@@ -159,6 +156,8 @@ export interface OperationParams {
   "invitation.accept": { id?: string | null | undefined; token?: string | null | undefined };
   "invitation.decline": { id: string };
   "loginSession.revoke": { id: string };
+  "account.setPicture": { picture: string };
+  "account.removePicture": {  };
   "admin.me": {  };
   "admin.createCode": { note?: string | null | undefined; days?: number | null | undefined; beta?: boolean | null | undefined };
   "admin.revokeCode": { code: string };
@@ -174,7 +173,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chat.relayPeople", "chat.relayPlaces", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "screen.apps", "screen.chrome", "screen.logs", "screen.settings", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -184,8 +183,6 @@ export function bindStationOperations(call: Call) {
     sessionCancelRetry: <T = unknown>(params: OperationParams["session.cancelRetry"]) => call("session.cancelRetry", params) as Promise<T>,
     toolsAccess: <T = unknown>(params: OperationParams["tools.access"] = {}) => call("tools.access", params) as Promise<T>,
     toolsSetAccess: <T = unknown>(params: OperationParams["tools.setAccess"]) => call("tools.setAccess", params) as Promise<T>,
-    stationModules: <T = unknown>(params: OperationParams["station.modules"] = {}) => call("station.modules", params) as Promise<T>,
-    stationModule: <T = unknown>(params: OperationParams["station.module.set"]) => call("station.module.set", params) as Promise<T>,
     agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     networkSetCongestion: <T = unknown>(params: OperationParams["network.setCongestion"]) => call("network.setCongestion", params) as Promise<T>,
@@ -235,6 +232,7 @@ export function bindStationOperations(call: Call) {
     connectPut: <T = unknown>(params: OperationParams["connect.put"]) => call("connect.put", params) as Promise<T>,
     connectDelete: <T = unknown>(params: OperationParams["connect.delete"]) => call("connect.delete", params) as Promise<T>,
     connectReconnect: <T = unknown>(params: OperationParams["connect.reconnect"]) => call("connect.reconnect", params) as Promise<T>,
+    connectMove: <T = unknown>(params: OperationParams["connect.move"]) => call("connect.move", params) as Promise<T>,
     connectBindSession: <T = unknown>(params: OperationParams["connect.bindSession"]) => call("connect.bindSession", params) as Promise<T>,
     connectPutSlackApp: <T = unknown>(params: OperationParams["connect.putSlackApp"]) => call("connect.putSlackApp", params) as Promise<T>,
     feishuRegister: <T = unknown>(params: OperationParams["feishu.register"] = {}) => call("feishu.register", params) as Promise<T>,
@@ -242,6 +240,7 @@ export function bindStationOperations(call: Call) {
     feishuVerify: <T = unknown>(params: OperationParams["feishu.verify"]) => call("feishu.verify", params) as Promise<T>,
     feishuCreateConnect: <T = unknown>(params: OperationParams["feishu.createConnect"]) => call("feishu.createConnect", params) as Promise<T>,
     feishuPutSecret: <T = unknown>(params: OperationParams["feishu.putSecret"]) => call("feishu.putSecret", params) as Promise<T>,
+    commaCreateConnect: <T = unknown>(params: OperationParams["comma.createConnect"]) => call("comma.createConnect", params) as Promise<T>,
     slackVerify: <T = unknown>(params: OperationParams["slack.verify"] = {}) => call("slack.verify", params) as Promise<T>,
     slackMakeApp: <T = unknown>(params: OperationParams["slack.makeApp"] = {}) => call("slack.makeApp", params) as Promise<T>,
     slackDropApp: <T = unknown>(params: OperationParams["slack.dropApp"]) => call("slack.dropApp", params) as Promise<T>,
@@ -297,9 +296,6 @@ export function bindStationOperations(call: Call) {
     signinSelf: <T = unknown>(params: OperationParams["signin.self"]) => call("signin.self", params) as Promise<T>,
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
-    outflowRevoke: <T = unknown>(params: OperationParams["outflow.revoke"]) => call("outflow.revoke", params) as Promise<T>,
-    outflowAnswer: <T = unknown>(params: OperationParams["outflow.answer"]) => call("outflow.answer", params) as Promise<T>,
-    outflowTailcat: <T = unknown>(params: OperationParams["outflow.tailcat"]) => call("outflow.tailcat", params) as Promise<T>,
     processEnd: <T = unknown>(params: OperationParams["process.end"]) => call("process.end", params) as Promise<T>,
     footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,
     footprintRebuild: <T = unknown>(params: OperationParams["footprint.rebuild"] = {}) => call("footprint.rebuild", params) as Promise<T>,
@@ -344,6 +340,8 @@ export function bindCloudOperations(call: Call) {
     invitationAccept: <T = unknown>(params: OperationParams["invitation.accept"] = {}) => call("invitation.accept", params) as Promise<T>,
     invitationDecline: <T = unknown>(params: OperationParams["invitation.decline"]) => call("invitation.decline", params) as Promise<T>,
     loginSessionRevoke: <T = unknown>(params: OperationParams["loginSession.revoke"]) => call("loginSession.revoke", params) as Promise<T>,
+    accountSetPicture: <T = unknown>(params: OperationParams["account.setPicture"]) => call("account.setPicture", params) as Promise<T>,
+    accountRemovePicture: <T = unknown>(params: OperationParams["account.removePicture"] = {}) => call("account.removePicture", params) as Promise<T>,
     adminMe: <T = unknown>(params: OperationParams["admin.me"] = {}) => call("admin.me", params) as Promise<T>,
     adminCreateCode: <T = unknown>(params: OperationParams["admin.createCode"] = {}) => call("admin.createCode", params) as Promise<T>,
     adminRevokeCode: <T = unknown>(params: OperationParams["admin.revokeCode"]) => call("admin.revokeCode", params) as Promise<T>,

@@ -20,9 +20,6 @@ pub fn after(@ui.Ctx, String, Bool, Double, keep? : Bool, later? : Bool, since? 
 
 pub fn alert_dialog(@ui.Ctx, String, Bool, String, String, description? : String, cancel? : String, danger? : Bool, w? : Double, look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit, body? : () -> Unit) -> Alert
 
-#callsite(autofill(loc))
-pub fn animate(@ui.Ctx, String, Double, transition? : @motion.Spec, loc~ : SourceLoc) -> Double
-
 pub fn aspect_ratio(@ui.Ctx, Double, () -> Unit) -> Int32
 
 pub fn avatar(@ui.Ctx, String, String, size? : Double, radius? : Double, bg? : Int64) -> Unit
@@ -43,7 +40,7 @@ pub fn button_text(size? : ButtonSize, tone? : Variant) -> @ui.TextStyle
 
 pub fn card(tone? : CardTone) -> @ui.Style
 
-pub fn checkbox(@ui.Ctx, String, @view.Check, label? : String, disabled? : Bool, look? : (@ui.Ctx, CheckboxState) -> Unit) -> @ui.Changed[@view.Check]
+pub fn checkbox(@ui.Ctx, String, @view.Check, label? : String, disabled? : Bool, look? : (@ui.Ctx, CheckboxState) -> Unit, on_change? : (@view.Check) -> Unit) -> @ui.Changed[@view.Check]
 
 pub fn checkbox_look(@ui.Ctx, CheckboxState) -> Unit
 
@@ -57,7 +54,7 @@ pub let collapsible_close_ms : Double
 
 pub let collapsible_open_ms : Double
 
-pub fn context_menu(@ui.Ctx, String, Int32, Array[Entry], label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit) -> Menu
+pub fn context_menu(@ui.Ctx, String, Int32, Array[Entry], label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, on_pick? : (String) -> Unit) -> Menu
 
 pub fn dialog(@ui.Ctx, String, Bool, String, description? : String, w? : Double, modal? : Bool, outside? : Bool, close_label? : String, look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit, scrim? : Int64, on_escape? : () -> Bool, () -> Unit) -> @ui.Changed[Bool]
 
@@ -75,7 +72,7 @@ pub let disabled_alpha : Double
 
 pub fn doubled(Int64) -> Int64
 
-pub fn dropdown_menu(@ui.Ctx, String, Bool, Int32, Array[Entry], side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, heading_look? : (@ui.Ctx, String) -> Unit, rule_look? : (@ui.Ctx) -> Unit, at? : (Double, Double, Double, Double), scrim? : Int64, submenu? : Bool, enter? : @motion.Trans, exit? : @motion.Trans) -> Menu
+pub fn dropdown_menu(@ui.Ctx, String, Bool, Int32, Array[Entry], side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, heading_look? : (@ui.Ctx, String) -> Unit, rule_look? : (@ui.Ctx) -> Unit, at? : (Double, Double, Double, Double), scrim? : Int64, submenu? : Bool, enter? : @motion.Trans, exit? : @motion.Trans, on_pick? : (String) -> Unit) -> Menu
 
 pub fn felt_tick(@ui.Ctx, String) -> Unit
 
@@ -109,7 +106,7 @@ pub fn group_thumb_look(@ui.Ctx, Double, Double) -> Unit
 
 pub fn held_in_room(@ui.Ctx, PopState, key? : String, most? : Double) -> Bool
 
-pub fn hover_card(@ui.Ctx, String, Int32, open_delay? : Double, close_delay? : Double, side? : @view.Side, along? : @view.Along, offset? : Double, tap? : Bool, held? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> Bool
+pub fn hover_card(@ui.Ctx, String, Int32, open_delay? : Double, close_delay? : Double, side? : @view.Side, along? : @view.Along, along_offset? : Double, offset? : Double, tap? : Bool, held? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> Bool
 
 pub let hover_card_close_ms : Double
 
@@ -142,9 +139,9 @@ pub let loupe_zoom : Double
 
 pub fn media_decode_stalled(@ui.Ctx, @ui.NativeView?) -> Bool
 
-pub fn media_grab_stalled(@ui.Ctx, @ui.NativeView) -> Bool
-
 pub let media_decode_wait_ms : Double
+
+pub fn media_grab_stalled(@ui.Ctx, @ui.NativeView) -> Bool
 
 pub let media_grab_wait_ms : Double
 
@@ -178,7 +175,7 @@ pub fn menu_separator() -> Entry
 
 pub fn menu_sub(String, Array[Entry], disabled? : Bool) -> Entry
 
-pub fn menubar(@ui.Ctx, String, Array[(String, Array[Entry])], label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, trigger_look? : (@ui.Ctx, ToggleState) -> Unit) -> String?
+pub fn menubar(@ui.Ctx, String, Array[(String, Array[Entry])], label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, trigger_look? : (@ui.Ctx, ToggleState) -> Unit, on_pick? : (String) -> Unit) -> String?
 
 pub fn menubar_trigger_look(@ui.Ctx, ToggleState) -> Unit
 
@@ -208,7 +205,7 @@ pub let pop_out : @motion.Trans
 
 pub let pop_out_ms : Double
 
-pub fn popover(@ui.Ctx, String, Bool, Int32, side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, modal? : Bool, focus? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, at? : (Double, Double, Double, Double), enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> @ui.Changed[Bool]
+pub fn popover(@ui.Ctx, String, Bool, Int32, side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, modal? : Bool, focus? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, at? : (Double, Double, Double, Double), anchor_node? : @view.View, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> @ui.Changed[Bool]
 
 pub fn popover_look(@ui.Ctx, PopState, () -> Unit) -> Unit
 
@@ -233,7 +230,7 @@ pub let progress_ms : Double
 
 pub let progress_sweep_ms : Double
 
-pub fn radio_group(@ui.Ctx, String, Array[Item], String, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, gap? : Double, look? : (@ui.Ctx, RadioState) -> Unit) -> @ui.Changed[String]
+pub fn radio_group(@ui.Ctx, String, Array[Item], String, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, gap? : Double, look? : (@ui.Ctx, RadioState) -> Unit, on_pick? : (String) -> Unit) -> @ui.Changed[String]
 
 pub fn radio_look(@ui.Ctx, RadioState) -> Unit
 
@@ -251,7 +248,7 @@ pub fn section_header(indent? : Indent) -> @ui.Style
 
 pub fn section_title() -> @ui.TextStyle
 
-pub fn select(@ui.Ctx, String, String, Array[Item], placeholder? : String, w? : Double, label? : String, disabled? : Bool, look? : (@ui.Ctx, SelectState) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit) -> @ui.Changed[String]
+pub fn select(@ui.Ctx, String, String, Array[Item], placeholder? : String, w? : Double, label? : String, disabled? : Bool, look? : (@ui.Ctx, SelectState) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, on_pick? : (String) -> Unit) -> @ui.Changed[String]
 
 pub fn select_look(@ui.Ctx, SelectState) -> Unit
 
@@ -263,13 +260,15 @@ pub fn sheet_grabber(@ui.Ctx) -> Unit
 
 pub fn sheet_look(@ui.Ctx, SheetState, () -> Unit) -> Unit
 
+pub fn sheet_place(@ui.Ctx) -> (Double, Double)?
+
 pub fn sheet_rest(String) -> Double
 
 pub let sheet_scrim_ms : Double
 
 pub fn sheet_top(@ui.Ctx) -> Double?
 
-pub fn slider(@ui.Ctx, String, Double, min? : Double, max? : Double, step? : Double, w? : @ui.Size, label? : String, disabled? : Bool, look? : (@ui.Ctx, SliderState) -> Unit) -> @ui.Changed[Double]
+pub fn slider(@ui.Ctx, String, Double, min? : Double, max? : Double, step? : Double, w? : @ui.Size, label? : String, disabled? : Bool, look? : (@ui.Ctx, SliderState) -> Unit, on_change? : (Double) -> Unit, on_let_go? : (Double) -> Unit) -> @ui.Changed[Double]
 
 pub fn slider_look(@ui.Ctx, SliderState) -> Unit
 
@@ -279,11 +278,12 @@ pub fn snap(Double, Double, Double, Double) -> Double
 
 pub fn speed_stretch(Double) -> (Double, Double)
 
-pub fn switch(@ui.Ctx, String, Bool, label? : String, disabled? : Bool, look? : (@ui.Ctx, SwitchState) -> Unit) -> @ui.Changed[Bool]
+pub fn switch(@ui.Ctx, String, Bool, label? : String, disabled? : Bool, look? : (@ui.Ctx, SwitchState) -> Unit, on_change? : (Bool) -> Unit) -> @ui.Changed[Bool]
 
 pub fn switch_held(@ui.Ctx, String, Bool) -> Double
 
-pub fn switch_knob(@ui.Ctx, String, Bool) -> Double
+#callsite(autofill(loc))
+pub fn switch_knob(@ui.Ctx, String, Bool, loc~ : SourceLoc) -> @motion.Anim
 
 pub fn switch_look(@ui.Ctx, SwitchState) -> Unit
 
@@ -295,7 +295,7 @@ pub fn switch_rest(String) -> Double
 
 pub fn tabs(@ui.Ctx, String, Array[Item], String, (String) -> Unit, orientation? : @ui.Orientation, manual? : Bool, label? : String, look? : (@ui.Ctx, ToggleState) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit) -> @ui.Changed[String]
 
-pub fn text_field(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], w? : @ui.Size, disabled? : Bool, secret? : Bool, enter_sends? : Bool, size? : Double, line? : Double, look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit, leaves? : Array[Int32], field? : @ui.Field) -> Field
+pub fn text_field(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], w? : @ui.Size, disabled? : Bool, secret? : Bool, enter_sends? : Bool, size? : Double, line? : Double, look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit, leaves? : Array[Int32], field? : @ui.Field, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> Field
 
 pub fn tinted(@ui.Ctx, Int64, Bool, Bool) -> Int64
 
@@ -321,9 +321,9 @@ pub fn toaster(@ui.Ctx, String, Array[Toast], duration? : Double, w? : Double, b
 
 pub fn toaster_node(@view.View, () -> Array[Toast], (Toast) -> Double, () -> Double, (@view.View, ToastNode) -> Unit, (String) -> Unit, (String) -> Unit, key? : String, w? : Double, label? : String) -> @view.View
 
-pub fn toggle(@ui.Ctx, String, Bool, key? : String, disabled? : Bool, look? : (@ui.Ctx, ToggleState) -> Unit) -> @ui.Changed[Bool]
+pub fn toggle(@ui.Ctx, String, Bool, key? : String, disabled? : Bool, look? : (@ui.Ctx, ToggleState) -> Unit, on_change? : (Bool) -> Unit) -> @ui.Changed[Bool]
 
-pub fn toggle_group(@ui.Ctx, String, Array[Item], Array[String], multiple? : Bool, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, slide? : Bool, grow? : Bool, widths? : Array[(Double, Double)], look? : (@ui.Ctx, ToggleState) -> Unit, thumb? : (@ui.Ctx, Double, Double) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit, lens? : @paint.Glass, lens_grow? : Double) -> @ui.Changed[Array[String]]
+pub fn toggle_group(@ui.Ctx, String, Array[Item], Array[String], multiple? : Bool, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, slide? : Bool, grow? : Bool, widths? : Array[(Double, Double)], look? : (@ui.Ctx, ToggleState) -> Unit, thumb? : (@ui.Ctx, Double, Double) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit, lens? : @paint.Glass, lens_grow? : Double, on_change? : (Array[String]) -> Unit) -> @ui.Changed[Array[String]]
 
 pub fn toggle_look(@ui.Ctx, ToggleState) -> Unit
 
@@ -643,13 +643,14 @@ pub(all) struct PopState {
 pub(all) struct Presence {
   built : Bool
   shown : Bool
-  t : Double
-} derive(Show)
+  t : @motion.Anim
+}
 pub fn Presence::leaving(Self) -> Bool
 
 pub(all) struct ProgressState {
   t : Double?
   known : Double
+  key : String
 }
 
 pub(all) struct RadioState {
@@ -703,7 +704,7 @@ pub(all) struct SliderState {
 
 pub(all) struct SwitchState {
   on : Bool
-  t : Double
+  t : @motion.Anim
   hovered : Bool
   pressed : Bool
   held : Double
@@ -734,8 +735,9 @@ pub fn ToastNode::toast(Self) -> Toast
 
 pub(all) struct ToastState {
   toast : Toast
-  t : Double
+  t : @motion.Anim
   dx : Double
+  away : Double
   hovered : Bool
 }
 

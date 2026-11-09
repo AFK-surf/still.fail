@@ -4,7 +4,7 @@ import { decodeJwt, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import { previewFiles } from "../src/preview.ts";
 
-// still.fail was called ember (docs/rename-still-fail.md). Its hosts' old names still answer (stations enrolled then
+// still.fail was called ember. Its hosts' old names still answer (stations enrolled then
 // may have one in their settings); the old request headers, subprotocols and signed messages no longer do.
 
 type Harness = Awaited<ReturnType<typeof harness>>;

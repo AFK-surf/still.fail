@@ -101,6 +101,22 @@ test("a station's report is kept once, numbered, and listed in the console with 
   }
 });
 
+test("the feedback monitor reads the console's list with its token, and that token does nothing else", async () => {
+  const h = await harness();
+  try {
+    const { station } = await workspace(h);
+    assert.equal((await send(h, station, report())).status, 201);
+    const list = (token: string, path = "/v1/admin/feedback/list") => h.fetch(path, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: "{}" });
+    const listed = (await (await list(h.feedbackToken)).json()) as any;
+    assert.deepEqual(listed.feedback.map((f: any) => [f.number, f.title, f.station?.name]), [[1, "chat_post 发不出去", "willow"]]);
+    assert.equal((await list(h.adminToken)).status, 401, "not the admin token");
+    assert.equal((await list("x".repeat(43))).status, 401);
+    assert.equal((await list(h.feedbackToken, "/v1/admin/workspaces/list")).status, 401, "nothing else");
+  } finally {
+    await h.close();
+  }
+});
+
 test("reports signed wrong, not signed, by a station not enrolled, or without a title are refused", async () => {
   const h = await harness();
   try {
@@ -192,7 +208,7 @@ test("the changelog is anyone's to read, with what each part has out on the host
     await bucket.put("changelog.json", JSON.stringify([{ version: 1340, commit: "b", at: 2, text: ["新功能：更新日志"], fixes: [], parts: ["web", "android"] }]));
     await bucket.put("web.json", JSON.stringify({ build: 1338 }));
     await bucket.put("web-beta.json", JSON.stringify({ build: 1340 }));
-    await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1300\npath: x.zip\n");
+    await bucket.put("mac/latest.json", JSON.stringify({ versionCode: 1300, file: "desktop/stillfail-0.1.1300-arm64-mac.zip" }));
     const stable = (await (await h.fetch("/v1/changelog")).json()) as any;
     assert.equal(stable.entries[0].text[0], "新功能：更新日志");
     assert.deepEqual(stable.released, { station: null, android: null, desktop: 1300, web: 1338 });

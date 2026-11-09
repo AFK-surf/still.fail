@@ -1,6 +1,6 @@
-// A runtime's own session transcript as one readable timeline for the pages (the Rust station's transcript.rs), read whole
-// as a session nobody watches is (live.rs `before`): its file, or its `.zst` once put away; the agent's own posts left
-// out of it and woven back in from the station's record of them (hub.rs `post_entries`).
+// A runtime's own session transcript as one readable timeline for the pages, read whole
+// as a session nobody watches is: its file, or its `.zst` once put away; the agent's own posts left
+// out of it and woven back in from the station's record of them.
 // - claude: <home>/projects/<cwd>/<id>.jsonl, lines of {type: user|assistant, message: {content: string | blocks}}
 // - codex: <home>/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning | …}
 // - dsh: <home>/dsh-sessions/<cwd>/<id>/session.v<N>.jsonl, lines of {type: user/message | assistant/message |
@@ -189,6 +189,14 @@ function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonl
 /// new session's is not written until its conversation begins, and every project (many on a station) was looked in at each
 /// read until then, 25 seconds on the station's thread while memory was short.
 const elsewhere = new Map<string, string | null>();
+const hintListeners = new Set<(id: string) => void>();
+const hintChanged = (id: string) => { for (const listener of hintListeners) { try { listener(id); } catch {} } };
+
+/// A live locator can discard a result if a relevant in-process path hint changed after its batch was read.
+export function onTranscriptHintsChanged(listener: (id: string) => void): () => void {
+  hintListeners.add(listener);
+  return () => { hintListeners.delete(listener); };
+}
 
 /// Where a session's transcript is in a directory of the runtime's transcripts (a home's, `transcriptDir`, or the shared
 /// place), if it is there. `placed`: a Claude one was looked for in its session's places first. `anywhere`: one not
@@ -208,9 +216,12 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
     if (!anywhere) return null;
     for (const project of entriesOf(dir) ?? []) {
       const path = join(dir, project, `${id}.jsonl`);
-      if (isFile(storage(path))) return (elsewhere.set(at, path), path);
+      if (isFile(storage(path))) {
+        if (elsewhere.get(at) !== path) { elsewhere.set(at, path); hintChanged(id); }
+        return path;
+      }
     }
-    if (placed) elsewhere.set(at, null);
+    if (placed && (!elsewhere.has(at) || elsewhere.get(at) !== null)) { elsewhere.set(at, null); hintChanged(id); }
     return null;
   }
   // Codex's: its file is where it was found (put away, its `.zst` beside) once a process.
@@ -241,7 +252,7 @@ function transcriptIn(runtime: RuntimeKind, dir: string, id: string, placed = fa
     return null;
   };
   const found = find(dir);
-  if (found !== null) rollouts.set(at, found);
+  if (found !== null && rollouts.get(at) !== found) { rollouts.set(at, found); hintChanged(id); }
   return found;
 }
 
@@ -251,7 +262,8 @@ const rollouts = new Map<string, string>();
 
 /// A running Codex thread says its own rollout path. The file may not exist until its first turn: keep the path even
 /// then, so following it does not visit every older day's directory while waiting for that file to appear.
-const saidRollouts = new Map<string, { suffix: string; seen: boolean }>();
+type SaidRollout = { suffix: string; seen: boolean };
+const saidRollouts = new Map<string, Map<string, SaidRollout>>();
 
 export function rememberCodexRollout(home: string, id: string, path: unknown): string | null {
   if (typeof path !== "string" || !isAbsolute(path) || /[\\/\0]/.test(id)) return null;
@@ -266,8 +278,11 @@ export function rememberCodexRollout(home: string, id: string, path: unknown): s
   };
   if (!within(dir) && !within(real)) return null;
   const entry = { suffix: relative(within(dir) ? dir : real, path), seen: false };
-  saidRollouts.set(`${dir}\0${id}`, entry);
-  saidRollouts.set(`${real}\0${id}`, entry);
+  let dirs = saidRollouts.get(id);
+  if (dirs === undefined) saidRollouts.set(id, (dirs = new Map()));
+  dirs.set(dir, entry);
+  dirs.set(real, entry);
+  hintChanged(id);
   return path;
 }
 
@@ -347,18 +362,18 @@ export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: st
     let reported: { suffix: string; seen: boolean } | undefined;
     if (runtime === "codex") {
       for (const dir of saidDirs) {
-        const said = saidRollouts.get(`${dir}\0${id}`) ?? saidRollouts.get(`${real(dir) ?? dir}\0${id}`);
+        const said = saidRollouts.get(id)?.get(dir) ?? saidRollouts.get(id)?.get(real(dir) ?? dir);
         if (!said) continue;
         reported ??= said;
         const path = join(dir, said.suffix);
-        if (isFile(storage(path))) { said.seen = true; return path; }
+        if (isFile(storage(path))) { if (!said.seen) { said.seen = true; hintChanged(id); } return path; }
         if (!said.seen && !anywhere) return null;
         // History also looks elsewhere: a file may have moved before this process saw it at the reported path.
       }
     }
     const path = inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id, placed, anywhere));
     // If a history read found the file elsewhere, later live reads may use that cached location too.
-    if (path !== null && reported) reported.seen = true;
+    if (path !== null && reported && !reported.seen) { reported.seen = true; hintChanged(id); }
     return path;
   });
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
@@ -375,6 +390,69 @@ export function transcriptSources(dataDir: string, profiles: readonly { id: stri
     if (runtime && found?.paths[0]) paths.push({ path: found.paths[0], runtime });
   }
   return { paths, current };
+}
+
+/// The in-process hints a live transcript locator needs. They are copied for one bounded batch of sources; locations
+/// found in a worker are only accepted if the main thread's hints did not change while it was looking.
+export type TranscriptLocationHints = {
+  elsewhere: [string, string | null][];
+  rollouts: [string, string][];
+  said: [string, [string, SaidRollout][]][];
+};
+
+export function transcriptLocationHints(dataDir: string, profiles: readonly { home: string }[],
+  sources: readonly { id: string; runtime: string }[]): { value: TranscriptLocationHints; current(): boolean; merge(found: TranscriptLocationHints): boolean } {
+  const claude = new Set<string>(), codex = new Map<string, string>(), reported = new Set<string>();
+  for (const source of sources) {
+    if (source.runtime !== "claude" && source.runtime !== "codex") continue;
+    const dirs = [sharedTranscripts(dataDir, source.runtime), ...profiles.map((p) => join(p.home, transcriptDir(source.runtime)))];
+    for (const dir of dirs) {
+      const key = `${dir}\0${source.id}`;
+      if (source.runtime === "claude") claude.add(key);
+      else codex.set(key, source.id);
+    }
+    if (source.runtime === "codex") reported.add(source.id);
+  }
+  const beforeElsewhere = new Map([...claude].flatMap((key) => elsewhere.has(key) ? [[key, elsewhere.get(key) as string | null] as const] : []));
+  const beforeRollouts = new Map([...codex.keys()].flatMap((key) => rollouts.has(key) ? [[key, rollouts.get(key)!] as const] : []));
+  const beforeSaid = new Map([...reported].map((id) => [id, new Map(saidRollouts.get(id) ?? [])] as const));
+  const beforeSeen = new Map([...beforeSaid].map(([id, dirs]) => [id, new Map([...dirs].map(([dir, entry]) => [dir, entry.seen]))] as const));
+  const value: TranscriptLocationHints = {
+    elsewhere: [...beforeElsewhere], rollouts: [...beforeRollouts], said: [...beforeSaid].map(([id, dirs]) => [id, [...dirs]]),
+  };
+  const same = <T>(keys: Set<string>, before: Map<string, T>, now: Map<string, T>) => [...keys].every((key) =>
+    before.has(key) === now.has(key) && before.get(key) === now.get(key));
+  const current = () => same(claude, beforeElsewhere, elsewhere) && same(new Set(codex.keys()), beforeRollouts, rollouts) && [...reported].every((id) => {
+    const before = beforeSaid.get(id)!, now = saidRollouts.get(id);
+    if ((now?.size ?? 0) !== before.size) return false;
+    return [...before].every(([dir, entry]) => now?.get(dir) === entry && beforeSeen.get(id)!.get(dir) === entry.seen);
+  });
+  return {
+    value,
+    current,
+    merge(found) {
+      if (!current()) return false;
+      for (const [key, path] of found.rollouts) {
+        const id = codex.get(key);
+        if (id !== undefined && rollouts.get(key) !== path) { rollouts.set(key, path); hintChanged(id); }
+      }
+      for (const [id, dirs] of found.said) for (const [dir, entry] of dirs) {
+        const old = beforeSaid.get(id)?.get(dir);
+        if (old !== undefined && old.suffix === entry.suffix && entry.seen && !old.seen) { old.seen = true; hintChanged(id); }
+      }
+      return true;
+    },
+  };
+}
+
+/// Used in the dedicated locator worker, whose transcript caches belong to one batch at a time.
+export function useTranscriptLocationHints(hints: TranscriptLocationHints): void {
+  elsewhere.clear();
+  rollouts.clear();
+  saidRollouts.clear();
+  for (const [key, path] of hints.elsewhere) elsewhere.set(key, path);
+  for (const [key, path] of hints.rollouts) rollouts.set(key, path);
+  for (const [id, dirs] of hints.said) saidRollouts.set(id, new Map(dirs));
 }
 
 /// Where a session works and worked, for `transcriptPaths`: the directory it was moved to, and its workspace.

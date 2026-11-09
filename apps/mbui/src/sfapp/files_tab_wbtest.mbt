@@ -13,7 +13,8 @@ fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
   }
   let w : Workspace = { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "" }
   @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       // (the library's words as the app's view says them: the tab's labels are found by them, and were its keys unless
       // another test had drawn the app first, 2026-10-24)
       @sf.set_words(fill)
@@ -22,7 +23,7 @@ fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
       c.box(w=Px(480.0), h=Fill(1.0), fn() { @sfdesk.files_tab(c, src, w.id, "s-c1", "ws1/st1") }) |> ignore
       // (what the tab presents, its menus, over it, as the shell draws them)
       @sf.presented(c)
-    },
+    }),
     w=1280.0,
     h=800.0,
     platform~,

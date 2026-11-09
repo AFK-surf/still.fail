@@ -9,11 +9,12 @@ import { join } from "node:path";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
-import { OUTDATED } from "../src/accounts/models.ts";
+import { learn } from "../src/accounts/catalog.ts";
 import { routes } from "../src/api/routes/accounts.ts";
 import { overview } from "../src/api/overview.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
+import { tr } from "../src/ops/i18n.ts";
 import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
@@ -29,7 +30,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -69,6 +70,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     resetQuota: o.resetQuota ?? null,
     codex: o.codex,
     hub: o.hub,
+    reviewUndecided: o.review,
     hermes: o.hermes,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
@@ -98,6 +100,38 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
+  test("an API key can be disabled and re-enabled without losing the key or its settings", async () => {
+    const moved: string[] = [];
+    let checks = 0;
+    const t = await rig({
+      hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, profileGone: async (id) => { moved.push(id); } },
+      check: async () => { checks++; return { state: "ok", detail: "fake", models: [], checkedAt: 0 }; },
+    });
+    try {
+      assert.equal((await t.call("PUT", "/profiles/key", { runtime: "claude", access: { kind: "anthropic-api", key: "sk-my-secret" }, models: ["opus"] }))[0], 200);
+      await settle();
+      assert.equal(t.view("key")!.enabled, true);
+      assert.equal((await t.call("PUT", "/profiles/key", { enabled: "no" }))[0], 400);
+      const disabled = await t.call("PUT", "/profiles/key", { enabled: false });
+      assert.equal(disabled[0], 200);
+      assert.equal(t.view("key")!.enabled, false);
+      assert.deepEqual(moved, ["key"]);
+      assert.equal((t.profile("key")!.access as any).key, "sk-my-secret");
+      assert.deepEqual(t.profile("key")!.models, ["opus"]);
+      await settle();
+      const before = checks;
+      assert.equal((await t.call("POST", "/profiles/key/check"))[0], 409);
+      await t.accounts.refreshQuota("key");
+      assert.equal(checks, before, "a disabled key is not checked in the background or by hand");
+      assert.equal((await t.call("PUT", "/profiles/key", { name: "Backup" }))[0], 200);
+      assert.equal(t.profile("key")!.enabled, false, "other edits retain the disabled state");
+      assert.equal((await t.call("PUT", "/profiles/key", { enabled: true }))[0], 200);
+      assert.equal(t.view("key")!.enabled, true);
+      assert.equal((t.profile("key")!.access as any).key, "sk-my-secret");
+      assert.deepEqual(t.profile("key")!.models, ["opus"]);
+    } finally { await t.close(); }
+  });
+
   test("a profile serves every workspace the station joined but those withheld from it; a joined workspace's members do all its own do", async () => {
     const t = await rig({ workspaces: ["W1", "W2", "W3"] });
     const joined = { ...viewer("guest@example.com", "admin"), workspace: "W2", home: false };
@@ -351,7 +385,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
-  test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
+  test("outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
     const data = temp("outdated");
     writeFileSync(
       join(data, "config.json"),
@@ -362,12 +396,51 @@ describe("the accounts routes", { concurrency: true }, () => {
     store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-opus-4-6", "claude-opus-5-5", "claude-sonnet-5-5"], checkedAt: 1 });
     const first = await rig({ data, store });
     assert.deepEqual(first.profile("cc")!.named, ["claude-sonnet-5-5", "claude-opus-5-5"]);
-    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, [...OUTDATED.keys()].sort());
+    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, ["claude-opus-4-6"]);
     assert.equal((await first.call("PUT", "/profiles/cc", { models: ["claude-opus-4-6", "claude-opus-5-5"] }))[0], 200);
     await first.close();
     const again = await rig({ data, store: Store.open(db, null) });
     assert.deepEqual(again.profile("cc")!.named, ["claude-opus-4-6", "claude-opus-5-5"]);
     await again.close();
+  });
+
+  test("a model new in the catalog has its maker's profiles checked again, and replaces the one before it", async () => {
+    const data = temp("new-model");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({
+        profiles: [
+          { id: "cc", runtime: "claude", access: { kind: "subscription" }, home: "homes/cc", models: ["claude-fable-5-1", "claude-opus-5-5"] },
+          { id: "cx", runtime: "codex", access: { kind: "subscription" }, home: "homes/cx", models: ["gpt-6.1-sol"] },
+        ],
+      }),
+    );
+    const store = Store.open(join(data, "stillfail.db"), null);
+    store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-fable-5-1", "claude-opus-5-5"], checkedAt: 1 });
+    store.setProfileCheck("cx", { state: "ok", detail: "", models: ["gpt-6.1-sol"], checkedAt: 1 });
+    const checked: string[] = [];
+    const t = await rig({
+      data,
+      store,
+      check: async (o) => {
+        checked.push(o.runtime);
+        return { state: "ok", detail: "fake", models: o.runtime === "claude" ? ["claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5"] : ["gpt-6.1-sol"], checkedAt: 0 };
+      },
+    });
+    try {
+      learn({ "claude-fable-5-2": { maker: "anthropic" }, "claude-fable-5-1": { maker: "anthropic" }, "claude-opus-5-5": { maker: "anthropic" }, "gpt-6.1-sol": { maker: "openai" } });
+      // A maker none of its profiles has a model of: nothing checked.
+      t.accounts.newModels(["glm-9"]);
+      t.accounts.newModels(["claude-fable-5-2"]);
+      await until(() => t.profile("cc")!.named.includes("claude-fable-5-2"), "checked again");
+      await settle();
+      assert.deepEqual(checked, ["claude"]);
+      assert.deepEqual(t.profile("cc")!.named, ["claude-opus-5-5", "claude-fable-5-2"]);
+      assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).outdatedUnchecked, ["claude-fable-5-1"]);
+    } finally {
+      learn(null);
+      await t.close();
+    }
   });
 
   test("a login its allowance's reading finds over is checked again, once, and the check says to sign in", async () => {
@@ -691,78 +764,6 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
-  test("an older host's fresh reset count gets its missing expiry details through the borrowed login", { timeout: 10_000 }, async () => {
-    const data = temp("borrowed-reset-expiries");
-    const home = join(data, "homes", "bx");
-    mkdirSync(home, { recursive: true });
-    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
-    const jwt = ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
-    let lent = 0;
-    const expiries = ["2030-03-17T00:00:00Z", "2030-03-19T00:00:00Z"];
-    let count = 2;
-    const chatgpt = await provider((request) => request.url.endsWith("/usage")
-      ? { status: 200, body: { rate_limit_reset_credits: { available_count: count }, rate_limit: { primary_window: { used_percent: 40 } } } }
-      : { status: 200, body: { available_count: count, credits: expiries.slice(0, count).map((expires_at) => ({ status: "available", expires_at })) } });
-    const shared = {
-      status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [], resetCount: count, detail: null, checkedAt: Date.now() + 60_000 } }),
-      lendCodex: async () => {
-        lent++;
-        writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: jwt, account_id: "acct" } }));
-        return Date.now() + 86_400_000;
-      },
-      view: () => null,
-    };
-    const t = await rig({ data, shared, readQuota: async () => ({ state: "unavailable", windows: [], detail: null, checkedAt: 0 }), urls: { ...URLS, chatgpt: chatgpt.base } });
-    await t.call("POST", "/profiles/bx/check");
-    await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.length === 2, "both reset expiries read");
-    assert.deepEqual(t.view("bx")!.quota.resetExpiries, expiries.map(Date.parse));
-    assert.equal(lent, 1, "a login is borrowed when one is not yet here");
-    assert.equal(chatgpt.asked[1]!.headers["chatgpt-account-id"], "acct");
-    // A newer-looking summary from the older host must not erase the recent detailed reading.
-    await t.call("POST", "/profiles/bx/check");
-    assert.deepEqual(t.view("bx")!.quota.resetExpiries, expiries.map(Date.parse));
-    // A changed count is a new set of credits; fetch its own details rather than reuse the old ones.
-    count = 1;
-    await t.call("POST", "/profiles/bx/check");
-    await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.length === 1, "the changed reset count read");
-    assert.deepEqual(t.view("bx")!.quota.resetExpiries, [Date.parse(expiries[0]!)]);
-    await chatgpt.close();
-    await t.close();
-  });
-
-  test("missing reset details are retried on a later quota round, not in a loop", { timeout: 10_000 }, async () => {
-    const data = temp("borrowed-reset-retry");
-    const home = join(data, "homes", "bx");
-    mkdirSync(home, { recursive: true });
-    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
-    const jwt = ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
-    writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: jwt } }));
-    let detailsAvailable = false;
-    const chatgpt = await provider((request) => request.url.endsWith("/usage")
-      ? { status: 200, body: { rate_limit_reset_credits: { available_count: 1 } } }
-      : detailsAvailable ? { status: 200, body: { credits: [{ status: "available", expires_at: "2030-03-17T00:00:00Z" }] } } : { status: 503, body: {} });
-    const time = testClock();
-    const shared = {
-      status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [], resetCount: 1, detail: null, checkedAt: 1 } }),
-      view: () => null,
-    };
-    const t = await rig({ data, shared, clock: time.clock, readQuota: async () => ({ state: "unavailable", windows: [], detail: null, checkedAt: 0 }), urls: { ...URLS, chatgpt: chatgpt.base } });
-    await t.call("POST", "/profiles/bx/check");
-    await upon((wake) => t.accounts.onChange(wake), () => chatgpt.asked.length === 2 && t.view("bx")?.quota?.checkedAt !== 1, "the first detail request finished");
-    assert.equal(t.view("bx")!.quota.resetCount, 1);
-    assert.equal(t.view("bx")!.quota.resetExpiries, undefined);
-    await t.call("POST", "/profiles/bx/check");
-    await settle();
-    assert.equal(chatgpt.asked.length, 2, "another check does not immediately retry the unavailable details");
-    detailsAvailable = true;
-    await time.adjust(5 * 60_000);
-    t.accounts.followed();
-    await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.length === 1, "the next quota round read the expiry");
-    assert.deepEqual(t.view("bx")!.quota.resetExpiries, [Date.parse("2030-03-17T00:00:00Z")]);
-    await chatgpt.close();
-    await t.close();
-  });
-
   test("a revoked borrowed login is replaced from its host, or remains unusable if the host cannot lend", async () => {
     const data = temp("borrowed-revoked");
     const home = join(data, "homes", "bx");
@@ -1049,7 +1050,25 @@ describe("the accounts routes", { concurrency: true }, () => {
     const decision = t.view("groq")!.check.decision;
     assert.ok(decision.state === "pending" || decision.state === "ready", JSON.stringify(decision));
     assert.equal((await t.call("POST", "/automatic-decisions/refresh"))[0], 200);
+    assert.equal((await t.call("PUT", "/profiles/groq", { enabled: false }))[0], 200);
+    assert.deepEqual(t.accounts.decisionModels(), [], "a disabled key is not offered for automatic decisions");
+    assert.equal((await t.call("POST", "/automatic-decisions/refresh"))[0], 200, "refresh skips it");
+    assert.equal((await t.call("PUT", "/profiles/groq", { enabled: true }))[0], 200);
+    await until(() => t.accounts.decisionModels().length > 0, "the re-enabled key can decide again");
     await t.close();
+  });
+
+  test("a review request reports when its rule was turned off while old checks were being prepared", async () => {
+    const entered = Promise.withResolvers<void>(), ready = Promise.withResolvers<number | null>();
+    const t = await rig({ review: () => { entered.resolve(); return ready.promise; } });
+    try {
+      t.config.update((raw) => { raw.automaticDecisions = { completion: { enabled: true, model: null } }; });
+      const response = t.call("POST", "/automatic-decisions/review");
+      await entered.promise;
+      t.config.update((raw) => { raw.automaticDecisions.completion.enabled = false; });
+      ready.resolve(null);
+      assert.deepEqual(await response, [409, { error: tr("zh", "station.decisions.enableFirst") }]);
+    } finally { ready.resolve(null); await t.close(); }
   });
 
   test("automatic archiving is for a workspace manager to change", async () => {
@@ -1103,6 +1122,80 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(after.change.summary, "改了策略，删了「看不出来」");
     await t.close();
   });
+});
+
+// These await a local provider. Start them after the concurrent route rigs have finished opening their stores,
+// so synchronous fixture setup cannot consume their timeout before the provider can answer.
+test("an older host's fresh reset count gets its missing expiry details through the borrowed login", { timeout: 10_000 }, async () => {
+  const data = temp("borrowed-reset-expiries");
+  const home = join(data, "homes", "bx");
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+  const jwt = ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+  let lent = 0;
+  const expiries = ["2030-03-17T00:00:00Z", "2030-03-19T00:00:00Z"];
+  let count = 2;
+  const chatgpt = await provider((request) => request.url.endsWith("/usage")
+    ? { status: 200, body: { rate_limit_reset_credits: { available_count: count }, rate_limit: { primary_window: { used_percent: 40 } } } }
+    : { status: 200, body: { available_count: count, credits: expiries.slice(0, count).map((expires_at) => ({ status: "available", expires_at })) } });
+  const shared = {
+    status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [], resetCount: count, detail: null, checkedAt: Date.now() + 60_000 } }),
+    lendCodex: async () => {
+      lent++;
+      writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: jwt, account_id: "acct" } }));
+      return Date.now() + 86_400_000;
+    },
+    view: () => null,
+  };
+  const t = await rig({ data, shared, readQuota: async () => ({ state: "unavailable", windows: [], detail: null, checkedAt: 0 }), urls: { ...URLS, chatgpt: chatgpt.base } });
+  await t.call("POST", "/profiles/bx/check");
+  await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.length === 2, "both reset expiries read");
+  assert.deepEqual(t.view("bx")!.quota.resetExpiries, expiries.map(Date.parse));
+  assert.equal(lent, 1, "a login is borrowed when one is not yet here");
+  assert.equal(chatgpt.asked[1]!.headers["chatgpt-account-id"], "acct");
+  // A newer-looking summary from the older host must not erase the recent detailed reading.
+  await t.call("POST", "/profiles/bx/check");
+  assert.deepEqual(t.view("bx")!.quota.resetExpiries, expiries.map(Date.parse));
+  // A changed count is a new set of credits; fetch its own details rather than reuse the old ones.
+  count = 1;
+  await t.call("POST", "/profiles/bx/check");
+  await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.length === 1, "the changed reset count read");
+  assert.deepEqual(t.view("bx")!.quota.resetExpiries, [Date.parse(expiries[0]!)]);
+  await chatgpt.close();
+  await t.close();
+});
+
+test("missing reset details are retried on a later quota round, not in a loop", { timeout: 10_000 }, async () => {
+  const data = temp("borrowed-reset-retry");
+  const home = join(data, "homes", "bx");
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+  const jwt = ["{}", JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 }), "s"].map((x) => Buffer.from(x).toString("base64url")).join(".");
+  writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { access_token: jwt } }));
+  let detailsAvailable = false;
+  const chatgpt = await provider((request) => request.url.endsWith("/usage")
+    ? { status: 200, body: { rate_limit_reset_credits: { available_count: 1 } } }
+    : detailsAvailable ? { status: 200, body: { credits: [{ status: "available", expires_at: "2030-03-17T00:00:00Z" }] } } : { status: 503, body: {} });
+  const time = testClock();
+  const shared = {
+    status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: { state: "ok", windows: [], resetCount: 1, detail: null, checkedAt: 1 } }),
+    view: () => null,
+  };
+  const t = await rig({ data, shared, clock: time.clock, readQuota: async () => ({ state: "unavailable", windows: [], detail: null, checkedAt: 0 }), urls: { ...URLS, chatgpt: chatgpt.base } });
+  await t.call("POST", "/profiles/bx/check");
+  await upon((wake) => t.accounts.onChange(wake), () => chatgpt.asked.length === 2 && t.view("bx")?.quota?.checkedAt !== 1, "the first detail request finished");
+  assert.equal(t.view("bx")!.quota.resetCount, 1);
+  assert.equal(t.view("bx")!.quota.resetExpiries, undefined);
+  await t.call("POST", "/profiles/bx/check");
+  await settle();
+  assert.equal(chatgpt.asked.length, 2, "another check does not immediately retry the unavailable details");
+  detailsAvailable = true;
+  await time.adjust(5 * 60_000);
+  t.accounts.followed();
+  await upon((wake) => t.accounts.onChange(wake), () => t.view("bx")?.quota?.resetExpiries?.length === 1, "the next quota round read the expiry");
+  assert.deepEqual(t.view("bx")!.quota.resetExpiries, [Date.parse("2030-03-17T00:00:00Z")]);
+  await chatgpt.close();
+  await t.close();
 });
 
 test("an overview names only the visible chats once when it makes the archive policy", async () => {

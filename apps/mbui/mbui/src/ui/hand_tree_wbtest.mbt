@@ -46,7 +46,7 @@ fn hand_tree() -> Tester {
     root.box(fn(col) {
       // (a signal: the line before it made before it is, shown once it is there and pointed at)
       let after : @signals.Signal[@view.View?] = @signals.signal(None, same=fn(_, _) { false })
-      col.show(fn() {
+      col.show(at_once=true, fn() {
         match after.get() {
           Some(v) => @view.View::pointed(v)
           None => false

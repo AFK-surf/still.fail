@@ -110,6 +110,25 @@ test "the caret at the start of a field with no frame of its own: whole in the f
 }
 
 ///|
+test "the caret at the start of a field that starts on a half pixel: on whole pixels across" {
+  let field = Field::new()
+  let t = Tester::new(
+    fn(c) {
+      c.box(pl=21.0, w=Fill(1.0), fn() { c.editor("field", font_size=16.0, plain=true, field~) |> ignore })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+    platform=3,
+    scale=1.5,
+  )
+  t.tap(40.0, 8.0)
+  t.draw()
+  let x = caret_drawn()[0] * 1.5
+  assert_eq(x, x.round())
+}
+
+///|
 test "Android: the caret's handle hangs from the middle of the caret's foot, at a line's start too" {
   let field = Field::new()
   field.set("hello world")

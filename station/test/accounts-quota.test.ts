@@ -1,4 +1,4 @@
-// Allowances and renewing a Claude login (quota.rs, claude_oauth.rs tests): against local providers, in temp homes.
+// Allowances and renewing a Claude login: against local providers, in temp homes.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
@@ -198,7 +198,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal(at("2026-09-27T00:00:02.500Z"), Date.parse("2026-09-27T00:00:02.500Z"));
   });
 
-  // ── renewing (claude_oauth.rs) ──
+  // ── renewing ──
 
   const credentials = (expires: number) => ({
     otherCredential: { keep: true },

@@ -1,4 +1,4 @@
-// A new device showing this one's code (Security.kt LockPrompts, pairSheet; the core's `lockPrompts`, views/pair.ts):
+// A new device showing this one's code (pairSheet; the core's `lockPrompts`, views/pair.ts):
 // put up over whichever page is open, in any workspace of the person's, once (the library's panel: what is put up
 // after it stands over it), until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away (拒绝),
 // it is denied (`lockPrompt.deny`) and its code is worth nothing; closed by hand (a tap beside it, back), it is no
@@ -24,7 +24,7 @@ fn lock_prompts_reset() -> Unit {
 /// The oldest device waiting on this one's code, put up in a sheet when nothing else is (`free`: no sheet of the
 /// app's up): call each frame, over the pages.
 pub fn lock_prompts(core : Core, free : Bool) -> Unit {
-  let prompts = (core.topic)("lockPrompts", Map::new()).value
+  let prompts = (core.topic)("lockPrompts", Map::new()).get().value
   let pairing = items(prompts, "pairing")
   if prompts is Some(_) {
     prompts_closed.retain(fn(d) { pairing.iter().any(fn(r) { ask_of(r) == d }) })
@@ -37,7 +37,7 @@ pub fn lock_prompts(core : Core, free : Bool) -> Unit {
 }
 
 ///|
-/// The sheet of a new device asking (Security.kt pairSheet): whose it is and what, where it asks to be let in, the code
+/// The sheet of a new device asking: whose it is and what, where it asks to be let in, the code
 /// large, that it is shown only here, 拒绝. Gone by itself once that device is done or turned away elsewhere.
 fn pair_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
@@ -56,7 +56,7 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
   }
   @sf.panel(fill("web-pages.security.pairTitle", [("name", who)]), from=Unanchored, gone=hide, fn(c, close) {
     // done or turned away on another device: gone here too; asked in one more workspace meanwhile, named too
-    let prompts = (core.topic)("lockPrompts", Map::new()).value
+    let prompts = (core.topic)("lockPrompts", Map::new()).get().value
     let now = items(prompts, "pairing").iter().find_first(fn(x) { text(Some(x), "device") == device })
     if prompts is Some(_) && now is None {
       close()
@@ -95,10 +95,10 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
       }
       note(c, tr("web-pages.security.pairNote"))
       c.box(style=pair_deny_room, fn() {
-        if wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false) {
+        wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false, on_press=fn() {
           close()
           deny()
-        }
+        })
       })
       |> ignore
     })
@@ -107,12 +107,12 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
 }
 
 ///|
-/// What the panel holds, 12 apart (Security.kt:372).
+/// What the panel holds, 12 apart.
 // kept across runs: a value (no field of it changes)
 let pair_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
-/// Whose device it is and what (14 in the muted: Security.kt:373).
+/// Whose device it is and what.
 // kept across runs: a value (no field of it changes)
 let pair_body : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
@@ -143,7 +143,7 @@ let pair_place_mark : Double = 20.0
 let pair_until : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
-/// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).
+/// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot.
 // kept across runs: a value (no field of it changes)
 let pair_deny_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
 

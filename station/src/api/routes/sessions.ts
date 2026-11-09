@@ -21,7 +21,7 @@ import { readAt } from "../../drive/fs.ts";
 /// What the Rust answers a path it has no route for.
 const noRoute = (r: Request) => error(404, `no route ${r.method} ${r.path}`);
 
-/// A file sent in a session's chat (files.rs `session_file`): in its workspace's uploads (its path), or packed with its
+/// A file sent in a session's chat: in its workspace's uploads (its path), or packed with its
 /// archived workspace.
 type Found = { contentType: string; file: string } | { contentType: string; archived: { room: string; path: string; relative: string } };
 
@@ -67,7 +67,7 @@ const STREAMED = 8 * 1024 * 1024;
 /// The bytes of a file sent in a chat, answered as files.rs does; an error as it came. With `thumb`, an image's thumbnail
 /// (made by the image codecs off this thread when it is not yet: drive/thumbs.ts), or the image itself when it gets none
 /// (small already, not an image). One packed with its archived workspace is read out of the archive here, under the
-/// room's lock (files.rs `session_file`; sessions/archive.ts).
+/// room's lock (sessions/archive.ts).
 async function file(tools: Tools, r: Request, key: string, name: string, thumb: boolean): Promise<Answer> {
   const found = await uploaded(tools, r, key, name);
   if ("status" in found) return found;

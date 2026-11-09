@@ -1,4 +1,4 @@
-// What the UIs can have done on a station or on still.fail cloud, each by its name (ops.rs). A UI never makes a request
+// What the UIs can have done on a station or on still.fail cloud, each by its name. A UI never makes a request
 // itself: it names what it wants done and with what, and the core knows the request that does it and what it changes
 // (the effects declared beside each operation).
 import { CoreError } from "./error.ts";
@@ -24,12 +24,10 @@ export type Effect =
   | { kind: "memory" }
   /// The workspace's presets on the station (the `presets` topic): read again.
   | { kind: "presets" }
-  /// The programs granted the station's data (the `outflowGrants` topic, docs/data-outflow.md): read again.
-  | { kind: "outflowGrants" }
   | { kind: "identity" }
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
-  /// A station's logins (docs/remote-login.md): the login answered with is put in place at once.
+  /// A station's logins: the login answered with is put in place at once.
   | { kind: "machineLogins" }
   /// A sign-in for a new profile (the overview's `logins`) started, given its code or dropped: as the station answered,
   /// in place at once until the overview says as much. `id`: the login's (null: the answer names it, as it starts);
@@ -47,7 +45,7 @@ export type Request = {
   effect: Effect;
 };
 
-/// Percent-encodes a path segment like encodeURIComponent (station.rs `encode`).
+/// Percent-encodes a path segment like encodeURIComponent.
 export function encode(text: string): string {
   let out = "";
   for (const b of utf8(text)) {
@@ -58,19 +56,17 @@ export function encode(text: string): string {
   return out;
 }
 
-const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "admin"];
+const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "account", "admin"];
 
 /// What each operation takes (`field:type`, `field?:type` when it may be left out; types: string, number, boolean,
 /// strings, json), station operations first: the contract the UIs' bindings are made from (scripts/operations.ts:
 /// web/src/core/operations.ts, the Android app's data/Operations.kt). It names exactly what `request` reads of the
-/// params (test/ops.test.ts checks it), besides `station` and `account`.
+/// params, besides `station` and `account`.
 export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
   "session.cancelRetry": "key:string thread:number seq:number",
   "tools.access": "",
   "tools.setAccess": "access:string",
-  "station.modules": "",
-  "station.module.set": "id:string enabled:boolean",
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
@@ -120,13 +116,15 @@ export const PARAMS: Record<string, string> = {
   "connect.put": "id:string input?:json",
   "connect.delete": "id:string",
   "connect.reconnect": "id:string",
+  "connect.move": "id:string to:string",
   "connect.bindSession": "connect:string session?:string title?:string",
   "connect.putSlackApp": "connect:string input?:json from?:json",
-  "feishu.register": "domain?:string name?:string",
+  "feishu.register": "domain?:string name?:string bind?:json mode?:string requireMention?:boolean threads?:boolean",
   "feishu.cancelRegistration": "id:string",
   "feishu.verify": "appId:string appSecret:string domain?:string",
   "feishu.createConnect": "feishu:json bind?:json mode?:string requireMention?:boolean owner?:json",
   "feishu.putSecret": "id:string appSecret:string",
+  "comma.createConnect": "line:string bind?:json",
   "slack.verify": "connect?:string install?:string appToken?:string botToken?:string",
   "slack.makeApp": "team?:string settings?:json icon?:string",
   "slack.dropApp": "appId:string",
@@ -182,9 +180,6 @@ export const PARAMS: Record<string, string> = {
   "signin.self": "id:string done?:boolean",
   "signin.deny": "id:string",
   "memory.get": "",
-  "outflow.revoke": "id:string",
-  "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
-  "outflow.tailcat": "on:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
@@ -224,6 +219,8 @@ export const PARAMS: Record<string, string> = {
   "invitation.accept": "id?:string token?:string",
   "invitation.decline": "id:string",
   "loginSession.revoke": "id:string",
+  "account.setPicture": "picture:string",
+  "account.removePicture": "",
   "admin.me": "",
   "admin.createCode": "note?:string days?:number beta?:boolean",
   "admin.revokeCode": "code:string",
@@ -327,17 +324,11 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/tools/access", null, NONE);
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
-    // The modules beside the station (docs/station-modules.md): each still.fail makes and each it runs, how it is now;
-    // one turned on (installed as a package and run) or off by the workspace's owners and admins.
-    case "station.modules":
-      return op("GET", () => "/modules", null, NONE);
-    case "station.module.set":
-      return op("PUT", () => `/modules/${encode(p.str("id"))}`, { enabled: p.bool("enabled") }, OVERVIEW);
-    // The variables everything the station starts for its agents runs with (docs/agent-env.md), set by the workspace's
+    // The variables everything the station starts for its agents runs with, set by the workspace's
     // owners and admins: `text`, all of them as `NAME=value` lines; or `env`, a patch (a string sets one, null removes it).
     case "agentEnv.set":
       return op("PUT", () => "/agent-env", p.pick(["env", "text"]), OVERVIEW);
-    // Whether the station's search finds its machine's person's own mail, messages and the like too (docs/search.md);
+    // Whether the station's search finds its machine's person's own mail, messages and the like too;
     // set by the workspace's owners and admins.
     case "search.setPersonal":
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
@@ -412,7 +403,7 @@ function stationOp(name: string, params: unknown): Request | null {
     }
     case "chat.pin":
       return op(p.bool("pinned") ? "PUT" : "DELETE", () => `/sessions/${p.at("session")}/pin`, null, session("session"));
-    // Where a chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in, read as asked.
+    // Where a chat can be relayed: each connect's channels and groups its bot is in, read as asked.
     case "chat.relayPlaces": {
       const thread = p.u64("thread");
       return op("GET", () => `/threads/${thread}/relay`, null, NONE);
@@ -447,7 +438,7 @@ function stationOp(name: string, params: unknown): Request | null {
     }
     case "session.new":
       return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast", "context", "preset"]), { kind: "session", key: null });
-    // The workspace's presets on the station (docs/presets.md): what a chat starts knowing, chosen as it is opened.
+    // The workspace's presets on the station: what a chat starts knowing, chosen as it is opened.
     case "preset.add":
       return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
     case "preset.put":
@@ -496,6 +487,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("DELETE", () => `/connects/${p.at("id")}`, null, connect("id"));
     case "connect.reconnect":
       return op("POST", () => `/connects/${p.at("id")}/reconnect`, null, connect("id"));
+    // To another station of its workspace (station/src/connects/workspace.ts), which runs it from then on.
+    case "connect.move":
+      return op("POST", () => `/connects/${p.at("id")}/move`, { station: p.str("to") }, connect("id"));
     case "connect.bindSession":
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
     // `from`: the app's settings the form started from; only what differs from them is written (and a new icon).
@@ -508,16 +502,19 @@ function stationOp(name: string, params: unknown): Request | null {
           : input;
       return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, changed, connect("connect"));
     }
-    // Feishu (and Lark) bots (docs/feishu.md): made by scanning (the station follows it, the overview's
+    // Feishu (and Lark) bots: made by scanning (the station follows it, the overview's
     // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
     case "feishu.register":
-      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name"]), OVERVIEW);
+      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name", "bind", "mode", "requireMention", "threads"]), OVERVIEW);
     case "feishu.cancelRegistration":
       return op("DELETE", () => `/feishu/registrations/${p.at("id")}`, null, OVERVIEW);
     case "feishu.verify":
       return op("POST", () => "/feishu/verify", p.pick(["appId", "appSecret", "domain"]), NONE);
     case "feishu.createConnect":
       return op("POST", () => "/feishu/connects", p.pick(["feishu", "bind", "mode", "requireMention", "owner"]), { kind: "connect", id: null });
+    // A Comma connect: made of the line Comma's still.fail plugin shows.
+    case "comma.createConnect":
+      return op("POST", () => "/comma/connects", p.pick(["line", "bind"]), { kind: "connect", id: null });
     // A Feishu connect's App Secret replaced (verified there first).
     case "feishu.putSecret":
       return op("PUT", () => `/feishu/connects/${p.at("id")}/secret`, p.pick(["appSecret"]), connect("id"));
@@ -575,7 +572,7 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), { kind: "login", id: p.str("id"), from: "needs_code" });
     case "login.drop":
       return op("DELETE", () => `/logins/${p.at("id")}`, null, { kind: "login", id: p.str("id"), from: null });
-    // A sign-in's page opened in the station's own browser (docs/remote-login.md, 在 station 的浏览器中登录), for the
+    // A sign-in's page opened in the station's own browser (在 station 的浏览器中登录), for the
     // person to finish there: `{screen}`, the screen of its tab, to open. Its job says the tab from then on (`screen`).
     case "profile.loginBrowser":
       return op("POST", () => `/profiles/${p.at("id")}/login-browser`, null, NONE);
@@ -587,11 +584,11 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => `/jobs/${p.at("id")}/log?lines=${p.u64("lines")}`, null, NONE);
     case "job.stop":
       return op("POST", () => `/jobs/${p.at("id")}/stop`, null, { kind: "job" });
-    // A screen closed for good (a tab of the station's browser, docs/remote-screens.md): it leaves the station's list as
+    // A screen closed for good (a tab of the station's browser): it leaves the station's list as
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
-    // A person's view of a screen, wherever it is, ended or made to only look (docs/remote-screens.md "Who is on a
+    // A person's view of a screen, wherever it is, ended or made to only look ( "Who is on a
     // screen"); it changes on the station's list as the station tells it.
     case "screen.endView":
       return op("POST", () => `/screens/${p.at("screen")}/views/${p.at("view")}/end`, null, NONE);
@@ -599,7 +596,7 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/views/${p.at("view")}/watch`, null, NONE);
     case "screen.endViews":
       return op("POST", () => `/screens/${p.at("screen")}/views/end`, null, NONE);
-    // An app debugged on a simulator (docs/remote-screens.md "Simulators"): its log's lines after `after` (`{next, lines}`),
+    // An app debugged on a simulator: its log's lines after `after` (`{next, lines}`),
     // the apps installed there (`{apps}`), one of them started again.
     case "screen.logs":
       return op("GET", () => `/screens/${p.at("screen")}/logs?after=${p.u64("after")}`, null, NONE);
@@ -638,7 +635,7 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/screens/${p.at("screen")}/status-bar`, p.pick(["tidy"]), NONE);
     case "screen.push":
       return op("POST", () => `/screens/${p.at("screen")}/push`, p.pick(["app", "text"]), NONE);
-    // A sign-in its card asks of the person (station/src/vault/signin.ts, docs/vault.md 登录态): what their password
+    // A sign-in its card asks of the person (station/src/vault/signin.ts 登录态): what their password
     // manager gave (`login`: username, password, code; an object, so `doing` keeps no copy of it), typed into the chat's
     // tab by the station; they sign in themselves on its screen (`signin.self`, `done` once they did); or they will not.
     // The card says how it goes, restated by the station.
@@ -659,17 +656,6 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/browser/sign-ins/${p.at("id")}/deny`, null, NONE);
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
-    // A program's grant of the station's data revoked (docs/data-outflow.md): its next read is refused.
-    case "outflow.revoke":
-      return op("DELETE", () => `/outflow/grants/${p.at("id")}`, null, { kind: "outflowGrants" });
-    // An admin's answer to a program's request for the station's data: allowed with the kinds and reach they left, or
-    // refused (docs/data-outflow.md). Its program takes the token the next time it asks.
-    case "outflow.answer":
-      return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
-    // Programs of other machines let ask through Tailcat, or no longer (docs/data-outflow.md): an admin's switch; how
-    // it is, with the address to give, comes back in the overview (`outflowTailcat`).
-    case "outflow.tailcat":
-      return op("POST", () => "/outflow/tailcat", p.pick(["on"]), OVERVIEW);
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
@@ -691,12 +677,12 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/updates/channel", p.pick(["channel"]), OVERVIEW);
     case "software.auto":
       return op("POST", () => "/updates/auto", { on: p.bool("on") }, OVERVIEW);
-    // The station's drive (docs/drive.md): the folders it lends its members, named by the workspace's owners and admins
+    // The station's drive: the folders it lends its members, named by the workspace's owners and admins
     // (their folders to pick from: `drive.folders`), and changes of what is in them. A station in several workspaces keeps a
-    // list for each: the asker's (docs/multi-workspace.md).
+    // list for each: the asker's.
     case "drive.setRoots":
       return op("PUT", () => "/drive/roots", p.pick(["roots"]), OVERVIEW);
-    // still.fail Helper's window for a grant up on a Mac station (docs/remote-screens.md "Grants"): `{window, screen}`.
+    // still.fail Helper's window for a grant up on a Mac station: `{window, screen}`.
     case "permissions.request":
       return op("POST", () => "/permissions/request", { grant: p.str("grant") }, OVERVIEW);
     case "drive.folders":
@@ -714,7 +700,7 @@ function stationOp(name: string, params: unknown): Request | null {
     // (the phone's Station 文件 switched to a file; the web's composer stages its own: composer.ts).
     case "drive.stage":
       return op("POST", () => "/drive/stage", p.pick(["root", "path", "zip"]), NONE);
-    // A login to one of the station's command-line tools cancelled (docs/remote-login.md): agents start them and drive
+    // A login to one of the station's command-line tools cancelled: agents start them and drive
     // their commands; how each stands comes on the station's stream (`machineLogins`).
     case "machineLogin.cancel":
       return op("DELETE", () => `/machine-logins/${p.at("id")}`, null, { kind: "machineLogins" });
@@ -774,6 +760,12 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/v1/invitations/${p.at("id")}/decline`, null);
     case "loginSession.revoke":
       return op("DELETE", () => `/v1/auth/sessions/${p.at("id")}`, null);
+    // The picture the account puts up for itself (a data URL, which still.fail cloud keeps), shown in the place of its
+    // sign-in's; or taken away, its sign-in's shown again.
+    case "account.setPicture":
+      return op("PUT", () => "/v1/me/picture", p.pick(["picture"]));
+    case "account.removePicture":
+      return op("DELETE", () => "/v1/me/picture", null);
     case "admin.me":
       return op("GET", () => "/v1/admin/me", null);
     case "admin.createCode":

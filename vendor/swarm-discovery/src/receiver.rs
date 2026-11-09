@@ -133,7 +133,7 @@ fn handle_msg(buf: &[u8], service_name: &Name, addr: IpAddr) -> Option<MdnsMsg> 
     }
 
     let mut peer_addrs: BTreeMap<String, Vec<(IpAddr, u16)>> = BTreeMap::new();
-    // ember: the addresses are taken from the answers too. A responder puts them in the additionals, but an mDNS
+    // stillfail: the addresses are taken from the answers too. A responder puts them in the additionals, but an mDNS
     // reflector between subnets (a router's) may send them on as answers, and they are as good there.
     for additional in packet.additionals.iter().chain(packet.answers.iter().filter(|r| matches!(r.data, RData::A(_) | RData::AAAA(_)))) {
         if !is_in(additional.dns_class) {
@@ -183,7 +183,7 @@ fn handle_msg(buf: &[u8], service_name: &Name, addr: IpAddr) -> Option<MdnsMsg> 
     Some(MdnsMsg::Response(ret))
 }
 
-/// ember: class IN, with or without mDNS's cache-flush bit (0x8000, RFC 6762 §10.2), which other responders set.
+/// stillfail: class IN, with or without mDNS's cache-flush bit (0x8000, RFC 6762 §10.2), which other responders set.
 fn is_in(class: DNSClass) -> bool {
     class == DNSClass::IN || u16::from(class) == u16::from(DNSClass::IN) | 0x8000
 }

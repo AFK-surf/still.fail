@@ -6,6 +6,33 @@
 /// The chats of workspace `scope` in list `filter` (all, mine, watching) as the core's view says them, worked out once
 /// for each version of it; what went wrong reading it.
 pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, String?) {
+  let (read, topic) = chats_read.read(src, chats_shown(src, scope, filter))
+  let error = match topic.error {
+    Some(e) => Some(text(Some(e), "message"))
+    None => None
+  }
+  (read.map(fn(r) { r.view }), error)
+}
+
+///|
+/// How many of a list's rows are asked of the core at first (`limit`), and how many more each time it is scrolled near
+/// the last of them: the core sends the first ones and how many more it has, not the whole of a list of 1400.
+pub let chats_page : Int = 50
+
+///|
+// kept across runs: let go of by reset (pages.mbt)
+/// How many of each list's rows are asked of the core now, by workspace and filter (chats_page until scrolled).
+let chat_limits : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
+
+///|
+// kept across runs: let go of by reset (pages.mbt)
+/// The limit each list was asked with before a page more, by workspace and filter, while the core has not answered
+/// the page more yet.
+let chat_limits_was : Map[String, Int] = {}
+
+///|
+/// The chats of workspace `scope` in list `filter` as they are asked of the core: as many of them as are asked now.
+fn chats_params(scope : String, filter : String) -> Map[String, Json] {
   let params : Map[String, Json] = {
     "scope": Json::string(scope),
     "mine": Json::boolean(filter == "mine"),
@@ -16,12 +43,73 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
   if filter == "hidden" {
     params["hidden"] = Json::boolean(true)
   }
-  let (read, topic) = chats_read.read(src, params)
-  let error = match topic.error {
-    Some(e) => Some(text(Some(e), "message"))
-    None => None
+  let limit = chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
+  params["limit"] = Json::number(limit.to_double())
+  params
+}
+
+///|
+/// The list `filter` of workspace `scope` as it is shown: as asked now once the core answered it, till then as it was
+/// asked before a page more (its rows staying, not its skeleton for the core's round trip), let go of as it comes.
+fn chats_shown(src : Source, scope : String, filter : String) -> Map[String, Json] {
+  let key = scope + "\u{1}" + filter
+  let now = chats_params(scope, filter)
+  guard chat_limits_was.get(key) is Some(was) else { return now }
+  let before = now.copy()
+  before["limit"] = Json::number(was.to_double())
+  let asked = src.topic("chats", now).get()
+  if asked.value is None && asked.error is None {
+    return before
   }
-  (read.map(fn(r) { r.view }), error)
+  chat_limits_was.remove(key)
+  (src.leave)("chats", before, TopicLeave::Legacy)
+  now
+}
+
+///|
+/// How many rows list `filter` of workspace `scope` has past those the core sent (its `more`).
+pub fn chats_more(src : Source, scope : String, filter : String) -> Int {
+  match field(src.topic("chats", chats_params(scope, filter)).get().value, "more") {
+    Some(Number(n, ..)) => n.to_int()
+    _ => 0
+  }
+}
+
+///|
+/// A page more of list `filter`'s rows asked for, where `limit` is still how many are asked (asked once for it), the
+/// list as it was asked shown till the core answers it (chats_shown).
+pub fn chats_ask_more(src : Source, scope : String, filter : String, limit : Int) -> Unit {
+  let key = scope + "\u{1}" + filter
+  if chat_limits.get(key).unwrap_or(chats_page) == limit {
+    // (a page more asked again before the last came: the one shown still the first's)
+    if !chat_limits_was.contains(key) {
+      chat_limits_was[key] = limit
+    } else {
+      (src.leave)("chats", chats_params(scope, filter), TopicLeave::Legacy)
+    }
+    chat_limits[key] = limit + chats_page
+  }
+}
+
+///|
+/// How many of list `filter`'s rows are asked now.
+pub fn chats_limit(scope : String, filter : String) -> Int {
+  chat_limits.get(scope + "\u{1}" + filter).unwrap_or(chats_page)
+}
+
+///|
+/// The chats' list of workspace `scope` as it is asked (all of its chats, its first rows: chats_params), for what is
+/// read of it beside its rows (its stations' trouble, its glyph).
+pub fn chats_topic(src : Source, scope : String) -> Topic {
+  src.topic("chats", chats_shown(src, scope, "all")).get().snapshot()
+}
+
+///|
+/// As at the start: each list asked a page of at first.
+pub fn chat_limits_reset() -> Unit {
+  chat_limits.clear()
+  chat_limits_was.clear()
+  chats_read_last.val = []
 }
 
 ///|
@@ -46,20 +134,33 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
     jsons,
     match was {
       Some(w) => w.read
-      None => []
+      // (a list asked anew, more of its rows: its rows as the list asked before had them, the same JSON where the
+      // core's delta kept them, taken as they were made)
+      None => chats_read_last.val
     },
     chat_row_key,
     chat_item,
   )
-  // (each row's JSON to what was made of it, in the order the days hold them)
+  chats_read_last.val = read
+  // (each row's JSON to what was made of it, in the order the days hold them; as its station's state makes it)
+  let stations = stations_said(v)
   let at = Ref(0)
   let view = chats_view_by(v, fn(_) {
     let item = read[at.val].1
     at.val += 1
-    item
+    if stations.is_empty() {
+      item
+    } else {
+      station_on(item, stations.get(item.station))
+    }
   })
   { view, read }
 })
+
+///|
+// kept across runs: let go of by reset (chat_limits_reset)
+/// The rows chats_read made last, of whichever list: what a list asked anew is made from.
+let chats_read_last : Ref[Array[(Json, ChatItem)]] = Ref([])
 
 ///|
 /// A row's key in the list, as the core keys them (client/core-ts collections.ts: `station` and `id`).
@@ -73,7 +174,7 @@ pub fn filter_of(src : Source, ws : String) -> String {
   let f = match app.filters.get(ws) {
     Some(f) => f
     None => {
-      let prefs = (src.topic)("prefs", {}).value
+      let prefs = src.topic("prefs", {}).get().value
       match field(field(prefs, "listFilter"), ws) {
         Some(String(f)) => f
         _ =>
@@ -169,7 +270,7 @@ pub fn days_new(key : String, days : Array[ChatDay]) -> Bool {
 }
 
 ///|
-/// `days` as shown (ListMotion.kt HeldOrder): while `hold` (a finger on the list, or it moving) rows keep their
+/// `days` as shown: while `hold` (a finger on the list, or it moving) rows keep their
 /// places and their days, each with what is new of it, so the row about to be tapped does not move away; ones gone
 /// go, new ones come in where they would be in their day (a day not shown yet comes where it would be). Let go, the
 /// list is as it is.
@@ -239,7 +340,7 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
 }
 
 ///|
-/// Whether a row shown in list `key` was moved by the viewer since: pinned or let go (Sidebar.tsx pinMoved), or
+/// Whether a row shown in list `key` was moved by the viewer since: pinned or let go, or
 /// written in by them, here or elsewhere (its last message theirs, one not shown before). It goes where it now is at
 /// once, even while the list is held still: the hand on the list keeps rows from moving away under it, not the
 /// viewer's own doing from showing (a pointer left resting on the list while they type is no tap to come). Nothing
@@ -275,7 +376,7 @@ pub fn row_is(item : ChatItem, r : ChatRef) -> Bool {
 }
 
 ///|
-/// A row's name in the list, kept as it changes (ListMotion.kt rowKey): its station and chat, a chat asked for here by
+/// A row's name in the list, kept as it changes: its station and chat, a chat asked for here by
 /// its `clientKey` before and after its station makes it.
 pub fn row_name(item : ChatItem) -> String {
   item.station + "/" + (if item.client_key != "" { item.client_key } else { item.id })
@@ -283,8 +384,8 @@ pub fn row_name(item : ChatItem) -> String {
 
 ///|
 /// What leads a row's second line (the core's `stateLead`): done and offered to archive (`settled`), the archive box in
-/// the check's place (ChatMark.tsx rowLead). Its title goes no lighter than the muted grey and still reads, so the mark
-/// says it (docs/ui-panels.md 对比度).
+/// the check's place. Its title goes no lighter than the muted grey and still reads, so the mark
+/// says it (mbui ui/contrast.mbt).
 pub fn row_lead(item : ChatItem) -> String {
   if item.settled && item.state_lead == "done" {
     "archive"
@@ -294,7 +395,7 @@ pub fn row_lead(item : ChatItem) -> String {
 }
 
 ///|
-/// What a chat's row says of it (Home.kt rowTone): the core's `tone` when it says one, else from its state.
+/// What a chat's row says of it: the core's `tone` when it says one, else from its state.
 pub fn row_tone(item : ChatItem) -> String {
   match item.tone {
     "alert" | "busy" | "done" | "wait" => item.tone
@@ -325,9 +426,9 @@ pub fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
 /// device's network is), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
 /// and what is wrong with them.
 pub fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
-  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
+  let chats = chats_topic(src, ws)
   let g = field(chats.value, "glyph")
-  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
+  let status = src.topic("status", { "workspace": Json::string(ws) }).get().value
   let asleep = flag(g, "asleep")
   let glyph : @sf.GlyphCounts = {
     online: count(g, "online"),
@@ -355,25 +456,64 @@ pub fn seq_key(station : String, thread : Double, seq : Double) -> String {
 ///|
 /// How many services are left up long in the workspace (the `longJobs` topic).
 pub fn long_jobs(src : Source, w : Workspace) -> Int {
-  items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").fold(init=0, fn(n, g) {
+  items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").fold(init=0, fn(n, g) {
     n + items(Some(g), "jobs").length()
   })
+}
+
+///|
+/// What is left up long in the workspace in view (the `longJobs` topic) held by node `v` from when it is made, asked
+/// with the chats' list it shows under (Home's) rather than once that list has come: Home's first page waits for both
+/// (held_unanswered).
+pub fn long_jobs_read(v : @view.View, src : Source, workspace : () -> Workspace?) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace() {
+        Some(w) => src.topic("longJobs", { "scope": Json::string(w.id) }).get().value is Some(_)
+        None => false
+      }
+    },
+    fn(_) { () },
+  )
+}
+
+///|
+/// How one left up long (a row of the `longJobs` topic) is stopped: the core's call, its params and what they name
+/// (for `core_doing`): a job's `job.stop`, a simulator's or a view's as its `stop` says (`screen.close`,
+/// `screen.endView`).
+pub fn long_stop(station : String, job : Json?) -> (String, Json, Array[(String, String)]) {
+  match field(job, "stop") {
+    Some(Object(_)) as stop => {
+      let on = [("station", station), ("screen", text(stop, "screen"))]
+      if text(stop, "view") != "" {
+        on.push(("view", text(stop, "view")))
+      }
+      let m : Map[String, Json] = {}
+      for kv in on {
+        m[kv.0] = Json::string(kv.1)
+      }
+      (text(stop, "call"), Json::object(m), on)
+    }
+    _ => {
+      let id = text(job, "id")
+      ("job.stop", { "station": Json::string(station), "id": Json::string(id) }, [("station", station), ("id", id)])
+    }
+  }
 }
 
 ///|
 /// Whether those left up long light the rail's bell (the `longJobs` topic's `lit`: one it has not shown yet, and the
 /// bell lit by them).
 pub fn long_jobs_lit(src : Source, w : Workspace) -> Bool {
-  flag((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "lit")
+  flag(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "lit")
 }
 
 ///|
 /// The bell has shown those left up long: kept, so they no longer light it (`prefs.set {jobsSeen}` with the
 /// `longJobs` topic's `ids`).
 pub fn long_jobs_seen(src : Source, w : Workspace) -> Unit {
-  let ids = field((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "ids").unwrap_or(Json::array([]))
+  let ids = field(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "ids").unwrap_or(Json::array([]))
   let m : Map[String, Json] = {}
   m[w.id] = ids
   (src.call)("prefs.set", Json::object({ "jobsSeen": Json::object(m) }), fn(_) {  })
 }
-

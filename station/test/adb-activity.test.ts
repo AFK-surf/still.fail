@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AdbActivity } from "../src/adb/activity.ts";
+import { AdbActivity, KEEP_TCP } from "../src/adb/activity.ts";
 
 function packet(name: string, id = 0, payload = ""): Buffer {
   const data = Buffer.from(payload);
@@ -22,6 +22,8 @@ test("adb use is service activity, not reconnects or the station's maintenance",
     packet("WRTE", 1, "background"),
     packet("CLSE", 1),
     packet("OPEN", 2, "shell,v2,raw:STILLFAIL_ADB_KEEP=1 cmd deviceidle whitelist +fail.still.android\0"),
+    packet("OPEN", 4, `shell,v2,raw:${KEEP_TCP}\0`),
+    packet("OPEN", 5, "tcpip:5555\0"),
     packet("OPEN", 3, "shell,v2,raw:input tap 50 50\0"),
     packet("WRTE", 3, "a command"),
     packet("OKAY", 3),

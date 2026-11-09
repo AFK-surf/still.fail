@@ -4,7 +4,7 @@
 // up by a next driver (with a snapshot, and after a crash) with the turn's end told once and no live event twice.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import fs from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
@@ -13,11 +13,13 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
-import { ackedOffset, runnerId } from "../src/agents/process.ts";
+import { REPO_RULES_COMMAND } from "../src/agents/repo-rules.ts";
+import { ackedOffset, outFile, runnerId } from "../src/agents/process.ts";
 import { allLeft, existingRunners, type RunnerInfo } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 import { transcriptPaths } from "../src/read/transcript.ts";
+import { tempDir } from "./temp-dir.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
@@ -25,7 +27,7 @@ process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 process.env.OPENAI_API_KEY = "leaked";
 process.env.CODEX_HOME = "/nowhere";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
+const data = tempDir(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
 const skills = join(data, "skills");
 mkdirSync(join(skills, "mine"), { recursive: true });
 writeFileSync(join(skills, "mine", "SKILL.md"), "");
@@ -84,6 +86,17 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("the software page only updates the installation this profile actually runs", { skip: process.platform === "win32" }, async () => {
+    const p = profile();
+    const stationBin = join(data, `station-bin-${p.id}`), otherBin = join(data, `profile-bin-${p.id}`);
+    mkdirSync(stationBin);
+    mkdirSync(otherBin);
+    for (const bin of [stationBin, otherBin]) writeFileSync(join(bin, "codex"), "#!/bin/sh\necho codex-cli\n", { mode: 0o755 });
+    const d = driver({ env: { PATH: stationBin } });
+    assert.equal(await d.updateMatchesStation({ ...p, env: { PATH: stationBin } }), true);
+    assert.equal(await d.updateMatchesStation({ ...p, env: { PATH: otherBin } }), false);
+  });
+
   for (const resumed of [false, true]) test(`a ${resumed ? "resumed" : "new"} thread uses the transcript path Codex gave, before and after the file appears`, async () => {
     const d = driver();
     const p = profile();
@@ -156,6 +169,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(start.params.config["features.view_image"], false);
     assert.equal(start.params.config["features.goals"], false);
     assert.deepEqual(start.params.config.mcp_servers, {});
+    assert.equal(start.params.config.hooks, undefined, "no tools, no rules to tell");
     assert.ok(stdin(p.dump).some((m) => m.method === "mcpServerStatus/list"));
     assert.ok(!stdin(p.dump).some((m) => m.method === "config/read"), "MCP credentials are not read into the runner log");
     await session.dispose();
@@ -309,6 +323,12 @@ describe("the Codex driver", { concurrency: true }, () => {
         config: {
           "mcp_servers.stillfail.url": "http://127.0.0.1:4750/mcp",
           "mcp_servers.stillfail.http_headers": { Authorization: "Bearer tok" },
+          // A repository's rules told as its tools first touch it (test/repo-rules-hook.test.ts), trusted as given.
+          hooks: {
+            PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+            PostCompact: [{ hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+          },
+          bypass_hook_trust: true,
           model_reasoning_effort: "high",
           "skills.config": [{ path: join(skills, "mine", "SKILL.md"), enabled: false }],
         },
@@ -525,18 +545,19 @@ describe("the Codex driver", { concurrency: true }, () => {
     // Updated: the files of the one running are gone (its version is not the one installed now).
     installed = "2.0.0";
     writeFileSync(`${p.dump}.version`, "2.0.0");
-    await d.runtimeChanged();
+    await d.runtimeChanged(false, true);
     assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    const c = listen();
+    const three = await d.open(options(p), c.push);
+    assert.equal(starts(p.dump).length, 2, "new threads use the updated host while the old turn finishes");
+    await three.prompt("say:back");
+    await c.until(ended(1));
     await one.abort();
     await a.until(ended(1));
     // The turn over, it is replaced: its threads closed, to be opened again with their next turn.
     await a.until((e) => e.some((x) => x.type === "closed"));
     await b.until((e) => e.some((x) => x.type === "closed"));
-    const c = listen();
-    const three = await d.open(options(p), c.push);
     assert.equal(starts(p.dump).length, 2);
-    await three.prompt("say:back");
-    await c.until(ended(1));
   });
 
   test("a same-version replacement waits for its turn and starts a new app-server", async () => {
@@ -1015,6 +1036,23 @@ describe("the Codex driver", { concurrency: true }, () => {
     await b.until(ended(1));
     assert.deepEqual(outcome(b.events), { kind: "completed" });
     assert.equal(starts(p.dump).length, 1, "the same app-server");
+  });
+
+  test("an app-server's output read again after a crash lets the main thread go and says it gets on with it", async () => {
+    const said: number[] = [];
+    let turns = 0;
+    const d = driver({ taking: () => { said.push(turns); setImmediate(() => turns++); } });
+    const p = profile();
+    const id = "codex-reread";
+    mkdirSync(dirname(outFile(data, id)), { recursive: true });
+    writeFileSync(outFile(data, id), '{"method":"item/started","params":{"threadId":"t"}}\n'.repeat(10_000));
+    try {
+      // No runner behind it: all the file is read, then taking it up goes no further, which is not this test's.
+      await (d as any).takeUp(p, { id, socket: join(data, "no-such.sock"), args: [] }).catch(() => {});
+    } finally {
+      await d.shutdown();
+    }
+    assert.deepEqual(said, [0, 1], "once per 4096 lines, the main thread let go after each");
   });
 
   test("shutdown ends the app-servers and their runners", async () => {

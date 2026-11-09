@@ -1,6 +1,6 @@
 # still.fail's brand
 
-A face, and words with one orange dot (2026-10-29; the rules for where it goes are `docs/ui-panels.md` 品牌).
+A face, and words with one orange dot (2026-10-29).
 
 - **The mark**: a face on a rounded square, two round eyes and two cheeks (the app icon's before 2026-10-26, its eyes a
   little larger to hold at 16 px). The black face (`#1C1D20`, its eyes white) where things are light, the white face

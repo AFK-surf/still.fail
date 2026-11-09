@@ -1,4 +1,4 @@
-// A profile's page (accounts.mbt, the web's Accounts.tsx AccountView) alone over the settings' fixture: Willow's
+// A profile's page (accounts.mbt) alone over the settings' fixture: Willow's
 // (ws1/st1) Claude subscription and its API key, wide; ChatGPT 团队's.
 
 ///|
@@ -21,6 +21,66 @@ test "a profile's page, wide: who it is and whether it works, then its allowance
 }
 
 ///|
+test "checking a Claude account does not ask for confirmation" {
+  for (w, platform) in page_cases {
+    let calls : Array[String] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          if name == "profile.check" || name == "profile.quota" { calls.push(name) }
+          (s.call)(name, params, done)
+        } }
+    })
+    t.click(Button, label="重新检查")
+    t.frame()
+    assert_eq(calls, ["profile.check", "profile.quota"])
+    assert_false(@sf.presenting())
+  }
+}
+
+///|
+test "returning to a Claude account's open login page does not ask again" {
+  for (w, platform) in page_cases {
+    let calls : Array[String] = []
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, mode="settings-profile-login-station", over=fn(s) {
+      fn with_open_screen(v : Json) -> Json {
+        match v {
+          Object(o) => {
+            let copy = o.copy()
+            for key, value in o { copy[key] = with_open_screen(value) }
+            if text(Some(v), "state") == "needs_code" && flag(Some(v), "browser") {
+              copy["screen"] = "browser:T1"
+            }
+            Json::object(copy)
+          }
+          Array(a) => Json::array(a.map(with_open_screen))
+          _ => v
+        }
+      }
+      { ..s,
+        topic_read: fn(name, params) {
+          let r = s.topic(name, params).get().snapshot()
+          { ..r, value: r.value.map(with_open_screen) }
+        },
+        call: fn(name, params, done) {
+          if name == "profile.loginBrowser" {
+            calls.push(name)
+            done(Ok({ "screen": "browser:T1" }))
+          } else {
+            (s.call)(name, params, done)
+          }
+        },
+      }
+    })
+    t.click(Button, label="其他方式")
+    presented_in(t)
+    t.tap_text("回到 Willow 的浏览器")
+    t.run_for(@kit.presence_out_ms)
+    assert_eq(calls, ["profile.loginBrowser"])
+    assert_false(@sf.presenting())
+  }
+}
+
+///|
 test "a shared subscription's main switch and its station details remain usable at each width" {
   for case in page_cases {
     let (w, platform) = case
@@ -36,7 +96,7 @@ test "a shared subscription's main switch and its station details remain usable 
     assert_eq(t.get(Switch, label="分享给其他 station").check, Some(On), msg=at)
     assert_true(t.find("登录在") is Some(_) && t.find("可用的 station") is Some(_), msg=at)
     assert_true(t.find("使用中：Maple") is Some(_), msg=at)
-    let boxes = t.boxes()
+    let boxes = t.boxes_held()
     let switch_title = boxes.filter(fn(b) { b.text == "分享给其他 station" })
     assert_eq(switch_title.length(), 1, msg=at)
     for title in ["登录在", "可用的 station"] {
@@ -49,11 +109,15 @@ test "a shared subscription's main switch and its station details remain usable 
     t.run_for(@kit.presence_in_ms)
     assert_true(t.find("选择登录的 station") is Some(_), msg=at)
     @sf.presenters_reset()
+    // (what was presented let go at once by hand, the test's way to close it: no signal of it, said)
+    t.stepped()
     t.frame()
     t.tap_text("可用的 station")
     t.run_for(@kit.presence_in_ms)
     assert_true(t.find("以后新加的 station 也能用") is Some(_), msg=at)
     @sf.presenters_reset()
+    // (what was presented let go at once by hand, the test's way to close it: no signal of it, said)
+    t.stepped()
     t.frame()
     t.click(Switch, label="分享给其他 station")
     t.frame()
@@ -70,7 +134,7 @@ test "a profile's workspace row shows its own mark, but no repeated initial with
       let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=fn(base) {
         {
           ..base,
-          topic: fn(name, params) {
+          topic_read: fn(name, params) {
             if name == "memberships" {
               {
                 value: Some({
@@ -81,17 +145,27 @@ test "a profile's workspace row shows its own mark, but no repeated initial with
                 version: 1,
               }
             } else {
-              (base.topic)(name, params)
+              base.topic(name, params).get().snapshot()
             }
           },
         }
       })
       let at = "\{w} platform \{platform}, emoji \{emoji}, icon \{icon}"
       assert_true(t.get(Switch, label="个人").check is Some(_), msg=at)
-      assert_true(t.boxes().filter(fn(b) { b.text == "个" }).is_empty(), msg=at)
-      assert_eq(t.boxes().iter().any(fn(b) { b.text == "🌱" }), emoji != "", msg=at)
-      assert_eq(t.shape_boxes().iter().any(fn(b) { b.0.has_prefix("sf/pic/glyph/star/") }), icon != "", msg=at)
+      assert_true(t.boxes_held().filter(fn(b) { b.text == "个" }).is_empty(), msg=at)
+      assert_eq(t.boxes_held().iter().any(fn(b) { b.text == "🌱" }), emoji != "", msg=at)
+      assert_eq(drawn_names().iter().any(fn(n) { n.has_prefix("sf/pic/glyph/star") }), icon != "", msg=at)
     }
+  }
+}
+
+///|
+/// What the window's tree draws called by name now (View::drawn_as: a mark's glyph, sf/pic/glyph/NAME), each drawn
+/// node's.
+fn drawn_names() -> Array[String] {
+  match @ui.view_tree() {
+    Some(tree) => tree.drawn().map(fn(d) { tree.drawn_name(d.id) })
+    None => []
   }
 }
 
@@ -125,8 +199,8 @@ fn alignment_places(s : Source) -> Source {
   }
   {
     ..s,
-    topic: fn(name, params) {
-      let v = (s.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = s.topic(name, params).get().snapshot()
       if name == "profiles" {
         match v.value {
           Some(x) => { ..v, value: Some(shaped(x)) }
@@ -142,7 +216,7 @@ test "an account's station statuses line up whether their rows open or not" {
   for (w, platform) in page_cases {
     let t = setting_tester(Profile("ws1/st1", "cc"), w, platform~, h=2400.0, over=alignment_places)
     let at = "\{w} platform \{platform}"
-    let statuses = t.boxes().filter(fn(b) { b.text == "额度查询失败" })
+    let statuses = t.boxes_held().filter(fn(b) { b.text == "额度查询失败" })
     assert_eq(statuses.length(), 3, msg=at)
     assert_eq(statuses[0].x, statuses[1].x, msg="\{at}: current and link")
     assert_eq(statuses[2].x, statuses[1].x, msg="\{at}: pending and link")
@@ -173,8 +247,8 @@ fn unshared_claude(s : Source) -> Source {
   }
   {
     ..s,
-    topic: fn(name, params) {
-      let v = (s.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = s.topic(name, params).get().snapshot()
       match v.value {
         Some(x) => { ..v, value: Some(without_share(x)) }
         None => v
@@ -303,7 +377,7 @@ test "a profile's page, wide: a profile one of the station's lists no more says 
   assert_true(t.find("找不到 ID 为 gone 的 Profile") is Some(_))
 }
 
-// A profile's quota reset and its models (Accounts.tsx QuotaSection) over ChatGPT 团队: a reset used once asked, its
+// A profile's quota reset and its models over ChatGPT 团队: a reset used once asked, its
 // models all listed, one named by hand and taken off again.
 
 ///|
@@ -435,8 +509,8 @@ fn long_profile(s : Source) -> Source {
   }
   {
     ..s,
-    topic: fn(name, params) {
-      let v = (s.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = s.topic(name, params).get().snapshot()
       match v.value {
         Some(x) => { ..v, value: Some(shaped(x)) }
         None => v

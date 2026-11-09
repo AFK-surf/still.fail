@@ -18,12 +18,19 @@ pub fn submenu_row(
   let row = key + "/row"
   let id = c.id(row)
   if c.rect_of(id) is None {
-    if menu_now() == key { menu_set("") }
+    if menu_is(key) { menu_set("") }
     if submenu_hover.val == key { submenu_hover.val = "" }
   }
-  let pressed = menu_item(c, label, key=row, icon~, end=if side == Left { "chevron-left" } else { "chevron-right" })
-  if layout(c.window_size().0) == Small {
-    if pressed { menu(items, from=Of(id), title=label) }
+  let small = layout(c.window_size().0) == Small
+  menu_item(c, label, key=row, icon~, end=if side == Left { "chevron-left" } else { "chevron-right" }, on_press=fn() {
+    if small {
+      menu(items, from=Of(id), title=label)
+    } else {
+      menu_set(key)
+    }
+  })
+  |> ignore
+  if small {
     return
   }
   let hovered = pointer_rests() && c.hovered(id)
@@ -31,7 +38,7 @@ pub fn submenu_row(
   if hovered { submenu_hover.val = key } else if submenu_hover.val == key { submenu_hover.val = "" }
   // (the arrow key toward where it opens)
   let toward = if (side == Left) != c.rtl() { @ui.key_code_left } else { @ui.key_code_right }
-  if pressed || (c.has_focus(id) && c.take_key(toward)) || entered {
+  if (c.has_focus(id) && c.take_key(toward)) || entered {
     menu_set(key)
   }
   if menu_items(c, key, id, items, submenu=true, side~, along=Start, offset=panel_pad + panel_pad) {

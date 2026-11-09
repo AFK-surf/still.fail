@@ -80,7 +80,7 @@ export function installEmptyUsageHistory(db: DatabaseSync): void {
 /// - the calls since then, read by the index on their time: the hours or days since those quarters stopped, not the
 ///   station's whole history.
 /// A station whose old quarters never held every call (their fill not done) counts from when the compact statistics
-/// began, or from now; the page says the days before are not known.
+/// began, or from now; the page says the days before are not known until usage-fill.ts has counted them.
 export function installUsageHistory(db: DatabaseSync, now: number): void {
   if (hasUsageHistory(db)) return;
   db.exec("BEGIN IMMEDIATE");
@@ -144,6 +144,17 @@ export const HISTORY_TOTAL = "SELECT tokens FROM usage_history_total WHERE scope
 
 /// The quarter `at` (ms) is in.
 export const quarter = (at: bigint): bigint => (at >= 0n ? at / 900_000n : -1n - (-1n - at) / 900_000n);
+
+/// The quarters from `start` until `end` as their calls say, whatever they held: in the caller's write.
+export function setUsageHistoryQuarters(db: DatabaseSync, start: number, end: number): void {
+  db.prepare("DELETE FROM usage_history WHERE scope IN (SELECT scope FROM usage_history_total) AND quarter >= ? AND quarter < ?").run(start, end);
+  db.prepare(`INSERT INTO usage_history (scope, quarter, calls, tokens) SELECT ${scopeOf("u")}, ${quarterOf("u")}, SUM(u.calls), SUM(${tokensOf("u")})
+    FROM usage u INDEXED BY usage_at WHERE u.at >= ? AND u.at < ? GROUP BY 1, 2`).run(start * QUARTER_MS, end * QUARTER_MS);
+}
+
+export function setUsageHistorySince(db: DatabaseSync, since: number | null): void {
+  db.prepare("UPDATE usage_history_since SET since = ? WHERE id = 1").run(since);
+}
 
 /// From when the history holds every call (ms); null, from the first.
 export function usageHistorySince(db: DatabaseSync): number | null {

@@ -56,25 +56,26 @@ fn settings_row(
 }
 
 ///|
+/// The settings' list as it stands, in its order, as the core says it, built in `c` (settings_parts_of: the bottom bar's
+/// row as `c`'s window has the bar, what is kept as asked of the core now).
+pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[SettingsPart] {
+  settings_parts_of(core, here, bars=@sfbase.bars_shown(c), kept=@settings.kept_said(c, core))
+}
+
+///|
 /// The settings' list as it stands, in its order, as the core says it: the topics its rows read are those the pages
-/// they open read. `bars`: whether the window has the bottom bar (none said: as `c`'s window is); not `asks`, what is
-/// kept said as last read, nothing asked of the core for it (what reads it asks: kept_ask).
-pub fn settings_parts(
-  c : @ui.Ctx,
-  core : Core,
-  here : @settings.Here,
-  bars? : Bool,
-  asks? : Bool = true,
-) -> Array[SettingsPart] {
+/// they open read. `bars`: whether the window has the bottom bar; `kept`: what 本机缓存's row says (@settings.kept_said,
+/// or kept_told: as last read, nothing asked of the core for it, what reads it asking: kept_ask).
+fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : String) -> Array[SettingsPart] {
   let w = @settings.workspace_view(core, here).value
   let stations = match @settings.stations_of(core, here).value {
     Some(Array(a)) => Some(a)
     _ => None
   }
-  let connects = (core.topic)("connects", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).value
-  let lock = (core.topic)("lock", { "workspace": Json::string(here.workspace) }).value
-  let vaults = (core.topic)("vaults", { "workspace": Json::string(here.workspace) }).value
-  let profiles = (core.topic)("profiles", { "scope": Json::string(here.workspace) }).value
+  let connects = (core.topic)("connects", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).get().value
+  let lock = (core.topic)("lock", { "workspace": Json::string(here.workspace) }).get().value
+  let vaults = (core.topic)("vaults", { "workspace": Json::string(here.workspace) }).get().value
+  let profiles = (core.topic)("profiles", { "scope": Json::string(here.workspace) }).get().value
   let parts : Array[SettingsPart] = []
   // who is signed in, the workspace in view
   let me = if here.person != "" { here.person } else { here.email }
@@ -199,14 +200,14 @@ pub fn settings_parts(
   })
   // this device's: what there is of it here (the bottom bar where the window has one, 2026-10-26: 「为啥中型屏会有这个
   // 设置」; the keys, this computer's station a computer's)
-  let prefs = (core.topic)("prefs", Map::new()).value
+  let prefs = (core.topic)("prefs", Map::new()).get().value
   let theme = match @settings.appearance(prefs) {
     "light" => @sf.t("android-settings.theme.light")
     "dark" => @sf.t("android-settings.theme.dark")
     _ => @sf.t("android-settings.theme.system")
   }
   // notifications as the core's `notify` says, or as switched while `notify.set` is out; refused by the system, in red
-  let notify = (core.topic)("notify", Map::new()).value
+  let notify = (core.topic)("notify", Map::new()).get().value
   let on = match @settings.notify_switched.get() {
     Some(v) => v
     None => notify is None || flag(notify, "on")
@@ -229,7 +230,7 @@ pub fn settings_parts(
       bad=refused,
     ),
   ]
-  if bars.unwrap_or(@sfbase.bars_shown(c)) {
+  if bars {
     device.push(settings_row(BarSettings, "bars", "view-columns", @sf.t("android-misc.bar.title"), value=@settings.bars_value(core)))
   }
   let platform = @ui.platform()
@@ -239,11 +240,11 @@ pub fn settings_parts(
   if platform == 0 {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
-  // 共享调试, the phone's (docs/adb-share.md): its page says which chats it is lent to
+  // 共享调试, the phone's: its page says which chats it is lent to
   if platform == 2 {
     device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
   }
-  device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=if asks { @settings.kept_said(c, core) } else { @settings.kept_told() }))
+  device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=kept))
   parts.push({ key: "device", heading: @sf.t("android-settings.home.device"), rows: device })
   // 关于: this build, or the newer one there is
   let v = (core.version_now)()
@@ -272,7 +273,7 @@ pub fn settings_parts(
 pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
   match r {
     Fonts => Appearance
-    SecurityOpen => Security
+    SecurityOpen | PersonalLock => Security
     VaultItems | VaultItem(_, _) => Vault
     AdbShare("") => AdbShare("")
     Station(_) | AdbShare(_) => Stations
@@ -302,15 +303,17 @@ pub fn settings_search_reset() -> Unit {
 ///|
 /// The same field over the list in either frame, as the chats' search over their list is (search.mbt
 /// search_field_ground): a round ground of its own with the search mark, as tall as the theme's band, no outline.
-/// While it holds words, clearing them is a press at its end, inside it.
-pub fn settings_search(c : @ui.Ctx) -> Unit {
+/// While it holds words, clearing them is a press at its end, inside it. Its words as far in as where its list stands
+/// (`at`) has them (band_pad_in).
+pub fn settings_search(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
   let t = @sf.theme()
   let l = t.chat_list
+  let pad = @sf.band_pad_in(at)
   let (size, line) = c.text_size(Ui)
   // (its end's room the clear press's while it holds words: round in the round ground's end, concentric)
   let held = settings_search_field.text() != ""
-  let end = if held { @sf.room_of(0.0) } else { @sf.room_of(l.band_pad) }
-  c.box(style=settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(l.band_pad), pr=end)), fn() {
+  let end = if held { @sf.room_of(0.0) } else { @sf.room_of(pad) }
+  c.box(style=settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(pad), pr=end)), fn() {
     @sf.icon(c, "search", size=l.band_icon, color=t.p.muted) |> ignore
     c.box(style=settings_search_grow, fn() {
       c.editor(
@@ -328,7 +331,7 @@ pub fn settings_search(c : @ui.Ctx) -> Unit {
       |> ignore
     })
     |> ignore
-    if held &&
+    if held {
       @sf.icon_button(
         c,
         "close",
@@ -337,9 +340,11 @@ pub fn settings_search(c : @ui.Ctx) -> Unit {
         icon_size=l.band_icon,
         round=true,
         label=@sf.t("android-misc.drive.pick.filterClear"),
-      ) {
-      settings_search_field.set("")
-      settings_search_field.focus()
+        on_press=fn() {
+          settings_search_field.set("")
+          settings_search_field.focus()
+        },
+      )
     }
   })
   |> ignore
@@ -358,13 +363,73 @@ let settings_search_grow : @ui.Style = @ui.style(w=@sf.grow)
 let settings_search_page : @ui.Style = @ui.css("w=Full pb=S3 clip=true")
 
 ///|
-/// The same search control hosted in the Small settings page's made-once tree.
+/// The room under the search field on a page (settings_search_page's S3).
+let settings_search_foot : Double = 12.0
+
+///|
+/// The same search control (settings_search's) as nodes, over the settings' list made once: its round ground as tall as
+/// the theme's band, the search mark, the field, and while it holds words the clear key at its end, inside the ground,
+/// as round as it; 12 under it. Its field an editor of its own (a Field is one editor's: the list made once while
+/// another of it still leaves, the sidebar's old one), what it holds the list's words (settings_search_field: kept as a
+/// result is opened, the sidebar's the same), each told the other's as they change.
 fn settings_search_node(parent : @view.View) -> Unit {
-  @ui.old(parent, fn(c) {
-    c.with_theme(@sf.ui_theme(), fn() {
-      c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore
+  let own = @ui.Field::new(text=@signals.untracked(fn() { settings_search_field.text() }))
+  let held = fn() { own.text() != "" }
+  parent.box(fn(page) {
+    @sf.style_node(page, fn() { settings_search_page })
+    page.reacts(fn() { own.text() }, fn(w) { settings_search_field.set(w) })
+    page.reacts(fn() { settings_search_field.text() }, fn(w) {
+      if @signals.untracked(fn() { own.text() }) != w {
+        own.set(w)
+      }
     })
-  }, natural=true).width_share(Is(1.0)) |> ignore
+    page.box(fn(g) {
+      // (its end's room the clear key's while it holds words: round in the round ground's end, concentric)
+      @sf.style_node(g, fn() {
+        // (a page across the whole screen, a phone's: its words as far in as there, band_pad_in)
+        let l = @sf.theme().chat_list
+        let pad = @sf.band_pad_in(Whole)
+        let end = if held() { @sf.room_of(0.0) } else { @sf.room_of(pad) }
+        settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(pad), pr=end))
+      })
+      @sf.icon_node(g, "search", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+      @ui.field(
+        g,
+        own,
+        placeholder_by=fn() { @sf.t("web-pages.settings.search") },
+        max_lines=1,
+        enter_sends=true,
+        size_by=fn() { @sf.theme().t.ui },
+        line=@signals.untracked(fn() { @sf.theme().t.ui_line }),
+        colors_by=fn() {
+          let p = @sf.theme().p
+          (p.text, p.subtle, p.accent)
+        },
+      )
+      .grow(Is(1.0))
+      .basis(Is(Some(0.0)))
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      |> ignore
+      g.show(held, fn(k) {
+        let l = @signals.untracked(fn() { @sf.theme().chat_list })
+        @sf.icon_button_node(
+          k,
+          "close",
+          fn() { @sf.t("android-misc.drive.pick.filterClear") },
+          fn() {
+            own.set("")
+            own.focus()
+          },
+          size=l.band_h,
+          icon_size=l.band_icon,
+        )
+        |> ignore
+      })
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -393,6 +458,7 @@ fn settings_search_children(row : SettingsRow, core : Core) -> Array[SettingsRow
     "appearance" => {
       let a : Array[(String, String, @settings.Route)] = [
         ("theme", @sf.t("web-pages.appearance.theme.title"), Appearance),
+        ("accent", @sf.t("web-pages.appearance.accent.title"), Appearance),
         ("fonts", @sf.t("web-pages.appearance.fonts.title"), Fonts),
         ("motion", @sf.t("web-pages.appearance.motion.title"), Appearance),
         ("haptics", @sf.t("web-pages.appearance.haptics.title"), Appearance),
@@ -484,58 +550,16 @@ fn settings_found(parts : Array[SettingsPart], core : Core, query : String) -> A
 }
 
 ///|
-/// The list as a page of its own (a small screen's, the gear's): who is signed in and the workspace on cards of their
-/// own, each group on its card under its heading. `open`: a row pressed, its page.
-pub fn settings_blocks(c : @ui.Ctx, core : Core, here : @settings.Here, open : (@settings.Route) -> Unit) -> Array[() -> Unit] {
-  let query = settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower()
-  let parts = settings_found(settings_parts(c, core, here), core, query)
-  let blocks : Array[() -> Unit] = [fn() { c.box(style=settings_search_page, fn() { settings_search(c) }) |> ignore }]
-  if parts.is_empty() && query != "" {
-    blocks.push(fn() { @sf.page_note(c, @sf.t("common.noMatch")) })
-  }
-  for part in parts {
-    let identity = part.rows.iter().any(fn(r) { !(r.lead is Icon(_)) })
-    // (the account and the workspace each a card of its own, as large as who and where they are)
-    let cards = if identity { part.rows.map(fn(r) { [r] }) } else { [part.rows] }
-    for i, rows in cards {
-      let heading = if i == 0 { part.heading } else { "" }
-      blocks.push(fn() {
-        if heading != "" {
-          @sf.heading(c, heading)
-        }
-        @sf.group(c, fn() {
-          for row in rows {
-            if @sf.link_row(
-                c,
-                "settings/" + row.key,
-                row.title,
-                value=if row.key.has_prefix("find/") { "" } else { row.value },
-                value_bad=row.bad,
-                value_dot=row.dot,
-                note=row.line,
-                strong=!(row.lead is Icon(_)),
-                lead=fn() { settings_lead(c, core, here, row, false) },
-              ) {
-              open(row.route)
-            }
-          }
-        })
-      })
-    }
-  }
-  blocks
-}
-
-///|
 /// The list as a sidebar's (beside the settings' pages on a medium or large screen): the same rows in the same groups,
 /// a sidebar's rows (the theme's side_row, as its other rows of one line), the room of a heading between two groups
-/// with none. `lit`: the row of the page beside it.
+/// with none. `lit`: the row of the page beside it. `at`: where the list stands (a side column, the tape's).
 pub fn settings_side_rows(
   c : @ui.Ctx,
   core : Core,
   here : @settings.Here,
   lit : @settings.Route?,
   open : (@settings.Route) -> Unit,
+  at : @sf.ListAt,
 ) -> Unit {
   let t = @sf.theme()
   let query = settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower()
@@ -545,7 +569,7 @@ pub fn settings_side_rows(
   }
   for k, part in parts {
     if part.heading != "" {
-      @sf.list_heading(c, part.heading, Side)
+      @sf.list_heading(c, part.heading, at)
     } else if k > 0 {
       @sf.list_apart(c)
     }
@@ -553,12 +577,12 @@ pub fn settings_side_rows(
       let key = "settings-nav/" + row.key
       let id = c.id(key)
       let selected = if row.key.has_prefix("find/") { lit == Some(row.route) } else { lit.map(settings_row_of) == Some(row.route) }
-      let ground = @sf.nav_ground(c, key, c.lit(id) || c.pressed(id), selected)
+      let ground = @sf.nav_ground_by(c, key, c.lit(id) || c.pressed(id), selected)
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
       // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {
-        let look = t.chat_list.side_row.then(settings_side_across).then(@sf.row_least_h())
-        c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
+        let look = @sf.side_row_at(at).then(settings_side_across).then(@sf.row_least_h())
+        let n = c.box(style=look, id~, fn() {
           settings_lead(c, core, here, row, true)
           c.box(style=settings_side_words, keep=true, fn() {
             c.text(row.title, style=t.chat_list.title.then(settings_side_title), keep=true) |> ignore
@@ -575,18 +599,21 @@ pub fn settings_side_rows(
             |> ignore
           }
         })
+        // (its ground eased as it is painted)
+        c.bg_by(n, ground)
+        n
       }
       let b = if i + 1 < part.rows.length() {
         let mut b = 0
-        c.box(style=@sf.list_more(Side), fn() { b = draw() }) |> ignore
+        c.box(style=@sf.list_more(at), fn() { b = draw() }) |> ignore
         b
       } else {
         draw()
       }
       c.semantics(b, Link, id~, label=row.title)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         open(row.route)
-      }
+      })
     }
   }
 }
@@ -613,24 +640,7 @@ fn settings_lead(c : @ui.Ctx, core : Core, here : @settings.Here, row : Settings
       // a picture put up fills the square; one of still.fail's icons or an emoji on the chips' ground; else its first
       // letter, muted, as the rail has it
       let picture = icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
-      // (in its row's corner, out from the row's words to the ladder's inset from its start, top and foot, as the list
-      // made once has it: settings_row_node)
-      let out = @sf.corner_inset - @sf.text_in
-      // (held in its corner at any size of words: the row's lead is put in the middle of its first line (row_lead),
-      // which the tile, as tall as that line at least by its foot's margin, fills; the list made once puts it at the
-      // row's top as ever)
-      let line = @sf.row_lead_line(c)
-      let foot = dmax(out, line - @sf.identity_mark - out)
-      c.box(
-        style=@sf.workspace_tile.then(
-          @ui.style(
-            bg=Data(if picture { t.p.card } else { t.p.chip }),
-            ml=@sf.room_of(out),
-            mt=@sf.room_of(out),
-            mb=@sf.room_of(foot),
-          ),
-        ),
-        fn() {
+      c.box(style=@sf.row_tile(c).then(@ui.style(bg=Data(if picture { t.p.card } else { t.p.chip }))), fn() {
         if picture {
           @sf.station_mark(c, emoji, icon, @sf.identity_mark, t.p.text)
         } else {
@@ -643,7 +653,7 @@ fn settings_lead(c : @ui.Ctx, core : Core, here : @settings.Here, row : Settings
 }
 
 ///|
-/// A sidebar row's mark's side (the rows' icons': SidebarList.css.ts mark, ICON's 16).
+/// A sidebar row's mark's side (ICON's 16).
 let settings_side_mark : Double = 16.0
 
 ///|
@@ -670,7 +680,7 @@ let settings_side_said : @ui.TextStyle = @ui.text_style(w=Hug)
 
 
 ///|
-/// The list as a page of its own made once as nodes (settings_blocks', the gear's on a small screen) in node `v`: who
+/// The list as a page of its own made once as nodes (the gear's on a small screen) in node `v`: who
 /// is signed in and the workspace on cards of their own, each group on its card under its heading. The page's frame
 /// and how far it is scrolled kept whatever changes; its cards and their rows each a node of its own by its group's key
 /// and its own, come, gone and in their order as the core says which there are (security mode where the
@@ -693,9 +703,9 @@ pub fn settings_home_node(
   // it is asked to be read again, not as the list is worked out)
   let query = fn() { settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower() }
   let parts = @signals.computed(fn(_) {
-    settings_found(settings_parts(@ui.current(), core, here(), bars=bars(), asks=false), core, query())
+    settings_found(settings_parts_of(core, here(), bars=bars(), kept=@settings.kept_told()), core, query())
   })
-  v.reacts(fn() { @settings.kept_asked() }, fn(_) { @settings.kept_ask(@ui.current(), core) })
+  v.reacts(fn() { @settings.kept_asked() }, fn(_) { @settings.kept_ask(core) })
   // (its cards: each by its group's key (the account's and the workspace's by their rows'), its heading, its rows' keys; the account and the workspace each a card of
   // their own, as large as who and where they are)
   let cards = fn() -> Array[(String, String, Array[String])] {
@@ -748,7 +758,7 @@ pub fn settings_home_node(
       block.show(fn() { heading() != "" }, fn(h) { @sf.heading_node(h, heading) })
       @sf.group_node(block, fn(g) {
         g.each(fn() { card_of(id).map(fn(c) { c.2 }).unwrap_or([]) }, fn(k) { k }, fn(rb, key) {
-          let key = @signals.untracked(fn() { key.get() })
+          let key = key.untracked()
           settings_row_node(rb, core, here, key, row_of, open, stint)
         })
       })
@@ -782,7 +792,7 @@ fn settings_row_node(
           if p == "" { "" } else { (core.picture)(p, stint()) }
         }, @sf.identity_mark)
       })
-    Some(Space(_, _)) => LeadMade(fn(l) { settings_space_node(l, row, stint) })
+    Some(Space(_, _)) => LeadTile(fn(l) { settings_space_node(l, row, stint) })
     None => NoLead
   }
   @sf.link_row_node(
@@ -799,6 +809,7 @@ fn settings_row_node(
     value_dot=fn() { row().map(fn(r) { r.dot }).unwrap_or(false) },
     note=said(fn(r) { r.line }),
     strong=shown.map(fn(r) { !(r.lead is Icon(_)) }).unwrap_or(false),
+    note_cut=shown.map(fn(r) { r.lead is Space(_, _) }).unwrap_or(false),
     lead~,
   )
 }
@@ -819,13 +830,13 @@ fn settings_space_node(parent : @view.View, row : () -> SettingsRow?, stint : ()
     icon.has_prefix("https://") || icon.has_prefix("http://") || icon.has_prefix("data:image/")
   }
   parent.box(fn(t) {
+    let side = @sf.row_tile_side_node(parent, t)
     t
-    .width(Is(Some(@sf.identity_mark)))
-    .height(Is(Some(@sf.identity_mark)))
+    .width(By(side))
+    .height(By(side))
     .radius(By(fn() { @ui.tree_theme().corner(@sf.small_radius) }))
-    // (a tile in its row's corner: out from the row's words (text_in) to the ladder's inset (8) from its start, top and
-    // foot, concentric with its corner there, the small block's 10)
-    .margin(Is((@sf.corner_inset - @sf.text_in, @sf.corner_inset - @sf.text_in, 0.0, @sf.corner_inset - @sf.text_in)))
+    // (the row's lead tile (LeadTile): the ladder's inset (8) from its start, top and foot, concentric with its corners
+    // there, the small block's 10)
     .clips(Is(true))
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

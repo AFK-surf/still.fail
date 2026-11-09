@@ -1,4 +1,4 @@
-// A login on another station end to end (docs/remote-login.md, station 之间), on a dev cloud (cloud/test/dev.ts), two
+// A login on another station end to end (station 之间), on a dev cloud (cloud/test/dev.ts), two
 // real stations and the owner's real core: an agent on station A (the fake claude's own MCP token, as a real agent calls
 // the station's tools) logs station B in with `login {station: B, command}`; the command runs on B, the agent is told it
 // is B's (the card carries B's key, the link is B's page), it acts only on the logins it started there, and when the

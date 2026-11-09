@@ -48,7 +48,7 @@ const traces = (got: { body: any }[]) => got.map((g) => g.body.resourceSpans[0].
 const batch = (name = "chat.open", spans = 1) => JSON.stringify({
   resourceSpans: [{
     resource: { attributes: [{ key: "service.name", value: { stringValue: "ember-web" } }] },
-    scopeSpans: [{ scope: { name: "ember-core" }, spans: Array.from({ length: spans }, () => ({ traceId: "4bf92f3577b34da6a3ce929d0e0e4736", spanId: "00f067aa0ba902b7", name, kind: 1, startTimeUnixNano: "1", endTimeUnixNano: "2" })) }],
+    scopeSpans: [{ scope: { name: "stillfail-core" }, spans: Array.from({ length: spans }, () => ({ traceId: "4bf92f3577b34da6a3ce929d0e0e4736", spanId: "00f067aa0ba902b7", name, kind: 1, startTimeUnixNano: "1", endTimeUnixNano: "2" })) }],
   }],
 });
 

@@ -107,7 +107,7 @@ def flight(t, d0=0.0):
 
 
 # key pattern, field, what it is, what is left of its way at t (ms from its start), its frame's lag (Compose's: a frame
-# from being asked to moving; the bar's own loop (Bar.kt) none: told as it is composed, stepped the next frame), its rest
+# from being asked to moving; the bar's own loop none: told as it is composed, stepped the next frame), its rest
 SPECS = [
     (r"^home/.*\x01r/", "fy", "a Home row to its new place (ListMotion.kt: spring(1, 350), 100 ms late closing over one gone)",
      [spring(350.0), spring(350.0, delay=100.0)], 1, 0.0),

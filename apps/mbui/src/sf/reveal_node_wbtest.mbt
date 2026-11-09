@@ -20,8 +20,8 @@ fn reveal_pair(on : @signals.Signal[Bool], node : Bool) -> @ui.Tester {
         c.box(w=Px(300.0), fn() {
           let target = if on.get() { 1.0 } else { 0.0 }
           let open = @motion.anim(c, "t/said", target, global=true)
-          open.follow(target, @motion.move().per_unit(@motion.reveal_height("t/said")))
-          let share = open.get()
+          open.follow(c, target, @motion.move().per_unit(@motion.reveal_height(c, "t/said")))
+          let share = open.get(c)
           if share > 0.0 {
             @motion.reveal(c, "t/said", share, middle=true, fn() { c.text(reveal_words, style~) |> ignore })
           }

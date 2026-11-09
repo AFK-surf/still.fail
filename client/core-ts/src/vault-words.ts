@@ -1,4 +1,4 @@
-// What the pages say of the vault (docs/vault.md), for every client alike: an item's kind, how agents may ask for it and
+// What the pages say of the vault, for every client alike: an item's kind, how agents may ask for it and
 // get it, its longest grant, an opened item's fields, the library's state at the settings' row. The web's vault.ts
 // worked these out; the core's views (views/vault.ts) put them on its topics, and the web's stories use them as the
 // core does. Self-contained (its only import the words) so that the web may import it as it is.

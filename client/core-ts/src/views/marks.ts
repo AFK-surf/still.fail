@@ -1,4 +1,4 @@
-// What each workspace has waiting for its person, for where workspaces are switched (views/marks.rs): of the chats
+// What each workspace has waiting for its person, for where workspaces are switched: of the chats
 // they take part in, those that want them and those with something unread; the chat last open in it. Only how many
 // and how urgent goes past a workspace.
 import { decodeComponent } from "../accounts.ts";
@@ -171,12 +171,14 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
         else if (tone === "done") c.unread++;
       }
       if (!seen && (tone === "alert" || tone === "wait" || tone === "done")) fresh[tone === "done" ? "unread" : tone]++;
-      if (!seen && tone === "done" && saidByPerson(row)) said++;
+      const byPerson = !seen && tone === "done" && saidByPerson(row);
+      if (byPerson) said++;
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
       // 待处理 (`items`), of what the badge counts: its failures until they run again, are archived or let go, read or
       // not (a chat read is still broken: pengxiao, 2026-10-28), as the workspace's mark counts them; its cards that
-      // came to want them and were not looked at since (one looked at: its row still says it).
-      if ((tone === "alert" && kinds.failed) || (!seen && tone === "wait" && kinds.wait)) {
+      // came to want them and were not looked at since (one looked at: its row still says it); its unread the badge
+      // counts, so every number on it can be found there.
+      if ((tone === "alert" && kinds.failed) || (!seen && tone === "wait" && kinds.wait) || (!seen && tone === "done" && (byPerson ? kinds.message : kinds.done))) {
         const [text, what] = stateText(row);
         const item: J = {
           kind: tone,
@@ -193,12 +195,14 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
           at: typeof get(row, "lastActiveAt") === "number" ? row.lastActiveAt : 0,
         };
         if (waits && typeof d.seq === "number") item.seq = d.seq;
+        else if (tone === "done" && typeof get(get(row, "last"), "seq") === "number") item.seq = get(row, "last").seq;
         if (tone === "alert" && failure !== null) item.failure = failure;
         items.push(item);
       }
     }
     // Most urgent first, the latest first within.
-    items.sort((a, b) => (a.kind === b.kind ? b.at - a.at : a.kind === "alert" ? -1 : 1));
+    const urgency = (kind: string) => ["alert", "wait", "done"].indexOf(kind);
+    items.sort((a, b) => urgency(a.kind) - urgency(b.kind) || b.at - a.at);
     if (currentWorkspace !== id) {
       others.alert += counts.alert;
       others.wait += counts.wait;

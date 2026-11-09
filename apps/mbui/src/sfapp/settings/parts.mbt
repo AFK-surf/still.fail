@@ -1,7 +1,7 @@
 // The settings pages' parts, as the Android app draws them (shared/ui/Parts.kt: NavBack, NavBar, LargeTitle,
 // SectionHeader, Card, ListCard, ListRow, Seg, Avatar; screens/SettingParts.kt GoRow, PageNote; PageParts.kt Switch,
 // PresenceDot; Controls.kt Button, PickRow, DoingMark; Waiting.kt Waiting, WaitLine; PlaceRows.kt PlaceEmpty;
-// Stations.kt TopBack). Sizes in dp as there; colours src/sf's narrow palette (Theme.kt's).
+// Stations.kt TopBack). Sizes in dp as there; colours src/sf's narrow palette.
 
 ///|
 /// Each page's blocks as given and as its list made of them, by the page's key (scroll_page's `keys`).
@@ -39,7 +39,7 @@ fn json_sign(v : Json?) -> String {
 let warn : Int64 = 0xD9962BFFL
 
 ///|
-/// Drawn in the wide frame's pane (a desktop's width, src/sfapp/wide.mbt): the pages as the web's settings pages
+/// Drawn in the wide frame's pane (a desktop's width): the pages as the web's settings pages
 /// stand (pages.css.ts page: their head's title 22 in 600, no back where the sidebar is the way back, a column 760 wide
 /// at most in the middle, 40 from the sides at least); `wide_deep`: a page under another of them (back shown).
 pub let wide : Ref[Bool] = Ref(false)
@@ -74,7 +74,7 @@ fn wide_head_in() -> Double {
 /// A page of the settings: what it shows, a block at a time (each laid out only when it comes into view), scrolling
 /// under what stays at its top. `key` keeps its place while it is on the stack. `keys`: each block's own (a station's
 /// id, a person's), as many as the blocks: what came or went comes and goes where it is, as a chat's rows do
-/// (ListRows, docs/list-motion.md); `moves` also closes a block that changes order and opens it at its new place. A
+/// (ListRows, mbui's view/list_motion.mbt); `moves` also closes a block that changes order and opens it at its new place. A
 /// page whose blocks are all others now (what waited, then what came) shows them as they are. `continuity` identifies
 /// the blocks that mean this is the same list: a spacer or a waiting view is not an existing item in it, and an
 /// unanswered view has none. Only those blocks are remembered for the next time.
@@ -90,6 +90,21 @@ fn scroll_page(
   // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
   let l = @sf.look()
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
+  // (at a place's top on the narrow page's list, neither a panel's nor the wide frame's: the room under the app's top
+  // bar its first row, keyed among the blocks, so that a block coming or changing has its own row's height go, not the
+  // row before it)
+  let is_wide = wide.val
+  let top = if @sf.in_panel() || is_wide { 0.0 } else { top_room() }
+  let top_keyed = top > 0.0 && keys is Some(ks) && ks.length() == blocks.length()
+  let (blocks, keys, versions) = if top_keyed {
+    (
+      [fn() { gap(c, top) }] + blocks,
+      keys.map(fn(ks) { ["page/top"] + ks }),
+      versions.map(fn(vs) { if vs.length() == blocks.length() { [""] + vs } else { vs } }),
+    )
+  } else {
+    (blocks, keys, versions)
+  }
   // (by their keys: those going still among them while they close, each keyed as it was)
   let (blocks, keys, rows) = match keys {
     Some(ks) if ks.length() == blocks.length() && !(@sf.in_panel() && @sf.panel_whole()) => {
@@ -145,7 +160,7 @@ fn scroll_page(
   }
   // (its rows built as the list lays them out, in the panel the page is: @sf.with_pane)
   let pane = @sf.pane_round.val
-  if wide.val {
+  if is_wide {
     let side = wide_side(c)
     c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) { @sf.with_pane(pane, fn() {
       if i == blocks.length() {
@@ -160,13 +175,12 @@ fn scroll_page(
     return
   }
   // what it shows ends over the navigation bar (SettingParts.kt pages: windowInsetsPadding(navigationBars)), and at a
-  // place's top, over the bottom bar too (Stations.kt BarRoom); there it starts under the app's top bar, scrolling
+  // place's top, over the bottom bar too; there it starts under the app's top bar, scrolling
   // under it (PlacePage.kt: `padding(top = top)` inside what scrolls)
   let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
   // (in a panel of its own, its last card as far from the panel's foot as from its sides: its card's 10 under it and this)
   let foot = if @sf.in_pane() { dmax(foot, @sf.panel_card_in - 10.0) } else { foot }
-  let top = top_room()
-  let head = if top > 0.0 { 1 } else { 0 }
+  let head = if top > 0.0 && !top_keyed { 1 } else { 0 }
   let n = head + blocks.length() + (if foot > 0.0 { 1 } else { 0 })
   c.list("settings/" + key, n, 80.0, fn(i) { @sf.with_pane(pane, fn() {
     if i < head {
@@ -209,12 +223,7 @@ pub fn wide_head(
         c.text(back, size=t.t.meta, color=if c.lit(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
       })
       |> ignore
-      if hit(c, id) {
-        match on_back {
-          Some(f) => f()
-          None => (core.pop)()
-        }
-      }
+      c.on_press(id, on_back.unwrap_or(fn() { (core.pop)() }))
     }
     c.box(style=title_line, fn() {
       c.box(style=if about == "" { title_words } else { title_about }, fn() {
@@ -294,13 +303,13 @@ fn gap(c : @ui.Ctx, h : Double) -> Unit {
 }
 
 ///|
-/// Back, a chevron in the accent and where it goes back to in a link's ink (Parts.kt NavBack). True on the frame after a tap.
-fn nav_back(c : @ui.Ctx, label : String) -> Bool {
-  @sf.nav_back(c, "settings-back", label)
+/// Back, a chevron in the accent and where it goes back to in a link's ink. `on_press` as it is pressed.
+fn nav_back(c : @ui.Ctx, label : String, on_press~ : () -> Unit) -> Unit {
+  @sf.nav_back(c, "settings-back", label, on_press~)
 }
 
 ///|
-/// Back at the top of a large-title page (Stations.kt TopBack): `on_back` when it is said, else the page popped;
+/// Back at the top of a large-title page: `on_back` when it is said, else the page popped;
 /// `trailing` at its other end (a ＋).
 fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on_back? : () -> Unit) -> Unit {
   if wide.val {
@@ -315,12 +324,12 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on
     gap(c, status_top.val)
   }
   c.box(style=top_back_line, fn() {
-    if nav_back(c, label) {
+    nav_back(c, label, on_press=fn() {
       match on_back {
         Some(f) => f()
         None => (core.pop)()
       }
-    }
+    })
     match trailing {
       Some(f) => f()
       None => ()
@@ -330,7 +339,7 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on
 }
 
 ///|
-/// Back's line at the top of a large-title page (Stations.kt TopBack): 10 in, 6 over, 4 under.
+/// Back's line at the top of a large-title page: 10 in, 6 over, 4 under.
 // kept across runs: a value (no field of it changes)
 let top_back_line : @ui.Style = @ui.css("row w=Full px=S2_5 pt=S1_5 pb=S1 align=ACenter justify=JBetween")
 
@@ -349,7 +358,7 @@ let top_label : Ref[String] = Ref("")
 let frame_core : Ref[Core?] = Ref(None)
 
 ///|
-/// A page's compact bar (Parts.kt NavBar): back, a centred title (and a line under it, `sub`), an action at its end.
+/// A page's compact bar: back, a centred title (and a line under it, `sub`), an action at its end.
 fn nav_bar(
   c : @ui.Ctx,
   core : Core,
@@ -365,12 +374,12 @@ fn nav_bar(
     wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back, about~)
     return
   }
-  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
+  @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val, on_press=fn() {
     match on_back {
       Some(f) => f()
       None => (core.pop)()
     }
-  }
+  })
 }
 
 ///|
@@ -382,15 +391,7 @@ pub let status_top : Ref[Double] = Ref(0.0)
 pub let nav_foot : Ref[Double] = Ref(0.0)
 
 ///|
-/// A bar's room, `h` high (none when it is 0): the status bar's over a page, the navigation bar's under it.
-fn bar_room_gap(c : @ui.Ctx, h : Double) -> Unit {
-  if h > 0.0 {
-    c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
-  }
-}
-
-///|
-/// The room a place's top page keeps at its foot for the bottom bar (App.kt LocalBarRoom: none on a wide screen).
+/// The room a place's top page keeps at its foot for the bottom bar.
 pub let bar_room : Ref[Double] = Ref(0.0)
 
 ///|
@@ -398,7 +399,7 @@ pub let bar_room : Ref[Double] = Ref(0.0)
 let at_root : Ref[Bool] = Ref(false)
 
 ///|
-/// Under the app's top bar (`page`'s `top`: a place's top page on a phone, PlacePage.kt), how far down what the page
+/// Under the app's top bar (`page`'s `top`: a place's top page on a phone), how far down what the page
 /// shows starts, scrolling under the bar; 0 where the page has a bar of its own over it.
 let root_top : Ref[Double] = Ref(0.0)
 
@@ -413,7 +414,7 @@ fn top_room() -> Double {
 }
 
 ///|
-/// What the back of a pushed place's page says (PlacePage.kt underLabel): the chats or settings, else `or_else`.
+/// What the back of a pushed place's page says: the chats or settings, else `or_else`.
 fn under_label(core : Core, or_else : String) -> String {
   match (core.under)() {
     "chats" => tr("android-misc.bar.place.chats")
@@ -423,7 +424,7 @@ fn under_label(core : Core, or_else : String) -> String {
 }
 
 ///|
-/// A place's page pushed (PlacePage.kt, not a bar's top): the compact bar, back to the page under it, its title; its
+/// A place's page pushed (not a bar's top): the compact bar, back to the page under it, its title; its
 /// actions at the bar's end; what it shows under it, 4 down. At the bar's top (`page`'s root) the app's top bar is
 /// over it instead, holding its actions, and only what it shows is drawn here, from the top of the page.
 fn place_page(
@@ -456,9 +457,9 @@ fn place_page(
                   "add-connect" => tr("android-misc.bar.action.connects")
                   _ => ""
                 }
-                if head_pill(c, key, label) {
+                head_pill(c, key, label, on_press=fn() {
                   run(Of(c.id(key)))
-                }
+                })
               }
               None => ()
             }
@@ -485,20 +486,21 @@ fn place_page(
             // its ＋, named as what it adds (PlusButton)
             match primary {
               Some((key, run)) =>
-                if nav_button(
-                    c,
-                    key,
-                    "plus",
-                    size=20.0,
-                    said=match key {
-                      "add-station" => tr("android-misc.bar.action.stations")
-                      "add-profile" => tr("android-misc.bar.action.profiles")
-                      "add-connect" => tr("android-misc.bar.action.connects")
-                      _ => ""
-                    },
-                  ) {
-                  run(Of(c.id(key)))
-                }
+                nav_button(
+                  c,
+                  key,
+                  "plus",
+                  size=20.0,
+                  said=match key {
+                    "add-station" => tr("android-misc.bar.action.stations")
+                    "add-profile" => tr("android-misc.bar.action.profiles")
+                    "add-connect" => tr("android-misc.bar.action.connects")
+                    _ => ""
+                  },
+                  on_press=fn() {
+                    run(Of(c.id(key)))
+                  },
+                )
               None => ()
             }
           })
@@ -540,12 +542,12 @@ let root_actions : @ui.Style = bar_actions.then(@ui.css("w=Full px=S4 pt=S2 just
 let place_body : @ui.Style = page_fill.then(@ui.css("pt=S1"))
 
 ///|
-/// What a place's page shows at the bar's top in the wide frame, 8 under its page bar (PlacePage.kt: `bar + 8.dp`).
+/// What a place's page shows at the bar's top in the wide frame, 8 under its page bar.
 // kept across runs: a value (no field of it changes)
 let root_body : @ui.Style = page_fill.then(@ui.css("pt=S2"))
 
 ///|
-/// A page's large title (Parts.kt LargeTitle): `small`'s line over the big word when it is said, the word after `lead`
+/// A page's large title: `small`'s line over the big word when it is said, the word after `lead`
 /// when there is one (a workspace's mark). (LargeTitle's letterSpacing -0.6sp: mbui's words have no spacing.)
 fn large_title(
   c : @ui.Ctx,
@@ -615,7 +617,7 @@ let wide_words_pane : @ui.Style = @ui.style(px=@sf.room_of(@sf.panel_words))
 let no_wide_words : @ui.Style = @ui.css("")
 
 ///|
-/// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end; `start` its room at its start
+/// A section's heading: its title, what it holds at its end; `start` its room at its start
 /// (20; the settings pages' say 24, S6, as their SectionHeaders do).
 fn section_header(
   c : @ui.Ctx,
@@ -724,28 +726,6 @@ let wide_section_title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibol
 let wide_section_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wide_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-/// What a section is about, under its head where the wide frame says it (page.css.ts sectionSub: 12, muted, 3 under
-/// the head, 10 over what it holds); none on a phone, whose pages say it under what it holds.
-fn section_note(c : @ui.Ctx, words : String) -> Unit {
-  if !wide.val || words == "" {
-    return
-  }
-  c.box(style=wide_section_note, fn() { c.text(words, style=wide_note_words) |> ignore }) |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_section_note : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
-
-///|
 /// What stands at the column's edge in the wide frame, 16 in as the title is (a section's control); 12 on a phone.
 fn inset(c : @ui.Ctx, body : () -> Unit) -> Unit {
   c.box(style=if wide.val { wide_inset } else { phone_inset }, body) |> ignore
@@ -760,7 +740,7 @@ let wide_inset : @ui.Style = @ui.css("w=Full px=S4")
 let phone_inset : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
-/// A page's note under its title, in a line or two (SettingParts.kt PageNote).
+/// A page's note under its title, in a line or two.
 fn page_note(c : @ui.Ctx, words : String) -> Unit {
   if wide.val {
     c.box(style=wide_page_note, fn() { c.text(words, style=wide_lead) |> ignore }) |> ignore
@@ -788,7 +768,7 @@ let wide_lead : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, w=Full)
 let page_note_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
 
 ///|
-/// What stands in a card's foot corners (the ladder's: docs/ui-panels.md「圆角阶梯」), so how far in its foot is: a
+/// What stands in a card's foot corners (the ladder's: @sf.pane_corner), so how far in its foot is: a
 /// capsule (a settings button or field, or a library button of its own height), concentric with the card's corner,
 /// reaching past its words to there (`foot_across`, `foot_start`); a block (a command's box), the ladder's inset, reaching past them to it
 /// (`block_across`), round by the ladder's next step there; or nothing with a ground, its words card_pad in.
@@ -800,10 +780,10 @@ priv enum Foot {
 }
 
 ///|
-/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words 20 in; round by the ladder's card
+/// A card on the page: 12 in from the sides, 10 under it, its words 20 in; round by the ladder's card
 /// corner, whatever stands in its corners concentric with it (`foot`: what stands in its foot corners); tapped when
-/// `key` is given. True on the frame after a tap.
-fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words) -> Bool {
+/// `key` is given, `on_press` what tapping it does, as it is let go (@sf.press_does).
+fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words, on_press? : () -> Unit) -> Unit {
   let id = if key == "" { 0 } else { c.id(key) }
   let ground = match foot {
     Words => card_ground
@@ -822,7 +802,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words
     |> ignore
   })
   |> ignore
-  id != 0 && hit(c, id)
+  @sf.press_does(c, id, id != 0, on_press)
 }
 
 ///|
@@ -841,8 +821,7 @@ let wide_card_room : @ui.Style = @ui.css("w=Full px=S4 pb=S2_5")
 let card_ground : @ui.Style = @ui.css("w=Full radius=Xl3 bg=Card clip").then(@ui.style(p=@sf.room_of(@sf.card_pad)))
 
 ///|
-///|
-/// A settings button's height (Controls.kt Button: 38).
+/// A settings button's height.
 pub let settings_button_h : Double = 38.0
 
 ///|
@@ -851,19 +830,6 @@ pub let settings_button_h : Double = 38.0
 /// words after it: its words where they were).
 // kept across runs: a value (no field of it changes)
 pub let foot_across : @ui.Style = @sf.foot_across(settings_button_h)
-
-///|
-// kept across runs: a value (no field of it changes)
-let foot_start : @ui.Style = @sf.foot_start(settings_button_h, button_pad)
-
-///|
-/// A block across a card's foot, its ground reaching past the card's words to the ladder's inset.
-// kept across runs: a value (no field of it changes)
-let block_across : @ui.Style = @sf.block_across
-
-///|
-/// A settings button's words in from its ends (button_box: 16).
-let button_pad : Double = 16.0
 
 ///|
 /// A card with a block in its foot corners: its foot the ladder's inset.
@@ -881,8 +847,8 @@ let card_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(settings_button
 let card_ui_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(@sf.button_height()))
 
 ///|
-/// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one
-/// (`on_card`, LocalOnCard). On every width, as the library's group is (docs/ui-panels.md 页面卡片: a group of rows on
+/// Rows on one rounded card, no lines between them (RowsCard): its rows know they are on one
+/// (`on_card`, LocalOnCard). On every width, as the library's group is (sf/page.mbt: a group of rows on
 /// a list card wide too; `boxed`, said where a page asked for the card in the wide frame before it was always one).
 fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
   ignore(boxed)
@@ -901,7 +867,7 @@ fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
 }
 
 ///|
-/// The rows' card itself, where its page puts it (Parts.kt RowsCard): its rows LIST_PAD in, knowing they are on one.
+/// The rows' card itself, where its page puts it: its rows LIST_PAD in, knowing they are on one.
 fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
   c.box(style=list_ground_now(), fn() {
     let was = on_card.val
@@ -913,7 +879,7 @@ fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
+/// Whether what is being drawn is on a list card: a PickRow's ground is then the card's
 /// padding in from its edge already. Set only while a list card's rows are drawn.
 let on_card : Ref[Bool] = Ref(false)
 
@@ -952,11 +918,11 @@ fn list_ground_now() -> @ui.Style {
 let list_ground_in_pane : @ui.Style = @ui.style(w=Full, p=@sf.room_of(@sf.corner_inset), radius=@sf.card_radius, bg=Card, clip=true)
 
 ///|
-/// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), what it holds
-/// CARD_PAD less LIST_PAD in all round (20 from the card's edges, as a card's words), 12 apart; tapped when `key` is given. True on
-/// the frame after a tap. `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
+/// A row of a list card: its ground concentric with the card's (LIST_ROW_CORNER), what it holds
+/// CARD_PAD less LIST_PAD in all round (20 from the card's edges, as a card's words), 12 apart; tapped when `key` is given, `on_press`
+/// what tapping it does, as it is let go (@sf.press_does). `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
 /// whether it is the card's first row, its last).
-fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool)) -> Bool {
+fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool), on_press? : () -> Unit) -> Unit {
   let id = if key == "" { 0 } else { c.id(key) }
   let row = fn(style : @ui.Style) {
     // (one that is tapped as high as a press's room at least, whatever it holds)
@@ -973,7 +939,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
     None => row(if wide.val { wide_list_line } else { list_line })
     Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
   }
-  id != 0 && hit(c, id)
+  @sf.press_does(c, id, id != 0, on_press)
 }
 
 ///|
@@ -1089,11 +1055,11 @@ fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 ///|
 /// The wide frame's row words (pages.css.ts listRow, cardRowText: 13; what is under them 12).
 // kept across runs: a value (no field of it changes)
-let wide_row_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full)
+let wide_row_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, weight=Medium, wrap=false, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, w=Full)
+let wide_row_title_lines : @ui.TextStyle = @ui.text_style(size=Body, color=Fg, weight=Medium, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1104,23 +1070,20 @@ let wide_row_sub : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wra
 let wide_row_sub_lines : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full, balance=true)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wide_value : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
 /// A row's title: the body's words on one line, as wide as the row lets them.
 // kept across runs: a value (no field of it changes)
-let row_title_words : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@sf.full_words)
+let row_title_words : @ui.TextStyle = @sf.body.then(row_title_strong).then(@sf.one_line).then(@sf.full_words)
 
 ///|
-/// A row's title with a tag after it: its words' width, on one line.
+/// A row's title as strong as the library's rows' titles (link_row's, a switch row's: Medium), so a page's rows of this
+/// file and of the library read as one (2026-11-06, 左子健: 共享调试的标题为啥没有加粗，为啥跟别的设置项不一样; 检查所有同类问题).
 // kept across runs: a value (no field of it changes)
-let row_title_tagged : @ui.TextStyle = @sf.body.then(@sf.one_line)
+let row_title_strong : @ui.TextStyle = @ui.text_style(weight=Medium)
 
 ///|
 /// A row's title in lines where it is long.
 // kept across runs: a value (no field of it changes)
-let row_title_lines : @ui.TextStyle = @sf.body.then(@sf.full_words)
+let row_title_lines : @ui.TextStyle = @sf.body.then(row_title_strong).then(@sf.full_words)
 
 ///|
 /// A row's title with a line under it, as wide as the row lets them; the title in lines where it is long, or cut to
@@ -1202,76 +1165,7 @@ fn chevron(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A row that opens a page (SettingParts.kt GoRow): its icon (settings' rows: `icon`, design/icons' name), its name, how
-/// things stand at its end (`bad` in red; `dot`, a red dot before it), a chevron. True on the frame after a tap.
-fn go_row(
-  c : @ui.Ctx,
-  key : String,
-  title : String,
-  value? : String = "",
-  bad? : Bool = false,
-  dot? : Bool = false,
-  icon? : String = "",
-  lead? : () -> Unit,
-) -> Bool {
-  list_row(c, key~, fn() {
-    if icon != "" {
-      row_icon(c, icon)
-    }
-    match lead {
-      Some(f) => f()
-      None => ()
-    }
-    row_title(c, title)
-    if value != "" {
-      c.box(style=near_beside, max_w=220.0, fn() {
-        if dot {
-          presence_dot(c, "error")
-        }
-        // SettingParts.kt:258 (14sp)
-        let look = if wide.val { wide_value } else { @sf.value }
-        c.text(value, style=if bad { look.then(@sf.bad) } else { look }) |> ignore
-      })
-      |> ignore
-    }
-    chevron(c)
-  })
-}
-
-///|
-/// A settings row's icon, before its name (SettingParts.kt RowIcon): the line art in the muted ink.
-fn row_icon(c : @ui.Ctx, name : String) -> Unit {
-  let t = @sf.theme()
-  @sf.icon(c, name, size=@sf.row_icon, color=t.p.muted) |> ignore
-}
-
-///|
-/// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
-// kept across runs: a value (no field of it changes)
-let near_beside : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-/// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
-/// in still.fail's colours; the row it is in takes the tap. Its knob slides as mbui's switch's does
-/// (`@kit.switch_knob` by `key`, unique where it is asked); Android's jumps.
-pub fn switch(c : @ui.Ctx, key : String, on : Bool) -> Unit {
-  let t = @sf.theme()
-  @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
-    c,
-    {
-      on,
-      t: @kit.switch_knob(c, key, on),
-      hovered: false,
-      pressed: false,
-      held: 0.0,
-      focus_shown: false,
-      disabled: false,
-    },
-  )
-}
-
-///|
-/// A connect's presence, a station's state (PageParts.kt PresenceDot): online green, at work the accent, failing red,
+/// A connect's presence, a station's state: online green, at work the accent, failing red,
 /// else a hollow ring.
 fn presence_dot(c : @ui.Ctx, state : String) -> Unit {
   match state {
@@ -1305,7 +1199,7 @@ let dot_error : @ui.Style = dot_shape.then(@ui.css("bg=Danger"))
 let dot_ring : @ui.Style = dot_shape.then(@ui.css("border_color=Subtle"))
 
 ///|
-/// A check's tone as a presence dot (Stations.kt toneDot).
+/// A check's tone as a presence dot.
 fn tone_dot(tone : String) -> String {
   match tone {
     "green" => "online"
@@ -1316,15 +1210,15 @@ fn tone_dot(tone : String) -> String {
 }
 
 ///|
-/// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
+/// A person's picture: theirs once it is here, else their initial on their colour.
 pub fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
   @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.page_stint()) }, size)
 }
 
 ///|
-/// A word in the accent's wash (Settings.kt You: 你, 本机).
+/// A word in the accent's wash (本机), whole on its line: the words before it cut short instead.
 pub fn you(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=you_ground, fn() {
+  c.box(style=you_ground, keep=true, fn() {
     // Settings.kt:294 (12sp)
     c.text(words, style=you_words) |> ignore
   })
@@ -1337,18 +1231,18 @@ pub fn you(c : @ui.Ctx, words : String) -> Unit {
 let you_ground : @ui.Style = @ui.css("px=S1_5 radius=Md bg=AccentBg")
 
 ///|
-/// Small words in the accent's ink (in lines where there is no room: Settings.kt:294 has no maxLines).
+/// Small words in the accent's ink.
 // kept across runs: a value (no field of it changes)
 let you_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(color=AccentText))
 
 ///|
-/// The turning ring (Waiting.kt Spinner): 14, or 12 in a line of small text.
+/// The turning ring: 14, or 12 in a line of small text.
 pub fn spinner(c : @ui.Ctx, inline? : Bool = false) -> Unit {
   @sf.spinner(c, size=if inline { 12.0 } else { 14.0 }) |> ignore
 }
 
 ///|
-/// Where what someone set going shows how it is (Controls.kt DoingMark): a spinner while it is under way, a small red
+/// Where what someone set going shows how it is: a spinner while it is under way, a small red
 /// mark for a few seconds after it failed, why over it while it is pointed at (DoingMark.tsx DoingShown's tip: the
 /// row or the menu that asked may have gone, the toast too). Its tip named by where it is called, as its place is.
 #callsite(autofill(loc))
@@ -1415,7 +1309,7 @@ fn note_waits(note : Json?) -> Bool {
 }
 
 ///|
-/// What the page is for, said where its list is empty (PlaceRows.kt PlaceEmpty).
+/// What the page is for, said where its list is empty.
 fn place_empty(c : @ui.Ctx, words : String, note? : String = "") -> Unit {
   c.box(style=place_empty_box, fn() {
     // PlaceRows.kt:55 (14sp)
@@ -1434,7 +1328,7 @@ fn place_empty(c : @ui.Ctx, words : String, note? : String = "") -> Unit {
 let place_empty_box : @ui.Style = @ui.css("w=Full px=S8 py=S10 gap=S2 align=ACenter")
 
 ///|
-/// A main action as wide as where it is (Security.kt WideButton): 46 high; primary in ink (red when `danger`), the
+/// A main action as wide as where it is: 46 high; primary in ink (red when `danger`), the
 /// other the ink at 8%.
 fn wide_button(
   c : @ui.Ctx,
@@ -1444,7 +1338,8 @@ fn wide_button(
   busy? : Bool = false,
   enabled? : Bool = true,
   danger? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let ground = if !primary {
@@ -1480,11 +1375,11 @@ fn wide_button(
     }
   })
   |> ignore
-  enabled && !busy && hit(c, id)
+  @sf.press_does(c, id, enabled && !busy, on_press)
 }
 
 ///|
-/// A wide button's height (Security.kt WideButton: 46).
+/// A wide button's height.
 let wide_button_h : Double = 46.0
 
 ///|
@@ -1492,56 +1387,6 @@ let wide_button_h : Double = 46.0
 /// (Security.kt WideButton: padding(horizontal = 20.dp)).
 // kept across runs: a value (no field of it changes)
 let wide_button_box : @ui.Style = @ui.css("row w=Full px=S5 radius=Full gap=S2 align=ACenter justify=JCenter")
-
-///|
-/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, rippled where it is pressed (not when off);
-/// its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
-/// 12 in and rounded concentric with the card, as a ListRow.
-// kept across runs: a value (no field of it changes)
-let pick_room : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line_off : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line : @ui.Style = pick_line_off
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_card_line_off : @ui.Style = pick_line_off.then(@ui.css("px=S3 radius=Inner"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_card_line : @ui.Style = pick_line.then(@ui.css("px=S3 radius=Inner"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_label_line : @ui.Style = near_beside.then(@sf.full_width)
-
-///|
-/// A word at a row's end that does something (Settings.kt RowAction: 移除, 撤回): a spinner in its place while it is
-/// under way, a red mark before it a moment after it failed. True on the frame after a tap.
-fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : String?) -> Bool {
-  if busy {
-    spinner(c)
-    return false
-  }
-  let id = c.id(key)
-  c.box(style=near_beside, fn() {
-    doing_mark(c, false, failed)
-    c.box(id~, fn() {
-      // Settings.kt:288 (14sp)
-      c.text(label, style=@sf.value.then(@sf.accent)) |> ignore
-      // Controls.kt pressText: rippled round its words, 6 past them on each side and 3 above and under, 8 round
-      @motion.ripple(c, id, press_corner, out_x=press_out, out_y=press_out / 2.0)
-    })
-    |> ignore
-  })
-  |> ignore
-  hit(c, id)
-}
 
 ///|
 /// A text button's ground under the finger past its words (Controls.kt pressText: PRESS_OUT on each side, half that
@@ -1557,7 +1402,7 @@ let press_corner : Double = 8.0
 let press_room : @ui.Style = @ui.css("p=S1")
 
 ///|
-/// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
+/// Words that do something when tapped (`on_press`, as the tap is let go: @sf.press_does).
 pub fn tap_text(
   c : @ui.Ctx,
   key : String,
@@ -1566,7 +1411,8 @@ pub fn tap_text(
   size? : Double = 15.0,
   said? : String = "",
   room? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let id = c.id(key)
   // `room`: 4 round its words, what it takes (BarSettings.kt's 设为当前, 删除: padding(4) inside what is tapped)
   let b = c.box(style=if room { press_room } else { @ui.style() }, id~, fn() {
@@ -1585,12 +1431,12 @@ pub fn tap_text(
   if said != "" {
     c.semantics(b, Button, id~, label=said)
   }
-  hit(c, id)
+  @sf.press_does(c, id, true, on_press)
 }
 
 ///|
-/// A round button in a bar (Parts.kt NavButton): its icon alone, 34 round. True on the frame after a tap.
-fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String = "") -> Bool {
+/// A round button in a bar: its icon alone, 34 round; `on_press`, what tapping it does, as it is let go.
+fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String = "", on_press? : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   // (34 round, off the scale; rippled over its circle: NavButton's clip(CircleShape).clickable; `said` what it is to a
@@ -1600,7 +1446,7 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, s
     @motion.ripple(c, id, 17.0)
   })
   |> ignore
-  hit(c, id)
+  @sf.press_does(c, id, true, on_press)
 }
 
 ///|
@@ -1609,7 +1455,7 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, s
 let round_button : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
 
 ///|
-/// A body of words (PageParts.kt Body): on a list card 12 and 12 in (its words 20 from the card's edge, as its rows'),
+/// A body of words: on a list card 12 and 12 in (its words 20 from the card's edge, as its rows'),
 /// else 16 and 14; 12 apart.
 fn body(c : @ui.Ctx, f : () -> Unit) -> Unit {
   c.box(style=if on_card.val { body_on_card } else { body_box }, f) |> ignore
@@ -1624,78 +1470,11 @@ let body_box : @ui.Style = @ui.css("w=Full px=S4 py=S3_5 gap=S3")
 let body_on_card : @ui.Style = body_box.then(@ui.css("px=S3 py=S3"))
 
 ///|
-/// A paragraph and a quieter one under it (Security.kt Para).
-fn para(c : @ui.Ctx, main : String, sub? : String = "") -> Unit {
-  c.box(style=@sf.full_width, fn() {
-    // Security.kt:105 (15sp, line 22)
-    c.text(main, style=@sf.paragraph.then(@sf.full_words)) |> ignore
-    if sub != "" {
-      // Security.kt:106 (15sp, line 22)
-      c.text(sub, style=@sf.lead.then(@sf.full_words)) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A quiet note (Security.kt Note).
+/// A quiet note.
 fn note(c : @ui.Ctx, words : String) -> Unit {
   // Security.kt:110 (12sp, line 18)
   c.text(words, style=@sf.note.then(@sf.full_words)) |> ignore
 }
-
-///|
-/// A small dot: on green, else warn or the line's grey (Security.kt Dot).
-fn dot(c : @ui.Ctx, on : Bool, warned? : Bool = false) -> Unit {
-  let t = @sf.theme()
-  c.box(
-    style=dot_shape,
-    bg=if on {
-      t.p.green
-    } else if warned {
-      warn
-    } else {
-      t.p.line
-    },
-    fn() {  },
-  )
-  |> ignore
-}
-
-///|
-/// A check's state in its words on a soft pill of its tone (Profiles.kt TonePill): green, the accent and amber in
-/// their inks; its ground its colour at 12% (amber's 14%), the chip's grey for neutral.
-fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
-  let t = @sf.theme()
-  let ink = match tone {
-    "green" => t.p.green_ink
-    "red" => t.p.red
-    "blue" => t.p.blue
-    "accent" => t.p.accent_text
-    "amber" => t.p.warn_ink
-    _ => t.p.muted
-  }
-  // (its ground its tone's at 12%, 14%: off the scale of opacities)
-  let ground = match tone {
-    "neutral" => t.p.chip
-    "amber" => @sf.alpha(ink, 0.14)
-    _ => @sf.alpha(ink, 0.12)
-  }
-  c.box(style=tone_pill_box, bg=ground, fn() {
-    // Profiles.kt:760 (12sp)
-    c.text(words, style=tone_pill_words, color=ink) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// TonePill: 6 in at its sides, 1 over and under, 6 round.
-// kept across runs: a value (no field of it changes)
-let tone_pill_box : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tone_pill_words : @ui.TextStyle = @sf.caption.then(@sf.one_line)
 
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
@@ -1748,101 +1527,10 @@ pub fn mono(
 let centre_column : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
-/// The core's done or waiting lead at the start of `s` (ui/StatusText.kt doneLead, waitLead; present.ts: 做完了,
-/// 做完了：…; 在等：…, 等待中; Done, Done: …; Waiting, Waiting: …): whether it is done, and how long the lead is.
-fn status_lead(s : String) -> (Bool, Int)? {
-  for w in ["做完了", "已完成"] {
-    if s == w {
-      return Some((true, w.length()))
-    }
-    if s.has_prefix(w + "：") {
-      return Some((true, w.length() + 1))
-    }
-  }
-  if s == "Done" {
-    return Some((true, 4))
-  }
-  if s.has_prefix("Done: ") {
-    return Some((true, 6))
-  }
-  for w in ["在等：", "等待："] {
-    if s.has_prefix(w) {
-      return Some((false, w.length()))
-    }
-  }
-  if s == "等待中" {
-    return Some((false, s.length()))
-  }
-  if s == "Waiting" {
-    return Some((false, 7))
-  }
-  if s.has_prefix("Waiting: ") {
-    return Some((false, 9))
-  }
-  None
-}
-
-///|
-/// A state in words, its done or waiting lead as a check or the wait mark before what follows it (ui/StatusText.kt).
-fn status_text(c : @ui.Ctx, s : String, style~ : @ui.TextStyle) -> Unit {
-  let t = @sf.theme()
-  match status_lead(s) {
-    Some((done, n)) => {
-      let reason = s.view(start_offset=n).to_owned()
-      c.box(style=status_line, fn() {
-        @sf.icon(c, if done { "check" } else { "wait" }, size=status_icon, color=t.p.muted) |> ignore
-        if reason != "" {
-          c.text(" " + reason, style~) |> ignore
-        }
-      })
-      |> ignore
-    }
-    None => c.text(s, style~) |> ignore
-  }
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_line : @ui.Style = @ui.css("row align=ACenter")
-
-///|
-/// A state's words, as small as where they stand has them: 11, 12, 13 (Connects.kt), muted, on one line.
-// kept across runs: a value (no field of it changes)
-let status_xs2 : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_xs : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let status_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-/// A state's lead as an icon, as tall as the words (StatusText.kt: 14).
-let status_icon : Double = 14.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let pick_line_ground : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S1,
-  py=@sf.pick_line_y,
-  gap=S3,
-  align=ACenter,
-  radius=@sf.pick_line_r,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let check_room : @ui.Style = @ui.style(w=@sf.check_room_w, align=ACenter)
-
-///|
-/// A page head's own action in the wide frame (ui.tsx Button with Plus): the library's button, its ＋ and words. True on
-/// the frame after a press.
-fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
-  @sf.button(c, label, key~, icon="plus")
+/// A page head's own action in the wide frame (ui.tsx Button with Plus): the library's button, its ＋ and words;
+/// `on_press`, what pressing it does.
+fn head_pill(c : @ui.Ctx, key : String, label : String, on_press~ : () -> Unit) -> Unit {
+  @sf.button(c, label, key~, icon="plus", on_press~)
 }
 
 ///|

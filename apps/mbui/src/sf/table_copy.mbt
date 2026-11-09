@@ -8,6 +8,9 @@
 // Shown as the table is pointed at (2026-10-30 用户：「表格右边的按钮改成 hover 表格那一行才显示」), its menu open or
 // it saying it copied, always to a finger: what a pointer over a thing shows (@sf.pointed_or_finger); its room kept
 // either way, so nothing moves as it comes and goes.
+//
+// Hung to the table's right, over nothing (the user, 2026-10-26: 「不要压在表格上」); a row over it and a button
+// inside its corner were tried and refused.
 
 ///|
 /// The key's size (icon_button's), and how far it is from the table and from what follows it (a press's room round it).
@@ -61,34 +64,25 @@ fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Uni
   }
   let copied = c.within(id, copied_ms)
   let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(shot) || copied
-  let seen = @kit.animate(
-    c,
-    key + "/copy-seen",
-    if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 },
-    transition=nav_fade,
-  )
+  // (built while it is seen or fading, till its fade's declared end; faded as it is drawn)
+  let to = if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 }
+  let seen = @motion.told(c, key + "/copy-seen", to, spec=nav_fade)
   let label = if copied { t("common.copied") } else { t("web-main.prose.copyTable") }
   c.box(style=@ui.style(px=room_of(table_key_gap), pt=room_of(y)), fn() {
-    if seen == 0.0 {
+    if to == 0.0 && seen.over(c) {
       // (its room, nothing in it to press)
       c.box(style=@ui.style(w=Fixed(table_key_size), h=Fixed(table_key_size)), fn() {  }) |> ignore
       return
     }
-    // (faded as its icon's ink: the button's own colours, so far on)
-    let th = theme()
+    // (faded whole, its ink and the ground it tints with it, as it is drawn)
     let icon = if copied { "check" } else { "copy" }
-    if icon_button(
-        c,
-        icon,
-        key=key + "/copy",
-        size=table_key_size,
-        round=true,
-        label~,
-        ink=alpha(th.p.text, seen),
-        quiet=alpha(th.p.muted, seen),
-      ) {
-      self.table_menu(shot, table, id)
-    }
+    let b = c.box(fn() {
+      icon_button(c, icon, key=key + "/copy", size=table_key_size, round=true, label~, on_press=fn() {
+        self.table_menu(shot, table, id)
+      })
+      |> ignore
+    })
+    c.look_by(b, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, seen.get(c)))) })
   })
   |> ignore
 }

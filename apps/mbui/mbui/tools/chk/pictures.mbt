@@ -1,4 +1,5 @@
-// Pictures checked: a renderer's lines (chk lines PNG), its shapes (chk shapes PNG), Android's round page (chk views-round LOG PNG)
+// Pictures checked: a renderer's lines (chk lines PNG), its shapes (chk shapes PNG), Android's round page (chk views-round LOG PNG),
+// a picture drawn again in a new context (chk images LOG)
 
 ///|
 fn picture(path : String) -> @png.Picture? {
@@ -410,4 +411,54 @@ fn shapes(args : Array[String]) -> Int {
   } else {
     1
   }
+}
+
+///|
+/// (The images' contract, kitdemo's MBUI_IMAGECHECK) the window pictured once the red picture, told ready again in the
+/// canvas's new context, was drawn again: as many red pixels in it as the picture has (its side in points at the
+/// window's scale, squared), all but its edges' row of each side
+fn images(args : Array[String]) -> Int {
+  if args.length() != 1 {
+    @sys.eprintln("chk images LOG")
+    return 2
+  }
+  let mut drawn : Array[String]? = None
+  for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
+    match line.find("IMAGECHECK drawn ") {
+      Some(i) => {
+        let ws = split_ws(line.view(start_offset=i + 17).to_string())
+        if ws.length() >= 3 {
+          drawn = Some(ws)
+        }
+      }
+      None => ()
+    }
+  }
+  let ws = match drawn {
+    Some(ws) => ws
+    None => {
+      say("images contract: the run did not say where it pictured the window (IMAGECHECK drawn)")
+      return 1
+    }
+  }
+  let pic = match picture(ws[0]) {
+    Some(p) => p
+    None => return 1
+  }
+  let side = (double_of_signed(ws[1]) * double_of_signed(ws[2])).round().to_int()
+  let mut red = 0
+  for y in 0..<pic.h {
+    for x in 0..<pic.w {
+      if near_max(pic.rgb(x, y), (255, 0, 0), 8) {
+        red += 1
+      }
+    }
+  }
+  let want = (side - 2) * (side - 2)
+  if red < want {
+    say("images contract: the picture not drawn again in the new context (\{red} red pixels, \{want} at least)")
+    return 1
+  }
+  say("images contract: the picture drawn again in the new context (\{red} red pixels)")
+  0
 }

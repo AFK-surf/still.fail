@@ -1,6 +1,6 @@
 // The archive (views/archive.rs): the archived chats of a scope's stations online in one list, newest first by the
 // day they were archived; only those whose title or last line has `q` in it or in which their station finds it (every
-// message, docs/search.md), and only the newest `limit` of them (it can be very long: the page asks for more as it is scrolled to its end). One on its way out of the archive from here is gone from it at once (local.ts).
+// message), and only the newest `limit` of them (it can be very long: the page asks for more as it is scrolled to its end). One on its way out of the archive from here is gone from it at once (local.ts).
 import * as format from "../format.ts";
 import type { Host } from "../host.ts";
 import { t } from "../i18n.ts";

@@ -1,17 +1,4 @@
-// still.fail's corner rule, measured (its docs/ui-panels.md, "所有带圆角的东西"): what has a ground of its own (a
-// button, a row, a field, a block) and lies in the corner of a rounded container stands as far from the two edges of
-// that corner, and its corner is concentric with the container's (smooth.mbt concentric: the container's less that
-// distance over 1.25, both corners smooth); a circle or a capsule there is as far from both, and the container's corner
-// that distance more than its own (ui-panels.md: not over 1.25, which would leave a crescent by the capsule; the
-// container's fault when not). A
-// container's corner is its own ground's, or a ground of its size laid under it as a layer. A test asks the frame it
-// drew (Tester::corner_faults); the gallery's components keep to it.
-//
-// What a page writes is a box's corner standing alone: in a container's corner, a smooth one's is worked out here
-// (corners_in_corners), so the concentric part holds by itself wherever the window or what it holds puts a box. What
-// is left to a page is where things stand, and which corners there are: the theme's ladder (Theme::corner_ladder), the
-// few corners nested things are round by, each the next one in at the ladder's step, and capsules' heights; the
-// check holds both to it.
+// The corner rule, checked on every frame a test draws (Tester::corner_faults).
 
 ///|
 /// Whether node `n` shows a ground of its own (a fill or an edge) and is drawn.
@@ -210,6 +197,8 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
     Some(tree) => tree.lit_all(true)
     None => ()
   }
+  // (how it is drawn changed by the test, no signal: built whole, as the frame after it is, frame_watch.mbt)
+  test_stepped()
   self.frame()
   let faults = c.with_tree_nodes(fn() { c.corner_faults() })
   c.lit_all = false
@@ -217,6 +206,7 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
     Some(tree) => tree.lit_all(false)
     None => ()
   }
+  test_stepped()
   self.frame()
   faults
 }
@@ -248,7 +238,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     i
   }
   tree_pictures.clear()
-  let held = if laid { tree.laid_held() } else { tree.drawn_held() }
+  tree_frame_ids.clear()
+  // (laid out, for what the old views hold worked out against what holds them: only what holds an old view, and what
+  // lies laid out where that does, as big (a ground laid beside it as a layer, Ctx::layer_grounds); what else of the
+  // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them)
+  let held = if laid { tree.laid_held_toward(fn(c) { c.hosted }) } else { tree.drawn_held() }
   // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
   let at : Array[Int] = Array::make(held.length(), -1)
   let last : Map[Int, Int] = Map([])
@@ -269,6 +263,8 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     let parent = if holder >= 0 { at[holder] } else { -1 }
     let n = Node::new()
     n.kind = kind_box
+    // (who it is among the frames: its tree node, sizes_steady.mbt)
+    n.ident = -(d.id.at * 65599 + d.id.gen) - 1
     n.x = d.x
     n.y = d.y
     n.fw = d.w
@@ -294,6 +290,8 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     n.clip = d.clips
     n.opacity = d.alpha
     n.tree_scrolls = tree.scrolls_now(d.id)
+    n.tree_corrected = tree.scroll_corrected(d.id)
+    n.tree_rows = tree.holds_rows(d.id)
     n.parent = parent
     if presses {
       n.hit = true
@@ -301,6 +299,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       n.id = -(k + 1)
     }
     let i = add(n)
+    tree_frame_ids[i] = d.id
     at[k] = i
     link(parent, i)
     // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
@@ -354,6 +353,7 @@ pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String
   let c = g()
   if lit {
     c.lit_all = true
+    test_stepped()
     self.frame()
   }
   let out : Array[String] = []
@@ -384,6 +384,7 @@ pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String
   }
   if lit {
     c.lit_all = false
+    test_stepped()
     self.frame()
   }
   out
@@ -489,8 +490,8 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         }
       }
       let (dx, dy) = corner_gaps(a, b, k)
-      // (a circle or a capsule is in the corner as a circle reads it: round_like)
-      let reach = if round { round_like(ra, room=c.container_room(ct)) } else { ra }
+      // (a circle or a capsule is in the corner by the radius as given)
+      let reach = if round { dmin(ra, c.container_room(ct)) } else { ra }
       // (by the window's corner, anything beside its arc counts as in it too: as near one edge as the corner is round,
       // and the other not past the arc by as much as the theme lets anything stand from an edge, as a bar's last
       // capsule 6 under the window's top and 16 in from its side; the user, 2026-10-30, 分享图片's 复制图片)
@@ -531,7 +532,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
                   "\{c.named(i)} (corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (corner \{ra}): linked to follow a corner \{src} round from \{e} in, it stands \{dx} and \{dy} from its edges",
                 )
               } else if ls[k].radius(corner_roots()) > dmin(b.fw, b.fh) / 2.0 + 0.5 &&
-                (round_like(ra, room=c.container_room(ct)) - (dmax(dx, dy) + rb)).abs() > 0.5 {
+                (dmin(ra, c.container_room(ct)) - (dmax(dx, dy) + rb)).abs() > 0.5 {
                 // A link can ask for a radius larger than its box. The renderer clips that radius to half the box,
                 // producing a circle or capsule: check that shape instead of trusting the requested linked radius.
                 out.push(
@@ -545,11 +546,11 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         None => ()
       }
       let even = (dx - dy).abs() <= 0.5
-      // a round one at a corner: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高, the
-      // container's as round as a circle reads it, smooth.mbt round_like), the fault the container's when it does not
+      // a round one at a corner: it is the container whose corner follows it (its distance and its half, the
+      // container's by the radius as given), the fault the container's when it does not
       let room_a = c.container_room(ct)
       let in_step = if round {
-        (round_like(ra, room=room_a) - (dmax(dx, dy) + rb)).abs() <= 0.5
+        (dmin(ra, room_a) - (dmax(dx, dy) + rb)).abs() <= 0.5
       } else {
         (rb - concentric(ra, dmax(dx, dy))).abs() <= 0.5
       }
@@ -645,7 +646,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       if !(even && in_step) {
         out.push(
           if round && even {
-            "\{c.named(p)} (corner \{ra}): wants corner \{round_like_out(dmax(dx, dy) + rb, room=room_a)}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
+            "\{c.named(p)} (corner \{ra}): wants corner \{dmin(dmax(dx, dy) + rb, room_a)}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
           } else {
             "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} and \{dy} from its edges" +
             (
@@ -667,7 +668,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
 }
 
 ///|
-/// Whether a corner `ra` round (as a circle reads it: round_like) is too square for a circle or a capsule `rb` round
+/// Whether a corner `ra` round is too square for a circle or a capsule `rb` round
 /// (its half) to follow it: concentric
 /// there, it would stand nearer its edges than the theme lets what follows a corner stand (Theme::corner_fit near).
 fn Ctx::too_square(self : Ctx, ra : Double, rb : Double) -> Bool {
@@ -740,7 +741,7 @@ fn Ctx::holds_unfollowing(self : Ctx, holds : Map[Int, Array[(Int, Double)]], i 
   match holds.get(i) {
     Some(list) => {
       let b = self.nodes[i]
-      list.iter().any(fn(h) { h.0 == k && self.too_square(round_like(rb, room=dmin(b.fw, b.fh) / 2.0), h.1) })
+      list.iter().any(fn(h) { h.0 == k && self.too_square(dmin(rb, dmin(b.fw, b.fh) / 2.0), h.1) })
     }
     None => false
   }
@@ -749,14 +750,14 @@ fn Ctx::holds_unfollowing(self : Ctx, holds : Map[Int, Array[(Int, Double)]], i 
 ///|
 /// Whether what lies in a corner `ra` round, its own corner `rb`, could be concentric with it anywhere and in any shape
 /// the theme lets it (Theme::corner_fit): a circle or a capsule (`round`) where it stands its radius as a circle reads it
-/// (round_like, `room` the container's shorter half) less `rb` in, if that is a place it may stand; a smooth box as round as concentric asks where it stands, if some place it may stand makes that
+/// (at most `room`, the container's shorter half) less `rb` in, if that is a place it may stand; a smooth box as round as concentric asks where it stands, if some place it may stand makes that
 /// a corner it may have. Always, where the theme says no ranges.
 fn Ctx::fit_there(self : Ctx, ra : Double, rb : Double, round : Bool, room? : Double = 1.0e30) -> Bool {
   match self.corner_fit {
     None => true
     Some(f) =>
       if round {
-        self.place_fits(round_like(ra, room~) - rb)
+        self.place_fits(dmin(ra, room) - rb)
       } else {
         concentric(ra, f.far) <= f.most + 0.5 && concentric(ra, f.near) >= f.least - 0.5
       }
@@ -961,10 +962,13 @@ let corner_line : Double = 6.0
 
 ///|
 /// Node `i` as a fault names it: the words built in it, else its nearest container's that has any (said so), where
-/// it is and how large, and its number in the frame.
+/// it is and how large, and its number in the frame, and where the source made the old view it is in
+/// (tester_sources.mbt).
 fn Ctx::named(self : Ctx, i : Int) -> String {
   let n = self.nodes[i]
-  let place = "at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}, node \{i}"
+  let src = self.old_source_said(i)
+  let place = "at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}, node \{i}" +
+    (if src == "" { "" } else { ", " + src })
   match self.words_cut(i) {
     Some(w) => "「\{w}」 (\{place})"
     None => {
@@ -1059,6 +1063,12 @@ fn Ctx::scroll_still(self : Ctx, q : Int, st : Sideways) -> Bool {
 /// frame's (Ctx::with_tree_nodes).
 // kept across runs: emptied before and after each time the tree's nodes are taken in
 let tree_pictures : Set[Int] = Set::new()
+
+///|
+/// Which of the window's tree's nodes each of them is, by its node here, while they are among the frame's
+/// (Ctx::with_tree_nodes): for a fault to say where it was made (sizes_steady.mbt).
+// kept across runs: emptied each time the tree's nodes are taken in
+let tree_frame_ids : Map[Int, @view.NodeId] = {}
 
 ///|
 /// The nodes said to be pictures (Role Image) this frame, the old views' and the tree's (in_picture).
@@ -1437,7 +1447,7 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
     rs[k] = match own {
       Some(r) if !lies => r[k]
       Some(r) if r[k] >= half && kk >= half => r[k]
-      Some(r) if r[k] >= half && !self.place_fits(round_like(rk, room=self.container_room(ct)) - half) => r[k]
+      Some(r) if r[k] >= half && !self.place_fits(dmin(rk, self.container_room(ct)) - half) => r[k]
       Some(r) if r[k] < half - 0.5 && kk >= half - 0.5 => r[k]
       Some(r) if !self.corner_fits(kk) => r[k]
       _ => kk
@@ -1479,7 +1489,7 @@ fn alike(rs : FixedArray[Double]) -> Bool {
 /// corner there is round, as far from both), concentric with it, as corner_faults asks; the others its own. So no page says it, and a box the window or what it holds
 /// moves into a corner or out of one is right in both. In the order built, a container before what it holds. A capsule
 /// or a circle (its corner half its shorter side) is round by its shape: where it stands is what makes it concentric
-/// (ui-panels.md: 外圆角 = 距离 + 半高), which corner_faults checks; so is one too small for the corner it would have
+/// (its distance and its half), which corner_faults checks; so is one too small for the corner it would have
 /// there, and one at different distances from the two edges: each keeps its own.
 fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
   let inner : Set[Int] = Set::new()
@@ -1687,7 +1697,7 @@ let half_pi : Double = 1.5707963267948966
 /// The corners said `Around`, from where what lies in their corners is as laid out (corners_after_layout, first): the
 /// box in the container's corner (the nearest to two of its edges of the boxes with a corner of their own in it, through
 /// boxes with none: a key's round, filled or not, a button) as far from both; the container's corner that distance more
-/// than a circle's or a capsule's own (ui-panels.md: 外圆角 = 距离 + 半高; still.fail's Android Smooth(8.dp + 17.dp)), or
+/// than a circle's or a capsule's own (still.fail's Android Smooth(8.dp + 17.dp)), or
 /// concentric round a smooth one (smooth.mbt concentric_out, Android's concentricOut). As corner_faults checks it,
 /// the other way round. A box with nothing with a corner in its corner, one at different distances from the two edges,
 /// or one whose corner is `Inner` itself (each worked out from the other) is drawn square, and said so.
@@ -1743,7 +1753,7 @@ fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
         let b = self.nodes[i]
         let rb = b.corner_at(k)
         let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
-        a.radius = if round { round_like_out(dx + rb, room=dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
+        a.radius = if round { dmin(dx + rb, dmin(a.fw, a.fh) / 2.0) } else { concentric_out(rb, dx) }
       }
     }
   }
@@ -1860,7 +1870,7 @@ fn Ctx::scrolled_side_fault(self : Ctx, i : Int, ct : Container) -> String? {
     if want < least - 0.5 {
       continue
     }
-    let round_ok = rb >= half - 0.5 && (round_like(ra) - (dx + half)).abs() <= 0.5
+    let round_ok = rb >= half - 0.5 && (ra - (dx + half)).abs() <= 0.5
     if (dy - dx).abs() > 0.5 || !((rb - want).abs() <= 0.5 || round_ok) {
       let name = ["top left", "top right", "bottom right", "bottom left"][k]
       return Some(

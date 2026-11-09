@@ -1,7 +1,8 @@
-// Where the viewer's attention is, and what follows from it (attend.rs; the `notify` topic, `client.focus`): a
+// Where the viewer's attention is, and what follows from it (the `notify` topic, `client.focus`): a
 // chat's unread line, what is read, what comes in with a motion while a chat shows, which notices a page shows now,
 // and the workspace the viewer is in. Whether notifications are on, whether the system was asked, and which
 // workspaces are heard of, are kept on the device.
+import { Marks } from "./reactive.ts";
 import { Deferred, Effect } from "effect";
 import type { ChatOf, FocusCall, Permission } from "./attend-parse.ts";
 import type { Host } from "./host.ts";
@@ -18,7 +19,7 @@ const KEY = "notify";
 /// A notice no page took this long is not shown any more.
 const SHOW_FOR_MS = 30_000;
 
-/// Which notices are shown (docs/notifications.md): a card or an agent needing them (wait, block), something gone
+/// Which notices are shown: a card or an agent needing them (wait, block), something gone
 /// wrong, a turn done (never, only while no page of the app is in front, or always), someone else saying something.
 export type Kinds = { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean };
 export const ALL_KINDS: Kinds = { wait: true, failed: true, done: "away", message: true };
@@ -77,6 +78,9 @@ type Visit = {
 export type Due = { read: { thread: number; seq: number } };
 
 export class Attend {
+  /// What reads the settings and what is to be shown (`settings`), or where the UIs are (`focus`): made again as they
+  /// change (reactive.ts).
+  readonly #seen = new Marks();
   readonly #host: Host;
   #settings: Settings;
   #pushing = false;
@@ -108,22 +112,26 @@ export class Attend {
   }
 
   on(): boolean {
+    this.#seen.read("settings");
     return this.#settings.on;
   }
 
   /// What this device shows of notices, as its push registration says it (the cloud makes a push to it so).
   shows(): { kinds: Kinds; preview: boolean; muted: string[] } {
+    this.#seen.read("settings");
     return { kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, muted: [...this.#settings.muted] };
   }
 
   /// Whether a workspace's notices are heard of on this device.
   heard(workspace: string): boolean {
+    this.#seen.read("settings");
     return !this.#settings.muted.includes(workspace);
   }
 
   /// The `notify` topic: the settings, whether this device should hold a push registration, what to show now.
   /// `nameOf`: a workspace's name, put before the title of a notice of a workspace the viewer is not in.
   value(nameOf: (workspace: string) => string | null = () => null): J {
+    this.#seen.read("settings");
     const now = this.#host.nowMs();
     const show = this.#show.filter(([, at]) => now - at < SHOW_FOR_MS).map(([n]) => {
       const out = this.#settings.preview ? structuredClone(n) : { ...structuredClone(n), body: hidden(n.kind) };
@@ -145,6 +153,7 @@ export class Attend {
     this.#settings = s;
     if (!s.on) this.#show = [];
     else this.#show = this.#show.filter(([n]) => this.heard(of(n)));
+    this.#seen.touch("settings");
     return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)), { log: "Unhandled", message: "attention kept" });
   }
 
@@ -152,6 +161,7 @@ export class Attend {
   permit(state: Permission): boolean {
     if (state === this.#permission) return false;
     this.#permission = state;
+    this.#seen.touch("settings");
     return true;
   }
 
@@ -161,12 +171,14 @@ export class Attend {
 
   /// Any page in view.
   seen(): boolean {
+    this.#seen.read("focus");
     return [...this.#focus.values()].some((f) => f.visible);
   }
 
   /// Any page in view, or none said where it is (a UI that never says is taken as looking): what is measured only to
   /// be shown (a station's connection) is measured only then.
   shown(): boolean {
+    this.#seen.read("focus");
     return this.#focus.size === 0 || this.seen();
   }
 
@@ -211,6 +223,7 @@ export class Attend {
 
   /// The workspaces the viewer is in; null while no UI says.
   current(): Set<string> | null {
+    this.#seen.read("focus");
     const ofUis = (inView: boolean) => new Set([...this.#focus.values()].filter((f) => f.visible || !inView).flatMap((f) => (workspaceOf(f) !== null ? [workspaceOf(f)!] : [])));
     const shown = ofUis(true);
     const all = shown.size === 0 ? ofUis(false) : shown;
@@ -236,6 +249,7 @@ export class Attend {
     if (call.workspace !== null) f.workspace = call.workspace;
     this.#endVisits();
     this.#told();
+    this.#seen.touch("focus");
   }
 
   /// A UI went away.
@@ -243,6 +257,7 @@ export class Attend {
     this.#focus.delete(client);
     this.#endVisits();
     this.#told();
+    this.#seen.touch("focus");
   }
 
   #endVisits(): void {
@@ -276,6 +291,7 @@ export class Attend {
   /// A chat's value as computed, with its unread line (and what was said and started while it showed) put in, and
   /// what it asks of the core.
   chat(station: string, session: string | null, value: J): { due: Due[]; value: J } {
+    this.#seen.read("focus");
     const due: Due[] = [];
     const thread = value?.thread?.id;
     if (typeof thread !== "number") {
@@ -368,14 +384,18 @@ export class Attend {
       const looking = this.#showing(station, typeof n.thread === "number" ? n.thread : null, typeof n.session === "string" ? n.session : null).some((f) => f.visible && f.focused);
       if (!looking) this.#show.push([structuredClone(n), now]);
     }
-    return this.#show.length > before;
+    if (this.#show.length <= before) return false;
+    this.#seen.touch("settings");
+    return true;
   }
 
   /// A page takes a notice to show: the first to ask.
   claim(id: string): boolean {
     const before = this.#show.length;
     this.#show = this.#show.filter(([n]) => n.id !== id);
-    return this.#show.length < before;
+    if (this.#show.length >= before) return false;
+    this.#seen.touch("settings");
+    return true;
   }
 
   /// A push came: shown unless notifications are off, a page is in view, its kind is off, or its workspace is.

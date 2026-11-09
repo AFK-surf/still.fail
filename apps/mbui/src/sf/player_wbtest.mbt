@@ -47,7 +47,8 @@ let test_words : Map[String, String] = {
 ///|
 /// The player of `name` among `list` (a folder's films), a phone's (`narrow`: laid out Small) or a desktop's (on a
 /// Mac), what it went to and how often it went back counted; or in `window` (its width, height and platform);
-/// `subtitled`, a subtitle beside it the folder names (read as nothing).
+/// `subtitled`, a subtitle beside it the folder names (read as nothing); `keyed`: hosted in a node of the window's
+/// tree under the player's keymap (player_bindings), as the app hosts it, its keys its actions.
 fn player_tester(
   narrow : Bool,
   name : String,
@@ -58,6 +59,7 @@ fn player_tester(
   facts? : FileFacts = no_facts,
   window? : (Double, Double, Int),
   subtitled? : Bool = false,
+  keyed? : Bool = false,
 ) -> @ui.Tester {
   let (w, h, platform) = window.unwrap_or(if narrow { (390.0, 844.0, 1) } else { (1280.0, 800.0, 0) })
   viewer_reset()
@@ -70,15 +72,20 @@ fn player_tester(
   let siblings : Array[ViewerEntry] = list.map(fn(n) { { name: n, size: 1.0, mtime: 0.0, mime: "", kind, dir: false } })
   let file = film(name, kind~, facts~)
   let file = if subtitled { { ..file, beside: Some(fn(_, _) {  }) } } else { file }
-  @ui.Tester::new(
-    fn(c) {
-      begin(c) |> ignore
-      player(c, "k", file, siblings, back_label="影片", on_back=fn() { backs.push(1) }, on_go=fn(n) { gone.push(n) })
-    },
-    w~,
-    h~,
-    platform~,
-  )
+  let built = fn(c : @ui.Ctx) {
+    begin(c) |> ignore
+    player(c, "k", file, siblings, back_label="影片", on_back=fn() { backs.push(1) }, on_go=fn(n) { gone.push(n) })
+  }
+  if keyed {
+    let t = @ui.Tester::new(fn(_) {  }, w~, h~, platform~)
+    @ui.set_view_app(fn(root) {
+      root.keymap(Is(@view.Keymap::new(player_bindings()))) |> ignore
+      @ui.old(root, built).grow(Is(1.0)) |> ignore
+    })
+    t
+  } else {
+    @ui.Tester::new(built, w~, h~, platform~)
+  }
 }
 
 ///|
@@ -256,7 +263,7 @@ test "a desktop's: a double click in the middle of the film plays it, as a phone
 ///|
 test "a desktop's keys: Space plays, paused ← → step a frame, J L 15 s, ↑ the sound, M mutes, ⇧N the next one" {
   let gone = []
-  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4"], gone, [])
+  let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4"], gone, [], keyed=true)
   t.draw()
   t.key(@ui.key_space)
   assert_true(told(t, 1))

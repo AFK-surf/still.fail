@@ -136,7 +136,7 @@ export class Account extends DurableObject<Env> {
     const claims = await verifyToken(this.env, token, "refresh");
     if (!claims || !validId(requestId)) return denied();
     const hash = await digest(token);
-    // Its span says whose session it was and what became of the refresh (docs/telemetry.md, signing out).
+    // Its span says whose session it was and what became of the refresh (signing out).
     const notes: SpanNotes = { "stillfail.account": claims.sub, "stillfail.session": claims.sid, "stillfail.auth.presented_generation": claims.gen ?? -1 };
     const outcome = (response: Response, what: string, more: SpanNotes = {}) => noted(response, { ...notes, "stillfail.auth.outcome": what, ...more });
     return this.ctx.blockConcurrencyWhile(async () => {

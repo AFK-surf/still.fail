@@ -1,5 +1,5 @@
 // What the chats' people hear about while no client of theirs runs (admin/notify.rs and the station process's
-// notify.rs, docs/notifications.md): noticed from the store's changes as they come, worked out by the readers
+// notify.rs): noticed from the store's changes as they come, worked out by the readers
 // (src/read/notices.ts), gathered over a second and posted to the control plane (still.fail cloud's
 // `/v1/stations/notify`, Comma's `/v1/comma/stations/notify`: ControlPlane.notify), signed with the station's key, which
 // pushes them to people's devices. Only what happens from now on is noticed. A batch that cannot be
@@ -94,7 +94,7 @@ export class Notifier {
     const batch = this.waiting.splice(0, MAX_BATCH);
     if (this.waiting.length > 0) this.queue(this.waiting.splice(0));
     if (this.cloud.removed() || this.cloud.state === null) return;
-    // Each workspace's people hear of its own chats (docs/multi-workspace.md): one post a workspace, those of a
+    // Each workspace's people hear of its own chats: one post a workspace, those of a
     // workspace the station is no longer in dropped.
     const home = this.cloud.home();
     const by = new Map<string | undefined, Notice[]>();

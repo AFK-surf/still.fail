@@ -1,6 +1,7 @@
 // Links to a station's screens and its 共享调试 in an agent's words (screen_links.mbt, over chat_fixture.mbt's
 // chat-screens): their cards alone in a paragraph, their titles bare in a sentence, a tap opening the link; a tab's
-// preview asked for while its card is on the screen and the app shown, its frames acknowledged peek_ms apart.
+// preview asked for while its card is on the screen and the app shown, its frames acknowledged peek_ms apart; an
+// Android device's (H.264 alone) decoded in its card, two such at once.
 
 ///|
 /// A streamed call the app made: its params, and what is told its values.
@@ -17,6 +18,7 @@ fn screen_links_core(
   cancelled : Array[Int],
   calls : Array[Made],
   over? : (String, Topic) -> Topic = fn(_, t) { t },
+  h264? : Bool = false,
 ) -> @ui.Tester {
   new_run()
   let base = fixture("chat-screens")
@@ -31,10 +33,10 @@ fn screen_links_core(
       streams.length()
     },
     cancel: fn(id) { cancelled.push(id) },
-    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
+    topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, h264~)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -148,7 +150,7 @@ test "a screen its station no longer has: its title muted; a live one's in the i
   let t = screen_links_core(streams, cancelled, calls)
   scroll_to_words(t, "此屏幕已不存在")
   let c = t.ctx()
-  // (the phone's muted, as the card's line under it: ScreenLinks.kt's C.muted for both)
+  // (the phone's muted)
   assert_eq(inks_of(t, "浏览器标签页"), inks_of(t, "此屏幕已不存在"))
   assert_true(inks_of(t, "浏览器标签页") != [c.color(Fg)])
   scroll_to_words(t, "发布清单预览")
@@ -426,7 +428,7 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
   t.move(100.0, 300.0)
   t.move(140.0, 300.0)
@@ -493,4 +495,74 @@ test "a preview stops as the app goes behind, and is asked for again as it comes
   assert_eq(running(streams, cancelled).length(), 1)
   assert_eq(streams.length(), 2)
   t.assert_idle()
+}
+
+///|
+/// The card's preview as the app keeps it (one card in the fixture's chat has one).
+fn only_peek() -> @sfbase.Peek raise {
+  let all = @sfbase.peeks.values().to_array()
+  assert_eq(all.length(), 1)
+  all[0]
+}
+
+///|
+test "an Android device's preview: H.264 where the host decodes it, drawn from the card's decoder, each frame acknowledged once shown" {
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls, h264=true)
+  scroll_to_words(t, "发布清单预览")
+  let s = streams[running(streams, cancelled)[0] - 1]
+  assert_eq(field(Some(s.params), "codecs"), Some(["jpeg", "h264"]))
+  let view = text(Some(s.params), "view")
+  let acks = fn() { named(calls, "screen.ack") }
+  (s.on_value)({ "config": { "codec": "h264", "width": 320, "height": 640 } }, Some(b"\x01\x42\x00\x1f"))
+  (s.on_value)({ "frame": { "ts": 101, "key": true } }, Some(b"\x00\x00\x00\x01\x65"))
+  t.frame()
+  let st = only_peek().stream.unwrap()
+  assert_eq(@sfbase.video_peeks.val, 1)
+  // not acknowledged until its decoder says what became of it
+  assert_eq(acks().length(), 0)
+  t.stream_shows(st.id(), 101.0, 320, 640)
+  t.frame()
+  assert_eq(acks().length(), 1)
+  assert_eq(text(Some(acks()[0].params), "view"), view)
+  assert_eq(number(Some(acks()[0].params), "ts"), 101.0)
+  assert_true(t.drawlist().contains("stream 320x640"), msg="its picture drawn in the card")
+  // the next acknowledged as it is shown, nothing else built in between (the station paces it)
+  (s.on_value)({ "frame": { "ts": 102, "key": false } }, Some(b"\x00\x00\x00\x01\x41"))
+  t.frame()
+  t.stream_shows(st.id(), 102.0, 320, 640)
+  t.frame()
+  assert_eq(acks().length(), 2)
+  assert_eq(number(Some(acks()[1].params), "ts"), 102.0)
+  // gone from view: its decoder stopped, its place given back
+  t.app_state(false, false)
+  assert_eq(running(streams, cancelled).length(), 0)
+  assert_eq(@sfbase.video_peeks.val, 0)
+}
+
+///|
+test "an Android device's preview past the app's two videos: let go, its mark shown, asked again peek_again_ms on" {
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls, h264=true)
+  scroll_to_words(t, "发布清单预览")
+  // (two previews decoded elsewhere)
+  @sfbase.video_peeks.val = @sfbase.video_peeks_most
+  let s = streams[running(streams, cancelled)[0] - 1]
+  (s.on_value)({ "config": { "codec": "h264", "width": 320, "height": 640 } }, Some(b"\x01\x42\x00\x1f"))
+  t.frame()
+  assert_eq(running(streams, cancelled).length(), 0)
+  assert_true(only_peek().stream is None)
+  assert_eq(@sfbase.video_peeks.val, @sfbase.video_peeks_most)
+  // one of them gone; a while on, this one asks again
+  @sfbase.video_peeks.val = 1
+  t.run_for(@sfbase.peek_again_ms / 2.0)
+  assert_eq(streams.length(), 1)
+  t.run_for(@sfbase.peek_again_ms / 2.0 + @ui.move_most_ms)
+  assert_eq(streams.length(), 2)
+  assert_eq(running(streams, cancelled).length(), 1)
+  @sfbase.video_peeks.val = 0
 }

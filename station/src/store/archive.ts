@@ -4,7 +4,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
-import { type EntryRow, type Json, attachment, authorKind, quote, withLetter } from "./rows.ts";
+import { type EntryRow, type Json, attachment, authorKind, quote, withChange, withLetter } from "./rows.ts";
 import { STATION_AUTHOR } from "./rows.ts";
 
 export const threadFile = (archiveDir: string, thread: number): string => join(archiveDir, "threads", `${thread}.jsonl.zst`);
@@ -32,6 +32,7 @@ export function entryJson(e: EntryRow): Record<string, Json> {
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;
   if (e.letter !== undefined) v.letter = e.letter;
+  if (e.change !== undefined) v.change = e.change;
   return v;
 }
 
@@ -46,7 +47,7 @@ export function archivedEntry(e: Json): EntryRow {
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
     quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
-    ...withLetter(e.letter),
+    ...withLetter(e.letter), ...withChange(e.change),
   };
 }
 

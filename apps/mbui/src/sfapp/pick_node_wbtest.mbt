@@ -2,7 +2,7 @@
 // its choices, the one chosen checked, what each is under its words and its value at its row's end; long, a panel with
 // a search over its list, the words typed finding by label, note and value, Enter picking the first found, none found
 // said so, the list scrolling past its most. On 小屏 a sheet still. What each does, as the old presenter has it
-// (pick_popover), held whatever draws it.
+// (presenters.mbt), held whatever draws it.
 
 ///|
 /// Choices 第1项 … 第n项 (c1 … cn), the first noted 最近用过, the third valued 3 个.
@@ -78,10 +78,14 @@ test "pick, long, 大屏 keyboard and mouse: its search has the focus; 第11 typ
   )
   let all = (t.find("第2项") is Some(_), t.find("第11项") is Some(_))
   t.type_text("第11")
+  // (what no longer matches closing its room, gone once it has)
+  t.run_for(@ui.move_most_ms)
   let found = (t.find("第2项") is None, t.find("第11项") is Some(_), t.field_words())
   t.type_text("x")
+  t.run_for(@ui.move_most_ms)
   let none = t.find("没有匹配的结果") is Some(_)
   t.backspace()
+  t.run_for(@ui.move_most_ms)
   t.key(@ui.key_code_enter)
   t.frame()
   assert_eq(
@@ -280,19 +284,19 @@ test "pick, long, 大屏 keyboard and mouse: words typed in its search, the lang
   new_run()
   let base = fixture("chat")
   // (the core's language as `lang` says it, where it says one: large_about_tester's)
-  let lang = Ref("")
+  let lang = @signals.signal("")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
-      if name != "prefs" || lang.val == "" {
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
+      if name != "prefs" || lang.get() == "" {
         return got
       }
       let o = match got.value {
         Some(Object(m)) => m.copy()
         _ => {}
       }
-      o["lang"] = Json::string(lang.val)
+      o["lang"] = Json::string(lang.get())
       { ..got, value: Some(Json::object(o)) }
     },
   }
@@ -305,12 +309,15 @@ test "pick, long, 大屏 keyboard and mouse: words typed in its search, the lang
   t.run_for(@ui.move_most_ms)
   t.type_text("第1")
   let before = t.get(TextField, label="搜索")
-  lang.val = "en"
+  lang.set("en")
+  // The made-up prefs notify readers as the core would when the language changes.
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let after = t.focused()
   let words = t.field_words()
-  lang.val = ""
+  lang.set("")
   @sf.set_language(None)
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let back = t.focused().map(fn(s) { s.label })
   assert_eq(

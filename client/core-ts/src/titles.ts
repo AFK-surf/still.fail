@@ -53,7 +53,7 @@ export const isStationAuthor = (kind: unknown) => typeof kind === "string" && ST
 /// Whether a thread is one of the station's own chats.
 export const isOwnChat = (t: Titled | null | undefined) => isOwnSurface(t?.surface);
 
-/// A Feishu chat's id (`oc_…`, docs/feishu.md).
+/// A Feishu chat's id (`oc_…`).
 export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
 
 /// The name a chat has been given: by people, else by its agent; null when neither did.

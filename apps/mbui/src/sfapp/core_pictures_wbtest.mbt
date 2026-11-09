@@ -1,4 +1,4 @@
-// Pictures as Android's has them (Parts.kt rememberPicture, PeopleStack; RowPicture.kt Faces): one that could not be
+// Pictures as Android's has them (PeopleStack): one that could not be
 // had asked again when its page is put up anew; people stacked with the first over the rest, a row's starter over the others.
 
 ///|
@@ -105,7 +105,7 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
   let lin = drawn_in(t, @sf.avatar_color("lin"))
   let mo = drawn_in(t, @sf.avatar_color("mo"))
   let kai = drawn_in(t, @sf.avatar_color("kai"))
-  // 18 each, 2 in, 3 over the one before; a pixel more after who started it (RowPicture.css.ts)
+  // 18 each, 2 in, 3 over the one before; a pixel more after who started it
   assert_eq([lin[0].1, mo[0].1, kai[0].1], [2.0, 17.0, 33.0])
   assert_eq([lin[0].3, mo[0].3, kai[0].3], [18.0, 18.0, 18.0])
   // Mo started it: over Lin and Kai

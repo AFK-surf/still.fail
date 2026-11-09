@@ -1,0 +1,16 @@
+# 小屏, a finger: the home's chats, four one-second drags down the list, then let it coast. Its first rows are seen
+# before, and gone after: the drags hit the list and scrolled its rows.
+timeout 20000
+until 整理发布清单
+until 今天
+wait 500
+log measure
+drag 195 700 0 -430 1000
+drag 195 700 0 -430 1000
+drag 195 700 0 -430 1000
+drag 195 700 0 -430 1000
+wait 317
+gone 整理发布清单
+gone 今天
+until 天前
+exit

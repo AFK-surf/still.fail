@@ -42,7 +42,7 @@ test "a list's rows built on their page's time on top: kept ones built again as 
     })
     |> ignore
   })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let first = nav.pages[0].stint
   let built_first = (seen.get(0), beside.val)

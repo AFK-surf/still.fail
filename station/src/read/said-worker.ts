@@ -4,6 +4,11 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
 import { SAID_BATCH_SIZE, saidScanStep, type SaidScan } from "../store/said-state.ts";
+import { archiveLastStep } from "../store/archive-last.ts";
+import { legacyEditsMaintenanceStep, legacyMergedReadReady } from "../store/legacy-edits-build.ts";
+import { repairMergedEditLookup } from "../store/schema.ts";
+import { hasLegacySaid, legacySaidScanReady, legacySaidStep } from "../store/legacy-said-build.ts";
+import { pageLetterStep } from "../store/page-letter-index.ts";
 import { TURN_COUNT_BATCH, turnCountStep, type TurnCountScan } from "../store/turn-state.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 250 });
@@ -12,9 +17,10 @@ const scans = new Map<number, SaidScan>();
 const counts = new Map<string, TurnCountScan>();
 db.exec("PRAGMA synchronous = NORMAL");
 
-parentPort!.on("message", async (message: { thread: number; cancel?: boolean } | { session: string; cancel?: boolean }) => {
+parentPort!.on("message", async (message: { thread: number; cancel?: boolean; archiveLast?: boolean; legacyEdits?: boolean; legacySaid?: boolean; pageLetters?: boolean } | { session: string; cancel?: boolean }) => {
   if (message.cancel) {
     if ("thread" in message) {
+      if (message.archiveLast || message.legacyEdits || message.legacySaid || message.pageLetters) return;
       const scan = scans.get(message.thread);
       scans.delete(message.thread);
       if (scan && takeBackfill(priority, threadId)) {
@@ -37,11 +43,34 @@ parentPort!.on("message", async (message: { thread: number; cancel?: boolean } |
   let owns = false;
   try {
     if ("thread" in message) {
-      const step = saidScanStep(db, message.thread, scans.get(message.thread) ?? null, SAID_BATCH_SIZE,
-        () => (owns = takeBackfill(priority, threadId)));
-      if (step.scan === null) scans.delete(message.thread);
-      else scans.set(message.thread, step.scan);
-      result = { done: step.done };
+      if (message.pageLetters) {
+        owns = takeBackfill(priority, threadId);
+        if (owns) result = { done: pageLetterStep(db, message.thread).done };
+      } else if (message.legacySaid) {
+        owns = takeBackfill(priority, threadId);
+        if (owns) {
+          if (hasLegacySaid(db) && !legacySaidScanReady(db)) legacySaidStep(db);
+          result = { done: !hasLegacySaid(db) || legacySaidScanReady(db) };
+        }
+      } else if (message.legacyEdits) {
+        owns = takeBackfill(priority, threadId);
+        if (owns) {
+          if (!legacyMergedReadReady(db)) {
+            repairMergedEditLookup(db);
+            if (!legacyMergedReadReady(db)) legacyEditsMaintenanceStep(db);
+          }
+          result = { done: legacyMergedReadReady(db) };
+        }
+      } else if (message.archiveLast) {
+        owns = takeBackfill(priority, threadId);
+        if (owns) result = { done: archiveLastStep(db, message.thread).done };
+      } else {
+        const step = saidScanStep(db, message.thread, scans.get(message.thread) ?? null, SAID_BATCH_SIZE,
+          () => (owns = takeBackfill(priority, threadId)));
+        if (step.scan === null) scans.delete(message.thread);
+        else scans.set(message.thread, step.scan);
+        result = { done: step.done };
+      }
     } else {
       const step = turnCountStep(db, message.session, counts.get(message.session) ?? null, TURN_COUNT_BATCH,
         () => (owns = takeBackfill(priority, threadId)));

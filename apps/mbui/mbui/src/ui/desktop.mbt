@@ -466,7 +466,7 @@ let mark_blocks_selection : Int = 32
 let mark_cursor_at : Int = 6
 
 ///|
-/// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
+/// What is said of the target `id` as it is built, marked on its node (the way there's 1: what a frame
 /// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
 /// (Ctx::id_built). The shape said last is the one.
 fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
@@ -553,7 +553,7 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
 
 ///|
 /// `id` takes presses, said as it is built: the pointer's hand over it (Ctx::show_cursor). What reads its click
-/// (Ctx::clicked, a part's Response) says so by that; what takes its press without its click (a slider set where it
+/// (Ctx::on_press, a part's Response) says so by that; what takes its press without its click (a slider set where it
 /// is pressed, Ctx::pressed alone) says it here.
 pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_takes)
@@ -635,7 +635,7 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   // (under an open menu or dialog, none: they are its)
   if !self.keys_here() {
     return false
@@ -653,7 +653,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// read) has none to look for when none came, as on every frame of a phone without a keyboard.
 pub fn Ctx::keys_came(self : Ctx) -> Bool {
   ignore(self)
-  hand_events_read()
+  hand_keys_read()
   !desk.keys.is_empty()
 }
 
@@ -661,7 +661,7 @@ pub fn Ctx::keys_came(self : Ctx) -> Bool {
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return false
   }
@@ -687,7 +687,7 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 /// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
 /// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return []
   }
@@ -1259,15 +1259,55 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
     return None
   }
   let layer = self.layer_at(x, y)
+  // (what floats over what scrolls there, a page's bar, its buttons: its own words alone, never those scrolled under it)
+  let over = self.float_at(layer, x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if t.layer == OldLayer(layer) && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 && old_owner_open(t.island) {
+    if t.layer == OldLayer(layer) &&
+      x >= t.x0 &&
+      x < t.x1 &&
+      y >= t.y0 &&
+      y < t.y1 &&
+      old_owner_open(t.island) &&
+      (over is None || over.map(fn(o) { has_prefix(t.at, o) }) == Some(true)) {
       return Some(t)
     }
     k = k - 1
   }
   None
+}
+
+///|
+/// Where in the page the topmost box floating over what scrolls (Ctx::floats_over) in layer `layer` holding (x, y)
+/// stands (Ctx::page_order), as last laid out; none there.
+fn Ctx::float_at(self : Ctx, layer : Int, x : Double, y : Double) -> Array[Int]? {
+  let mut k = self.floating.length() - 1
+  while k >= 0 {
+    let i = self.floating[k]
+    if i < self.count {
+      let n = self.nodes[i]
+      if x >= n.x && x < n.x + n.fw && y >= n.y && y < n.y + n.fh && self.layer_of(i) == layer {
+        return Some(self.page_order(i))
+      }
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// Whether place `at` lies within place `p` (Ctx::page_order): `p`, or below it.
+fn has_prefix(at : Array[Int], p : Array[Int]) -> Bool {
+  if at.length() < p.length() {
+    return false
+  }
+  for i, v in p {
+    if at[i] != v {
+      return false
+    }
+  }
+  true
 }
 
 ///|

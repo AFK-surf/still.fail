@@ -1,8 +1,8 @@
 // What a chat offers as Android's does, over the fixture's chat with its views edited for each case: its station's tag
-// opens the station's card (PageParts.kt ChatStationChip), a notice's word installs a runtime or reports a failure,
-// one about a profile leads to it, one saying a chat was opened links to it (Chat.kt SystemNotice), a waiting message's
-// line installs (BlockedLine), a link to an archived chat reads as its title and its card says so (ChatRef.tsx), a
-// Slack user's name in a history offers 这是我 (History.kt SlackName), and the chat's sheet opens it in Slack or Feishu.
+// opens the station's card, a notice's word installs a runtime or reports a failure,
+// one about a profile leads to it, one saying a chat was opened links to it, a waiting message's
+// line installs (BlockedLine), a link to an archived chat reads as its title and its card says so, a
+// Slack user's name in a history offers 这是我, and the chat's sheet opens it in Slack or Feishu.
 
 ///|
 /// `v` with `more` said over its fields (an object; anything else as it is).
@@ -56,8 +56,8 @@ fn edited_core(
   let base = fixture(mode)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       // (a change the test makes is a new version of what the core says: `epoch` set as it makes it, followed as the
       // core's is)
       match t.value {
@@ -393,6 +393,7 @@ test "the chat's menu: one from Slack or Feishu opens there" {
         v
       }
     })
+    open_share(t)
     t.tap_text(words)
     assert_true(t.opened().contains(url), msg=words)
   }

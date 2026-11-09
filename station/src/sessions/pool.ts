@@ -1,4 +1,4 @@
-// The account pool (the Rust station's pool.rs): which of a station's profiles a session runs on. Only profiles with the
+// The account pool: which of a station's profiles a session runs on. Only profiles with the
 // chosen model (one they run) qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is
 // used up, is passed over. Accounts paid for already (subscriptions, memberships) go first: one billed per use (an API
 // key, a gateway) runs a session only when none of them can, and its sessions move back before a turn when one can again
@@ -10,14 +10,14 @@
 // Even, the one picked least recently. A session keeps its profile while it is usable (on another it starts afresh and
 // reads back what it needs: afresh.ts); on one nearly full it moves before a turn only when that loses little: its
 // runtime has just compacted its context, or is about to (`cheapToLeave`).
-// Also the reasoning levels a model offers (shapes reasoning.rs), which the pool's accounts decide.
+// Also the reasoning levels a model offers, which the pool's accounts decide.
 import { type Profile, runs, sameModel } from "./config.ts";
 import { billedPerUse } from "../agents/profiles.ts";
 import { COMPACTED_FROM } from "../store/rows.ts";
 
 type Json = any;
 
-/// How a profile is doing: its last check and allowance (profiles.rs ProfileCheck / ProfileQuota, camelCase JSON), the
+/// How a profile is doing: its last check and allowance (camelCase JSON), the
 /// account whose allowance it uses when known, and whether a turn ran into that allowance since it was last read.
 export type ProfileHealth = { check?: Json | null; quota?: Json | null; account?: string | null; spent?: boolean };
 

@@ -1,4 +1,4 @@
-// What the chats' people hear about (admin/notify.rs): a turn told by how it ended, a person's message to the others,
+// What the chats' people hear about: a turn told by how it ended, a person's message to the others,
 // the station's ⚠️ to everyone; gathered and handed on once.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -111,6 +111,7 @@ test("a notice reads its chat's name and whom to tell, nothing counted over the 
   const entries = store.entriesBefore(chat.id, null, 1);
   const heard = ops.saidNotices!(reader, { thread: chat.id, entries: entries.map((e) => ({ ...e, kind: "message", authorKind: "person", author: "bob@x.com", text: "在吗" })), since: 0, lang: "zh" }) as any[];
   assert.deepEqual(heard.map((n) => [n.kind, n.to.join(","), n.text]), [["message", "ada@x.com", "在吗"]]);
+  assert.equal(told.notices[0].title, heard[0].title);
   store.setChatMuted("ADA@x.com", chat.id, true);
   const muted = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
   assert.deepEqual(muted.notices.map((n: any) => n.to), [["bob@x.com"]], "the other participant still receives a push");
@@ -119,6 +120,7 @@ test("a notice reads its chat's name and whom to tell, nothing counted over the 
   const unmuted = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
   assert.deepEqual(unmuted.notices[0].to, ["ada@x.com", "bob@x.com"]);
   assert.deepEqual(asked.filter((sql) => /\bCOUNT\(/i.test(sql)), []);
+  assert.ok(!asked.some((sql) => sql.includes("m.n = t.person_n")), "own-chat titles do not read the first message");
 });
 
 test("a chat's people hear of its turns and of each other, once, gathered", async (t) => {
@@ -137,7 +139,7 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
       }
     },
   };
-  // In its home workspace "ws", and in "w2" it joined (docs/multi-workspace.md).
+  // In its home workspace "ws", and in "w2" it joined.
   const cloud: any = Object.assign(Object.create(Cloud.prototype), {
     state: { origin: "http://x", station: "s", workspace: "ws", workspace_name: "ws", name: "s", peers: [], revocations: [], joined: [{ workspace: "w2", workspace_name: "W2", name: "s", peers: [], revocations: [] }] },
     lock: null,

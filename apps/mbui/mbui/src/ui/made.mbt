@@ -1,4 +1,4 @@
-// What is made once (docs/retained.md, the way there's 2): a node made by what it is filled with (`fill`, a call of
+// What is made once (the way there's 2): a node made by what it is filled with (`fill`, a call of
 // Ctx::box or Ctx::text that makes that one node and nothing in it), what it holds made the same way, each followed by
 // a watch of its own (mbui/signals' Watch). Each frame what is made is put among the frame's nodes where its holder is
 // built (Ctx::made), each node as it was made where nothing its fill read changed, filled anew in its place where
@@ -72,7 +72,7 @@ pub fn made_box(fill : (Ctx) -> Unit, kids? : Array[Made] = []) -> Made {
 /// holds it, kept as its nodes by a watch of its own (Ctx::kept_as_nodes): built again only as what it read changes or
 /// what it is built from besides (`key`, worked out where it is put) does. Made once where it is (`name`), whatever
 /// else of the frame is built anew: what is made once holds it, and what it reads it reads itself, never what was
-/// handed it as it was made (docs/retained.md, the way there's 3: the old view as an island). `read_out`: what reads
+/// handed it as it was made (the way there's 3: the old view as an island). `read_out`: what reads
 /// the widgets reads it.
 pub fn made_island(
   name : String,
@@ -96,7 +96,7 @@ pub fn made_island(
 
 ///|
 /// What `body` builds the old way (Ctx::box and the rest), built each time it is put, kept as nothing: the frame's
-/// watch follows what it reads, as it follows the rest of the frame built the old way (docs/retained.md, the way
+/// watch follows what it reads, as it follows the rest of the frame built the old way (the way
 /// there's 3: the old view in what is made once, its islands kept as they are where it is the frame's).
 pub fn made_old(body : (Ctx) -> Unit) -> Made {
   let held = Ref(None)
@@ -266,6 +266,18 @@ let made_placed : Array[(Int, Node)] = []
 let made_presses : Map[Int, () -> Unit] = {}
 
 ///|
+/// What the second of two presses on each target does in place of a press (Ctx::on_double_press), by its id, as its
+/// box was last built.
+// kept across runs: written as what says it is built; a run's start clears it
+let made_double_presses : Map[Int, () -> Unit] = {}
+
+///|
+/// What a part beside each target does as a press on the target is let go, as well as the target's own (a popover its
+/// trigger opens: Ctx::on_press_beside), by its id, as it was last built.
+// kept across runs: written as what says it is built; a run's start clears it
+let made_beside_presses : Map[Int, () -> Unit] = {}
+
+///|
 /// A run begins: nothing made is kept.
 fn made_forget() -> Unit {
   for _, m in made_roots {
@@ -274,6 +286,8 @@ fn made_forget() -> Unit {
   made_roots.clear()
   made_placed.clear()
   made_presses.clear()
+  made_double_presses.clear()
+  made_beside_presses.clear()
   keys_taken.clear()
 }
 
@@ -367,7 +381,7 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
 
 ///|
 /// Node `n`, made and kept, put in `slot` (the next of the frame's) under what is being built, as alloc_part would
-/// put one made there; what the frame is told of it said again (docs/retained.md, the way there's 1: what its node
+/// put one made there; what the frame is told of it said again (the way there's 1: what its node
 /// does not hold).
 fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
   while self.nodes.length() <= slot {
@@ -412,16 +426,63 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 }
 
 ///|
-/// A press on target `id` (a tap, a click, Enter or Space where it takes the focus), let go on it, does `f`: then, as it
-/// is let go, outside any build, not read as the next frame is built (docs/retained.md, the model's 5: acting is a
-/// callback). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
-/// hand over it). What a frame read of the press (Ctx::clicked) it reads as before.
+/// A press on target `id` (a tap, a click, Enter or Space where it takes the focus, the Activate a screen reader asks),
+/// let go on it, does `f`: then, as it is let go, outside any build, not read as the next frame is built (the model's
+/// 5: acting is a callback); its moment the event's (Ctx::moment). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
+/// hand over it). It runs in the scope it was said in
+/// (Ctx::id, Ctx::scope): a key it names is the target or the field it named where it was said (in_said_scope).
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   if id == 0 {
     return
   }
   self.takes_presses(id)
-  made_presses[id] = f
+  // (read so: what said it is built again as it is pressed, as what reads a click is (a part's Response, hand.mbt), and
+  // draws what the press changed of what it holds)
+  hand.clicked.has(id) |> ignore
+  hand.asked.has(id) |> ignore
+  made_presses[id] = self.in_said_scope(f)
+}
+
+///|
+/// `f` as it runs outside any build, in the scope (Ctx::scope's) the build that said it was in then: the ids its keys
+/// name (Ctx::id) those of what was built where it was said, not the window's root's.
+fn Ctx::in_said_scope(self : Ctx, f : () -> Unit) -> () -> Unit {
+  let seed = self.id_seed
+  fn() {
+    let was = self.id_seed
+    self.id_seed = seed
+    f()
+    self.id_seed = was
+  }
+}
+
+///|
+/// The second of two presses on target `id` (a desktop's double click: the second let go within double_click_ms of the
+/// first, as near as double_click_slop) does `f` in place of what a press on it does (Ctx::on_press, which the first
+/// did): as it is let go, outside any build, its moment the event's. Said as `id`'s box is built.
+pub fn Ctx::on_double_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
+  if id == 0 {
+    return
+  }
+  self.takes_presses(id)
+  // (read so: what said it is built again as it is pressed twice, hand.mbt)
+  hand.double.has(id) |> ignore
+  made_double_presses[id] = self.in_said_scope(f)
+}
+
+///|
+/// A press let go on target `id` does `f` too, beside what the target's own handler does (Ctx::on_press, said by what
+/// the target is): what a part that stands by another's target does as it is pressed (a popover its trigger opens or
+/// shuts), as it is let go, outside any build, its moment the event's. Said as the part is built; its own, one for each
+/// target, not the target's.
+pub fn Ctx::on_press_beside(self : Ctx, id : Int, f : () -> Unit) -> Unit {
+  if id == 0 {
+    return
+  }
+  self.takes_presses(id)
+  // (read so: what said it is built again as the target is pressed, hand.mbt)
+  hand.clicked.has(id) |> ignore
+  made_beside_presses[id] = self.in_said_scope(f)
 }
 
 ///|
@@ -480,6 +541,21 @@ fn keys_taken_now(focus : Int, code : Int, mods : Int) -> Bool {
 }
 
 ///|
+/// A step up (`up`) or down asked of `id` (the Increment or Decrement a screen reader asks): given, at its moment, to
+/// what its last build said takes its keys (Ctx::on_key), as the Up or Down key is; whether it took it.
+fn made_stepped(id : Int, up : Bool) -> Bool {
+  match keys_taken.get(id) {
+    Some(w) if w.build >= builds_made.val => {
+      @signals.start_batch()
+      let took = @signals.untracked(fn() { (w.take)(if up { key_code_up } else { key_code_down }, 0) })
+      @signals.end_batch()
+      took
+    }
+    _ => false
+  }
+}
+
+///|
 /// A frame built: what takes the keys of a field it no longer said so of let go (its part not built nor kept).
 fn keys_taken_built() -> Unit {
   let last = builds_made.val
@@ -494,7 +570,23 @@ fn keys_taken_built() -> Unit {
 /// Target `id` let go of a press (a click, a tap, a key): what a node made said a press on it does, done now, outside
 /// any build (Made::on_press).
 fn made_pressed(id : Int) -> Unit {
-  match made_presses.get(id) {
+  run_press(made_presses.get(id))
+  run_press(made_beside_presses.get(id))
+}
+
+///|
+/// The second of two presses let go on target `id`: what was said it does (Ctx::on_double_press), done now, outside any
+/// build; whether one was said (none: it is a press as any other).
+fn made_double_pressed(id : Int) -> Bool {
+  let f = made_double_presses.get(id)
+  run_press(f)
+  f is Some(_)
+}
+
+///|
+/// A press's handler run outside any build: what it changes told once it has done.
+fn run_press(f : (() -> Unit)?) -> Unit {
+  match f {
     Some(f) => {
       @signals.start_batch()
       @signals.untracked(f)

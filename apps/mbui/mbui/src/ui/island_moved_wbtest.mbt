@@ -24,9 +24,9 @@ fn island_moved_tester(
       old(b, fn(c) {
         c.box(w=Px(300.0), h=Px(150.0), fn() {
           let id = c.id("go")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             clicks.val = clicks.val + 1
-          }
+          })
           c.box(w=Px(80.0), h=Px(40.0), id~, fn() { c.text("go words", wrap=false) |> ignore }) |> ignore
         })
         |> ignore
@@ -96,6 +96,35 @@ test "an old view laid out 30 in by its holder's padding, moved by an offset twi
 }
 
 ///|
+test "an old view in what is drawn off where it is laid out, drawn off again, then left so: each frame drawn as built whole, drawn elsewhere than before" {
+  let off = @signals.signal((0.0, 0.0), same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.width(Is(Some(400.0))).height(Is(Some(200.0))).drawn_off(By(fn() { off.get() })) |> ignore
+      old(b, fn(c) {
+        c.box(w=Px(300.0), h=Px(150.0), fn() {
+          c.box(w=Px(80.0), h=Px(40.0), fn() { c.text("go words", wrap=false) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      .width(Is(Some(300.0)))
+      .height(Is(Some(150.0)))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.clock_frame()
+  let before = t.frame_hash()
+  let (_, d1, w1) = island_frame(t, fn() { off.set((50.0, 30.0)) })
+  // (frames after with nothing changed: drawn where it is now, as built whole)
+  let (_, d2, w2) = island_frame(t, fn() {  })
+  let (_, d3, w3) = island_frame(t, fn() { off.set((0.0, 0.0)) })
+  assert_eq((d1 == w1, d1 != before, d2 == w2, d2 == d1, d3 == w3, d3 == before), (true, true, true, true, true, true))
+}
+
+///|
 test "an old view faded by its node: painted alone, drawn as built whole" {
   let alpha = @signals.signal(1.0, same=fn(a, b) { a == b })
   let t = island_moved_tester(
@@ -138,7 +167,7 @@ fn island_rooms(at : (Double, Double)) -> Array[String] {
           c.box(dir=Row, fn() {
             for k in 0..<2 {
               let id = c.id("key \{k}")
-              c.clicked(id) |> ignore
+              c.takes_presses(id)
               c.box(w=Px(20.0), h=Px(20.0), id~, fn() {  }) |> ignore
             }
           })
@@ -181,7 +210,7 @@ fn island_read(at : @signals.Signal[(Double, Double)], field : Field) -> Tester 
       old(b, fn(c) {
         c.box(w=Px(300.0), h=Px(150.0), align=AStart, fn() {
           let id = c.id("go")
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
           let k = c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  })
           c.semantics(k, Button, id~, label="go")
           c.editor("field", field~, font_size=10.0) |> ignore

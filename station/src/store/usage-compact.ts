@@ -54,8 +54,13 @@ const invalidateContext = (session: string, when = "1") => `
   UPDATE usage_minute_scope SET context_runtime = NULL, context_model = NULL, context_fast = NULL, context_uncertain = 1,
     context_after = (SELECT at FROM usage INDEXED BY usage_session WHERE session = ${session} ORDER BY at DESC LIMIT 1)
     WHERE session = ${session} AND (${when});`;
-const contextColumns = ["id", "at", "session", "turn", "profile", "runtime", "model", "subagent", "fast", "context", "context_window", "cache_write", "cache_write_long", "compact_counted"];
+const contextColumns = ["id", "at", "session", "turn", "profile", "runtime", "model", "subagent", "fast", "context", "context_window", "cache_write", "cache_write_long"];
 const contextChanged = contextColumns.map((c) => `OLD.${c} IS NOT NEW.${c}`).join(" OR ");
+const contextChange = `CREATE TRIGGER usage_compact_context_change AFTER UPDATE OF ${contextColumns.join(", ")} ON usage
+        WHEN (OLD.subagent = 0 OR NEW.subagent = 0) AND (${contextChanged}) BEGIN
+          ${invalidateContext("OLD.session")}
+          ${invalidateContext("NEW.session")}
+      END;`;
 
 export function hasCompactUsage(db: DatabaseSync): boolean {
   return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compact_since'").get() !== undefined;
@@ -117,6 +122,18 @@ export function installUsageSummaryChanges(db: DatabaseSync): void {
 
 export function compactCoverageSince(db: DatabaseSync): number {
   return (db.prepare("SELECT since FROM usage_compact_since WHERE id = 1").get() as { since: number }).since;
+}
+
+export function setCompactCoverageSince(db: DatabaseSync, since: number): void {
+  db.prepare("UPDATE usage_compact_since SET since = ? WHERE id = 1").run(since);
+}
+
+/// An old call taken in (usage-fill.ts) says nothing new of a session's context. A station whose trigger came before
+/// this would lose the context of every session it has old calls of. In the caller's write.
+export function keepContextOnFill(db: DatabaseSync): void {
+  const trigger = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'usage_compact_context_change'").get() as { sql: string } | undefined;
+  if (trigger === undefined || !trigger.sql.includes("compact_counted")) return;
+  db.exec(`DROP TRIGGER usage_compact_context_change; ${contextChange}`);
 }
 
 export function compactUsageSince(db: DatabaseSync): number {
@@ -260,11 +277,7 @@ export function installCompactUsage(db: DatabaseSync, now: () => number): void {
       CREATE TRIGGER usage_compact_context_old_add AFTER INSERT ON usage WHEN NEW.compact_counted = 0 AND NEW.subagent = 0 BEGIN
         ${invalidateContext("NEW.session")}
       END;
-      CREATE TRIGGER usage_compact_context_change AFTER UPDATE OF ${contextColumns.join(", ")} ON usage
-        WHEN (OLD.subagent = 0 OR NEW.subagent = 0) AND (${contextChanged}) BEGIN
-          ${invalidateContext("OLD.session")}
-          ${invalidateContext("NEW.session")}
-      END;
+      ${contextChange}
       CREATE TRIGGER usage_compact_add AFTER INSERT ON usage WHEN NEW.compact_counted = 1 BEGIN
         ${scope("NEW")}
         ${add("NEW")}

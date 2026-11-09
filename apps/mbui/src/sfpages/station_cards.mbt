@@ -1,4 +1,4 @@
-// What a station's page shows of the machine and its software (ember web/src/components.tsx MeterDials, Dial;
+// What a station's page shows of the machine and its software (still.fail web/src/components.tsx MeterDials, Dial;
 // cloud/StationCards.tsx Net, HostDetails; Versions.tsx SoftwareList, SoftwareRow; MachineLogins.tsx LoginsSection,
 // PastRow; their css.ts), all of it as the core says it.
 
@@ -6,22 +6,24 @@
 /// A machine's CPU, memory and disk (MeterDials): each what is left large over its cells, filled as far as is used,
 /// its name and its total under them.
 fn meter_dials(c : @ui.Ctx, meters : Array[Json], details? : Array[String] = [], columns? : Int = 0) -> Unit {
-  @sf.dials(
-    c,
-    meters.map(fn(m) {
-      let mv = Some(m)
-      {
-        number: text(mv, "big"),
-        unit: text(mv, "unit"),
-        fill: 100 - count(mv, "left"),
-        level: text(mv, "level"),
-        label: text(mv, "title"),
-        note: text(mv, "total"),
-      }
-    }),
-    details~,
-    columns~,
-  )
+  @sf.dials(c, meters.map(meter_dial), details~, columns~)
+}
+
+///|
+/// A meter as its dial: what is left large, filled as far as is used, its name and its total under (each its short
+/// words too).
+fn meter_dial(m : Json) -> @sf.Dial {
+  let mv = Some(m)
+  {
+    number: text(mv, "big"),
+    unit: text(mv, "unit"),
+    fill: 100 - count(mv, "left"),
+    level: text(mv, "level"),
+    label: text(mv, "title"),
+    note: text(mv, "total"),
+    label_short: text(mv, "titleShort"),
+    note_short: text(mv, "totalShort"),
+  }
 }
 
 ///|
@@ -31,25 +33,42 @@ fn station_resource_dials(c : @ui.Ctx, meters : Array[Json], gpus : Array[Json])
     meter_dials(c, meters)
     return
   }
-  let all = meters.copy()
-  all.append(gpus)
-  let models = meters.map(fn(_) { "" })
-  models.append(gpus.map(fn(g) { text(Some(g), "model") }))
+  let (all, models) = station_dials_of(meters, gpus)
   meter_dials(c, all, details=models, columns=3)
 }
 
 ///|
-/// An allowance's windows on its profile's page (QuotaBars, not compact): each what is left large over its cells, as
-/// far as is left, its name and when it refills.
-pub fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
-  @sf.dials(
-    c,
-    windows.map(fn(w) {
-      let wv = Some(w)
-      let left = count(wv, "left")
-      { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills") }
-    }),
-  )
+/// The machine's meters and its GPUs as one row of dials, and what is said under each (a GPU's model; "" none).
+fn station_dials_of(meters : Array[Json], gpus : Array[Json]) -> (Array[Json], Array[String]) {
+  let all = meters.copy()
+  all.append(gpus)
+  let models = meters.map(fn(_) { "" })
+  models.append(gpus.map(fn(g) { text(Some(g), "model") }))
+  (all, models)
+}
+
+///|
+/// The machine's dials (station_resource_dials', as nodes), as `host` says them now.
+fn station_dials_node(p : @view.View, host : () -> Json?) -> Unit {
+  p.pick(fn() { items(host(), "gpus").length() > 0 }, fn(d, gpus) {
+    if gpus {
+      let both = fn() { station_dials_of(items(host(), "meters"), items(host(), "gpus")) }
+      @sf.dials_node(d, fn() { both().0.map(meter_dial) }, details=fn() { both().1 }, columns=3)
+    } else {
+      @sf.dials_node(d, fn() { items(host(), "meters").map(meter_dial) })
+    }
+  })
+}
+
+///|
+/// An allowance's windows on its profile's page as dials (QuotaBars, not compact; dials_node's): what is left of each,
+/// large over its cells, as far as is left, its name and when it refills.
+fn quota_dials_of(windows : Array[Json]) -> Array[@sf.Dial] {
+  windows.map(fn(w) {
+    let wv = Some(w)
+    let left = count(wv, "left")
+    { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills"), label_short: "", note_short: "" }
+  })
 }
 
 ///|
@@ -99,17 +118,88 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
 }
 
 ///|
+/// This device's connection to it (station_net's, as nodes), as `net` says it now: how it goes and packets lost, its
+/// round trip; beside them ↑ over ↓ (under them where the line has not the room).
+fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
+  let has = fn(key : String) { field(net(), key) is Some(Object(_)) }
+  p.box(fn(r) {
+    @sf.style_node(r, fn() { nt_row })
+    r.wraps(Is(Some(nt_lines))) |> ignore
+    r.box(fn(part) {
+      @sf.style_node(part, fn() { nt_part }, in_row=true)
+      part.cuts(Is(true)) |> ignore
+      part.box(fn(l) {
+        @sf.style_node(l, fn() { nt_line })
+        @sf.words_node(l, fn() { text(net(), "path") }, fn() { nt_words_cut }) |> ignore
+        l.show(fn() { has("loss") }, fn(f) { figure_node(f, fn() { field(net(), "loss") }) })
+      })
+      |> ignore
+      part.show(fn() { has("rtt") }, fn(x) {
+        x.box(fn(l) {
+          @sf.style_node(l, fn() { nt_line })
+          let parts = fn() {
+            let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
+            words.split("\u{0}").map(fn(p) { p.to_string() }).collect()
+          }
+          @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
+          figure_node(l, fn() { field(net(), "rtt") })
+          @sf.words_node(l, fn() { parts().get(1).unwrap_or("") }, fn() { nt_words_cut }) |> ignore
+        })
+        |> ignore
+      })
+    })
+    |> ignore
+    r.box(fn(rates) {
+      @sf.style_node(rates, fn() { nt_rates }, in_row=true)
+      for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
+        rates.box(fn(l) {
+          @sf.style_node(l, fn() { nt_rate })
+          @sf.words_node(l, fn() { way.0 }, fn() { nt_words }) |> ignore
+          l.box(fn(sp) {
+            @sf.style_node(sp, fn() { nt_speed }, in_row=true)
+            @sf.words_node(sp, fn() { text(net(), way.1) }, fn() { nt_figure }) |> ignore
+          })
+          |> ignore
+          @sf.words_node(
+            l,
+            fn() {
+              match text(net(), way.2) {
+                "" => ""
+                total => @sf.t("web-pages.stations.total", args=[("total", total)])
+              }
+            },
+            fn() { nt_words },
+          )
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A figure (figure's, as a node), as `f` says it now.
+fn figure_node(p : @view.View, f : () -> Json?) -> Unit {
+  @sf.words_node(p, fn() { text(f(), "text") }, fn() { figure_style(text(f(), "level")) }) |> ignore
+}
+
+///|
+/// A figure's words by its level: bold in the words' ink, in its level's colour when off.
+fn figure_style(level : String) -> @ui.TextStyle {
+  match level {
+    "amber" => nt_figure.then(@ui.text_style(color=WarnInk))
+    "red" => nt_figure.then(@ui.text_style(color=Danger))
+    _ => nt_figure
+  }
+}
+
+///|
 /// A figure (Figure): bold in the words' ink, in its level's colour when off.
 pub fn figure(c : @ui.Ctx, f : Json?) -> Unit {
-  c.text(
-    text(f, "text"),
-    style=match text(f, "level") {
-      "amber" => nt_figure.then(@ui.text_style(color=WarnInk))
-      "red" => nt_figure.then(@ui.text_style(color=Danger))
-      _ => nt_figure
-    },
-  )
-  |> ignore
+  c.text(text(f, "text"), style=figure_style(text(f, "level"))) |> ignore
 }
 
 ///|
@@ -200,9 +290,9 @@ fn software_list(c : @ui.Ctx, core : Core, station : String, updates : Array[Jso
       let checking = is_doing(core, ["software.check"], [("station", station)])
       let cid = c.id("software-check/" + station)
       if !checking {
-        if c.clicked(cid) {
+        c.on_press(cid, fn() {
           software_call(core, station, "software.check", [])
-        }
+        })
       }
       c.box(style=sw_check, id=cid, fn() {
         c.text(
@@ -230,16 +320,16 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
   let latest = text(v, "latest")
   let button = fn(label : String, primary : Bool) {
     if manager && flag(v, "updatable") {
-      if @sf.button(c, label, key="software/" + station + "/" + id, tone=if primary { Primary } else { Plain }, disabled=busy) {
+      @sf.button(c, label, key="software/" + station + "/" + id, tone=if primary { Primary } else { Plain }, disabled=busy, on_press=fn() {
         software_call(core, station, "software.update", [("id", str(id))])
-      }
+      }) |> ignore
     }
   }
   let repair = fn(label : String) {
     if manager && flag(v, "repairable") {
-      if @sf.button(c, label, key="software/" + station + "/" + id, tone=Primary, disabled=busy) {
+      @sf.button(c, label, key="software/" + station + "/" + id, tone=Primary, disabled=busy, on_press=fn() {
         software_call(core, station, "software.update", [("id", str(id)), ("repair", Json::boolean(true))])
-      }
+      }) |> ignore
     }
   }
   let own = id == "station"
@@ -253,8 +343,8 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
     })
     |> ignore
-    // its name and what is newer with updating it on its first line; its version, why it cannot be updated and its
-    // own switches under them, as wide as its words (lines of their own)
+    // its name and what is newer with updating it on its first line; its version, what an update says, why it cannot
+    // be updated and its own switches under them, as wide as its words (lines of their own)
     @sf.row_lines(c, spaced=true, fn() {
       c.box(style=sw_name_line.then(sw_name_grow), fn() {
         c.text(text(v, "name"), style=sw_name) |> ignore
@@ -269,13 +359,8 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
             Some(Number(p, ..)) => @sf.progress(c, "software/" + station + "/" + id, Some(p / 100.0), w=Px(sw_progress_w))
             _ => ()
           }
-          c.text(text(v, "updatingText"), style=sw_newer) |> ignore
         } else if state == "failed" {
-          let fid = c.id("software-failed/" + station + "/" + id)
-          c.box(id=fid, fn() { c.text(text(v, "failedText"), style=sw_failed) |> ignore }) |> ignore
-          if text(v, "message") != "" {
-            @sf.tip(c, "software-failed-tip/" + station + "/" + id, fid, text(v, "message"))
-          }
+          c.text(text(v, "failedText"), style=sw_failed) |> ignore
           if flag(v, "repairable") {
             repair(@sf.t("common.retry"))
           } else {
@@ -291,8 +376,6 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
         } else if flag(v, "downgrade") && latest != "" {
           c.text(latest, style=sw_newer) |> ignore
           button(@sf.t("web-main.versions.backToStable"), false)
-        } else if text(v, "done") != "" {
-          c.text(text(v, "done"), style=sw_newer) |> ignore
         }
       })
       |> ignore
@@ -302,15 +385,22 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       if text(v, "tipText") != "" {
         @sf.tip(c, "software-tip/" + station + "/" + id, vid, text(v, "tipText"))
       }
+      // (what an update under way or done says: on a line of its own, not beside its name)
+      if software_said(v) != "" {
+        c.text(software_said(v), style=sw_note) |> ignore
+      }
       if text(v, "note") != "" {
         c.text(text(v, "note"), style=sw_note) |> ignore
+      }
+      if state == "failed" && text(v, "message") != "" {
+        c.text(text(v, "message"), style=sw_note) |> ignore
       }
       // the station's own: which releases it takes, and whether it takes them by itself
       if switches {
         c.box(style=sw_switches, fn() {
           if beta && has(v, "channel") {
             let busy_ch = is_doing(core, ["software.channel"], [("station", station)])
-            // (what it means over it while it is pointed at: Versions.tsx's tips)
+            // 
             let line = c.id("software-beta-line/" + station)
             c.box(style=sw_switch_line, id=line, taps=false, points=true, fn() {
               c.text(@sf.t("web-main.versions.beta"), style=sw_switch_word) |> ignore
@@ -355,7 +445,7 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
 /// pressed open to them. Nothing when there are none. Away (`online` false), no card of one under way: it can be
 /// neither done nor cancelled until it is back.
 fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = true) -> Unit {
-  let view = (core.topic)("machineLogins", { "station": str(station) }).value
+  let view = (core.topic)("machineLogins", { "station": str(station) }).get().value
   let logins = items(view, "logins")
   let active = if online { logins.filter(fn(l) { flag(Some(l), "active") }) } else { [] }
   let tools = items(view, "tools")
@@ -366,7 +456,7 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = t
     if active.length() > 0 {
       c.box(style=lg_cards, fn() {
         for l in active {
-          login_card(c, core, station, text(Some(l), "id"))
+          login_card(c, core, station, text(Some(l), "id"), place="station")
         }
       })
       |> ignore
@@ -384,23 +474,24 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = t
           let said = join([text(tv, "summaryText"), chat].filter(fn(w) { w != "" }), " · ")
           // (none went through and the latest failed: said in red)
           let failed = flag(tv, "failed")
-          if @sf.link_row(
-              c,
-              "login-tool/" + station + "/" + name,
-              name,
-              note=if failed { "" } else { said },
-              trouble=if failed { said } else { "" },
-              folds=open,
-              // (its maker's mark, bare, in its colours; else a terminal's: one key for all told them apart by nothing)
-              lead=fn() {
-                c.box(style=lg_mark, fn() { @sf.tool_mark(c, text(tv, "mark"), 20.0) })
-                |> ignore
-              },
-              // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
-              tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
-            ) {
-            st_logins_open[station] = if open { "" } else { name }
-          }
+          @sf.link_row(
+            c,
+            "login-tool/" + station + "/" + name,
+            name,
+            note=if failed { "" } else { said },
+            trouble=if failed { said } else { "" },
+            folds=open,
+            // (its maker's mark, bare, in its colours; else a terminal's: one key for all told them apart by nothing)
+            lead=fn() {
+              c.box(style=lg_mark, fn() { @sf.tool_mark(c, text(tv, "mark"), 20.0) })
+              |> ignore
+            },
+            // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
+            tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
+            on_press=fn() {
+              st_logins_open[station] = if open { "" } else { name }
+            },
+          ) |> ignore
           if open {
             for l in items(tv, "tries") {
               let lv = Some(l)
@@ -430,7 +521,8 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = t
 
 ///|
 /// Which program's tries are open on a station's page, by station ("" none: closed again).
-let st_logins_open : Map[String, String] = {}
+// kept across runs: said as a program's row is pressed; login_cards_reset empties it
+let st_logins_open : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 // ── styles ──────────────────────────────────────────────────────────────
 

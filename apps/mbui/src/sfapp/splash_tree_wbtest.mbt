@@ -1,6 +1,5 @@
-// The splash, starting or failed, is the window's tree's nodes (app_tree's splash_tree), drawn as the app's old view
-// alone draws it (splash): the same glyphs, of the same colour, where they are; the same mark; the ground alone till
-// the splash's second where there is nothing to say at once.
+// The splash, starting or failed, is the window's tree's nodes (app_tree's splash_tree): its words, its lines in the
+// middle, and the mark; the ground alone till the splash's second where there is nothing to say at once.
 
 ///|
 /// A failure said in two lines, the second long enough to wrap in a phone's window.
@@ -13,27 +12,22 @@ fn splash_case(fatal : String?) -> Source {
   {
     ..base,
     fatal: fn() { fatal },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "accounts" {
         { value: None, error: None, version: 0 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
 }
 
 ///|
-/// What is drawn at `at` after the start, the window's tree's (`tree`) or the old view's alone: the glyphs (their
-/// places and colours) and the shapes.
-fn splash_drawn(fatal : String?, tree : Bool, at : Double) -> (Array[(Double, Double, Int64)], Array[(Double, Double, Double, Double, Double, Int64)]) {
+/// What is drawn at `at` after the start: the glyphs (their places and colours) and the shapes.
+fn splash_drawn(fatal : String?, at : Double) -> (Array[(Double, Double, Int64)], Array[(Double, Double, Double, Double, Double, Int64)]) {
   new_run()
   let src = splash_case(fatal)
-  let t = if tree {
-    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=800.0, platform=2)
-  } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=800.0, platform=2)
-  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=800.0, platform=2)
   t.run_for(at)
   (t.drawn_glyphs(), t.drawn_shapes())
 }
@@ -48,27 +42,27 @@ fn tree_says_meta() -> Bool {
 }
 
 ///|
-test "failed: the splash's words the window's tree's own, every glyph and the mark drawn as the old view alone draws them, from the first frame" {
-  let (old_glyphs, old_shapes) = splash_drawn(Some(failed_words), false, 0.0)
-  let (glyphs, shapes) = splash_drawn(Some(failed_words), true, 0.0)
+test "failed: the splash's words the window's tree's own, on more than two lines, and the mark, from the first frame" {
+  let (glyphs, shapes) = splash_drawn(Some(failed_words), 0.0)
   let own = tree_says_meta()
   let lines = glyphs.map(fn(g) { g.1 }).fold(init=[], fn(ys : Array[Double], y) { if ys.contains(y) { ys } else { ys + [y] } })
+  // (each glyph of the words, none of their spaces or line breaks)
+  let letters = failed_words.iter().filter(fn(ch) { ch != ' ' && ch != '\n' }).count()
   assert_eq(
-    (own, glyphs == old_glyphs, shapes == old_shapes, old_shapes.length() > 0, lines.length() > 2),
-    (true, true, true, true, true),
-    msg="old \{old_glyphs.length()} glyphs, \{old_shapes.length()} shapes; the tree's \{glyphs.length()}, \{shapes.length()}; first old \{old_glyphs[:3]}, tree \{glyphs[:3]}; lines \{lines}",
+    (own, glyphs.length() == letters, shapes.length() > 0, lines.length() > 2),
+    (true, true, true, true),
+    msg="the tree's \{glyphs.length()} glyphs of \{letters}, \{shapes.length()} shapes; lines \{lines}",
   )
 }
 
 ///|
-test "starting: the ground alone just before the splash's second, the mark drawn as the old view alone draws it just after" {
-  let before = splash_drawn(None, true, splash_label_ms - 50.0)
-  let (_, old_shapes) = splash_drawn(None, false, splash_label_ms + 50.0)
-  let (glyphs, shapes) = splash_drawn(None, true, splash_label_ms + 50.0)
+test "starting: the ground alone just before the splash's second, the mark alone just after" {
+  let before = splash_drawn(None, splash_label_ms - 50.0)
+  let (glyphs, shapes) = splash_drawn(None, splash_label_ms + 50.0)
   assert_eq(
-    (before.0.length(), before.1.length(), glyphs.length(), shapes == old_shapes, old_shapes.length() > 0),
-    (0, 0, 0, true, true),
-    msg="the tree's \{shapes.length()} shapes, the old view's \{old_shapes.length()}",
+    (before.0.length(), before.1.length(), glyphs.length(), shapes.length() > 0),
+    (0, 0, 0, true),
+    msg="the tree's \{shapes.length()} shapes",
   )
 }
 
@@ -126,8 +120,8 @@ test "failed and starting past the second: nothing of the splash an old view hos
       None => -1
     }
   }
-  let _ = splash_drawn(Some(failed_words), true, 0.0)
+  let _ = splash_drawn(Some(failed_words), 0.0)
   let failed = hosts()
-  let _ = splash_drawn(None, true, splash_label_ms + 50.0)
+  let _ = splash_drawn(None, splash_label_ms + 50.0)
   assert_eq((failed, hosts()), (0, 0))
 }

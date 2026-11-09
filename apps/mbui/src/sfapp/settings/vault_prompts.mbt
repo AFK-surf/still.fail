@@ -25,7 +25,7 @@ fn vault_prompts_reset() -> Unit {
 /// The latest device waiting on this one for a key, put up in a sheet when nothing else is (`free`: no sheet of the
 /// app's up): call each frame, over the pages.
 pub fn vault_prompts(core : Core, free : Bool) -> Unit {
-  let prompts = (core.topic)("lockPrompts", Map::new()).value
+  let prompts = (core.topic)("lockPrompts", Map::new()).get().value
   let asks = items(prompts, "asks")
   if prompts is Some(_) {
     key_asks_closed.retain(fn(d) { asks.iter().any(fn(r) { key_ask_of(r) == d }) })
@@ -55,7 +55,7 @@ fn key_ask_sheet(core : Core, r : Json) -> Unit {
   }
   @sf.panel(fill("web-pages.vault.promptTitle", [("device", text(rv, "deviceText"))]), from=Unanchored, gone=hide, fn(c, close) {
     // given the key elsewhere, or put away there: gone here too
-    let prompts = (core.topic)("lockPrompts", Map::new()).value
+    let prompts = (core.topic)("lockPrompts", Map::new()).get().value
     let now = items(prompts, "asks").iter().find_first(fn(x) { key_ask_of(x) == ask })
     if prompts is Some(_) && now is None {
       close()
@@ -67,13 +67,13 @@ fn key_ask_sheet(core : Core, r : Json) -> Unit {
       c.text(text(rv, "workspaceName") + " · " + text(rv, "vaultName"), style=key_ask_where) |> ignore
       c.box(style=key_ask_buttons, fn() {
         let giving = is_doing(core, ["vault.addDevice"], on)
-        if wide_button(c, "vault-key-give", tr("web-pages.vault.promptGive"), true, busy=giving) {
+        wide_button(c, "vault-key-give", tr("web-pages.vault.promptGive"), true, busy=giving, on_press=fn() {
           act(core, tr("web-pages.vault.addDeviceWhat"), "vault.addDevice", obj([("workspace", str(ws)), ("vault", str(vault)), ("device", str(device))]), done=tr("web-pages.vault.addedDevice"))
-        }
-        if wide_button(c, "vault-key-later", tr("web-pages.vault.promptLater"), false, enabled=!giving) {
+        })
+        wide_button(c, "vault-key-later", tr("web-pages.vault.promptLater"), false, enabled=!giving, on_press=fn() {
           close()
           hide()
-        }
+        })
       })
       |> ignore
     })

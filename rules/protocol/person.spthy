@@ -1,0 +1,86 @@
+/*
+ * A person's own lock and how a workspace's lock takes it, apart from lock.spthy: put in there, it
+ * left that theory's lemmas searching past their minute. The adversary holds the network and any device it takes.
+ *
+ * What is modelled:
+ *   - a device begins a lock of its own, and a device on it, given a new device's code face to face, signs it in;
+ *   - a member's device, one the workspace's lock has, says which lock is its person's;
+ *   - a station goes along a bound lock's chain, taking a key only as a key it has on that lock signed it.
+ * What is not: that the device binding is its person's own (proved in rules/src/role, `binds`), a device taken off a lock,
+ * the cryptography itself (perfect here).
+ *
+ * tamarin-prover --prove rules/protocol/person.spthy   (CI: .github/workflows/rules.yml `protocol`)
+ */
+theory StillfailPerson
+begin
+
+builtins: signing, hashing
+
+// A device of the workspace's lock, at its station.
+rule Member_Device:
+    [ Fr(~d), Fr(~st) ]
+  --[ Honest(pk(~d)) ]->
+    [ !Signer(~d), !Member(~st, pk(~d)), Out(pk(~d)), Out(~st) ]
+
+// A new device makes its key and shows the code of it.
+rule Device_Made:
+    [ Fr(~k) ]
+  --[ Made(pk(~k)), Honest(pk(~k)) ]->
+    [ !Signer(~k), !Shown(h(pk(~k))), Out(pk(~k)) ]
+
+// A device begins a lock of its own: the lock goes by its first key.
+rule Person_Begin:
+    [ !Signer(~k) ]
+  --[ Begun(pk(~k)) ]->
+    [ !OnPerson(pk(~k), ~k) ]
+
+// A device on a lock, given the code face to face, signs a key in.
+rule Person_Approve:
+    [ !OnPerson(root, ~a), In(pkNew), !Shown(h(pkNew)) ]
+  --[ Approved(root, pk(~a), pkNew) ]->
+    [ Out(<'pdevice', root, pkNew, pk(~a), sign(<'pdevice', root, pkNew>, ~a)>) ]
+
+// A member's device says which lock is its person's.
+rule Bind:
+    [ !Signer(~d), !Member(st, pk(~d)), In(root) ]
+  --[ Binds(pk(~d), root) ]->
+    [ Out(<'person', root, pk(~d), sign(<'person', root>, ~d)>) ]
+
+// A station takes that from a device its lock has: the lock's first key is on it, there.
+rule Station_Binds:
+    [ !Member(st, pk(d)), In(<'person', root, pk(d), sign(<'person', root>, d)>) ]
+  --[ Bound(st, root, pk(d)) ]->
+    [ !PersonOn(st, root, root) ]
+
+// A station goes along a bound lock's chain: a key it has on it signed the next in.
+rule Station_Takes:
+    [ !PersonOn(st, root, pk(s)), In(<'pdevice', root, pkNew, pk(s), sign(<'pdevice', root, pkNew>, s)>) ]
+  --[ Takes(st, root, pkNew, pk(s)) ]->
+    [ !PersonOn(st, root, pkNew) ]
+
+// The adversary takes a device.
+rule Reveal:
+    [ !Signer(~k) ] --[ Reveal(pk(~k)) ]-> [ Out(~k) ]
+
+// ── what runs at all ──
+
+lemma a_lock_can_be_bound: exists-trace
+  "Ex st root d #i. Bound(st, root, d) @ i & not (Ex k #r. Reveal(k) @ r)"
+
+// ── what holds ──
+
+// A lock is bound only as a device's own key said so, or the adversary took it.
+lemma bound_as_its_device_said:
+  "All st root d #i. Bound(st, root, d) @ i & (Ex #h. Honest(d) @ h) ==>
+      (Ex #j. Binds(d, root) @ j & j < i) | (Ex #r. Reveal(d) @ r & r < i)"
+
+// A key taken along a bound lock's chain as a device's own key signed it is one that device approved, or it was taken.
+lemma each_key_as_its_signer_approved:
+  "All st root pk by #i. Takes(st, root, pk, by) @ i & (Ex #h. Honest(by) @ h) ==>
+      (Ex #j. Approved(root, by, pk) @ j & j < i) | (Ex #r. Reveal(by) @ r & r < i)"
+
+// A key approved onto a lock is a device's that showed its code: no one in the middle swaps in their own.
+lemma approved_only_as_shown:
+  "All root a pk #i. Approved(root, a, pk) @ i ==> Ex #j. Made(pk) @ j & j < i"
+
+end

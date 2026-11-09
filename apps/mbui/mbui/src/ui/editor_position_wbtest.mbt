@@ -4,7 +4,7 @@ test "pasting a long code in a one-line field scrolls sideways and keeps all its
   let t = Tester::new(fn(c) {
     c.editor("code", field~, max_lines=1, plain=true, font_size=10.0) |> ignore
   }, w=120.0, h=100.0, platform=0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   t.tap(10.0, 5.0)
   let code = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -53,7 +53,7 @@ test "a field in a list row keeps its text origin when the pointer rebuilds the 
       }) |> ignore
     }, stick_end=true) |> ignore
   }, w=600.0, h=400.0, platform=3)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   for (x, y) in [(300.0, 250.0), (590.0, 250.0), (300.0, 260.0), (590.0, 260.0)] {
     t.move(x, y)
     let c = g()

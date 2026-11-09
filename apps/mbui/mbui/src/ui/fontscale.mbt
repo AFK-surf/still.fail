@@ -89,10 +89,11 @@ pub fn sp_from(scale : Double, px : Double) -> Double {
 /// said before the system's size of words applies.
 pub fn Ctx::sp_of(self : Ctx, px : Double) -> Double {
   let px = px / self.words_k
-  if self.font_scale == 1.0 {
+  let fs = font_scale()
+  if fs == 1.0 {
     px
   } else {
-    sp_from(self.font_scale, px)
+    sp_from(fs, px)
   }
 }
 
@@ -101,7 +102,9 @@ pub fn Ctx::sp_of(self : Ctx, px : Double) -> Double {
 /// this frame, made as much smaller as where they are drawn says (Ctx::words_smaller) (Ctx::text, rich and editor take
 /// sizes this way; what lays out round words measured by hand, too).
 pub fn Ctx::sp(self : Ctx, v : Double) -> Double {
-  let drawn = if self.font_scale == 1.0 { v } else { sp_at(self.font_scale, v) }
+  // (the system's size of words as the frame has it, followed: what is built at it built again as it changes)
+  let fs = font_scale()
+  let drawn = if fs == 1.0 { v } else { sp_at(fs, v) }
   drawn * self.words_k
 }
 

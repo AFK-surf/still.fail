@@ -1,8 +1,9 @@
-// What the clients show of a value, decided once (present.rs): times in words beside the times, and each topic's
+// What the clients show of a value, decided once: times in words beside the times, and each topic's
 // value through its shape (client/core-ts/src/shapes/schema.ts) as it goes out.
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
+import { authorNameOf } from "./entries.ts";
 import type { Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
@@ -16,6 +17,7 @@ import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
+import * as clock from "./clock.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
 import { isStationAuthor } from "./titles.ts";
@@ -28,8 +30,18 @@ const get = (v: unknown, k: string | number): J => getU(v, k);
 /// The time a value is put together for: now, and the viewer's offset from UTC.
 export type Clock = { now: number; offsetMin: number };
 
+/// The clock moved on to `c` (a value is put together for it): what reads a grain that changed is made again.
+export function clockAt(c: Clock): void {
+  clock.minute.set(`${Math.floor(c.now / 60_000)}/${c.offsetMin}`);
+  clock.day.set(`${format.localDay(c.now, c.offsetMin)}/${c.offsetMin}`);
+}
+
+const DAY_MS = 86_400_000;
+
 /// A moment in words (Stamp).
 export function stamp(ms: number, c: Clock): Record<string, unknown> {
+  // (a day or more past, its words are its day's: 昨天 18:12, 11月3日 18:12; nearer, or to come, the minute's)
+  (c.now - ms >= DAY_MS ? clock.day : clock.minute).get();
   return {
     past: ms <= c.now,
     at: ms,
@@ -49,6 +61,7 @@ export function leftLevel(used: number): [number, string] {
 }
 
 function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
+  clock.minute.get();
   const out = list.map((w) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
@@ -99,6 +112,7 @@ export function times(value: unknown, c: Clock): unknown {
     }
   }
   if ("windows" in map && "state" in map) {
+    clock.minute.get();
     const credits = map.credits;
     if (isObject(credits)) {
       const text =
@@ -145,6 +159,7 @@ export function ticks(topic: Topic): boolean {
 /// it does not allow is an error naming the field.
 /// A topic's shape; undefined for one that goes out as it is.
 export function shapeOf(topic: Topic): Ty | undefined {
+  if (topic.topic === "stations" && topic.brief === true) return { vec: "StationBrief" };
   return TOPIC_SHAPES[topic.topic];
 }
 
@@ -175,7 +190,7 @@ export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { 
 }
 
 
-// ── Sessions and rows (present.rs) ──
+// ── Sessions and rows ──
 
 const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 
@@ -191,16 +206,17 @@ export function ending(s: J): string | null {
 /// Where a session stands.
 export function sessionStatus(s: J): string {
   if (get(s, "process") === "running") return "running";
-  if ((u64(get(s, "pending")) ?? 0) > 0) return "queued";
   const turn = get(s, "lastTurn");
-  if (!isObject(turn)) return "idle";
   // A turn not ended yet is running, whatever `process` says: the station reads its process states before its
-  // database (read/pool.ts), so a turn that has just begun can come with the process still cold.
-  if (turn.endedAt === null && (turn.outcome === null || turn.outcome === undefined)) return "running";
-  const e = ending(s);
+  // database (read/pool.ts), so a turn that has just begun can come with the process still cold. One that ended
+  // waiting on work it started is at work too, messages given it or not: the turn they begin takes over from it,
+  // not a queue between the two (its activity in the chat went and came back as words were sent, 2026-11-08).
+  const e = isObject(turn) ? ending(s) : null;
+  if (isObject(turn) && ((turn.endedAt === null && (turn.outcome === null || turn.outcome === undefined)) || e === "waiting")) return "running";
+  if ((u64(get(s, "pending")) ?? 0) > 0) return "queued";
+  if (!isObject(turn)) return "idle";
   if (e === "all_done") return "final";
   if (e === "need_help") return "block";
-  if (e === "waiting") return "running";
   const outcome = str(turn.outcome);
   return outcome === "failed" ? "failed" : outcome === "aborted" ? "aborted" : "unexpected";
 }
@@ -237,11 +253,15 @@ export function rowWatch(agents: J[]): J {
 
 /// What a finger's swipe asks before archiving a chat (only the swipe: its menu's and its key's 归档 ask only for a watch):
 /// its watch's words while one of its agents keeps watch, else while one is at work or waits on work it started (an
-/// archived one finishes its turn and waits on nothing after); null otherwise.
-export function swipeAsk(agents: J[]): string | null {
+/// archived one finishes its turn and waits on nothing after); and while someone else started it (`starter`: their
+/// name; archiving takes it off the whole workspace's lists, not the viewer's alone; `hides`: the viewer can hide it
+/// from their own list instead), said first, before what it is doing; null otherwise.
+export function swipeAsk(agents: J[], starter: string | null = null, hides = false): string | null {
   const watch = rowWatch(agents);
-  if (watch !== null) return watch.ask;
-  return agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+  const state = watch !== null ? (watch.ask as string) : agents.some((a) => markOf(a) === "run") ? t("core-views.present.run_ask") : null;
+  if (starter === null) return state;
+  const others = t(hides ? "core-views.present.others_ask_hide" : "core-views.present.others_ask", { name: starter });
+  return state === null ? others : t("core-views.present.asks_both", { first: others, then: state });
 }
 
 /// Waiting on its watch: one runs and the agent said its wait is that (`waitWatch`; said before it, taken so). Waiting on
@@ -732,10 +752,10 @@ export function profile(p: J): J {
   if (isObject(o.quota)) o.quota = legacyCodexQuota(o);
   if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access = { ...o.access, kind: "api-provider" };
   const blocked = get(o.quota, "state") === "blocked";
-  const [text, tone] = blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);
+  const [text, tone] = o.enabled === false ? [t("core-views.present.profile.disabled"), "neutral"] : blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);
   o.checkText = text;
   o.checkTone = tone;
-  o.trouble = profileTrouble(o);
+  o.trouble = o.enabled === false ? null : profileTrouble(o);
   // The kind of account it is listed under, as the workspace's list has it (views/profiles.ts).
   o.group = profileGroup(o);
   o.groupTitle = profileGroupTitle(o.group);
@@ -801,7 +821,7 @@ export function profile(p: J): J {
   const named = str(o.name) ?? "";
   const detail = withoutPart(withoutPart((detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, ""), named), kind === "subscription" ? (checkPlan ?? "") : "");
   // A machine's token-only check may have said `max` while its own login identifies that plan as Ultra.
-  o.checkLine = isObject(o.check)
+  o.checkLine = o.enabled === false ? "" : isObject(o.check)
     ? withoutPart(detail, o.runtime === "claude" && checkPlan?.toLowerCase() === "ultra" ? "max" : "")
     : t("core-views.present.profile.never_checked");
   return o;
@@ -945,7 +965,7 @@ export function host(h: J): J {
   const arch = str(src.arch) ?? "";
   // Each as the allowances are drawn: how much is left (`left`, its fill and cells) and that in words; on a machine's
   // own page, that large (`big` `unit`), what it is (`title`) and what it is out of (`total`).
-  const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; total: string }) => {
+  const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; titleShort?: string; total: string; totalShort?: string }) => {
     const p = format.round(Math.min(Math.max(percent, 0), 100));
     return { label, short, percent: p, left: 100 - p, level: p >= 90 ? "red" : p >= 75 ? "amber" : "ok", value, note, ...room };
   };
@@ -955,7 +975,7 @@ export function host(h: J): J {
   const cpuPercent = typeof busy === "number" ? busy * 100 : load * 100;
   const idle = format.round(100 - Math.min(Math.max(cpuPercent, 0), 100));
   const loadText = t("core-views.present.host.load", { load: format.fixed1(load * cpus) });
-  const cpuRoom = { remaining: t("core-views.present.host.idle", { percent: idle }), big: String(idle), unit: "%", title: t("core-views.present.host.cpu_idle"), total: loadText };
+  const cpuRoom = { remaining: t("core-views.present.host.idle", { percent: idle }), big: String(idle), unit: "%", title: t("core-views.present.host.cpu_idle"), titleShort: t("core-views.present.host.cpu_idle_short"), total: loadText };
   const cpu =
     typeof busy === "number"
       ? meter("CPU", "CPU", cpuPercent, `${format.round(cpuPercent)}%`, [loadText, cpuModel].filter((x) => x !== null).join(" · "), cpuRoom)
@@ -970,10 +990,10 @@ export function host(h: J): J {
   // What is left in gigabytes, large: one decimal below 100.
   const big = (bytes: number) => format.gb1(Math.max(bytes, 0)).replace(/ GB$/, "");
   const memory = meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null, {
-    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.out_of", { size: format.gb(memTotal) }),
+    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.memory_total", { size: format.gb(memTotal) }), totalShort: t("core-views.present.host.total_short", { size: format.gb(memTotal) }),
   });
   const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
-    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.out_of", { size: format.gb(diskTotal) }),
+    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.disk_total", { size: format.gb(diskTotal) }), totalShort: t("core-views.present.host.total_short", { size: format.gb(diskTotal) }),
   });
   // Each GPU is an ordinary resource dial: free capacity in its figure, used capacity in its cells.
   const gpus = (arr(src.gpus) ?? []).filter(isObject);
@@ -992,18 +1012,19 @@ export function host(h: J): J {
       : used !== null ? t("core-views.present.host.gpu_memory_used", { used: size(used) })
       : total !== null ? t("core-views.present.host.gpu_memory_total", { total: size(total) }) : cores;
     const title = t("core-views.present.host.gpu_idle", { gpu: label });
+    const titleShort = t("core-views.present.host.gpu_idle_short", { gpu: label });
     if (busy !== null) {
-      const m = meter(label, label, busy * 100, "", null, { remaining: "", big: String(format.round(100 - busy * 100)), unit: "%", title, total: memoryNote });
-      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+      const m = meter(label, label, busy * 100, "", null, { remaining: "", big: String(format.round(100 - busy * 100)), unit: "%", title, titleShort, total: memoryNote });
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, titleShort: m.titleShort, total: m.total, model: name === "GPU" ? "" : name };
     }
     if (total !== null && used !== null) {
       const m = meter(label, label, used / total * 100, "", null, {
-        remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }),
-        total: t("core-views.present.host.out_of", { size: format.gb(total) }),
+        remaining: "", big: big(total - used), unit: "GB", title: t("core-views.present.host.gpu_memory_left", { gpu: label }), titleShort: t("core-views.present.host.gpu_memory_left_short"),
+        total: t("core-views.present.host.gpu_memory_all", { size: format.gb(total) }),
       });
-      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, total: m.total, model: name === "GPU" ? "" : name };
+      return { big: m.big, unit: m.unit, left: m.left, level: m.level, title: m.title, titleShort: m.titleShort, total: m.total, model: name === "GPU" ? "" : name };
     }
-    return { big: "—", unit: "", left: 100, level: "ok", title, total: memoryNote, model: name === "GPU" ? "" : name };
+    return { big: "—", unit: "", left: 100, level: "ok", title, titleShort, total: memoryNote, model: name === "GPU" ? "" : name };
   });
   // What the machine is, the same line wherever it is named: its chip, its memory, its system.
   o.identity = [cpuModel, memTotal > 0 ? format.gb(memTotal) : null, os || null].filter((x) => x !== null).join(" · ");
@@ -1190,7 +1211,7 @@ function messagePeek(answer: J, c: Clock): J | null {
   if (entry === undefined) return null;
   const text = format.cleanText(format.plainText(str(entry.text) ?? ""));
   const at = entry.at;
-  return { author: str(entry.authorName) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
+  return { author: str(authorNameOf(entry.authorKind, entry.author, entry.authorName)) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
 }
 
 function overview(value: J, c: Clock, station: string | null): J {
@@ -1391,7 +1412,7 @@ export function installView(runtime: string, updates: J[], manages: boolean): J 
   return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
 }
 
-/// A piece of software as it is said (the web's Versions.tsx describe): its version as shown, what is said of it on
+/// A piece of software as it is said: its version as shown, what is said of it on
 /// hover (up to date, or that the last check failed), and while it updates or once that failed, in words.
 export function software(u: J): J {
   const installed = get(u, "installed") === true;

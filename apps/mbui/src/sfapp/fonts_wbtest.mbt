@@ -1,4 +1,4 @@
-// 外观 › 字体 (settings/fonts.mbt; Fonts.kt) and the faces the app is then set in (faces.mbt), over the settings'
+// 外观 › 字体 (settings/fonts.mbt) and the faces the app is then set in (faces.mbt), over the settings'
 // fixture and its made-up faces (fonts_fixture.mbt).
 
 ///|
@@ -72,8 +72,8 @@ test "a face being fetched: how far said on its row, the app's own standing in u
 fn kept_here(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       if name == "prefs" {
         match field(t.value, "faces") {
           Some(Object(faces)) =>
@@ -135,7 +135,7 @@ test "a face's file the host cannot read where it is: had through the core inste
   }
   // (the app from the frame its host is set so)
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.set_unreadable_font("/data/500")
   on.val = true
   t.draw()

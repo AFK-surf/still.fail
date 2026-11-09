@@ -3,7 +3,7 @@
 
 ///|
 test "记忆 made once, the mouse resting on a station's row: back to settings and in again with it still there, each frame as drawn whole" {
-  let t = memories_tester(true, 0)
+  let t = memories_tester(0)
   let row = match t.semantics().search_by(fn(n) { n.label == "Willow" }) {
     Some(i) => t.semantics()[i].rect
     None => fail("Willow's row read out")
@@ -19,7 +19,7 @@ test "记忆 made once, the mouse resting on a station's row: back to settings a
 
 ///|
 test "一台 station 的记忆 made once, the mouse resting on its own skills' row: back and in again with it still there, each frame as drawn whole" {
-  let t = memories_tester(true, 0, mode="settings-memory")
+  let t = memories_tester(0, mode="settings-memory")
   let row = match t.semantics().search_by(fn(n) { n.label == @sf.t("web-main.memory.builtin") }) {
     Some(i) => t.semantics()[i].rect
     None => fail("its own skills' row read out")
@@ -35,7 +35,7 @@ test "一台 station 的记忆 made once, the mouse resting on its own skills' r
 
 ///|
 test "一台 station 的记忆 made once, its own skills folded open with the mouse, the mouse resting there: back and in again with it still there, each frame as drawn whole" {
-  let t = memories_tester(true, 0, mode="settings-memory")
+  let t = memories_tester(0, mode="settings-memory")
   t.tap_text(@sf.t("web-main.memory.builtin"))
   t.run_for(@motion.ripple_tap_ms)
   app.nav.pop() |> ignore

@@ -1,4 +1,4 @@
-// Slack's Web API over HTTP (chat/slack.rs `slack_api`, chat/slack_apps.rs `call`): one client for both, with one
+// Slack's Web API over HTTP: one client for both, with one
 // rule for 429 (wait what Slack says, up to five times). Where Slack is can be changed: tests point it at a stand-in
 // ($STILLFAIL_SLACK_API, or the client's `base`).
 type Json = any;

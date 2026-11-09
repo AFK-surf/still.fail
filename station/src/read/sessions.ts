@@ -147,7 +147,7 @@ export function summary(s: Store, key: string): Json {
   return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings, participants: store.participants(s, key), watches: watching(s, [key]), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
-/// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
+/// GET /sessions: the sessions shown in lists, or only the archived ones; those of one connect;
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
@@ -158,13 +158,13 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
   return rows.map((x) => summaryWith(s, x.key, l));
 }
 
-/// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first). `turns`: only that
+/// GET /sessions/:key: the session, its threads, turns and jobs (newest first). `turns`: only that
 /// many of its latest turns (`?turns=`), for a device that knows how many it had and how long they ran from its summary
 /// (`turns`, `workMs`): all of them were read for that, many of one session in 25 s on a station (2026-11-03).
 /// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
 export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null, now = false): Json {
   setLang(lang);
-  // One of another workspace is none (docs/multi-workspace.md).
+  // One of another workspace is none.
   const row = store.getSession(s, key);
   if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
   const listed = store.listTurns(s, key, turns);
@@ -188,12 +188,11 @@ function threadJson(t: ThreadRow): Json {
 }
 
 /// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote. Of one
-/// thread (what is told of it as it changes, for each viewer), its own shares and snapshots alone.
+/// thread (what is told of it as it changes, for each viewer), its own shares alone.
 function threadView(
   s: Store,
   t: ThreadSummary,
   shares: ReturnType<typeof store.chatShares> = store.chatShares(s, [t.thread.home ?? t.sessions[0]?.session ?? ""]),
-  published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s, [t.thread.id]),
 ): Json {
   const names = authorNames(s, t.thread.id);
   const v = threadJson(t.thread);
@@ -211,41 +210,35 @@ function threadView(
   // A Slack channel's name, as far as known.
   v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
-  // A still.fail chat's Slack and Feishu threads, where what people send can be copied (docs/relay.md "抄送"), the one
+  // A still.fail chat's Slack and Feishu threads, where what people send can be copied, the one
   // said in last first; left out when none.
   if (t.thread.surface === store.STILLFAIL_SURFACE) {
     const to = store.ccThreads(s, t.thread.id);
     if (to.length > 0) v.cc = to.map((o) => ({ thread: o.thread.id, surface: o.thread.surface, channel: o.thread.channel, threadTs: o.thread.threadTs, channelName: knownChannel(s, o.connect, o.thread.channel) }));
   }
-  // Which other workspaces it is shared with (docs/chat-share.md), by the session key its link names.
+  // Which other workspaces it is shared with, by the session key its link names.
   const shared = shares.get(t.thread.home ?? t.sessions[0]?.session ?? "");
   v.xshare = shared === undefined ? null : shared;
-  // Its snapshots published for anyone with their links (docs/public-share.md); left out when none.
-  const snapshots = published.get(t.thread.id);
-  if (snapshots !== undefined) v.published = snapshots;
   return v;
 }
 
 /// The threads of the viewer's workspace (of one session).
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
-  const summaries = store.listThreads(s, viewer.email, session, null);
-  const seen = store.seenBy(s, viewer, summaries.flatMap((t) => t.sessions.map((m) => m.session)));
-  const visible = summaries.filter((t) => t.sessions.some((m) => seen(m.session)));
+  const visible = store.listThreads(s, viewer.email, session, null, "count", viewer);
   // A pending chat would otherwise make the reader rebuild this whole list once for each unprepared session.
   store.requireCcSessions(s, visible.flatMap((t) => t.thread.surface === store.STILLFAIL_SURFACE
     ? t.sessions.map((m) => m.session) : []));
   const shares = store.chatShares(s, visible.map((t) => t.thread.home ?? t.sessions[0]?.session ?? ""));
-  const published = store.publishedByThread(s, visible.map((t) => t.thread.id));
-  return visible.map((t) => threadView(s, t, shares, published));
+  return visible.map((t) => threadView(s, t, shares));
 }
 
-/// GET /threads?session= (views.rs `threads`): the threads (of one session).
+/// GET /threads?session=: the threads (of one session).
 export function threads(s: Store, viewer: Viewer, session: string | null, lang: Lang): Json[] {
   setLang(lang);
   return threadViews(s, viewer, session);
 }
 
-/// GET /threads/:id (admin/mod.rs, views.rs `thread`): the id an i64, the thread there.
+/// GET /threads/:id (admin/mod.rs): the id an i64, the thread there.
 export function thread(s: Store, viewer: Viewer, id: string, lang: Lang): Json {
   setLang(lang);
   const n = parseI64(id);
@@ -265,11 +258,11 @@ export function parseI64(text: string): number | null {
 // ---- a session's timeline and widgets ----
 
 /// GET /sessions/:key/timeline: transcript entries before those a page was sent: up to `limit` (200, from 1 to 1000)
-/// before entry `before` (0), and the index of the first (live.rs `before`); in brief (transcript.ts `brief`) with
+/// before entry `before` (0), and the index of the first; in brief (transcript.ts `brief`) with
 /// `brief=1`. `after` instead: up to `limit` entries just after entry `after` (what a device that holds up to there has yet
 /// to have). `from` and `to` instead: those entries (both included, at most 1000), whole unless `brief=1`, as one in brief
 /// is read again when it is opened. `end`: how many entries the transcript has. The transcript is found through the
-/// session's profile (hub.rs `locate`); none found: nothing.
+/// session's profile; none found: nothing.
 export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string, afterParam?: string): Json {
   setLang(lang);
   const before = parseUsize(beforeParam) ?? 0;
@@ -305,7 +298,7 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   return { start, entries: between(start, upto), end };
 }
 
-/// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
+/// A session's transcripts: those of the runtime sessions it ran in before first (sessions/afresh.ts),
 /// and none now (its context cleared) still reads those it ran in; found whatever profile it is on now, if any. Null:
 /// none found.
 function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: { path: string; runtime: RuntimeKind }[] } | null {
@@ -329,7 +322,7 @@ export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
   if (row.runtimeSessionId === null) return { path: null };
-  const source = store.runtimeSessionSources(s, key).find((s) => s.id === row.runtimeSessionId);
+  const source = store.runtimeSessionSource(s, key, row.runtimeSessionId);
   if (!source) return { path: null };
   const { paths, current } = transcriptSources(s.dataDir, configOf(s).profiles, [source], sessionPlaces(row));
   return { path: current ? paths.at(-1)!.path : null };
@@ -352,7 +345,7 @@ export function widgetState(s: Store, key: string, path: string | undefined, lan
   return { state };
 }
 
-// ---- a session's files (admin/files.rs) ----
+// ---- a session's files ----
 
 /// files.rs `mime`: by the file's extension.
 export function mime(path: string): string {

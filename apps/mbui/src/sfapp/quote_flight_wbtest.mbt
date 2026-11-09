@@ -117,7 +117,7 @@ fn send_ground(t : @ui.Tester) -> Int64 raise {
   }
   // (its round: the largest round about its middle, what it is pressed in reaching past it; drawn on its way as the
   // composer changes shape, its place in the capsule's end and in the opened box's corner 1.13 apart: smooth.mbt
-  // round_like)
+  // capsule_in)
   let (mx, my) = (x + w / 2.0, y + h / 2.0)
   let mut round : (Double, Double, Double, Double, Int64)? = None
   for r in t.drawn_rects() {

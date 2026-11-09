@@ -1,4 +1,4 @@
-// 73-pick-words (e2e/traces/pick-words.trace): picking words where they are (MessagePick.kt): held still on the
+// 73-pick-words (e2e/traces/pick-words.trace): picking words where they are: held still on the
 // agent's words, the word under the finger is picked, the bar over it (引用, 复制, 全选); 复制 copies just that word
 // (已复制); held again, 引用 quotes the picked words and they are sent with a line of the person's: the quote is a part
 // of the agent's words, not all of them.

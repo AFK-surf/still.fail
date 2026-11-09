@@ -44,7 +44,7 @@ fn flat_made(owner_first : Bool) -> (Tester, Nav[String], @signals.Signal[Bool],
         if stay == shown.val {
           return
         }
-        if @signals.untracked(fn() { ready.get() }) {
+        if ready.untracked() {
           shown.val = stay
           nav.flat_keep(None)
         } else {

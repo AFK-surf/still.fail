@@ -1,4 +1,4 @@
-// screen (docs/remote-screens.md, "Asking a person to take over"): the screens of this station a person can see and
+// screen ("Asking a person to take over"): the screens of this station a person can see and
 // drive from their still.fail app, who is on each now, and the link that opens one, for the agent to post when a
 // person has to do something there (log in, solve a captcha).
 import { tr } from "../ops/i18n.ts";

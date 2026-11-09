@@ -3,7 +3,7 @@
 timeout 20000
 until Willow
 tap Willow
-until 内存剩
+until 可用内存
 wait 800
 tapxy -33 22
 until 重命名

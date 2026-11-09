@@ -1,4 +1,4 @@
-// How a page's list moves as each platform's own lists do, as data (docs/determinism.md, "Motion is data"): Android's
+// How a page's list moves as each platform's own lists do, as data ("Motion is data"): Android's
 // fling (Compose's FlingCalculator over AndroidFlingSpline), its stretch at the ends (EdgeEffect's intensity, HWUI's
 // mapping, its spring back), iOS's deceleration and rubber band, the desktop's coast; each a function of what it set out
 // from and the time alone. One for both of what draws lists: an old view's (ui's scroll.mbt, Ctx::list) and a column of

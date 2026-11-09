@@ -1,6 +1,6 @@
 /*
  * The workspace lock, face-to-face approval and the vault's key, as messages between devices and stations
- * (docs/workspace-lock.md, docs/vault.md), for the Tamarin prover. rules/src proves what each check decides; this
+ * (), for the Tamarin prover. rules/src proves what each check decides; this
  * proves that the checks, put together and run over a network the adversary holds, keep what they are for. The
  * adversary is the control plane and every station but the one asked: it reads, drops, replays and makes up any
  * message, and learns the keys of any device it takes (Reveal).

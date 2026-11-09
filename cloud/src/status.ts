@@ -1,6 +1,6 @@
 // What still.fail/status shows (status/status.html, GET /v1/status): each of still.fail's services, checked by the cron
 // every minute, and how each has done on each of the last days. What is checked is only what still.fail runs itself: a
-// station's own state is seen from the devices that reach it (docs/cloud.md), and a client that fails on what a service
+// station's own state is seen from the devices that reach it, and a client that fails on what a service
 // answers is not seen here: those are incidents people open, as GitHub issues labelled `incident` (P1 or P2 beside it),
 // and end by closing them, with no deploy and nothing else to sign in to. Only the repository's own can label an issue,
 // and a workflow sends them here when one changes (receiveIncidents).
@@ -130,6 +130,23 @@ export async function receiveIncidents(request: Request, env: Env): Promise<Resp
   const issues: unknown = await request.json().catch(() => null);
   if (!Array.isArray(issues)) return reply({ error: "invalid_request" }, 400);
   await env.SERVICE_STATUS.getByName("primary").keepIncidents(incidentsOf(issues));
+  return reply({ ok: true });
+}
+
+/** The workflows that put releases in the bucket (their feeds last): pipeline.yml's on main, stable.yml's. */
+const RELEASING = ["pipeline.yml", "stable.yml"];
+
+/**
+ * POST /v1/releases/out: a release's feeds were just put in the bucket (by one of RELEASING, believed by the OIDC token
+ * GitHub gives it on the default branch); every device and station connected is told, to read its feed again.
+ */
+export async function receiveReleased(request: Request, env: Env): Promise<Response> {
+  if (!env.STATUS_REPO) return reply({ error: "not_found" }, 404);
+  const token = bearerToken(request);
+  const claims = token ? await jwtVerify(token, githubKeys, { issuer: GITHUB_ACTIONS, audience: env.PUBLIC_ORIGIN }).then((v) => v.payload, () => null) : null;
+  const refs = RELEASING.map((file) => `${env.STATUS_REPO}/.github/workflows/${file}@refs/heads/main`);
+  if (!claims || claims.repository !== env.STATUS_REPO || !refs.includes(String(claims.workflow_ref))) return denied();
+  await env.DIRECTORY.getByName("primary").tellAll({ type: "release" }, { type: "release" });
   return reply({ ok: true });
 }
 

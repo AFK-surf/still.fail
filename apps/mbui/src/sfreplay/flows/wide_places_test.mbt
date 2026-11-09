@@ -22,6 +22,8 @@ test "65-wide-places" {
     // its thumb slides there (Ctx::cover), from this tap to the end of its slide
     f.run_for(@ui.cover_slide_ms)
     f.tap("返回会话")
+    // The settings pane releases its reads when its return transition ends.
+    f.run_for(@ui.move_most_ms)
     f.see("新建对话")
     f.end()
   })

@@ -1,8 +1,8 @@
-// Android emulators and phones on this machine's adb as screen sources (`android:<id>`, docs/remote-screens.md
+// Android emulators and phones on this machine's adb as screen sources (`android:<id>`
 // "Android"): a touchscreen as an iOS Simulator is (kind `simulator`), its pictures and input through scrcpy's program
 // on the device (./scrcpy-server, its version pinned: its protocol is its own and changes between releases). A phone
 // lent to a chat is in that grant's adb server (adb/servers.ts), not here.
-import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcess, type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { randomInt } from "node:crypto";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
@@ -31,7 +31,19 @@ const FOLLOWED_FOR = 10 * 60_000;
 /// Encoded frames kept for a view that asks slowly: past this they are dropped up to a new key frame (a delta dropped
 /// alone would break every frame after it).
 const QUEUE_MOST = 30;
-const BITRATE = 8_000_000;
+/// What a view is encoded at, by the side scrcpy is asked for (sideOf): its encoder takes no new rate while it runs, so a
+/// view cannot start low and climb as the pace asks of a helper's. A phone's UI stays sharp at these where 1.5 Mbit/s
+/// (the pace's start, which this took before) left 1280 and up soft; a still screen sends nothing at any of them.
+export function bitrateOf(side: number): number {
+  return side <= 480 ? 2_000_000 : side <= 720 ? 3_000_000 : side <= 1080 ? 5_000_000 : side <= 1440 ? 7_000_000 : 8_000_000;
+}
+/// A preview (a link's card): about two pictures a second, small and cheap.
+export const PEEK_FPS = 2;
+export const PEEK_BITRATE = 300_000;
+/// The most previews of this machine's devices running at once, besides the views: each is a run of scrcpy and an
+/// encoder on a device, and a video decoder in the client showing its card (a page of cards would use up a phone's
+/// hardware decoders). One more is refused (503) and its card asks again later.
+export const PEEKS_MOST = 2;
 /// What a view opened to drive shows at least, however small the window it opened in: scrcpy cannot change its size
 /// without starting over.
 const LEAST_SIDE = 1280;
@@ -273,7 +285,7 @@ export class ScrcpyStream {
 }
 
 /// How adb is run here: a server this starts does not connect by itself to every phone paired with this machine's key
-/// it finds on the network, a phone lent to one chat among them (docs/adb-share.md: that chat's server alone has it).
+/// it finds on the network, a phone lent to one chat among them (that chat's server alone has it).
 export const adbEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => ({ ...env, ADB_MDNS_AUTO_CONNECT: "0" });
 
 /// adb started: a .cmd (a shim) through what runs it, no window on Windows.
@@ -489,6 +501,40 @@ export function sideOf(options: ViewOptions): number {
   return Math.min(MOST_SIDE, options.peek ? asked : Math.max(LEAST_SIDE, asked)) & ~7;
 }
 
+/// What scrcpy is run with for a view: its side, its rate by that side (bitrateOf; `ViewOptions.bitrate`, the pace's start
+/// for a source that climbs from it, is not taken), its frames a second as asked (none: 60), its screen turned on to
+/// drive. A preview: PEEK_FPS and PEEK_BITRATE at the card's size, the screen left as it is.
+export function viewArgs(options: ViewOptions): { maxSide: number; bitrate: number; fps?: number; wake: boolean } {
+  const maxSide = sideOf(options);
+  if (options.peek === true) return { maxSide, bitrate: PEEK_BITRATE, fps: PEEK_FPS, wake: false };
+  return { maxSide, bitrate: bitrateOf(maxSide), ...(options.fps ? { fps: options.fps } : {}), wake: true };
+}
+
+/// The previews running of a machine's devices, PEEKS_MOST at most.
+export class PeekCount {
+  #running = 0;
+  readonly #most: number;
+
+  constructor(most = PEEKS_MOST) {
+    this.#most = most;
+  }
+
+  /// One more starts, unless as many as can run already do.
+  take(): boolean {
+    if (this.#running >= this.#most) return false;
+    this.#running++;
+    return true;
+  }
+
+  free() {
+    this.#running = Math.max(0, this.#running - 1);
+  }
+
+  get running(): number {
+    return this.#running;
+  }
+}
+
 /// One device on adb.
 export class AndroidScreen implements ScreenSource {
   readonly id: string;
@@ -501,10 +547,18 @@ export class AndroidScreen implements ScreenSource {
   readonly #file: string;
   readonly #changed: () => void;
   readonly #views = new Set<AndroidView>();
+  readonly #peeks: PeekCount;
+  /// An emulator's start (ms); none: a phone, which costs this machine nothing while nobody uses it.
+  readonly #since: number | undefined;
   #size: { width: number; height: number };
+  readonly discard?: () => Promise<void>;
 
-  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void }) {
+  constructor(o: { id: string; title: string; size: { width: number; height: number }; panels: Panel[]; adb: Adb; file: string; changed: () => void; peeks?: PeekCount; emulator?: { since: number } }) {
     this.id = o.id;
+    this.#since = o.emulator?.since;
+    // An emulator is closed from a person's app (one left running, the core's `longJobs`): it leaves adb, and the list.
+    if (o.emulator) this.discard = async () => void (await o.adb.run(["emu", "kill"]));
+    this.#peeks = o.peeks ?? new PeekCount();
     this.panels = o.panels;
     this.#title = o.title;
     this.#size = o.size;
@@ -517,13 +571,22 @@ export class AndroidScreen implements ScreenSource {
     return this.#title;
   }
 
+  since(): number | undefined {
+    return this.#since;
+  }
+
   size(): { width: number; height: number } {
     return this.#size;
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
     if (!options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
-    const view: AndroidView = new AndroidView(this.#adb, () => this.#views.delete(view), (size) => {
+    const peek = options.peek === true;
+    if (peek && !this.#peeks.take()) throw new ScreenRefused(503, "station.screen.failed", { said: `at most ${PEEKS_MOST} Android screens are previewed at once` });
+    const view: AndroidView = new AndroidView(this.#adb, () => {
+      this.#views.delete(view);
+      if (peek) this.#peeks.free();
+    }, (size) => {
       // Turned or unfolded: its shape as the listing has it.
       if (Math.abs(size.width / size.height - this.#size.width / this.#size.height) < SAME_SHAPE) return;
       this.#size = size;
@@ -531,12 +594,7 @@ export class AndroidScreen implements ScreenSource {
     });
     this.#views.add(view);
     try {
-      await view.start(this.#file, {
-        maxSide: sideOf(options),
-        bitrate: Math.round(options.bitrate ?? BITRATE),
-        ...(options.fps ? { fps: options.fps } : {}),
-        wake: options.peek !== true,
-      });
+      await view.start(this.#file, viewArgs(options));
       return view;
     } catch (error) {
       view.close();
@@ -550,6 +608,32 @@ export class AndroidScreen implements ScreenSource {
     for (const view of [...this.#views]) view.close();
   }
 }
+
+/// When the emulator of `serial` (`emulator-<port>`) started (ms): its qemu's start, where `ps` says it (macOS, Linux);
+/// none elsewhere (Windows) or when it is not found, and the station takes when it listed it.
+export async function emulatorStart(serial: string, ps: () => Promise<string> = psStarts): Promise<number | undefined> {
+  const port = /^emulator-(\d+)$/.exec(serial)?.[1];
+  if (port === undefined || platform.os === "windows") return undefined;
+  const lines = await ps().catch(() => "");
+  return startOf(lines, port);
+}
+
+/// The start of the qemu run with `-port <port>` in `ps -Ao lstart=,args=`'s lines (its start the first five words, a
+/// local time: `Fri Nov  6 16:34:52 2026`).
+export function startOf(lines: string, port: string): number | undefined {
+  for (const line of lines.split("\n")) {
+    const words = line.trim().split(/\s+/);
+    const args = words.slice(5);
+    const at = args.indexOf("-port");
+    if (at < 0 || args[at + 1] !== port || !/qemu-system|emulator/.test(args[0] ?? "")) continue;
+    const t = Date.parse(words.slice(0, 5).join(" "));
+    if (Number.isFinite(t)) return t;
+  }
+  return undefined;
+}
+
+const psStarts = () =>
+  new Promise<string>((resolve, reject) => execFile("ps", ["-Ao", "lstart=,args="], { timeout: 10_000, maxBuffer: 16 << 20 }, (error, out) => (error ? reject(error) : resolve(out))));
 
 /// Whether a device on adb is a screen: an emulator, a phone on USB or one someone connected to by its address. Not one
 /// adb found on the network by itself (`adb-<serial>._adb-tls-connect._tcp`: any phone paired with this key that is on
@@ -597,6 +681,8 @@ export class AndroidScreens {
   readonly #adb: () => string | null;
   readonly #file: string;
   readonly #listed = new Map<string, { id: string; source: AndroidScreen; remove: () => void }>();
+  /// The previews running, of all its devices.
+  readonly #peeks = new PeekCount();
   #follow: ChildProcess | null = null;
   #again: (() => void) | null = null;
   #closed = false;
@@ -712,6 +798,8 @@ export class AndroidScreens {
       adb,
       file: this.#file,
       changed: () => this.#screens.changed(),
+      peeks: this.#peeks,
+      ...(emulator ? { emulator: { since: (await emulatorStart(serial)) ?? wall.now() } } : {}),
     });
   }
 

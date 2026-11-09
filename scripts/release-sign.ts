@@ -1,4 +1,4 @@
-// Signs releases (docs/release-signing.md) with the key in $RELEASE_SIGNING_KEY (Ed25519, PKCS#8 PEM: CI's
+// Signs releases with the key in $RELEASE_SIGNING_KEY (Ed25519, PKCS#8 PEM: CI's
 // `production` environment), as the station (station/src/updates/signed.ts) and the apps' core
 // (client/core-ts/src/app-release.ts) verify them.
 //   release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST …
@@ -6,14 +6,14 @@
 //       Node binary in its Node (scripts/node-dist.sh's: bin/node in the tarball, node.exe in nodejs.org's zip)
 //   release-sign.ts file FILE --kind stillfail-desktop-win --build N
 //       FILE.sig: the signed words naming FILE (the Windows desktop app's installer)
-//   release-sign.ts module FEED --id ID --build N --needs-station M PLATFORM=ARCHIVE …
-//       the feed of a module's package (scripts/module-bundle.ts, docs/station-modules.md): its version, the oldest
-//       station it runs beside (M, that station's build) and the signed words naming each archive (PLATFORM `any`:
-//       one for every machine)
 //   release-sign.ts keygen PRIVATE_FILE
 //       a new key: the private one written to PRIVATE_FILE (PEM), the public one (for RELEASE_KEYS) said
 // Without a key: in CI (CI set) an error; elsewhere, with --unsigned-ok, a warning and the feed unsigned (a release for
 // a dev cloud: RELEASE_DIR), no .sig. A key the station does not take (not in RELEASE_KEYS) is refused in CI.
+// The key is in GitHub's `production` environment and backed up offline; its public half is in signed.ts's
+// RELEASE_KEYS beside a recovery key kept offline, which signs a release replacing a lost or leaked key. To change keys,
+// release one with both (signed by the old), then swap the secret. Without a key a local RELEASE_DIR release is unsigned
+// and stations will not take it; `keygen` makes a test key, which STILLFAIL_RELEASE_KEYS makes a station trust.
 import { spawn } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from "node:crypto";
 import { createReadStream, statSync, writeFileSync } from "node:fs";
@@ -31,7 +31,7 @@ const fail = (why: string): never => {
   process.exit(1);
 };
 const usage = (): never => {
-  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | module FEED --id ID --build N --needs-station M PLATFORM=ARCHIVE… | keygen PRIVATE_FILE");
+  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | keygen PRIVATE_FILE");
   process.exit(2);
 };
 
@@ -89,7 +89,7 @@ function signed(words: object, k: { key: ReturnType<typeof createPrivateKey>; ra
 function keyOrNone() {
   const k = signingKey();
   if (k) return k;
-  if (process.env.CI) fail("RELEASE_SIGNING_KEY is not set: CI does not publish unsigned releases (docs/release-signing.md)");
+  if (process.env.CI) fail("RELEASE_SIGNING_KEY is not set: CI does not publish unsigned releases (scripts/release-sign.ts)");
   if (!args.includes("--unsigned-ok")) fail("RELEASE_SIGNING_KEY is not set (--unsigned-ok: an unsigned release for a dev cloud)");
   console.error("release-sign: warning: RELEASE_SIGNING_KEY is not set: the release is not signed, and no station updates to it");
   return null;
@@ -131,26 +131,6 @@ switch (positional[0]) {
     const { sha256, size } = await hashFile(file);
     writeFileSync(`${file}.sig`, `${JSON.stringify(signed({ kind, version: `0.1.${n}`, build: n, file: basename(file), sha256, size }, k))}\n`);
     console.error(`release-sign: ${file}.sig: signed by ${keyId(k.raw)}`);
-    break;
-  }
-  case "module": {
-    const out = positional[1] ?? usage();
-    const id = flag("--id") ?? usage();
-    if (!/^[a-z][a-z0-9]{0,31}$/.test(id)) usage();
-    const n = build();
-    const needsStation = Number(flag("--needs-station"));
-    if (!Number.isSafeInteger(needsStation) || needsStation <= 0) usage();
-    const version = `0.1.${n}`;
-    const builds: Record<string, { sha256: string; size: number }> = {};
-    for (const given of positional.slice(2)) {
-      const [, platform, archive] = /^([a-z0-9-]+)=(.+)$/.exec(given) ?? usage();
-      builds[platform!] = await hashFile(archive!);
-    }
-    if (Object.keys(builds).length === 0) usage();
-    const k = keyOrNone();
-    const feed = { id, version, build: n, needsStation, ...(k ? signed({ kind: "stillfail-module-release", id, version, build: n, needsStation, builds }, k) : {}) };
-    writeFileSync(out, `${JSON.stringify(feed)}\n`);
-    console.error(`release-sign: ${out}: module ${id} ${version} for stations from 0.1.${needsStation}${k ? `, signed by ${keyId(k.raw)}` : ", NOT signed"} (${Object.keys(builds).join(", ")})`);
     break;
   }
   case "keygen": {

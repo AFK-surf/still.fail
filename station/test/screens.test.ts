@@ -1,4 +1,4 @@
-// The station's screens (docs/remote-screens.md): the view wire over a member's link in memory (framing, at most
+// The station's screens: the view wire over a member's link in memory (framing, at most
 // as many frames not acknowledged as the pace lets go, read-only members, who is on a screen, how a view ends), with a fake source; the
 // list (GET /screens, `screens` on the event stream); a person's input as macOS posts it; the desktop source with a
 // fake helper (its grants, its view protocol); the clipboard both ways and files dropped (only for a view that drives,
@@ -27,10 +27,10 @@ import type { SimDebug } from "../src/screens/sim-debug.ts";
 import { SIMCTL, Simulators, bootedOf, runtimeName, screenOf } from "../src/screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "../src/screens/win-desktop.ts";
 import { KEYS, WinInput } from "../src/screens/win-input.ts";
-import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, codecFor } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
-import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, ownRate, rateCeiling } from "../src/mesh/screen-pace.ts";
+import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, rateCeiling } from "../src/mesh/screen-pace.ts";
 import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
@@ -414,7 +414,7 @@ test("the helper's view of a part of the display: the part asked with the bounds
   });
 });
 
-test("a still screen's picture goes again sharper as the rate goes up, a key frame each STILL_MS, until it is at the source's own", async () => {
+test("a still screen's picture goes again sharper as the rate goes up, a key frame each STILL_MS, until it is at the most it is asked at", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
   source.make = () => new StillView();
@@ -438,8 +438,8 @@ test("a still screen's picture goes again sharper as the rate goes up, a key fra
     assert.equal(again[0], 1, "the picture again is a key frame");
     ts = Number(again.readBigUInt64BE(1));
   }
-  // Up from START_RATE by the pace's steps to the source's own (1920×1080's), and then no more.
-  assert.deepEqual(steps, [2_250_000, 3_375_000, 5_062_500, ownRate(1920, 1080)]);
+  // Up from START_RATE by the pace's steps to the most 自动 asks (1920×1080's), and then no more.
+  assert.deepEqual(steps, [2_250_000, 3_375_000, 5_062_500, 7_593_750, 11_390_625, 17_085_938, 25_628_906, rateCeiling(1920, 1080)]);
   await time.adjust(5 * STILL_MS);
   await settle();
   assert.equal(view.keyframes, steps.length);
@@ -447,8 +447,8 @@ test("a still screen's picture goes again sharper as the rate goes up, a key fra
   await v.served;
 });
 
-test("原画 asked: the rate goes up past the source's own, to its pixels × 8; 高清 × 4; a client that says none, its own", async () => {
-  for (const [quality, top] of [["original", rateCeiling(1920, 1080, "original")], ["hd", rateCeiling(1920, 1080, "hd")], [undefined, ownRate(1920, 1080)]] as const) {
+test("the rate goes up to its pixels × 16 whatever the 画质 but 流畅, × 6 there", async () => {
+  for (const [quality, top] of [["original", 1920 * 1080 * 16], ["hd", 1920 * 1080 * 16], ["smooth", 1920 * 1080 * 6], [undefined, 1920 * 1080 * 16]] as const) {
     const hub = new ScreenHub();
     const source = new FakeSource();
     source.make = () => new StillView();
@@ -1917,7 +1917,7 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
   const listed = {
     devices: {
       "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [
-        { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", state: "Booted", deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17" },
+        { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", state: "Booted", deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17", lastUsedAt: "2026-11-06T08:33:59Z" },
         { udid: "422DED77-9031-4A8D-93D7-67F1A7C4A272", name: "iPhone 17", state: "Shutdown" },
         { udid: "not a udid", name: "x", state: "Booted" },
       ],
@@ -1926,7 +1926,7 @@ test("the simulators booted, as simctl lists them: their runtime's name, their s
     },
   };
   assert.deepEqual(bootedOf(listed), [
-    { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", runtime: "iOS 26.2", type: "com.apple.CoreSimulator.SimDeviceType.iPhone-17" },
+    { udid: "5A25EA86-3568-43D6-9068-8B2CB5FADB26", name: "iPhone 17", runtime: "iOS 26.2", type: "com.apple.CoreSimulator.SimDeviceType.iPhone-17", bootedAt: Date.parse("2026-11-06T08:33:59Z") },
     { udid: "6518D637-E9E0-4293-B844-EAC38471B04F", name: "Apple Vision Pro", runtime: "visionOS 27.0", type: "" },
   ]);
   assert.deepEqual(bootedOf(null), []);
@@ -1962,7 +1962,8 @@ test("a simulator a screen while it is booted: listed with its device's name and
   const run = async (file: string, args: string[]) => {
     runs.push([file, ...args].join(" "));
     if (file === SIMCTL && args.join(" ") === "list -j devices")
-      return JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [{ udid, name: "iPhone 17", state: booted ? "Booted" : "Shutdown", deviceTypeIdentifier: "t17" }] } });
+      return JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-2": [{ udid, name: "iPhone 17", state: booted ? "Booted" : "Shutdown", deviceTypeIdentifier: "t17", lastUsedAt: "2026-11-06T08:33:59Z" }] } });
+    if (file === SIMCTL && args[0] === "shutdown") return "";
     if (file === SIMCTL && args.join(" ") === "list -j devicetypes") return JSON.stringify({ devicetypes: [{ identifier: "t17", bundlePath: "/t17.simdevicetype" }] });
     if (file === "plutil") return JSON.stringify({ capabilities: { ScreenDimensionsCapability: { "main-screen-width": 1206, "main-screen-height": 2622 } } });
     throw new Error(`not run here: ${file}`);
@@ -1973,6 +1974,10 @@ test("a simulator a screen while it is booted: listed with its device's name and
   assert.equal(listed?.id, `simulator:${udid}`);
   assert.equal(listed?.title, "iPhone 17 · iOS 26.2");
   assert.deepEqual([listed?.width, listed?.height], [1206, 2622]);
+  // Up since its boot, and closed from a person's app as shut down.
+  assert.deepEqual([listed?.since, listed?.closable], [Date.parse("2026-11-06T08:33:59Z"), true]);
+  await hub.closeScreen(`simulator:${udid}`);
+  assert.ok(runs.includes(`${SIMCTL} shutdown ${udid}`));
   // Its size is asked once a device type, not again as the list is looked at again.
   await simulators.refresh();
   assert.equal(runs.filter((r) => r.includes("devicetypes")).length, 1);
@@ -2066,4 +2071,14 @@ test("negotiated system audio flows while the picture is still, and unrequested 
     await v.served;
     assert.equal(sound.closed, true);
   }
+});
+
+test("a source's codec: the best of its own the view takes; a preview's JPEG where both have it", () => {
+  const own = ["h265", "h264", "jpeg"] as const;
+  assert.equal(codecFor({ codecs: ["jpeg", "h264", "h265"] }, own), "h265");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"] }, own), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, own), "jpeg");
+  assert.equal(codecFor({ codecs: ["h264"], peek: true }, own), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg", "h264"], peek: true }, ["h264"]), "h264");
+  assert.equal(codecFor({ codecs: ["jpeg"] }, ["h264"]), undefined);
 });

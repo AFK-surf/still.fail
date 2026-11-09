@@ -1,4 +1,4 @@
-// The corner rule (mbui's Tester::corner_faults; still.fail's docs/ui-panels.md「所有带圆角的东西」「圆角阶梯」: what
+// The corner rule (mbui's Tester::corner_faults; mbui's ui/corners.mbt: what
 // lies in a rounded container's corner as far from both its edges and concentric with it, the corners of both the
 // ladder's) on every screen sffix opens, in the narrowest window of each layout and a wide desktop's, in both of the
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
@@ -195,13 +195,18 @@ test "each player failure reason fits without adding a spacing or corner fault" 
     for lang in ["zh", "en"] {
       // The player's existing header has a known gap fault on a small screen. These are states of that same page,
       // so compare their actual faults with it rather than counting that same fault once per message.
-      let baseline = screen_in("player-failed", win, lang).gap_faults().map(gap_without_nodes)
+      // (and its corners with it: the player-failed screen's own, known to corners_everywhere_known, the rail's on the
+      // tape)
+      let failed = screen_in("player-failed", win, lang)
+      let baseline = failed.gap_faults().map(gap_without_nodes)
+      let corners = failed.corner_faults().map(gap_without_nodes)
+      let lit = failed.lit_all_faults().map(gap_without_nodes)
       for mode in ["player-damaged", "player-unplayable", "player-unsupported"] {
         let t = screen_in(mode, win, lang)
         let at = "\{win.0}-\{lang} \{mode}"
         assert_eq(t.gap_faults().map(gap_without_nodes), baseline, msg=at)
-        assert_true(t.corner_faults().is_empty(), msg=at)
-        assert_true(t.lit_all_faults().is_empty(), msg=at)
+        assert_eq(t.corner_faults().map(gap_without_nodes), corners, msg=at)
+        assert_eq(t.lit_all_faults().map(gap_without_nodes), lit, msg=at)
         if squeeze_windows.contains(win.0) {
           assert_true(t.squeeze_faults().is_empty(), msg=at)
         }

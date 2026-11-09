@@ -1,4 +1,4 @@
-// tiny-skia's geometry (path/src/lib.rs Point, rect.rs, size.rs): points, integer and float rects, sizes.
+// tiny-skia's geometry (path/src/lib.rs Point): points, integer and float rects, sizes.
 
 ///|
 /// A point (a value: every operation makes a new one).

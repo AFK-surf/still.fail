@@ -1,4 +1,4 @@
-// The pages, one for every tier and either input (docs/architecture.md: Pages): each drawn in the box it is given,
+// The pages, one for every tier and either input (Pages): each drawn in the box it is given,
 // what it does read from the input, never the tier; what it opens asked of the shell.
 
 ///|
@@ -15,8 +15,10 @@ fn init {
   @ui.old_fault_shown.val = fn(c, _) {
     @sf.empty(c, fn() {
       c.text(@sf.t("android-misc.fault.shown"), style=fault_words) |> ignore
-      if @sfbase.back_step() is Some(_) && @sf.button(c, @sf.t("common.back"), key="fault-back") {
-        @sfbase.go_back() |> ignore
+      if @sfbase.back_step() is Some(_) {
+        @sf.button(c, @sf.t("common.back"), key="fault-back", on_press=fn() {
+          @sfbase.go_back() |> ignore
+        }) |> ignore
       }
     })
   }
@@ -70,14 +72,15 @@ pub fn reset() -> Unit {
   vault_item_reset()
   mine_filter_open.clear()
   connect_reset()
-  outflow_left.clear()
   new_connect_reset()
   station_cards_reset()
   station_page_reset()
   profile_page_reset()
+  add_profile_start.clear()
   local_menu.val = false
   memory_doc_reset()
   signin_reset()
+  own_picture_reset()
   fx_policy_up.val = ""
   fx_vault_add_up.val = false
 }

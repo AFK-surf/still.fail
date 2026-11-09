@@ -1,4 +1,4 @@
-// A flow of e2e/flows seen again in a Tester, its steps written as a test's (e2e/README.md):
+// A flow of e2e/flows seen again in a Tester, its steps written as a test's (scripts/e2e-local.sh):
 // the app (source.mbt) over a run's conversation with its core (e2e/traces), every input given by the test. An input
 // draws only the frames it causes (Tester::draw); what the core said comes as the run had it, posted to mbui's queue
 // (Tester::post on "core") as a frame ends once what it came after has been asked again (Replay::deliver,
@@ -26,6 +26,9 @@ pub struct Flow {
   priv one_by_one : Ref[Bool]
   /// what moved as the last step that acts was taken (Tester::moving's lines): not what it began
   priv at_step : Array[String]
+  /// the words followed down the screen (Flow::follow; "": none), and where their middle was drawn each frame since
+  priv followed : Ref[String]
+  priv follow_ys : Array[(Double, Double)]
 }
 
 ///|
@@ -62,10 +65,10 @@ pub fn Flow::start(
 ) -> Flow {
   // (the app of the run before let go first, while the core it talks to is that run's: what it says as it goes (a
   // page's drafts dropped) is that run's, never heard by this one, whichever flow ran before it)
-  match @ui.view_tree() {
-    Some(t) => t.dispose()
-    None => ()
-  }
+  @ui.run_let_go()
+  // Legacy scopes outlive a frame's tree. Release the previous run's watches before its core is replaced, so their
+  // reset notifications cannot subscribe them into the next recording. Tester::new resets the rest of the app later.
+  @sfbase.reset()
   let r = @core.Replay::parse(trace)
   use_recorded_jobs(r)
   // (asks the run's timing made, with what came for them: each test says which and why)
@@ -125,10 +128,18 @@ pub fn Flow::start(
   // (the last of the run's frames given to the Tester's display)
   let frames_to = Ref::new(-@double.infinity)
   let said : Array[String] = []
+  let followed = Ref::new("")
+  let follow_ys : Array[(Double, Double)] = []
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
   t.between_frames(fn() {
+    if followed.val != "" {
+      match t.find(followed.val) {
+        Some((_, y)) => follow_ys.push((t.time(), y))
+        None => ()
+      }
+    }
     for m in t.moving() {
       if !said.contains(m) {
         said.push(m)
@@ -186,6 +197,8 @@ pub fn Flow::start(
     one_by_one,
     said,
     at_step: [],
+    followed,
+    follow_ys,
   }
   // each step the test says taken when the run took it, at this pace (at once: as soon as the test takes it), what
   // came after it in the run let come (Replay::step_taken)
@@ -404,6 +417,15 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 }
 
 ///|
+/// A visible field holds words even when it has lost focus, as for a restored draft.
+pub fn Flow::field_visible(self : Flow, words : String) -> Unit {
+  emit("field " + words.replace_all(old="\n", new="\\n"))
+  if !self.t.all(@ui.Role::TextField).iter().any(fn(field) { field.value.contains(words) }) {
+    self.fail("no visible field holds \{words.escape()}")
+  }
+}
+
+///|
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
   emit((if top { "tap1 " } else { "tap " }) + what)
@@ -570,7 +592,13 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       self.t.run_for(frame_ms)
     }
     while self.t.rest_of("") > self.t.time() {
-      self.t.run_for(self.t.rest_of("") - self.t.time())
+      let before = self.t.time()
+      self.t.run_for(self.t.rest_of("") - before)
+      // run_for treats a rounding-sized difference as the same frame. If the motion's end is just beyond that
+      // frame, show the next one so the motion is actually sampled at rest instead of waiting forever.
+      if self.t.time() == before {
+        self.t.frame()
+      }
     }
     // (a toast's time too, before the frame owed: what is shown does not wait for it, but one left at the end goes at
     // its time, not as the end's last frame happens to fall)
@@ -789,6 +817,24 @@ pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
 /// The wheel turned by `dy` over the window's middle (a flow's `wheel`).
 pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
   emit("wheel \{dy.to_int()}")
+  let (w, h) = self.t.size()
+  self.t.wheel(w / 2.0, h / 2.0, dy)
+  self.core()
+}
+
+///|
+/// Align content using a distance measured on the current frame. In another timing, that distance can change while
+/// the same scroll is needed; match the recorded wheel step in the same direction while applying the measured distance.
+pub fn Flow::wheel_aligned(self : Flow, dy : Double) -> Unit {
+  let actual = "wheel \{dy.to_int()}"
+  let step = if !self.strict {
+    match self.r.next_step() {
+      Some(recorded) if recorded.has_prefix("wheel ") && recorded != "wheel 0" &&
+        ((dy < 0.0 && recorded.has_prefix("wheel -")) || (dy > 0.0 && !recorded.has_prefix("wheel -"))) => recorded
+      _ => actual
+    }
+  } else { actual }
+  emit(step)
   let (w, h) = self.t.size()
   self.t.wheel(w / 2.0, h / 2.0, dy)
   self.core()
@@ -1037,4 +1083,36 @@ pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit 
   self.t.share_in(text, title~)
   self.t.draw()
   self.core()
+}
+
+///|
+/// From here, where `what` (words on screen, as Tester::find finds them) is drawn down the screen each frame, till
+/// Flow::followed: what the reader sees of the list carrying it, whatever moved it.
+pub fn Flow::follow(self : Flow, what : String) -> Unit {
+  self.followed.val = what
+  self.follow_ys.clear()
+}
+
+///|
+/// How many times what was followed (Flow::follow) turned back since, more than `least` points each way: 0 where the
+/// screen took it one way only (2026-11-09 the user, of a card's option picked and the agent answering at once, the
+/// list up and then down: 「点一个决策后上下摇晃」). Following it stops.
+pub fn Flow::turns_followed(self : Flow, least? : Double = 1.0) -> Int {
+  self.followed.val = ""
+  let ys = self.follow_ys
+  let mut turns = 0
+  let mut way = 0.0
+  let mut from = if ys.length() > 0 { ys[0].1 } else { 0.0 }
+  for p in ys {
+    let d = p.1 - from
+    if d.abs() < least {
+      continue
+    }
+    if way != 0.0 && d * way < 0.0 {
+      turns += 1
+    }
+    way = d
+    from = p.1
+  }
+  turns
 }

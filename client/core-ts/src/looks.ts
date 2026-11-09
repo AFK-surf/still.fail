@@ -1,4 +1,4 @@
-// What the clients show of the stations and their links (looks.rs): the stations' glyph and its line, what a list
+// What the clients show of the stations and their links: the stations' glyph and its line, what a list
 // with no rows says instead, how a chat's link is when it is not as it should be, a station's face, a station update.
 import { t } from "./i18n.ts";
 import { bytes as size } from "./format.ts";

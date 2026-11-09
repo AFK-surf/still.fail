@@ -1,7 +1,7 @@
 // The directories and files people and agents name for the station (a chat's directory continued from a terminal, a
 // job's, a task's synced folder, a file attached to a message): looked at, and a file copied, without the station's own
 // thread ever touching a folder macOS protects (drive/fs.ts `protectedPlace`, the drive's own classification;
-// docs/drive.md "Folders macOS protects"). A station launchd runs that opens ~/Documents, ~/Desktop, ~/Downloads, a disk
+//). A station launchd runs that opens ~/Documents, ~/Desktop, ~/Downloads, a disk
 // in /Volumes or iCloud Drive makes macOS put up a prompt for its launcher and hold the call until someone answers:
 // the station's main thread can stop in `opendir`, leaving the whole station silent.
 //
@@ -15,7 +15,7 @@
 // (Linux, Windows) a path is looked at directly, as before.
 //
 // The agents' own commands still run as the station's launcher does: macOS may keep them out of these folders, or
-// prompt for them (docs/drive.md); only the station's own looking is kept off its thread here.
+// prompt for them; only the station's own looking is kept off its thread here.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";

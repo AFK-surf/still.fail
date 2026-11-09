@@ -51,6 +51,7 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.cleanText("<@U1> hi   there"), "hi there");
   const plain = (s: string) => f.cleanText(f.plainText(s));
   assert.equal(plain("改成 `tsgo` 了，**快**很多 ~~慢~~ *真的*"), "改成 tsgo 了，快很多 慢 真的");
+  assert.equal(plain("12~20 个，100~300 元"), "12~20 个，100~300 元");
   assert.equal(plain("看 [PR #12](https://github.com/a/b/pull/12) 和 https://x.dev/a?b=1"), "看 PR #12 和 [链接]");
   assert.equal(plain("<https://x.dev|文档> <https://y.dev> <#C1|ops> &lt;b&gt; &amp;"), "文档 [链接] #ops <b> &");
   assert.equal(plain("![](shot.png) [](/tmp/a.pdf) [报告](report.pdf)"), "[图片] [文件] 报告");

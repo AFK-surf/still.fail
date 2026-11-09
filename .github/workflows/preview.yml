@@ -22,7 +22,6 @@ on:
     paths:
       - "apps/mbui/**"
       - "client/**"
-      - "media/**"
       - "vendor/**"
       - "scripts/native.ts"
       - "scripts/release-put.sh"
@@ -301,7 +300,7 @@ jobs:
             shell-apple-target-ios-arm64-
       - name: The iOS app for a device, as an .ipa
         run: |
-          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
+          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui SF_SRC=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
           zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
       - uses: actions/upload-artifact@v4
@@ -582,6 +581,8 @@ jobs:
       # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
       - name: The order of names (win.sh collate)
         run: bash apps/mbui/scripts/win.sh collate
+      - name: Synchronous answers across the engine DLL
+        run: bash apps/mbui/scripts/win.sh engine-sync
       # what still.fail's desktop app kept sealed, opened by the app built in its place (src/host/win_electron_sealed.h)
       - name: The desktop app's sealed values (win.sh sealed)
         run: bash apps/mbui/scripts/win.sh sealed
@@ -592,7 +593,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # its .sig, which the feed carries (the app takes a build only as it says it: docs/release-signing.md)
+          # its .sig, which the feed carries (the app takes a build only as it says it: scripts/release-sign.ts)
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           MBUI_CACHE: ${{ runner.temp }}/mbui-release
         run: |

@@ -1,4 +1,4 @@
-// The desktop's 密钥's dialogs (web/src/VaultAdd.tsx AddKinds, cloud/Vault.tsx Editor and Recover), the library's
+// The desktop's 密钥's dialogs, the library's
 // (open_dialog; 添加's a pick): what 添加 offers, an item written (a new one, or one opened, changed or deleted), the recovery words
 // typed in.
 
@@ -8,7 +8,7 @@
 /// says it is kept in the clear where the library is not locked); each its mark, its name and what it is.
 pub fn vault_add(core : Core, here : Here, from~ : @sf.Beside) -> Unit {
   let ws = here.workspace
-  let v = (core.topic)("vaults", { "workspace": str(ws) }).value
+  let v = (core.topic)("vaults", { "workspace": str(ws) }).get().value
   let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
   let plain = flag(v, "plain")
   let kinds = ["profile"]
@@ -157,14 +157,15 @@ pub fn vault_editor_dialog(
           @sf.field(c, @sf.t("web-pages.vault.editor.file"), fn() {
             // (the button the same before and after: what was picked fades in beside it, the row no higher)
             c.box(style=vd_file, fn() {
-              if @sf.button(c, @sf.t("web-pages.vault.editor.pickFile"), key=key("file"), tone=Plain) {
+              @sf.button(c, @sf.t("web-pages.vault.editor.pickFile"), key=key("file"), tone=Plain, on_press=fn() {
                 e.file_pick = @ui.pick(Files)
-              }
+              }) |> ignore
               if e.file_content != "" {
                 let name = if e.file_name != "" { e.file_name } else { @sf.t("web-pages.vault.kind.file") }
+                // (faded in as it is drawn)
                 let shown = @kit.presence(c, key("file/" + name), true).t
-                c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.alpha(@sf.theme().p.text, shown))], style=vd_file_name)
-                |> ignore
+                let i = c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.theme().p.text)], style=vd_file_name)
+                c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get(c)))) })
               }
             })
             |> ignore
@@ -230,7 +231,7 @@ pub fn vault_editor_dialog(
       match row {
         Some(r) => {
           let removing = is_doing(core, ["vault.deleteItem"], [("workspace", ws), ("vault", vault)])
-          if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger, busy=removing) {
+          @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger, busy=removing, on_press=fn() {
             confirm(
               @sf.t("web-pages.vault.deleteTitle", args=[("name", text(was, "name"))]),
               @sf.t("web-pages.vault.deleteBody"),
@@ -245,17 +246,17 @@ pub fn vault_editor_dialog(
                 })
               },
             )
-          }
+          }) |> ignore
         }
         None => ()
       }
       c.spacer()
-      if @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost, on_press=fn() {
         c.blur()
         shut()
-      }
+      }) |> ignore
       let ready = vault_problem(k, words, e.agent, e.mode) == ""
-      if @sf.button(c, @sf.t("common.save"), key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
+      @sf.button(c, @sf.t("common.save"), key=key("save"), tone=Primary, busy=e.saving, disabled=!ready, on_press=fn() {
         e.saving = true
         e.error = ""
         c.blur()
@@ -280,7 +281,7 @@ pub fn vault_editor_dialog(
             }
           },
         )
-      }
+      }) |> ignore
     },
   )
 }
@@ -308,13 +309,13 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
       let n = count_of()
       c.text("\{n} / 24", style=desk_note) |> ignore
       c.spacer()
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         c.blur()
         shut()
-      }
+      }) |> ignore
       let (busy, _) = state.get()
       // (its button's words short beside the count and 取消 on a phone: the dialog's title says what it is)
-      if @sf.button(c, @sf.t("web-pages.vault.recoverGo"), key=key + "/go", tone=Primary, busy~, disabled=n != 24) {
+      @sf.button(c, @sf.t("web-pages.vault.recoverGo"), key=key + "/go", tone=Primary, busy~, disabled=n != 24, on_press=fn() {
         state.set((true, ""))
         (core.call)("vault.recover", obj([("workspace", str(ws)), ("words", str(words.val.trim(chars=" \n").to_lower().to_owned()))]), fn(
           r,
@@ -337,7 +338,7 @@ pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
             Err(e) => state.set((false, vault_said(e).unwrap_or("")))
           }
         })
-      }
+      }) |> ignore
     },
   )
 }

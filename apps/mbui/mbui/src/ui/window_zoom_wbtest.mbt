@@ -33,9 +33,9 @@ test "window zoom: a host press and accessibility agree at both extremes" {
     let hits = Ref(0)
     let t = Tester::new(fn(c) {
       let id = c.id("zoom-test-button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         hits.val += 1
-      }
+      })
       c.box(id~, label="Zoom test", w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
     }, w=400.0, h=300.0, window_corner=16.0)
     t.set_a11y(true)

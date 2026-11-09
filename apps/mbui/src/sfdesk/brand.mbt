@@ -13,7 +13,7 @@ fn update_shown() -> Bool {
 }
 
 ///|
-/// The desktop app's newer build, the library's update key (Home.kt's, one look on every screen), the size of the
+/// The desktop app's newer build, the library's update key (one look on every screen), the size of the
 /// filter beside it (32, its mark 16): in the sidebar's first row before the filter (update_in_row); with the sidebar
 /// closed, where the bar's start leaves room for it, past the rail (and the window's buttons). `top`: the system's
 /// bars over the window (a phone's status bar), which take what is pressed under them: it goes below them.
@@ -36,13 +36,13 @@ fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
   }
   let (label, tip, busy) = update_said()
   let offered = now is Offered(_, ..)
-  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy, coming~, offered~) {
+  @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy, coming~, offered~, on_press=fn() {
     if coming is Some(_) {
       @sfbase.update_dialog(src)
     } else {
       update_go(src)
     }
-  }
+  })
 }
 
 ///|

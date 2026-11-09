@@ -60,7 +60,7 @@ const files = new Map<string, Part[]>();
 for (const p of parts) for (const f of await inputs(p)) files.set(f, [...(files.get(f) ?? []), p]);
 
 // Each file on its own: what plan.sh decides when it is the only one changed.
-const script = `PLAN_SOURCE=1 PLAN_MODULES=0; . scripts/plan.sh; range=
+const script = `PLAN_SOURCE=1; . scripts/plan.sh; range=
 while IFS= read -r changed; do decide; echo "$changed api=$api station=$station android_beta=$android_beta mac_beta=$mac_beta win_beta=$win_beta"; done`;
 const out = execFileSync("bash", ["-c", script], { cwd: root, input: [...files.keys()].join("\n") + "\n", encoding: "utf8" });
 

@@ -1,7 +1,7 @@
-// Codex driver (the Rust station's runtime/codex.rs): one shared `codex app-server` per profile, under a runner whose id comes
+// Codex driver: one shared `codex app-server` per profile, under a runner whose id comes
 // from the profile, one thread per session.
 //
-// Pinned by spikes (spike/README.md):
+// Pinned by spikes:
 // - a thread adds <1MB to its app-server, so sessions share one process;
 // - per-session settings (the MCP endpoint and token) travel in the thread/start|resume `config`, not the process
 //   environment;
@@ -17,10 +17,12 @@ import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
-import { existingRunners, listening, type RunnerInfo } from "./runner.ts";
+import { liveRunners, listening, type RunnerInfo } from "./runner.ts";
+import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { wall } from "../ops/fibers.ts";
 import { Said, stationLang, tr } from "../ops/i18n.ts";
-import { run } from "../updates/runtimes.ts";
+import { findCommand, run } from "../updates/runtimes.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { versionIn } from "../updates/versions.ts";
 import { findMissingCodexHost } from "../updates/codex-repair.ts";
 
@@ -434,7 +436,7 @@ class Host {
 /// `draining`: being replaced, its turns ending on it (`drain`).
 export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string; loginStale?: boolean; runtimeStale?: boolean; keep?: number; draining?: boolean };
 
-/// A thread as a next station takes it up (codex.rs HandedThread), with what its app-server needs (HandedHost).
+/// A thread as a next station takes it up, with what its app-server needs (HandedHost).
 export type CodexSnapshot = {
   runtime: "codex";
   threadId: string;
@@ -482,6 +484,8 @@ export type CodexDriverOptions = {
   /// it ever wrote read again on the main thread (131 MB on a station, 2026-11-02: held 4.8 s as devices came back after an
   /// update), and taken from the station still handing over, which let go of the turns running on it.
   takenUp?: Promise<unknown>;
+  /// Another stretch of an app-server's output read again: the launcher hears the station gets on with it.
+  taking?: () => void;
 };
 
 /// An app-server's runner keeps all it wrote (every diff and command output of every thread on it, hundreds of MB in a
@@ -491,10 +495,15 @@ const OUTPUT_LIMIT = 64 * 1024 * 1024;
 
 /// What an app-server writes most of and that says nothing of where a thread stands (LiveFromCodex keeps no state of
 /// either): not parsed again when its output is read after a crash.
+/// Lines of an app-server's output read again at a time before the main thread is let go (`takeUp`): three hosts of
+/// 172 to 291 MB held it up to 32 s at a time on a loaded station, and six starts in a row took up at most one session
+/// in the launcher's 90 s (2026-11-06).
+const TAKE_UP_LINES = 4096;
+
 const UNTOLD = ['{"method":"turn/diff/updated"', '{"method":"item/commandExecution/outputDelta"'];
 
 /// A borrowed login this close to its end is replaced in its home's auth.json, under the app-server running on it: Codex
-/// reads that file again when it is refused (UnauthorizedRecovery's first step, codex-rs login/src/auth/manager.rs) and
+/// reads that file again when it is refused (UnauthorizedRecovery's first step) and
 /// goes on with the new one, its threads and their turns as they were.
 const LENT_RENEW_MS = 6 * 3600_000;
 
@@ -535,6 +544,15 @@ export class CodexDriver implements AgentDriver {
 
   runtime(): "codex" {
     return "codex";
+  }
+
+  async updateMatchesStation(profile: Profile): Promise<boolean> {
+    if (this.command !== "codex") return false;
+    const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(profile, "codex"), profile.id) };
+    const [agentEnv, stationEnv] = await Promise.all([withShellCommand(this.command, env), withShellCommand(this.command, this.env)]);
+    const agent = findCommand(this.command, agentEnv);
+    const station = findCommand(this.command, stationEnv);
+    return agent !== null && station !== null && agent.onPath === station.onPath && agent.real === station.real;
   }
 
   /// Has the app-server running on a profile renew its login now (its login is not renewed from outside meanwhile: it
@@ -611,13 +629,25 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// Codex installed or updated (from the station's pages): app-servers of the old one are replaced once idle.
-  async runtimeChanged(replaced = false) {
+  async runtimeChanged(replaced = false, drainBusy = false) {
     // Mark the old hosts before probing the new version, so a concurrent turn cannot join one during the probe.
     if (replaced) await this.serial(async () => { for (const host of this.hosts.values()) host.runtimeStale = true; });
     const installed = await this.installedVersion(true);
+    const draining: Host[] = [];
     await this.serial(async () => {
-      for (const id of [...this.hosts.keys()]) await this.retireStale(id, installed);
+      // Do not let new turns join a known older host while its existing turns are still finishing.
+      if (installed !== null) for (const host of this.hosts.values()) if (host.version !== null && host.version !== installed) host.runtimeStale = true;
+      for (const [id, host] of [...this.hosts]) {
+        if (drainBusy && host.runtimeStale && host.turns.size > 0) {
+          // As with an outgrown host, its running turns finish there; new ones can start on the updated executable.
+          host.draining = true;
+          this.hosts.delete(id);
+          this.draining.add(host);
+          draining.push(host);
+        } else await this.retireStale(id, installed);
+      }
     });
+    for (const host of draining) void this.drain(host).catch((error) => log.warn("agents::codex", "a codex app-server being replaced not let go of", { profile: host.profile, error: String(error) }));
   }
 
   /// A new sign-in must be loaded by every app-server of this profile, without interrupting its turns.
@@ -686,7 +716,7 @@ export class CodexDriver implements AgentDriver {
     // One left by the station before that no session handed over is on (`sweepLeft`, later) is one of them already: the
     // sessions are all taken up by now (`host` waits for that).
     await this.serial(async () => {
-      for (const info of this.leftRunners(key)) if (info.id !== on.proc.info.id) this.keepDraining(this.holdLeft(profile, info, key));
+      for (const info of await this.leftRunners(key)) if (info.id !== on.proc.info.id) this.keepDraining(this.holdLeft(profile, info, key));
     });
     for (const host of [...this.draining]) {
       if (host === on || host.key !== key || !host.alive()) continue;
@@ -712,17 +742,18 @@ export class CodexDriver implements AgentDriver {
 
   /// The runners of a host key an earlier station left, the oldest first: its own (`runnerId`) and those of app-servers
   /// started while one was being replaced (`<id>.<n>`); none this driver holds.
-  private leftRunners(key: string): RunnerInfo[] {
+  private async leftRunners(key: string): Promise<RunnerInfo[]> {
     const base = runnerId("codex", key);
+    const runners = await liveRunners(this.data, { strict: true });
     const held = new Set([...this.hosts.values(), ...this.draining].map((h) => h.proc.info.id));
-    return existingRunners(this.data)
+    return runners
       .filter((r) => (r.id === base || r.id.startsWith(`${base}.`)) && !held.has(r.id) && listening(r))
       .sort((a, b) => a.startedAt - b.startedAt);
   }
 
   /// What an earlier station left of a host key taken up: the newest as its app-server, any older as being replaced.
   private async takeUpLeft(profile: Profile, key: string): Promise<Host | null> {
-    const left = this.leftRunners(key);
+    const left = await this.leftRunners(key);
     const newest = left.pop();
     if (newest === undefined) return null;
     for (const older of left) this.keepDraining(await this.takeUp(profile, older, key));
@@ -734,7 +765,7 @@ export class CodexDriver implements AgentDriver {
   private sweepLeft(profile: Profile, key: string) {
     wall.after(ORPHANS_MS, () => {
       void this.serial(async () => {
-        for (const info of this.leftRunners(key)) this.keepDraining(this.holdLeft(profile, info, key));
+        for (const info of await this.leftRunners(key)) this.keepDraining(this.holdLeft(profile, info, key));
       }).catch((error) => log.warn("agents::codex", "a codex app-server left being replaced not taken up", { key, error: String(error) }));
     });
   }
@@ -823,7 +854,12 @@ export class CodexDriver implements AgentDriver {
     const { at, keep } = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
     const began = new Map<string, number>();
+    let read = 0;
     for (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
+      if (++read % TAKE_UP_LINES === 0) {
+        this.options.taking?.();
+        await new Promise((resolve) => setImmediate(resolve));
+      }
       if (UNTOLD.some((m) => line.startsWith(m))) continue;
       let msg: Json;
       try {
@@ -916,6 +952,14 @@ export class CodexDriver implements AgentDriver {
     } : {
       "mcp_servers.stillfail.url": options.mcpUrl,
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
+      // A repository's rules told as its tools first touch it, and again after a compaction (./repo-rules.ts: Codex
+      // reads AGENTS.md only from where it starts up). Hooks run only once trusted, which a thread's config may say
+      // it needs not (an app-server takes no --dangerously-bypass-hook-trust); hooks it knows no more are ignored.
+      hooks: {
+        PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+        PostCompact: [{ hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+      },
+      bypass_hook_trust: true,
     };
     if (options.textOnly) {
       // An empty table is merged with the profile's configured servers. Read their names without config/read, whose
@@ -1133,6 +1177,10 @@ export function codexToolsLost(method: string, params: Json): string | null {
   return unreachable(error) ? chars(error, 300) : null;
 }
 
+/// Whether a thread's notification says it compacted its context, on its own as it filled or by thread/compact/start:
+/// a contextCompaction item done.
+export const codexCompacted = (method: string, params: Json) => method === "item/completed" && params?.item?.type === "contextCompaction";
+
 export class CodexSession implements AgentSession {
   private driver: CodexDriver;
   private threadId: string;
@@ -1180,6 +1228,7 @@ export class CodexSession implements AgentSession {
       for (const event of this.live.feed(method, params)) this.events({ type: "live", event });
       const lost = codexToolsLost(method, params);
       if (lost !== null) this.events({ type: "toolsLost", why: lost });
+      if (codexCompacted(method, params)) this.events({ type: "compacted" });
       if (method === "turn/started") {
         const id = params?.turn?.id;
         if (typeof id === "string") this.state.turnId = id;
@@ -1209,6 +1258,14 @@ export class CodexSession implements AgentSession {
 
   id() {
     return this.threadId;
+  }
+
+  runtimeVersion() {
+    return this.host.version;
+  }
+
+  runtimeUpdateMatchesStation() {
+    return this.driver.updateMatchesStation(this.profile);
   }
 
   rememberTranscript(path: unknown) {

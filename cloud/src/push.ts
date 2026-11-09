@@ -1,4 +1,4 @@
-// Push notifications (docs/notifications.md): devices register where they can be pushed to (a browser's Web Push
+// Push notifications: devices register where they can be pushed to (a browser's Web Push
 // subscription, the Android app's FCM token, the iOS app's APNs token) with the signed-in account and session; a station sends the notices of
 // its chats, signed with its key, naming who they are for by email; still.fail cloud makes each one's text and pushes it
 // to the devices of those people who are members of the station's workspace (the one the notices say, for a station in

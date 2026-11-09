@@ -43,22 +43,25 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           if is_made && i == cur {
             @sf.pill(c, @sf.t("android-misc.bar.current"), tone=Accented)
           }
-          if is_made && i != cur && @sf.action(c, "bar-use/" + i.to_string(), @sf.t("android-misc.bar.use")) {
-            @settings.save_bars(core, made, i)
+          if is_made && i != cur {
+            @sf.action(c, "bar-use/" + i.to_string(), @sf.t("android-misc.bar.use"), on_press=fn() {
+              @settings.save_bars(core, made, i)
+            })
           }
-          if sets.length() > 1 &&
-            @sf.action(c, "bar-delete/" + i.to_string(), @sf.t("android-misc.bar.delete"), bad=true) {
-            if !is_made {
-              @settings.bar_adding.set(false)
-            } else {
-              let left : Array[Array[String]] = []
-              for k, x in made {
-                if k != i {
-                  left.push(x)
+          if sets.length() > 1 {
+            @sf.action(c, "bar-delete/" + i.to_string(), @sf.t("android-misc.bar.delete"), bad=true, on_press=fn() {
+              if !is_made {
+                @settings.bar_adding.set(false)
+              } else {
+                let left : Array[Array[String]] = []
+                for k, x in made {
+                  if k != i {
+                    left.push(x)
+                  }
                 }
+                @settings.save_bars(core, left, if cur > i || cur >= left.length() { if cur - 1 < 0 { 0 } else { cur - 1 } } else { cur })
               }
-              @settings.save_bars(core, left, if cur > i || cur >= left.length() { if cur - 1 < 0 { 0 } else { cur - 1 } } else { cur })
-            }
+            })
           }
         },
         fn() {
@@ -72,12 +75,12 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   blocks.push(fn() {
     @sf.group(c, fn() {
       let id = c.id("bar-new")
-      if @sf.link_row(c, "bar-new", @sf.t("android-misc.bar.new"), chevron=false, lead=fn() {
-          @sf.icon(c, "plus", size=bar_new_mark, color=@sf.link_ink()) |> ignore
-        }) {
+      @sf.link_row(c, "bar-new", @sf.t("android-misc.bar.new"), chevron=false, lead=fn() {
+        @sf.icon(c, "plus", size=bar_new_mark, color=@sf.link_ink()) |> ignore
+      }, on_press=fn() {
         @settings.bar_adding.set(true)
         pick_for(made.length(), Of(id))
-      }
+      }) |> ignore
     })
   })
   blocks.push(fn() {
@@ -141,7 +144,7 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
         }
         None => false
       }
-      // a screen reader's (BarSettings.kt's actions 左移, 右移): one slot along
+      // a screen reader's (右移): one slot along
       if c.action_asked(id, Decrement) && j > 0 {
         move(j, j - 1)
       }
@@ -161,10 +164,10 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
         if !only {
           c.layer(fn() {
             let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
-            if c.clicked(rid) {
+            c.on_press(rid, fn() {
               let (now, ncur) = (core.bars)()
               @settings.save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
-            }
+            })
             // in the slot's top right corner, concentric with it (so with the card's, the last slot's corner in the
             // card's), however wide a slot is
             let said = @sf.t("android-misc.bar.remove", args=[("name", bar_place_name(key))])
@@ -187,9 +190,9 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
     }
     if set.length() < @settings.bar_size {
       let aid = c.id("bar-add/" + i.to_string())
-      if c.clicked(aid) {
+      c.on_press(aid, fn() {
         add(Of(aid))
-      }
+      })
       c.box(style=bar_face, id=aid, fn() {
         c.box(style=bar_face_words, fn() {
           c.box(style=bar_add_ring, fn() {
@@ -209,7 +212,7 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
   |> ignore
 }
 
-// ── styles (BarSettings.kt) ─────────────────────────────────────────────
+// ── styles ─────────────────────────────────────────────
 
 ///|
 /// The slots side by side, each a quarter of the card, as far apart as they go where it is wider than four slots.
@@ -267,7 +270,7 @@ let bar_remove : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Neutral align=ACe
 // kept across runs: a value (no field of it changes)
 let bar_remove_at : @ui.Style = @ui.style(
   w=Full,
-  p=@sf.room_of(@sf.capsule_in(@sf.group_corner, bar_remove_side) - @sf.list_pad),
+  p=@sf.room_of(@ui.capsule_in(@sf.group_corner, bar_remove_side) - @sf.list_pad),
   align=AEnd,
 )
 

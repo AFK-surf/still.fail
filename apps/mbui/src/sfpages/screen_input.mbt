@@ -1,7 +1,7 @@
-// What a person does on the device, as a station's screen takes it (ember apps/android app/remote/Input.kt;
-// docs/remote-screens.md, `screen.input`): points in 0..1 of the frame, buttons as the DOM's bit mask, keys by the DOM's
+// What a person does on the device, as a station's screen takes it (still.fail apps/android app/remote/Input.kt;
+// `screen.input`): points in 0..1 of the frame, buttons as the DOM's bit mask, keys by the DOM's
 // KeyboardEvent names, typed text as it is committed. And the frame's own zoom and the trackpad's pointer, on this
-// device only (ScreenViewer.kt ViewZoom: mbui's @kit.Zoom; PadPointer).
+// device only (PadPointer).
 
 ///|
 /// The DOM's mouse buttons (MouseEvent.buttons).
@@ -57,17 +57,6 @@ fn clamp01(v : Double) -> Double {
     0.0
   } else if v > 1.0 {
     1.0
-  } else {
-    v
-  }
-}
-
-///|
-fn clamp_to(v : Double, lo : Double, hi : Double) -> Double {
-  if v < lo {
-    lo
-  } else if v > hi {
-    hi
   } else {
     v
   }
@@ -166,7 +155,7 @@ fn mods_round(send : (Json) -> Unit, mods : Int, kind : String) -> Unit {
 }
 
 ///|
-/// The station's pointer's shape (a CSS cursor's name: docs/remote-screens.md `cursor`) as this device draws its own.
+/// The station's pointer's shape (a CSS cursor's name) as this device draws its own.
 fn cursor_of_shape(shape : String) -> @ui.Cursor {
   match shape {
     "pointer" => Hand
@@ -268,9 +257,9 @@ fn screen_zoom() -> @kit.Zoom {
 let screen_max_zoom : Double = 5.0
 
 ///|
-/// Where the frame is drawn on the stage now (zoomed), nothing before its size is known.
-fn ScreenUi::shown(self : ScreenUi) -> SRect {
-  match self.zoom.rect() {
+/// Where the frame is drawn on the stage now (zoomed), as the old view `c` has it; nothing before its size is known.
+fn ScreenUi::shown(self : ScreenUi, c : @ui.Ctx) -> SRect {
+  match self.zoom.rect(c) {
     Some((x, y, w, h)) => cased_in({ x, y, w, h }, self.case_x, self.case_y)
     None => srect_zero
   }
@@ -278,15 +267,15 @@ fn ScreenUi::shown(self : ScreenUi) -> SRect {
 
 ///|
 /// The part of the frame in sight while it is zoomed in (0..1 of it each way); None while it is not (all of it is).
-fn ScreenUi::in_sight(self : ScreenUi) -> Part? {
-  let s = self.shown()
-  if !self.zoom.zoomed() || s.w <= 0.0 || s.h <= 0.0 || self.box_w <= 0.0 || self.box_h <= 0.0 {
+fn ScreenUi::in_sight(self : ScreenUi, c : @ui.Ctx) -> Part? {
+  let s = self.shown(c)
+  if !self.zoom.zoomed(c) || s.w <= 0.0 || s.h <= 0.0 || self.box_w.get() <= 0.0 || self.box_h.get() <= 0.0 {
     return None
   }
   let x0 = dmax(0.0, -s.x / s.w)
   let y0 = dmax(0.0, -s.y / s.h)
-  let x1 = dmin(1.0, (self.box_w - s.x) / s.w)
-  let y1 = dmin(1.0, (self.box_h - s.y) / s.h)
+  let x1 = dmin(1.0, (self.box_w.get() - s.x) / s.w)
+  let y1 = dmin(1.0, (self.box_h.get() - s.y) / s.h)
   if x1 <= x0 || y1 <= y0 {
     None
   } else {
@@ -300,11 +289,6 @@ fn ScreenUi::in_sight(self : ScreenUi) -> Part? {
 fn pad_gain(dp_per_ms : Double) -> Double {
   0.55 + 1.6 * clamp01((dp_per_ms - 0.1) / 1.4)
 }
-
-///|
-/// How long after the finger moved the pointer the station's word on it is taken again (its echo of the moves is
-/// behind).
-let pad_settle_ms : Double = 600.0
 
 ///|
 /// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the

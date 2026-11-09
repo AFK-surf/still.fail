@@ -1,4 +1,4 @@
-// alice's other device in the local still.fail (scripts/e2e-local.sh): ember's TS core in Node (client/core-ts
+// alice's other device in the local still.fail (scripts/e2e-local.sh): still.fail's TS core in Node (client/core-ts
 // hosts/node.ts, on the station's own mesh addon), signed in with the dev cloud's mock account, asked as a UI asks.
 // It makes the chat the app's flows run in and says things in it, so the app sees a chat made and words come from
 // elsewhere; and it reads the chat back, as a check from outside the app.
@@ -32,19 +32,19 @@
 //   node e2e/peer.ts stations [WORDS|!WORDS]  the workspace's stations as the cloud has them: STATION <id> <name>
 //                                          emoji=<emoji> icon=<icon>; with WORDS once a line has them (!: none has)
 //
-// E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
+// E2E_SF_SRC (the still.fail checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
-const ember = process.env.E2E_EMBER!;
+const src = process.env.E2E_SF_SRC!;
 const origin = process.env.E2E_ORIGIN!;
 const dir = process.env.E2E_PEER_DATA!;
 mkdirSync(dir, { recursive: true });
 // (as URLs: a Windows path is no module specifier)
-const { start } = await import(pathToFileURL(join(ember, "client/core-ts/src/hosts/node.ts")).href);
-const { apply } = await import(pathToFileURL(join(ember, "client/core-ts/src/delta.ts")).href);
+const { start } = await import(pathToFileURL(join(src, "client/core-ts/src/hosts/node.ts")).href);
+const { apply } = await import(pathToFileURL(join(src, "client/core-ts/src/delta.ts")).href);
 
 type J = any;
 const pending = new Map<number, (m: J) => void>();

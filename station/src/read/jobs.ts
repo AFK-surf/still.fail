@@ -6,7 +6,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import { setLang } from "./spoken.ts";
 import * as store from "./store.ts";
 import type { Json, JobRow, Store } from "./store.ts";
-import { HttpError, chats, scopeOf } from "./views.ts";
+import { HttpError, chats, scopeOfJobNames } from "./views.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 
@@ -89,7 +89,7 @@ export function rustLines(text: string): string[] {
   return parts.map((l, i) => (i < parts.length - 1 || ended) && l.endsWith("\r") ? l.slice(0, -1) : l);
 }
 
-/// GET /jobs (views.rs `open_jobs`): the jobs still up (running, or a service being started again), newest first, each
+/// GET /jobs: the jobs still up (running, or a service being started again), newest first, each
 /// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived). Those of the
 /// viewer's workspace's chats. The jobs up by the index of their states, and the chats of their sessions alone: read
 /// with every job the station ever ran, the whole sidebar and (for a session whose own chat is not listed) the whole
@@ -104,7 +104,7 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
     if (ms >= 1_000) log.warn("readers", "a jobs read's stages", { ms, named, ...stage });
   };
   setLang(lang);
-  const up = store.upJobs(s);
+  const up = store.upJobs(s, viewer);
   const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
   const open = up.filter((j) => seen(j.sessionKey));
   const looked = Math.round(performance.now() - started);
@@ -116,9 +116,9 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
   }
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
   // each, as the sidebar lists them): of the items its session and the chats it takes part in make (views.ts
-  // `scopeOf`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
+  // `scopeOfJobNames`), each as the whole list has it. The archive's are read only for a session whose own chat is not listed.
   const keys = new Set(open.map((j) => j.sessionKey));
-  const scope = scopeOf(s, [...keys], store.threadsOfSessions(s, [...keys]));
+  const scope = scopeOfJobNames(s, [...keys]);
   const scan = (archived: boolean) => {
     const own = new Map<string, Json>();
     const any = new Map<string, Json>();

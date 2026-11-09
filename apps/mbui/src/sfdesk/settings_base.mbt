@@ -13,7 +13,6 @@ using @settings {
   failing_of,
   first_text,
   has,
-  hit,
   is_doing,
   join,
   lasts_choice,

@@ -1,4 +1,4 @@
-// The wide frame's rail and its sidebar as the web's (Rail.tsx, brand.tsx, shell.css.ts dock): folded, the rail a bar
+// The wide frame's rail and its sidebar as the web's (brand.tsx, shell.css.ts dock): folded, the rail a bar
 // of its own and the list shown a while as the pointer comes onto it; each sidebar's width and folding kept on the
 // device; the lit place pressed again folds or opens; ⌃1 … ⌃9 the workspaces; a row's menu relays it.
 
@@ -50,11 +50,12 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
 }
 
 ///|
-/// The ground (30, Rail.css.ts item's) of the rail's place at `rect` (its 38 to press): its box as laid out.
+/// The ground (30) of the rail's place at `rect` (its 38 to press): its box as laid out (a node of the window's tree:
+/// among the tree's, Tester::boxes_held).
 fn rail_ground_at(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> @ui.Laid {
   let (x, y, w, h) = rect
   t
-  .boxes()
+  .boxes_held()
   .iter()
   .find_first(fn(b) {
     b.kind != "text" && b.w == 30.0 && b.h == 30.0 && b.x >= x && b.y >= y && b.x + b.w <= x + w && b.y + b.h <= y + h
@@ -78,12 +79,19 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       t.run_for(@ui.move_most_ms)
       assert_true(t.find("新建对话") is Some(_), msg="shown a while")
     }
-    let bar = t
-      .boxes()
-      .iter()
-      .find_first(fn(b) { b.x == @sfdesk.closed_bar_in && b.radius > 0.0 && b.h > 400.0 && b.bg != 0L })
+    // (the block's ground a node of the window's tree: as the tree draws it)
+    guard @ui.view_tree()
       .unwrap()
-    assert_eq(bar.radii, (follow, follow, follow, follow))
+      .drawn()
+      .iter()
+      .find_first(fn(d) { d.x == @sfdesk.closed_bar_in && d.h > 400.0 && d.ground != 0L }) is Some(bar) else {
+      fail("no closed bar's ground drawn at \{@sfdesk.closed_bar_in}")
+    }
+    let radii = match bar.corners {
+      Some(k) => k
+      None => (bar.radius, bar.radius, bar.radius, bar.radius)
+    }
+    assert_eq(radii, (follow, follow, follow, follow))
     // the settings' ground at the bar's foot, 6 from its left and its foot: the bar's corner there (10) less 6, 4, is
     // squarer than the ranges let a corner be (6): it stands alone, a small block's 10, all round alike; a place's in
     // the middle the same, one layer, one corner
@@ -264,6 +272,7 @@ test "wide: a row's menu has 接力到频道… for a chat with an agent" {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   assert_true(t.find("接力到频道…") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -289,11 +298,11 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   let archive : Json = { "days": [{ "label": "今天", "items": [row("a1", "整理上个月的发票"), row("a2", "试一下新的图标尺寸")] }] }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "archive" {
         { value: Some(archive), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -385,11 +394,11 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
   let kept_told = @signals.signal(0)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match changed.get(name) {
         Some(v) => { value: Some(v), error: None, version: 1 }
         None if name == "prefs" =>
-          match (base.topic)(name, params) {
+          match base.topic(name, params).get().snapshot() {
             { value: Some(Object(m)), version, .. } => {
               let p = m.copy()
               p["trouble"] = Json::object(kept)
@@ -397,7 +406,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
             }
             t => t
           }
-        None => (base.topic)(name, params)
+        None => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -426,7 +435,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
 ///|
 /// The home fixture's chats of ws1 with what is wrong with its stations.
 fn chats_in_trouble() -> Json {
-  match (fixture("home").topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value {
+  match fixture("home").topic("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).get().value {
     Some(Object(m)) => {
       let v = m.copy()
       v["trouble"] = { "text": "Maple 连不上了", "state": "error" }
@@ -515,7 +524,7 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  // one gone wrong is not let go from here (Attention.tsx: 忽略 for what waits on the viewer)
+  // one gone wrong is not let go from here
   let (ax, ay) = t.find("磁盘满了").unwrap()
   t.move(ax, ay)
   t.frame()
@@ -1030,11 +1039,11 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   // (the second workspace's own station: the fixture's list is the first's)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, params.get("scope")) {
         ("stations", Some(String("ws2"))) =>
-          match ((base.topic)(name, { "scope": Json::string("ws1") }).value) {
+          match (base.topic(name, { "scope": Json::string("ws1") }).get().value) {
             Some(Array(list)) =>
               match list[0] {
                 Object(m) => {

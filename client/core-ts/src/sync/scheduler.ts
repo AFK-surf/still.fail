@@ -1,4 +1,4 @@
-// The sync scheduler (docs/core-ts.md, rule 6): every request the core makes of still.fail cloud and the stations is a
+// The sync scheduler (rule 6): every request the core makes of still.fail cloud and the stations is a
 // task here, run by the lane it belongs to (still.fail cloud's, or a station's) a few at a time, the most urgent first.
 // What exists to be synced is the sync's to say, whatever the UI shows; the UI only makes some of it more urgent
 // (`prioritize`: a chat opened, a page shown). A task asked for again while it waits or runs is the same task: its

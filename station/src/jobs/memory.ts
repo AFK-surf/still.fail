@@ -1,4 +1,4 @@
-// The station's watch over the memory of what its agents run (docs/station-scheduling.md): their jobs and other
+// The station's watch over the memory of what its agents run: their jobs and other
 // stations' tasks here, and the commands the agents' runtimes run themselves (a test an agent starts in its own shell).
 // Nothing is stopped for using much: its agent is told. Only when the system says it is about to run out of memory
 // (critical) is the largest of them stopped, one at a time, its agent told why: the machine is kept up.
@@ -24,6 +24,7 @@ import { log } from "../ops/log.ts";
 import { type ProcessInfo, platform, treeOf } from "../platform/index.ts";
 import type { Store } from "../store/store.ts";
 import type { DirectorySession } from "../store/session-directory.ts";
+import type { ProcessJob } from "../store/process-jobs.ts";
 import type { Pressure } from "./admit.ts";
 import { type Jobs, named } from "./jobs.ts";
 
@@ -243,8 +244,13 @@ export class MemoryWatch {
 }
 
 /// The jobs running now, as the watches see them (the resources' too, resources/watch.ts).
-export function watchedJobs(store: Store): WatchedJob[] {
-  return store.jobsRunning().flatMap((j) => (j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : []));
+export type ProcessJobsLookup = { read(): ProcessJob[] | null; consider(running: number): void };
+export function watchedJobs(store: Store, lookup?: ProcessJobsLookup): WatchedJob[] {
+  const indexed = lookup?.read() ?? null;
+  if (indexed !== null) return indexed.map((j) => ({ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }));
+  const running = store.jobsRunning();
+  lookup?.consider(running.length);
+  return running.flatMap((j) => (j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : []));
 }
 
 /// The session of `sessions` whose directory (its workspace, or where it runs) holds `dir`, the deepest; null for none.
@@ -306,7 +312,7 @@ export async function runnersWithSessions(data: string, whose: (ids: string[]) =
 /// The watch as the station runs it: over its jobs (`jobs`' store) and the commands of its runtimes (the runners of
 /// before and now, <data>/run/runners), on this machine's memory.
 export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock; runnerNames?: RunnerNameLookup;
-  directory?: (dir: string) => DirectorySession | null }): MemoryWatch {
+  directory?: (dir: string) => DirectorySession | null; processJobs?: ProcessJobsLookup }): MemoryWatch {
   const { store } = o;
   const whose = runnerSessions(store, o.runnerNames);
   // A directory none of the sessions shown has, and whose it is among every session ever (none: null): a session made
@@ -322,7 +328,7 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
     table: (exact) => platform.processTable(exact),
     totalBytes: () => totalmem(),
     cwds: (pids) => platform.cwds(pids),
-    jobs: () => watchedJobs(store),
+    jobs: () => watchedJobs(store, o.processJobs),
     agents: async () => (await runnersWithSessions(o.data, whose)).map((r) => ({ pid: r.pid, session: r.session })),
     // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's),
     // and what that found kept: under memory pressure (the whole while on a station) the watch looks every few seconds, and

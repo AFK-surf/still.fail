@@ -1,4 +1,4 @@
-// A station's files picked to go into a message (ember web/src/mobile/StationFiles.tsx, as the phone's ＋ → Station
+// A station's files picked to go into a message (still.fail web/src/mobile/StationFiles.tsx, as the phone's ＋ → Station
 // 文件 and a narrow chat's 文件 tab): each station's home and the person's favorites, under its name (离线 while away),
 // a folder entered by a tap, the way back as crumbs over
 // them; files ticked (and the folder shown, as a whole), then 添加: each into the chat's message as the 文件 tab's
@@ -49,12 +49,10 @@ pub fn station_files_pick(src : Source, key : String) -> Unit {
     live=fn() { (@sf.t("web-pages.chat.files"), "", "") },
     tall=station_pick_tall,
     foot=fn(c, close) {
-      if @sf.button(c, @sf.t("common.cancel"), key="station-pick/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="station-pick/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
-      if station_pick_add(c, key) {
-        close()
-      }
+      }) |> ignore
+      station_pick_add(c, key, then=close)
     },
   )
 }
@@ -77,8 +75,8 @@ fn draft_workspace(key : String) -> String {
 }
 
 ///|
-/// 添加 (添加 n 个 once something is ticked): pressed, what is ticked goes into the message of chat `key`. Whether it was.
-fn station_pick_add(c : @ui.Ctx, key : String) -> Bool {
+/// 添加 (添加 n 个 once something is ticked): pressed, what is ticked goes into the message of chat `key`, then `then`.
+fn station_pick_add(c : @ui.Ctx, key : String, then~ : () -> Unit) -> Unit {
   let ticked = spick.ticked.get()
   let n = ticked.length()
   let label = if n == 0 {
@@ -86,15 +84,14 @@ fn station_pick_add(c : @ui.Ctx, key : String) -> Bool {
   } else {
     @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   }
-  if @sf.button(c, label, key="station-pick/add", tone=Primary, disabled=n == 0) {
+  @sf.button(c, label, key="station-pick/add", tone=Primary, disabled=n == 0, on_press=fn() {
     for d in ticked {
       files_into(key, d)
     }
     spick.ticked.set([])
-    true
-  } else {
-    false
-  }
+    then()
+  })
+  |> ignore
 }
 
 ///|
@@ -183,11 +180,14 @@ fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, String, Bool
       c.text(words, style=pick_head_words) |> ignore
     })
     |> ignore
-  } else if @sf.link_row(c, "station-pick/place/" + s.station + "|" + root + "|" + path, name, note=dv_absolute(root, path), lead=fn() {
+  } else {
+    @sf.link_row(c, "station-pick/place/" + s.station + "|" + root + "|" + path, name, note=dv_absolute(root, path), lead=fn() {
       @sf.icon(c, if home { "server" } else { "folder" }, size=pick_mark, color=t.p.muted) |> ignore
-    }) {
-    let root_name = if path == "" { name } else { dv_root_label(s.roots, root) }
-    spick.at.set(Some({ station: s.station, station_name: s.name, root, root_name, path }))
+    }, on_press=fn() {
+      let root_name = if path == "" { name } else { dv_root_label(s.roots, root) }
+      spick.at.set(Some({ station: s.station, station_name: s.name, root, root_name, path }))
+    })
+    |> ignore
   }
 }
 
@@ -211,7 +211,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
     "station": Json::string(at.station),
     "root": Json::string(at.root),
     "path": Json::string(at.path),
-  })
+  }).get().snapshot()
   let entries = @sfbase.dv_entries(src, at.station, at.root, at.path).unwrap_or([])
   let shown = @sfbase.dv_shown(src, at.station, at.root, at.path, entries).unwrap_or([])
   let whole : Dragged = {
@@ -236,9 +236,9 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
   let mark = fn(icon : String) { fn() { @sf.icon(c, icon, size=pick_mark, color=t.p.muted) |> ignore } }
   // a row ticked (✓ at its end while it is): its name and what is under it; pressed, ticked or not
   let tick_row = fn(key : String, icon : String, name : String, sub : String, d : Dragged) {
-    if @sf.choice_row(c, "station-pick/row/" + key, ticked(d), name, note=sub, lead=mark(icon)) {
+    @sf.choice_row(c, "station-pick/row/" + key, ticked(d), name, note=sub, lead=mark(icon), on_press=fn() {
       toggle(d)
-    }
+    }) |> ignore
   }
   match topic.value {
     None =>
@@ -268,9 +268,9 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
           let icon = dv_kind_icon(if e.dir { "folder" } else { e.kind })
           if e.dir {
             // (a folder: entered)
-            if @sf.link_row(c, "station-pick/row/e/" + e.name, e.name, note=e.time_text, lead=mark(icon)) {
+            @sf.link_row(c, "station-pick/row/e/" + e.name, e.name, note=e.time_text, lead=mark(icon), on_press=fn() {
               spick.at.set(Some({ ..at, path }))
-            }
+            }) |> ignore
           } else {
             let d : Dragged = {
               station: at.station,
@@ -324,5 +324,5 @@ let pick_head_first : @ui.Style = @ui.css("w=Full pt=S1 pb=S1")
 let pick_head_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Muted, wrap=false)
 
 ///|
-/// The ＋'s sheet as tall as most of the window (StationFiles.kt: 86%).
+/// The ＋'s sheet as tall as most of the window.
 let station_pick_tall : Double = 0.86

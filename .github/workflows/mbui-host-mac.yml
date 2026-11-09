@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The host's and the text's contracts on macOS (docs/determinism.md, "What is compared, and where"; scripts/
+# The host's and the text's contracts on macOS ("What is compared, and where"; scripts/
 # host_contract.sh), on macos-ci (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
 # scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape macos-ci kept
 # (mac_capture_controls) asked of Core Text again (every answer the same). When the macOS host changes.

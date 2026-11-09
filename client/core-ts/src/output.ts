@@ -1,36 +1,59 @@
-// What a topic's value looks like as it goes out (docs/core-ts.md, rule 7): decorated (present.ts) and put through its
+// What a topic's value looks like as it goes out (rule 7): decorated (present.ts) and put through its
 // shape (conform.ts), item by item for its keyed lists (collections.ts). An item that is as it was (the same object a
-// view keeps for it, or one equal to it) within the same minute (times in words are a minute's) is the very object
-// that went out before: not copied, decorated, shaped or compared again, so a list of 2000 rows with one changed costs
-// one row. What went out is marked in `shaped` (util.ts), and frozen when shared values are checked: nothing changes it
-// after.
-import { type Spec, keyOf, specOf } from "./collections.ts";
+// view keeps for it, or one equal to it) is the very object that went out before: not copied, decorated, shaped or
+// compared again, so a list of 2000 rows with one changed costs one row. Each is made in a computed (reactive.ts) that
+// reads the clock at the grain its times in words change by (present.ts `clockAt`): a new minute makes again only the
+// items that said a minute's words, one of days ago only at local midnight. What went out is marked in `shaped`
+// (util.ts), and frozen when shared values are checked: nothing changes it after.
+import { type Spec, specOf, textOf } from "./collections.ts";
 import { conformTy, type Ty } from "./conform.ts";
 import * as present from "./present.ts";
 import type { Topic } from "./protocol.ts";
+import { computed, observe, type Derived } from "./reactive.ts";
 import { equal, isObject, shaped, sharedValue } from "./util.ts";
+import { work } from "./work.ts";
 
-type Memo = { raw: unknown; minute: number; out: unknown };
+/// An item as it goes out: what it was made from, and what is made of it.
+type Memo = { raw: unknown; out: Derived<unknown> };
 
 /// One topic's items as they last went out, by their place and key.
 export class Output {
   #memo = new Map<string, Memo>();
+  /// The clock the items are made for now (what their computeds read when they are made again).
+  #c: present.Clock = { now: 0, offsetMin: 0 };
+  /// What keeps the items' computeds (and so what they made) while they are the ones that went out.
+  #keep: (() => void) | null = null;
+  /// Told as what went out is out of date (the clock moved on past what an item's words say): it goes out again.
+  readonly #again: () => void;
+
+  constructor(again: () => void = () => {}) {
+    this.#again = again;
+  }
 
   /// The value as it goes out, or the shape's error (`path: what`).
   shape(topic: Topic, raw: unknown, c: present.Clock, shapes: boolean): { ok: unknown } | { error: string } {
     const spec = specOf(topic);
     const ty = shapes ? present.shapeOf(topic) : undefined;
-    const minute = Math.floor(c.now / 60_000);
+    this.#c = c;
+    present.clockAt(c);
     const next = new Map<string, Memo>();
+    let out: { ok: unknown } | { error: string } = { error: "" };
     try {
-      const input = topic.topic === "chat" && topic.compact === true ? compactChat(raw) : raw;
-      const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", c, minute, next) : input;
-      const v = present.decorate(topic, copy(skeleton), c);
-      const out = ty === undefined ? { ok: v } : conformTy(ty, v);
+      // (made under a watch of its own, the old one let go after: the items' computeds kept as they were, those of
+      // items no longer there let go with it)
+      const was = this.#keep;
+      const keep = observe(() => {
+        const input = topic.topic === "chat" && topic.compact === true ? compactChat(raw) : raw;
+        const skeleton = spec ? this.#build(topic, input, spec, ty, "", "", next) : input;
+        const v = present.decorate(topic, copy(skeleton), c);
+        out = ty === undefined ? { ok: v } : conformTy(ty, v);
+      }, () => this.#again());
       if ("ok" in out) {
+        this.#keep = keep;
+        was?.();
         this.#memo = next;
         sharedValue(out.ok);
-      }
+      } else keep();
       return out;
     } catch (e) {
       if (e instanceof ItemWrong) return { error: e.message };
@@ -38,39 +61,51 @@ export class Output {
     }
   }
 
+  /// Lets go of what it keeps (its topic gone).
+  stop(): void {
+    this.#keep?.();
+    this.#keep = null;
+    this.#memo = new Map();
+  }
+
   /// The value with each keyed item put as it goes out.
-  #build(topic: Topic, raw: unknown, spec: Spec, ty: Ty | undefined, at: string, path: string, c: present.Clock, minute: number, next: Map<string, Memo>): unknown {
+  #build(topic: Topic, raw: unknown, spec: Spec, ty: Ty | undefined, at: string, path: string, next: Map<string, Memo>): unknown {
     if (spec.key && Array.isArray(raw)) {
       const itemTy = ty === undefined ? undefined : present.itemOf(ty);
       return raw.map((item, i) => {
         const here = `${path}[${i}]`;
-        const place = `${at}\u0001${JSON.stringify(keyOf(item, spec.key!))}`;
+        const place = `${at}\u0001${textOf(item, spec.key!)}`;
         // Items holding keyed lists of their own are put together anew around them (cheap: their items are done).
         const leaf = !spec.item;
         const was = leaf ? this.#memo.get(place) : undefined;
-        if (was && was.minute === minute && ((was.raw === item && Object.isFrozen(item)) || equal(was.raw, item))) {
+        // (the store keeps what did not change as the same object, never changed after: collections.ts share)
+        if (was && (was.raw === item || equal(was.raw, item))) {
           next.set(place, was);
-          return was.out;
+          return was.out.get();
         }
-        const inner = spec.item ? this.#build(topic, item, spec.item, itemTy, place, here, c, minute, next) : item;
-        const decorated = present.decorateItem(topic, copy(inner), c);
-        let out = decorated;
-        if (itemTy !== undefined) {
-          const shapedItem = conformTy(itemTy, decorated, here);
-          if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
-          out = shapedItem.ok;
-        }
-        freeze(out);
-        // What it was made from, as it was: a frozen item is kept as it is, another copied (it may be changed in place),
-        // what in it went out as it is (a message's Markdown) shared, not cloned.
-        if (leaf) next.set(place, { raw: Object.isFrozen(item) ? item : copy(item), minute, out });
+        const inner = spec.item ? this.#build(topic, item, spec.item, itemTy, place, here, next) : item;
+        const made = computed(() => {
+          const decorated = present.decorateItem(topic, copy(inner), this.#c);
+          let out = decorated;
+          if (itemTy !== undefined) {
+            const shapedItem = conformTy(itemTy, decorated, here);
+            if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
+            out = shapedItem.ok;
+          }
+          freeze(out);
+          return out;
+        });
+        // What it was made from: the item itself (a store's value is never changed in place: frozen where that is checked).
+        if (leaf) next.set(place, { raw: item, out: made });
+        work.shaped++;
+        const out = made.get();
         return out;
       });
     }
     if (spec.fields && isObject(raw)) {
       const out: Record<string, unknown> = { ...raw };
       for (const [field, inner] of Object.entries(spec.fields)) {
-        if (field in raw) out[field] = this.#build(topic, raw[field], inner, ty === undefined ? undefined : present.fieldOf(ty, field), `${at}/${field}`, path === "" ? field : `${path}.${field}`, c, minute, next);
+        if (field in raw) out[field] = this.#build(topic, raw[field], inner, ty === undefined ? undefined : present.fieldOf(ty, field), `${at}/${field}`, path === "" ? field : `${path}.${field}`, next);
       }
       return out;
     }

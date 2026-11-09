@@ -2,7 +2,7 @@
 // counters (relay-metrics.ts Load) about a minute apart, kept a week. The relays on machines of their own send theirs
 // (POST /v1/relays/load, relay-load.sh run by a timer there, believed by the address they send from); Cloudflare's is read by this Worker's cron from the
 // relay process (index.ts). What is shown is worked out from the counters when asked (relay-load-view.ts). What each did
-// in the minute between two samples goes to Axiom as well (a `relay minute` log line, docs/telemetry.md), beside the
+// in the minute between two samples goes to Axiom as well (a `relay minute` log line), beside the
 // devices' and stations' records of the same minutes.
 import { DurableObject } from "cloudflare:workers";
 import { nowSeconds, reply } from "./auth";

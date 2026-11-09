@@ -1,4 +1,4 @@
-// Where a device on the station's LAN can dial it straight (docs/mesh-lan.md): the station's private IPv4 addresses, each
+// Where a device on the station's LAN can dial it straight: the station's private IPv4 addresses, each
 // at its mesh port. Told to a member as its credential checks out (serve.ts), the device dials them on an endpoint of its
 // own, by address alone: a path iroh punches through to a station on the LAN stopped answering seconds after it opened,
 // while one dialled by address kept working.
@@ -42,7 +42,7 @@ export function tailnetV4(ip: string): boolean {
 }
 
 /// `ip:port` of each Tailscale address the station has, at the port of its IPv4 socket (as `lanAddrs`): where a device
-/// on the same tailnet dials it straight, Tailscale carrying it (docs/mesh-lan.md, Tailscale). Known by the address,
+/// on the same tailnet dials it straight, Tailscale carrying it (Tailscale). Known by the address,
 /// not the interface: Tailscale's is utun on macOS, tailscale0 on Linux, its own name on Windows.
 export function tailnetAddrs(sockets: string[], interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
   const v4 = sockets.map((s) => /^(\d+\.\d+\.\d+\.\d+):(\d+)$/.exec(s)).find((m) => m !== null);

@@ -127,7 +127,7 @@ fn stat_of(s : Split, name : String) -> Int {
 }
 
 ///|
-/// The functions' units (not decls.h, externs.h, data.c, init.c nor moonbit_init's)
+/// The functions' units
 fn fn_units(files : Map[String, String]) -> Array[String] {
   let out = []
   for n, _ in files {
@@ -157,7 +157,7 @@ test "kinds" {
   assert_true(has(decls, "#else\nextern const int32_t pre_tab[2];\n#endif"))
   let data = files["data.c"]
   assert_true(has(data, "#define CSPLIT_DEFS"))
-  // (each global in a data unit of its own kind: none in data.c, none twice)
+  // (none twice)
   assert_false(has(data, "_M0G1"))
   let globals = one_data(files)
   for g in ["_M0G1 =", "_M0G2;", "_M0G3[] =", "const _M0S1 ="] {
@@ -317,7 +317,7 @@ let by_content_src : String =
   #|
 
 ///|
-/// (the layouts' names in the order they come, the literals' names sorted, data.c)
+/// (the layouts' names in the order they come, the literals' names sorted)
 fn layout_names_in(files : Map[String, String]) -> (Array[String], Array[String], String) {
   let u = fn_units(files).map(fn(n) { files[n] }).fold(init="", fn(a, b) { a + b })
   let ub = utf8(u)

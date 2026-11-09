@@ -1,4 +1,4 @@
-// Visualizations (ember apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt, Prose.kt; web/src/Viz.tsx): an HTML
+// Visualizations: an HTML
 // file an agent placed in its message's text (`[title](figure.html)` on a line of its own), drawn there in a page's
 // view (src/ui/native.mbt NativeView::page) instead of shown as a card, with ways under it to open it over the whole
 // screen or as a page of its own (PreviewFile, service.mbt). (A ```mermaid block is the app's own picture:
@@ -14,7 +14,7 @@
 // ── the page itself ────────────────────────────────────────────────────
 
 ///|
-/// A page drawn (Viz.kt VizFrame): its view, the height it said, whether it is shown yet (once it has drawn itself:
+/// A page drawn: its view, the height it said, whether it is shown yet (once it has drawn itself:
 /// what is under it shows meanwhile), the theme it was told.
 pub(all) struct VizFrame {
   view : @ui.NativeView
@@ -180,7 +180,7 @@ pub fn viz_frame(
           None => ()
         }
       })
-      // in a list, an upright drag on the page moves the list (Viz.kt passVerticalDrags); a page of its own keeps them
+      // in a list, an upright drag on the page moves the list; a page of its own keeps them
       if !fill {
         view.touch(@ui.Touch::VerticalOut)
       }
@@ -285,10 +285,10 @@ pub fn viz_frame(
     if tall.target() != said {
       match c.row_way() {
         Some(way) => on_row_way(c, tall, said, way)
-        None => tall.animate(said, @motion.move(over=(said - tall.get()).abs()))
+        None => tall.animate(c, said, @motion.move(over=(said - tall.get(c)).abs()))
       }
     }
-    let h = tall.get()
+    let h = tall.get(c)
     // till it has drawn itself, its place as while its file came (the line's grey, breathing, its corners the
     // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
     let waiting = !f.shown || !f.view.host_done()
@@ -337,9 +337,9 @@ fn viz_reveal(c : @ui.Ctx, f : VizFrame, w : Double, h : Double, waited : (Doubl
     return
   }
   if a.target() == 0.0 {
-    a.animate(1.0, @motion.tween(viz_reveal_ms, ease=Linear))
+    a.animate(c, 1.0, @motion.tween(viz_reveal_ms, ease=Linear))
   }
-  let p = a.get()
+  let p = a.get(c)
   if p >= 1.0 {
     f.reveal = None
     return
@@ -416,7 +416,7 @@ pub let viz_fill : @ui.Style = @ui.css("w=Full h=Full")
 pub let viz_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// A whole page in a message: its corners the card's (Smooth 20), on the paper (Viz.kt: #F6F2EA, dark #26272B).
+/// A whole page in a message: its corners the card's (Smooth 20), on the paper (dark #26272B).
 // kept across runs: a value (no field of it changes)
 pub let viz_page_frame : @ui.Style = @ui.style(w=Full, radius=@sf.viz_card_radius, clip=true, bg=@sf.viz_paper, dark=@ui.patch(bg=@sf.viz_paper_dark))
 
@@ -479,8 +479,8 @@ fn viz_shown_again(key : String) -> Unit {
 }
 
 ///|
-/// One of the ways under a page (VizFiles.kt): a 22 box (corners Smooth 6), a 14 icon in the frame's subtle grey; named
-/// `label`, said over it while it is pointed at (Viz.tsx's Tip).
+/// One of the ways under a page: a 22 box (corners Smooth 6), a 14 icon in the frame's subtle grey; named
+/// `label`, said over it while it is pointed at.
 pub fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String, subtle : Int64) -> Unit {
   let b = c.box(style=viz_way, id~, fn() {
     @sf.icon(c, icon, size=14.0, color=subtle) |> ignore
@@ -491,7 +491,7 @@ pub fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String, subtle : I
   @sf.tip(c, "viz-way/" + id.to_string(), id, label)
 }
 
-// ── in a message (VizFiles.kt VizFile) ─────────────────────────────────
+// ── in a message ─────────────────────────────────
 
 ///|
 /// Where a visualization's words to send go: the chat's composer, whichever frame's (its draft: the words after what
@@ -504,7 +504,7 @@ pub fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
       Some(w) => w + "\n" + words
       None => words
     }
-    draft_given()
+    draft_given(key)
     true
   }
 }
@@ -549,14 +549,10 @@ pub fn viz_file_of(
         // under the page, out of its way: the ways to open it on its own, icons in the chat's grey
         c.box(style=viz_ways, fn() {
           let full = c.id("viz/full/" + place)
-          if c.clicked(full) {
-            c.tell("viz/open-full", fn() { viz_open_full(a.name, station, key, a.path, session) })
-          }
+          c.on_press(full, fn() { viz_open_full(a.name, station, key, a.path, session) })
           viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
           let aside = c.id("viz/aside/" + place)
-          if c.clicked(aside) {
-            open_page(PreviewFile(station, key, a.path, a.name))
-          }
+          c.on_press(aside, fn() { open_page(PreviewFile(station, key, a.path, a.name)) })
           viz_icon(c, aside, "panel-open", viz_tr("android-misc.viz.openAside"), subtle)
         })
         |> ignore
@@ -606,7 +602,7 @@ pub let viz_way : @ui.Style = @ui.style(
   justify=JCenter,
 )
 
-// ── over the whole screen (Viz.kt VizFull, VizFiles.kt VizOpen) ────────
+// ── over the whole screen ────────
 
 ///|
 /// A visualization open over the whole screen: its name, its file (to fetch, or fetched), the chat whose composer its
@@ -659,7 +655,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     Some(Ok((html, state))) => {
       // (while this one is open, built again or not)
       let native = @sf.native_over_up(v.name, alive=fn() {
-        match @signals.untracked(fn() { viz_full.get() }) {
+        match viz_full.untracked() {
           Some(now) => physical_equal(now, v)
           None => false
         }
@@ -698,7 +694,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
         })
         |> ignore
         if !native {
-          let (closed, _) = @sf.viewer_frame_bar(
+          @sf.viewer_frame_bar(
             c,
             "viz/full",
             @sf.t("common.back"),
@@ -710,10 +706,9 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
             1.0,
             @sf.page_viewer_ink(),
             fn() {  },
+            on_close=viz_close_full,
           )
-          if closed {
-            c.tell("viz/full-close", fn() { viz_close_full() })
-          }
+          |> ignore
         }
       })
       |> ignore

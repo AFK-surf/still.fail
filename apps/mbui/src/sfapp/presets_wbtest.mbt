@@ -153,8 +153,8 @@ test "editing another station's preset still starts browsing on the composer's s
   let base = fixture("newchat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match got.value {
         Some(Object(m)) if name == "newChat" => {
           let v = m.copy()

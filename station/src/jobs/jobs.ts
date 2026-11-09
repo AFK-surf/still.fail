@@ -1,4 +1,4 @@
-// Background jobs (the Rust station's jobs.rs): commands a session's agent starts that the station runs and keeps, apart from
+// Background jobs: commands a session's agent starts that the station runs and keeps, apart from
 // the agent's turns. Each runs in a process group of its own with its output in a log file; the agent hears when it
 // ends, and whatever the job says on the way (`stillfail-job notify …`). A job with a port is a web service: kept up
 // (started again when it ends, with a growing pause), and seen by the workspace's members through the station's
@@ -931,7 +931,8 @@ export class Jobs {
   /// The record of a job's group an earlier station started (not one this station follows).
   private leftBehind(pgid: number): ProcessRow | null {
     for (const r of this.running.values()) if (r.pgid === pgid) return null;
-    return this.store.listProcesses().find((p) => p.runtime === "job" && p.pgid === pgid) ?? null;
+    const entry = this.store.processByGroup(pgid);
+    return entry?.runtime === "job" ? entry : null;
   }
 
   /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it), if it was at work within

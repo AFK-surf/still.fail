@@ -3,9 +3,9 @@ import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogL
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
-import { shareFiles } from "../src/share.ts";
 import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
+import { brotliCompressSync } from "node:zlib";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
 // not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
@@ -63,8 +63,6 @@ export async function harness(
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
-    /** The share host (src/share.ts): published chats. */
-    shareOrigin?: string;
     /** The test channel's host (BETA_ORIGIN): the web app and the API, for accounts let in. */
     betaOrigin?: string;
     /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
@@ -97,7 +95,6 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
-  const shareOrigin = options.shareOrigin ?? "https://share.relay.example";
   const betaOrigin = options.betaOrigin ?? "https://app.beta-domain.example";
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
@@ -105,7 +102,8 @@ export async function harness(
   /** still.fail cloud's time, in seconds: what a station signs with, say. */
   const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
-    adminToken = randomSecret();
+    adminToken = randomSecret(),
+    feedbackToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = {
     ...(await exportJWK(publicKey)),
@@ -147,7 +145,7 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin, SHARE_ORIGIN: shareOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
@@ -172,6 +170,7 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
+        FEEDBACK_TOKEN: feedbackToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         ...(options.access ? { ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD: "test-access-aud" } : {}),
         ...(options.upstream ? { RELEASES_UPSTREAM: "https://upstream.test/releases" } : {}),
@@ -262,7 +261,6 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
-  const fetchShare = (path: string, init?: RequestInit) => mf.dispatchFetch(shareOrigin + path, init as any);
   /** A request to the test channel's host. */
   const fetchBeta = (path: string, init?: RequestInit) => mf.dispatchFetch(betaOrigin + path, init as any);
   /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
@@ -359,13 +357,13 @@ export async function harness(
     grantJwk,
     grantPublicJwk,
     adminToken,
+    feedbackToken,
     signingKey,
     codes,
     mails,
     fetch,
     fetchAdmin,
     fetchPreview,
-    fetchShare,
     fetchBeta,
     fetchOld,
     fetchWorker,
@@ -377,24 +375,28 @@ export async function harness(
   };
 }
 
-/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`, `/share/…`: see test/static-worker.ts). */
+/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
   "/web/web.html": "<title>still.fail · web</title>",
   "/web/assets/app.js": "// the web app",
   "/web/sw.js": "// the notifications' worker",
+  "/web/mbui/app.js": "// the app, as mbui-web built it",
+  "/web/mbui/host.js": "// mbui's web host",
   "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
   "/preview/_stillfail/sw.js": "// the preview's service worker",
   "/preview/404.html": "这是 still.fail 的预览地址",
-  "/share/index.html": "<title>still.fail 分享</title>",
-  "/share/assets/share.js": "// the share page",
-  ...Object.fromEntries(Object.entries(shareFiles({ cloud: "https://relay.example", relays: ["https://relay.example", "https://39.105.157.122"] })).map(([path, text]) => [`/share/${path}`, text])),
 };
+
+/** The files the build brotlis beside them (apps/mbui/scripts/web-app.sh): app.js's, not host.js's (a build without one). */
+const STAND_IN_PACKED: Record<string, string> = { "/web/mbui/app.js.br": "/web/mbui/app.js" };
 
 function standInAssets(request: Request): Response {
   const path = new URL(request.url).pathname;
+  const packed = STAND_IN_PACKED[path];
+  if (packed) return new MFResponse(brotliCompressSync(STAND_IN_FILES[packed]!)) as unknown as Response;
   const body = STAND_IN_FILES[path];
   const headers = path.endsWith(".html") ? { "content-type": "text/html; charset=utf-8" } : {};
   return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body, { headers }) as unknown as Response;

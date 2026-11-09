@@ -5,7 +5,7 @@
 #   stillfail update [--beta|--stable]            updates this station to its cloud's latest release, on its channel
 #   stillfail station enroll <cloud-origin> <token> [--provider comma]
 #   stillfail station id
-#   stillfail lock status|reset                   the workspace lock on this station (docs/workspace-lock.md)
+#   stillfail lock status|reset                   the workspace lock on this station
 # The data is in $env:STILLFAIL_DATA, default ~\.stillfail.
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSScriptRoot
@@ -28,7 +28,7 @@ switch ("$($a[0]) $($a[1])".Trim()) {
   { $a[0] -eq 'update' } {
     # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than
     # this one) and installed by the installer this release carries, told what it must hash to
-    # (docs/release-signing.md). Not the cloud's installer: whoever serves it could put anything here. Node only says
+    # (scripts/release-sign.ts). Not the cloud's installer: whoever serves it could put anything here. Node only says
     # what to run: the installer ends what runs from the release, which it is.
     if ($a.Count -gt 2 -or ($a.Count -eq 2 -and $a[1] -notin '--beta', '--stable')) { [Console]::Error.WriteLine('usage: stillfail update [--beta|--stable]'); exit 2 }
     $node = if ($env:STILLFAIL_NODE) { $env:STILLFAIL_NODE } else { Join-Path $here 'node\node.exe' }

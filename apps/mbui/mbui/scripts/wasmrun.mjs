@@ -183,7 +183,7 @@ const chkev = {
   },
 };
 
-// The core's env, as moonrun gives it (moonbitlang/core/env's env_wasm.mbt): strings made and read a character at a
+// The core's env, as moonrun gives it: strings made and read a character at a
 // time through handles, a string array ended by "ffi_end_of_/string_array".
 const handles = new Map();
 let next = 1;

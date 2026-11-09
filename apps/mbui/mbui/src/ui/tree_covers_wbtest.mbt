@@ -140,7 +140,7 @@ fn old_over_covers(take : (@view.View) -> @view.View) -> Array[Double] {
       old(b, fn(c) { c.native(page) |> ignore }).over(Is(true)) |> ignore
       old(b, fn(c) {
         let id = c.id("over")
-        c.clicked(id) |> ignore
+        c.takes_presses(id)
         c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
       })
       .over(Is(true))
@@ -415,7 +415,7 @@ test "an old view over another's native view, the node hosting it said to take a
       island.val = Some(
         old(b, fn(c) {
           let id = c.id("over")
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
           c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
         })
         .over(Is(true))

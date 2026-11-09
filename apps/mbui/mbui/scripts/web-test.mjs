@@ -22,7 +22,12 @@ const shots = 'out/web-shots';
 fs.mkdirSync(shots, { recursive: true });
 
 const headed = !!process.env.HEADED;
-const browser = await chromium.launch({ headless: !headed, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({
+  // MBUI_WEB_CHANNEL=chrome: the system's Google Chrome in place of Playwright's Chromium
+  ...(process.env.MBUI_WEB_CHANNEL ? { channel: process.env.MBUI_WEB_CHANNEL } : {}),
+  headless: !headed,
+  args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'],
+});
 const ctx = await browser.newContext({ viewport: { width: 900, height: 720 }, deviceScaleFactor: 2 });
 // Exercise the Apple text bindings even when the browser test runs on another system.
 await ctx.addInitScript(() => {
@@ -135,6 +140,56 @@ m = await mark();
 await page.keyboard.press('Enter');
 await drawn(m, { k: 'key' });
 await page.screenshot({ path: `${shots}/04-sent.png` });
+// Voice input writes a guess and replaces it as it hears more. iOS's dictation selects its last guess and inserts the
+// next over it (WebPage::replaceDictatedText); a keyboard of another's deletes it key by key and types the next. Only
+// the last guess is in the field either way.
+const guess = (next, prev, keyByKey) => page.evaluate(([next, prev, keyByKey]) => {
+  const ta = document.getElementById('ime');
+  if (keyByKey) {
+    for (let i = 0; i < prev.length; i++) document.execCommand('delete');
+  } else if (prev) {
+    ta.setSelectionRange(ta.selectionStart - prev.length, ta.selectionStart);
+  }
+  document.execCommand('insertText', false, next);
+}, [next, prev, keyByKey]);
+for (const keyByKey of [false, true]) {
+  let prev = '';
+  for (const next of ['今天', '今天天气', '今天天气真不错 👋']) {
+    m = await mark();
+    await guess(next, prev, keyByKey);
+    // (what was put in, past what the guess before it and this one begin with)
+    await drawn(m, { k: 'text', s: keyByKey ? next : next.slice(prev.length) });
+    prev = next;
+  }
+  assert.equal((await field()).value, prev, `one sentence said is one sentence written (${keyByKey ? 'key by key' : 'replaced'})`);
+  m = await mark();
+  await page.keyboard.press('Enter');
+  await drawn(m, { k: 'key' });
+}
+// A phone's soft keyboard changes no size of the page's, only the visual viewport's: the app laid out above it. Put
+// away by the person (Safari's Done), the field lets go of the focus, and the keyboard does not come back.
+await page.evaluate(() => {
+  window.__frameHs = [];
+  window.__frame = window.__mb.frame;
+  window.__mb.frame = (w, h, s, t) => { window.__frameHs.push(h); window.__frame(w, h, s, t); };
+  Object.defineProperty(window.visualViewport, 'height', { get: () => window.innerHeight - 300, configurable: true });
+  window.visualViewport.dispatchEvent(new Event('resize'));
+});
+await page.waitForFunction(() => window.__frameHs.at(-1) === window.innerHeight - 300, null, { timeout: 30000 });
+await page.waitForFunction(() => document.activeElement === document.getElementById('ime'));
+m = await mark();
+await page.evaluate(() => document.getElementById('ime').blur());
+await drawn(m, { k: 'text', s: '' });
+assert.notEqual(await page.evaluate(() => document.activeElement.id), 'ime', 'the keyboard put away stays away');
+await page.evaluate(() => {
+  delete window.visualViewport.height;
+  window.visualViewport.dispatchEvent(new Event('resize'));
+});
+await page.waitForFunction(() => window.__frameHs.at(-1) === window.innerHeight, null, { timeout: 30000 });
+await page.evaluate(() => { window.__mb.frame = window.__frame; });
+// (pressed again, it takes the focus again)
+await page.mouse.click(120, 690);
+await page.waitForFunction(() => document.activeElement === document.getElementById('ime'));
 m = await mark();
 for (let i = 0; i < 30; i++) await page.mouse.wheel(0, -120);
 await drawn(m, { k: 'wheel' }, 30);

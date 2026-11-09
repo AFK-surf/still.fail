@@ -84,7 +84,7 @@ pub fn share_look_keys() -> Array[String] {
 ///|
 /// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the first).
 fn share_look(src : Source) -> ShareLook {
-  let kept = text((src.topic)("prefs", Map::new()).value, "shareLook")
+  let kept = text(src.topic("prefs", Map::new()).get().value, "shareLook")
   for l in share_looks {
     if l.key == kept {
       return l
@@ -115,9 +115,9 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           c.text(name, style=if on { groups_name_on } else if c.lit(id) { groups_name_lit } else { groups_name }) |> ignore
         })
         c.semantics(b, Tab, id~, label=name, selected=on)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           share_group_shown.val = group
-        }
+        })
       }
     })
     |> ignore
@@ -138,8 +138,10 @@ fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
           })
           c.semantics(b, Button, id~, label=name, selected=on)
-          if c.clicked(id) && !on {
-            (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+          if !on {
+            c.on_press(id, fn() {
+              (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+            })
           }
         }
       })

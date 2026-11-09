@@ -98,6 +98,7 @@ fn main {
     ["contained", .. rest] => contained(rest.to_array())
     ["views-round", .. rest] => views_round(rest.to_array())
     ["views", .. rest] => views(rest.to_array())
+    ["images", .. rest] => images(rest.to_array())
     ["site", .. rest] => site(rest.to_array())
     ["cache-prune", .. rest] => cache_prune(rest.to_array())
     _ => {

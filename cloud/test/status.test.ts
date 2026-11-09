@@ -3,6 +3,10 @@ import test from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 
+// A cron at a minute that is only the every-minute one's (not the hourly models' at :07, not a probe's): the real
+// clock's minute made the hourly catalog's fetch of models.dev run in the test at :07 (2026-11-08, run 42469996303).
+const EVERY_MINUTE_ONLY = new Date(Date.UTC(2026, 0, 1, 0, 1));
+
 type Status = { now: number; days: number; services: { id: string; state: string; name?: string; relay?: string; days: (number | null)[] }[] };
 
 test("the status page's numbers: what the cron found of each service, a failure counted down only from the second in a row", async () => {
@@ -26,8 +30,8 @@ test("the status page's numbers: what the cron found of each service, a failure 
       assert.equal(answer.headers.get("access-control-allow-origin"), "*");
       return (await answer.json()) as Status;
     };
-    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string }): Promise<{ outcome: string }> };
-    const cron = async () => assert.equal((await api.scheduled({ cron: "* * * * *" })).outcome, "ok");
+    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string; scheduledTime: Date }): Promise<{ outcome: string }> };
+    const cron = async () => assert.equal((await api.scheduled({ cron: "* * * * *", scheduledTime: EVERY_MINUTE_ONLY })).outcome, "ok");
     const states = (s: Status) => Object.fromEntries(s.services.map((v) => [v.name ?? v.id, v.state]));
 
     // Before any check there is nothing to say.

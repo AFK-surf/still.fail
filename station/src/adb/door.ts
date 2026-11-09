@@ -1,4 +1,4 @@
-// The door of a grant's adb server (docs/adb-share.md, 2026-11-05): the port a chat's agent is given. The server itself
+// The door of a grant's adb server (2026-11-05): the port a chat's agent is given. The server itself
 // serves any client on its socket and says nothing of who it is, so the phone's listener, which lets that server in
 // (servers.ts `owner`), cannot tell one chat's `adb -P <port> shell` from another's. Here each connection's client is
 // found among the machine's processes, and only the grant's session (and the station) is put through; the server

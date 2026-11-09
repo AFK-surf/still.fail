@@ -1,4 +1,4 @@
-// What changed, for people (docs/changelog.md): the changelog CI makes from main's history (scripts/changelog.ts) and
+// What changed, for people (scripts/changelog.ts): the changelog CI makes from main's history (scripts/changelog.ts) and
 // keeps in the releases bucket as changelog.json, with what each part has released on a channel, so a client can say
 // what its version has and what is still to come. Bug reports an entry fixes (`Fixes: FB-<n>`) are marked fixed with
 // it, and once the fix is out on the channel the report came on, the station that sent it is told (POST
@@ -69,9 +69,9 @@ async function entries(bucket: Bucket, key: string): Promise<ChangelogEntry[]> {
   }
 }
 
-/** n of a version said as 0.1.<n> (or a bare n). */
+/** n of a version said as 0.<m>.<n> (or a bare n). */
 function build(said: unknown): number | null {
-  const m = /^(?:0\.1\.)?(\d+)$/.exec(typeof said === "number" || typeof said === "string" ? String(said).trim() : "");
+  const m = /^(?:0\.\d+\.)?(\d+)$/.exec(typeof said === "number" || typeof said === "string" ? String(said).trim() : "");
   return m ? Number(m[1]) : null;
 }
 const json = (text: string | null): Record<string, unknown> => {
@@ -88,13 +88,14 @@ export async function released(bucket: Bucket, channel: Channel): Promise<Releas
   const [station, android, desktop, web] = await Promise.all([
     read(bucket, beta ? "station-beta.json" : "station.json"),
     read(bucket, beta ? "android/beta/latest.json" : "android/latest.json"),
-    read(bucket, beta ? "desktop/stillfail-beta-mac.yml" : "desktop/stillfail-mac.yml"),
+    // (the Mac app's own updater's feed, which every product's has: monoid's never had electron-updater's .yml)
+    read(bucket, beta ? "mac/beta/latest.json" : "mac/latest.json"),
     read(bucket, beta ? "web-beta.json" : "web.json"),
   ]);
   return {
     station: build(json(station).build ?? json(station).version),
     android: build(json(android).versionCode),
-    desktop: build(/^version:\s*(\S+)\s*$/m.exec(desktop ?? "")?.[1]),
+    desktop: build(json(desktop).versionCode),
     web: build(json(web).build ?? json(web).version),
   };
 }

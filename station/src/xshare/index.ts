@@ -1,4 +1,4 @@
-// Chats shared with other workspaces (docs/chat-share.md). As stations share profiles and skills (share/index.ts), it
+// Chats shared with other workspaces. As stations share profiles and skills (share/index.ts), it
 // is between the stations only, over the station transport; the control plane says nothing of it beyond each
 // workspace's own stations.
 //
@@ -16,7 +16,7 @@
 // - Each of these lapses once unused for XSHARE_IDLE_MS (6 hours): a chat's share with a workspace whose agents neither
 //   read it nor wrote to it (store/store.ts `used`; a person shares it again), and an answer to a session that neither
 //   wrote nor was answered (`answered`).
-// - A station in several workspaces (docs/multi-workspace.md): a chat shared from here is its own workspace's (what its
+// - A station in several workspaces: a chat shared from here is its own workspace's (what its
 //   link names); one shared with this station is the workspace's that took it (`as`: the workspace a member of which
 //   said to take chats from its host, which its sessions alone see), the home one for what was kept before. Requests
 //   for a session of one of those say so (`as`), as the host may share this station's other workspaces too. A chat
@@ -90,6 +90,8 @@ export type XshareDeps = {
   touches: (request: Json) => string[];
   /// Where session.* requests go once allowed (as they do from the stations of this workspace, for any of its chats).
   inbox: (peer: string, request: Json) => Promise<Json>;
+  /// Start or resume the bounded lookup without delaying a share operation.
+  prepareIndex?: () => void;
   clock?: Clock.Clock;
 };
 
@@ -326,6 +328,7 @@ export class ChatShares {
   /// Once the next share lapses (unused too long), its chat's views change and its workspace's stations are told it is
   /// no longer shared with them.
   private lapseLater() {
+    this.deps.prepareIndex?.();
     this.lapsing?.();
     this.lapsing = null;
     const next = this.deps.store.lapseChatShares(this.lapsed);
@@ -340,6 +343,7 @@ export class ChatShares {
 
   /// Brings what is told and asked in line: one at a time, again if asked meanwhile.
   reconcile(): Promise<void> {
+    this.deps.prepareIndex?.();
     if (this.reconciling) {
       this.again = true;
       return this.reconciling;
@@ -411,7 +415,7 @@ export class ChatShares {
     }
     // Workspaces nothing is shared with any more, once told so: forgotten (those a share with lapsed are answered why).
     const used = new Set([...shares.values()].flatMap((s) => s.to.map((t) => t.workspace)));
-    for (const workspace of this.deps.store.lapsedShareWorkspaces()) used.add(workspace);
+    for (const workspace of this.deps.store.lapsedShareWorkspaces(Object.keys(state.guests))) used.add(workspace);
     for (const [workspace, g] of Object.entries(state.guests)) {
       if (used.has(workspace)) continue;
       if (Object.values(state.hosted).some((h) => Object.keys(h.told).some((st) => st in g.stations))) continue;
@@ -593,6 +597,7 @@ export class ChatShares {
   /// xshare.list: the chats of workspace `here` (null: the home one) shared with the asking station's workspaces; it
   /// has them now.
   private list(peer: string, here: string | null, workspaces: string[]): Json {
+    this.deps.prepareIndex?.();
     const state = this.readState();
     const chats: Json[] = [];
     for (const [chat, share] of this.deps.store.chatShares()) {
@@ -696,6 +701,7 @@ export class ChatShares {
   /// The chats of other workspaces shared with workspace `as` of this station's (absent: the home one), the latest
   /// first: those of other stations, and those of this one's other workspaces.
   borrowed(as?: string | null): Borrowed[] {
+    this.deps.prepareIndex?.();
     const of = as ?? this.home();
     const state = this.readState();
     const theirs = Object.values(state.borrowed).filter((b) => this.asOf(b) === of);

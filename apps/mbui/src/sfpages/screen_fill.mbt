@@ -1,4 +1,4 @@
-// A page's login filled from this device's password manager (ember docs/remote-screens.md, "Filling a login"): while
+// A page's login filled from this device's password manager ("Filling a login"): while
 // this viewer drives a tab of a station's browser whose focus is in a login field, the station says the site (the
 // tab's address, not the page's word); the person's own 1Password (@hostapi passwords.mbt: its command-line tool,
 // which asks them itself) is asked for that site's logins, they pick one where there are more, and its account and
@@ -211,8 +211,10 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
         }
         c.box(style=drop_words, fn() { c.text(title, style=if step == "said" { drop_path_words } else { drop_name }) |> ignore })
         |> ignore
-        if step != "" && screen_row_key(c, "fill-close", "close", @sf.t("common.close")) {
-          s.fill_stop()
+        if step != "" {
+          screen_row_key(c, "fill-close", "close", @sf.t("common.close"), on_press=fn() {
+            s.fill_stop()
+          })
         }
       }, fn() {
         match step {
@@ -223,9 +225,7 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
               None => ()
             }
             c.box(style=drop_buttons, fn() {
-              if soft_button(c, "fill", @sf.t("android-misc.screen.fill.button")) {
-                c.tell("screen-fill-start/" + s.view, fn() { s.fill_start() })
-              }
+              soft_button(c, "fill", @sf.t("android-misc.screen.fill.button"), on_press=fn() { s.fill_start() })
             })
             |> ignore
           }
@@ -234,10 +234,7 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
             c.box(style=fill_choice_list, fn() {
               for i, l in s.fill_choices {
                 let words = if l.username == "" { l.title } else { l.title + " · " + l.username }
-                if soft_button(c, "fill-pick/\{i}", words) {
-                  let picked = l
-                  c.tell("screen-fill-pick/" + s.view, fn() { s.fill_pick(picked) })
-                }
+                soft_button(c, "fill-pick/\{i}", words, on_press=fn() { s.fill_pick(l) })
               }
             })
             |> ignore

@@ -1,0 +1,158 @@
+/* ---------- 02 Teams: three cells in one row ----------
+   Each cell's picture plays a short story while it is on screen (main.js: the cell's data-seq says how long each step
+   holds; an element with data-in="n" is .is-in from step n until its data-out). Entering uses --ease-out, moving on
+   screen --ease-in-out, leaving is a quick fade. Nothing appears from nothing: no scale(0). Reduced motion: the
+   finished picture, still. Pictures of monoid's own app use the product's values (05-components.css .mk); Slack keeps
+   Slack's look. Every picture is drawn at the product's 1:1 size, 400 wide, and scaled as a whole with `zoom`. */
+/* Three cells on the page's grid: dashed rules across the page above and below them, dashed rules between them (the
+   page's guides are their outer edges). */
+.rails { position: relative; }
+/* One rule over the cells; the next band's own rule closes them (a second one here would leave an empty row). */
+.rails::before { content: ""; position: absolute; top: 0; left: calc(50% - 50vw); right: calc(50% - 50vw); height: 1px; background: var(--dash-x); pointer-events: none; }
+.rails > .cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cell { padding: clamp(16px, 1.7vw, 24px) clamp(16px, 1.7vw, 24px) clamp(24px, 2.4vw, 36px); display: flex; flex-direction: column; min-width: 0; }
+.cell + .cell { background: var(--dash-y); background-position: left top; }
+.cell h3 { margin-top: clamp(20px, 1.8vw, 28px); font-size: 16px; line-height: 1.3; letter-spacing: -.008em; display: flex; align-items: center; gap: 10px; }
+/* The headline breaks where its comma was; the comma stays for screen readers. */
+.cell > p { margin-top: 8px; color: var(--mut); font-size: var(--t-small); line-height: 1.6; text-wrap: pretty; max-width: 34em; }
+
+/* The picture's ground: a dotted panel, 4:3. Each picture is drawn 400 × 300 at the product's 1:1
+   and zoomed in steps to about 88% of the frame's width, so it sits whole in the middle with even room round it. */
+.cell .vis { position: relative; container: tv / inline-size; aspect-ratio: 4 / 3; min-width: 0; display: grid; place-items: center; overflow: hidden;
+  padding: 0; border-radius: 10px; background: var(--dots), var(--panel); }
+.tp { --z: .52; position: relative; width: 400px; height: 300px; zoom: var(--z); transition: transform var(--dur-ui) var(--ease-out); }
+@container tv (width >= 260px) { .tp { --z: .58; } }
+@container tv (width >= 290px) { .tp { --z: .64; } }
+@container tv (width >= 320px) { .tp { --z: .7; } }
+@container tv (width >= 350px) { .tp { --z: .78; } }
+@container tv (width >= 390px) { .tp { --z: .86; } }
+@container tv (width >= 430px) { .tp { --z: .95; } }
+@container tv (width >= 470px) { .tp { --z: 1.05; } }
+@container tv (width >= 520px) { .tp { --z: 1.15; } }
+/* A product fragment floats on the dots: hairline and a soft low shadow, the app's own corner. */
+.tp.frame { border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 4px 16px -4px rgb(28 27 26 / .1), 0 1px 2px rgb(28 27 26 / .06); }
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .cell:hover .tp.frame { transform: translateY(-2px); }
+}
+
+/* Steps: what is not in yet waits, invisible; leaving is a fast fade wherever it is. */
+/* (The default timing has no specificity, so a part's own transition, below, wins.) */
+:where(.cell [data-in]) { transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out); }
+:where(.cell [data-in].is-in) { transition-duration: 320ms; }
+.cell [data-in]:not(.is-in) { opacity: 0; }
+/* The app's own working marks step only while their cell is on screen. */
+.cell.play .mk-busy, .cell.play .mk-av.ag::after { animation: step-turn .8s steps(8) infinite; }
+
+/* ---- 1 · Slack: someone mentions the bot in a thread, it works and answers there, and hears whoever speaks next ---- */
+.tp-sl { display: grid; grid-template-columns: 52px minmax(0, 1fr); border-radius: 12px; overflow: hidden; background: #fff; text-align: left;
+  font: 400 13px/1.42 "Lato", "Helvetica Neue", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1D1C1D; -webkit-font-smoothing: antialiased; user-select: none;
+  box-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 4px 16px -4px rgb(28 27 26 / .1), 0 1px 2px rgb(28 27 26 / .06); }
+.sl-rail { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 14px; background: #3F0E40; }
+.sl-ws { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #fff; color: #3F0E40; font-weight: 800; font-size: 14px; box-shadow: 0 0 0 2px #3F0E40, 0 0 0 4px rgb(255 255 255 / .55); }
+.sl-rail i { width: 24px; height: 24px; border-radius: 7px; background: rgb(255 255 255 / .16); }
+.sl-pane { position: relative; min-width: 0; overflow: hidden; }
+.sl-head { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 8px; height: 44px; padding: 13px 16px 0; background: #fff; box-shadow: 0 1px 0 #E8E8E8; }
+.sl-head b { font-weight: 900; font-size: 15px; }
+.sl-head > span { font-size: 12px; color: #616061; }
+/* The thread scrolls up as it fills, the way Slack's does (main.js: data-follow). */
+.sl-msgs { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 0; transition: transform 480ms var(--ease-in-out); }
+.sl-m { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: start; }
+.sl-m.is-in, .sl-st.is-in { transform: none; }
+.sl-m:not(.is-in), .sl-st:not(.is-in) { transform: translateY(6px); }
+.sl-av { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; color: #fff; font-weight: 700; font-size: 13px; font-style: normal; background: #9A7F72; }
+.sl-av.z { background: #6F7883; }
+img.sl-av { background: none; }
+.sl-m .h { display: flex; align-items: baseline; gap: 5px; line-height: 16px; }
+.sl-m .h b { font-weight: 900; }
+.sl-m .h em { font-style: normal; font-size: 9px; font-weight: 700; line-height: 13px; padding: 0 3px; border-radius: 2px; background: rgb(29 28 29 / .13); color: #616061; }
+.sl-m .h time { font-size: 11px; color: #616061; }
+.sl-m p + p { margin-top: 1px; word-break: keep-all; overflow-wrap: anywhere; }
+:root:lang(ja) .sl-m p + p { word-break: normal; line-break: strict; } /* Japanese breaks between characters, as Slack does */
+.sl-at { color: #1264A3; background: rgb(29 155 209 / .1); border-radius: 3px; padding: 0 2px; }
+.sl-slot { display: grid; }
+.sl-slot > * { grid-area: 1 / 1; }
+/* Slack's own line while an agent works: the app's name and the status the station sets, a fixed category
+   (station/src/slack/status.ts: Running command…, Thinking…), never the task itself. */
+.sl-st { display: flex; align-items: center; height: 20px; padding-left: 38px; font-size: 12px; font-style: italic; color: #616061; white-space: nowrap; }
+.sl-st b { font-weight: 700; }
+/* The grey context line the bot adds under its last message when the turn ends (cards.ts standsBlock), removed when work
+   starts again. */
+.sl-m .sl-ctx { max-height: 20px; margin-top: 4px; overflow: hidden; font-size: 12px; line-height: 18px; color: #616061; white-space: nowrap; text-overflow: ellipsis; }
+.sl-m .sl-ctx:not(.is-in) { max-height: 0; margin-top: 0; }
+.sl-ctx, .sl-ctx.is-in { transition: opacity 200ms var(--ease-out), max-height 320ms var(--ease-in-out), margin-top 320ms var(--ease-in-out); }
+.cell.play .sl-st.is-in > span { animation: sl-breathe 1.6s ease-in-out infinite; }
+@keyframes sl-breathe { 50% { opacity: .55; } }
+
+/* ---- 2 · One workspace: a teammate's new chat arrives in everyone's list ---- */
+/* Four rows, whole: the list's clip ends on a row's edge, never through one (rows 54 + 2 apart). */
+.tp.tp-ws { display: flex; background: var(--sb); }
+.tp-ws .mk-rail { flex: none; padding-top: 14px; }
+.ws-side { flex: 1; min-width: 0; padding: 0 10px 0 0; overflow: hidden; }
+.tp-ws .mk-nav { margin-top: 14px; }
+.ws-list { opacity: 1 !important; transform: translateY(-56px); transition: transform 560ms var(--ease-in-out); }
+.ws-list.is-in { transform: none; }
+.ws-list:not(.is-in) .ws-new { opacity: 0; transition: opacity 160ms var(--ease-out); }
+.ws-list .ws-new { transition: opacity 360ms var(--ease-out) 200ms; }
+/* The day heading stays put over the list as it moves. */
+.tp-ws .mk-day { position: relative; z-index: 1; margin-bottom: 0; padding-bottom: 4px; background: var(--sb); }
+.ws-clip { height: 222px; overflow: hidden; }
+
+/* ---- 3 · Stations hand off work: a test goes from Willow to the server, runs there, and the results come back ---- */
+.tp.tp-st { display: grid; align-content: center; gap: 0; padding: 14px; background: var(--sb); }
+.tp-st .mk-row.on { background: var(--se); }
+.st-lane { position: relative; height: 48px; margin-left: 18px; }
+.st-lane::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; border-left: 1.5px dotted #B9B7B1; }
+.st-lane .pk { position: absolute; left: -4px; top: 0; width: 9.5px; height: 9.5px; border-radius: 2.5px; background: var(--ink); }
+.st-lane .pk.up { background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); }
+.st-lane .pk { transition: opacity 120ms linear; }
+.st-lane .pk.dn.is-in { animation: pk-down 900ms var(--ease-in-out) both; }
+.st-lane .pk.up.is-in { animation: pk-up 900ms var(--ease-in-out) both; }
+@keyframes pk-down { 0% { opacity: 0; transform: translateY(0); } 18%, 78% { opacity: 1; } 100% { opacity: 0; transform: translateY(24px); } }
+@keyframes pk-up { 0% { opacity: 0; transform: translateY(24px); } 18%, 78% { opacity: 1; } 100% { opacity: 0; transform: translateY(0); } }
+.st-say { position: absolute; left: 16px; top: 50%; translate: 0 -50%; font: 400 11.5px/1 var(--mono); color: var(--graphite); white-space: nowrap; }
+.st-say:not(.is-in) { transform: translateX(-4px); }
+.st-say.is-in { transform: none; }
+/* While the test runs on the server: 1 running in place of its online dot, and its idle CPU falls (63% to 24%). */
+.st-swap { display: inline-grid; flex: none; }
+.st-swap > * { grid-area: 1 / 1; transition: opacity var(--dur-ui) var(--ease-out); }
+.tp-st .l1 > .st-swap { margin-left: auto; justify-items: end; align-items: center; }
+.st-swap > .ok { align-items: center; height: 20px; }
+.st-swap > .b, .cell[data-step="2"] .st-swap > .a { opacity: 0; }
+.cell[data-step="2"] .st-swap > .b { opacity: 1; }
+.tp-st .meter.cpu > i { transform-origin: left; transition: transform 700ms var(--ease-in-out); }
+/* 76% used: the meter turns amber (StationCards: amber from 75% used). */
+.cell[data-step="2"] .tp-st .meter.cpu > i { transform: scaleX(2.05); background: rgb(110 72 2 / .28); }
+
+
+/* ---- Phones and small tablets: a swiper of cards, full bleed, snapping to the gutter; the next card peeks in (three
+   columns from 900, where each picture keeps a readable scale). The browser owns the gesture (native scroll); below,
+   the dots and count follow it, as the devices swiper's do (60-devices.css). ---- */
+.tm-nav { display: none; }
+@media (max-width: 899px) {
+  .rails { margin-inline: calc(-1 * var(--gl)) calc(-1 * var(--gr)); }
+  .rails::before { display: none; }
+  .rails > .cells { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(calc(100vw - var(--gl) - var(--gr) - 28px), 380px); gap: 12px;
+    margin: 0; padding: 2px var(--gr) 4px var(--gl); scroll-padding-inline: var(--gl); overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory; touch-action: pan-x pan-y; scrollbar-width: none; align-items: stretch; }
+  .rails > .cells::-webkit-scrollbar { display: none; }
+  .rails > .cells:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 18px; }
+  .cell, .cell + .cell { scroll-snap-align: start; scroll-snap-stop: always; padding: 8px 8px 22px; border: 1px solid var(--line); border-radius: 15px; background: #fff; } /* .vis 6 + padding 8 + border 1 */
+  .cell .vis { border-radius: 6px; }
+  .cell h3 { margin: 18px 8px 0; font-size: 16px; }
+  .cell > p { margin: 6px 8px 0; font-size: 15px; line-height: 1.55; }
+  .tm-nav { display: flex; align-items: center; gap: 12px; margin: 8px var(--gr) 0 var(--gl); }
+  .tm-dots { position: relative; display: flex; margin-left: -10px; }
+  .tm-dots button { all: unset; box-sizing: border-box; position: relative; width: 26px; height: 44px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+  .tm-dots button::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 3px; background: rgba(28,27,26,.2);
+    transition: background-color var(--dur-press) ease-out; }
+  .tm-dots button:active::before { background: rgba(28,27,26,.5); } /* pressed: the dot darkens at once (6 px has no room to scale) */
+  .tm-dots button:focus-visible { outline: 2px solid var(--ring); outline-offset: -8px; border-radius: 10px; }
+  .tm-dots button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tm-pill { position: absolute; left: 0; top: 50%; width: 18px; height: 6px; margin-top: -3px; border-radius: 3px; background: var(--ink); pointer-events: none;
+    transform: translateX(calc(4px + var(--p, 0) * 26px)); }
+  .tm-count { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--graphite); }
+  .tm-count b { font-weight: 500; color: var(--brand-deep); }
+}
+@media (prefers-reduced-motion: reduce) { .rails > .cells { scroll-behavior: auto; } }

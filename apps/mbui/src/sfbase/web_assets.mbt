@@ -10,7 +10,7 @@ pub let viz_css : String =
   #| * (--background, --foreground, --muted-foreground, --viz-series-1…) and utility classes under Bootstrap's names (.card,
   #| * .btn, .table, .nav-pills…), the only design system a figure is written with. Their values are still.fail's: the page
   #| * hands in its own tokens for the theme it shows as --e-* (colours, type, corners), and the utilities look like the
-  #| * app's parts (docs/ui-panels.md): grey unless something is wrong, what is chosen in ink and never the accent, things
+  #| * app's parts (sf/align.mbt): grey unless something is wrong, what is chosen in ink and never the accent, things
   #| * set apart by grounds and room rather than frames, the app's sizes of type, numbers one width. Keep it in step with
   #| * station/src/skills/stillfail-viz.md.
   #| */
@@ -101,7 +101,7 @@ pub let viz_css : String =
   #|  --dur: 140ms;
   #|  --ease-out: cubic-bezier(.2, .7, .2, 1);
   #|
-  #|  /* Names this sheet answered to before (Codex's older ones and ember's), kept so old figures draw. */
+  #|  /* Names this sheet answered to before (Codex's older ones and still.fail's from before its rename), kept so old figures draw. */
   #|  --chart-1: var(--viz-series-1);
   #|  --chart-2: var(--viz-series-2);
   #|  --chart-3: var(--viz-series-3);
@@ -119,7 +119,7 @@ pub let viz_css : String =
   #|  background: var(--background);
   #|  color: var(--foreground);
   #|  font: var(--font-size-base) / var(--line-height-normal) var(--font-sans);
-  #|  /* Numbers one width throughout, as the app's own words (docs/ui-panels.md 数字). */
+  #|  /* Numbers one width throughout, as the app's own words (sf/tokens.mbt). */
   #|  font-variant-numeric: tabular-nums;
   #|  -webkit-font-smoothing: antialiased;
   #|}
@@ -303,7 +303,7 @@ pub let viz_css : String =
   #|.table :is(.text-center, [align="center"]) { text-align: center; }
   #|.table .text-nowrap { white-space: nowrap; }
   #|
-  #|/* ── Boxes in a flow (ember's own) ────────────────────────────────────────────────── */
+  #|/* ── Boxes in a flow (still.fail's own) ────────────────────────────────────────────── */
   #|.viz-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
   #|.viz-flow.is-vertical { flex-direction: column; align-items: flex-start; }
   #|.viz-node {

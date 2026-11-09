@@ -27,6 +27,8 @@ fn setting_tester(
   @sfbase.reset()
   reset()
   @settings.reset()
+  // (as the app begins anew: a prior Tester's keyed page rows do not belong to this one)
+  @sf.page_rows_reset()
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
@@ -38,9 +40,10 @@ fn setting_tester(
   ready()
   app.nav.push(Settings)
   app.nav.push(Setting(route))
-  let made = route is (About | Changelog | Memories | Memory(_) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion)
+  let made = @settings.made_once(route)
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       // (made once: the presenters around the tree's page, set_view_app's)
       guard !made else { return }
       @sf.begin(c) |> ignore
@@ -51,7 +54,7 @@ fn setting_tester(
         }
         @sf.presented(c)
       })
-    },
+    }),
     w~,
     h~,
     platform~,
@@ -73,6 +76,8 @@ fn setting_tester(
             _ => ()
           }
         })
+        // (what of the presented the tree draws, over the page: as the app's tree has it)
+        @sf.presented_nodes(root)
       },
       around=fn(c) {
         @sf.begin(c) |> ignore
@@ -114,7 +119,21 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
       shortcuts_node(p, core, on_back=core.pop, frame~, active=fn() { app.nav.top_stay().1 == stay }, width~)
     }
     Notifications => notify_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    AutoPolicy(st) => policy_node(p, core, here, st, on_back=core.pop, frame~, width~)
+    Appearance => appearance_node(p, core, on_back=core.pop, frame~, width~)
+    LocalStation => local_station_node(p, core, on_back=core.pop, frame~, width~)
+    Permissions => permissions_node(p, core, on_back=core.pop, frame~, width~)
+    Security => security_node(p, core, here, on_back=core.pop, frame~, width~)
+    SecurityOpen => security_open_node(p, core, here, on_back=core.pop, frame~, width~)
+    MemoryDoc(a, skill, at) => memory_doc_node(p, core, here, a, skill, at, on_back=core.pop, frame~, width~)
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
+    Workspace => workspace_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    VaultItems => vault_items_node(p, core, here, on_back=core.pop, frame~, width~)
+    Connects(only) => connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    Connect(station, id) => connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    Profile(a, id) => profile_node(p, core, here, a, id, on_back=core.pop, frame~, width~)
+    NewProfile(a) => new_profile_node(p, core, here, a, on_back=core.pop, frame~, width~)
+    Station(a) => station_node(p, core, here, a, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {
@@ -134,24 +153,11 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
   @settings.frame(core, here)
   let frame : PageFrame = { back: app.nav.under().map(@sfbase.back_label), top: 0.0, foot: 0.0, named: false }
   match route {
-    Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
     BarSettings => bars_page(c, core, frame)
-    Permissions => permissions_page(c, core, frame)
     Me => me_page(c, core, here, frame)
-    Workspace => workspace_page(c, core, here, frame)
-    Security => security_page(c, core, here, frame)
-    SecurityOpen => security_open_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
-    VaultItems => vault_items_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
-    Connects(only) => connects_page(c, src, core, here, frame, only)
-    Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
-    Station(a) => station_page(c, core, here, frame, a)
-    Profile(a, id) => profile_page(c, core, here, frame, a, id)
-    LocalStation => local_station_page(c, core, frame)
-    MemoryDoc(a, skill, at) => memory_doc_page(c, core, here, frame, a, skill, at)
-    AutoPolicy(st) => policy_page(c, core, here, frame, st)
     _ => ()
   }
 }

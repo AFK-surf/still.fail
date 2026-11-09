@@ -1,11 +1,9 @@
-// A station's own page, one in every frame, laid out by its width (page_look.mbt) (web/src/cloud/StationPage.tsx StationSettings, Head, Body, Overview,
+// A station's own page, one in every frame, laid out by its width (web/src/cloud/StationPage.tsx StationSettings, Head, Body, Overview,
 // Settings, Machine; StationPage.css.ts): its head (its mark and name, which its managers change where they are, how it
 // is and what it is, what is wrong with it, trying it again while away, its ⋯), then its parts one at a time: how it
 // is and what runs on it (what is left of the machine, its screens, profiles, connects and folders), what it is let do
 // and set to (macOS's grants, the tools logged in on it, its agents' variables, what its search finds, the workspaces
 // it is in), its software and the machine. Everything said is the core's (its station view, its topics).
-
-
 
 ///|
 fn station_page_reset() -> Unit {
@@ -132,7 +130,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
       // its mark: its managers pick it, by what it is called (图标)
       let mid = c.id("station-mark/" + address)
       if manager {
-        if hit(c, mid) {
+        c.on_press(mid, fn() {
           open_mark_pick(core, name, text(s, "emoji"), text(s, "icon"), @sf.t("android-settings.station.emojiWhat"), fn(
             emoji,
             icon,
@@ -144,7 +142,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
               done,
             )
           })
-        }
+        })
       }
       let mb = c.box(
         style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter),
@@ -202,7 +200,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
 }
 
 ///|
-/// Where a station another workspace lent is from (StationCards.tsx joinedText): its home workspace's name, else that
+/// Where a station another workspace lent is from: its home workspace's name, else that
 /// it is another's; "" for one whose home is here.
 fn joined_text(s : Json?) -> String {
   if !flag(s, "joined") {
@@ -238,14 +236,14 @@ fn station_rename(core : Core, here : Here, s : Json?) -> Unit {
 /// Tried again now (RetryPill: the core's `client.wake`, every station at once): while it is, a ring before its word.
 fn station_retry(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let trying = flag(field(s, "link"), "retrying") || is_doing(core, ["client.wake"], [])
-  if @sf.button(c, @sf.t("common.retry"), key="station-retry/" + text(s, "station"), tone=Ghost, busy=trying, disabled=trying) {
+  @sf.button(c, @sf.t("common.retry"), key="station-retry/" + text(s, "station"), tone=Ghost, busy=trying, disabled=trying, on_press=fn() {
     @settings.act(
       core,
       @sf.t("common.retry"),
       "client.wake",
       obj([("away", Json::number(0.0)), ("network", Json::boolean(true)), ("retry", Json::boolean(true))]),
     )
-  }
+  }) |> ignore
 }
 
 ///|
@@ -253,16 +251,17 @@ fn station_retry(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 /// to reach; while it is being started, installed or updated, busy.
 fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> Unit {
   let working = text(local, "doing") != ""
-  if @sf.button(
-      c,
-      @sf.t("web-pages.localStation.start"),
-      key="station-start/" + address,
-      tone=Ghost,
-      busy=working,
-      disabled=working,
-    ) {
-    local_start(core, local)
-  }
+  @sf.button(
+    c,
+    @sf.t("web-pages.localStation.start"),
+    key="station-start/" + address,
+    tone=Ghost,
+    busy=working,
+    disabled=working,
+    on_press=fn() {
+      local_start(core, local)
+    },
+  ) |> ignore
 }
 
 ///|
@@ -270,12 +269,16 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
 /// online (its launcher hands over, its sessions go on, what its advanced settings saved taking effect), removing it
 /// from the workspace (asked first).
 fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
+  let key = "station-more/" + text(s, "station")
+  @sf.icon_action(c, "more", key, @sf.t("common.more"), on_press=fn() {
+    @sf.menu(station_menu_items(core, here, s), from=Of(c.id(key)), along=End)
+  })
+}
+
+///|
+/// What its ⋯ holds (station_menu's): renaming it, restarting it while it is online, removing it (asked first).
+fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem?] {
   let address = text(s, "station")
-  let key = "station-more/" + address
-  if !@sf.icon_action(c, "more", key, @sf.t("common.more")) {
-    return
-  }
-  let mid = c.id(key)
   let remove = fn() {
     confirm(
       @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
@@ -295,8 +298,7 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
       },
     )
   }
-  @sf.menu(
-    [
+  [
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
       if flag(s, "online") {
         Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
@@ -307,10 +309,7 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
         None
       },
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
-    ],
-    from=Of(mid),
-    along=End,
-  )
+  ]
 }
 
 ///|
@@ -378,7 +377,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
         @sf.group(c, fn() {
           @sf.block(c, fn() {
             station_resource_dials(c, items(host, "meters"), items(host, "gpus"))
-            match (core.topic)("stationNet", { "station": str(address) }).value {
+            match (core.topic)("stationNet", { "station": str(address) }).get().value {
               Some(Object(_)) as net => station_net(c, net)
               _ => ()
             }
@@ -395,8 +394,8 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       })
     })
   }
-  // its screens (docs/remote-screens.md); one from before them says so quietly
-  match (core.topic)("screens", { "station": str(address) }).value {
+  // its screens; one from before them says so quietly
+  match (core.topic)("screens", { "station": str(address) }).get().value {
     Some(Object(_)) as v => {
       let screens = items(v, "screens")
       let note = text(v, "note")
@@ -410,18 +409,19 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                 let lacks = access is Some(Object(_)) && (!flag(access, "capture") || !flag(access, "control"))
                 // this machine's own display: said so, not opened (own_screen)
                 let own = own_screen(address, text(sv, "id"))
-                if @sf.link_row(
-                    c,
-                    "station-screen/" + address + "/" + text(sv, "id"),
-                    text(sv, "title"),
-                    // what it lacks says so in its line (the core's: what cannot be done now)
-                    note=if own { @sf.t("android-misc.screen.here") } else { text(sv, "line") },
-                    lacks=lacks && !own,
-                    goes=!own,
-                    lead=fn() { st_row_mark(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }) },
-                  ) {
-                  @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))
-                }
+                @sf.link_row(
+                  c,
+                  "station-screen/" + address + "/" + text(sv, "id"),
+                  text(sv, "title"),
+                  // what it lacks says so in its line (the core's: what cannot be done now)
+                  note=if own { @sf.t("android-misc.screen.here") } else { text(sv, "line") },
+                  lacks=lacks && !own,
+                  goes=!own,
+                  lead=fn() { st_row_mark(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }) },
+                  on_press=fn() {
+                    @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title"), until_gone: false }))
+                  },
+                ) |> ignore
                 screen_views(c, core, here, address, sv)
               }
               if screens.length() == 0 {
@@ -449,16 +449,18 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
               _ => 0
             }
             let row = "station-profiles/" + address + "/" + kind
-            if @sf.link_row(
+            let from = c.id(row)
+            @sf.link_row(
               c,
               row,
               name,
               value=@sf.t("web-mobile.settings.profilesCount", args=[("n", ids.length().to_string())]),
               trouble=if attention > 0 { @sf.t("web-mobile.settings.profilesShort", args=[("n", attention.to_string())]) } else { "" },
               lead=fn() { @settings.group_mark(c, kind) },
-            ) {
-              station_profiles_panel(core, here, address, kind, name, c.id(row), ids.length() >= @sf.pick_search_from)
-            }
+              on_press=fn() {
+                station_profiles_panel(core, here, address, kind, name, Of(from), ids.length() >= @sf.pick_search_from)
+              },
+            ) |> ignore
           }
         })
       })
@@ -471,16 +473,17 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
         @sf.group(c, fn() {
           for cn in connects {
             let cv = Some(cn)
-            if @sf.link_row(
-                c,
-                "station-connect/" + address + "/" + text(cv, "id"),
-                text(cv, "name"),
-                note=join([text(cv, "team"), text(cv, "runText")], " · "),
-                value=if text(cv, "presence") != "online" { text(cv, "statusText") } else { "" },
-                lead=fn() { @sf.status_dot(c, text(cv, "presence")) },
-              ) {
-              (core.push)(Connect(address, text(cv, "id")))
-            }
+            @sf.link_row(
+              c,
+              "station-connect/" + address + "/" + text(cv, "id"),
+              text(cv, "name"),
+              note=join([text(cv, "team"), text(cv, "runText")], " · "),
+              value=if text(cv, "presence") != "online" { text(cv, "statusText") } else { "" },
+              lead=fn() { @sf.status_dot(c, text(cv, "presence")) },
+              on_press=fn() {
+                (core.push)(Connect(address, text(cv, "id")))
+              },
+            ) |> ignore
           }
         })
       })
@@ -494,14 +497,15 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
         if flag(drive, "anywhere") {
           st_section(c, @sf.t("web-pages.drive.title"), fn() {
             @sf.group(c, fn() {
-              if @sf.link_row(
-                  c,
-                  "station-files/" + address,
-                  @sf.t("web-pages.stations.page.openFiles"),
-                  lead=fn() { st_row_mark(c, "folder") },
-                ) {
-                @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
-              }
+              @sf.link_row(
+                c,
+                "station-files/" + address,
+                @sf.t("web-pages.stations.page.openFiles"),
+                lead=fn() { st_row_mark(c, "folder") },
+                on_press=fn() {
+                  @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
+                },
+              ) |> ignore
             })
           })
         } else {
@@ -510,9 +514,9 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
             @sf.t("web-pages.drive.title"),
             count=roots.length(),
             actions=fn() {
-              if @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder") {
+              @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder", on_press=fn() {
                 @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
-              }
+              })
             },
             fn() {
               @sf.group(c, fn() {
@@ -521,15 +525,16 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
                 }
                 for r in roots {
                   let rv = Some(r)
-                  if @sf.link_row(
-                      c,
-                      "station-folder/" + address + "/" + text(rv, "path"),
-                      text(rv, "name"),
-                      note=text(rv, "path"),
-                      lead=fn() { st_row_mark(c, "folder") },
-                    ) {
-                    @sfbase.open_page(Drive({ station: address, root: Some(text(rv, "path")), path: "" }))
-                  }
+                  @sf.link_row(
+                    c,
+                    "station-folder/" + address + "/" + text(rv, "path"),
+                    text(rv, "name"),
+                    note=text(rv, "path"),
+                    lead=fn() { st_row_mark(c, "folder") },
+                    on_press=fn() {
+                      @sfbase.open_page(Drive({ station: address, root: Some(text(rv, "path")), path: "" }))
+                    },
+                  ) |> ignore
                 }
               })
             },
@@ -543,9 +548,9 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
   out.push(fn() {
     st_section(c, @sf.t("web-pages.stations.page.more"), fn() {
       @sf.group(c, fn() {
-        if @sf.link_row(c, "st-memory/" + address, @sf.t("android-settings.memory")) {
+        @sf.link_row(c, "st-memory/" + address, @sf.t("android-settings.memory"), on_press=fn() {
           (core.push)(Memory(address))
-        }
+        }) |> ignore
         // (共享调试 is no station's: a chat's agent asks for the phone, and settings' 共享调试 is where it stands)
       })
     })
@@ -564,7 +569,15 @@ let st_row_glyph : Double = 16.0
 
 ///|
 /// One account kind, with its live profiles and their allowances. A long kind can be searched without leaving it.
-fn station_profiles_panel(core : Core, here : Here, address : String, kind : String, title : String, from : Int, many : Bool) -> Unit {
+fn station_profiles_panel(
+  core : Core,
+  here : Here,
+  address : String,
+  kind : String,
+  title : String,
+  from : @sf.Anchor,
+  many : Bool,
+) -> Unit {
   let search_key = "station-profiles-search/" + address + "/" + kind
   let query = @ui.Field::new()
   @sf.panel(
@@ -607,7 +620,7 @@ fn station_profiles_panel(core : Core, here : Here, address : String, kind : Str
         }) |> ignore
       }
     },
-    from=Of(from),
+    from~,
     field=if many { search_key } else { "" },
     tall=if many { 0.85 } else { 0.0 },
     grows=many,
@@ -622,40 +635,41 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?, st
   if used > 0 {
     facts.push(@sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())]))
   }
-  if @sf.link_row(
-      c,
-      "station-profile/" + address + "/" + text(p, "id"),
-      text(p, "name"),
-      note=join(facts, " · "),
-      lead=fn() {
-        c.box(style=st_profile_mark.then(@sf.row_lead_out()), fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
-        |> ignore
-      },
-      below?=if text(field(p, "quota"), "state") == "ok" {
-        Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, key="station-profile/" + address + "/" + text(p, "id")) })
-      } else {
-        None
-      },
-      tail=fn() {
-        let status = if text(state, "text") != "" { text(state, "text") } else { text(p, "checkText") }
-        let tone = if text(state, "text") != "" { text(state, "tone") } else { text(p, "checkTone") }
-        if tone != "green" && status != "" {
-          @sf.pill(
-            c,
-            status,
-            tone=match tone {
-              "red" => Red
-              "amber" => Amber
-              "blue" => Blue
-              _ => Neutral
-            },
-          )
-        }
-      },
-    ) {
-    close()
-    (core.push)(Profile(address, text(p, "id")))
-  }
+  @sf.link_row(
+    c,
+    "station-profile/" + address + "/" + text(p, "id"),
+    text(p, "name"),
+    note=join(facts, " · "),
+    lead=fn() {
+      c.box(style=st_profile_mark.then(@sf.row_lead_out()), fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
+      |> ignore
+    },
+    below?=if text(field(p, "quota"), "state") == "ok" {
+      Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, key="station-profile/" + address + "/" + text(p, "id")) })
+    } else {
+      None
+    },
+    tail=fn() {
+      let status = if text(state, "text") != "" { text(state, "text") } else { text(p, "checkText") }
+      let tone = if text(state, "text") != "" { text(state, "tone") } else { text(p, "checkTone") }
+      if tone != "green" && status != "" {
+        @sf.pill(
+          c,
+          status,
+          tone=match tone {
+            "red" => Red
+            "amber" => Amber
+            "blue" => Blue
+            _ => Neutral
+          },
+        )
+      }
+    },
+    on_press=fn() {
+      close()
+      (core.push)(Profile(address, text(p, "id")))
+    },
+  ) |> ignore
 }
 
 ///|
@@ -697,16 +711,6 @@ fn station_settings(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Arra
     _ => ()
   }
   out.push(fn() { station_logins(c, core, address) })
-  // (asked for only when the station's overview says there are some)
-  let grants = match field(o, "outflowGrants") {
-    Some(Number(n, ..)) => n > 0.0
-    _ => false
-  }
-  match field(o, "outflowTailcat") {
-    Some(Object(_)) as link => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers"), grants, link) })
-    _ if grants => out.push(fn() { station_outflow(c, core, address, flag(o, "outflowAnswers"), grants, None) })
-    _ => ()
-  }
   match field(o, "agentEnv") {
     Some(Array(env)) => out.push(fn() { station_env(c, core, address, env, manager) })
     _ => ()
@@ -780,32 +784,33 @@ fn station_permissions(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
           tail=fn() {
             match end {
               "open" =>
-                if @sf.button(c, @sf.t("web-pages.stations.permissions.openScreen"), key="grant-open/" + address + "/" + gid) {
+                @sf.button(c, @sf.t("web-pages.stations.permissions.openScreen"), key="grant-open/" + address + "/" + gid, on_press=fn() {
                   open_screen_link(core, text(p, "screen"))
-                }
+                }) |> ignore
               "request" => {
                 let busy = is_doing(core, ["permissions.request"], [("station", address), ("grant", gid)])
-                if @sf.button(
-                    c,
-                    @sf.t("web-pages.stations.permissions.request"),
-                    key="grant-request/" + address + "/" + gid,
-                    tone=Primary,
-                    busy~,
-                    disabled=busy,
-                  ) {
-                  let screen = text(p, "screen")
-                  @settings.act(
-                    core,
-                    @sf.t("web-pages.stations.permissions.requestWhat", args=[("name", text(gv, "name"))]),
-                    "permissions.request",
-                    obj([("station", str(address)), ("grant", str(gid))]),
-                    then=fn(answer) {
-                      if text(Some(answer), "window") == "up" && flag(Some(answer), "screen") && screen != "" {
-                        open_screen_link(core, screen)
-                      }
-                    },
-                  )
-                }
+                @sf.button(
+                  c,
+                  @sf.t("web-pages.stations.permissions.request"),
+                  key="grant-request/" + address + "/" + gid,
+                  tone=Primary,
+                  busy~,
+                  disabled=busy,
+                  on_press=fn() {
+                    let screen = text(p, "screen")
+                    @settings.act(
+                      core,
+                      @sf.t("web-pages.stations.permissions.requestWhat", args=[("name", text(gv, "name"))]),
+                      "permissions.request",
+                      obj([("station", str(address)), ("grant", str(gid))]),
+                      then=fn(answer) {
+                        if text(Some(answer), "window") == "up" && flag(Some(answer), "screen") && screen != "" {
+                          open_screen_link(core, screen)
+                        }
+                      },
+                    )
+                  },
+                ) |> ignore
               }
               _ => ()
             }
@@ -824,7 +829,7 @@ fn grant_mark_by_button() -> @ui.Style {
 }
 
 ///|
-/// A grant's mark (StationPermissions.tsx GRANT_MARK): the screen's two by what they do, the folders by what they
+/// A grant's mark: the screen's two by what they do, the folders by what they
 /// hold, the LAN by the devices on it.
 fn grant_icon(id : String) -> String {
   match id {
@@ -840,7 +845,7 @@ fn grant_icon(id : String) -> String {
 }
 
 ///|
-/// Who is on one of its screens now (docs/remote-screens.md "Who is on a screen"): a row a view, whose and on which
+/// Who is on one of its screens now: a row a view, whose and on which
 /// device, whether it drives it and since when; 转为只看 and 断开 at its end for one the viewer may let go of, and 全部断开
 /// once there is more than one.
 fn screen_views(c : @ui.Ctx, core : Core, here : Here, address : String, screen : Json?) -> Unit {
@@ -866,14 +871,14 @@ fn screen_views(c : @ui.Ctx, core : Core, here : Here, address : String, screen 
         Some(fn() {
           if flag(vv, "control") {
             let what = @sf.t("web-pages.screen.viewWatchOnly")
-            if @sf.button(c, what, key="screen-view-watch/" + view, tone=Ghost, busy=is_doing(core, ["screen.watchOnly"], on)) {
+            @sf.button(c, what, key="screen-view-watch/" + view, tone=Ghost, busy=is_doing(core, ["screen.watchOnly"], on), on_press=fn() {
               asked("screen.watchOnly", what, [("view", str(view))])
-            }
+            }) |> ignore
           }
           let what = @sf.t("web-pages.screen.viewEnd")
-          if @sf.button(c, what, key="screen-view-end/" + view, tone=Ghost, busy=is_doing(core, ["screen.endView"], on)) {
+          @sf.button(c, what, key="screen-view-end/" + view, tone=Ghost, busy=is_doing(core, ["screen.endView"], on), on_press=fn() {
             asked("screen.endView", what, [("view", str(view))])
-          }
+          }) |> ignore
         })
       } else {
         None
@@ -889,9 +894,9 @@ fn screen_views(c : @ui.Ctx, core : Core, here : Here, address : String, screen 
       "",
       goes=false,
       control=fn() {
-        if @sf.button(c, what, key="screen-views-end/" + id, tone=Ghost, busy=is_doing(core, ["screen.endViews"], [("screen", id)])) {
+        @sf.button(c, what, key="screen-views-end/" + id, tone=Ghost, busy=is_doing(core, ["screen.endViews"], [("screen", id)]), on_press=fn() {
           asked("screen.endViews", what, [])
-        }
+        }) |> ignore
       },
     )
     |> ignore
@@ -970,7 +975,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
       f
     }
   }
-  let d = (core.topic)("agentEnvForm", { "station": str(address), "form": str(form) }).value
+  let d = (core.topic)("agentEnvForm", { "station": str(address), "form": str(form) }).get().value
   let draft = match env_drafts.get(address) {
     Some(draft) => draft
     None => {
@@ -989,7 +994,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     draft.source = Some(now)
     if pending == Some(now) {
       c.tell("env-ack/" + form, fn() {
-        if @signals.untracked(fn() { draft.pending.get() }) == Some(now) {
+        if draft.pending.untracked() == Some(now) {
           draft.pending.set(None)
           draft.sent = None
         }
@@ -1008,7 +1013,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
   // finishes. An older acknowledgement never clears or resends a newer value.
   if pending is Some(words) && d is Some(Object(_)) && !flag(d, "pending") && text(d, "text") != words && draft.sent != Some(words) {
     c.tell("env-edit/" + form, fn() {
-      if @signals.untracked(fn() { draft.pending.get() }) == Some(words) && draft.sent != Some(words) {
+      if draft.pending.untracked() == Some(words) && draft.sent != Some(words) {
         draft.sent = Some(words)
         station_env_edit(core, address, form, words)
       }
@@ -1058,22 +1063,23 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
       }
     }
     @sf.card_foot(c, at_end=true, fn() {
-      if flag(d, "dirty") &&
-        @sf.button(c, @sf.t("common.cancel"), key="env-reset/" + address, tone=Ghost) {
-        @signals.start_batch()
-        draft.pending.set(None)
-        draft.sent = None
-        draft.reset.set(@signals.untracked(fn() { draft.reset.get() }) + 1)
-        @signals.end_batch()
-        @settings.act(
-          core,
-          @sf.t("web-pages.stations.agentEnvEdit"),
-          "agentEnv.form.edit",
-          obj([("station", str(address)), ("form", str(form)), ("input", obj([("reset", Json::boolean(true))]))]),
-        )
+      if flag(d, "dirty") {
+        @sf.button(c, @sf.t("common.cancel"), key="env-reset/" + address, tone=Ghost, on_press=fn() {
+          @signals.start_batch()
+          draft.pending.set(None)
+          draft.sent = None
+          draft.reset.set(draft.reset.untracked() + 1)
+          @signals.end_batch()
+          @settings.act(
+            core,
+            @sf.t("web-pages.stations.agentEnvEdit"),
+            "agentEnv.form.edit",
+            obj([("station", str(address)), ("form", str(form)), ("input", obj([("reset", Json::boolean(true))]))]),
+          )
+        }) |> ignore
       }
       let can = d is Some(Object(_)) && flag(d, "dirty") && !flag(d, "pending") && !saving && read && count(d, "errors") == 0
-      if @sf.button(c, @sf.t("common.save"), key="env-save/" + address, tone=Primary, busy=saving, disabled=!can) {
+      @sf.button(c, @sf.t("common.save"), key="env-save/" + address, tone=Primary, busy=saving, disabled=!can, on_press=fn() {
         @settings.act(
           core,
           @sf.t("web-pages.stations.agentEnvSave"),
@@ -1081,7 +1087,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
           obj([("station", str(address)), ("form", str(form))]),
           done=@sf.t("web-pages.profiles.saved"),
         )
-      }
+      }) |> ignore
     })
   })
   |> ignore
@@ -1131,7 +1137,7 @@ fn station_search(c : @ui.Ctx, core : Core, address : String, search : Json?, ma
 }
 
 ///|
-/// What it sends still.fail to find its problems by (StationDiagnostics.tsx): whether its log goes, scrubbed, said by the
+/// What it sends still.fail to find its problems by: whether its log goes, scrubbed, said by the
 /// workspace's managers (others read it).
 fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics : Json?, manager : Bool) -> Unit {
   st_section(c, @sf.t("web-pages.stations.diagnostics.section"), fn() {
@@ -1160,7 +1166,7 @@ fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics :
 }
 
 ///|
-/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): the station default
+/// How it goes on with a session whose prompt cache is over: the station default
 /// and its estimated cost threshold, said by the workspace's managers (others read them).
 fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
   let cost = match field(context, "afreshAbove") {
@@ -1173,9 +1179,9 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
   let actions : (() -> Unit)? = match cost {
     Some(value) if on && manager =>
       Some(fn() {
-        if @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy) {
+        @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy, on_press=fn() {
           station_cold_custom(core, address, value)
-        }
+        })
       })
     _ => None
   }
@@ -1229,16 +1235,16 @@ fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
       })
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let amount = station_cold_amount(field_.text())
       let changed = match amount {
         Some(v) => v != cost
         None => false
       }
       let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
-      if @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, busy~, disabled=!changed) {
+      @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, busy~, disabled=!changed, on_press=fn() {
         match amount {
           Some(v) => {
             @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
@@ -1246,13 +1252,13 @@ fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
           }
           None => ()
         }
-      }
+      }) |> ignore
     },
   )
 }
 
 ///|
-/// Whether a Windows station runs as the machine's administrator (StationElevation.tsx ElevationSection): switched by
+/// Whether a Windows station runs as the machine's administrator: switched by
 /// the workspace's managers, Windows asking on the machine and the station restarting; what it means or how a change
 /// goes under it, how the last one failed under that.
 fn station_elevation(c : @ui.Ctx, core : Core, address : String, elevation : Json?) -> Unit {
@@ -1290,9 +1296,9 @@ fn station_elevation(c : @ui.Ctx, core : Core, address : String, elevation : Jso
 fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, manager : Bool) -> Unit {
   @sf.group(c, fn() {
     let open = @settings.station_network_open.get(address).unwrap_or(false)
-    if @sf.link_row(c, "network-open/" + address, @sf.t("web-pages.stations.network.advanced"), folds=open) {
+    @sf.link_row(c, "network-open/" + address, @sf.t("web-pages.stations.network.advanced"), folds=open, on_press=fn() {
       @settings.station_network_open[address] = !open
-    }
+    }) |> ignore
     if open {
       @sf.setting(c, @sf.t("web-pages.stations.network.algorithm"), note=@sf.t("web-pages.stations.network.note"), fn() {
         let busy = is_doing(core, ["network.setCongestion"], [("station", address)])
@@ -1311,7 +1317,7 @@ fn station_network(c : @ui.Ctx, core : Core, address : String, network : Json?, 
 /// The workspaces it is in (Workspaces), for its home's owners and admins once it is in more than one: its home
 /// first, what each has of the machine.
 fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
-  let m = (core.topic)("memberships", { "station": str(address) }).value
+  let m = (core.topic)("memberships", { "station": str(address) }).get().value
   let ws = items(m, "workspaces")
   if !flag(m, "manages") || ws.length() < 2 {
     return
@@ -1334,7 +1340,7 @@ fn station_workspaces(c : @ui.Ctx, core : Core, address : String) -> Unit {
 }
 
 ///|
-/// A workspace's mark before its name (StationPage.tsx WorkspaceNamed: 16).
+/// A workspace's mark before its name.
 let st_ws_mark : Double = 16.0
 
 // ── Machine ─────────────────────────────────────────────────────────────
@@ -1394,7 +1400,7 @@ fn station_machine(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array
   ]
 }
 
-// ── styles (StationPage.css.ts, settings.css.ts workspaceHead) ──────────
+// ── styles ──────────
 
 ///|
 let st_mark_glyph : Double = 28.0
@@ -1403,19 +1409,12 @@ let st_mark_glyph : Double = 28.0
 let st_profile_glyph : Double = 18.0
 
 ///|
-let st_grant_glyph : Double = 18.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let st_mark_letter : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let st_fact : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false)
-
-///|
-/// Between the facts' lines (workspaceFacts: 4).
-let st_facts_line : Double = 4.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1444,23 +1443,7 @@ let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 bg=Neutral align=ACenter ju
 
 ///|
 // kept across runs: a value (no field of it changes)
-let st_grant_mark : @ui.Style = @ui.css("w=S9 h=S9 radius=Full bg=Neutral align=ACenter justify=JCenter")
-
-
-///|
-// kept across runs: a value (no field of it changes)
 let st_env_problems : @ui.Style = @ui.css("w=Full gap=S1")
-
-///|
-/// A card's buttons at its foot, at its end (cardActions: 8 apart).
-// kept across runs: a value (no field of it changes)
-let st_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
-
-///|
-/// A st_footed_card's buttons at its end, reaching past its words to its foot corner's.
-fn st_foot_actions() -> @ui.Style {
-  st_card_actions.then(@sf.foot_across(@sf.button_height()))
-}
 
 ///|
 /// The variables' editor on its card: the field, what is wrong under it, its buttons, 12 apart.

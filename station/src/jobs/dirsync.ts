@@ -1,5 +1,5 @@
 // A local directory of a source session mirrored on another station for its remote tasks (station_task's `dir`,
-// docs/station-peers.md "Directories"). Each start brings the mirror up to date before the command runs there:
+//). Each start brings the mirror up to date before the command runs there:
 //
 // - Which files: in a Git work tree what `git ls-files -co --exclude-standard` names (tracked, and untracked but not
 //   ignored), so node_modules, target and dist stay home; elsewhere every file but IGNORED. `.git` is not synced,
@@ -7,13 +7,14 @@
 //   directory, and is left out (said in `skipped`) when it leads out.
 // - Compared by content: a file's id is its Git blob id (sha1 of "blob <size>\0" and its bytes), free from the index
 //   for a clean tracked file the mirror has as it is, hashed for the rest (also a clean one that would be sent: with a
-//   filter or eol conversion its bytes are not what the index names). The target keeps a manifest of what it wrote into the mirror (path →
-//   id, mode and the stat it left), and answers with what is there now (a file a command changed is hashed again).
+//   filter or eol conversion its bytes are not what the index names). The target keeps the last synced source state
+//   and answers with it and what is there now (a file a command changed is hashed again). The source plans its changes
+//   against the last synced state; the target preserves remote-only changes and refuses conflicting changes.
 // - Sent: only contents the mirror has nowhere, as pieces packed into zstd-compressed requests (`sync.put`), each
 //   within the transport's 1 MiB message; then the plan (`sync.commit`), in pages as well.
 // - Written: a changed file goes to a temporary file renamed over it, with its exec bit; a file that left the set is
-//   removed; nothing else in the mirror (build output, node_modules, files a task made) is touched, and an unchanged
-//   file keeps its mtime, so incremental builds there see exactly what changed.
+//   removed if it did not change remotely; an existing remote result at a new path is checked too. An unchanged file
+//   keeps its mtime, so incremental builds there see exactly what changed.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -274,8 +275,9 @@ function pages<T>(items: T[]): T[][] {
 /// `bulk`: where its contents wait their turn with the station's other bulk requests.
 export async function syncDir(ask: Ask, dir: string, now: () => number = Date.now, bulk: Bulk = new Bulk()): Promise<Synced | null> {
   const t0 = now();
-  const begun = await ask("sync.begin", {});
+  const begun = await ask("sync.begin", { safe: 1 });
   if (begun?.started === true) return null;
+  if (begun?.safe !== 1) throw new Error("the target cannot protect remote results during sync; update that station before starting");
   const id = String(begun?.id ?? "");
   const listing = await listLocal(dir);
   const there = new Map<string, [string, string]>();
@@ -284,8 +286,15 @@ export async function syncDir(ask: Ask, dir: string, now: () => number = Date.no
     for (const [path, hash, mode] of page.entries as [string, string, string][]) there.set(path, [hash, mode]);
     after = typeof page.next === "number" ? page.next : null;
   }
+  const base = new Map<string, [string, string]>();
+  for (let after: number | null = 0; after !== null; ) {
+    const page: Json = await ask("sync.base", { id, after });
+    for (const [path, hash, mode] of page.entries as [string, string, string][]) base.set(path, [hash, mode]);
+    after = typeof page.next === "number" ? page.next : null;
+  }
+  // Compare the source with the last source version, not the mirror's possibly newer task output.
   const same = (f: Local) => {
-    const t = there.get(f.path);
+    const t = base.get(f.path);
     return t !== undefined && t[0] === f.hash && t[1] === f.mode;
   };
   // What would go with the index's id is hashed first: with a Git filter or eol conversion (a .bat checked out with
@@ -310,7 +319,7 @@ export async function syncDir(ask: Ask, dir: string, now: () => number = Date.no
     if (!have.has(f.hash) && !need.has(f.hash)) need.set(f.hash, f);
   }
   const local = new Set(listing.files.map((f) => f.path));
-  const remove = [...there.keys()].filter((p) => !local.has(p));
+  const remove = [...base.keys()].filter((p) => !local.has(p));
   const sent = await sendBlobs(ask, id, dir, [...need.values()], bulk);
   const plan = [...set.map((s) => ({ s })), ...remove.map((r) => ({ r }))];
   const parts = pages(plan);
@@ -422,8 +431,8 @@ async function sendBlobs(ask: Ask, id: string, dir: string, need: Local[], bulk:
 
 // ── the target: the mirror ──
 
-/// A file the mirror has: its id, mode, and the size, mtime and inode it was left with.
-export type Entry = [hash: string, mode: string, size: number, mtime: number, ino: number];
+/// A file the mirror has: its id, mode, size, mtime, inode and ctime. Older manifests have no ctime.
+export type Entry = [hash: string, mode: string, size: number, mtime: number, ino: number, ctime?: number];
 export type Manifest = { dir: string; name: string; version: number; files: Record<string, Entry> };
 
 export function readManifest(path: string): Manifest | null {
@@ -436,12 +445,12 @@ export function readManifest(path: string): Manifest | null {
 
 const entryOf = (hash: string, mode: string, path: string): Entry => {
   const st = lstatSync(path);
-  return [hash, mode, st.size, st.mtimeMs, st.ino];
+  return [hash, mode, st.size, st.mtimeMs, st.ino, st.ctimeMs];
 };
 
 /// What the mirror has of the files it was given, now: one a command changed is hashed again, one it removed (or made
-/// something else) is no longer there.
-export async function actual(mirror: string, files: Record<string, Entry>): Promise<Record<string, Entry>> {
+/// something else) is no longer there. Paths about to be overwritten are checked by content even if their stat matches.
+export async function actual(mirror: string, files: Record<string, Entry>, verify: ReadonlySet<string> = new Set()): Promise<Record<string, Entry>> {
   const out: Record<string, Entry> = {};
   for (const [path, e] of Object.entries(files)) {
     const abs = join(mirror, ...path.split("/"));
@@ -451,12 +460,12 @@ export async function actual(mirror: string, files: Record<string, Entry>): Prom
     } catch {
       continue;
     }
-    const same = st.size === e[2] && st.mtimeMs === e[3] && st.ino === e[4];
+    const same = !verify.has(path) && st.size === e[2] && st.mtimeMs === e[3] && st.ino === e[4] && st.ctimeMs === e[5];
     if (st.isSymbolicLink()) {
-      out[path] = e[1] === LINK && same ? e : [blobId(Buffer.from(readlinkSync(abs))), LINK, st.size, st.mtimeMs, st.ino];
+      out[path] = e[1] === LINK && same ? e : [blobId(Buffer.from(readlinkSync(abs))), LINK, st.size, st.mtimeMs, st.ino, st.ctimeMs];
     } else if (st.isFile()) {
       const mode = modeOf(st.mode);
-      out[path] = e[1] === mode && same ? e : [await fileId(abs, st.size), mode, st.size, st.mtimeMs, st.ino];
+      out[path] = e[1] === mode && same ? e : [await fileId(abs, st.size), mode, st.size, st.mtimeMs, st.ino, st.ctimeMs];
     }
   }
   return out;

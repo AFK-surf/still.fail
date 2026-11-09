@@ -7,7 +7,7 @@
 // own box in its own corners, nothing in it drawn.
 
 /** How high a line's bar is, of its words' size: about as high as a line of them is inked. */
-export const BONE_SHARE = 0.8;
+const BONE_SHARE = 0.8;
 
 /** A picture or an icon no bigger than this either way is a dot. */
 const ICON_MOST = 24;

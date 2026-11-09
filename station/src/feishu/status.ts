@@ -1,4 +1,4 @@
-// What an agent is doing, said in the Feishu chat it works for (docs/feishu.md「工作中」; when and how often:
+// What an agent is doing, said in the Feishu chat it works for (「工作中」; when and how often:
 // connects/status.ts): a card posted as the turn starts, following the agent's steps at most once a second, and once
 // the turn is over saying how long it took and where its steps can be read. The card is a CardKit entity, changed by
 // its id as often as needed (a message's own edits run out after a few dozen); where the app may not make those (no

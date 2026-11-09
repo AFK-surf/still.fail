@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Orange is for the wordmark's dot, what connects and the beta's tape, never decoration (the user, 2026-10-29: 「dark 用白脸，light 用黑脸」).
 """still.fail's brand art (README.md here says what it is), made from Inter Bold and written where each app takes it.
 
     python3 design/brand/make.py          the SVGs and the Android drawables (fontTools and uharfbuzz)

@@ -1,4 +1,4 @@
-// A chat relayed to a channel (docs/relay.md): a person picks a Slack channel or a Feishu/Lark group one of the
+// A chat relayed to a channel: a person picks a Slack channel or a Feishu/Lark group one of the
 // station's connects' bots is in, and the chat's agent goes on there too. The station starts the conversation there
 // itself (who relayed it, from which chat, their note), or joins a Slack thread a person gave the link of, makes it one of the agent's conversations, says so in the chat
 // it came from, and tells the agent, who writes people there what they need to pick it up: its first post there is
@@ -133,7 +133,7 @@ async function targetOf(connects: ReturnType<typeof connectsFor>, target: RelayT
   return { c, existing, channel, place };
 }
 
-/// The people of the place a chat would be relayed to, to be mentioned in the note (docs/relay.md「附言里 @ 人」):
+/// The people of the place a chat would be relayed to, to be mentioned in the note (「附言里 @ 人」):
 /// none where the platform cannot say.
 export async function relayPeople(hub: Hub, thread: ThreadRow, target: RelayTarget): Promise<Member[]> {
   const { c, channel } = await targetOf(connectsFor(hub, agentOf(hub, thread)), target);

@@ -1,4 +1,4 @@
-// tiny-skia's own tests of its scalars, rects and transforms (path/src/scalar.rs, rect.rs, transform.rs).
+// tiny-skia's own tests of its scalars, rects and transforms.
 
 ///|
 test "bound" {

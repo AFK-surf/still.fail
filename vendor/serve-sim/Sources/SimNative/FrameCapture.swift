@@ -13,11 +13,11 @@ import SimNativeSupport
 /// for late-joining clients.
 ///
 /// Pipeline: IOSurface (shared memory) → CVPixelBuffer (zero-copy) → H.264 encode
-// ember: public, as still.fail Helper uses it from another module.
+// stillfail: public, as still.fail Helper uses it from another module.
 public actor FrameCapture {
     public init() {}
 
-    // ember: whether a still screen's picture is given again at the idle floor (upstream's MJPEG needs it); still.fail
+    // stillfail: whether a still screen's picture is given again at the idle floor (upstream's MJPEG needs it); still.fail
     // Helper's views encode a picture only when it is new, and ask for the same one again themselves.
     private var reemitsIdle = true
     public func setReemitsIdle(_ value: Bool) { reemitsIdle = value }
@@ -298,7 +298,7 @@ public actor FrameCapture {
     private func onIdleTimerTick() {
         let now = ContinuousClock.now
         guard (now - self.lastCaptureTime) >= Self.idleInterval else { return }
-        // ember: the same picture again only where it is wanted (`reemitsIdle`); a new one either way.
+        // stillfail: the same picture again only where it is wanted (`reemitsIdle`); a new one either way.
         self.captureFrame(force: reemitsIdle, trigger: .idleTick)
         // Self-heal: if we've never captured a frame, the cached descriptor
         // is likely stale. Re-wire the pipeline periodically (every ~1s)

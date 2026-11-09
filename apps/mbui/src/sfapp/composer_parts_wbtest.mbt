@@ -1,4 +1,4 @@
-// The composer's parts as Android's (Composer.kt, ChatFiles.kt, StationFiles.kt, Keyboard.kt): what waits to go (its
+// The composer's parts as Android's: what waits to go (its
 // files in the order they were put in, a row that scrolls sideways; a picture opening in the viewer, a link opening,
 // a file going up said as it goes), the quotes kept to 176, the archived chat's restore, what the buttons are called,
 // a long press letting the keyboard be. Over the fake core of composer_wbtest.mbt.
@@ -28,7 +28,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "照片.png", png_head())
   t.draw()
   t.run_for(@ui.move_most_ms)
-  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files.get()[0]), "id")
   let seen = "ws1/st1//draft:" + id
   let tile = match thumb_of(t.ctx(), seen) {
     Some(tile) => tile
@@ -48,7 +48,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   }
   assert_eq(named(calls, "station.file").length(), 0)
   // the picture is not taken out by the tap
-  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.get().length(), 1)
   t.back()
   t.run_for(preview_rest() - t.time())
   assert_true(viewer.get() is None)
@@ -61,7 +61,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(true)
   t.check_looks(false)
   t.run_for(@ui.move_most_ms)
@@ -74,7 +74,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
   t.draw()
   t.run_for(@ui.move_most_ms)
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   let picture = @sfbase.writing_pictures[id]
   let tile = thumb_of(t.ctx(), "ws1/st1//draft:" + id).unwrap()
   let visible = fn() {
@@ -167,7 +167,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
 
 ///|
 test "what waits to go has its ✕ hung on its corner, its centre on the curve, a picture's and a file's card alike, on a phone and a computer alike, clear of the next; tapped, it takes it out" {
-  // (Android, then macOS: one design on every screen, docs/ui-panels.md)
+  // (Android, then macOS: one design on every screen, sf/align.mbt)
   for platform in [2, 0] {
     let calls : Array[Made] = []
     let made : Ref[Source?] = Ref(None)
@@ -179,7 +179,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
     t.run_for(@ui.move_most_ms)
-    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
     assert_eq(tiles.length(), 2)
@@ -215,7 +215,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     let (cx, cy, cw, ch) = t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "build.log")])).unwrap().rect
     t.tap(cx + cw / 2.0, cy + ch / 2.0)
     t.draw()
-    let left = @sfbase.writing(src, "ws1/st1:s-c1").files
+    let left = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
     assert_eq(left.length(), 1)
     assert_eq(text(Some(left[0]), "name"), "第二张.png")
   }
@@ -244,7 +244,7 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     let drawn = t.drawn_rects().filter(fn(r) { near(r.0, x) && near(r.1, y) && near(r.2, cw) && near(r.3, ch) })
     assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{drawn.map(fn(r) { r.4 })}, not \{ground}")
     assert_false(t.drawn_shadows().iter().any(fn(s) { near(s.0, x) && near(s.2, cw) }), msg="a shadow under it (platform \{platform})")
-    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
     assert_eq(tiles.length(), 1)
@@ -698,8 +698,8 @@ test "a picture restored in the composer remains visible in the sending message"
     },
     // Its station has not supplied a picture: the message must use the one already in the composer.
     file: fn(_, _, _) { "" },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" || !in_draft.val { return now }
       let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
       m["files"] = [{ "id": "kept-1", "name": "截图.png", "size": 120, "sent": 40 }]

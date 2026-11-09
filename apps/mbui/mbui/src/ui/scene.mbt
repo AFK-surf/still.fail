@@ -1,5 +1,6 @@
 // Painting: the laid-out tree becomes a flat list of instances (60 floats
-// each) that every renderer draws with one shader:
+// each) that every renderer draws with one shader (some in strips, a
+// ground's middle flat, where that pays: src/host/bands.h):
 //   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
 //   36-39) · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
@@ -38,10 +39,23 @@
 // round), 11 a band of a shape (shape.mbt: 4 half its stroke's width, 0 a
 // fill; 6 1 a fill by the even-odd rule; 12 its first piece, 13 how many), 12
 // the pieces of the frame's shapes, after every instance drawn (shape.mbt:
-// six to an instance, none drawn).
+// six to an instance, none drawn), 13 a header: a group of instances the host
+// keeps (a list's row kept, view_ride.mbt's ride_head; @hostapi.group_set),
+// drawn in its place and the room after it, moved by 0, 1 (12 the group, 13
+// the first of its instances, 14 how many: the header's room and that after
+// it, unwritten; 15 how far on its shapes' pieces are among the frame's).
+// What works on the frame's instances where they are draws a header out first
+// (Ctx::flat_from), or passes over its room (inst_after); a Tester's frame is
+// drawn out as its paint ends, as a host draws it (src/host/groups.h).
 
 ///|
 let inst_size = 60
+
+///|
+/// `len` of the numbers of `a` from `from` on, as an array of their own: copied, not made first and then written over.
+fn inst_copy(a : FixedArray[Double], from : Int, len : Int) -> FixedArray[Double] {
+  FixedArray::from_array(a[from:from + len])
+}
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -152,8 +166,8 @@ fn clip_top() -> Int {
 
 ///|
 /// The corner of the clip `k` (in `clip_stack`) at its corner `corner` (0 top left, then clockwise) where (`x`, `y`) is
-/// that corner (as laid out: within a millionth, what the same place worked out two ways may differ by, a capsule's
-/// place in a smooth corner being no whole number, smooth.mbt round_like): its radius and how smooth it is, else
+/// that corner (as laid out: within a millionth, what the same place worked out two ways may differ by, a fractional
+/// layout's place): its radius and how smooth it is, else
 /// square (0, 0).
 fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Double) {
   let s = clip_stack
@@ -164,6 +178,41 @@ fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Doub
   } else {
     (0.0, 0.0)
   }
+}
+
+///|
+/// Whether (`x`, `y`) is the clip `k`'s corner `corner` (clip_corner_r's).
+fn clip_corner_is(k : Int, corner : Int, x : Double, y : Double) -> Bool {
+  let s = clip_stack
+  let cx = if corner == 0 || corner == 3 { s[k] } else { s[k + 2] }
+  let cy = if corner < 2 { s[k + 1] } else { s[k + 3] }
+  (x - cx).abs() < 1.0e-6 && (y - cy).abs() < 1.0e-6
+}
+
+///|
+/// clip_corner_r's radius alone (a pair is an allocation each).
+fn clip_corner_radius(k : Int, corner : Int, x : Double, y : Double) -> Double {
+  if clip_corner_is(k, corner, x, y) {
+    clip_stack[k + 4 + corner]
+  } else {
+    0.0
+  }
+}
+
+///|
+/// clip_corner_r's smoothness alone.
+fn clip_corner_smooth(k : Int, corner : Int, x : Double, y : Double) -> Double {
+  if clip_corner_is(k, corner, x, y) {
+    clip_stack[k + 8 + corner]
+  } else {
+    0.0
+  }
+}
+
+///|
+/// A box's corner of radius `r` as drawn in a box `room` to its shorter side's half: at most that, none below 0.
+fn box_corner_r(r : Double, room : Double) -> Double {
+  dmax(dmin(r, room), 0.0)
 }
 
 ///|
@@ -204,8 +253,7 @@ fn push_clip_r(
   } else if outer_kept {
     k + 12
   } else {
-    let cands = if has_outer && !apart { [k, k + 12] } else { [k] }
-    match clip_cutting(cands, clip_stack, x0, y0, x1, y1, r, sm) {
+    match clip_cutting(k, if has_outer && !apart { k + 12 } else { -1 }, clip_stack, x0, y0, x1, y1, r, sm) {
       Some(c) => c
       None => if apart { k + 12 } else { -1 }
     }
@@ -263,14 +311,15 @@ fn clip_has_outer(k : Int) -> Bool {
 }
 
 ///|
-/// Of the clips that may be the outer of a clip of rect (x0 y0 x1 y1), its corners `r` as smooth as `sm` (each at its
-/// offset in `at`: 12 numbers, a clip_stack level's or an instance's 40-51), the one whose curves cut into it the most
+/// Of the clips that may be the outer of a clip of rect (x0 y0 x1 y1), its corners `r` as smooth as `sm` (`c0`, and `c1`
+/// unless that is -1: each at its offset in `at`, 12 numbers, a clip_stack level's or an instance's 40-51), the one whose curves cut into it the most
 /// (clip_cut_depth), none where none cuts any of it. Straight edges are no cut (it is cut to their rects already), nor
 /// a corner it shares, as round or rounder (sd_clip draws a corner where its box has it): only a curve that reaches
 /// into its shape where it is not that corner, a band brushed across a frame's foot, a frame scrolled into a pane's
 /// corner.
 fn[A : ClipNumbers] clip_cutting(
-  cands : Array[Int],
+  c0 : Int,
+  c1 : Int,
   at : A,
   x0 : Double,
   y0 : Double,
@@ -279,16 +328,15 @@ fn[A : ClipNumbers] clip_cutting(
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
 ) -> Int? {
-  let mut best : Int? = None
-  let mut most = clip_cut_least
-  for c in cands {
-    let d = clip_cut_depth(at, c, x0, y0, x1, y1, r, sm)
-    if d > most {
-      most = d
-      best = Some(c)
-    }
+  let d0 = clip_cut_depth(at, c0, x0, y0, x1, y1, r, sm)
+  let d1 = if c1 >= 0 { clip_cut_depth(at, c1, x0, y0, x1, y1, r, sm) } else { clip_cut_least }
+  if d1 > d0 && d1 > clip_cut_least {
+    Some(c1)
+  } else if d0 > clip_cut_least {
+    Some(c0)
+  } else {
+    None
   }
-  best
 }
 
 ///|
@@ -328,6 +376,32 @@ let clip_arc_sin : FixedArray[Double] = FixedArray::makei(clip_arc_steps + 1, fn
 })
 
 ///|
+/// The curve's points (clip_arc_cos, clip_arc_sin) each to the power `e` (det_pow), for the `e` last asked: a curve as
+/// smooth as the one before it (most are not smooth at all) not worked out again.
+fn clip_arc_powers(e : Double) -> Unit {
+  if e == clip_arc_e.val {
+    return
+  }
+  clip_arc_e.val = e
+  for q in 0..=clip_arc_steps {
+    clip_arc_cos_e[q] = det_pow(clip_arc_cos[q], e)
+    clip_arc_sin_e[q] = det_pow(clip_arc_sin[q], e)
+  }
+}
+
+///|
+// kept across runs: worked out again only for another power (clip_arc_powers)
+let clip_arc_e : Ref[Double] = Ref::new(-1.0)
+
+///|
+// kept across runs: as clip_arc_e
+let clip_arc_cos_e : FixedArray[Double] = FixedArray::make(clip_arc_steps + 1, 0.0)
+
+///|
+// kept across runs: as clip_arc_e
+let clip_arc_sin_e : FixedArray[Double] = FixedArray::make(clip_arc_steps + 1, 0.0)
+
+///|
 /// How far the clip of 12 numbers at `o` in `at` (its rect, its corners, how smooth) cuts into a shape of rect (x0 y0
 /// x1 y1), corners `r` as smooth as `sm`: the most of the shape past that clip's curves (≤ 0: none of it). Only its
 /// corners count (sd_clip's, each against its own corner point). Its distance is a convex shape's, convex: across the
@@ -344,19 +418,19 @@ fn[A : ClipNumbers] clip_cut_depth(
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
 ) -> Double {
-  let n = fn(j : Int) { at.clip_number(o + j) }
-  let (ox0, oy0, ox1, oy1) = (n(0), n(1), n(2), n(3))
+  let ox0 = at.clip_number(o)
+  let oy0 = at.clip_number(o + 1)
+  let ox1 = at.clip_number(o + 2)
+  let oy1 = at.clip_number(o + 3)
   let ohx = dmax((ox1 - ox0) / 2.0, 0.0)
   let ohy = dmax((oy1 - oy0) / 2.0, 0.0)
-  let own = [r.0, r.1, r.2, r.3]
-  let owns = [sm.0, sm.1, sm.2, sm.3]
   let mut most = -1.0e9
   for j in 0..<4 {
-    let rr = n(4 + j)
+    let rr = at.clip_number(o + 4 + j)
     if rr <= 0.0 {
       continue
     }
-    let ss = n(8 + j)
+    let ss = at.clip_number(o + 8 + j)
     let reach = rr * (1.0 + (smooth_scale - 1.0) * ss)
     let left = j == 0 || j == 3
     let top = j < 2
@@ -372,15 +446,6 @@ fn[A : ClipNumbers] clip_cut_depth(
     }
     let vx = dmax(ohx, reach)
     let vy = dmax(ohy, reach)
-    // (a point of the shape's rect its own curves cut away, a square corner beside a frame's corner it shares, is none
-    // of it)
-    let past = fn(px : Double, py : Double) {
-      if sd_clip(px, py, x0, y0, x1, y1, r, sm) > clip_cut_least {
-        -1.0e9
-      } else {
-        sd_corner(dmax(vx - (px - kx) * ix, 0.0), dmax(vy - (py - ky) * iy, 0.0), vx, vy, rr, ss)
-      }
-    }
     // the shape's corners within that square
     for i in 0..<4 {
       let sl = i == 0 || i == 3
@@ -389,10 +454,21 @@ fn[A : ClipNumbers] clip_cut_depth(
       let cy = if st { y0 } else { y1 }
       let jx = if sl { 1.0 } else { -1.0 }
       let jy = if st { 1.0 } else { -1.0 }
-      let sr = own[i]
+      let sr = match i {
+        0 => r.0
+        1 => r.1
+        2 => r.2
+        _ => r.3
+      }
+      let si = match i {
+        0 => sm.0
+        1 => sm.1
+        2 => sm.2
+        _ => sm.3
+      }
       if sr <= 0.0 {
         if cx >= zx0 && cx <= zx1 && cy >= zy0 && cy <= zy1 {
-          most = dmax(most, past(cx, cy))
+          most = dmax(most, clip_past(cx, cy, x0, y0, x1, y1, r, sm, kx, ky, ix, iy, vx, vy, rr, ss))
         }
         continue
       }
@@ -400,27 +476,58 @@ fn[A : ClipNumbers] clip_cut_depth(
       if cx == kx && cy == ky && sr >= rr {
         continue
       }
-      let sreach = sr * (1.0 + (smooth_scale - 1.0) * owns[i])
+      let sreach = sr * (1.0 + (smooth_scale - 1.0) * si)
       // (its curve's square, met by that one)
       let (ax0, ax1) = if sl { (cx, cx + sreach) } else { (cx - sreach, cx) }
       let (ay0, ay1) = if st { (cy, cy + sreach) } else { (cy - sreach, cy) }
       if ax1 < zx0 || ax0 > zx1 || ay1 < zy0 || ay0 > zy1 {
         continue
       }
-      let e = 2.0 / (2.0 + (smooth_exponent - 2.0) * owns[i])
+      let e = 2.0 / (2.0 + (smooth_exponent - 2.0) * si)
+      clip_arc_powers(e)
       for q in 0..=clip_arc_steps {
-        let ux = sreach * det_pow(clip_arc_cos[q], e)
-        let uy = sreach * det_pow(clip_arc_sin[q], e)
+        let ux = sreach * clip_arc_cos_e[q]
+        let uy = sreach * clip_arc_sin_e[q]
         // from its curve's middle out towards the corner; what of it is past the shape's rect is none of it
         let px = cx + jx * (sreach - ux)
         let py = cy + jy * (sreach - uy)
         if px >= x0 && px <= x1 && py >= y0 && py <= y1 {
-          most = dmax(most, past(px, py))
+          most = dmax(most, clip_past(px, py, x0, y0, x1, y1, r, sm, kx, ky, ix, iy, vx, vy, rr, ss))
         }
       }
     }
   }
   most
+}
+
+///|
+/// How far past the curve of a clip's corner (at `kx` `ky`, inwards `ix` `iy`, its reach `vx` `vy`, radius `rr` as
+/// smooth as `ss`) the point (`px`, `py`) of a shape (x0 y0 x1 y1, corners `r` as smooth as `sm`) is (clip_cut_depth):
+/// none of it where the shape's own curves cut it away (a square corner beside a frame's corner it shares). A function
+/// of its own, not a closure: one made for each corner measured.
+fn clip_past(
+  px : Double,
+  py : Double,
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  r : (Double, Double, Double, Double),
+  sm : (Double, Double, Double, Double),
+  kx : Double,
+  ky : Double,
+  ix : Double,
+  iy : Double,
+  vx : Double,
+  vy : Double,
+  rr : Double,
+  ss : Double,
+) -> Double {
+  if sd_clip(px, py, x0, y0, x1, y1, r, sm) > clip_cut_least {
+    -1.0e9
+  } else {
+    sd_corner(dmax(vx - (px - kx) * ix, 0.0), dmax(vy - (py - ky) * iy, 0.0), vx, vy, rr, ss)
+  }
 }
 
 ///|
@@ -447,28 +554,25 @@ fn push_circle_clip(cx : Double, cy : Double, r : Double) -> Unit {
 ///|
 /// Node `n`'s clip pushed: its rect, its corners rounded as it draws them (radius_at), within the clip it is in.
 fn push_round_clip(n : Node) -> Unit {
-  // (a box whose border is drawn over what it holds (paint's border_over) cuts it at the border's inside, as CSS's
-  // overflow cuts at the padding box: what it holds never shows under its line, which is the box's edge (a list's row
-  // under a card's see-through line read as the line through it), its corners concentric with the box's there)
-  let bw = if n.border_w > 0.0 && n.first >= 0 && (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll) {
-    dmin(n.border_w, dmin(n.fw, n.fh) / 2.0)
-  } else {
-    0.0
-  }
-  push_inset_clip(n.x, n.y, n.fw, n.fh, fn(j) { n.radius_at(j) }, bw)
+  push_box_clip(n.x, n.y, n.fw, n.fh, n.radius_at(0), n.radius_at(1), n.radius_at(2), n.radius_at(3))
 }
 
 ///|
 /// A clip pushed for what a box `w` by `h` at (x, y) holds, its corners `radius_at` each (top left, then round it),
-/// cut `bw` in from its edges where its line is drawn over what it holds (the line's inside, as CSS's overflow cuts at
-/// the padding box), its corners concentric with the box's there; within the clip it is in. An old view's box's
-/// (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
-fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (Int) -> Double, bw : Double) -> Unit {
-  let bw = dmax(0.0, dmin(bw, dmin(w, h) / 2.0))
-  let x = x + bw
-  let y = y + bw
-  let w = w - 2.0 * bw
-  let h = h - 2.0 * bw
+/// within the clip it is in (its corners' radii given each, not asked of a function: a closure made for each box clipped): at
+/// the box's own edge, where its border is, which takes no room (what is laid out to its
+/// edge is all of it there, under its border, drawn over it: paint's border_over), as a layer's border over what it
+/// masks. An old view's box's (push_round_clip) and a node's of the window's tree (view_host.mbt), the same.
+fn push_box_clip(
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  r0 : Double,
+  r1 : Double,
+  r2 : Double,
+  r3 : Double,
+) -> Unit {
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -480,27 +584,34 @@ fn push_inset_clip(x : Double, y : Double, w : Double, h : Double, radius_at : (
   // card mostly past the window's edge: its far corners as round as its line, sd_clip)
   let room = dmin(w, h) / 2.0
   // where a corner is both's, the rounder
-  let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
-    let (pr, ps) = clip_corner_r(k, j, cx, cy)
-    let r = dmax(dmin(concentric(radius_at(j), bw), room), 0.0)
-    if r > 0.0 && cx == ox && cy == oy && r >= pr {
-      (r, smoothness(r, room))
-    } else {
-      (pr, ps)
-    }
-  }
-  let (tl, stl) = corner(0, x0, y0, x, y)
-  let (tr, s_tr) = corner(1, x1, y0, x + w, y)
-  let (br, sbr) = corner(2, x1, y1, x + w, y + h)
-  let (bl, sbl) = corner(3, x0, y1, x, y + h)
+  let r0 = box_corner_r(r0, room)
+  let r1 = box_corner_r(r1, room)
+  let r2 = box_corner_r(r2, room)
+  let r3 = box_corner_r(r3, room)
+  let own0 = r0 > 0.0 && x0 == x && y0 == y
+  let own1 = r1 > 0.0 && x1 == x + w && y0 == y
+  let own2 = r2 > 0.0 && x1 == x + w && y1 == y + h
+  let own3 = r3 > 0.0 && x0 == x && y1 == y + h
+  let p0 = clip_corner_radius(k, 0, x0, y0)
+  let p1 = clip_corner_radius(k, 1, x1, y0)
+  let p2 = clip_corner_radius(k, 2, x1, y1)
+  let p3 = clip_corner_radius(k, 3, x0, y1)
+  let tl = if own0 && r0 >= p0 { r0 } else { p0 }
+  let tr = if own1 && r1 >= p1 { r1 } else { p1 }
+  let br = if own2 && r2 >= p2 { r2 } else { p2 }
+  let bl = if own3 && r3 >= p3 { r3 } else { p3 }
+  let stl = if own0 && r0 >= p0 { smoothness(r0, room) } else { clip_corner_smooth(k, 0, x0, y0) }
+  let s_tr = if own1 && r1 >= p1 { smoothness(r1, room) } else { clip_corner_smooth(k, 1, x1, y0) }
+  let sbr = if own2 && r2 >= p2 { smoothness(r2, room) } else { clip_corner_smooth(k, 2, x1, y1) }
+  let sbl = if own3 && r3 >= p3 { smoothness(r3, room) } else { clip_corner_smooth(k, 3, x0, y1) }
   push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
 }
 
 ///|
 fn pop_clip() -> Unit {
-  for _ in 0..<clip_n {
-    clip_stack.pop() |> ignore
-  }
+  // (cut, not popped: a Double popped comes boxed in its Option, an allocation each)
+  let len = clip_stack.length() - clip_n
+  clip_stack.truncate(if len < 0 { 0 } else { len })
   while clip_window.length() > clip_stack.length() / clip_n {
     clip_window.pop() |> ignore
   }
@@ -584,13 +695,14 @@ fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 /// How far the old view painted now is carried off the pixels from where it was laid out (an old view hosted in a node
 /// drawn off its place by its tree, old_frame): its words set on the pixels where they are laid out, then carried with
 /// it, as an old view's look sets them before it moves and scales them (draw.mbt); none (0, 0) for the rest.
-// kept across runs: (0, 0) but while what is in such an old view is painted (Ctx::paint, Ctx::glyphs_carried_of)
-let glyphs_carried : Ref[(Double, Double)] = Ref((0.0, 0.0))
+// (across, down: two numbers set in place, not a pair made for each node painted)
+// kept across runs: (0, 0) but while what is in such an old view is painted (Ctx::paint, Ctx::carry_glyphs)
+let glyphs_carried : FixedArray[Double] = [0.0, 0.0]
 
 ///|
 /// Where a glyph's picture goes across, `x` as painted: on the pixels where it is laid out (glyphs_carried).
 fn glyph_x(x : Double, sc : Double) -> Double {
-  let m = glyphs_carried.val.0
+  let m = glyphs_carried[0]
   on_pixels(x - m, sc) + m
 }
 
@@ -598,7 +710,7 @@ fn glyph_x(x : Double, sc : Double) -> Double {
 /// Where a glyph's picture goes down, its line's baseline `base` as painted, then its own offset `oy` (on_glyph_row): on
 /// the pixels where it is laid out (glyphs_carried).
 fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
-  let m = glyphs_carried.val.1
+  let m = glyphs_carried[1]
   on_glyph_row(base - m, oy, sc) + m
 }
 
@@ -606,7 +718,7 @@ fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 /// Where a line of words (struck through, underlined) goes down, `y` as painted: on the pixels where it is laid out
 /// (glyphs_carried).
 fn glyph_y(y : Double, sc : Double) -> Double {
-  let m = glyphs_carried.val.1
+  let m = glyphs_carried[1]
   on_pixels(y - m, sc) + m
 }
 
@@ -625,6 +737,118 @@ let words_alpha : Ref[Double] = Ref(1.0)
 /// on (its surface where nothing in it is said to be: draw.mbt).
 // kept across runs: 1 and none between frames, set as a look is painted and put back as it is done
 let look_surface : Ref[(Double, Int)] = Ref((1.0, -1))
+
+///|
+/// How many nodes the paint has left out as outside what cuts them, counted on (row_drawing.mbt: a row that left some
+/// out shows them once moved, so is not kept as drawn).
+// kept across runs: only counts on
+let paint_culled : Ref[Int] = Ref(0)
+
+///|
+/// A list's row painted to be kept whole, past its list's clip (row_drawing.mbt): from which instance on each is a
+/// node's (instance, node: pairs) and a line of words' (instance, top, height: triples; a height below 0, none), so
+/// that what a paint there would leave out (Ctx::paint_node's cull, a line's) is left out where it is drawn again.
+// kept across runs: off, and its marks cleared, between rows painted so
+let rec_whole : Ref[Bool] = Ref(false)
+
+///|
+// kept across runs: cleared as a row is painted to be kept whole
+let rec_node_at : Array[Int] = []
+
+///|
+// kept across runs: cleared as a row is painted to be kept whole
+let rec_line_at : Array[Double] = []
+
+///|
+// kept across runs: -1 between rows painted to be kept whole
+let rec_node_now : Ref[Int] = Ref(-1)
+
+///|
+/// The list's clip a row painted whole is in (its rect): a picture outside it is not asked for (left out, the row not
+/// kept so).
+// kept across runs: set as a row is painted whole
+let rec_real : Ref[(Double, Double, Double, Double)] = Ref((0.0, 0.0, 0.0, 0.0))
+
+///|
+/// From instance `at` on, node `node`'s (and no line's).
+fn rec_node(at : Int, node : Int) -> Unit {
+  rec_node_at.push(at)
+  rec_node_at.push(node)
+  rec_node_now.val = node
+  rec_line(at, 0.0, -1.0)
+}
+
+///|
+/// From instance `at` on, the line of words `top` down, `h` tall (`h` below 0: none).
+fn rec_line(at : Int, top : Double, h : Double) -> Unit {
+  let n = rec_line_at.length()
+  if n >= 3 && rec_line_at[n - 2] == top && rec_line_at[n - 1] == h {
+    return
+  }
+  rec_line_at.push(at.to_double())
+  rec_line_at.push(top)
+  rec_line_at.push(h)
+}
+
+///|
+/// Whether glyph `key`, at `sc` pixels a point, lying at (`x0`, `y0`)–(`x1`, `y1`), is one a row painted whole
+/// (rec_whole) would ask the host for outside its list's clip (rec_real), where a paint of the list alone would not: not
+/// drawn, and the row kept drawn only short of it (rec_skip), its glyphs asked for as they come to show.
+fn rec_glyph_early(key : Int, sc : Double, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Bool {
+  if !rec_whole.val {
+    return false
+  }
+  let (rx0, ry0, rx1, ry1) = rec_real.val
+  if x1 >= rx0 && x0 <= rx1 && y1 >= ry0 && y0 <= ry1 {
+    return false
+  }
+  match text_cache.glyphs.get(key) {
+    Some(g) => glyph_other_scale(g, sc)
+    None => true
+  }
+}
+
+///|
+/// How far down a row painted whole (rec_whole) is drawn, top and bottom: short of each line of words above or below
+/// the list's clip whose glyphs were not asked for (rec_skip).
+// kept across runs: set as a row is painted whole
+let rec_reach : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// A line of words from `y0` down to `y1` with glyphs not asked for (rec_glyph_early), not drawn: above or below the
+/// list's clip, the row is kept drawn only so far as it ends short of the line (rec_reach); beside it, not kept.
+fn rec_skip(y0 : Double, y1 : Double) -> Unit {
+  let (_, ry0, _, ry1) = rec_real.val
+  let (t, b) = rec_reach.val
+  if y1 < ry0 {
+    rec_reach.val = (dmax(t, y1 + 0.001), b)
+  } else if y0 > ry1 {
+    rec_reach.val = (t, dmin(b, y0 - 0.001))
+  } else {
+    paint_culled.val += 1
+  }
+}
+
+///|
+/// The clip a list's row is painted in while it is kept as drawn (row_drawing.mbt), or none.
+// kept across runs: none between rows kept, set as one is painted to be kept
+let row_band : Ref[Array[Double]?] = Ref(None)
+
+///|
+/// Something left out by what cuts it now (a node, a line of words): counted where that is the list's clip a row kept
+/// as drawn is painted in, or reaches its edge (a row's own clip wholly inside it moves with the row, so leaves out the
+/// same once moved).
+fn left_out() -> Unit {
+  match row_band.val {
+    Some(b) => {
+      let k = clip_top()
+      if !(clip_stack[k] > b[0] && clip_stack[k + 1] > b[1] && clip_stack[k + 2] < b[2] && clip_stack[k + 3] < b[3]) {
+        paint_culled.val += 1
+      }
+    }
+    None => ()
+  }
+}
 
 ///|
 fn Ctx::push_inst(
@@ -649,6 +873,11 @@ fn Ctx::push_inst(
   }
   // (what is not a glyph in words drawn a glyph at a time, a list's mark, a quote's bar, a code block's ground: with
   // the glyph after it, its line's first: Ctx::glyphs_by)
+  // (an ink worked out as what holds it is painted, for its words, lines and shapes: Ctx::ink_by)
+  let color = match ink_now.val {
+    Some(ink) if kind == 1.0 || kind == 7.0 || kind == 10.0 || kind == 11.0 => ink
+    _ => color
+  }
   let (y, alpha, c2d) = match glyph_look.val {
     Some(f) if !glyph_pushing.val => {
       let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 })
@@ -658,66 +887,69 @@ fn Ctx::push_inst(
   }
   let b = self.ninst * inst_size
   let a = self.inst
-  a[b] = x
-  a[b + 1] = y
-  a[b + 2] = w
-  a[b + 3] = h
-  a[b + 4] = radius
-  a[b + 5] = kind
-  a[b + 6] = bw
-  a[b + 7] = blur
-  a[b + 8] = ((color >> 24) & 0xFFL).to_double() / 255.0
-  a[b + 9] = ((color >> 16) & 0xFFL).to_double() / 255.0
-  a[b + 10] = ((color >> 8) & 0xFFL).to_double() / 255.0
+  // (each number written unchecked: the room for it grown above, the clip's level whole)
+  a.unsafe_set(b, x)
+  a.unsafe_set(b + 1, y)
+  a.unsafe_set(b + 2, w)
+  a.unsafe_set(b + 3, h)
+  a.unsafe_set(b + 4, radius)
+  a.unsafe_set(b + 5, kind)
+  a.unsafe_set(b + 6, bw)
+  a.unsafe_set(b + 7, blur)
+  a.unsafe_set(b + 8, ((color >> 24) & 0xFFL).to_double() / 255.0)
+  a.unsafe_set(b + 9, ((color >> 16) & 0xFFL).to_double() / 255.0)
+  a.unsafe_set(b + 10, ((color >> 8) & 0xFFL).to_double() / 255.0)
   // (what the looks it is in hold, fainter by them: words_alpha; a box's edge as its ground, glyph_look's way)
   let alpha = alpha * words_alpha.val
   let c2d = if kind == 0.0 { c2d * words_alpha.val } else { c2d }
-  a[b + 11] = (color & 0xFFL).to_double() / 255.0 * alpha
-  a[b + 12] = c2a
-  a[b + 13] = c2b
-  a[b + 14] = c2c
-  a[b + 15] = c2d
+  a.unsafe_set(b + 11, (color & 0xFFL).to_double() / 255.0 * alpha)
+  a.unsafe_set(b + 12, c2a)
+  a.unsafe_set(b + 13, c2b)
+  a.unsafe_set(b + 14, c2c)
+  a.unsafe_set(b + 15, c2d)
   let k = clip_top()
-  a[b + 16] = clip_stack[k]
-  a[b + 17] = clip_stack[k + 1]
-  a[b + 18] = clip_stack[k + 2]
-  a[b + 19] = clip_stack[k + 3]
-  a[b + 24] = clip_stack[k + 4]
-  a[b + 25] = clip_stack[k + 5]
-  a[b + 26] = clip_stack[k + 6]
-  a[b + 27] = clip_stack[k + 7]
-  a[b + 28] = clip_stack[k + 8]
-  a[b + 29] = clip_stack[k + 9]
-  a[b + 30] = clip_stack[k + 10]
-  a[b + 31] = clip_stack[k + 11]
+  guard k >= 0 else { abort("push_inst: no clip pushed") }
+  a.unsafe_set(b + 16, clip_stack.unsafe_get(k))
+  a.unsafe_set(b + 17, clip_stack.unsafe_get(k + 1))
+  a.unsafe_set(b + 18, clip_stack.unsafe_get(k + 2))
+  a.unsafe_set(b + 19, clip_stack.unsafe_get(k + 3))
+  a.unsafe_set(b + 24, clip_stack.unsafe_get(k + 4))
+  a.unsafe_set(b + 25, clip_stack.unsafe_get(k + 5))
+  a.unsafe_set(b + 26, clip_stack.unsafe_get(k + 6))
+  a.unsafe_set(b + 27, clip_stack.unsafe_get(k + 7))
+  a.unsafe_set(b + 28, clip_stack.unsafe_get(k + 8))
+  a.unsafe_set(b + 29, clip_stack.unsafe_get(k + 9))
+  a.unsafe_set(b + 30, clip_stack.unsafe_get(k + 10))
+  a.unsafe_set(b + 31, clip_stack.unsafe_get(k + 11))
   // the clip outside it its own cuts through, if any (40-51)
   for j in 0..<12 {
-    a[b + 40 + j] = clip_stack[k + 12 + j]
+    a.unsafe_set(b + 40 + j, clip_stack.unsafe_get(k + 12 + j))
   }
-  a[b + 20] = 0.0 // the image it shows, if any
+  // the image it shows, if any
+  a.unsafe_set(b + 20, 0.0)
   // a rect's or frosted glass's notch (none); liquid glass and glyphs in it set theirs after
-  a[b + 21] = 0.0
-  a[b + 22] = 0.0
-  a[b + 23] = 0.0
+  a.unsafe_set(b + 21, 0.0)
+  a.unsafe_set(b + 22, 0.0)
+  a.unsafe_set(b + 23, 0.0)
   // not turned
-  a[b + 32] = 0.0
-  a[b + 33] = 0.0
-  a[b + 34] = 0.0
-  a[b + 35] = 0.0
+  a.unsafe_set(b + 32, 0.0)
+  a.unsafe_set(b + 33, 0.0)
+  a.unsafe_set(b + 34, 0.0)
+  a.unsafe_set(b + 35, 0.0)
   // its corners all `radius` (a box's each its own: corners_last)
-  a[b + 36] = radius
-  a[b + 37] = radius
-  a[b + 38] = radius
-  a[b + 39] = radius
+  a.unsafe_set(b + 36, radius)
+  a.unsafe_set(b + 37, radius)
+  a.unsafe_set(b + 38, radius)
+  a.unsafe_set(b + 39, radius)
   // fading towards no cut
-  a[b + 52] = 0.0
-  a[b + 53] = 0.0
-  a[b + 54] = 0.0
-  a[b + 55] = 0.0
-  a[b + 56] = 0.0
-  a[b + 57] = 0.0
-  a[b + 58] = 0.0
-  a[b + 59] = 0.0
+  a.unsafe_set(b + 52, 0.0)
+  a.unsafe_set(b + 53, 0.0)
+  a.unsafe_set(b + 54, 0.0)
+  a.unsafe_set(b + 55, 0.0)
+  a.unsafe_set(b + 56, 0.0)
+  a.unsafe_set(b + 57, 0.0)
+  a.unsafe_set(b + 58, 0.0)
+  a.unsafe_set(b + 59, 0.0)
   if inst_owners_kept() {
     inst_owned(self.ninst)
   }
@@ -817,6 +1049,11 @@ let glyph_look : Ref[((GlyphAt) -> GlyphLook)?] = Ref(None)
 let glyph_n : Ref[Int] = Ref(0)
 
 ///|
+/// The ink what is painted now is drawn in (Ctx::ink_by): None, its own.
+// kept across runs: set only while a node that says it is painted, put back as it is done
+let ink_now : Ref[Int64?] = Ref(None)
+
+///|
 /// The top and foot of what cuts the node whose glyphs have looks of their own (Ctx::glyphs_by), as it is painted: what
 /// of it shows, not what cuts a part of it (a code block's own box).
 // kept across runs: set only while a node that says it is painted, put back as it is done
@@ -899,7 +1136,15 @@ fn Ctx::emit_text(
       _ => ()
     }
     if top > cy1 || top + tl.line_h < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      if rec_glyph_early(key, sc / zoom, ox + tl.xs[c], top, ox + tl.xs[c] + s.adv[c], top + tl.line_h) {
+        rec_skip(top, top + tl.line_h)
+        continue
+      }
+      rec_line(self.ninst, top, tl.line_h)
     }
     // (made at the host's pixels a point)
     let g = glyph(key, sc / zoom)
@@ -969,6 +1214,9 @@ fn Ctx::emit_text(
       self.inst[b + 23] = glass_paint.ink_r
     }
   }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
+  }
 }
 
 ///|
@@ -987,6 +1235,12 @@ fn span_color(spans : Array[(Int, Int, Int64)], off : Int, color : Int64) -> Int
 /// What node `n` holds, painted in turn (what goes over its siblings after them); but what `but` says is painted
 /// apart (the old frame's root, the one old view the window's: its layers, over the window's tree: view_paint).
 fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double, but? : (Int) -> Bool = fn(_) { false }) -> Unit {
+  // (an old view's list that scrolled this frame: all of it where it shows drawn anew, told to what works out what a
+  // host draws again, h_present)
+  if n.kind == kind_list && lists_scrolled.length() > 0 && lists_scrolled.contains(n.id) && !shooting.val {
+    let k = clip_top()
+    damage_known.push((clip_stack[k], clip_stack[k + 1], clip_stack[k + 2], clip_stack[k + 3]))
+  }
   let mut c = n.first
   let mut over = false
   while c >= 0 {
@@ -995,7 +1249,11 @@ fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double, but? : (Int) -> Bool = 
     } else if dr.any && self.drawn_z(c) == 1 {
       over = true
     } else {
-      self.paint(c, alpha)
+      if n.kind == kind_list {
+        self.paint_list_row(c, alpha)
+      } else {
+        self.paint(c, alpha)
+      }
     }
     c = self.nodes[c].next
   }
@@ -1053,22 +1311,45 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     _ => None
   }
+  // (what it holds in an ink worked out as it is painted: Ctx::ink_by)
+  let ink_was = match self.drawn_entry(i) {
+    Some({ ink_by: Some(f), .. }) if drawing => {
+      let was = ink_now.val
+      ink_now.val = Some(f())
+      Some(was)
+    }
+    _ => None
+  }
   // (its words set on the pixels where the old view it is in is laid out, carried with that to where it is drawn,
   // whenever and from wherever it is painted: glyphs_carried)
-  let carried_was = glyphs_carried.val
-  glyphs_carried.val = self.glyphs_carried_of(i)
+  let carried_x = glyphs_carried[0]
+  let carried_y = glyphs_carried[1]
+  self.carry_glyphs(i)
   // (what comes after it as faint as before it: its own ground may have been drawn as its look's surface)
-  let (words_was, surface_was) = (words_alpha.val, look_surface.val)
+  let words_was = words_alpha.val
+  let surface_was = look_surface.val
+  let rec_was = rec_node_now.val
+  if rec_whole.val {
+    rec_node(self.ninst, i)
+  }
   self.paint_node(i, alpha_in)
+  if rec_whole.val {
+    rec_node(self.ninst, rec_was)
+  }
   words_alpha.val = words_was
   look_surface.val = surface_was
-  glyphs_carried.val = carried_was
+  glyphs_carried[0] = carried_x
+  glyphs_carried[1] = carried_y
   match glyphs_was {
     Some((f, n, cut)) => {
       glyph_look.val = f
       glyph_n.val = n
       glyph_cut.val = cut
     }
+    None => ()
+  }
+  match ink_was {
+    Some(was) => ink_now.val = was
     None => ()
   }
   if passes {
@@ -1134,8 +1415,17 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // cull what is outside the clip: nothing of its own shows there, and nothing it cuts; what a box that does not cut
   // holds may lie past the box (a row squeezed to the room it has, wider than that, moved sideways: ＋'s recent
   // photos), each part of it culled where it is
+  // (a picture of a row painted whole, outside the list's clip: not asked for before it shows, rec_real)
+  if rec_whole.val && n.kind == kind_image {
+    let (rx0, ry0, rx1, ry1) = rec_real.val
+    if n.x > rx1 || n.y > ry1 || n.x + n.fw < rx0 || n.y + n.fh < ry0 {
+      paint_culled.val += 1
+      return
+    }
+  }
   if (n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0) &&
     !(dr.any && dr.mode != mode_hits && self.draw_carries(i)) {
+    left_out()
     if !n.clip && (n.kind == kind_box || n.kind == kind_scroll) {
       words_alpha.val = held_faint
       self.paint_held(n, alpha)
@@ -1186,11 +1476,13 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     )
     self.corners_last(n)
   }
-  // its border over what it holds (drawn after it, below): the box's own edge, never covered by what is in it, as
-  // CSS's border is outside what a box holds (here it takes no room); with nothing in it, with its ground
+  // its border over what it holds and over what it draws of its own (drawn after them, below): a line drawn inside
+  // its shape, taking no room, what is in it measured from its outer edge and under the line, never over it (SwiftUI's
+  // strokeBorder over what it holds; the user, 2026-11-09): a box holding something, and what draws in its box itself
+  // (words, a field's, a picture, a page, what the host draws, its shapes and lines); a box with nothing over its
+  // ground, with its ground
   let border_over = n.border_w > 0.0 &&
-    n.first >= 0 &&
-    (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll)
+    (n.first >= 0 || n.kind != kind_box || n.shapes.length() > 0 || n.lines.length() > 0)
   // (a picture's is what shows until it is in, drawn with it: paint_image)
   let bg = if n.kind == kind_image {
     0L
@@ -1237,6 +1529,36 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     n.radius = laid.4
     n.radii = laid.5
   }
+  // (its line over all it draws, last: what it holds, its words, its shapes, its picture; never anything over it)
+  let line_over = fn() {
+    let inside_faint = words_alpha.val
+    words_alpha.val = own_faint
+    if border_over && n.dashed {
+      match ground {
+        Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
+          self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, border_c, alpha)
+        None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, border_c, alpha)
+      }
+    } else if border_over {
+      // (the line as it shows over its own ground, whatever is under it: one colour all along it, over a row's ground
+      // or a picture as over the box's own)
+      let border_c = if (bg & 0xFFL) != 0L { over(bg, border_c) } else { border_c }
+      match ground {
+        // (round its ground drawn in another box: that box's corners, each its own)
+        Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
+          self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, border_c, alpha)
+          self.notch_last(n)
+          self.corners_last_each(r0, r1, r2, r3)
+        }
+        None => {
+          self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, border_c, alpha)
+          self.notch_last(n)
+          self.corners_last(n)
+        }
+      }
+    }
+    words_alpha.val = inside_faint
+  }
   // (its own ground drawn: what it holds, and what it draws itself, as faint as the looks it is in say: words_alpha)
   words_alpha.val = held_faint
   // (nothing in a page's bones is pressed or pointed at: it is not there yet)
@@ -1266,6 +1588,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if n.bones != 0L {
     self.paint_bones_of(i, n, alpha)
     if n.kind != kind_box && n.kind != kind_scroll && n.kind != kind_list {
+      line_over()
       return
     }
   }
@@ -1287,10 +1610,12 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
         )
       None => ()
     }
+    line_over()
     return
   }
   if n.kind == kind_rich {
     self.paint_rich(i, n, alpha)
+    line_over()
     return
   }
   if n.kind == kind_editor {
@@ -1298,18 +1623,22 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       self.scroll_target(n, cx0, cy0, cx1, cy1)
     }
     self.paint_editor(n, alpha)
+    line_over()
     return
   }
   if n.kind == kind_image {
     self.paint_image(i, n, alpha)
+    line_over()
     return
   }
   if n.kind == kind_native {
     self.paint_native(i, n)
+    line_over()
     return
   }
   if n.kind == kind_page {
     self.paint_page(n, alpha)
+    line_over()
     return
   }
   if !dr.targets_said && scrolls(n) {
@@ -1385,30 +1714,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if clipped {
     pop_clip()
   }
-  let inside_faint = words_alpha.val
-  words_alpha.val = own_faint
-  if border_over && n.dashed {
-    match ground {
-      Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
-        self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, border_c, alpha)
-      None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, border_c, alpha)
-    }
-  } else if border_over {
-    match ground {
-      // (round its ground drawn in another box: that box's corners, each its own)
-      Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
-        self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, border_c, alpha)
-        self.notch_last(n)
-        self.corners_last_each(r0, r1, r2, r3)
-      }
-      None => {
-        self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, border_c, alpha)
-        self.notch_last(n)
-        self.corners_last(n)
-      }
-    }
-  }
-  words_alpha.val = inside_faint
+  line_over()
 }
 
 ///|
@@ -1492,4 +1798,3 @@ fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
   self.next_points[id] = true
   self.next_point_hits.push(self.next_hit_ids.length() - 1)
 }
-

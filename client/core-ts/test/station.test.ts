@@ -1,4 +1,4 @@
-// The station sync and topics (docs/core-ts.md, rules 2, 3, 6): a station is linked as its workspace is reached,
+// The station sync and topics (rules 2, 3, 6): a station is linked as its workspace is reached,
 // read when its stream opens, kept current by its events; topics only read what is held.
 import assert from "node:assert/strict";
 import { test } from "node:test";

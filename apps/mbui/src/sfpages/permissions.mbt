@@ -1,4 +1,4 @@
-// Settings pages the wide frame has as the web's has them (ember web/src/pages/Permissions.tsx, Archiving.tsx;
+// Settings pages the wide frame has as the web's has them (still.fail web/src/pages/Permissions.tsx, Archiving.tsx;
 // archiving.ts): what the system lets still.fail do here, and 归档: whether a done chat suggests archiving it, then
 // each station's own archiving, a page of its own each. The phone's settings say these elsewhere (the station's page).
 // 通知 is notifications.mbt's.
@@ -7,113 +7,127 @@
 // 权限
 
 ///|
-/// 权限 (PermissionsPage): what the system lets still.fail do on this device, each with what it is for and whether it
-/// is given; not given, what goes without it and the way to give it.
-pub fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let notify = (core.topic)("notify", Map::new()).value
-  let state = match text(notify, "permission") {
-    "granted" | "denied" | "default" => text(notify, "permission")
-    _ => "unknown"
+/// 权限 (PermissionsPage) made once as nodes in node `v`, laid out by the `width` its frame gives it: what the system
+/// lets still.fail do on this device, each with what it is for and whether it is given; not given, what goes without it
+/// and the way to give it; each as the core says it now.
+pub fn permissions_node(
+  v : @view.View,
+  core : Core,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  let state = fn() {
+    let notify = (core.topic)("notify", Map::new()).get().value
+    match text(notify, "permission") {
+      "granted" | "denied" | "default" => text(notify, "permission")
+      _ => "unknown"
+    }
   }
-  let where_ = @sf.t(
-    if @ui.platform() == 0 {
-      "web-pages.permissions.where.mac"
-    } else {
-      "web-pages.permissions.where.windows"
-    },
-    args=[("name", "still.fail")],
-  )
-  @sf.page(c, on_back=core.pop, frame~, "permissions",
-    @sf.t("web-pages.settings.nav.permissions"),
-    lead=@sf.t("web-pages.permissions.lead", args=[("name", "still.fail")]),
-    [
-      fn() {
-        permission_row(
-          c,
-          look,
-          "bell",
-          @sf.t("web-pages.permissions.notify.name"),
-          @sf.t("web-pages.permissions.notify.purpose"),
-          @sf.t("web-pages.permissions.notify.without"),
-          where_,
-          state,
-          fn() { (core.notify_ask)() },
-          fn() { open_notify_settings(c) },
-        )
+  let where_ = fn() {
+    @sf.t(
+      if @ui.platform() == 0 {
+        "web-pages.permissions.where.mac"
+      } else {
+        "web-pages.permissions.where.windows"
       },
-    ],
+      args=[("name", "still.fail")],
+    )
+  }
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-pages.settings.nav.permissions") },
+    on_back~,
+    frame~,
+    said?,
+    width?,
+    lead=fn() { @sf.t("web-pages.permissions.lead", args=[("name", "still.fail")]) },
+    fn() { ["notify"] },
+    fn(b, _key) {
+      permission_row_node(
+        b,
+        "bell",
+        fn() { @sf.t("web-pages.permissions.notify.name") },
+        fn() { @sf.t("web-pages.permissions.notify.purpose") },
+        fn() { @sf.t("web-pages.permissions.notify.without") },
+        where_,
+        state,
+        fn() { (core.notify_ask)() },
+        fn() { @ui.notice_settings() |> ignore },
+      )
+    },
   )
 }
 
 ///|
-/// One permission (PermissionRow): a card, its round mark, what it is for and whether it is given (given in green, refused
-/// in red); not given, what goes without it, where the system keeps it when refused, and the way to give it.
-fn permission_row(
-  c : @ui.Ctx,
-  look : Look,
+/// One permission (PermissionRow) as nodes: a card, its round mark, what it is for and whether it is given (given in
+/// green with a check, refused in red); not given, what goes without it, where the system keeps it when refused, and the
+/// way to give it (asked, or the system's settings opened); each as `state` says it now.
+fn permission_row_node(
+  parent : @view.View,
   icon : String,
-  name : String,
-  purpose : String,
-  without : String,
-  where_ : String,
-  state : String,
+  name : () -> String,
+  purpose : () -> String,
+  without : () -> String,
+  where_ : () -> String,
+  state : () -> String,
   allow : () -> Unit,
   open : () -> Unit,
 ) -> Unit {
-  let t = @sf.theme()
-  @sf.page_card(c, fn() {
-    c.box(style=desk_card_row, fn() {
-      c.box(style=permission_icon, fn() { @sf.icon(c, icon, size=permission_glyph, color=t.p.text) |> ignore }) |> ignore
-      c.box(style=desk_card_text, fn() {
-        c.text(name, style=desk_strong) |> ignore
-        c.text(purpose, style=desk_muted) |> ignore
+  @sf.page_card_node(parent, fn(k) {
+    k.box(fn(r) {
+      @sf.style_node(r, fn() { desk_card_row })
+      r.box(fn(m) {
+        @sf.style_node(m, fn() { permission_icon }, in_row=true)
+        @sf.icon_node(m, icon, permission_glyph, By(fn() { @sf.theme().p.text })) |> ignore
       })
       |> ignore
-      c.box(style=permission_state, fn() {
-        let ink = match state {
-          "granted" => t.p.green_ink
-          "denied" => t.p.red
-          _ => t.p.muted
-        }
-        if state == "granted" {
-          @sf.icon(c, "check", size=permission_check, color=ink) |> ignore
-        }
-        c.text(@sf.t("web-pages.permissions.state." + state), style=match state {
-          "granted" => permission_state_given
-          "denied" => permission_state_refused
-          _ => permission_state_words
+      r.box(fn(w) {
+        @sf.style_node(w, fn() { desk_card_text }, in_row=true)
+        @sf.words_node(w, name, fn() { desk_strong }) |> ignore
+        @sf.words_node(w, purpose, fn() { desk_muted }) |> ignore
+      })
+      |> ignore
+      r.box(fn(st) {
+        @sf.style_node(st, fn() { permission_state }, in_row=true)
+        st.show(fn() { state() == "granted" }, fn(c) {
+          @sf.icon_node(c, "check", permission_check, By(fn() { @sf.theme().p.green_ink })) |> ignore
+        })
+        @sf.words_node(st, fn() { @sf.t("web-pages.permissions.state." + state()) }, fn() {
+          match state() {
+            "granted" => permission_state_given
+            "denied" => permission_state_refused
+            _ => permission_state_words
+          }
         })
         |> ignore
       })
       |> ignore
     })
     |> ignore
-    if state == "default" || state == "denied" {
-      c.box(style=desk_card_row, fn() {
-        c.box(style=desk_card_text, fn() {
-          c.text(without, style=desk_words) |> ignore
-          if state == "denied" {
-            c.text(where_, style=desk_muted) |> ignore
-          }
-        })
-        |> ignore
-        if state == "default" {
-          if @sf.button(c, @sf.t("web-pages.permissions.allow"), key="permission-allow", tone=Primary) {
-            allow()
-          }
-        } else if @sf.button(c, @sf.t("web-pages.permissions.open"), key="permission-open") {
-          open()
-        }
+    k.show(fn() { state() == "default" || state() == "denied" }, fn(r) {
+      @sf.style_node(r, fn() { desk_card_row })
+      r.box(fn(w) {
+        @sf.style_node(w, fn() { desk_card_text }, in_row=true)
+        @sf.words_node(w, without, fn() { desk_words }) |> ignore
+        w.show(fn() { state() == "denied" }, fn(d) { @sf.words_node(d, where_, fn() { desk_muted }) |> ignore })
       })
       |> ignore
-    }
+      r.pick(fn() { state() == "default" }, fn(p, asks) {
+        if asks {
+          @sf.button_node(p, fn() { @sf.t("web-pages.permissions.allow") }, allow, tone=Primary) |> ignore
+        } else {
+          @sf.button_node(p, fn() { @sf.t("web-pages.permissions.open") }, open) |> ignore
+        }
+      })
+    })
   })
 }
 
 // ---------------------------------------------------------------------------
-// 归档, one page in every frame (the web's pages/Archiving.tsx and mobile/Archiving.tsx), laid out by its width
-// (page_look.mbt). How each station archives and what choosing each way saves, its review and what the hint 按模型判断
+// 归档, one page in every frame, laid out by its width
+// . How each station archives and what choosing each way saves, its review and what the hint 按模型判断
 // means for the stations' reviews, are the core's (present.ts archiving, the `settings` view).
 
 ///|
@@ -142,7 +156,7 @@ pub fn archiving_node(
     }
   }
   let read = fn() { @settings.stations_of(core, here()).value }
-  let said = fn() { (core.topic)("settings", { "scope": str(here().workspace) }).value }
+  let said = fn() { (core.topic)("settings", { "scope": str(here().workspace) }).get().value }
   @sf.page_node(v, fn() { @sf.t("web-pages.archiving.title") }, on_back~, frame~, said?=told, width?, fn() { ["hint", "auto"] }, fn(b, key) {
     match key {
       "hint" =>
@@ -384,12 +398,7 @@ pub fn station_archiving_node(
 }
 
 ///|
-/// A link in a note's words (12).
-pub let link_size : Double = 12.0
-
-
-///|
-/// A permission's mark (Permissions.css.ts icon: as tall as a button, round, on the canvas, its glyph 18), its state
+/// A permission's mark (round, on the canvas, its glyph 18), its state
 /// at its first row's end (the meta's 12 in 500: given in green with a check 14, refused in red).
 let permission_glyph : Double = 18.0
 
@@ -415,10 +424,3 @@ let permission_state_given : @ui.TextStyle = permission_state_words.then(@ui.tex
 ///|
 // kept across runs: a value (no field of it changes)
 let permission_state_refused : @ui.TextStyle = permission_state_words.then(@ui.text_style(color=Danger))
-
-///|
-/// The system's settings of this app's notifications, where they are allowed again once refused (the host knows where:
-/// Android's page of the app's notifications, iOS's, macOS's and Windows' Notifications), told as the frame ends.
-fn open_notify_settings(c : @ui.Ctx) -> Unit {
-  c.tell("notify-settings", fn() { @ui.notice_settings() |> ignore })
-}

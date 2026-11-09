@@ -1,4 +1,4 @@
-// Tasks on other stations of the workspace (the Rust station's remote.rs). Workspace peers call named operations over an
+// Tasks on other stations of the workspace. Workspace peers call named operations over an
 // authenticated station transport (`stillfail/station/1`, the mesh layer's); shell tasks are one service on it, never an
 // admin API proxy. Any station of the workspace may run them (the transport checks the roster), as its agents may open a
 // chat here whose agent runs the same commands: shell execution as the station's OS user, not a sandbox. A source session's
@@ -9,7 +9,7 @@
 // The records are the Rust's files, written the same way (remote/incoming/<id>/task.json, sessions/<id>/session.json,
 // outgoing/<id>.json, used/<id>.json), so either station reads what the other wrote. A task's station tells the one
 // that started it when the task ends or says something (`task.changed`), and that one then asks it what (`task.get`):
-// nothing asks about a task while nothing happens to it, but a task on a station from before that (asked every 5 s).
+// nothing asks about a task while nothing happens to it; one on a station from before that is not followed (its session is told).
 // What is retried (a request that did not get through, a closed session's stations every 60 s) and the hourly sweep
 // are Effect schedules; nothing here polls local state.
 import { createHash, randomBytes } from "node:crypto";
@@ -59,9 +59,6 @@ const PATCH_MAX = 64 * 1024 * 1024;
 export const IDLE_MS = 14 * 24 * 3600 * 1000;
 /// A source keeps asking an unreachable target to remove a closed session's directory this long.
 const CLOSE_FOR_MS = 30 * 24 * 3600 * 1000;
-/// How often a source asks about a task on a station from before `task.changed`, a closed session's stations, and a
-/// target sweeps.
-const WATCH_EVERY = "5 seconds";
 /// A request that did not get through (`task.changed` to the source, `task.get` after it) is asked again after 1 s,
 /// then twice as long each time, at most a minute apart.
 const AGAIN = Schedule.min([Schedule.exponential("1 second"), Schedule.spaced("1 minute")]);
@@ -296,10 +293,8 @@ export class Remote {
   /// waited behind another chat's sync of a big directory on a loaded station, past its caller's 30 s, and the callers
   /// asked again into the same line (2026-10-21, one test host for another: a 1 KB file synced in 61 s).
   private lanes = new Map<string, Promise<unknown>>();
-  /// The records followed now (outgoing tasks, closing sessions).
+  /// The closing sessions whose stations are being asked to remove their directories.
   private watching = new Set<string>();
-  /// The outgoing tasks followed, by the station (and workspace) they are on: asked about together.
-  private following = new Map<string, Set<string>>();
   /// The station is stopping: nothing more is followed.
   private stopped = false;
   /// Tasks asked about after their station said something (`check`), each with whether it said more meanwhile.
@@ -833,8 +828,8 @@ export class Remote {
       const mirror = field(meta, "mirror");
       if (typeof mirror !== "string") continue;
       const job = this.store.getJob(this.jobOf(dir));
-      if (job?.state === "running") running.add(mirror);
-      else if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
+      if (job?.state === "running" || (job && meta.safe === true && meta.collected !== true)) running.add(mirror);
+      if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
     }
     const found: { name: string; used: number; busy: boolean }[] = [];
     let changed = false;
@@ -970,7 +965,13 @@ export class Remote {
         continue;
       }
       await mkdir(this.preparedDir(session), { recursive: true }).catch(() => undefined);
-      await rename(file, join(this.preparedDir(session), name)).catch(() => undefined);
+      // A newer prepare may have written there since this old record was read. Never replace it with the old one.
+      try {
+        await link(file, join(this.preparedDir(session), name));
+        await rm(file, { force: true });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") await rm(file, { force: true }).catch(() => undefined);
+      }
     }
   }
 
@@ -1382,7 +1383,7 @@ export class Remote {
           ? this.seen(workspace, peer, session)
           : join(this.room(workspace, peer, session), "work")
         : join(dir, "work");
-    // A task with a directory runs in its mirror, a directory of the session's (docs/station-peers.md "Directories").
+    // A task with a directory runs in its mirror, a directory of the session's.
     const mirror = typeof meta.mirror === "string" ? meta.mirror : null;
     const room = this.room(workspace, peer, session);
     const manifestPath = mirror === null ? "" : join(room, "mirrors", `${mirror}.json`);
@@ -1390,8 +1391,11 @@ export class Remote {
     if (method.startsWith("sync.") && mirror === null) throw new Error("this task has no directory to sync");
     /// Another task of the session running in the same mirror (one at a time there).
     const refuseBusy = async () => {
-      const other = (await this.tasksOf(workspace, peer, session)).find((t) => t.dir !== dir && this.running(t.dir) && field(t.meta, "mirror") === mirror);
+      const tasks = (await this.tasksOf(workspace, peer, session)).filter((t) => t.dir !== dir && field(t.meta, "mirror") === mirror);
+      const other = tasks.find((t) => this.running(t.dir));
       if (other) throw new Error(`task ${text(other.meta, "key")} is running in ${mirror} on this station; wait for it or stop it`);
+      const collecting = tasks.find((t) => t.meta.safe === true && t.meta.collected !== true && this.store.getJob(this.jobOf(t.dir)) !== null);
+      if (collecting) throw new Error(`task ${text(collecting.meta, "key")} is still bringing back its results from ${mirror}; wait for its completion notice`);
     };
     /// The sync under way: its state, when `id` is its.
     const ongoing = (): Json => {
@@ -1440,15 +1444,32 @@ export class Remote {
         this.usedMirror(workspace, peer, session, mirror!);
         const manifest = readManifest(manifestPath);
         const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
+        const base = { ...(manifest?.files ?? {}) };
+        // Refresh the stat only where the content is still the source's: old manifests lacked ctime and must be hashed
+        // once, not at every subsequent sync. A changed file keeps the original content as its conflict base.
+        for (const [path, current] of Object.entries(files)) {
+          const before = base[path];
+          if (before && before[0] === current[0] && before[1] === current[1]) base[path] = current;
+        }
         const id = randomBytes(12).toString("hex");
         writeJson(join(syncing, "actual.json"), files);
+        writeJson(join(syncing, "base.json"), base);
         writeJson(join(syncing, "state.json"), { id, key, version: manifest?.version ?? 0 });
-        return { key, id, dir: mirror, version: manifest?.version ?? 0 };
+        if (field(request, "safe") === 1) {
+          meta.safe = true;
+          writeJson(record, meta);
+        }
+        return { key, id, dir: mirror, version: manifest?.version ?? 0, safe: 1 };
       }
       case "sync.manifest": {
         ongoing();
         const after = asU64(field(request, "after")) ?? 0;
         return page(listed(readJson(join(syncing, "actual.json"))), after);
+      }
+      case "sync.base": {
+        ongoing();
+        const after = asU64(field(request, "after")) ?? 0;
+        return page(listed(readJson(join(syncing, "base.json"))), after);
       }
       case "sync.put": {
         ongoing();
@@ -1472,12 +1493,46 @@ export class Remote {
           plan.set.push(...p.set);
           plan.remove.push(...p.remove);
         }
-        const files = readJson(join(syncing, "actual.json"));
+        const base = readJson(join(syncing, "base.json"));
+        const root = join(work, mirror!);
+        // Re-read at commit: a task's output may have changed while the source sent its files.
+        const verify = new Set([...plan.set.map(([path]) => path), ...plan.remove]);
+        const files = await actual(root, base, verify);
+        const untracked: Record<string, [string, string, number, number, number, number?]> = {};
+        if (existsSync(root)) for (const [path] of plan.set) {
+          if (base[path] !== undefined || files[path] !== undefined) continue;
+          let abs: string;
+          try { abs = filePath(root, path, false); } catch { throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`); }
+          try {
+            const st = lstatSync(abs);
+            if (!st.isFile()) throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`);
+            untracked[path] = ["", "", 0, 0, 0];
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          }
+        }
+        Object.assign(files, await actual(root, untracked));
+        const equal = (a: readonly unknown[] | undefined, b: readonly unknown[] | undefined) => a?.[0] === b?.[0] && a?.[1] === b?.[1];
+        const safe = { set: [] as [string, string, string][], remove: [] as string[] };
+        for (const [path, hash, mode] of plan.set) {
+          const before = base[path], current = files[path], wanted = [hash, mode];
+          // Old sources send a plan against the actual mirror: an unchanged source must not reset remote output.
+          if (equal(before, wanted) && !equal(before, current)) continue;
+          if (!equal(before, current) && !equal(current, wanted)) throw new Error(`sync conflict at ${path}: source and remote both changed; preserve the remote result and reconcile the files`);
+          safe.set.push([path, hash, mode]);
+        }
+        for (const path of plan.remove) {
+          if (files[path] !== undefined && !equal(base[path], files[path])) throw new Error(`sync conflict at ${path}: the remote file changed before removal`);
+          safe.remove.push(path);
+        }
+        const nextBase = { ...base };
         let done: { written: number; removed: number };
         try {
-          done = apply(work, mirror!, join(syncing, "scratch"), join(syncing, "blobs"), files, plan);
+          done = apply(work, mirror!, join(syncing, "scratch"), join(syncing, "blobs"), files, safe);
         } finally {
-          writeManifest(manifestPath, { dir: text(field(meta, "spec"), "dir"), name: mirror!, version: version + 1, files });
+          for (const [path, hash, mode] of safe.set) if (equal(files[path], [hash, mode])) nextBase[path] = files[path];
+          for (const path of safe.remove) if (files[path] === undefined) delete nextBase[path];
+          writeManifest(manifestPath, { dir: text(field(meta, "spec"), "dir"), name: mirror!, version: version + 1, files: nextBase });
         }
         meta.synced = true;
         writeJson(record, meta);
@@ -1504,6 +1559,12 @@ export class Remote {
           changes.push(change);
         }
         return { key, base: mirror, changes, more };
+      }
+      case "task.collected": {
+        if (!job || job.state === "running") throw new Error("the task has not finished");
+        meta.collected = true;
+        writeJson(record, meta);
+        return { key, collected: true };
       }
       case "task.files": {
         if (job?.state === "running") throw new Error("wait for the task to finish before downloading artifacts");
@@ -1642,7 +1703,7 @@ export class Remote {
   }
 
   /// The workspace a session's tasks go in (mesh/cloud.json): its chat's, the home one for those from before; while the
-  /// station is still in it (docs/multi-workspace.md).
+  /// station is still in it.
   private workspace(own: string | null): string {
     const state = readJson(join(this.data, "mesh", "cloud.json"));
     if (field(state, "removed_at") !== null) throw new Error("station was removed from workspace");
@@ -1658,11 +1719,9 @@ export class Remote {
     return join(this.root, "outgoing", `${hash([workspace, session, station, key])}.json`);
   }
 
-  /// Follows a task on a station from before `task.changed`: asks it every 5 s until it is over, telling its session
-  /// what it said on the way and how it ended. The tasks followed on one station are asked about in one request
-  /// (`task.gets`; one each of a station from before it). Across restarts (the record is a file).
-  private watch(path: string): void {
-    if (this.watching.has(path) || this.stopped) return;
+  /// A task on a station from before `task.changed`: that station never tells of it, and it is not asked about on a
+  /// timer; its session is told so, once.
+  private async unfollowed(path: string): Promise<void> {
     let entry: Json;
     try {
       entry = readJson(path);
@@ -1670,55 +1729,16 @@ export class Remote {
       return;
     }
     if (entry.delivered === true) return;
-    this.watching.add(path);
-    const station = text(entry, "station");
-    const workspace = field(entry, "workspace");
-    const group = JSON.stringify([station, workspace]);
-    const paths = this.following.get(group);
-    if (paths !== undefined) {
-      paths.add(path);
+    const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: that station is from before it tells how its tasks go, so this one is not followed. Update that station, or ask with get.`;
+    try {
+      await this.notify(text(entry, "session"), message);
+    } catch {
       return;
     }
-    this.follow(group, station, workspace, new Set([path]));
-  }
-
-  /// Asks `station` about the tasks of `paths` every WATCH_EVERY (the first time WATCH_EVERY after it was last asked)
-  /// until none is left to follow: over, or its station says it tells of it itself.
-  private follow(group: string, station: string, workspace: Json, paths: Set<string>): void {
-    this.following.set(group, paths);
-    let batched = true;
-    const round = Effect.promise(async (): Promise<boolean> => {
-      const asked = [...paths];
-      const outcomes = await this.round(station, workspace, asked, batched, () => (batched = false));
-      for (const [path, outcome, got] of outcomes) {
-        if (outcome === "over" || (outcome === "wait" && pushes(got))) {
-          paths.delete(path);
-          this.watching.delete(path);
-        }
-      }
-      // Delivered meanwhile, or its record gone: not asked about.
-      for (const path of asked) {
-        if (outcomes.some(([p]) => p === path)) continue;
-        paths.delete(path);
-        this.watching.delete(path);
-      }
-      return paths.size === 0;
-    });
-    void this.run(
-      Effect.sleep(WATCH_EVERY).pipe(
-        Effect.andThen(round),
-        Effect.repeat({ schedule: Schedule.spaced(WATCH_EVERY), until: (over) => over }),
-        Effect.ensuring(Effect.sync(() => {
-          if (this.following.get(group) === paths) this.following.delete(group);
-          // Followed after the last round had found none left: followed anew.
-          for (const path of [...paths]) {
-            this.watching.delete(path);
-            this.watch(path);
-          }
-        })),
-        Effect.asVoid,
-      ),
-    ).catch(() => undefined);
+    entry.delivered = true;
+    try {
+      writeJson(path, entry);
+    } catch {}
   }
 
   /// Asks `station` once about the tasks of `paths` (those still to be told), what it says settled: each one's outcome.
@@ -1736,12 +1756,12 @@ export class Remote {
     return Promise.all(entries.map(async ([path, entry], i): Promise<[string, Outcome, Got]> => [path, await this.settle(path, entry, got[i]), got[i]]));
   }
 
-  /// What follows an outcome: asked again soon or later, followed every 5 s on a station from before `task.changed`,
-  /// or nothing until its station says something.
+  /// What follows an outcome: asked again soon or later, nothing until its station says something, or (a station from
+  /// before `task.changed`) told it is not followed.
   private after(path: string, outcome: Outcome, got: Got): void {
     if (outcome === "again") this.check(path);
     else if (typeof outcome === "object") this.later(path, outcome.at);
-    else if (outcome === "wait" && !pushes(got)) this.watch(path);
+    else if (outcome === "wait" && !pushes(got)) void this.unfollowed(path);
   }
 
   /// Asks the station of the task started from here (`path`) about it now, and again (AGAIN) until it is reached and
@@ -1826,11 +1846,13 @@ export class Remote {
       entry.since = now;
       try {
         writeJson(path, entry);
-      } catch {}
+      } catch {
+        return "again";
+      }
     }
     const result = "result" in got ? got.result : null;
-    // Never started there (its prepare or start did not get through, and the agent went on with another key): followed
-    // for good, every 5 s, by the dozen on a loaded station (2026-10-21, the station's 90 to another host). Given up on, said once.
+    // Never started there (its prepare or start did not get through, and the agent went on with another key): asked
+    // about once more when it would have started, then given up on, said once.
     const unknown = "refused" in got && /unknown task/.test(got.refused);
     if (unknown || (result !== null && field(result, "job") === null)) {
       if (now - entry.since < GIVE_UP_MS) return { at: entry.since + GIVE_UP_MS };
@@ -1862,7 +1884,26 @@ export class Remote {
       }
       try {
         writeJson(path, entry);
-      } catch {}
+      } catch {
+        return "again";
+      }
+    }
+    if (finished && typeof entry.dir === "string" && entry.brought !== undefined) {
+      const brought = entry.brought;
+      const missing = Array.isArray(brought?.files?.missing) ? brought.files.missing : [];
+      const incomplete = brought?.error || brought?.changed?.error || brought?.changed?.more === true ||
+        (Array.isArray(brought?.changed?.notInPatch) && brought.changed.notInPatch.length > 0) ||
+        missing.some((m: unknown) => typeof m !== "string" || !m.endsWith(": not there"));
+      if (incomplete) {
+        brought.pending = "Some results were not brought back. Preserve them with station_file; then station_task release permits the next task in this mirror.";
+      } else {
+        try {
+          await this.ask(text(entry, "station"), { method: "task.collected", workspace: field(entry, "workspace"), session: field(entry, "session"), key: field(entry, "key") });
+        } catch (error) {
+          // An old target has no result fence. New targets retain it until this acknowledgement is received.
+          if (!(error instanceof Refused && /unsupported peer method/.test(error.message))) return "again";
+        }
+      }
     }
     if (finished && entry.brought !== undefined && typeof result === "object") result.back = entry.brought;
     if (finished || (Array.isArray(notices) && notices.length > 0 && !isDeepStrictEqual(field(entry, "notices"), notices))) {
@@ -2046,7 +2087,7 @@ export class Remote {
           changed.patch = file;
           changed.apply = `review it, then git apply it in ${entry.dir} if wanted`;
         }
-        const left = [...missing, ...(made?.missing ?? [])];
+        const left = [...missing, ...(made?.missing ?? (made === null ? changes.map((c) => String(c.path)) : []))];
         if (left.length > 0) changed.notInPatch = left.slice(0, 50);
         out.changed = changed;
       }
@@ -2084,8 +2125,8 @@ export class Remote {
     if (!sessionAction) this.recordUse(workspace, session, station);
     const request: Json = { workspace, session, key };
     if (tool === "station_task") {
-      if (!["prepare", "start", "get", "log", "stop", "list", "mirrors", "clean"].includes(action)) throw new Error("unknown task action");
-      request.method = `task.${action}`;
+      if (!["prepare", "start", "get", "log", "stop", "release", "list", "mirrors", "clean"].includes(action)) throw new Error("unknown task action");
+      request.method = action === "release" ? "task.collected" : `task.${action}`;
       if (action === "mirrors" || action === "clean") {
         if (action === "clean") request.mirror = field(args, "mirror");
         return this.ask(station, request);
@@ -2099,6 +2140,11 @@ export class Remote {
       const preparedName = `${hash([workspace, session, station, key])}.json`;
       const prepared = join(this.preparedDir(session), preparedName);
       if (action === "prepare") {
+        // Fence off any earlier spec before validation or a network request. If this attempt fails or the station
+        // restarts, start must not quietly use the task the target kept from an earlier successful prepare.
+        mkdirSync(this.preparedDir(session), { recursive: true });
+        const attempt = randomBytes(16).toString("hex");
+        writeJson(prepared, { workspace, session, station, key, preparing: attempt });
         const dir = field(args, "dir");
         const back = field(args, "back");
         const small = field(args, "small") === true;
@@ -2128,10 +2174,9 @@ export class Remote {
           request.spec.back = back;
         }
         const answer = await this.ask(station, request);
-        if (dir !== null || back !== null) {
-          mkdirSync(this.preparedDir(session), { recursive: true });
-          writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
-        }
+        // A concurrent prepare may have begun while this one was away. Its result alone can release its fence.
+        if (text(readJson(prepared), "preparing") !== attempt) throw new Error("a newer prepare superseded this one; prepare again before starting");
+        writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
         return answer;
       }
       let synced: Synced | null = null;
@@ -2144,6 +2189,7 @@ export class Remote {
           // Not moved into its session's directory yet (movePrepared), or moved meanwhile.
           local = await readJsonSoon(join(this.root, "prepared", preparedName)).catch(() => readJsonSoon(prepared)).catch(() => null);
         }
+        if (typeof local?.preparing === "string") throw new Error("the last prepare failed or is still in progress; prepare again before starting this key");
         if (typeof local?.dir === "string") {
           const dir: string = local.dir;
           const id = hash([workspace, session, station, dir]);
@@ -2172,6 +2218,9 @@ export class Remote {
             throw new Error(`${local.dir} was not synced to ${station}, so nothing was started: ${message}`);
           }
         }
+        // A re-prepare may have failed while the directory sync was in flight.
+        const latest = await readJsonSoon(prepared).catch(() => null);
+        if (typeof latest?.preparing === "string") throw new Error("the last prepare failed or is still in progress; prepare again before starting this key");
         // Persist before sending: an uncertain start is still followed after a process restart.
         const path = this.outgoing(workspace, session, station, key);
         let refused = false;
@@ -2187,8 +2236,8 @@ export class Remote {
       }
       try {
         const answer = await this.ask(station, request);
-        // A station from before `task.changed` is asked about it every 5 s.
-        if (action === "start" && field(answer, "push") !== true) this.watch(this.outgoing(workspace, session, station, key));
+        // A station from before `task.changed` never tells of it: not followed, its session told so.
+        if (action === "start" && field(answer, "push") !== true) void this.unfollowed(this.outgoing(workspace, session, station, key));
         return synced === null ? answer : { ...answer, sync: synced };
       } catch (error) {
         // An uncertain start: asked about once its station would have started it (it says something before if it did).
@@ -2265,7 +2314,7 @@ function asI64(v: unknown): number | null {
   return typeof v === "number" && Number.isInteger(v) ? v : null;
 }
 
-/// The target side of the station transport (peer.rs `serve`): a request taken in, its answer as the wire has it
+/// The target side of the station transport: a request taken in, its answer as the wire has it
 /// (`{"result": …}` or `{"error": "…"}`). The transport checks the peer and its workspace before.
 export async function answerPeer(remote: Remote, workspace: string, peer: string, request: Json): Promise<Json> {
   try {

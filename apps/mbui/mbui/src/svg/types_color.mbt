@@ -1,4 +1,4 @@
-// svgtypes' colours (color.rs) and transform lists (transform.rs).
+// svgtypes' colours and transform lists.
 
 ///|
 pub(all) struct SColor {

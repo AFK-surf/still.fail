@@ -108,10 +108,34 @@ final class CoreHost {
         for (int lid : listens.keySet()) Loopback.close(lid);  // every listener of this core closes with it
     }
 
+    /**
+     * A file a station's agent sends this phone (the core's adb.ts fetch), in the app's own folder of shared storage
+     * (Android/data/…/files/station), which adb's shell reads and the person's other apps do not: {@code bytes} written
+     * at {@code offset}, 0 beginning it anew; -1 only asks. Answered with its path and size.
+     */
+    private static String stage(String name, long offset, byte[] bytes) throws Exception {
+        if (name.isEmpty() || name.contains("/") || name.equals(".") || name.equals("..")) throw new IllegalArgumentException("bad name");
+        File dir = StillfailApp.app.getExternalFilesDir("station");
+        if (dir == null) throw new java.io.IOException("no shared storage");
+        dir.mkdirs();
+        File file = new File(dir, name);
+        if (offset >= 0) {
+            try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(file, "rw")) {
+                f.setLength(offset);
+                f.seek(offset);
+                if (bytes != null) f.write(bytes);
+            }
+        }
+        JSONObject o = new JSONObject();
+        o.put("path", file.getAbsolutePath());
+        o.put("size", file.exists() ? file.length() : 0);
+        return o.toString();
+    }
+
     void onApp(long id, String op, byte[] json, byte[] bytes) {
         if (op.startsWith("picked.")) {
             // a file picked too big to be read whole (mbui's Picks.Held), read a part at a time as it goes up
-            // (`composer.add` with `blob: {hostFile}`; still.fail's Android app's PickedFiles.kt)
+            // (`composer.add` with `blob: {hostFile}`)
             pickedCalls.execute(() -> {
                 try {
                     JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
@@ -141,11 +165,15 @@ final class CoreHost {
             // a file the app kept in Downloads read back (the core's downloads: hosts/bridge.ts kept.read)
             pickedCalls.execute(() -> {
                 try {
+                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
+                    if (op.equals("kept.stage")) {
+                        answer(id, stage(a.getString("name"), a.getLong("offset"), bytes), null, null);
+                        return;
+                    }
                     if (!op.equals("kept.read")) {
                         answer(id, null, "unsupported", null);
                         return;
                     }
-                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
                     byte[] b = Keeps.read(a.getString("at"), a.getLong("start"), a.getLong("end"));
                     if (b == null) answer(id, "{\"none\":true}", null, null);
                     else answer(id, "{}", null, b);
@@ -212,7 +240,7 @@ final class CoreHost {
     }
 
     /**
-     * An error as ember's app says it (SecureStore.errorText): a secure call's code (user_cancelled, no_device_lock…),
+     * An error as still.fail's app says it (SecureStore.errorText): a secure call's code (user_cancelled, no_device_lock…),
      * key_invalidated when the screen lock was taken off (what was sealed for the person cannot open), else the
      * exception's class and its message.
      */
@@ -232,7 +260,7 @@ final class CoreHost {
         }
     }
 
-    // ── listen.* (ember client/core-ts hosts/bridge.ts; ember's Loopback.kt, as apple_core.mm answers them) ──
+    // ── listen.* (still.fail client/core-ts hosts/bridge.ts; as apple_core.mm answers them) ──
     //   listen.open {port, host} → {id, port}, or the error (the port taken: "… Address already in use")
     //   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
     //   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}
@@ -349,13 +377,13 @@ final class CoreHost {
 
     private static final class Unsupported extends Exception {}
 
-    // ── secure.* (ember client/core-ts hosts/bridge.ts; ember apps/android core SecureStore.kt) ──
+    // ── secure.* (still.fail client/core-ts hosts/bridge.ts) ──
     //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
     //   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes.
     // `user: false`: each value a file of <data>/secure (the key's UTF-8 in hex), sealed with AES-GCM under one key of
     // the Android Keystore (StrongBox where the phone has one), which never leaves it; the value's name is the cipher's
     // associated data, so one file can't stand in for another.
-    // `user: true` (SecureStore.kt's): an RSA-2048 pair whose private half takes the person each time (biometrics or
+    // `user: true`: an RSA-2048 pair whose private half takes the person each time (biometrics or
     // the screen lock, BiometricPrompt over the activity, the core's `reason` in it); a value is sealed with a fresh
     // AES key wrapped to the public half, so keeping one asks nobody and only reading it does. It needs a screen lock,
     // and is gone for good once the screen lock is taken off (key_invalidated). Its files are <data>/secure-user, as
@@ -516,7 +544,7 @@ final class CoreHost {
     }
 
     // ── what still.fail's Android app kept, this app having taken its place (the same package, so its files and its
-    // Keystore's keys): its sealed values (apps/android core SecureStore.kt), each a file of <files>/stillfail-sealed
+    // Keystore's keys): its sealed values, each a file of <files>/stillfail-sealed
     // named by its key (letters, digits, - and _ as they are, the rest %XX), a version byte (1), `user`, then for
     // `user: false` the IV (12) and AES-GCM's output under its key stillfail-sealed-device, its associated data
     // naming the key and `user`; for `user: true` this app's own form, under stillfail-sealed-person.
@@ -625,7 +653,7 @@ final class CoreHost {
     }
 
     /**
-     * Asks the person, over the activity in front (SecureStore.kt ask): biometrics or the screen lock, `reason` under
+     * Asks the person, over the activity in front: biometrics or the screen lock, `reason` under
      * the app's name; `crypto` (Android 11 on) what the yes unlocks. Waits for the answer on this call's thread (one
      * secure call at a time, as SecureStore.kt's lock). Fails user_cancelled when they said no, no_device_lock when
      * there is nothing to ask with, not_in_front when no screen of the app is.
@@ -724,7 +752,7 @@ final class CoreHost {
                 boolean none = "{\"none\":true}".equals(gone.json) && gone.bytes == null;
                 ok &= none;
                 Host.log("SECURE_TEST secure.get after delete " + gone.json);
-                // one kept as still.fail's Android app kept it (SecureStore.kt set, user: false): read as it was, kept
+                // one kept as still.fail's Android app kept it (user: false): read as it was, kept
                 // again as this app keeps it, the former file gone with secure.delete
                 String fkey = "mbui.secure-test.former";
                 String fargs = "{\"key\":" + JSONObject.quote(fkey) + "}";

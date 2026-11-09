@@ -97,7 +97,7 @@ fn min_max(s : Sz) -> @flex.Dim {
 
 ///|
 /// The node of a template's node, translated as the harness translates it into a flexbox style for Taffy and Yoga
-/// (benches/pangui.rs `style`): Expand along the parent's main axis shares out its space (grow by the weight, shrink
+/// : Expand along the parent's main axis shares out its space (grow by the weight, shrink
 /// 1, basis 0, min 0); an Expand minimum grows from the node's own size; Expand across is stretched.
 fn node(sp : Spec, parent_is_row : Bool) -> @flex.Node {
   let n = @flex.Node::new()

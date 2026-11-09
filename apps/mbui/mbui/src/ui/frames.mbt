@@ -1,4 +1,4 @@
-// A run as data (PocketJS has it so: docs/DETERMINISM.md there): what each frame drew as one number, so two runs of
+// A run as data: what each frame drew as one number, so two runs of
 // the same steps are compared frame by frame (the same, or the first frame they part at) rather than by their last
 // screen alone, and a test that gives the same steps another order of what comes from outside (a seed, a replay's
 // pace) can say the frames that should not change did not.

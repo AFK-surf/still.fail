@@ -1,4 +1,4 @@
-// Feishu connects through the pages (docs/feishu.md「管理 API」): an app made by a scan (its registration begun,
+// Feishu connects through the pages (「管理 API」): an app made by a scan (its registration begun,
 // followed in the overview, dropped), an app's id and secret checked, a connect made of either, and a Feishu connect's
 // part of its config entry (`feishuEntry`). Editing, deleting and reconnecting a connect are every connect's
 // (routes/connects.ts).
@@ -7,6 +7,7 @@ import type { Route } from "../admin.ts";
 import { log } from "../../ops/log.ts";
 import { tr } from "../../ops/i18n.ts";
 import type { FeishuParts } from "../../feishu/index.ts";
+import type { Registration } from "../../feishu/register.ts";
 import { verifyFeishuApp } from "../../feishu/surface.ts";
 import { domainOf } from "../../feishu/web.ts";
 import type { EntryEdit } from "../../connects/connections.ts";
@@ -21,7 +22,7 @@ export type FeishuRoutesDeps = Omit<ConnectEditDeps, "entry"> & { feishu: Feishu
 export const feishuEntry: EntryEdit = (given, had) => {
   if (!isObject(given) && had === null) return null;
   const f: Json = { ...(had ?? {}) };
-  for (const key of ["appId", "appSecret", "botName", "botImage", "botOpenId"]) {
+  for (const key of ["appId", "appSecret", "botName", "botImage", "botOpenId", "registration"]) {
     const [, value] = field(given, key);
     if (value !== null) f[key] = value;
   }
@@ -36,7 +37,7 @@ export const feishuEntry: EntryEdit = (given, had) => {
 
 export const feishuRoutes = (deps: FeishuRoutesDeps): Route[] => {
   const { feishu } = deps;
-  const { putConnect, save, raw, connectsRaw, mine } = connectEdits({ ...deps, entry: (kind) => (kind === "feishu" ? feishuEntry : undefined) });
+  const { putConnect, save, raw, connectsRaw, mine, ofViewer } = connectEdits({ ...deps, entry: (kind) => (kind === "feishu" ? feishuEntry : undefined) });
   const answer = (f: (r: Request, args: string[]) => Promise<Answer> | Answer) => async (r: Request, args: string[]) => {
     try {
       return await f(r, args);
@@ -56,17 +57,18 @@ export const feishuRoutes = (deps: FeishuRoutesDeps): Route[] => {
     return ok({ identity: shown, errors });
   };
 
-  /// POST /feishu/connects: a connect of an app made by a scan (`feishu.registration`) or given by its id and secret,
-  /// named as its bot is, checked before it is kept.
-  const create = async (r: Request, i: Input) => {
+  /// Save an app, or find the result of an earlier save whose response or registration journal write failed.
+  const saveApp = async (r: Request, i: Input, made: Registration | null): Promise<{ id: string; overview: unknown }> => {
     const f = i.feishu;
     let appId = (str(get(f, "appId")) ?? "").trim();
     let appSecret = (str(get(f, "appSecret")) ?? "").trim();
     let domain = domainOf(get(f, "domain"));
-    const registration = str(get(f, "registration"));
-    if (registration !== undefined) {
-      const made = feishu.registrations.take(registration, idOf(r.viewer));
-      if (made === null || made.app === null) throw new Refused(400, tr(r.lang, "station.feishu.notRegistered"));
+    const registration = made?.id;
+    const saved = () => registration === undefined ? undefined : connectsRaw(raw()).find((c: Json) => c?.kind === "feishu" && c?.feishu?.registration === registration && ofViewer(r, c));
+    const existing = saved();
+    if (existing !== undefined) return { id: existing.id, overview: null };
+    if (made !== null) {
+      if (made.app === null) throw new Refused(400, tr(r.lang, "station.feishu.notRegistered"));
       [appId, appSecret, domain] = [made.app.appId, made.app.appSecret, made.domain];
     }
     const [identity, errors] = await verifyFeishuApp(appId, appSecret, domain, r.lang);
@@ -77,15 +79,37 @@ export const feishuRoutes = (deps: FeishuRoutesDeps): Route[] => {
     const base = connectSlug(name, "feishu");
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    const fields: Json = { appId, appSecret, domain, ...(get(f, "threads") === true ? { threads: true } : {}) };
+    const fields: Json = { appId, appSecret, domain, ...(registration !== undefined ? { registration } : {}), ...(get(f, "threads") === true ? { threads: true } : {}) };
     if (identity !== null) {
       fields.botName = identity.botName;
       fields.botOpenId = identity.botUserId;
       if (identity.botImage !== null) fields.botImage = identity.botImage;
       if (identity.teamId !== "") fields.tenant = { key: identity.teamId, name: identity.team };
     }
-    const shown = await putConnect(r, id, { ...i, kind: "feishu", feishu: fields });
-    return ok({ id, overview: shown });
+    try {
+      return { id, overview: await putConnect(r, id, { ...i, kind: "feishu", feishu: fields }) };
+    } catch (e) {
+      // putConnect writes before producing the overview: a failure in the latter must not make a second connect.
+      const committed = saved();
+      if (committed !== undefined) return { id: committed.id, overview: null };
+      throw e;
+    }
+  };
+
+  /// Both the station's worker and an older client asking to create use the same serialized, idempotent save.
+  feishu.registrations.start(async (made) => {
+    const context = made.context!;
+    const r: Request = { method: "POST", path: "/feishu/connects", query: [], headers: {}, body: Buffer.alloc(0), viewer: context.viewer, lang: context.lang };
+    return (await saveApp(r, context.input, made)).id;
+  });
+
+  /// POST /feishu/connects: an app given by its id and secret, or a finished scan (including an older client).
+  const create = async (r: Request, i: Input) => {
+    const registration = str(get(i.feishu, "registration"));
+    if (registration === undefined) return ok(await saveApp(r, i, null));
+    const id = await feishu.registrations.complete(registration, idOf(r.viewer), r.viewer.workspace, async (made) => (await saveApp(r, i, made)).id);
+    if (id === null) throw new Refused(400, tr(r.lang, "station.feishu.notRegistered"));
+    return ok({ id, overview: await deps.overview(r.viewer, r.lang) });
   };
 
   return [
@@ -99,7 +123,10 @@ export const feishuRoutes = (deps: FeishuRoutesDeps): Route[] => {
         const name = str(i.name)?.trim() ?? null;
         let made;
         try {
-          made = await feishu.registrations.begin(idOf(r.viewer), domainOf(i.domain), name);
+          const { sub, email, name: viewerName, role, workspace, device, home } = r.viewer;
+          const viewer = { sub, email, name: viewerName, role, workspace, device, ...(home === undefined ? {} : { home }) };
+          const context = isObject(i.bind) ? { viewer, lang: r.lang, input: { bind: i.bind, mode: i.mode, requireMention: i.requireMention, feishu: { threads: i.threads === true } } } : null;
+          made = await feishu.registrations.begin(idOf(r.viewer), domainOf(i.domain), name, context, workspace);
         } catch (e) {
           throw new Refused(502, tr(r.lang, "station.feishu.registerFailed", { error: (e as Error).message }));
         }
@@ -110,7 +137,7 @@ export const feishuRoutes = (deps: FeishuRoutesDeps): Route[] => {
       method: "DELETE",
       pattern: /^\/*feishu\/+registrations\/+([^/]+)\/*$/,
       handle: answer(async (r, [id]) => {
-        if (!feishu.registrations.cancel(percentDecode(id!), idOf(r.viewer))) throw new Refused(404, tr(r.lang, "station.feishu.notRegistered"));
+        if (!feishu.registrations.cancel(percentDecode(id!), idOf(r.viewer), r.viewer.workspace)) throw new Refused(404, tr(r.lang, "station.feishu.notRegistered"));
         return ok(await deps.overview(r.viewer, r.lang));
       }),
     },

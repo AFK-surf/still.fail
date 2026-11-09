@@ -1,5 +1,5 @@
 // A station's link: its `/admin/api/events` stream, held open for as long as the station is reached, and opened again
-// with backoff when it drops (docs/core-ts.md, rule 6). Every station of every workspace an account reaches has one.
+// with backoff when it drops (rule 6). Every station of every workspace an account reaches has one.
 //
 // This is the way to a station only: when its stream is opened, tried again, or taken over by another that follows
 // something else. What comes on it and what is read as it opens is the sync's (sync.ts), told here as `Told`: a stream
@@ -50,9 +50,6 @@ export const LOGS_KEPT = 40;
 export const MEMORY = "agentMemory";
 /// The workspace's presets on the station as it answered GET /presets last (the `presets` topic), in the link's memory.
 export const PRESETS = "presets";
-/// The programs granted the station's data as it answered GET /outflow/grants last (the `outflowGrants` topic,
-/// docs/data-outflow.md), in the link's memory; `{unsupported: true}` from a station from before.
-export const OUTFLOW = "outflowGrants";
 /// What a web link in a message is, as the station answered GET /link-preview for it last (the `linkPreview` topic), in
 /// the link's memory: the latest few kept (each may carry its page's icon and picture inline).
 export const LINK_PREVIEW_KEY = "linkPreview\n";
@@ -85,7 +82,8 @@ export const BRIEF_MAX_MS = 8_000;
 /// The steps in flight and the phase of a session at work, as its stream says them.
 /// `tasks` and `plan`: what it has going in the background (each with since when, on this device's clock) and its
 /// checklist, as its station last said them (none from a station from before it says them).
-export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean; tasks?: unknown[]; plan?: unknown[] };
+/// `failed`: why its transcript's last read failed (it is read again while shown), till one answers.
+export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean; failed?: string; tasks?: unknown[]; plan?: unknown[] };
 
 /// Why a station taken for down is not reached, as far as the device can tell: `network`, still.fail cloud is not
 /// reached either (the device's own network, most likely); `station`, the cloud says it is not online; `unreached`, the
@@ -522,7 +520,7 @@ export class Links {
     // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
     if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
-    // The logins' terminals shown (docs/remote-login.md).
+    // The logins' terminals shown.
     for (const id of wants.logins ?? []) query.push(`login=${encode(id)}`);
     if (since !== null) query.push(`since=${encode(since)}`);
     return `/events?${query.join("&")}`;
@@ -579,7 +577,20 @@ export class Links {
               }),
               () => Effect.succeed({ dropped: true } as const),
             );
-            const opened = yield* Effect.raceFirst(Effect.result(self.#requests.stream(link.addr, path, span.context)), dropped);
+            // Not answered at all within as long as a stream may stay silent: the way it went is taken for gone (a
+            // station killed and started anew, its connection left open here: every open waited on it for good).
+            const slow = Effect.sleep(STREAM_IDLE_MS).pipe(Effect.as({ slow: true } as const)); // timer: a timeout
+            const opened = yield* Effect.raceAllFirst([Effect.result(self.#requests.stream(link.addr, path, span.context)), dropped, slow]);
+            if ("slow" in opened) {
+              self.#requests.wire.reset?.(link.addr);
+              span.fail();
+              span.end();
+              misses++;
+              const state = reached && misses < MISSES ? "reconnecting" : "offline";
+              const message = t("station.core.streamIdle");
+              self.setLink(address, state === "offline" ? { state, message, cause: self.#cause(address) } : { state, message });
+              return { failed: `open failed: ${t("station.core.streamIdle")}` } as const;
+            }
             if ("dropped" in opened) {
               self.#requests.wire.reset?.(link.addr);
               span.fail();
@@ -670,6 +681,8 @@ export class Links {
                 break;
               }
               if ("idle" in next) {
+                // Silent past its keepalive: the way to it is taken for gone too, not asked again on the same.
+                self.#requests.wire.reset?.(link.addr);
                 why = t("station.core.streamIdle");
                 break;
               }

@@ -58,11 +58,11 @@ test "touch wide: an agent's history flung toward its start rests further that w
   let history = fling_history(12)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(history), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -104,7 +104,7 @@ let history_frame_ms : Double = 1000.0 / 120.0
 
 
 ///|
-test "touch wide: an agent's history as the agent writes builds again only the row its words are written in" {
+test "touch wide: an agent's history as the agent writes builds no old view's row: its steps are nodes" {
   new_run()
   let base = fixture("chat")
   let was = fling_history(12)
@@ -126,11 +126,11 @@ test "touch wide: an agent's history as the agent writes builds again only the r
   let chose_dark = @signals.signal(false)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(history.get()), error: None, version: 1 }
       } else if name == "prefs" && chose_dark.get() {
-        let p = (base.topic)(name, params)
+        let p = base.topic(name, params).get().snapshot()
         match p.value {
           Some(Object(m)) => {
             let o : Map[String, Json] = {}
@@ -143,7 +143,7 @@ test "touch wide: an agent's history as the agent writes builds again only the r
           _ => p
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -172,8 +172,8 @@ test "touch wide: an agent's history as the agent writes builds again only the r
   chose_dark.set(false)
   t.run_for(history_words_step_ms)
   // as a host draws them (no frame built again keeping none to hold it, as a Tester does) and as the core tells them,
-  // between frames (not a step of the test's, whose first frame is built anew): of the history's rows, only the one the
-  // words are in built for each, the rest kept however the frame is built
+  // between frames (not a step of the test's, whose first frame is built anew): none of an old view's list's rows built
+  // for them, the history's steps nodes (sfpages' history_steps_node: a row made again only as what it shows changes)
   t.check_looks(false)
   t.set_frame_period(history_frame_ms)
   let built_at : Array[Int] = []
@@ -194,6 +194,6 @@ test "touch wide: an agent's history as the agent writes builds again only the r
   assert_true(t.find(more[more.length() - 1]) is Some(_))
   for k in 0..<more.length() {
     let built = built_at[k + 1] - built_at[k]
-    assert_true(built == 1, msg="\{more[k]}: \{built} built (\{whys})")
+    assert_true(built == 0, msg="\{more[k]}: \{built} built (\{whys})")
   }
 }

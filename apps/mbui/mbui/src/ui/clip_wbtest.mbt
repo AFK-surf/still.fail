@@ -38,9 +38,9 @@ fn rounded_view(cut : Bool, taps : Ref[Int]) -> (Ctx) -> Unit {
       if cut {
         c.box(w=Px(80.0), h=Px(40.0), radius=12.0, clip=true, fn() {
           let id = c.id("fill")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             taps.val = taps.val + 1
-          }
+          })
           c.box(w=Fill(1.0), h=Fill(1.0), bg=red, id~, fn() { c.text("Fill", wrap=false) |> ignore })
           |> ignore
           c.layer(fn() { c.box(w=Px(10.0), h=Px(10.0), bg=0x0000FFFFL, fn() { () }) |> ignore }) |> ignore
@@ -413,9 +413,9 @@ fn pane_frames(taps : Ref[Int]) -> (Ctx) -> Unit {
       c.box(w=Px(200.0), h=Px(200.0), radius=30.0, clip=true, fn() {
         c.box(w=Px(60.0), h=Px(40.0), radius=8.0, clip=true, left=10.0, top=2.0, fn() {
           let id = c.id("frame")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             taps.val = taps.val + 1
-          }
+          })
           c.box(w=Fill(1.0), h=Fill(1.0), bg=red, id~, fn() { () }) |> ignore
         })
         |> ignore

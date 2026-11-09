@@ -11,20 +11,23 @@ import { join } from "node:path";
 import { runnerId } from "../agents/process.ts";
 import { runnerOf } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { watchedJobs } from "../jobs/memory.ts";
 import { platform } from "../platform/index.ts";
 import { gate } from "./door.ts";
 import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { PhoneDisplays } from "./displays.ts";
 import { grantChatTitle } from "./title.ts";
-import { adbTools, phoneTools, reached } from "./tool.ts";
+import { PHONE_SEND, adbTools, phoneTools, reached } from "./tool.ts";
+import { fetchOnPhone, staged } from "./send.ts";
+import { fromSandbox } from "../sessions/conversations.ts";
 import { Shares, adbPath, answerAdb } from "./link.ts";
 
 export const AdbLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const plane = yield* ControlPlane;
     const parts = yield* Parts;
-    const { hub } = yield* Agents;
+    const { hub, cardOutcomes } = yield* Agents;
     const store = yield* Store;
     const events = yield* Events;
     const screens = yield* ScreenRegistry;
@@ -55,13 +58,13 @@ export const AdbLive = Layer.effectDiscard(
           return r === undefined ? [] : [r.runner, r.pid];
         });
       },
-      jobs: () => store.jobsRunning().flatMap((j) => (j.pgid === null ? [] : [{ pgid: j.pgid, mine: (id: string) => j.sessionKey === sessionOf(id) }])),
+      jobs: () => watchedJobs(store, hub.processJobLookup()).map((j) => ({ pgid: j.pgid, mine: (id: string) => j.session === sessionOf(id) })),
       cwds: (pids) => platform.cwds(pids),
       self: process.pid,
     }, grant, holders);
     const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath, join(data, "run", "adb-servers.json"), admit)), (s) => Effect.promise(() => s.close()));
     void servers.reap(previous.gone).catch(() => undefined);
-    // Chats' grants of people's phones (docs/adb-share.md): told to the owner's devices, their phones connected anew in
+    // Chats' grants of people's phones: told to the owner's devices, their phones connected anew in
     // the grants' adb servers, a grant's server stopped as it ends.
     let shares: Shares | null = null;
     // The chats' own screens on the phones (displays.ts): their phones' offers say which chats have one up.
@@ -80,7 +83,7 @@ export const AdbLive = Layer.effectDiscard(
       (d) => Effect.sync(() => d.closeAll()),
     );
     const grants = new PhoneGrants({
-      db: store.db, hub: hub as any, home: () => plane.state.home(), now: () => wall.now(),
+      db: store.db, hub: hub as any, cardOutcomes, home: () => plane.state.home(), now: () => wall.now(),
       title: (r) => grantChatTitle(store, r),
       told: (r: PhoneRequest, workspace, change) => {
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
@@ -121,21 +124,21 @@ export const AdbLive = Layer.effectDiscard(
       }
       // A grant decided, taken back, or the owner's grants listed (from their app).
       const ask = head.adb ?? {};
-      if (ask.op === "decide" || ask.op === "revoke" || ask.op === "grants" || ask.op === "lasts") {
+      if (ask.op === "decide" || ask.op === "revoke" || ask.op === "grants" || ask.op === "lasts" || ask.op === "sign") {
         const reply = async (status: number, body: unknown) => {
           await writeLine(stream, { status, headers: { "content-type": "application/json" } });
           await stream.write(Buffer.from(JSON.stringify(body)));
           await stream.finish();
         };
         const email = viewer.email.toLowerCase();
-        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: grants.lastsOf(email) });
+        if (ask.op === "grants") return reply(200, { grants: grants.ofOwner(email, viewer.workspace), lasts: grants.lastsOf(email), signs: true });
         if (ask.op === "lasts") {
           const why = grants.setLasts(email, ask.lasts, ask.at);
           return why === null ? reply(200, { lasts: grants.lastsOf(email) }) : reply(422, { message: why });
         }
         const id = typeof ask.request === "string" ? ask.request : "";
         const scope = ask.scope === "hour" || ask.scope === "chat" ? (ask.scope as Scope) : null;
-        const why = ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace, ask.signed) : grants.revoke(email, id, viewer.workspace);
+        const why = ask.op === "sign" ? grants.sign(email, id, ask.signed, viewer.workspace) : ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace, ask.signed) : grants.revoke(email, id, viewer.workspace);
         const request = grants.get(id);
         return why === null ? reply(200, { request: request === null ? null : grants.shown(request) }) : reply(422, { message: why });
       }
@@ -157,6 +160,27 @@ export const AdbLive = Layer.effectDiscard(
         return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null, display);
       }),
     );
+    parts.tools([
+      {
+        ...PHONE_SEND,
+        run: async (session, args, signal) => {
+          const grant = grants.held(session)[0];
+          if (grant === undefined) return "This chat holds no phone grant: ask for the phone with phone_use first.";
+          const share = [...lent.byKey.values()].find((s) => s.owner.email.toLowerCase() === grant.owner);
+          if (share === undefined) return "Granted, but the phone is not lent to this station right now: call phone_use to see why.";
+          const workspace = store.getSession(session)?.workspace;
+          if (workspace === undefined) throw new Error(`unknown session ${session}`);
+          // (a sandboxed agent's file brought here first, as chat_post's are)
+          const given = (await fromSandbox(hub, session, { files: [typeof args.path === "string" ? args.path : ""] }, false)).files as string[];
+          const { name, size } = await staged(workspace, given[0]!);
+          grants.used(grant.id, true);
+          const r = await fetchOnPhone(share.conn, session, name, size, () => grants.used(grant.id, true), signal);
+          if ("path" in r) return `On the phone at ${r.path} (${size} bytes). pm cannot read that folder: to install an APK, adb … shell 'cp ${r.path} /data/local/tmp/a.apk && pm install -r /data/local/tmp/a.apk'.`;
+          if (r.old) return "The still.fail app on the phone is too old to take files this way: use adb push, or ask its person to update the app.";
+          return `Not all there: the phone has ${r.at} of ${size} bytes (${r.error}). Call phone_send again to go on from there.`;
+        },
+      },
+    ]);
     parts.tools(
       // Phones lent with an app's switch (from before grants): any agent's. A phone granted to chats is theirs alone.
       adbTools(() => lent.list().filter((p) => grants.grantedOfOwner(p.owner.email).length === 0)),

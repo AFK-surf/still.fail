@@ -1,14 +1,14 @@
 #!/bin/bash
-# still.fail in mbui (APP=stillfail) end to end against a still.fail of its own on this machine: ember's local cloud
+# still.fail in mbui (APP=stillfail) end to end against a still.fail of its own on this machine: still.fail's local cloud
 # (cloud/test/dev.ts: its Workers in Miniflare, Google mocked, the test identities and the "Dev" workspace), an
-# iroh-relay of its own, a test station enrolled there from a checkout of ember, with ember's fake claude
-# (station/test/fake) as its agent, and a second client of alice's (e2e/peer.ts, ember's TS core in Node) that makes
+# iroh-relay of its own, a test station enrolled there from a checkout of still.fail, with still.fail's fake claude
+# (station/test/fake) as its agent, and a second client of alice's (e2e/peer.ts, still.fail's TS core in Node) that makes
 # the chat and says things in it. Nothing reaches app.still.fail, the machine's own station or ~/.stillfail: every part
-# has its own ports and directories under $E2E_WORK, the station its own HOME. See e2e/README.md.
+# has its own ports and directories under $E2E_WORK, the station its own HOME.
 #
-#   scripts/e2e-local.sh install    what `up` installs first, alone: ember's packages, the station built, the natives
+#   scripts/e2e-local.sh install    what `up` installs first, alone: still.fail's packages, the station built, the natives
 #                                   (fetched or built): ios-smoke.sh's, while the app builds
-#   scripts/e2e-local.sh up         the cloud, relay, station, the chat (prints what the app needs: e2e-env.sh)
+#  scripts/e2e-local.sh up the cloud, relay, station, the chat
 #   scripts/e2e-local.sh mac        the mac flows (e2e/flows/*.drive) against what `up` started, pass/fail per flow
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
 #   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded
@@ -52,24 +52,25 @@
 #
 # E2E_WORK (default: e2e-local beside this checkout), E2E_STATION (the station's data and HOME, /tmp/mbui-e2e-<uid>),
 # E2E_PORT (18787: the cloud takes it to +5), E2E_RELAY (18740),
-# EMBER (the ember checkout to clone from; default ember-src beside this session's tools).
+# SF_SRC (the still.fail checkout to clone from; default this one, scripts/env.sh).
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 ROOT=$PWD
-WORK=${E2E_WORK:-$(cd .. && pwd)/e2e-local}
+. "$D/e2e-paths.sh"
+e2e_paths "$ROOT"
+WORK=$E2E_WORK
 # (absolute: some steps run from elsewhere)
 mkdir -p "$WORK" && WORK=$(cd "$WORK" && pwd)
 PORT=${E2E_PORT:-18787}
 RELAY_PORT=${E2E_RELAY:-18740}
 ORIGIN=http://127.0.0.1:$PORT
-EMBER=${EMBER:-$(cd "${TOOLS:-..}/.." 2>/dev/null && pwd)/ember-src}
-E=$WORK/ember
+E=$WORK/stillfail
 RUN=$WORK/run
 # the test station's own directory: short (its runners listen on sockets in it, whose paths may not be longer than
 # 104 bytes on macOS)
-STATION=${E2E_STATION:-/tmp/mbui-e2e-$(id -u)}
+STATION=$E2E_STATION
 mkdir -p $WORK $RUN
 
 say() { echo "e2e: $*"; }
@@ -108,25 +109,25 @@ claim() {
 # argument the most it is given, in s, before it fails
 waitfor() { local s=$1; shift; node "$D/waitfor.mjs" --deadline $s "$@" > /dev/null; }
 
-# ember, cloned (read only from $EMBER: never built or installed in), its packages installed, the station built
-ember() {
+# still.fail, cloned (read only from $SF_SRC: never built or installed in), its packages installed, the station built
+sources() {
   local want
-  want=$(git -C "$EMBER" rev-parse --verify HEAD) || die "no source revision in $EMBER"
+  want=$(git -C "$SF_SRC" rev-parse --verify HEAD) || die "no source revision in $SF_SRC"
   if [ ! -d $E/.git ]; then
-    git clone -q "$EMBER" $E
+    git clone -q "$SF_SRC" $E
   fi
   if [ "$(git -C $E rev-parse HEAD)" != "$want" ]; then
     git -C $E fetch -q origin && git -C $E -c advice.detachedHead=false checkout -q --detach $want
-    rm -f $WORK/ember.ready
+    rm -f $WORK/stillfail.ready
   fi
-  if [ "$(cat $WORK/ember.ready 2>/dev/null)" != "$want" ]; then
-    say "installing ember $(git -C $E log --oneline -1 | cut -c1-60)"
+  if [ "$(cat $WORK/stillfail.ready 2>/dev/null)" != "$want" ]; then
+    say "installing still.fail $(git -C $E log --oneline -1 | cut -c1-60)"
     (cd $E && pnpm install --frozen-lockfile --ignore-scripts >$WORK/install.log 2>&1) || die "install failed ($WORK/install.log)"
     for p in cloud station client/core-ts; do
       (cd $E/$p && pnpm install --frozen-lockfile >>$WORK/install.log 2>&1) || die "install of $p failed"
     done
     (cd $E/station && pnpm run build >>$WORK/install.log 2>&1) || die "station build failed"
-    echo $want > $WORK/ember.ready
+    echo $want > $WORK/stillfail.ready
   fi
 }
 
@@ -224,8 +225,8 @@ up() {
   for p in $PORT $((PORT + 1)) $((PORT + 2)) $((PORT + 3)) $((PORT + 4)) $((PORT + 5)) $RELAY_PORT; do
     listening $p && die "port $p is taken (E2E_PORT, E2E_RELAY): run down, or pick others"
   done
-  ember
-  # the relay: iroh-relay in dev mode (plain HTTP) on loopback, as ember's side tests run it
+  sources
+  # the relay: iroh-relay in dev mode (plain HTTP) on loopback, as still.fail's side tests run it
   cat > $RUN/relay.toml <<EOF
 enable_relay = true
 http_bind_addr = "127.0.0.1:$RELAY_PORT"
@@ -248,7 +249,7 @@ EOF
   local token=$(grep -m1 '^ENROLL ' $RUN/cloud.log | awk '{print $NF}')
   [ -n "$token" ] || die "no enrollment in the cloud's log"
   # the station: its own data and HOME, the fake runtimes first on PATH (e2e/fake's claude, which posts cards and
-# tool steps, over ember's), no discovery on the LAN
+# tool steps, over still.fail's), no discovery on the LAN
   claim
   rm -rf $STATION $WORK/peer $WORK/peer-home && mkdir -p $STATION/data/homes/cc $STATION/home $STATION/app/node/bin
   ln -s $E/station/dist $STATION/app/station
@@ -258,7 +259,7 @@ EOF
   echo '{}' > $STATION/data/homes/cc/.credentials.json
   # (what this shell has of the machine's own station, a job's notify address and token, is not the test station's)
   cat > $RUN/station-env.sh <<EOF
-for v in \$(env | grep -Eo '^(EMBER|STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset \$v; done
+for v in \$(env | grep -Eo '^(STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset \$v; done
 export HOME=$STATION/home
 export PATH=$ROOT/e2e/fake:$E/station/test/fake:\$PATH
 export STILLFAIL_NO_DISCOVERY=1
@@ -331,7 +332,7 @@ down() {
 
 peer() {
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/peer-home; mkdir -p $HOME
-   E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
 }
 
 # a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
@@ -340,7 +341,7 @@ peer() {
 intruder() {
   mkdir -p $WORK/intruder && cp $WORK/peer/chat.json $WORK/intruder/chat.json
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/intruder-home; mkdir -p $HOME
-   E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/intruder E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/intruder E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
 }
 intruder_refused() {
   local out rc
@@ -678,7 +679,7 @@ thaw() {
 }
 
 case "${1:-all}" in
-  install) ember; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
+  install) sources; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
   up) up ;;
   snapshot) shift; snapshot "$@" ;;
   restore) shift; restore "$@" ;;

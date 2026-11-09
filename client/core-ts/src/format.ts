@@ -281,7 +281,7 @@ export function plainText(text: string): string {
       .replace(/<!(here|channel|everyone)(\|[^>]*)?>/g, "@$1")
       .replace(/https?:\/\/[^\s<>()]+/g, () => words("link"))
       .replace(/(\*\*|__|~~)(?=\S)([^\n]*?\S)\1/g, "$2")
-      .replace(/(^|[^\w*~])([*_~])(?=[^\s*_~])([^\n]*?[^\s*_~])\2(?![\w*~])/gm, "$1$3")
+      .replace(/(^|[^\w*])([*_])(?=[^\s*_])([^\n]*?[^\s*_])\2(?![\w*])/gm, "$1$3")
       .replace(/\\([\\`*_{}[\]()#+\-.!|~>])/g, "$1")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
@@ -336,7 +336,7 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   return [where, when];
 }
 
-/// A Feishu chat's id (`oc_…`, docs/feishu.md).
+/// A Feishu chat's id (`oc_…`).
 export const isFeishuChat = titles.isFeishuChat;
 
 /// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
@@ -508,8 +508,10 @@ export function modeText(mode: string, requireMention: boolean): [string, string
 /// Why a turn failed, in words, from its `detail`.
 export function failureText(detail: string): string {
   switch (detail.split(":")[0]!.trim()) {
-    case "rate_limit":
-      return said("core-logic.format.failure.rate_limit");
+    case "rate_limit": {
+      const model = modelLimitOf(detail);
+      return model !== null ? tr(current(), "core-logic.format.failure.model_limit", { model }) : said("core-logic.format.failure.rate_limit");
+    }
     case "overloaded":
       return said("core-logic.format.failure.overloaded");
     case "network":
@@ -531,6 +533,13 @@ export function failureText(detail: string): string {
     default:
       return said("core-logic.format.failure.other");
   }
+}
+
+/// The model whose own allowance a limit was, as the runtime named it (the station's agents/runtime.ts `modelLimitOf`):
+/// "You've reached your Fable limit." is not the account's, whose quota then still shows room (#4365).
+function modelLimitOf(text: string): string | null {
+  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  return name && !/\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i.test(name) ? name : null;
 }
 
 /// A status in words, and its tone.

@@ -1,4 +1,4 @@
-// What the core keeps in sync with the stations, by itself, whatever the UI shows (docs/core-ts.md, rule 6; station.rs
+// What the core keeps in sync with the stations, by itself, whatever the UI shows (rule 6; station.rs
 // and sync.rs for what a station says and how). Every station of every workspace an account reaches has a link
 // (link.ts): its events stream, held open while the station is reached. What a station holds is of two sorts, kept in
 // sync each its own way:
@@ -31,12 +31,13 @@ import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./req
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, RECONNECT_MAX_MS, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
 import { concat, readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
+import { Seen } from "./seen.ts";
 import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
 import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
@@ -55,6 +56,9 @@ export const RECHECK_MS = 5 * 60 * 1000;
 /// A read that failed in passing (a 5xx, the link dropping) is tried again after this, doubling, this many times.
 export const READ_RETRY_MS = 2_000;
 export const READ_RETRIES = 5;
+/// How long a read that failed `n` times in a row before waits to be asked again: twice as long each time, at most
+/// RECONNECT_MAX_MS.
+export const retryAfter = (n: number): number => Math.min(READ_RETRY_MS * 2 ** Math.min(n, 10), RECONNECT_MAX_MS);
 /// The field naming a row of each list read whole that may be asked as what changed of it (POST /changed/<list>).
 const LIST_ID: Record<string, string> = { chatRows: "id", archivedRows: "id", threads: "id", sessions: "key" };
 /// A station from before POST /changed/<list> reads its lists whole, and is tried again after this.
@@ -85,10 +89,10 @@ const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
-/// times a second, each search asked again a search of the machine's files there (docs/search.md).
+/// times a second, each search asked again a search of the machine's files there.
 export const SEARCH_STALE_MS = 2_000;
-/// How often a shown resources page asks a station from before telling them again (the station, asked, looks as often
-/// itself); and how long one that tells them is waited on after its last before the stream is taken for gone.
+/// How long after a station's resources stream ended it is opened again; and how long one that tells them is waited on
+/// after its last before the stream is taken for gone.
 export const RESOURCES_EVERY_MS = 5_000;
 const RESOURCES_SILENT_MS = 4 * RESOURCES_EVERY_MS;
 
@@ -117,7 +121,7 @@ export function applyStep(view: LiveView, event: unknown, now: number, held = 0)
     if (typeof parent === "string" && parent !== "") step.parent = parent;
     view.steps.push(step);
   } else if (kind === "end") {
-    // On new steps: the ones there are in the live topic's value as it was made (shared, docs/core-ts.md).
+    // On new steps: the ones there are in the live topic's value as it was made (shared).
     view.steps = view.steps.map((s) => (equal(get(s, "id"), id) && isObject(s) ? { ...s, ended: true, held } : s));
   }
 }
@@ -131,10 +135,13 @@ export function stepShown(step: unknown, held: number): boolean {
   return typeof at === "number" && held <= at;
 }
 
-/// How long a folder's watch waits before asking again, the station not reached or its asking failed.
-const WATCH_AGAIN_MS = 5_000;
+/// How long a folder's watch waits before opening its stream again after it failed: doubling, up to WATCH_AGAIN_MAX_MS.
+const WATCH_AGAIN_MS = 1_000;
+const WATCH_AGAIN_MAX_MS = 30_000;
 
 export class StationsSync {
+  /// Reads held on the device that their station has not taken yet (`read`), by `<address>\u0001<thread>`.
+  readonly #heldReads = new Map<string, number>();
   readonly #core: Inner;
   readonly requests: Requests;
   /// What its stations hold that is only added to (threads' entries, sessions' transcripts), kept in sync by number.
@@ -143,15 +150,43 @@ export class StationsSync {
   readonly #links: Links;
   /// What their streams told while a read was out, to tell again on top of what it brings.
   readonly #retold = new Retold();
+  /// The transcripts of the histories shown whose reads failed, how many times in a row.
+  readonly #transcriptMisses = new Map<string, number>();
+  readonly #transcriptAgain = new Set<string>();
   /// The stations whose searches shown are to be asked again once SEARCH_STALE_MS is up.
   readonly #staleSearches = new Set<string>();
   /// A usage preparation can take many bounded batches; it has its own cancellable stream, outside the sync lane.
   readonly #usageReading = new Map<string, { link: Link; fiber: Fiber.Fiber<void, never> | null }>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
-  /// Told when what a station holds beyond the records changed (link, live views, host, logs).
-  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
-  /// The loopback relays of logins this device takes the callback of (docs/remote-login.md).
+  /// What a station holds beyond the records (link, live views, host, logs), as its readers see it change.
+  readonly seen = new Seen();
+  /// Told when what a station holds beyond the records changed, after its readers (`seen`).
+  onTouched: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
+
+  onChange(address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string): void {
+    this.seen.touch(address, what === "errors" ? "log" : what, key);
+    this.onTouched(address, what, key);
+    if (what === "link") {
+      const waiting = this.#linkWaits.get(address);
+      this.#linkWaits.delete(address);
+      if (waiting) Deferred.doneUnsafe(waiting, Effect.void);
+    }
+  }
+
+  /// Those waiting for a station's link to change (`#linkChange`).
+  readonly #linkWaits = new Map<string, Deferred.Deferred<void>>();
+
+  /// Until the station's link changes (it came up, say).
+  #linkChange(address: string): Effect.Effect<void> {
+    let waiting = this.#linkWaits.get(address);
+    if (!waiting) {
+      waiting = Deferred.makeUnsafe<void>();
+      this.#linkWaits.set(address, waiting);
+    }
+    return Deferred.await(waiting);
+  }
+  /// The loopback relays of logins this device takes the callback of.
   readonly relays: Relays;
   /// Told of entries that came as they were said (an event): they come in with a motion.
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
@@ -374,12 +409,20 @@ export class StationsSync {
   #catchUpShown(address: string): void {
     for (const topic of this.#core.store.liveTopics()) {
       if (topic.station !== address) continue;
-      if (topic.topic === "thread" && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+      if (topic.topic === "thread" && typeof topic.thread === "number") {
+        this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+        // An opening around an unread or saved position may still be missing even if a later page is held. Recompute it
+        // so its failed range read is asked again, independently of whether the catch-up read brings anything new.
+        this.#core.store.invalidate(topic);
+      }
+      // A history shown: its first read may have failed while the stream was away, and a station that follows the
+      // sessions at work tells nothing of one at rest, so it would wait for ever.
+      else if (topic.topic === "live" && this.#links.get(address)?.followsRunning === true) this.channels.bring(transcriptOf(address, String(topic.key)), Priority.shown, "latest");
       else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }
 
-  /// The station's screens as it has them now (docs/remote-screens.md), in its link's memory (kept: what was said last
+  /// The station's screens as it has them now, in its link's memory (kept: what was said last
   /// shows as the app opens again, until they are read). A station from before screens has none (404): it is held so,
   /// and said (`outdated`).
   #screens(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
@@ -463,32 +506,6 @@ export class StationsSync {
     });
   }
 
-  /// The programs granted the station's data (GET /outflow/grants, the `outflowGrants` topic, docs/data-outflow.md),
-  /// read each time a page shows them; then as the station tells (`outflow-grants`). A station from before: none.
-  outflowShown(address: string): void {
-    this.#enqueue(address, "outflowGrants", Priority.shown, this.#outflow(address));
-  }
-
-  #outflow(address: string): Effect.Effect<void, CoreError> {
-    const key = topicKey({ topic: "outflowGrants", station: address });
-    return Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/outflow/grants", null, { quiet: true }));
-      if (answer._tag === "Success") {
-        link.errors.delete(key);
-        link.memory.set(OUTFLOW, answer.success);
-        this.onChange(address, "log", key);
-      } else if (answer.failure.status === 404) {
-        link.errors.delete(key);
-        link.memory.set(OUTFLOW, { unsupported: true });
-        this.onChange(address, "log", key);
-      } else if (answer.failure.status !== undefined && !link.memory.has(OUTFLOW)) {
-        link.errors.set(key, answer.failure);
-        this.onChange(address, "errors", key);
-      }
-    });
-  }
 
   /// What a web link in a message is (GET /link-preview, the `linkPreview` topic), read as its card shows it (cardShown).
   linkPreviewShown(address: string, url: string): void {
@@ -533,7 +550,7 @@ export class StationsSync {
 
   /// A job's log as it is now (its `lines` last lines), once a run: its topic opened (what was kept of it shows
   /// meanwhile). The station's stream says how it grows from then on (an older station's does not: its log is as it was
-  /// when opened, docs/core-ts.md).
+  /// when opened).
   readLog(address: string, job: string, lines: number): void {
     const key = logKey(job, lines);
     if (this.#links.get(address)?.memory.fresh(key)) return;
@@ -555,7 +572,7 @@ export class StationsSync {
     );
   }
 
-  /// What a search finds on the station (`stationSearch`, docs/search.md): asked a moment after the words stop changing
+  /// What a search finds on the station (`stationSearch`): asked a moment after the words stop changing
   /// (one shown that long), at the urgency of what is shown, and again as it is shown again; held in memory while
   /// shown, the station's answer as it came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
   /// `again`: asked again as the station's chats changed (said to it: `again=1`, answered as found lately).
@@ -740,7 +757,7 @@ export class StationsSync {
     });
   }
 
-  /// The station's logins (docs/remote-login.md), read whole: in its link's memory, as its stream then tells them. A
+  /// The station's logins, read whole: in its link's memory, as its stream then tells them. A
   /// station from before them answers 404: it has none (the page offers none).
   #machineLogins(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
@@ -897,12 +914,13 @@ export class StationsSync {
   }
 
   /// A folder of the drive shown, kept as it is on the station's disk (an agent writing there, a file renamed on the
-  /// machine): the station answers GET /drive/watch once something in it changes (else after a while), and it is read
-  /// again. A station from before watching, or a folder gone, answers 4xx: then it is read only as it is shown.
+  /// machine): the station tells of each change on a stream (GET /drive/watch as events), and the folder is read again.
+  /// The stream is opened as the station is reached; one that ended is opened again, the folder read then for what
+  /// changed meanwhile. A station from before streaming it, or a folder gone, refuses it: then it is read only as shown.
   /// What still.fail uses of the station's machine now (GET /resources), while shown (a fiber of the topic's,
   /// topics.ts) and a page of the app is in view: the station tells it as it looks, on a stream of its own (asked as
-  /// events). A station from before answers it once instead: asked again every RESOURCES_EVERY_MS. One that has none
-  /// says so (its refusal), asked again as often.
+  /// events), opened again RESOURCES_EVERY_MS after it ends. A station from before answers it once instead, and one
+  /// that has none says so (its refusal): either is what is shown, not asked again on a timer.
   resourcesWatch(address: string): Effect.Effect<void, never> {
     const key = topicKey({ topic: "stationResources", station: address });
     const attend = this.#core.attention?.attend;
@@ -911,18 +929,20 @@ export class StationsSync {
       link.memory.set(key, value);
       this.onChange(address, "log", key);
     };
+    /// Follows the station's stream; false once there is nothing to follow (a refusal, a station from before streams).
     const follow = Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const link = this.#links.get(address);
-        if (!link || !this.reachable(address)) return;
+        if (!link || !this.reachable(address)) return true;
         const opened = yield* Effect.result(this.requests.stream(link.addr, "/resources", null));
         if (opened._tag === "Failure") {
           const status = opened.failure.status;
           if (status !== undefined && status < 500) {
             link.errors.set(key, opened.failure);
             this.onChange(address, "errors", key);
+            return false;
           }
-          return;
+          return true;
         }
         const reply = opened.success;
         // From before: what it is now, once.
@@ -930,13 +950,13 @@ export class StationsSync {
           const bytes = yield* Effect.result(readAll(reply.body));
           const value = bytes._tag === "Success" ? parseJson(bytes.success) : undefined;
           if (value !== undefined) told(link, value);
-          return;
+          return false;
         }
         const parser = new SseParser();
         const silent = Effect.sleep(RESOURCES_SILENT_MS).pipe(Effect.as(null));
         for (;;) {
           const next = yield* Effect.raceFirst(Effect.result(reply.body.take), silent);
-          if (next === null || next._tag === "Failure" || next.success === null) return;
+          if (next === null || next._tag === "Failure" || next.success === null) return true;
           for (const [name, data] of parser.feed(next.success)) {
             const value = name === "resources" ? parseJson(data) : undefined;
             if (value !== undefined) told(link, value);
@@ -945,28 +965,49 @@ export class StationsSync {
       }),
     );
     // (not while no page of the app is in view: a phone in a pocket asks nothing)
-    const whileShown = attend ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.suspend(() => attend.untilHidden()))) : follow;
-    return Effect.forever(Effect.andThen(whileShown, Effect.sleep(RESOURCES_EVERY_MS)));
+    const whileShown = attend
+      ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.as(Effect.suspend(() => attend.untilHidden()), true)))
+      : follow;
+    return Effect.gen(function* () {
+      while (yield* whileShown) yield* Effect.sleep(RESOURCES_EVERY_MS);
+    });
   }
 
   driveWatch(address: string, root: string, path: string): Effect.Effect<void, never> {
-    const id = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(16).padStart(2, "0")).join("");
-    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}&id=${id}`;
+    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}`;
+    // (asked when it runs: `ask` asks as it is called)
+    const read = Effect.suspend(() => Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" }));
     return Effect.gen({ self: this }, function* () {
+      let wait = WATCH_AGAIN_MS;
+      let opened = 0;
       for (;;) {
         const link = this.#links.get(address);
         if (!link || !this.reachable(address)) {
-          yield* Effect.sleep(WATCH_AGAIN_MS);
+          yield* this.#linkChange(address);
           continue;
         }
-        const answer = yield* Effect.result(this.requests.call(link.addr, "GET", asked, null, { quiet: true }));
-        if (answer._tag === "Failure") {
-          const status = answer.failure.status;
-          if (status !== undefined && status >= 400 && status < 500) return;
-          yield* Effect.sleep(WATCH_AGAIN_MS);
-          continue;
-        }
-        if (get(answer.success, "changed") === true) yield* Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" });
+        const ended = yield* Effect.scoped(
+          Effect.gen({ self: this }, function* () {
+            const reply = yield* Effect.result(this.requests.stream(link.addr, asked, null));
+            if (reply._tag === "Failure") {
+              const status = reply.failure.status;
+              return status !== undefined && status >= 400 && status < 500 ? ("refused" as const) : ("failed" as const);
+            }
+            if (!(replyHeader(reply.success, "content-type") ?? "").startsWith("text/event-stream")) return "refused" as const;
+            wait = WATCH_AGAIN_MS;
+            // Opened again: what changed while none was open is read now.
+            if (opened++ > 0) yield* read;
+            const parser = new SseParser();
+            for (;;) {
+              const next = yield* Effect.result(reply.success.body.take);
+              if (next._tag === "Failure" || next.success === null) return "ended" as const;
+              if (parser.feed(next.success).some(([name]) => name === "changed")) yield* read;
+            }
+          }),
+        );
+        if (ended === "refused") return;
+        yield* Effect.raceFirst(Effect.sleep(wait), this.#linkChange(address));
+        wait = Math.min(wait * 2, WATCH_AGAIN_MAX_MS);
       }
     });
   }
@@ -1271,9 +1312,12 @@ export class StationsSync {
   #channelAnswered(channel: Channel, error: CoreError | null, nothing: boolean): void {
     const link = this.#links.get(channel.station);
     if (!link) return;
-    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading).
+    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading). One
+    // that failed is said, and asked again while it is shown: nothing else would ask (a stream that follows the sessions
+    // at work tells nothing of one at rest, and it stays open).
     if (channel.kind === TRANSCRIPT) {
       if (error === null) this.#transcriptKnown(link, channel.id);
+      else this.#transcriptFailed(link, channel.id, error);
       return;
     }
     if (channel.kind !== ENTRIES) return;
@@ -1472,11 +1516,11 @@ export class StationsSync {
         this.#usageChanged(address, null, typeof from === "number" && Number.isFinite(from) ? from : null);
         return;
       }
-      // Its screens came or went, or who is on them changed (docs/remote-screens.md).
+      // Its screens came or went, or who is on them changed.
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
-      // A login of the station's (docs/remote-login.md).
+      // A login of the station's.
       case "machine-logins": {
         const link = this.#links.get(address);
         if (!link) return;
@@ -1488,14 +1532,6 @@ export class StationsSync {
       case "presets":
         if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
         return;
-      // The programs granted the station's data changed, or read it (docs/data-outflow.md).
-      case "outflow-grants": {
-        const link = this.#links.get(address);
-        if (!link || !Array.isArray(get(data, "grants"))) return;
-        link.memory.set(OUTFLOW, data);
-        this.onChange(address, "log", topicKey({ topic: "outflowGrants", station: address }));
-        return;
-      }
       // A login's terminal as it changes (while one is shown).
       case "login-screen": {
         const link = this.#links.get(address);
@@ -1922,14 +1958,14 @@ export class StationsSync {
       // Of the chat list the station makes for everyone, once it is read: till then the rows held stand.
       if (link.sharedRows === null) return;
       const lang = current();
-      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
       return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, words));
     }
     const sessions = data.shared({ topic: "sessions", station: address });
     const threads = data.shared({ topic: "threads", station: address });
     if (!Array.isArray(sessions) || !Array.isArray(threads)) return;
     const lang = current();
-    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
     data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words));
   }
 
@@ -2038,13 +2074,19 @@ export class StationsSync {
     );
   }
 
+  /// A chat opened with no summary held (made since the threads were read, elsewhere or while away; opened from a
+  /// link): its summary read at once, as its entries are (topics.ts `start`).
+  summaryOf(address: string, id: number): void {
+    if (this.#links.has(address)) this.#enqueue(address, `thread/${id}`, Priority.shown, this.#threadSummary(address, id));
+  }
+
   #threadSummary(address: string, id: number): Effect.Effect<void, CoreError> {
     return this.#asked((read) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
       if (view._tag === "Success") this.putThread(address, view.success);
-      else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
+      else if (view.failure.status === 404) this.#threadGone(address, id);
       this.#retell(address, read);
     }));
   }
@@ -2107,9 +2149,39 @@ export class StationsSync {
   #transcriptKnown(link: Link, key: string): void {
     let view = link.lives.get(key);
     if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
-    if (view.loaded) return;
+    this.#transcriptMisses.delete(`${link.address}\u0001${key}`);
+    if (view.loaded && view.failed === undefined) return;
     view.loaded = true;
+    delete view.failed;
     this.onChange(link.address, "live", key);
+  }
+
+  /// A read of a session's transcript failed: why, for its history to say, and read again after a while, less often each
+  /// time it fails in a row, while its history is shown.
+  #transcriptFailed(link: Link, key: string, error: CoreError): void {
+    let view = link.lives.get(key);
+    if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
+    if (view.failed !== error.message) {
+      view.failed = error.message;
+      this.onChange(link.address, "live", key);
+    }
+    const topic: Topic = { topic: "live", station: link.address, key };
+    if (!this.#core.store.inUse(topic)) return;
+    const miss = `${link.address}\u0001${key}`;
+    // (one read again at a time: two that failed together wait as one)
+    if (this.#transcriptAgain.has(miss)) return;
+    this.#transcriptAgain.add(miss);
+    const n = this.#transcriptMisses.get(miss) ?? 0;
+    this.#transcriptMisses.set(miss, n + 1);
+    // timer: retry after a failure, with a backoff
+    const again = Effect.sleep(retryAfter(n)).pipe(
+      Effect.andThen(Effect.sync(() => {
+        this.#transcriptAgain.delete(miss);
+        if (this.#core.store.inUse(topic)) this.channels.bring(transcriptOf(link.address, key), Priority.shown, "latest");
+      })),
+      Effect.onInterrupt(() => Effect.sync(() => this.#transcriptAgain.delete(miss))),
+    );
+    this.#core.runner.fork(again, link.scoped);
   }
 
   /// What the chat shows of a session at work (activity.ts), from its live view.
@@ -2210,9 +2282,6 @@ export class StationsSync {
         // What the agents' memory says of it changed (a skill shared or no longer): read again where it is shown or held.
         case "memory":
           if (this.#core.store.inUse({ topic: "memory", station: address }) || this.#links.get(address)?.memory.has(MEMORY)) reads.push(["memory", this.#memory(address)]);
-          break;
-        case "outflowGrants":
-          reads.push(["outflowGrants", this.#outflow(address)]);
           break;
         case "presets":
           reads.push(["presets", this.#presets(address)]);
@@ -2328,9 +2397,18 @@ export class StationsSync {
   /// Records how far the viewer has read a thread; nothing is sent when it is read that far already.
   read(address: string, thread: number, n: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const key = `${address}\u0001${thread}`;
       const position = this.readPosition(address, thread);
-      if (position !== null && position >= n) return;
+      // (read so far as the station has it: not as far as a read held here that it has not taken yet)
+      const held = this.#heldReads.get(key);
+      if (position !== null && position >= n && !(held !== undefined && held >= n)) return;
+      // Held read here as it is asked, not once the station answers: the list's row and its workspace's mark were
+      // unread for that round trip, and read again after it (2026-11-08). The station's next summary says otherwise
+      // if it does not take it, and the read is asked again (attend.ts `failed`).
+      this.#heldReads.set(key, Math.max(held ?? 0, n));
+      this.putRead(address, thread, n);
       const answer = yield* this.requests.call(StationAddr.parse(address), "PUT", `/threads/${thread}/read`, { n }, { ctx });
+      if ((this.#heldReads.get(key) ?? 0) <= n) this.#heldReads.delete(key);
       this.putRead(address, thread, u64(get(answer, "n")) ?? n);
     });
   }

@@ -1,4 +1,4 @@
-// Copying into the station's drive (./transfers.ts, docs/drive.md "Copying between stations") as a part of the station
+// Copying into the station's drive (./transfers.ts) as a part of the station
 // (parts.ts): the transfers into it, run here and kept in its data directory, told to the asker's streams as they
 // change (`drive-transfers`); its routes (api/routes/transfers.ts); and what another station of the workspace reads of
 // this one's drive with a grant of its own (`drive.walk`, `drive.part`, `drive.release` on the bus).

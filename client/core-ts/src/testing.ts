@@ -1,4 +1,4 @@
-// A host for tests (testing.rs): in-memory storage and database, HTTP answered by a function you set, emissions
+// A host for tests: in-memory storage and database, HTTP answered by a function you set, emissions
 // collected, WebSockets fed by the test, time on a TestClock the test moves (`pass`), random bytes from a fixed seed.
 import type { Recorder } from "./record.ts";
 import { Deferred, Duration, Effect, Queue, Scope, type Clock } from "effect";

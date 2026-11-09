@@ -1,4 +1,4 @@
-// still.fail was called ember (docs/rename-still-fail.md). No station, app or page from before the rename is left
+// still.fail was called ember. No station, app or page from before the rename is left
 // (2026-11-05: none in two weeks of telemetry), so the cloud answers only the new names, but for its old hosts (the
 // *_ORIGIN_ALIASES, bound to the same Workers: stations enrolled then may still be told them in their own settings,
 // which they move off themselves).

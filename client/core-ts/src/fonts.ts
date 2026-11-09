@@ -1,4 +1,4 @@
-// The faces a device's pages are set in (docs/fonts.md): three places, each its own choice (`prefs.set {fonts: {…}}`):
+// The faces a device's pages are set in (sf/faces.mbt): three places, each its own choice (`prefs.set {fonts: {…}}`):
 // ui, the app's own words; text, what people and agents wrote (messages, the composer); code. None chosen: the app's
 // own face (text: as ui). Beside the system's: the faces still.fail keeps in the releases bucket (scripts/fonts.py makes
 // them, fonts/<id>/<version>/), and on a computer one installed there (`local:<family>`, the page lists them).

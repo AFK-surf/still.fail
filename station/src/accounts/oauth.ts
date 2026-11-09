@@ -1,4 +1,4 @@
-// Renewing a Claude login without sending a prompt (the Rust station's claude_oauth.rs): under Claude Code's own locks (its
+// Renewing a Claude login without sending a prompt: under Claude Code's own locks (its
 // current one in the config directory and its legacy one beside it), read again once locked, and saved back where it
 // was (the keychain for the machine's login on macOS, else the file), never as a copy. Used for the machine profile's
 // token (the Claude driver's `machineToken`), for checking a profile and for reading a subscription's allowance. A login
@@ -24,7 +24,7 @@ const LOCK_WAIT_MS = 40_000;
 const LOCK_STALE_MS = 60_000;
 const HEARTBEAT_MS = 5_000;
 
-/// The OAuth access token Claude Code keeps in this config directory's file (quota.rs claude_token).
+/// The OAuth access token Claude Code keeps in this config directory's file.
 export function claudeToken(home: string): string | undefined {
   try {
     const token = JSON.parse(readFileSync(join(home, ".credentials.json"), "utf8"))?.claudeAiOauth?.accessToken;

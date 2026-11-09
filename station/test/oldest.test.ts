@@ -5,6 +5,7 @@ import { buildOf, coreTooOld } from "../src/api/oldest.ts";
 
 test("a core's build is read as its 0.1.<n>, or <n>", () => {
   assert.equal(buildOf("0.1.6936"), 6936);
+  assert.equal(buildOf("0.34.6936"), 6936);
   assert.equal(buildOf(" 6936 "), 6936);
   assert.equal(buildOf("dev"), null);
   assert.equal(buildOf(undefined), null);

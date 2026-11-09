@@ -1,4 +1,4 @@
-// Picking a passage of a message (pick.mbt, MessagePick.kt), over the made-up chat. The fake host has no word
+// Picking a passage of a message (pick.mbt), over the made-up chat. The fake host has no word
 // boundaries of its own: a Han character is a word, letters and digits together are one.
 
 ///|
@@ -31,7 +31,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
   assert_eq(pk.sel.b - pk.sel.a, 1)
-  // felt as it picked, once (MessagePick.kt: LongPress)
+  // felt as it picked, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("引用") is Some(_))
   assert_true(t.find("复制") is Some(_))
@@ -108,7 +108,7 @@ test "a message that did not go: a finger can select and copy its words" {
   // The passage can be quoted too; there is no message at the station to link to or share yet.
   assert_true(t.find("引用") is Some(_))
   assert_true(t.query(Button, label="复制消息链接") is None)
-  assert_true(t.query(Button, label="分享这一轮") is None)
+  assert_true(t.query(Button, label="多选") is None)
   let one = t.ctx().words_of(pk.sel.key).unwrap().slice(pk.sel.a, pk.sel.b)
   t.tap_text("复制")
   assert_eq(t.clipboard(), one)
@@ -185,17 +185,18 @@ test "a message picked on its way and then delivered keeps its selection and quo
 }
 
 ///|
-test "分享这一轮 on the bar lets go and shares the message's turn as a picture (chat.publishPreview by its seq)" {
+test "多选 on the bar lets go and opens the chat's picture with that message alone ticked (chat.publishPreview of the whole chat)" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  t.click(Button, label="分享这一轮")
+  t.click(Button, label="多选")
   assert_eq(pk.ts, "")
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
-  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+  // (the whole chat asked: the message ticked alone once it is read)
+  assert_true(field(Some(asked[0].params), "turn") is None)
 }
 
 ///|

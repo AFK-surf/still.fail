@@ -1,6 +1,7 @@
-// A chat relayed to a channel (docs/relay.md): the places a connect's bot is in, the conversation the station starts
+// A chat relayed to a channel: the places a connect's bot is in, the conversation the station starts
 // there, the agent going on in it, and Slack's side of it against Slack's stand-in (test/slack-fake.ts).
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { test } from "node:test";
 import type { Place, ThreadRef } from "../src/sessions/chat.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
@@ -9,6 +10,11 @@ import { mentioned, relay, relayPeople, relayPlaces } from "../src/sessions/rela
 import { MEMBERS_MS } from "../src/connects/surface.ts";
 import { PEOPLE_MS, SlackSurface } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";
+import { chatTools } from "../src/tools/chat.ts";
+import { Readers } from "../src/read/pool.ts";
+import { installLegacyEdits, legacyEditDrain, legacyEditStep } from "../src/store/legacy-edits-build.ts";
+import { addClientColumn } from "../src/store/schema.ts";
+import { Store } from "../src/store/store.ts";
 import { Rig, message, settle, testClock, type Setup } from "./hub-fakes.ts";
 import { FakeSlack } from "./slack-fake.ts";
 
@@ -237,6 +243,294 @@ test("relaying to a Slack thread by a message's link joins that thread: the stat
   await r.close();
 });
 
+test("a relay's first post waits for old edits without scanning the thread on the station", async () => {
+  const { r } = relayRig(), release = Promise.withResolvers<void>();
+  let post: Promise<string> | undefined;
+  try {
+    const [key, source] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+    const old = r.store.openThread("slack:T1", "C1", "1650000000.000100", null, null);
+    const db = r.store.db;
+    db.exec("DROP INDEX entries_edits; DROP INDEX IF EXISTS entries_target");
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES(?,?,'edit',?,'person','p','other',?)");
+    for (let n = 1; n <= 150; n++) put.run(old.id, n, n + 10000, n);
+    installLegacyEdits(db);
+    addClientColumn(db);
+    const done = await relay(r.hub, source, ADA, { link: "https://acme.slack.com/archives/C1/p1650000000000100" }, "");
+    await settle();
+    const opening = r.hub.openings.get(old.id)!;
+    const original = r.store.messageAt(old.id, opening.ts)!.text;
+    let started = 0;
+    r.hub.prepareLegacyEdits = async () => {
+      started++;
+      await release.promise;
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+    };
+    post = r.call(key, "chat_post", { to: done.to, text: "Context" });
+    void post.catch(() => {});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(started, 1, "old edits are prepared off the station thread");
+    assert.equal(r.chat.edits.length, 0, "nothing is changed on Slack before preparation finishes");
+    release.resolve();
+    assert.match(await post, /added to the station's first message/);
+    assert.equal(r.chat.edits[0]![2], `${original}\n\nContext`);
+    assert.equal(r.store.messageAt(old.id, opening.ts)!.text, `${original}\n\nContext`);
+  } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+});
+
+async function relayIntoOldThread(disk = false) {
+  const { r } = relayRig();
+  if (disk) {
+    await r.hub.shutdown();
+    r.store.close();
+    r.store = Store.open(join(r.dir, "stillfail.db"));
+    r.hub = r.newHub({ chats: (id) => id === "cl" ? r.chat : undefined, link: true });
+  }
+  const [key, source] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  const old = r.store.openThread("slack:T1", "C1", "1650000000.000100", null, null);
+  const db = r.store.db;
+  db.exec("DROP INDEX entries_edits; DROP INDEX IF EXISTS entries_target");
+  const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES(?,?,'edit',?,'person','p','other',?)");
+  for (let n = 1; n <= 150; n++) put.run(old.id, n, n + 10000, n);
+  installLegacyEdits(db);
+  addClientColumn(db);
+  const done = await relay(r.hub, source, ADA, { link: "https://acme.slack.com/archives/C1/p1650000000000100" }, "");
+  await settle();
+  return { r, key, old, db, done, opening: r.hub.openings.get(old.id)! };
+}
+
+test("a relay's first post prepares old edits through the background worker", async () => {
+  const { r, key, old, db, done, opening } = await relayIntoOldThread(true);
+  const readers = new Readers(r.dir, 1, undefined, 1);
+  try {
+    let preparations = 0;
+    r.hub.prepareLegacyEdits = (signal) => { preparations++; return readers.prepareLegacyEdits(signal); };
+    assert.match(await r.call(key, "chat_post", { to: done.to, text: "Context" }), /added to the station's first message/);
+    assert.equal(preparations, 1);
+    assert.equal(db.prepare("SELECT scanned FROM legacy_edit_meta WHERE id=1").get()?.scanned, 1);
+    assert.ok(r.store.messageAt(old.id, opening.ts)!.text.endsWith("\n\nContext"));
+  } finally { readers.close(); await r.close(); }
+});
+
+for (const failed of [false, true]) {
+  test(`a second relay post is a reply while the first ${failed ? "fails preparation" : "waits for preparation"}`, async () => {
+    const { r, key, db, done } = await relayIntoOldThread();
+    const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+    let first: Promise<string> | undefined;
+    try {
+      r.hub.prepareLegacyEdits = async () => {
+        started.resolve();
+        await release.promise;
+        if (failed) throw new Error("synthetic preparation failure");
+        while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+        while (legacyEditDrain(db)) { /* reconcile writes */ }
+      };
+      first = r.call(key, "chat_post", { to: done.to, text: "First" });
+      void first.catch(() => {});
+      await started.promise;
+      assert.match(await r.call(key, "chat_post", { to: done.to, text: "Second" }), /Posted to C1\/1650000000\.000100\./);
+      assert.equal(r.chat.edits.length, 0);
+      release.resolve();
+      if (failed) {
+        await assert.rejects(first, /synthetic preparation failure/);
+        assert.match(await r.call(key, "chat_post", { to: done.to, text: "Retry" }), /Posted to C1\/1650000000\.000100\./);
+        assert.equal(r.chat.edits.length, 0, "the failed first post cannot reclaim the opening after another post");
+      } else {
+        assert.match(await first, /added to the station's first message/);
+        assert.equal(r.chat.edits.length, 1);
+      }
+    } finally { release.resolve(); await Promise.allSettled(first ? [first] : []); await r.close(); }
+  });
+}
+
+test("a relay's first post rechecks archiving after old edits are prepared", async () => {
+  const { r, key, old, db, done } = await relayIntoOldThread(), release = Promise.withResolvers<void>();
+  let post: Promise<string> | undefined;
+  try {
+    r.hub.prepareLegacyEdits = async () => {
+      await release.promise;
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+    };
+    post = r.call(key, "chat_post", { to: done.to, text: "Context" });
+    void post.catch(() => {});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    r.store.setThreadHidden(old.id, true, "manual");
+    release.resolve();
+    await assert.rejects(post, /archived/);
+    assert.equal(r.chat.edits.length, 0);
+    r.store.setThreadHidden(old.id, false, "manual");
+    assert.match(await r.call(key, "chat_post", { to: done.to, text: "Context" }), /added to the station's first message/);
+    assert.equal(r.chat.edits.length, 1);
+  } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+});
+
+test("a relay's waiting question is not posted if its turn ends during old edit preparation", async () => {
+  const { r, key, db, done } = await relayIntoOldThread();
+  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  let post: Promise<string> | undefined;
+  try {
+    const actor = r.hub.actors.get(key)!;
+    const turn = actor.currentTurnId();
+    assert.ok(turn, "the relay has started an agent turn");
+    r.hub.statePendingCard = async () => null;
+    r.hub.prepareLegacyEdits = async () => {
+      started.resolve();
+      await release.promise;
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+    };
+    post = r.call(key, "chat_post", { to: done.to, text: "May I continue?", kind: "need_human", need: "permission" });
+    void post.catch(() => {});
+    await started.promise;
+    r.claude.last().end({ kind: "aborted" });
+    await settle();
+    r.hub.notify(key, "a background job ended");
+    await settle();
+    assert.notEqual(actor.currentTurnId(), turn, "the original turn ended while waiting");
+    release.resolve();
+    const result = await Promise.allSettled([post]);
+    assert.equal(r.chat.edits.length, 0, "the ended turn did not change the platform message");
+    assert.equal(r.chat.posts.length, 1, "the ended turn did not post a reply");
+    assert.equal(result[0]!.status, "rejected");
+    if (result[0]!.status === "rejected") assert.match(String(result[0]!.reason), /turn ended.*no message was posted/);
+  } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+});
+
+for (const changed of [false, true]) {
+  test(`a relay question's turn ends while the platform ${changed ? "changes" : "declines"} its opening`, async () => {
+    const { r, key, old, db, done, opening } = await relayIntoOldThread();
+    const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+    let post: Promise<string> | undefined;
+    try {
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+      const actor = r.hub.actors.get(key)!, turn = actor.currentTurnId();
+      assert.ok(turn);
+      r.hub.statePendingCard = async () => null;
+      const edit = r.chat.edit.bind(r.chat);
+      r.chat.edit = async (...args) => {
+        started.resolve();
+        await release.promise;
+        return changed ? edit(...args) : false;
+      };
+      post = r.call(key, "chat_post", { to: done.to, text: "May I continue?", kind: "need_human", need: "permission" });
+      void post.catch(() => {});
+      await started.promise;
+      r.claude.last().end({ kind: "aborted" });
+      await settle();
+      r.hub.notify(key, "a background job ended");
+      await settle();
+      assert.notEqual(actor.currentTurnId(), turn);
+      release.resolve();
+      if (changed) {
+        assert.match(await post, /turn ended before its state was recorded/);
+        assert.equal(r.chat.edits.length, 1);
+        assert.ok(r.store.messageAt(old.id, opening.ts)!.text.endsWith("\n\nMay I continue?"));
+      } else {
+        await assert.rejects(post, /turn ended.*no message was posted/);
+        assert.equal(r.chat.edits.length, 0);
+      }
+      assert.equal(r.chat.posts.length, 1, "no additional reply was posted");
+    } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+  });
+}
+
+test("handover cancels a relay's first post before old edit preparation finishes", async () => {
+  const { r, key, db, done } = await relayIntoOldThread(), release = Promise.withResolvers<void>();
+  let post: Promise<string> | undefined;
+  try {
+    r.hub.prepareLegacyEdits = async () => {
+      await release.promise;
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+    };
+    post = r.call(key, "chat_post", { to: done.to, text: "Context" });
+    void post.catch(() => {});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await r.hub.handOver();
+    release.resolve();
+    await assert.rejects(post, { name: "AbortError" });
+    assert.equal(r.chat.edits.length, 0);
+  } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+});
+
+test("a relay post already accepted continues if its tool connection goes away", async () => {
+  const { r, key, db, done } = await relayIntoOldThread(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  let post: Promise<string> | undefined;
+  try {
+    r.hub.prepareLegacyEdits = async () => {
+      await release.promise;
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+    };
+    const tool = chatTools(r.hub).find((t) => t.name === "chat_post")!;
+    post = tool.run(key, { to: done.to, text: "Context" }, controller.signal);
+    void post.catch(() => {});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    controller.abort();
+    release.resolve();
+    assert.match(await post, /added to the station's first message/);
+    assert.equal(r.chat.edits.length, 1);
+  } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+});
+
+test("a relay's first post is recorded after the platform changed it, even through handover", async () => {
+  const { r, key, old, db, done, opening } = await relayIntoOldThread(), release = Promise.withResolvers<void>();
+  let post: Promise<string> | undefined;
+  try {
+    while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+    while (legacyEditDrain(db)) { /* reconcile writes */ }
+    const edit = r.chat.edit.bind(r.chat);
+    r.chat.edit = async (...args) => {
+      const changed = await edit(...args);
+      const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES(?,?,'edit',?,'person','p','other',?)");
+      const first = Number(db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread=?").get(old.id)!.n) + 1;
+      for (let n = first; n < first + 65; n++) put.run(old.id, n, n + 10000, n);
+      return changed;
+    };
+    let started = 0;
+    r.hub.prepareLegacyEdits = async (signal) => {
+      assert.equal(signal, undefined, "the already visible change must still be recorded");
+      started++;
+      await release.promise;
+      while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+      while (legacyEditDrain(db)) { /* reconcile writes */ }
+    };
+    post = r.call(key, "chat_post", { to: done.to, text: "Context" });
+    void post.catch(() => {});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(started, 1);
+    assert.equal(r.chat.edits.length, 1);
+    await r.hub.handOver();
+    release.resolve();
+    assert.match(await post, /added to the station's first message/);
+    assert.equal(r.chat.edits.length, 1, "the platform edit is not repeated");
+    assert.ok(r.store.messageAt(old.id, opening.ts)!.text.endsWith("\n\nContext"));
+  } finally { release.resolve(); await Promise.allSettled(post ? [post] : []); await r.close(); }
+});
+
+test("a failed recording after the platform edit says the message was already updated", async () => {
+  const { r, key, old, db, done } = await relayIntoOldThread();
+  try {
+    while (!legacyEditStep(db).ready) { /* bounded worker steps */ }
+    while (legacyEditDrain(db)) { /* reconcile writes */ }
+    const edit = r.chat.edit.bind(r.chat);
+    r.chat.edit = async (...args) => {
+      const changed = await edit(...args);
+      const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES(?,?,'edit',?,'person','p','other',?)");
+      const first = Number(db.prepare("SELECT MAX(n) AS n FROM entries WHERE thread=?").get(old.id)!.n) + 1;
+      for (let n = first; n < first + 65; n++) put.run(old.id, n, n + 10000, n);
+      return changed;
+    };
+    r.hub.prepareLegacyEdits = async () => { throw new Error("synthetic preparation failure"); };
+    await assert.rejects(r.call(key, "chat_post", { to: done.to, text: "Context" }), /updated on the platform, but could not be recorded here: synthetic preparation failure/);
+    assert.equal(r.chat.edits.length, 1);
+    assert.equal(r.chat.posts.length, 1, "no extra reply was posted");
+  } finally { await r.close(); }
+});
+
 test("Slack: the channels the bot is in, page by page; a conversation begins with a message, what is too long going on in its thread", async () => {
   const fake = await FakeSlack.start();
   try {
@@ -321,4 +615,3 @@ test("Slack: the people in a channel, named as users.list names them, bots and d
     await fake.close();
   }
 });
-

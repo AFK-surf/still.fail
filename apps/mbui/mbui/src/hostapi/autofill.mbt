@@ -1,5 +1,5 @@
 // The system's autofill, for an app that fills a login it does not hold itself (still.fail's: a page of a station's
-// browser seen and driven from the app, ember docs/remote-screens.md): Android's (android_host.c, dev.mbui.Autofills).
+// browser seen and driven from the app): Android's (android_host.c, dev.mbui.Autofills).
 // The app says the site the login is for; the host puts a login form of that site before the system's autofill service
 // (1Password, Google's, whichever the person chose), which offers its logins there itself; the one the person picks
 // comes back here. Nothing of it is kept by the host once taken. None elsewhere (`autofill` is false there).

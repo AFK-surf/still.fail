@@ -1,4 +1,4 @@
-// A message from outside the frames handed to the framework, from any thread (src/host/post.h; docs/determinism.md):
+// A message from outside the frames handed to the framework, from any thread (src/host/post.h):
 // what a core says, posted on its channel ("core") as its JSON (UTF-8, `len` bytes, not NUL-terminated) with the
 // bytes beside it (NULL: none). Copied. The window's next frame takes it, in the order posted, and hands it to the
 // app's handler for its channel (@ui.on_message); the first posted since a frame took the last asks for that frame.

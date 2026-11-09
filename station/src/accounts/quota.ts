@@ -1,4 +1,4 @@
-// How much of a profile's allowance is used, where the provider says (the Rust station's quota.rs):
+// How much of a profile's allowance is used, where the provider says:
 // - OpenCode Go: GET /zen/go/v1/usage (rolling, weekly and monthly windows);
 // - Kimi Code (its key, or a Kimi sign-in's current token): GET /coding/v1/usages (the week, and shorter windows), as
 //   kimi-cli's /usage reads it;

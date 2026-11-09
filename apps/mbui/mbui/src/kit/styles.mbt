@@ -1,4 +1,4 @@
-// Ready styles (docs/style.md, "kit's recipes"): a card, a list's row, a section's header, a button, a field, a badge,
+// Ready styles (mbui's ui/style.mbt, "kit's recipes"): a card, a list's row, a section's header, a button, a field, a badge,
 // a panel, and the words of a row, made of the theme's tokens alone. An app's theme (Ctx::set_theme) changes the
 // tokens' values, and these are its look; what does not fit the scale goes in the app's own styles or token file,
 // not here. A variant is a parameter (its default the usual one), a pair of them that looks otherwise a `match`.

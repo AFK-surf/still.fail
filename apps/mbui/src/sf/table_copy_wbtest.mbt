@@ -11,13 +11,14 @@ let copy_table : String = "| 模型 | 输入 | 输出 | 缓存读 |\n| --- | ---
 fn table_tester(platform : Int, w : Double, h : Double, text? : String = copy_table, margin? : Double = 0.0) -> @ui.Tester {
   presenters_reset()
   @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=presented_tree(fn(c) {
       begin(c) |> ignore
       c.with_theme(ui_theme(), fn() {
         c.column(w=Fill(1.0), pad=dmax(16.0, margin), fn() { markdown(c, text, bleed=margin) |> ignore }) |> ignore
         presented(c)
       })
-    },
+    }),
     w~,
     h~,
     platform~,
@@ -186,7 +187,8 @@ test "two messages' tables: the picture copied is of the table whose key was pre
   let other = "| 一 | 二 | 三 |\n|---|---|---|\n| one \{long} | two \{long} | three \{long} |\n"
   presenters_reset()
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=presented_tree(fn(c) {
       begin(c) |> ignore
       c.with_theme(ui_theme(), fn() {
         c.column(w=Fill(1.0), pad=16.0, fn() {
@@ -196,7 +198,7 @@ test "two messages' tables: the picture copied is of the table whose key was pre
         |> ignore
         presented(c)
       })
-    },
+    }),
     w=1280.0,
     h=800.0,
     platform=0,

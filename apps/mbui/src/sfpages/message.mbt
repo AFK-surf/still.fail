@@ -1,4 +1,4 @@
-// A chat's message on the desktop (ember web/src/Chat.tsx MessageRow, MineMessage, OthersMessage, SystemNotice,
+// A chat's message on the desktop (still.fail web/src/Chat.tsx MessageRow, MineMessage, OthersMessage, SystemNotice,
 // BlockedLine, AgentAvatar, MessageAvatar, Quotes, PersonWords, MineBubble, ProseWithFiles, SentElsewhere; Chat.css.ts,
 // styles/conversation.css.ts, styles/chat.css.ts): the viewer's own on the right in its bubble; still.fail's own a
 // pill across the chat; anyone else's with its picture out in the margin before its name and time, what it quotes, its
@@ -8,7 +8,7 @@
 ///|
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
 /// message (by its seq, and the passage of it a quote's card pressed quoted: lit alone there); None out of one (a letter, a decision's). `inline`: no margin for
-/// the pictures (a side panel's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
+/// the pictures, each over its head's start. `gutter`: the
 /// room beside the words either side that is only the page's margin (`--list-gutter`: a list's sides, narrow or wide,
 /// its pictures out in it standing by their heads' line; none out of a list), which the message's own tables scroll
 /// out over to the pane's edges. In its chat's list (`list`), how it moves there: its list's turns (what it asks
@@ -42,10 +42,12 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
   match here.list {
     Some(l) => {
       let rd = reading_of(l.rk)
-      if rd.found_at != "" && rd.found_at == ts {
+      if find_chat() == l.rk {
+        find_words_in(l.rk)
+      } else if rd.found_at != "" && rd.found_at == ts {
         rd.found_words
       } else {
-        find_words_in(l.rk)
+        []
       }
     }
     None => []
@@ -54,7 +56,7 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
 
 ///|
 /// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: sfbase's picking), its
-/// turn shared as a picture from there (`turn`: its seq; the sharing over the window, open_publish); out of a list, as
+/// chat shared as a picture from there with it alone ticked (`turn`: its seq; 多选, open_publish); out of a list, as
 /// they are.
 pub fn picking(
   here : MessageHere,
@@ -71,11 +73,29 @@ pub fn picking(
 ) -> Unit {
   match here.list {
     Some(_) => {
-      let share = if turn >= 0.0 { here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } }) } else { None }
+      let share = if turn >= 0.0 { here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, picked=Some(turn)) } }) } else { None }
       let link = if turn >= 0.0 { @sfbase.message_link(here.station, here.session, turn) } else { "" }
       // gone to by a quote of it: the passage quoted lit as it flashes (chat_list.mbt passage_lit)
       let lit = if ts != "" { passage_lit(c, here, ts) } else { None }
-      @sfbase.pickable(c, if key == "" { ts } else { key }, author, role, words, fill, @sfbase.mouse_picks(), body, keep=ts != "" && passage_wanted(here, ts), share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })
+      let marked = marked_of(here, ts)
+      let at = if key == "" { ts } else { key }
+      let marks = fn(id) {
+        if !marked.is_empty() {
+          let rd = reading_of(here.list.unwrap().rk)
+          let (x, y) = match c.laid_rect(id) {
+            Some((x, y, _, _)) => (x, y)
+            None => (0.0, 0.0)
+          }
+          if find_chat() == here.list.unwrap().rk {
+            // (⌘F's: every match coloured in, the stroke over it the current one's alone)
+            found_scribbles(c, "pick/" + at, marked, x, y)
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
+          } else {
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, faint=rd.found_at != ts)
+          }
+        }
+      }
+      @sfbase.pickable(c, at, author, role, words, fill, @sfbase.mouse_picks(), body, keep=!marked.is_empty() || (ts != "" && passage_wanted(here, ts)), marks~, share~, link~, lit~, source_ts=if key == "" || key == ts { None } else { Some(ts) })
     }
     None => body()
   }
@@ -132,7 +152,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     share_link=@sfbase.message_link(here.station, here.session, m.seq),
     share_words=m.text,
     share=if here.list is Some(_) {
-      here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(m.seq)) } })
+      here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, picked=Some(m.seq)) } })
     } else { None },
     fn() { message_avatar(c, src, here, m, agent) },
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
@@ -186,7 +206,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
             |> ignore
           } else {
             // coming in with the words, when they fly here from the composer: seen once they are in over it, not as
-            // they pass up over its place (docs/motion.md rule 4)
+            // they pass up over its place (sf/motion.mbt rule 4)
             let at = c.box(fn() { message_time(c, "m:" + m.ts, m.time) })
             match flight_here(here) {
               Some(f) if f.text != "" => {
@@ -196,9 +216,10 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
                 if f.placed && lands < @double.infinity && c.moment() >= lands {
                   let a = @motion.anim(c, "time-in/" + m.ts, 0.0, global=true)
                   if a.target() != 1.0 {
-                    a.animate(1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
+                    a.animate(c, 1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
                   }
-                  c.look(at, @ui.look(alpha=a.get()))
+                  // (faded in as it is drawn)
+                  c.look_by(at, fn() { @ui.look(alpha=a.get(c)) })
                 } else {
                   // (built again as they land)
                   if f.placed && lands < @double.infinity {
@@ -352,11 +373,20 @@ pub fn agent_avatar(
 
 ///|
 /// Agent `agent`'s card (AgentHover) over trigger `id` while the pointer rests on it, to a finger as it holds it
-/// (hover): over its picture and over its name beside its messages alike.
-fn agent_hover(c : @ui.Ctx, src : Source, here : MessageHere, key : String, id : Int, agent : String) -> Unit {
+/// (hover): over its picture and over its name beside its messages alike; over its name (`words_along`), its words
+/// where the name's start.
+fn agent_hover(
+  c : @ui.Ctx,
+  src : Source,
+  here : MessageHere,
+  key : String,
+  id : Int,
+  agent : String,
+  words_along? : Bool = false,
+) -> Unit {
   let r = here_ref(here)
-  hover(c, key, id, tile=true, fn() {
-    match agent_json((src.topic)("chat", chat_params(r)).value, agent) {
+  hover(c, key, id, tile=true, words_along~, fn() {
+    match agent_json(src.topic("chat", chat_params(r)).get().value, agent) {
       Some(j) => agent_card(c, src, r, j)
       None => ()
     }
@@ -399,23 +429,20 @@ fn message_name(
 ) -> Unit {
   let goes = agent != "" || from != ""
   let id = if goes { c.id("msg-name/" + key) } else { 0 }
-  if goes {
-    if c.clicked(id) {
-      if agent != "" {
-        open_detail(src, here_ref(here), agent)
-      } else {
-        let to = from
-        c.tell("msg-name/" + key, fn() { open_link(to) })
-      }
+  c.on_press(id, fn() {
+    if agent != "" {
+      open_detail(src, here_ref(here), agent)
+    } else {
+      open_link(from)
     }
-  }
+  })
   c.box(style=msg_name_room, id~, fn() {
-    // (the accent's words already: pointed at, underlined, docs/ui-panels.md 悬停)
+    // (the accent's words already: pointed at, underlined, mbui ui/hand_moves.mbt)
     c.rich([@ui.span(name, underline=goes && c.hovered(id))], style=msg_name) |> ignore
   })
   |> ignore
   if agent != "" {
-    agent_hover(c, src, here, "agent-name-hover/" + key, id, agent)
+    agent_hover(c, src, here, "agent-name-hover/" + key, id, agent, words_along=true)
   }
 }
 
@@ -427,9 +454,9 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
     None => ()
     Some(s) => {
       let id = c.id("msg-time/" + key)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         absolute_times.val = !absolute_times.val
-      }
+      })
       @sf.tip(c, "msg-time/" + key, id, if absolute_times.val { s.ago } else { s.full })
       c.box(id~, keep=true, fn() { c.text(if absolute_times.val { s.full } else { s.ago }, style=msg_time) |> ignore }) |> ignore
     }
@@ -695,15 +722,17 @@ fn is_viz(name : String) -> Bool {
 
 ///|
 /// What still.fail itself says (SystemNotice): a pill across the chat in one line, a failure in red (the core's
-/// `notice`); pressed, all its words, what failed said of it (`detail`, as it said it), and its time under it. One about a profile: what went wrong links to that
+/// `notice`); pressed, all its words, what failed said of it (`detail`, as it said it), and its time under it. One that
+/// a chat's run changed: what changed, else (no room on the line) what it runs on now; pressed, how it ran and runs,
+/// whole (`short`, `lines`). One about a profile: what went wrong links to that
 /// profile's page; one saying the station lacks the chat's runtime ends in installing it; a failure the station takes
 /// reports of, in reporting it.
 fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> Unit {
   let station = here.station
   let id = c.id("notice/" + m.ts)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     notices_open[m.ts] = !notices_open.get(m.ts).unwrap_or(false)
-  }
+  })
   let open = notices_open.get(m.ts).unwrap_or(false)
   let failed = m.notice_failed
   let said = m.notice_words
@@ -720,7 +749,17 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
     c.box(style=notice_pill_of(failed, open), id~, fn() {
       c.box(style=notice_line, fn() {
         c.box(style=notice_words_room, fn() {
-          if linked {
+          if m.notice_short != "" || m.notice_lines.length() > 0 {
+            // a chat's run changed: closed, what changed on its line, else what it runs on now; opened, both runs whole
+            if open && m.notice_lines.length() > 0 {
+              for line in m.notice_lines {
+                c.text(line, style=notice_words_open.then(@ui.text_style(color=ink))) |> ignore
+              }
+            } else {
+              c.text(said, style=notice_words.then(@ui.text_style(color=ink)), shorter=[m.notice_short], allow_ellipsis=true)
+              |> ignore
+            }
+          } else if linked {
             let p = @sf.theme().p
             c.rich(
               [
@@ -736,7 +775,7 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             |> ignore
           } else {
             // its words as Markdown, as the core read them (a chat it opened: a link to it), of the notice's size open
-            // or closed (the pill's one size: Chat.css.ts msgSystemBox); closed, their first block on one line
+            // or closed; closed, their first block on one line
             let (meta, _) = c.text_size(notice_size)
             @sf.markdown(
               c,
@@ -790,16 +829,15 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
         let cut = retry_share < 1.0
         let action = c.box(style=if cut { notice_action_cut.then(@ui.style(max_w=Fixed(natural * retry_share))) } else { notice_action_room }, fn() {
           let inner = c.box(style=notice_action_in, keep=cut, fn() {
-            if @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline) {
-              c.tell("notice-cancel/" + m.ts, fn() {
-                act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
-                  "station": Json::string(station),
-                  "key": Json::string(session),
-                  "thread": Json::number(m.thread),
-                  "seq": Json::number(m.seq),
-                })
+            @sf.button(c, @sf.t("common.cancel"), key="notice-cancel/" + m.ts, busy~, disabled=!retry || src.read_only || here.view.offline, on_press=fn() {
+              act(src, @sf.t("common.cancel"), "", "session.cancelRetry", {
+                "station": Json::string(station),
+                "key": Json::string(session),
+                "thread": Json::number(m.thread),
+                "seq": Json::number(m.seq),
               })
-            }
+            })
+            |> ignore
           })
           @motion.measure(c, inner, retry_key)
         })
@@ -821,19 +859,12 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
 /// What failed said of a notice, copied (复制, 已复制 a moment once copied, as a link's address is: link_copy).
 fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
   let key = "notice-copy/" + m.ts
-  let said = notices_copied.contains(m.ts) &&
-    (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-      notices_copied.remove(m.ts)
-      false
-    } else {
-      true
-    })
   let id = c.id(key)
-  if c.clicked(id) {
+  let said = c.within(id, @sf.copied_ms)
+  c.on_press(id, fn() {
     c.copy_text(m.notice_detail)
-    @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-    notices_copied.add(m.ts)
-  }
+    c.mark(id)
+  })
   c.box(style=notice_copy_room, id~, fn() {
     c.rich([@ui.span(@sf.t(if said { "common.copied" } else { "common.copy" }), underline=true)], style=if ink == Danger {
       notice_act_failed
@@ -846,10 +877,6 @@ fn notice_copy(c : @ui.Ctx, m : Message, ink : @ui.Color) -> Unit {
 }
 
 ///|
-/// Notices whose detail was copied a moment ago, by message.
-let notices_copied : Set[String] = Set::new()
-
-///|
 /// Notices opened (all their words and their time), by message.
 let notices_open : Map[String, Bool] = {}
 
@@ -859,9 +886,7 @@ let notices_open : Map[String, Bool] = {}
 fn notice_action(c : @ui.Ctx, key : String, action : String, ink : @ui.Color, busy : Bool, run : () -> Unit) -> Unit {
   let id = c.id(key)
   if !busy {
-    if c.clicked(id) {
-      c.tell(key, run)
-    }
+    c.on_press(id, run)
   }
   c.box(style=notice_end, keep=true, fn() {
     c.box(style=notice_dot_room, fn() {
@@ -938,10 +963,8 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
   let stuck = b.state == "missing" || b.state == "failed"
   let busy = install_busy(src, station, b)
   let id = if b.action != "" { c.id("blocked/" + key) } else { 0 }
-  if id != 0 && !busy {
-    if c.clicked(id) {
-      c.tell("blocked/" + key, fn() { install_runtime(src, station, b) })
-    }
+  if !busy {
+    c.on_press(id, fn() { install_runtime(src, station, b) })
   }
   let hot = id != 0 && !busy && c.hovered(id)
   let words = if stuck { blocked_words_stuck } else { blocked_words }
@@ -998,29 +1021,29 @@ pub fn quotes(
         Some(f) => @sfbase.flight_quote_words(c, f, @sfbase.quote_key(i))
         None => ("", None)
       }
-      let done = @sf.quote_card(
+      // (the passage it quotes lit there alone, where that message's words have it)
+      let jump = match here.go {
+        Some(go) if q.ts != "" => Some(fn() { if seq >= 0.0 { go(seq, q.text) } })
+        _ => None
+      }
+      let card = @sf.quote_card(
         c,
         "msg-quote/" + q.ts + "/" + i.to_string(),
         q.author,
         q.text,
         role=q.role,
         comment=q.comment,
-        jump=q.ts != "" && here.go is Some(_),
+        on_jump?=jump,
         words_key~,
         words_width?,
         // (its own box, as the message's files have theirs: at most as wide as the card has room; its corner concentric
         // with the card's)
         picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }) } }),
       )
-      // (the passage it quotes lit there alone, where that message's words have it)
-      match here.go {
-        Some(go) if done.jumped && seq >= 0.0 => go(seq, q.text)
-        _ => ()
-      }
       // sent from the composer: it flies here from its card there
       match flight {
         Some(f) =>
-          flight_quote_landing(c, f, done.card, @sfbase.quote_key(i), @sf.quote_sent_shift(q.author, q.role))
+          flight_quote_landing(c, f, card, @sfbase.quote_key(i), @sf.quote_sent_shift(q.author, q.role))
         None => ()
       }
     }
@@ -1101,11 +1124,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
     None => ("", "")
   }
   let place = if url != "" { c.id("msg-place/" + key) } else { 0 }
-  if place != 0 {
-    if c.clicked(place) {
-      c.tell("msg-place/" + key, fn() { @sfbase.open_slack(app, url) |> ignore })
-    }
-  }
+  c.on_press(place, fn() { @sfbase.open_slack(app, url) |> ignore })
   c.box(style=msg_route, fn() {
     @sf.icon(c, if s.received { "received" } else { "send" }, size=route_icon, color=t.p.accent) |> ignore
     c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string(), style=route_words)
@@ -1148,7 +1167,7 @@ let agent_mark_side : Double = 12.0
 let place_corner_side : Double = 9.0
 
 ///|
-/// The viewer's bubble's sides (chat.css.ts msgMine msgBubble: `bubble`'s px=S3_5).
+/// The viewer's bubble's sides.
 let bubble_side : Double = 14.0
 
 
@@ -1449,7 +1468,7 @@ let msg_route : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 let route_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// The place (later.css.ts hPlace): its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
+/// The place: its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
 /// link's the hover ground under the pointer.
 // kept across runs: a value (no field of it changes)
 let route_place : @ui.Style = @ui.css("row px=S1_5 py=SPx gap=S1 radius=Md bg=Neutral align=ACenter")

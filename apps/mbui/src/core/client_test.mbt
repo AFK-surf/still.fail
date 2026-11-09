@@ -37,6 +37,96 @@ test "params make another subscription" {
 }
 
 ///|
+test "subscription lookup preserves the topic sent to the core and distinguishes its parameters" {
+  let (c, sent) = recorder()
+  // A parameter named topic replaces the supplied topic in the message to the core. Both ways to ask for that
+  // message must still share one subscription, including when it is ended by the other way.
+  let overridden = c.subscribe("unused", params={ "topic": "actual", "station": "ws/一\n:1" })
+  let direct = c.subscribe("actual", params={ "station": "ws/一\n:1" })
+  assert_true(physical_equal(overridden, direct))
+  assert_eq(sent.length(), 1)
+  c.unsubscribe_topic("actual", params={ "station": "ws/一\n:1" })
+  assert_eq(sent.length(), 2)
+  let asked_again = c.subscribe("unused", params={ "topic": "actual", "station": "ws/一\n:1" })
+  assert_true(asked_again.id != overridden.id)
+  // Values of different kinds and strings that could look like concatenated key parts are separate topics.
+  let text = c.subscribe("p", params={ "v": "1" })
+  let number = c.subscribe("p", params={ "v": 1 })
+  let one = c.subscribe("p", params={ "a": "bc", "d": "e" })
+  let other = c.subscribe("p", params={ "a": "b", "cd": "e" })
+  assert_true(text.id != number.id)
+  assert_true(one.id != other.id)
+  assert_true(physical_equal(one, c.subscribe("p", params={ "a": "bc", "d": "e" })))
+}
+
+///|
+test "subscriptions share exactly when their outgoing topic JSON is the same" {
+  let (c, _) = recorder()
+  let cases : Array[(String, Map[String, Json])] = [
+    ("a", {}),
+    ("unused", { "topic": "a" }),
+    ("a", { "x": "一\n:1" }),
+    ("unused", { "x": "一\n:1", "topic": "a" }),
+    ("a", { "x": "1" }),
+    ("a", { "x": 1 }),
+    ("a", { "x": null }),
+    ("a", { "topic": 1, "x": "1" }),
+    ("b", { "topic": 1, "x": "1" }),
+    ("a", { "x": "bc", "y": "d" }),
+    ("a", { "x": "b", "cy": "d" }),
+    ("a", { "x": "b", "y": "cd" }),
+    ("a", { "x": { "inner": [1, true, null] } }),
+    ("a", { "x": { "inner": [1, true, null] } }),
+    ("a", { "x": "inner", "y": "value" }),
+    ("a", { "y": "value", "x": "inner" }),
+    ("unused", { "topic": "z", "x": "1", "y": "2" }),
+    ("other", { "x": "1", "topic": "z", "y": "2" }),
+    ("z", { "x": "1", "y": "2" }),
+    ("z", { "y": "2", "x": "1" }),
+  ]
+  let seen : Array[(String, Int, String, Map[String, Json])] = []
+  for (topic, params) in cases {
+    let sent : Map[String, Json] = { "topic": Json::string(topic) }
+    for k, v in params { sent[k] = v }
+    let outgoing = Json::object(sent).stringify()
+    let sub = c.subscribe(topic, params~)
+    for (previous, id, previous_topic, previous_params) in seen {
+      assert_true(
+        (outgoing == previous) == (sub.id == id),
+        msg="the same outgoing topic must find the same subscription: \{outgoing} / \{previous}",
+      )
+      let (other, sent) = recorder()
+      let old_sub = other.subscribe(previous_topic, params=previous_params)
+      other.unsubscribe_topic(topic, params~)
+      assert_true(
+        (sent.length() == 2) == (outgoing == previous),
+        msg="unsubscribe must find exactly the outgoing topic: \{outgoing} / \{previous}",
+      )
+      let again = other.subscribe(previous_topic, params=previous_params)
+      assert_true(physical_equal(old_sub, again) == (outgoing != previous))
+    }
+    seen.push((outgoing, sub.id, topic, params))
+  }
+}
+
+///|
+test "a subscription with an overridden topic survives restart and is forgotten by reset" {
+  let (c, sent) = recorder()
+  let params : Map[String, Json] = { "station": "ws/a", "topic": "chat", "session": "s/a" }
+  let first = c.subscribe("unused", params~)
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 1)
+  assert_true(physical_equal(first, c.subscribe("unused", params~)))
+  c.reset()
+  let after_reset = c.subscribe("unused", params~)
+  assert_true(!physical_equal(first, after_reset))
+  assert_eq(after_reset.id, 1)
+  c.unsubscribe_topic("unused", params~)
+  assert_true(!physical_equal(after_reset, c.subscribe("unused", params~)))
+}
+
+///|
 test "a call's answer goes to its on_done" {
   let (c, sent) = recorder()
   let got : Array[String] = []
@@ -138,6 +228,23 @@ test "an error clears the value until the next one" {
 }
 
 ///|
+test "a retained value belongs to the new core only after its reply" {
+  let (c, sent) = recorder()
+  assert_eq(c.topic_generation("composer"), (0, true))
+  assert_eq(sent.length(), 0, msg="checking freshness must not create a subscription")
+  let s = c.subscribe("composer")
+  c.receive_json({ "id": 1, "value": { "text": "before" } })
+  c.restarted()
+  assert_eq(c.topic_generation("composer"), (1, false))
+  assert_eq(s.value.unwrap().stringify(), "{\"text\":\"before\"}")
+  c.receive_json({ "id": 1, "value": { "text": "after" } })
+  assert_eq(c.topic_generation("composer"), (1, true))
+  c.unsubscribe(s)
+  assert_eq(sent.length(), 3, msg="the freshness check must not keep the subscription open")
+  assert_eq(c.topic_generation("composer"), (1, true))
+}
+
+///|
 test "a fatal fails the calls in flight; restarted asks every subscription again" {
   let (c, sent) = recorder()
   let s = c.subscribe("accounts")
@@ -153,7 +260,7 @@ test "a fatal fails the calls in flight; restarted asks every subscription again
   c.receive("{\"fatal\":\"boom\"}") |> ignore
   assert_eq(c.fatal, Some("boom"))
   assert_eq(errs.length(), 1)
-  // (in the app's words, as StillFailCore.kt fails them; the core's own reason kept in `fatal`)
+  // (in the app's words, the core's own reason kept in `fatal`)
   assert_eq(errs[0].stringify(), "{\"code\":\"core_restarted\",\"message\":\"" + restarted_text.val + "\"}")
   sent.clear()
   c.restarted()
@@ -315,14 +422,14 @@ test "a core started anew is told again where the app's attention is (client.foc
 }
 
 ///|
-test "a subscription's changes are pushed: what read it in a computed follows each message for it, and its end" {
-  let (c, _) = recorder()
+test "a computed keeps a subscription after a direct reader leaves, and its last reader ends it" {
+  let (c, sent) = recorder()
   let s = c.subscribe("accounts")
   let worked = Ref(0)
   let seen = @signals.computed(fn(_) {
     worked.val += 1
-    // (as an app's source reads a topic: core_topic)
-    let read = c.subscribe("accounts").followed()
+    // (as an app's source reads a topic_read: core_topic)
+    let read = c.follow_topic("accounts")
     match read.value {
       Some(Array(a)) => a.length()
       _ => -1
@@ -340,12 +447,66 @@ test "a subscription's changes are pushed: what read it in a computed follows ea
   assert_true(c.receive("{\"id\":1,\"delta\":[{\"path\":[],\"append\":[1]}]}"))
   assert_eq(seen.get(), 1)
   assert_eq(worked.val, 3)
-  // let go: what read it reads it anew, from the subscription asked again
+  // The direct reader leaves; the computed still has the same subscription and value.
   c.unsubscribe(s)
-  assert_eq(seen.get(), -1)
-  assert_eq(worked.val, 4)
-  assert_true(c.receive("{\"id\":2,\"value\":[7,8]}"))
+  assert_eq(sent.length(), 1)
+  assert_eq(seen.get(), 1)
+  assert_eq(worked.val, 3)
+  assert_true(c.receive("{\"id\":1,\"value\":[7,8]}"))
   assert_eq(seen.get(), 2)
+  seen.dispose()
+  assert_eq(sent.length(), 2)
+  assert_eq(s.changes.get(), -1)
+}
+
+///|
+test "a direct hold reacquired while a graph reader leaves keeps its subscription" {
+  let (c, sent) = recorder()
+  let first = c.subscribe("accounts")
+  let seen = @signals.computed(fn(_) { c.follow_topic("accounts").version })
+  seen.get() |> ignore
+  c.unsubscribe(first)
+  let again = c.subscribe("accounts")
+  seen.dispose()
+  assert_eq(sent.length(), 1)
+  assert_true(physical_equal(again, c.peek_topic("accounts").unwrap()))
+  c.unsubscribe(again)
+  assert_eq(sent.length(), 2)
+  assert_true(c.peek_topic("accounts") is None)
+}
+
+///|
+test "a refreshed subscription still ends when its last graph reader leaves" {
+  let (c, sent) = recorder()
+  let direct = c.subscribe("accounts")
+  let seen = @signals.computed(fn(_) { c.follow_topic("accounts").version })
+  seen.get() |> ignore
+  c.unsubscribe(direct)
+  c.refresh_topic("accounts")
+  assert_eq(sent.length(), 3)
+  assert_eq(c.peek_topic("accounts").unwrap().id, 2)
+  seen.dispose()
+  assert_eq(sent.length(), 4)
+  assert_eq(sent[3].stringify(), ({ "id": 2, "unsubscribe": true } : Json).stringify())
+  assert_true(c.peek_topic("accounts") is None)
+}
+
+///|
+test "a deferred retirement cannot end a subscription made after reset" {
+  let (c, sent) = recorder()
+  let direct = c.subscribe("accounts")
+  let seen = @signals.computed(fn(_) { c.follow_topic("accounts").version })
+  seen.get() |> ignore
+  @signals.start_batch()
+  c.unsubscribe(direct)
+  seen.dispose()
+  c.reset()
+  let fresh = c.subscribe("accounts")
+  @signals.end_batch()
+  assert_eq(sent.length(), 2)
+  assert_true(physical_equal(fresh, c.peek_topic("accounts").unwrap()))
+  c.unsubscribe(fresh)
+  assert_eq(sent.length(), 3)
 }
 
 ///|
@@ -379,4 +540,40 @@ test "a quiet call's values and an unread call's answer may be taken as they com
   // over: its values no longer quiet
   c.receive_json({ "id": view, "ok": {} })
   assert_false(said({ "id": view, "value": { "frame": { "ts": 3 } } }))
+}
+
+///|
+test "more of a list asked from what it has: its first value what changed from that one's, which is kept till it comes" {
+  let (c, sent) = recorder()
+  let first = c.subscribe("chatRows", params={ "station": "ws/a", "limit": 2 })
+  assert_true(c.receive("{\"id\":1,\"value\":{\"items\":[{\"id\":\"a\"},{\"id\":\"b\"}]}}"))
+  let more = c.subscribe("chatRows", params={ "station": "ws/a", "limit": 4 })
+  assert_eq(sent[1].stringify(), ({ "id": 2, "subscribe": { "topic": "chatRows", "station": "ws/a", "limit": 4 }, "keyed": true, "from": 1 } : Json).stringify())
+  // (the one shown till then let go of: kept, as the delta to come is from it)
+  c.unsubscribe(first)
+  assert_eq(sent.length(), 2)
+  let ops = "[{\"path\":[\"items\"],\"key\":[\"id\"],\"put\":{\"id\":\"c\"},\"before\":null},{\"path\":[\"items\"],\"key\":[\"id\"],\"put\":{\"id\":\"d\"},\"before\":null}]"
+  assert_true(c.receive("{\"id\":2,\"delta\":" + ops + ",\"from\":1}"))
+  assert_eq(more.value.unwrap().stringify(), "{\"items\":[{\"id\":\"a\"},{\"id\":\"b\"},{\"id\":\"c\"},{\"id\":\"d\"}]}")
+  // (its rows had kept as they were)
+  match (first.value, more.value) {
+    (Some(Object(a)), Some(Object(b))) =>
+      match (a.get("items"), b.get("items")) {
+        (Some(Array(x)), Some(Array(y))) => assert_true(physical_equal(x[0], y[0]))
+        _ => fail("no items")
+      }
+    _ => fail("no values")
+  }
+  assert_eq(sent[2].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
+}
+
+///|
+test "a call still answering keeps its name as the record forgets the others: its progress is said by it" {
+  let (c, _) = recorder()
+  let id = c.stream("station.preview", on_value=fn(_, _) {  })
+  let done = c.call("chat.read")
+  assert_eq(c.perf_name({ "id": Json::number(done.to_double()), "ok": Json::null() }), "answer chat.read")
+  c.perf_forget()
+  assert_eq(c.perf_name({ "id": Json::number(id.to_double()), "value": { "chunk": true } }), "progress station.preview")
+  assert_eq(c.perf_name({ "id": Json::number(id.to_double()), "ok": Json::null() }), "answer station.preview")
 }

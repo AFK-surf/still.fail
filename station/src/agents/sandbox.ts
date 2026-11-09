@@ -1,4 +1,4 @@
-// Execution in sandboxes (docs/sandbox-exec.md): with `sandbox` in config.json switched on, what the station starts for
+// Execution in sandboxes: with `sandbox` in config.json switched on, what the station starts for
 // a session (its runtime's process, its jobs) runs in that session's own sandbox, reached over SSH (an l4es front door:
 // `ssh NAME.WORKSPACE@host` makes the sandbox on first use and deletes it after it has been idle), through
 // ./sandbox-bridge.mjs. The station itself, its chats, its store and its door stay here. The sandboxes share no file

@@ -15,9 +15,11 @@ import { ControlPlane, Events, Paths, StationConfig, Store } from "../services.t
 import { showEnded } from "./card-ends.ts";
 import type { ConnectState, Connection, EntryEdit } from "./connections.ts";
 import type { ConnectsOptions } from "./connects.ts";
+import type { NameBook } from "./names.ts";
 
 /// What the part needs of a platform's connects (connects.ts makeConnects').
 type Connects = {
+  names: NameBook;
   chats(id: string): ChatSurface | undefined;
   chat(id: string): Connection | undefined;
   connects(): { id: string }[];
@@ -56,13 +58,14 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     const connects = yield* Effect.acquireRelease(
       Effect.sync(() =>
         make({
-          data, store, config, receive: (connect, event) => hub.receive(connect, event), models: (connect) => hub.modelsFor(connect), bound: () => agents.taken() && agents.bound(),
+          data, store, config, receive: (connect, event) => agents.receive(connect, event), models: (connect) => hub.modelsFor(connect), bound: () => agents.taken() && agents.bound(),
           inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
         }),
       ),
       (c) => Effect.promise(() => c.close()),
     );
     agents.surfaces((id) => connects.chats(id));
+    agents.nameBook(own.kind, connects.names);
     agents.connectKind(own.kind, {
       connection: (c) => connects.state(String(c?.id ?? "")),
       shown: (c) => own.shown(connects, c),

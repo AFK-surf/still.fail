@@ -58,18 +58,16 @@ pub fn station_page_beside(src : Source, r : ChatRef, p : Page) -> Bool {
 fn station_tab_name(src : Source, tab : String) -> String? {
   guard station_tab(tab) is Some((kind, station, screen)) else { return None }
   if kind == "screen" {
-    let card = (src.topic)("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).value
+    let card = src.topic("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).get().value
     let name = text(card, "title")
     return Some(if name == "" { @sf.t("web-pages.screen.section") } else { name })
   }
   let scope = station.split("/").next().unwrap_or("").to_string()
-  let stations = (src.topic)("stations", { "scope": Json::string(scope) }).value
   let mut name = station
-  match stations {
-    Some(Array(xs)) => for s in xs {
-      if text(Some(s), "station") == station { name = text(Some(s), "name") }
+  for s in @sfbase.station_marks(src, scope) {
+    if s.address == station {
+      name = s.name
     }
-    _ => ()
   }
   let what = match kind {
     "drive" => "web-pages.drive.title"
@@ -93,7 +91,9 @@ fn station_tab_page(r : ChatRef, tab : String) -> Page? {
 let panel_screen_pages : Map[String, @sfbase.ScreenAt] = {}
 
 ///|
-let panel_screens : Map[String, (String, String, Int)] = {}
+/// The station screens shown in a tab, by the tab: the station and the screen, and whether the frame's builds drew it
+/// since station_tabs_sweep went over them last (as the frame before's were over).
+let panel_screens : Map[String, (String, String, Bool)] = {}
 
 ///|
 fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab : String, own_bar? : @ui.Style? = None) -> Bool {
@@ -101,7 +101,7 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
   let frame : PageFrame = { back: None, top: 0.0, foot: 0.0, named: false }
   match kind {
     "screen" => {
-      panel_screens[tab] = (station, screen, c.frame_number())
+      panel_screens[tab] = (station, screen, true)
       let at = panel_screen_pages.get(tabs_key(r) + "/" + tab).unwrap_or({ station, screen, title: "", until_gone: false })
       @sfpages.screen_page(c, src, at, frame,
         on_close=fn() { side_change(src, r, "close", Some(tab)) }, in_tab=true, own_bar~)
@@ -115,17 +115,29 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
       @settings.wide_deep.val = false
       @settings.page(c, core, here, AdbShare(station))
     }
-    _ => setting_route(c, src, w, Station(station), frame) |> ignore
+    // (a station's page: its old view, the panel being one: station_page; every frame's own stack makes it once)
+    _ => {
+      let core = settings_core(src, w)
+      let here = @settings.here_of(core, w.id, w.name)
+      @settings.frame(core, here)
+      settings_fixture(src, core)
+      @sfpages.station_page(c, core, here, frame, station)
+    }
   }
   true
 }
 
 ///|
-/// Stop streams when their tab is hidden, closed or its chat left.
+/// Stop streams when their tab is hidden, closed or its chat left: said once a frame's builds are over (the app's
+/// after_build), those they did not draw; those they did, to be drawn again by the next frame's.
 pub fn station_tabs_sweep(c : @ui.Ctx, src : Source) -> Unit {
+  ignore(c)
   let gone : Array[String] = []
-  for tab, (station, screen, frame) in panel_screens {
-    if frame != c.frame_number() {
+  let drawn : Array[(String, String, String)] = []
+  for tab, (station, screen, was) in panel_screens {
+    if was {
+      drawn.push((tab, station, screen))
+    } else {
       match app.nav.top() {
         Screen(at) if at.station == station && at.screen == screen => ()
         _ => @sfpages.screen_left(src, station, screen)
@@ -134,4 +146,5 @@ pub fn station_tabs_sweep(c : @ui.Ctx, src : Source) -> Unit {
     }
   }
   for tab in gone { panel_screens.remove(tab) }
+  for d in drawn { panel_screens[d.0] = (d.1, d.2, false) }
 }

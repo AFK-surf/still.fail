@@ -4,7 +4,7 @@
 // cancels the turn and kills the command it runs; the SDK's `steer` puts it in the turn, the command going on in the
 // background. The bridge speaks a line of JSON per message (its header).
 //
-// Behaviour pinned against @cursor/sdk 1.0 (docs/cursor.md):
+// Behaviour pinned against @cursor/sdk 1.0:
 // - `open` creates the SDK's agent (it names it) or resumes one it keeps; the station's tools an HTTP MCP server, its
 //   instructions (with its workspace's memory) and skills a folder of project rules beside the session's working directory;
 // - `prompt` starts a run (a turn), whose messages stream (status, thinking, assistant text, tool calls, usage) and which

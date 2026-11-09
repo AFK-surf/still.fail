@@ -25,7 +25,9 @@ pub fn chat_row_node(
   // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
   let finger = !@sf.pointer_rests()
   let first = @signals.untracked(item)
-  let key = @sfbase.row_name(first)
+  // (which chat it is: another's as the row is taken for another, a list's rows not made and let go as it is scrolled
+  // (View::scrolls_window's reused))
+  let key = fn() { @sfbase.row_name(item()) }
   // (made again for its chat, asked back say: whatever swiped it off before is over)
   rows.swiped_off.remove(swiped_key(first))
   let r = fn() { row_ref(item()) }
@@ -33,15 +35,15 @@ pub fn chat_row_node(
   let menu_ok = fn() { item().offline is None && !item().pending }
   let menu_on = fn() { row_menu_open(item()) }
   // (its title a field in its place, from a mouse's 重命名: rename_node)
-  let renaming = fn() { row_renaming.get() == key }
+  let renaming = fn() { row_renaming.get() == key() }
   let failed = fn() { row_failed(src, item()) }
   // (held by a finger a while: its time shows)
   let held : @signals.Signal[Bool] = @signals.signal(false)
   // (pressed by a finger, shown so once it has stayed tap_indication_ms: one going on to scroll lights nothing)
   let press_lit : @signals.Signal[Bool] = @signals.signal(false)
   let press_due : Ref[() -> Unit] = Ref(fn() {  })
-  // (what a finger going down on it read ahead, let go as it is let go without opening it: a scroll, a hold)
-  let primed = Ref(false)
+  // (what a finger pressing it read ahead, let go as it is let go without opening it: a hold)
+  let primed : Ref[@sfbase.TopicLease?] = Ref(None)
   let opened = Ref(false)
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
   // about and nothing in it is unread, its chat goes there as it opens: ChatMark.tsx jumpFromLine)
@@ -51,6 +53,15 @@ pub fn chat_row_node(
     let i = @signals.untracked(item)
     opened.val = true
     let r = row_ref(i)
+    // A quick tap has no prefetch yet. Keep a reader from the open event until the page has its own, even if the
+    // graph that first read the chat changes in a core reply before that page's first frame.
+    let early = match primed.val {
+      Some(reader) => Some(reader)
+      None if !src.read_only => Some(src.lease_topic("chat", chat_params(r)))
+      None => None
+    }
+    primed.val = None
+    let reader = match early { Some(reader) => @sfbase.prepare_chat_handoff(reader); None => None }
     let on_line = match (down_at.val, state_at.val) {
       (Some((x, y)), Some(l)) if l.alive() => {
         let (lx, ly, lw, lh) = l.placed_window_now()
@@ -63,6 +74,7 @@ pub fn chat_row_node(
       _ => ()
     }
     open_page(Chat(r))
+    match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
   }
   parent.box(fn(slot) {
     @sf.style_node(slot, fn() { if more { @sf.list_more(at) } else { row_last } })
@@ -74,6 +86,12 @@ pub fn chat_row_node(
       slot
     }
     let row = holder.box(fn(_) {  })
+    row.owns(fn() {
+      match primed.val {
+        Some(reader) => { primed.val = None; reader.cancel() }
+        None => ()
+      }
+    }) |> ignore
     // held by a finger, it lifts off the list toward the finger (iOS's context menu): a little as its time shows, all
     // the way once its menu opens, back down as the menu goes (@sf.lift_of's), a card of the raised ground over the
     // menu's scrim, drawn in from the screen's sides (row_lifted, @sf.lift_over's)
@@ -124,7 +142,7 @@ pub fn chat_row_node(
       if from_row {
         @ui.haptic(LongPress)
       }
-      @sf.menu(chat_menu_items(src, i, []), from~)
+      @sf.menu(chat_menu_items(src, i, share_from=fn() { from }), from~)
       rows.menu_for = @sfbase.row_name(i)
       rows.menu_serial = @sf.last_presented()
     }
@@ -132,10 +150,14 @@ pub fn chat_row_node(
     let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
     let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() }
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the
-    // pointer's eased in and out, the selected one's while its chat is in view (nav_ground's)
+    // pointer's eased in and out, the selected one's while its chat is in view (nav_ground_by's)
     // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
-    // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view
+    // and a while after (left_lit_ms), then fades (left_fade_ms); one row so, the chat last in view; in a side column,
+    // beside the chat, it fades as a mouse's does (dur_ms), and the row pressed goes from its press's ground to the
+    // selected one's over dur_ms, never through none (the user, 2026-11-07: active 那个状态好像切换的时候颜色会稍微有些闪)
     let left = @sf.EdgeWay::new(0.0)
+    // (a finger's press's ground, beside the chat: on at once, off over dur_ms)
+    let pressed = @sf.EdgeWay::new(0.0)
     // (a finger's swiped left in its slot, by so many points: swipe_node's)
     let off = @sf.EdgeWay::new(0.0)
     let hand = @sf.EdgeWay::new(0.0)
@@ -146,8 +168,11 @@ pub fn chat_row_node(
         // (lifted, its card is its ground: the row's own drawn by the card round it, not square inside it)
         if lifted() > 0.0 {
           0L
-        } else if held.get() || menu_on() || press_lit.get() {
+        } else if held.get() || menu_on() || (at == Whole && press_lit.get()) {
           @sf.alpha(p.text, 0.05)
+        } else if at != Whole && (pressed.shown(row) > 0.0 || chosen.shown(row) > 0.0 || left.shown(row) > 0.0) {
+          let o = dmax(chosen.shown(row), left.shown(row))
+          @sf.over(@sf.alpha(p.text, 0.05 * pressed.shown(row) * (1.0 - o)), @sf.alpha(p.selected, o))
         } else if on() {
           p.selected
         } else {
@@ -173,7 +198,7 @@ pub fn chat_row_node(
     }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across the
     // whole screen at its second line's end; the row pointed at says when instead)
-    let cornered = fn() { at == Side && !shows_time() && row_aside_shows(item(), lead) }
+    let cornered = fn() { at != Whole && !shows_time() && row_aside_shows(item(), lead) }
     let face_ground = fn() { @sf.over(list_ground(), if lifted() > 0.0 { t().p.raised } else { ground() }) }
     @sf.list_row_node(
       row,
@@ -182,13 +207,13 @@ pub fn chat_row_node(
       high=true,
       // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
       end_room=fn() { if archive_key() { @sf.row_keys_room(1) } else { 0.0 } },
-      corner?=if at == Side {
+      corner?=if at != Whole {
         Some(fn(k : @view.View) { row_aside_node(k, src, tips, item, lead, face_ground, stint) })
       } else {
         None
       },
       corner_shown=cornered,
-      corner_w=fn() { row_aside_w_node(item(), lead) },
+      corner_w=fn() { row_aside_w_node(row, item(), lead) },
       slotted=swipes,
       end_slot=kind_slot_w,
       corner_end=fn() { row_aside_end_w(item(), lead) },
@@ -205,7 +230,7 @@ pub fn chat_row_node(
           // (what is left of the line, from none: its title cut short in it, what stands at its end kept whole)
           n.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
           if on {
-            rename_node(n, src, item)
+            rename_node(n, src, item, at)
             return
           }
           n.box(fn(w) {
@@ -244,7 +269,15 @@ pub fn chat_row_node(
             _ => ""
           }
         }
-        h.pick(fn() { if away() != "" { if item().updating { 2 } else { 1 } } else if item().connect { 3 } else { 0 } }, fn(
+        h.pick(fn() {
+          if away() != "" {
+            if item().updating { 2 } else { 1 }
+          } else if item().connect {
+            if item().origin_kind == "comma" { 4 } else { 3 }
+          } else {
+            0
+          }
+        }, fn(
           a,
           which,
         ) {
@@ -252,7 +285,7 @@ pub fn chat_row_node(
           a.box(fn(s) {
             @sf.style_node(s, fn() { kind_slot }, in_row=true)
             let said = fn() {
-              if which == 3 {
+              if which >= 3 {
                 if item().origin_text != "" {
                   item().origin_text
                 } else {
@@ -266,6 +299,8 @@ pub fn chat_row_node(
             match which {
               2 => @sf.updating_mark_node(s, kind_glyph, fn() { t().p.subtle })
               1 => @sf.icon_node(s, "unplug", kind_glyph, By(fn() { t().p.subtle })) |> ignore
+              // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
+              4 => @sf.drawable_node(s, "comma", kind_mark, tint=fn() { Some(t().p.text) }) |> ignore
               _ => @sf.origin_mark_node(s, fn() { item().origin_kind }, kind_mark) |> ignore
             }
             @sf.tip_node(tips, s, said, within=true) |> ignore
@@ -289,7 +324,15 @@ pub fn chat_row_node(
           |> ignore
         })
         // the station it runs on, by its mark: last, in the same column at every row's end
-        h.show(fn() { @sf.has_station_mark(item().station_emoji, item().station_icon) && !renaming() }, fn(k) {
+        // (as big as its kind of mark is: made again where another chat's is of another, the row taken for that one)
+        h.pick(fn() {
+          if @sf.has_station_mark(item().station_emoji, item().station_icon) && !renaming() {
+            Some(kind_mark_of(item().station_icon))
+          } else {
+            None
+          }
+        }, fn(k, size) {
+          guard size is Some(size) else { return }
           k.box(fn(s) {
             @sf.style_node(s, fn() { kind_slot }, in_row=true)
             s.says(By(fn() { Some(@view.said(Image, label=item().station_name)) })) |> ignore
@@ -297,7 +340,7 @@ pub fn chat_row_node(
               s,
               fn() { item().station_emoji },
               fn() { item().station_icon },
-              kind_mark_of(@signals.untracked(item).station_icon),
+              size,
               fn() { if offline() { t().p.subtle } else { t().p.muted } },
               stint,
             )
@@ -358,31 +401,87 @@ pub fn chat_row_node(
       let past : @signals.Signal[Bool] = @signals.signal(false)
       let out : @signals.Signal[Bool] = @signals.signal(false)
       row.offset(By(fn() { (off.shown(row), 0.0) })) |> ignore
+      // (taken for another chat: not swiped)
+      row.reacts(key, fn(_) {
+        past.set(false)
+        out.set(false)
+      })
       swipe_under_node(row, off, past, out)
       swipe_node(holder, src, item, off, past, out)
     }
     row.reacts(fn() { @sf.lit_in_node(row) }, fn(h) { hand.go(row, if h { 1.0 } else { 0.0 }, @sf.dur_ms) })
-    row.reacts(on, fn(o) { chosen.go(row, if o { 1.0 } else { 0.0 }, @sf.dur_ms) })
-    if finger {
-      let was_on = Ref(@signals.untracked(on))
-      row.reacts(on, fn(o) {
-        if was_on.val && !o {
-          row_left_said.set(key)
-          let at = row.cause_at()
-          left.go_from(row, 1.0, 1.0, @motion.Snap(0.0))
-          row.at_moment(at + left_lit_ms, fn() { left.go(row, 0.0, left_fade_ms, ease=Leave) }) |> ignore
+    // (its chat in view or no more, eased; taken for another chat, as that one's at once, as it would be made)
+    let chosen_for = Ref(@sfbase.row_name(first))
+    row.reacts(fn() { (key(), on()) }, fn(now) {
+      let (k, o) = now
+      let to = if o { 1.0 } else { 0.0 }
+      if k == chosen_for.val {
+        chosen.go(row, to, @sf.dur_ms)
+      } else {
+        chosen.go_from(row, to, to, @motion.Snap(0.0))
+      }
+      chosen_for.val = k
+    })
+    // (taken for another chat: what was the one before's let go, as it would be were it made anew for this one)
+    let made_for = Ref(@sfbase.row_name(first))
+    row.reacts(key, fn(k) {
+      guard k != made_for.val else { return }
+      made_for.val = k
+      rows.swiped_off.remove(swiped_key(@signals.untracked(item)))
+      held.set(false)
+      (press_due.val)()
+      press_due.val = fn() {  }
+      press_lit.set(false)
+      match primed.val {
+        Some(reader) => {
+          primed.val = None
+          reader.cancel()
         }
-        was_on.val = o
+        None => ()
+      }
+      opened.val = false
+      down_at.val = None
+      for w in [left, pressed, hand, off] {
+        w.go_from(row, 0.0, 0.0, @motion.Snap(0.0))
+      }
+      lift.go_from(slot, 0.0, 0.0, @motion.Snap(0.0))
+    })
+    if finger {
+      if at != Whole {
+        row.reacts(fn() { press_lit.get() }, fn(lit) {
+          if lit {
+            pressed.go_from(row, 1.0, 1.0, @motion.Snap(0.0))
+          } else {
+            pressed.go(row, 0.0, @sf.dur_ms)
+          }
+        })
+      }
+      let was_on = Ref((@sfbase.row_name(first), @signals.untracked(on)))
+      row.reacts(fn() { (key(), on()) }, fn(now) {
+        let (k, o) = now
+        // (gone back from its chat: not another chat it is taken for, which was never in view here)
+        if was_on.val.0 == k && was_on.val.1 && !o {
+          row_left_said.set(k)
+          let since = row.cause_at()
+          left.go_from(row, 1.0, 1.0, @motion.Snap(0.0))
+          if at == Whole {
+            row.at_moment(since + left_lit_ms, fn() { left.go(row, 0.0, left_fade_ms, ease=Leave) }) |> ignore
+          } else {
+            // (beside its chat, the list never covered: no page slides off it, its ground goes as a mouse's does)
+            left.go(row, 0.0, @sf.dur_ms)
+          }
+        }
+        was_on.val = (k, o)
       })
       // (another row gone back from since: this one's ground gone at once)
       row.reacts(fn() { row_left_said.get() }, fn(k) {
-        if k != key {
+        if k != @signals.untracked(key) {
           left.go_from(row, 0.0, 0.0, @motion.Snap(0.0))
         }
       })
     }
     // pressed: its chat; right clicked, its menu at the pointer; held long by a finger, its menu from the row (its
-    // time shown meanwhile); a finger going down reads its chat ahead
+    // time shown meanwhile); a finger that stays down as long as it takes to show pressed reads its chat ahead then
     row
     .says(By(fn() { Some(@view.said(Link, label=item().title)) }))
     .on_menu(fn(m) { open_menu(m.wx, m.wy, false) })
@@ -401,20 +500,27 @@ pub fn chat_row_node(
         down_at.val = Some((d.wx, d.wy))
         opened.val = false
         (press_due.val)()
-        press_due.val = row.at_moment(row.cause_at() + @ui.tap_indication_ms, fn() { press_lit.set(true) })
-        if finger && !src.read_only {
-          primed.val = true
-          (src.topic)("chat", chat_params(@signals.untracked(r))) |> ignore
-        }
+        // (not as it goes down: each finger that scrolls the list goes down on a row, and would have its chat read,
+        // the core's whole answer taken in as the drag begins, and let go again; a tap quicker than that opens its
+        // chat as it is let go)
+        press_due.val = row.at_moment(row.cause_at() + @ui.tap_indication_ms, fn() {
+          press_lit.set(true)
+          if finger && !src.read_only {
+            match primed.val { Some(reader) => { primed.val = None; reader.cancel() }; None => () }
+            primed.val = Some(src.lease_topic("chat", chat_params(@signals.untracked(r))))
+          }
+        })
       },
       up=fn() {
         held.set(false)
         (press_due.val)()
         press_lit.set(false)
-        if primed.val && !opened.val {
-          unprime(src, @signals.untracked(r))
+        if !opened.val {
+          let reader = primed.val
+          primed.val = None
+          unprime(src, @signals.untracked(r), reader)
         }
-        primed.val = false
+        primed.val = None
       },
     )
     // (Tab passes the rows, as the old list's: they are gone through by ⌥↑ ⌥↓, chat.prev and chat.next)
@@ -424,7 +530,7 @@ pub fn chat_row_node(
       o
       .over(Is(true))
       .lines_up(Is(Some(End)))
-      .padding(Is((0.0, @sf.capsule_in(@sf.row_corner, row_key_side), @sf.capsule_in(@sf.row_corner, row_key_side), 0.0)))
+      .padding(Is((0.0, @ui.capsule_in(@sf.row_corner, row_key_side), @ui.capsule_in(@sf.row_corner, row_key_side), 0.0)))
       |> ignore
       o.box(fn(k) {
         k
@@ -451,7 +557,7 @@ pub fn chat_row_node(
 ///|
 /// What a finger's row `row` swiped left uncovers in its slot as it has gone `off` (points, from 0 to as wide as the
 /// slot), in a node past its end that goes with it: at that end as far as the row has gone and no further
-/// (mobile/Home.tsx mSwipeUnder), quiet until letting go would archive it (`past`), then ink (over swipe_fill_ms); 归档
+/// , quiet until letting go would archive it (`past`), then ink (over swipe_fill_ms); 归档
 /// at the slot's end in it, laid out the slot across so it is whole (what of it the row has not uncovered yet, cut
 /// with it). Nothing while the row is where it rests.
 fn swipe_under_node(
@@ -492,7 +598,7 @@ fn swipe_under_node(
 }
 
 ///|
-/// A finger's row (mobile/Home.tsx SwipeArchive) swiped left in its slot `sw` to archive its chat (swipe_to_archive's):
+/// A finger's row swiped left in its slot `sw` to archive its chat (swipe_to_archive's):
 /// left past the slop and plainly across first it is the swipe (swipe_claims: the row's press and hold let go), else the list's (or what the row is on:
 /// the tape's, to the right). The row follows the finger, `off` how far (points); let go past `archive_at_share` of
 /// its width or flung left it goes off to the left as fast as the finger let it go and, there, its chat is archived
@@ -541,7 +647,7 @@ fn swipe_node(
         let at = dclamp(from.val + (d.wx - from_x.val), -w, 0.0)
         off.put(at)
         let now = at < -w * archive_at_share
-        if now && !@signals.untracked(fn() { past.get() }) {
+        if now && !past.untracked() {
           @ui.haptic(TextHandleMove)
         }
         past.set(now)
@@ -549,18 +655,18 @@ fn swipe_node(
       Up => {
         let at = @signals.untracked(fn() { off.target() })
         past.set(false)
-        if swipe_archives(at, w, d.vx) {
+        if swipe_archives(at, w, d.vx()) {
           if row_busy(src, i) {
-            back(d.vx)
+            back(d.vx())
           } else if i.swipe_ask is Some(_) {
             // (one keeping watch, or at work: springs back and asks first, in the core's words: swipeAsk)
-            back(d.vx)
+            back(d.vx())
             archive_row(src, i, ask=i.swipe_ask)
           } else {
             // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out of
             // sight); refused, it comes back from there
             rows.swiped_off[key] = true
-            off.go_by(sw, -w, @motion.move(), velocity=d.vx * 1000.0)
+            off.go_by(sw, -w, @motion.move(), velocity=d.vx() * 1000.0)
             sw.at_moment(off.end(), fn() {
               archive_row(src, i, failed=fn() {
                 rows.swiped_off.remove(key)
@@ -571,7 +677,7 @@ fn swipe_node(
             |> ignore
           }
         } else {
-          back(d.vx)
+          back(d.vx())
         }
       }
       Off => {
@@ -604,13 +710,14 @@ fn swiped_key(item : ChatItem) -> String {
 let row_key_side : Double = 24.0
 
 ///|
-/// How wide what row_aside_node shows is (row_aside_w's), by its parts' sizes as the theme says them now.
-fn row_aside_w_node(item : ChatItem, lead : String) -> Double {
+/// How wide what row_aside_node shows is (row_aside_w's), by its parts' sizes as the theme says them now, its words at
+/// the system's size of words where row `v` is drawn.
+fn row_aside_w_node(v : @view.View, item : ChatItem, lead : String) -> Double {
   let l = @sf.theme().chat_list
   let groups = @sfbase.row_agent_groups(item)
   let people = item.people
   let th = @ui.tree_theme()
-  let more_w = fn(n : Int) { @ui.text_advance("+\{n}", size=@ui.current().sp(th.text_size(Meta).0)) }
+  let more_w = fn(n : Int) { @ui.text_advance("+\{n}", size=@sf.node_sp(v, th.text_size(Meta).0)) }
   let parts : Array[Double] = []
   if groups.length() > 0 {
     let shown = if groups.length() > aside_most { aside_most } else { groups.length() }
@@ -638,18 +745,20 @@ fn row_aside_w_node(item : ChatItem, lead : String) -> Double {
 }
 
 ///|
-/// A row's title as a field in its place (row_rename's, Rename.tsx TitleInput, from a mouse's 重命名) in `n`: its words
-/// the title's, the focus in it as it comes; Enter saves it (`chat.rename`), Esc or leaving it lets it be.
-fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
+/// A row's title as a field in its place (row_rename's, from a mouse's 重命名) in `n`: its words
+/// the title's, the focus in it as it comes; Enter saves it (`chat.rename`), Esc or leaving it lets it be; as far in as where its list stands
+/// (`at`) has it (rename_box).
+fn rename_node(n : @view.View, src : Source, item : () -> ChatItem, at : @sf.ListAt) -> Unit {
   rows.rename_field.set(@signals.untracked(item).title)
   let done = fn() { stop_rename() }
   n.box(fn(b) {
-    @sf.style_node(b, fn() { rename_box() }, in_row=true)
+    @sf.style_node(b, fn() { rename_box(at) }, in_row=true)
     b.row(Is(true)).lines_up(Is(Some(Middle))).edge(By(fn() { (1.0, @sf.theme().p.line_strong) })) |> ignore
     let f = @ui.field(
       b,
       rows.rename_field,
       font_size=rename_size,
+      label=@sf.t("web-main.chat.rename"),
       line=rename_line,
       max_lines=1,
       enter_sends=true,
@@ -672,7 +781,7 @@ fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
         let (x, y) = b.window_down_point()
         let (left, top, w, h) = b.placed_window_now()
         if x < left || x >= left + w || y < top || y >= top + h {
-          @ui.current().blur()
+          b.focus_let_go()
           done()
         }
       }
@@ -699,4 +808,3 @@ let row_renaming : @signals.Signal[String] = @signals.signal("")
 /// The row last gone back from by a finger (its name: row_name), the one whose ground stays a while.
 // kept across runs: put back by chat_rows_reset
 let row_left_said : @signals.Signal[String] = @signals.signal("")
-

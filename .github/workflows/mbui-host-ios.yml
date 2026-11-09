@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The host's and the text's contracts on iOS (docs/determinism.md, "What is compared, and where"; scripts/
+# The host's and the text's contracts on iOS ("What is compared, and where"; scripts/
 # host_contract.sh), on macos-ci's simulator (mbui's runner there, label mbui-render; scripts/ios.sh's ios-mbui-sf):
 # kitdemo's controls page run with its scripted taps, its tape made a Tester's test and run here (every frame the
 # same), then the committed tape's text (ios_controls) asked of Core Text there again (every answer the same). When
@@ -97,6 +97,14 @@ jobs:
               - "scripts/host_contract.sh"
               - ".github/workflows/mbui-host-ios.yml"
               - "src/host/moon.pkg"
+            a11y:
+              - "src/host/ios_app.m"
+              - "src/ui/a11y.mbt"
+              - "src/ui/semantics.mbt"
+              - "src/kitdemo/gallery/a11ycheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/mbui-host-ios.yml"
         run: python3 scripts/ci_paths.py
       - name: The simulator free (no other run's app on it)
         run: scripts/host_contract.sh ios free
@@ -118,6 +126,9 @@ jobs:
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/ios.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh ios marks
+      - name: "The accessibility's contract: a button and a checkbox told VoiceOver as elements, the button pressed through its own"
+        if: (success() || failure()) && steps.f.outputs.a11y != 'false'
+        run: scripts/host_contract.sh ios a11y
       - name: The simulator shut down again (when these runs booted it)
         if: always()
         run: scripts/host_contract.sh ios done

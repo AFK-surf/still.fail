@@ -35,9 +35,8 @@ fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.
     begin(c) |> ignore
     c.with_theme(ui_theme(), fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=at, fn() {
-        if button(c, "打开", key="open") {
-          open(Of(c.id("open")))
-        }
+        let from = c.id("open")
+        button(c, "打开", key="open", on_press=fn() { open(Of(from)) }) |> ignore
       })
       |> ignore
       presented(c)
@@ -49,7 +48,7 @@ fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.
 fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button_at? : @ui.Justify = JStart) -> @ui.Tester {
   presenters_reset()
   let (platform, w, h) = at
-  let t = @ui.Tester::new(presenting_view(open, at=button_at), w~, h~, platform~)
+  let t = @ui.Tester::new(@ui.old_views_here, tree=presented_tree(presenting_view(open, at=button_at)), w~, h~, platform~)
   t.draw()
   t
 }
@@ -60,7 +59,7 @@ fn beside_of(from : Anchor) -> Beside {
   match from {
     Anchor::Of(id) => Of(id)
     Anchor::At(x, y, w, h) => At(x, y, w, h)
-    Unanchored => abort("a menu or a pick is opened beside what opened it")
+    Unanchored | Node(_) => abort("a menu or a pick is opened beside what opened it")
   }
 }
 
@@ -102,9 +101,9 @@ test "a capped sheet measures lists that arrive after it opens" {
   let shown = Ref(false)
   let t = presenting_tester(phone, fn(from) {
     panel("内容", from~, tall=0.8, fn(c, _) {
-      if button(c, "显示列表") {
+      button(c, "显示列表", on_press=fn() {
         shown.val = true
-      }
+      }) |> ignore
       if shown.val {
         panel_list(c, "late-a", 1, 20.0, fn(_) {
           c.box(style=@ui.style(w=Full, h=Fixed(96.0)), fn() { c.text("第一组") |> ignore }) |> ignore
@@ -274,11 +273,15 @@ test "a long pick with a mouse at Large: its search over it finds by the words, 
   assert_eq(presented_how, [AsPopover])
   assert_true(t.find("第2项") is Some(_))
   t.type_text("第11")
+  // (what no longer matches closing its room, gone once it has)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("第2项") is None)
   assert_true(t.find("第11项") is Some(_))
   t.type_text("x")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("common.noMatch") is Some(_))
   t.backspace()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.key_named("enter"))
   assert_eq(chosen.val, "c11")
   assert_true(!presenting())
@@ -305,10 +308,10 @@ fn panel_body(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
     panel_text(c, fn() { c.text("面板里的话", style=paragraph) |> ignore })
     panel_foot(c, fn() {
-      if panel_button(c, "ok", "好的", tone=Filled) {
+      panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         said.push("ok")
         close()
-      }
+      }) |> ignore
     })
   }
 }
@@ -356,10 +359,10 @@ fn lines_body(n : Int, held : Ref[Bool]) -> (@ui.Ctx, () -> Unit) -> Unit {
 /// A panel's foot: 好的, which says so and closes it.
 fn ok_foot(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
-    if button(c, "好的", key="ok", tone=Primary) {
+    button(c, "好的", key="ok", tone=Primary, on_press=fn() {
       said.push("ok")
       close()
-    }
+    }) |> ignore
   }
 }
 
@@ -535,9 +538,9 @@ test "one over another: a confirm from a menu's item comes when the menu has gon
   let said : Array[String] = []
   let t = presenting_tester(phone, fn(from) {
     panel("面板", fn(c, _) {
-      if button(c, "删除它", key="del") {
+      button(c, "删除它", key="del", on_press=fn() {
         confirm("删掉吗？", "删掉后不能恢复。", "删掉", fn() { said.push("deleted") }, danger=true)
-      }
+      }) |> ignore
     }, from~)
   })
   open_it(t)
@@ -562,10 +565,10 @@ fn dialog_panel(said : Array[String]) -> (Anchor) -> Unit {
       from=Unanchored,
       description="每项都会加密保存",
       foot=fn(c, close) {
-        if button(c, "确认添加", key="add") {
+        button(c, "确认添加", key="add", on_press=fn() {
           said.push("added")
           close()
-        }
+        }) |> ignore
       },
       gone=fn() { said.push("gone") },
     )
@@ -608,9 +611,9 @@ fn panel_with_confirm(at : (Int, Double, Double), by_nothing? : Bool = false) ->
       from=if by_nothing { Unanchored } else { from },
       fn(c, _) {
         c.text("面板内容") |> ignore
-        if button(c, "删掉", key="drop") {
+        button(c, "删掉", key="drop", on_press=fn() {
           confirm("删掉这个？", "删掉后找不回来。", "确认删掉", fn() {  }, danger=true)
-        }
+        }) |> ignore
       },
     )
   })

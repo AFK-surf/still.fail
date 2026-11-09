@@ -8,10 +8,9 @@
 //   stillfail-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
   //   stillfail-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)
   //   stillfail-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
-  //   stillfail-share    the share host, static, on share.still.fail: published chats (wrangler.share.jsonc)
   // A route takes precedence over a Custom Domain on the same host, so the API's and the relay's paths reach their
   // Workers and every other path the static ones.
-  // Each host has its new name (still.fail) and its old one (3720.org), both bound for good (docs/rename-still-fail.md):
+  // Each host has its new name (still.fail) and its old one (3720.org), both bound for good:
   // PUBLIC_ORIGIN and ADMIN_ORIGIN are the new ones, which every link is made with; the *_ALIASES the old ones,
   // answered the same (src/compat.ts). migrate-workers.py transfers existing Durable Objects before a Worker rename;
   // namespace IDs and signing keys must remain unchanged. The release bucket migrates separately.
@@ -57,8 +56,9 @@
     // Relays beside still.fail's own (src/relays.ts): one in Beijing (Alibaba Cloud, by its IP: no ICP filing), for
     // stations and devices in mainland China, where Cloudflare's is slow or out of reach; one in Hong Kong (Alibaba
     // Cloud, on a line tuned for the mainland), near enough to both the mainland and abroad; one in Shenzhen (Alibaba
-    // Cloud, BGP), for the south of the mainland, far from Beijing and without Hong Kong's border crossing.
-    "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168,https://120.24.233.158",
+    // Cloud, BGP), for the south of the mainland, far from Beijing and without Hong Kong's border crossing; one in Tokyo
+    // (Alibaba Cloud), for stations and devices abroad.
+    "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168,https://120.24.233.158,https://47.79.40.84",
     // Ways into those two for devices alone (src/relays.ts): Beijing's machine forwarding to Hong Kong's relay, and
     // Hong Kong's to Beijing's (nginx on :8443, each with its own certificate), so a phone in the mainland reaches a
     // station abroad (bft in Tokyo, whose line to Beijing loses packets) through Beijing and Hong Kong's good line.
@@ -67,9 +67,9 @@
     // The relays probed from China's carriers every half hour by Globalping's free probes (src/probes.ts).
     "RELAY_PROBES": "globalping",
     // What they are called on a station's card (经中继北京).
-    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
+    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://120.24.233.158": "深圳", "https://47.79.40.84": "东京", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     // The pages still.fail/status checks (src/status.ts).
-    "STATUS_PAGES": { "site": "https://still.fail/", "web": "https://app.still.fail/", "share": "https://share.still.fail/" },
+    "STATUS_PAGES": { "site": "https://still.fail/", "web": "https://app.still.fail/" },
     // Whose issues labelled `incident` it shows.
     "STATUS_REPO": "AFK-surf/still.fail",
     "GOOGLE_CLIENT_ID": "",

@@ -1,4 +1,4 @@
-// What a person debugging an app on an iOS Simulator has beside its picture (docs/remote-screens.md "Simulators"): the
+// What a person debugging an app on an iOS Simulator has beside its picture: the
 // logs of the apps installed on it and their restart, all simctl's. The log is `log stream` inside the device, started
 // as it is first asked for and left running a while after (so what happens between two looks is there), its newest
 // lines held here. Only apps a person installed log into it (their image is in the device's Containers), which leaves

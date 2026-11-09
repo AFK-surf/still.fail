@@ -28,7 +28,7 @@ pub fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, eas
   (self.due)()
   self.way.go(to, @motion.tween(ms, ease~), at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -51,7 +51,7 @@ pub fn EdgeWay::go_by(
   (self.due)()
   self.way.go(to, spec, at=n.cause_at(), velocity?)
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -65,7 +65,7 @@ pub fn EdgeWay::go_from(self : EdgeWay, n : @view.View, from : Double, to : Doub
   self.way.put(from)
   self.way.go(to, spec, at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -110,14 +110,16 @@ pub fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
 /// edge grey while `active()` (pressed, dragged), else the strong line's grey; its line while on it (unless `line()` says
 /// no, as that changes: a sidebar folded) or active. Its bar's height and showing move over edge_bar_ms, its grey over edge_ink_ms, its line over
 /// edge_line_ms, each eased out, from the moment its state changed. Taking nothing. The node.
+#callsite(autofill(loc))
 pub fn edge_look_node(
   parent : @view.View,
   over : () -> Bool,
   on : () -> Bool,
   active : () -> Bool,
   line? : () -> Bool = fn() { true },
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     let theme = fn() { @ui.tree_theme() }
     let state = fn() { edge_state(over(), on(), active(), line()) }
     let now = @signals.untracked(state)

@@ -11,7 +11,9 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
+import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
+import { modelLimitOf } from "../src/agents/runtime.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -207,6 +209,13 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(settings.skillOverrides.loop, "off");
     assert.equal(settings.skillOverrides["anthropic-skills:computer-use"], "off");
     assert.equal(settings.skillOverrides["anthropic-skills:docx"], "name-only");
+    // A repository's rules told as its tools first touch it (test/repo-rules-hook.test.ts).
+    const [rules] = settings.hooks.PostToolUse;
+    assert.match(rules.matcher, /^Bash\|Read\|/);
+    assert.ok(rules.hooks[0].command.includes(REPO_RULES_HOOK), rules.hooks[0].command);
+    const [compacted] = settings.hooks.SessionStart;
+    assert.equal(compacted.matcher, "compact");
+    assert.ok(compacted.hooks[0].command.includes(REPO_RULES_HOOK), compacted.hooks[0].command);
     const env = started.env;
     assert.equal(env.CLAUDE_CONFIG_DIR, o.profile.home);
     assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");
@@ -312,6 +321,10 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
     assert.equal(classifyResult("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue."), "rate_limit");
+    // A model's own limit names the model; an account's window is no model (#4365).
+    assert.equal(modelLimitOf("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue."), "Fable");
+    assert.equal(modelLimitOf("Claude usage limit reached: you have reached your weekly usage limit"), null);
+    assert.equal(modelLimitOf("You've hit your session limit · resets 3:40am"), null);
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
     assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
     assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");

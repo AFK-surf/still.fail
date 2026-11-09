@@ -19,9 +19,9 @@ test "a layer of an old view's anchored to a box with a press of its own, a butt
             c.box(w=Px(60.0), h=Px(200.0), fn() {  }) |> ignore
             let inner = c.id("inner")
             c.box(id=inner, w=Px(60.0), h=Px(40.0), fn() {  }) |> ignore
-            if c.clicked(inner) {
+            c.on_press(inner, fn() {
               inner_pressed.val = inner_pressed.val + 1
-            }
+            })
           })
           |> ignore
           c.with_dismissed(fn(why) { told.push("\{why}") }, fn() {

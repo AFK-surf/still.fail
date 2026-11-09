@@ -18,7 +18,7 @@ test("a station release includes every worker built, including workers in new di
     cpSync(fileURLToPath(new URL("../../scripts/station-bundle.sh", import.meta.url)), join(root, "scripts/station-bundle.sh"));
     for (const path of ["bin/stillfail", "bin/stillfail.cmd", "bin/stillfail.ps1", ".node-version", "natives/stillfail-station",
       "natives/stillfail-station-w.exe", "natives/mesh.node", "natives/stillfail-runner", "natives/stillfail-screen.exe",
-      "natives/agent-desktop.exe", "natives/still.fail Helper.app/Contents/MacOS/helper"]) file(path);
+      "natives/agent-desktop.exe", "natives/stillfail-reader", "natives/stillfail-reader.exe", "natives/still.fail Helper.app/Contents/MacOS/helper"]) file(path);
     // A release may run after a different build in the same checkout; its files must not leak into this one.
     file("station/dist/stale/old-worker.js");
     file("mock-bin/node", `#!/bin/sh
@@ -27,7 +27,7 @@ case "$1" in
   */posthog-key.ts) mkdir -p "$BUNDLE_TEST_ROOT/dist/admin"; printf '{}' > "$BUNDLE_TEST_ROOT/dist/admin/posthog.json" ;;
   */native.ts) case "$3" in
     launcher) name=stillfail-station ;; mesh) name=mesh.node ;; runner) name=stillfail-runner ;;
-    helper) name='still.fail Helper.app' ;; screen) name=stillfail-screen.exe ;; agent-desktop) name=agent-desktop.exe ;;
+    helper) name='still.fail Helper.app' ;; reader) name=stillfail-reader; [ "$4" = win32-x64 ] && name=stillfail-reader.exe ;; screen) name=stillfail-screen.exe ;; agent-desktop) name=agent-desktop.exe ;;
     *) exit 1 ;;
   esac; printf '%s/natives/%s\\n' "$BUNDLE_TEST_ROOT" "$name" ;;
   */installers.ts) : ;;
@@ -36,8 +36,8 @@ esac
 `);
     file("mock-bin/pnpm", `#!/bin/sh
 set -eu
-for name in main.js read/worker.js read/said-worker.js read/recent-chat-worker.js search/worker.js vault/use-index-worker.js vault/signin-save-worker.js \\
-  usage/minute-worker.js sessions/workspace-activity-worker.js sessions/post-block-worker.js outflow/chat-index-worker.js future/another-worker.js \\
+for name in main.js read/worker.js read/said-worker.js read/recent-chat-worker.js search/worker.js search/scope-worker.js vault/use-index-worker.js vault/signin-save-worker.js \\
+  usage/minute-worker.js sessions/workspace-activity-worker.js sessions/post-block-worker.js read/chat-index-worker.js future/another-worker.js \\
   skills/example.md dsh-bridge.mjs cursor-bridge.mjs sandbox-bridge.mjs scrcpy-server linux-portal.py linux-x11.py; do
   mkdir -p "dist/$(dirname "$name")"
   printf '%s' "$name" > "dist/$name"
@@ -50,12 +50,14 @@ done
     for (const platform of ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"]) {
       execFileSync("/bin/sh", [join(root, "scripts/station-bundle.sh"), join(root, "out"), platform], { env });
       const station = join(root, "out/stillfail/station");
-      for (const worker of ["read/worker.js", "read/said-worker.js", "read/recent-chat-worker.js", "search/worker.js", "vault/use-index-worker.js", "vault/signin-save-worker.js",
-        "usage/minute-worker.js", "sessions/workspace-activity-worker.js", "sessions/post-block-worker.js", "outflow/chat-index-worker.js", "future/another-worker.js"]) {
+      for (const worker of ["read/worker.js", "read/said-worker.js", "read/recent-chat-worker.js", "search/worker.js", "search/scope-worker.js", "vault/use-index-worker.js", "vault/signin-save-worker.js",
+        "usage/minute-worker.js", "sessions/workspace-activity-worker.js", "sessions/post-block-worker.js", "read/chat-index-worker.js", "future/another-worker.js"]) {
         assert.equal(readFileSync(join(station, worker), "utf8"), worker, `${platform}: ${worker}`);
       }
       assert.equal(existsSync(join(station, "stale/old-worker.js")), false, `${platform}: nothing left from an earlier build`);
       assert.equal(existsSync(join(station, "linux-portal.py")), platform.startsWith("linux-"));
+      // the reader in MoonBit (scripts/native.ts `reader`), every platform's
+      assert.ok(existsSync(join(station, platform === "win32-x64" ? "stillfail-reader.exe" : "stillfail-reader")), `${platform}: the MoonBit reader`);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

@@ -1,4 +1,4 @@
-// What macOS lets still.fail Helper do on this Mac (docs/remote-screens.md "Grants"): Screen Recording and
+// What macOS lets still.fail Helper do on this Mac: Screen Recording and
 // Accessibility (the desktop seen and driven), and the folders macOS protects (the drive's: Documents, Desktop,
 // Downloads, removable and network disks), and whether the station may reach the LAN it is on (macOS's Local Network:
 // the station's own, looked at by sending to it, mesh/lan.ts `lanReach`). One look at them (the helper's `status`) is kept for whatever asks: the

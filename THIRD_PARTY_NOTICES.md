@@ -20,27 +20,11 @@ still.fail Helper (the station's macOS app) builds in the simulator capture and 
 
 ## scrcpy's server in the station's release
 
-The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`, docs/remote-screens.md "Android").
+The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`).
 
 ## agent-desktop in the station's release
 
 still.fail Helper (macOS) carries `agent-desktop` and `agent-desktop-macos-helper` beside its executable, and the Windows station `agent-desktop.exe` beside `stillfail-screen.exe`: the unmodified binaries of [agent-desktop](https://github.com/vercel-labs/agent-desktop) 1.0.2 (Vercel, Inc.) from its GitHub release, each archive checked against the SHA-256 in that release's `checksums.txt` (`AGENT_DESKTOP` in `scripts/native.ts`), under its [Apache-2.0 license](https://github.com/vercel-labs/agent-desktop/blob/v1.0.2/LICENSE). The station runs them to read and act on the desktop's apps by their accessibility trees.
-
-## FFmpeg in the media service's package
-
-The media service's package (`media/service`, installed by stations as the module `media`) carries `ffmpeg` and `ffprobe` in its `bin/`, one build per platform (darwin-arm64, linux-x64, linux-arm64). They are built in CI from the unmodified upstream sources below by `scripts/ffmpeg.ts` (the native part `ffmpeg` of `scripts/native.ts`), each tarball checked against its SHA-256. still.fail keeps a copy of each, the same bytes, in the release [`third-party-sources`](https://github.com/AFK-surf/still.fail/releases/tag/third-party-sources) of this repository (with `SHA256SUMS`); the build falls back to it when upstream cannot be reached. Each package's `bin/` also holds FFmpeg's `LICENSE.md` and `COPYING.LGPLv2.1` (as `ffmpeg-LICENSE.md`, `ffmpeg-COPYING.LGPLv2.1`), the notices of what is linked in, and `SOURCE`, which names these sources and the exact configure flags.
-
-| Component | Version | License | Source | In |
-| --- | --- | --- | --- | --- |
-| FFmpeg | 9.0.2 | LGPL-2.1-or-later | <https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz> (sha256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`) | all three |
-| OpenH264 (Cisco Systems) | 2.6.0 | BSD-2-Clause | <https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz> (sha256 `558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69`) | Linux (the H.264 encoder) |
-| zlib | 1.3.2 | Zlib | <https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz> (sha256 `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) | Linux (macOS uses the system's libz) |
-
-FFmpeg is configured as LGPL only: `--disable-gpl --disable-nonfree --disable-version3` (no libx264, libx265 or any other GPL or non-free library), `--disable-autodetect` (nothing from the build machine is picked up) and `--disable-everything`, then only the demuxers, muxers, decoders, encoders, parsers, bitstream filters, filters and protocols the media service uses (`COMPONENTS` in `scripts/ffmpeg.ts`). H.264 is encoded by Apple's VideoToolbox on macOS (`--enable-videotoolbox`, `h264_videotoolbox`) and by OpenH264 on Linux (`--enable-libopenh264`); audio by FFmpeg's own AAC encoder. The binaries are static apart from the operating system's own libraries (macOS: libSystem, libz and the VideoToolbox, CoreMedia, CoreVideo, CoreFoundation and CoreServices frameworks; Linux: glibc 2.28 or later). The full flag list is in each package's `bin/SOURCE` and printed by `ffmpeg -buildconf`.
-
-Whoever has the package may replace these binaries with their own build: the media service runs `$MEDIA_FFMPEG` and `$MEDIA_FFPROBE` when they are set. NASM 3.02 (BSD-2-Clause) assembles the x86-64 code during the Linux x64 build and is not distributed.
-
-Patents are a separate question from copyright: H.264, HEVC, AAC, AC-3 and others may be covered by patents in some countries. Cisco's royalty-free H.264 patent coverage applies only to the OpenH264 binaries Cisco distributes, not to OpenH264 built from source as here.
 
 ## Model and runtime marks
 

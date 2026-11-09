@@ -14,7 +14,7 @@ pub fn changelog_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let topic = fn() { (core.topic)("changelog", Map([])) }
+  let topic = fn() { (core.topic)("changelog", Map([])).get() }
   let value = fn() { topic().value }
   // opened: what the update brought is read, once each news (as it is said)
   v.reacts(

@@ -78,7 +78,7 @@ pub fn chats_lists_node(
       }
     })
     // (the filter's menu opened: the three lists read and made by the time one is picked, kept from then)
-    let opened_before = @signals.untracked(fn() { filter_menu_opened.get() })
+    let opened_before = filter_menu_opened.untracked()
     p.reacts(fn() { filter_menu_opened.get() }, fn(n) {
       if n > opened_before {
         for k in 0..<list_filters.length() {
@@ -135,11 +135,6 @@ fn chats_pane_node(
   let key = "chats/" + id + "/" + filter
   let read = fn() { @sfbase.chats_of(src, id, filter) }
   let scroll = list_scroll(key)
-  // how far it is put to tuck its search out of view, as it was first placed (tucked_by's); the room its foot keeps for
-  // that; whether it is to be put there still (the hand not on it since)
-  let tuck : @signals.Signal[Double?] = @signals.signal(tucked_by.get(key))
-  let slack : @signals.Signal[Double] = @signals.signal(0.0)
-  let owed = Ref(false)
   // (while the hand is on the list or it glides, its rows keep their places; a row the viewer moved goes at once)
   let held = fn() { v.pointed_in() || scroll.glides_till() is Some(_) }
   // its days in the order shown, and its rows by their names: worked out once as what is read, or the hand on it,
@@ -150,6 +145,8 @@ fn chats_pane_node(
   let revision : @signals.Signal[Int] = @signals.signal(0)
   let seen : Ref[Array[ChatDay]] = Ref([])
   let stamp = Ref(0)
+  // A count alone helps diagnose the work of opening a list, without recording any chat's name or contents.
+  let recorded_rows = Ref(-1)
   // what of its rows and days comes, goes and goes ahead of others as the list changes while it is watched (ListRows'):
   // its lines as last shown, the rows going still among them (each after the line it came after, as it was), each
   // line coming or going and since when; told by a number as they change
@@ -169,9 +166,6 @@ fn chats_pane_node(
     },
     fn(at) {
       let days = seen.val
-      if at.1 {
-        owed.val = false
-      }
       let hold = at.1 && !@sfbase.viewer_moved(key, days)
       let shown = @sfbase.held_order(key, days, hold)
       let by_name : Map[String, ChatItem] = {}
@@ -180,10 +174,14 @@ fn chats_pane_node(
           by_name[@sfbase.row_name(item)] = item
         }
       }
+      if @hostapi.perf_recording() && by_name.length() != recorded_rows.val {
+        recorded_rows.val = by_name.length()
+        @hostapi.perf_line("chat-list: filter=\{filter} rows=\{recorded_rows.val}")
+      }
       motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched))
       ordered.set(shown)
       rows.set(by_name)
-      revision.set(@signals.untracked(fn() { revision.get() }) + 1)
+      revision.set(revision.untracked() + 1)
     },
   )
   let days = fn() { ordered.get() }
@@ -235,49 +233,36 @@ fn chats_pane_node(
       None => "agents"
     }
   }
-  // the list's first time with its rows: the search tucked over them out of view, the first line after it at the foot
-  // of what covers the list (frame.under: a phone's top bar, not the room under it), there once scrolled to (as far as
-  // the room over the list and the field's line come to past that foot)
-  // (where the field is laid out, as it is first: put by where it is, never by what it is said to be)
-  let search_line : Ref[@view.View?] = Ref(None)
-  let search_laid : @signals.Signal[Bool] = @signals.signal(false)
-  v.reacts(fn() { (search_tucked(read().0), search_laid.get()) }, fn(now) {
-    if now.0 && now.1 && !placed.contains(key) && search_line.val is Some(line) && line.alive() {
-      placed[key] = true
-      // (what covers the list's top: Home's top bar to its foot; a side column's band, the room over the list)
-      let cover = match frame.at {
-        Side => (frame.top)()
-        Whole => (frame.under)()
-      }
-      // (not scrolled yet: where it is in the list is where it is laid out in it)
-      let (_, fy, _, fh) = line.placed_window_now()
-      let (_, vy, _, _) = v.placed_window_now()
-      let at = fy - vy + fh - cover
-      tucked_by[key] = at
-      tuck.set(Some(at))
-      owed.val = true
-      scroll.put(at)
-    }
-  })
-  // (as far as it goes with fewer rows than it is tall: its foot keeps the room it lacks to go there, the search tucked
-  // all the same however few they are; put there again where it came short of it as it was laid out, till the hand is
-  // on it)
-  v.reacts(fn() { (tuck.get(), scroll.reach(), search_tucked(read().0)) }, fn(now) {
-    let had = @signals.untracked(fn() { slack.get() })
-    let want = match now {
-      (Some(at), most, true) => dmax(0.0, at - (most - had))
-      _ => 0.0
-    }
-    if (want - had).abs() >= 0.5 {
-      slack.set(want)
-      return
-    }
-    match now.0 {
-      Some(at) if owed.val && scroll.at(v.tree) < at - 0.5 && now.1 >= at - 0.5 => scroll.put(at)
-      _ => ()
-    }
-  })
+  // (how many more the core has, read anew only as its list changes, not each time the column is scrolled)
+  let more = @signals.computed(fn(_) { @sfbase.chats_more(src, id, filter) })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  // (a chat's row in line `line`, its key as it is now (`key`: "r/" and its name, another's as the row is taken for
+  // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
+  let row_line = fn(line : @view.View, key : () -> String) {
+    motion.line_node(line, key)
+    let name = fn() { key().view(start_offset=2).to_owned() }
+    guard @signals.untracked(fn() { item_of(name()) }) is Some(first) else { return }
+    // (looked up once as its key or the days change, not by each of what of the row reads it: the last it was where it
+    // is gone)
+    let now = @signals.computed(fn(was : ChatItem?) {
+      match item_of(name()) {
+        Some(i) => i
+        None => was.unwrap_or(first)
+      }
+    })
+    let item = fn() { now.get() }
+    let on = fn() {
+      match open_chat() {
+        Some(r) => @sfbase.row_is(item(), r)
+        None => false
+      }
+    }
+    // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found)
+    line.show(fn() { !motion.going_now(key()) }, leave=row_size_ms, fn(r) {
+      chat_row_node(r, src, tips, item, @signals.untracked(lead), on, frame.at, stint, list_ground=frame.ground, more=true)
+      |> ignore
+    })
+  }
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
   v.scrolls_window(
     scroll,
@@ -285,7 +270,10 @@ fn chats_pane_node(
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
-    foot_room=fn() { slack.get() },
+    // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
+    near_foot=(1.5, fn() { more.get() > 0 }, fn() {
+      @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
+    }),
     fn(b, k) {
     b.box(fn(line) {
       @sf.style_node(line, fn() { @sf.list_line(frame.at) })
@@ -294,13 +282,20 @@ fn chats_pane_node(
         "foot" => line.height(By(fn() { Some((frame.foot)() + @sf.list_foot_in(frame.at)) })) |> ignore
         "search" => {
           let field = search_field_node(line, frame.at)
-          // (told as it is first laid out: where it is then)
-          field.reacts(fn() { field.laid_size_told() is Some(_) }, fn(laid) {
-            if laid {
-              search_line.val = Some(field)
-              search_laid.set(true)
-            }
-          })
+          // the list's first time with its rows: the search tucked over them out of view, the first line after it at the
+          // foot of what covers the list (frame.under: a phone's top bar, not the room under it; a side column's band,
+          // the room over the list), there once scrolled to (Scroll::tucks: as far as the room over the list and the
+          // field's line come to past that foot)
+          scroll.tucks(
+            field,
+            fn() {
+              match frame.at {
+                Side | Tape => (frame.top)()
+                Whole => (frame.under)()
+              }
+            },
+            kept=fn() { search_tucked(read().0) },
+          )
         }
         "wait" => list_waiting_node(line, src, read, frame.at, tips, stint)
         "empty" => list_empty_node(line, read, filter, frame.at)
@@ -314,17 +309,19 @@ fn chats_pane_node(
           }
         }
         _ if k.has_prefix("h/") => {
-          motion.line_node(line, k)
+          motion.line_node(line, fn() { k })
           @sf.list_heading_node(line, fn() { k.view(start_offset=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
         }
         _ => {
-          motion.line_node(line, k)
-          let name = k.view(start_offset=2).to_owned()
           // (a row gone, or the copy of one gone ahead of others where it was: as it was, drawn only)
           match motion.gone_item(k) {
             // (swiped off: out of sight already, its room closing alone)
-            Some(gone) if swiped_gone(gone) => return
+            Some(gone) if swiped_gone(gone) => {
+              motion.line_node(line, fn() { k })
+              return
+            }
             Some(gone) => {
+              motion.line_node(line, fn() { k })
               line.box(fn(o) {
                 o.presses(Is(false)) |> ignore
                 chat_row_node(o, src, tips, fn() { gone }, @signals.untracked(lead), fn() { false }, frame.at, stint, list_ground=frame.ground, more=true)
@@ -335,33 +332,37 @@ fn chats_pane_node(
             }
             None => ()
           }
-          guard @signals.untracked(fn() { item_of(name) }) is Some(first) else { return }
-          let last : Ref[ChatItem] = Ref(first)
-          let item = fn() {
-            match item_of(name) {
-              Some(i) => {
-                last.val = i
-                i
-              }
-              None => last.val
-            }
-          }
-          let on = fn() {
-            match open_chat() {
-              Some(r) => @sfbase.row_is(item(), r)
-              None => false
-            }
-          }
-          // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found)
-          line.show(fn() { !motion.going_now(k) }, leave=row_size_ms, fn(r) {
-            chat_row_node(r, src, tips, item, @signals.untracked(lead), on, frame.at, stint, list_ground=frame.ground, more=true)
-            |> ignore
-          })
+          row_line(line, fn() { k })
         }
       }
     })
     |> ignore
   },
+    // (a chat's row, and a day's heading, as it no more shows, taken by the next of its kind to come to show: its key
+    // that one's, not made and let go as the list is scrolled; one gone, as it was, not)
+    reused=fn(k) {
+      if k.contains(moved_mark) {
+        None
+      } else if k.has_prefix("r/") && motion.gone_item(k) is None {
+        Some(0)
+      } else if k.has_prefix("h/") {
+        Some(1)
+      } else {
+        None
+      }
+    },
+    make_reused=fn(b, key) {
+      b.box(fn(line) {
+        @sf.style_node(line, fn() { @sf.list_line(frame.at) })
+        if @signals.untracked(key).has_prefix("h/") {
+          motion.line_node(line, key)
+          @sf.list_heading_node(line, fn() { key().view(start_offset=2).to_owned() }, frame.at)
+        } else {
+          row_line(line, key)
+        }
+      })
+      |> ignore
+    },
   )
   |> ignore
 }
@@ -421,7 +422,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
     }
   }
   v.pick(fn() {
-    if at == Side {
+    if at != Whole {
       0
     } else if stations() == 0 && filter == "all" {
       1
@@ -642,10 +643,10 @@ fn RowsMotion::said(
         self.moving.remove(k)
         self.going.remove(k)
       }
-      self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+      self.told.set(self.told.untracked() + 1)
     })
     |> ignore
-    self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+    self.told.set(self.told.untracked() + 1)
   }
   self.had = self.had || !lines.is_empty()
   self.last = lines
@@ -694,14 +695,14 @@ fn RowsMotion::gone_item(self : RowsMotion, key : String) -> ChatItem? {
 }
 
 ///|
-/// Line `key`'s node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
+/// Line `key`'s (its key as it is now) node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
 /// moment over row_size_ms, what it holds in the middle of it, as big as it is open and faded in from row_gone_at, cut
 /// softly at both ends.
-fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : String) -> Unit {
+fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> String) -> Unit {
   let way = @sf.EdgeWay::new(1.0)
   let state = fn() {
     self.told.get() |> ignore
-    self.moving.get(key)
+    self.moving.get(key())
   }
   line.reacts(state, fn(m) {
     match m {

@@ -1,5 +1,5 @@
-// The screen's pointer drawn over the picture (screen_stage.mbt) in the shape the station says (docs/remote-screens.md
-// `cursor`): a text cursor over text, a hand over a link, the resizing arrows…, the point it points with where the
+// The screen's pointer drawn over the picture (screen_stage.mbt) in the shape the station says:
+// a text cursor over text, a hand over a link, the resizing arrows…, the point it points with where the
 // station's pointer is.
 
 ///|

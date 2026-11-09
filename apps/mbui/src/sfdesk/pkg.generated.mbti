@@ -30,6 +30,8 @@ pub let bar_update_in : Double
 
 pub let bar_update_inset : Double
 
+pub fn attention_any(@sfbase.Source, @sfbase.Workspace) -> Bool
+
 pub fn bell_lit(@sfbase.Source, @sfbase.Workspace) -> Bool
 
 pub fn bring_page() -> Unit
@@ -58,10 +60,6 @@ pub fn columns_view(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, String, Shown, Dou
 
 pub let context : ContextMenu
 
-pub fn context_image(@ui.Ctx, Int32, String) -> Unit
-
-pub fn context_link(@ui.Ctx, String) -> Unit
-
 pub fn context_menu(@ui.Ctx) -> Unit
 
 pub fn context_node(@view.View) -> Unit
@@ -71,8 +69,6 @@ pub fn context_page(@ui.Ctx, Int32) -> Unit
 pub fn copy_path(@ui.Ctx, String) -> Unit
 
 pub fn drag_ask(Asking) -> Unit
-
-pub fn drag_frame(@ui.Ctx, @sfbase.Source, String, outside? : Bool) -> Unit
 
 pub fn dragged() -> @sfbase.Dragged?
 
@@ -148,10 +144,6 @@ pub fn keep_files_page(String, @sfbase.DriveAt) -> Unit
 
 pub fn keep_opened(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, String) -> Unit
 
-pub fn keep_tab(String, @sfbase.DriveAt?) -> Unit
-
-pub fn kept_tab(String) -> @sfbase.DriveAt??
-
 pub fn keys(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn keys_dialog(@ui.Ctx, @sfbase.Source) -> Unit
@@ -184,9 +176,9 @@ pub fn new_chat_after(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRe
 
 pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 
-pub fn on_cards() -> Bool
-
 pub fn open_attention() -> Unit
+
+pub fn open_attention_panel(@sfbase.Source, @sfbase.Workspace, @sf.Anchor) -> Unit
 
 pub fn open_entry(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, @sfbase.DvEntry, Array[@sfbase.DvEntry], (@sfbase.DriveAt) -> Unit) -> Unit
 
@@ -297,6 +289,8 @@ pub fn set_this_machine(String) -> Unit
 pub fn setting_route(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @settings.Route, @sf.PageFrame) -> Bool
 
 pub fn settings_beside(@settings.Route) -> Unit
+
+pub fn settings_fixture(@sfbase.Source, @settings.Core) -> Unit
 
 pub let settings_landing : @settings.Route
 
@@ -424,11 +418,7 @@ pub fn toggle_jobs_pop() -> Unit
 
 pub fn transfers_key(@ui.Ctx, @sfbase.Source, String, Double, Double) -> Unit
 
-pub fn transfers_key_shown(@sfbase.Source, String) -> Bool
-
 pub fn transfers_open() -> Unit
-
-pub fn transfers_shown(@sfbase.Source, String) -> Bool
 
 pub let update_closed_in : Double
 
@@ -452,7 +442,7 @@ pub fn wide_takes_back(@sfbase.Source) -> Bool
 
 pub fn window_zoom_keys(@ui.Ctx, @sfbase.Source) -> Unit
 
-pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, () -> Unit) -> Unit
+pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, () -> Unit) -> Unit
 
 // Errors
 
@@ -530,7 +520,6 @@ pub struct ContextMenu {
   mut image : String
   mut field : Int32
   mut words : String
-  mut frame : Int32
   mut copying : String
   mut share : (() -> Unit)?
   mut share_link : String

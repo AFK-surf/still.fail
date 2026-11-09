@@ -144,11 +144,11 @@ test "a window with its buttons in the app's top row: its top drags it before an
       let base = fixture("home")
       let src : Source = {
         ..base,
-        topic: fn(name, params) {
+        topic_read: fn(name, params) {
           if name == "accounts" {
             { value: None, error: None, version: 0 }
           } else {
-            (base.topic)(name, params)
+            base.topic(name, params).get().snapshot()
           }
         },
       }

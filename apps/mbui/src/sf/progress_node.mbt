@@ -1,5 +1,5 @@
 // A progress bar as nodes of the window's tree (progress's, @kit.progress with @kit.progress_look_of): how far, drawn
-// to a value told anew over progress_ms on the ease-out, from where it is at that moment; while how far is not known, a
+// to a value told anew over progress_ms on the ease-out, from where it is at that moment (from not known, there at once); while how far is not known, a
 // piece 40% of it sweeping across, eased there and back once a period (a wait, View::cycle); becoming known, that
 // piece's ends drawn into the part come over progress_known_ms (and back), each set out at its cause, sampled as each
 // frame is drawn while it goes.
@@ -8,6 +8,7 @@
 /// A progress bar in `parent`, as wide as it is given, `h` high: how far `part` says (0 to 1; None: not known), on
 /// `track` in `fill` (each as it changes). Read out as a progress bar, how far as a share and as a number of 100 (none
 /// while it is not known), as the old one is (@kit.progress). The node.
+#callsite(autofill(loc))
 pub fn progress_node(
   parent : @view.View,
   part : () -> Double?,
@@ -15,6 +16,7 @@ pub fn progress_node(
   fill : () -> Int64,
   h? : Double = 3.0,
   period? : Double = @kit.progress_sweep_ms,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (how far, drawn to it as told; whether it is known, drawn into it as it becomes so: each from where it is, there
   // at once as it is made)
@@ -22,7 +24,7 @@ pub fn progress_node(
   let first = @signals.untracked(part)
   let at = EdgeWay::new(first.unwrap_or(0.0))
   let known = EdgeWay::new(if first is Some(_) { 1.0 } else { 0.0 })
-  parent.box(fn(bar) {
+  parent.box(made_for=loc, fn(bar) {
     bar
     .row(Is(true))
     .height(Is(Some(h)))
@@ -40,7 +42,13 @@ pub fn progress_node(
     bar.reacts(part, fn(p) {
       match p {
         Some(k) => {
-          at.go(bar, k, @kit.progress_ms, ease=Out)
+          // (known, told anew: from where it is drawn; coming from not known, there at once, what ran along it drawn
+          // into it, as the old one's part come is laid out as told and reshaped only while known)
+          if @signals.untracked(fn() { known.target() }) >= 1.0 {
+            at.go(bar, k, @kit.progress_ms, ease=Out)
+          } else {
+            at.put(k)
+          }
           known.go(bar, 1.0, @kit.progress_known_ms, ease=InOut)
         }
         None => known.go(bar, 0.0, @kit.progress_known_ms, ease=InOut)

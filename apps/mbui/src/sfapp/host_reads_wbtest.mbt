@@ -30,7 +30,9 @@ test "host reads: the window's buttons in the app's top row push the sidebar dow
   let (_, y0) = t.find("新建对话").unwrap()
   let t = reads_tester(window_inset=true)
   let (_, y1) = t.find("新建对话").unwrap()
-  assert_eq(y1 - y0, 36.0)
+  // (44 under the window's buttons; else beside the rail's first place, its ground as far under the window's top as
+  // it is in from its side: 12 in the Tester's square window, the sidebar's top row 3 over that place's 38, at 5)
+  assert_eq(y1 - y0, 39.0)
   t.set_window_inset(false)
   t.draw()
   let (_, y2) = t.find("新建对话").unwrap()

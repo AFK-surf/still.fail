@@ -55,12 +55,9 @@ pub fn face_add_family(face : Int, family : String) -> Bool {
 
 ///|
 /// The font families installed on this machine (@hostapi.local_font_families), a JSON array of their names; "" where
-/// there is no way to them. Under a Tester: as it is set (Tester::set_local_fonts).
+/// there is no way to them.
 pub fn local_font_families() -> String {
-  match fake.val {
-    Some(f) => f.local_fonts
-    None => @hostapi.local_font_families()
-  }
+  @hostapi.local_font_families()
 }
 
 ///|
@@ -91,15 +88,18 @@ fn faces_style(words : Bool, face : Int) -> Int {
 }
 
 ///|
-/// How many times the faces changed: words laid out before (a text's or a paragraph's, its node's layout kept) are laid
-/// out again.
-let words_shaped_in : Ref[Int] = Ref::new(0)
+/// What the host measures words in, as one number that moves on as it changes (the faces given, the host's glyphs'
+/// generation: text_arrive): read where words are measured (shape, all_metrics), so that what measured them is
+/// measured again as it changes; words laid out before (a text's or a paragraph's, its node's layout kept, a row kept
+/// as laid out) are laid out again.
+// kept across runs: put back as a run begins (faces_reset)
+let words_shaped_in : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Everything shaped and measured forgotten (its faces changed): shaped again as it is next asked for; the window's
 /// tree's words measured and drawn again in them at once (view_words_rescaled), as an old view's are laid out again.
 fn words_forgotten() -> Unit {
-  words_shaped_in.val += 1
+  words_shaped_in.set(words_shaped_in.untracked() + 1)
   clear_shapes()
   text_cache.fonts.clear()
   text_cache.metrics.clear()
@@ -107,14 +107,16 @@ fn words_forgotten() -> Unit {
   // (the frame drawn whole, its glyphs other pixels; the host's glyphs as they are now: a face it has later than it is
   // given (a page's, loaded) moves them on again, and what was laid out till then is laid out again (text_frame))
   presented.forget()
-  text_cache.generation = h_atlas_generation()
+  let g = h_atlas_generation()
+  atlas_said.val = Some(g)
+  text_cache.generation = g
   view_words_rescaled()
 }
 
 ///|
 /// As at the start (a Tester's): no face given.
 fn faces_reset() -> Unit {
-  words_shaped_in.val = 0
+  words_shaped_in.set(0)
   faces_env_read.val = false
   for i in 0..<faces_given.length() {
     faces_given[i] = false

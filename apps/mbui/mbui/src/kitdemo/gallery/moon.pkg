@@ -3,6 +3,7 @@ import {
   "mbui/hostapi",
   "mbui/ui",
   "mbui/kit",
+  "mbui/signals",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/string",

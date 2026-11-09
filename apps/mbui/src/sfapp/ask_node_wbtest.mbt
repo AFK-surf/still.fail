@@ -81,7 +81,7 @@ test "大屏: a question cancelled before a frame drew it, a confirm asked then:
   @sf.confirm("删除", "删除这个对话？", "删除", fn() {  })
   t.draw()
   t.draw()
-  let at = (t.focused().map(fn(s) { s.role }), @ui.current().focus != 0)
+  let at = (t.focused().map(fn(s) { s.role }), t.ctx().focus != 0)
   t.enter()
   assert_eq((at, @sf.presenting(), t.all(Button, label="删除").length()), ((None, true), true, 1))
 }

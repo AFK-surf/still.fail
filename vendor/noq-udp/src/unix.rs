@@ -643,7 +643,7 @@ fn prepare_msg(
                     };
                     encoder.push(libc::IPPROTO_IP, libc::IP_PKTINFO, pktinfo);
                 }
-                // ember: macOS takes the source address from IP_PKTINFO; it ignores IP_RECVDSTADDR (FreeBSD's
+                // stillfail: macOS takes the source address from IP_PKTINFO; it ignores IP_RECVDSTADDR (FreeBSD's
                 // IP_SENDSRCADDR) on send, so a reply left from whichever address the routing table picked, and a
                 // peer that had dialed another address of this machine dropped it as sent to the wrong interface.
                 #[cfg(apple)]

@@ -1,5 +1,5 @@
 // 62-wide-row-menu (e2e/traces/wide-row-menu.trace: 1280 × 800): a chat's row right clicked in the wide frame's list:
-// its menu (Sidebar.tsx ContextMenu); 固定 pins it (chat.pin), the row goes up under 已固定; right clicked again,
+// its menu; 固定 pins it (chat.pin), the row goes up under 已固定; right clicked again,
 // 取消固定 lets it go. (The run's pins at the station, alice's one then none: the app's chat.pin asks, made again as
 // they were.)
 

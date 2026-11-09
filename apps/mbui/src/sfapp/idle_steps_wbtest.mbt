@@ -33,7 +33,7 @@ test "a wide window left alone, its field focused, an agent at work: each step o
   for mode in ["home", "chat"] {
     let calls : Array[Made] = []
     let t = wide_tester(calls, mode~)
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     t.check_looks(false)
     ignore(host_frames_till(t, t.time() + 4000.0))
     assert_true(t.ime().0, msg="\{mode}: the message field focused")
@@ -48,7 +48,7 @@ test "a wide window left alone, its field focused, an agent at work: each step o
 test "a wide window not shown while an agent works: its marks draw no steps till it is shown again" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="home")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   // (past the field's caret blinking: it rests shown after caret_blinks_for_ms)
   ignore(host_frames_till(t, t.time() + @ui.caret_blinks_for_ms + 1000.0))

@@ -1,4 +1,4 @@
-// The app keeping itself current, for both frames (ember apps/android app/Updates.kt, Install.kt; the desktop app's
+// The app keeping itself current, for both frames (still.fail apps/android app/Updates.kt, Install.kt; the desktop app's
 // appUpdate). What the person wants is the newest build, not to watch it come: a newer build is asked of the update
 // source the app is given (`set_update_source`) as the app starts and each time it is shown again, and one found is
 // handed to the host at once (@ui.update_fetch), which downloads it by itself and checks it (on a phone, on a network
@@ -19,6 +19,9 @@
 // is given by default: src/stillfail gives the cloud's for MBUI_UPDATE_FEED=<feed> (the local cloud's in e2e). A
 // source of a release elsewhere answers the same AppRelease (versionCode, versionName, file: a path under the source's
 // releases or a whole https URL, sha256, size, news).
+//
+// A person wants the latest version; checking and fetching are not their business (the user, 2026-10-31: 「从第一性
+// 原理出发」).
 
 ///|
 /// As at the start (the app's reset).
@@ -31,6 +34,8 @@ pub fn update_reset() -> Unit {
   update_pending.set(None)
   update.available.set(None)
   update.asked = false
+  update_again_n.val = 0
+  update_told.val = -1
   update.checking.set(false)
   update.source = None
   update.said.set(Unsaid)
@@ -245,7 +250,7 @@ pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {
 /// Whether newer builds are downloaded by themselves here (the prefs' `appUpdate`: 自动更新, on unless turned off),
 /// else only at the person's word.
 pub fn update_auto(src : Source) -> Bool {
-  text((src.topic)("prefs", {}).value, "appUpdate") != "off"
+  text(src.topic("prefs", {}).get().value, "appUpdate") != "off"
 }
 
 ///|
@@ -434,7 +439,28 @@ pub fn update_first(src : Source) -> Unit {
 }
 
 ///|
-/// How this build's update stands, as 关于's version row says it (SettingsHome.kt Version): what pressing it does, the
+/// How long the app, left open, waits before asking for a newer build again. A window never put away on a Mac that
+/// never sleeps is never shown again: asked only as it started (right after the machine did, before the network was
+/// up), it stayed three days on a build 400 behind (2026-11-07). The core asks the feed at most every 5 minutes.
+pub let update_again_ms : Double = 60.0 * 60.0 * 1000.0
+
+///|
+// kept across runs: put back by update_reset
+let update_again_n : Ref[Int] = Ref(0)
+
+///|
+/// Asked again each update_again_ms the app stays signed in, in every frame (signed_in_frame, beside update_first): as
+/// a check as it is shown again, nothing said unless a newer build is found.
+pub fn update_again(c : @ui.Ctx, src : Source) -> Unit {
+  let n = update_again_n.val
+  if @kit.after(c, "update-again/\{n}", true, update_again_ms, later=true) {
+    update_again_n.val = n + 1
+    c.tell("update-again", fn() { update_check(src, false) })
+  }
+}
+
+///|
+/// How this build's update stands, as 关于's version row says it: what pressing it does, the
 /// line under it, how far (a bar while something is under way: None, a piece sweeping across), whether it is under way,
 /// and whether newer builds are asked for here at all.
 pub fn update_stands() -> @settings.VersionNow {
@@ -597,7 +623,7 @@ fn update_ask_now(src : Source) -> Unit {
 /// in its place).
 fn update_dialog_words() -> (String, String) {
   let current = @sf.t("web-pages.changelog.build", args=[("build", this_version().to_string())])
-  match update_now() {
+  match update_dialog_now() {
     Quiet | Checking => (@sf.t("android-misc.updates.checking"), current)
     Latest => (@sf.t("desktop.update.latest"), current)
     CouldNot(why) => (@sf.t("desktop.update.checkFailed"), why)
@@ -607,15 +633,28 @@ fn update_dialog_words() -> (String, String) {
 }
 
 ///|
+/// How the update stands as the dialog shows it: the person's check of a build known said as that build stands (its
+/// title, what it brings, its bar), the check only in the line under the bar (update_stands), not in a dialog of
+/// other words for the while it takes: the dialog as tall all the way.
+fn update_dialog_now() -> UpdateNow {
+  match update_now() {
+    Checking if update.available.get() is Some(_) => update_known()
+    now => now
+  }
+}
+
+///|
 /// How many of what a newer build brings the dialog says before 还有 n 项 (the changelog page has them all).
 let update_news_most : Int = 5
 
 ///|
 /// What the dialog holds: while still.fail cloud is asked, a bar going to and fro; for a newer build, what it brings
-/// (its first few, 还有 n 项), then how it stands as 关于's row says it (update_stands: its line, a bar while it is under
-/// way; what went wrong in red), each whole on its line: the bar there from the first, the dialog as tall all the way.
+/// (its first few, 还有 n 项), then how it stands as 关于's row says it (update_stands: its line; what went wrong in red)
+/// under its bar, each whole on its line: the bar there in every stage (empty offered, full ready, how far while it
+/// comes, sweeping while it is under way unknown how far), the dialog as tall all the way (2026-11-06 the user,
+/// 「这玩意儿为啥老抖动」「高度抖动」: the bar came and went with each stage, the dialog shorter and taller again).
 fn update_dialog_body(c : @ui.Ctx) -> Unit {
-  match update_now() {
+  match update_dialog_now() {
     Quiet | Checking =>
       c.box(style=update_body.then(@sf.panel_words_in()), fn() { @sf.progress(c, "update/asking", None) }) |> ignore
     Latest | CouldNot(_) => ()
@@ -636,19 +675,14 @@ fn update_dialog_body(c : @ui.Ctx) -> Unit {
           c.text(line, style=update_news_line) |> ignore
         }
         c.box(style=update_going, fn() {
-          // (the bar coming and going with what is under way, what is under it moving with it: not in a frame)
-          let open = @motion.anim(c, "update/bar", if stands.going { 1.0 } else { 0.0 })
-          open.follow(
-            if stands.going { 1.0 } else { 0.0 },
-            @motion.move().per_unit(@motion.reveal_height("update/bar")),
-          )
-          let share = open.get()
-          if stands.going || share > 0.0 {
-            // (the room between it and the words under it its own: none left when it has gone)
-            @motion.reveal(c, "update/bar", share, middle=true, fn() {
-              c.box(style=update_bar_room, fn() { @sf.progress(c, "update/part", stands.part) }) |> ignore
-            })
+          let part = if stands.going {
+            stands.part
+          } else if now is (Ready(_, ..) | Allow(_)) {
+            Some(1.0)
+          } else {
+            Some(0.0)
           }
+          c.box(style=update_bar_room, fn() { @sf.progress(c, "update/part", part) }) |> ignore
           let said = match now {
             Coming(_, _) | Installing(_) => stands.label + (if stands.note == "" { "" } else { " · " + stands.note })
             _ => stands.note
@@ -669,37 +703,38 @@ fn update_dialog_body(c : @ui.Ctx) -> Unit {
 /// ask; for a newer build 稍后 (关闭 once it comes by itself) and what is the person's to do: 下载 (offered), 重启更新
 /// (turning while it comes or is put in place), the leave to install apps, 重试 (failed).
 fn update_dialog_foot(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
-  match update_now() {
+  match update_dialog_now() {
     Quiet | Checking =>
-      if @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
+      }) |> ignore
     Latest =>
-      if @sf.button(c, @sf.t("common.confirm"), key="update/ok", tone=Primary) {
+      @sf.button(c, @sf.t("common.confirm"), key="update/ok", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     CouldNot(_) => {
-      if @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="update/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
-      if @sf.button(c, @sf.t("common.retry"), key="update/retry", tone=Primary) {
+      }) |> ignore
+      @sf.button(c, @sf.t("common.retry"), key="update/retry", tone=Primary, on_press=fn() {
         update_ask_now(src)
-      }
+      }) |> ignore
     }
     now => {
       let going = now is (Coming(_, _) | Installing(_))
-      if @sf.button(c, @sf.t(if going { "common.close" } else { "desktop.update.later" }), key="update/later", tone=Ghost) {
+      @sf.button(c, @sf.t(if going { "common.close" } else { "desktop.update.later" }), key="update/later", tone=Ghost, on_press=fn() {
         close()
-      }
+      }) |> ignore
       let label = match now {
         Offered(_, ..) => @sf.t("desktop.update.download")
         Allow(_) => @sf.t("android-misc.updates.allow")
         Failed(_, _) => @sf.t("common.retry")
         _ => @sf.t("desktop.update.restart")
       }
-      if @sf.button(c, label, key="update/go", tone=Primary, busy=going) {
+      // (the person's check under way: the key turning, as it does while the build comes)
+      @sf.button(c, label, key="update/go", tone=Primary, busy=going || update.checking.get(), on_press=fn() {
         update_go(src)
-      }
+      }) |> ignore
     }
   }
 }
@@ -723,3 +758,33 @@ let update_going : @ui.Style = @ui.css("w=Full pt=S2")
 /// The bar's room: 6 under it, over the words.
 // kept across runs: a value (no field of it changes)
 let update_bar_room : @ui.Style = @ui.css("w=Full pb=S1_5")
+
+///|
+/// The core's word that a newer build may be out (the `releases` topic's `told`) as last heard (-1: none yet).
+// kept across runs: put back by update_reset
+let update_told : Ref[Int] = Ref(-1)
+
+///|
+/// Asked again each time the core says a newer build may be out (still.fail cloud said a release is out, or its socket
+/// opened again), in every frame beside update_first: the build got ready is the newest, not one heard of before (one
+/// put in as the app quits or while it is away, then another as the newer one asks: 2026-11-09, pengxiao, 「不会用最新
+/// 的版本，而是会连续更新好几次」).
+pub fn update_on_release(c : @ui.Ctx, src : Source) -> Unit {
+  if !update_asks() {
+    return
+  }
+  let v = src.topic("releases", {}).get().value
+  if v is None {
+    return
+  }
+  let told = count(v, "told")
+  if told != update_told.val {
+    c.tell("update-release", fn() {
+      let first = update_told.val < 0
+      update_told.val = told
+      if !first {
+        update_check(src, false)
+      }
+    })
+  }
+}

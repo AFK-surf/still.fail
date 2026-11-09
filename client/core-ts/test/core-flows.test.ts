@@ -1,5 +1,5 @@
 // The Rust core's core/tests.rs, the rest ported (same names; the checks as the TS core's design has them, its
-// deliberate differences in docs/core-ts.md): workspaces kept apart, the beta channel, previews, traces, choices,
+// deliberate differences): workspaces kept apart, the beta channel, previews, traces, choices,
 // drafts, decisions, the chat list's local overlays, jobs, the archive, forms, the changelog.
 import assert from "node:assert/strict";
 import { Effect, Queue } from "effect";
@@ -15,13 +15,14 @@ import { name as brandName } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
+import { SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
-import { tokensOf } from "../src/forms.ts";
+import { ConnectFlows, pickOf, tokensOf } from "../src/forms.ts";
 import * as present from "../src/present.ts";
 import { PUSH_KEY } from "../src/attention.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
@@ -176,6 +177,78 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   core.close();
 });
 
+test("the_list_changed_reads_the_account_and_the_workspaces_new_to_it_alone", async () => {
+  // A member added: the cloud tells the list changed and the workspace changed. Each of the person's devices read
+  // /v1/me, its sign-ins, an operator's lists and the workspace twice more besides: seven of them used up the
+  // account's 120 requests a minute, and the owner's next call was refused (the locks' end to end, 2026-11-10).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let listed = [{ id: "ws", name: "W" }];
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: listed, invitations: [], relay_url: "https://relay.test" });
+    if (path.startsWith("/v1/workspaces/")) return jsonResponse(200, { id: path.split("/")[3], name: "W", role: "owner", members: [], stations: [], invitations: [] });
+    if (path === "/v1/auth/sessions") return jsonResponse(200, { sessions: [] });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "workspaces" });
+  await host.settle();
+  const asked = () => host.requests.splice(0).map((r) => `${r.method} ${r.url.replace("https://stillfail.test", "")}`).filter((r) => r.includes("/v1/") && !r.includes("/v1/telemetry") && !r.includes("/v1/events")).sort();
+  assert.ok(asked().includes("GET /v1/workspaces/ws"), "read as it was first shown");
+  // A member added to ws: the list and the workspace told.
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  host.socketSend("/v1/events", '{"type":"workspace","id":"ws"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws"]);
+  // A workspace made: the one new to the list read too.
+  listed = [...listed, { id: "ws2", name: "W2" }];
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws2"]);
+  core.close();
+});
+
+test("a_release_missed_while_the_events_socket_was_closed_is_read_again_and_the_app_told", async () => {
+  // A Mac asleep through a release: the feed's newest was kept from before, so the app got that build ready, put it in
+  // as it quit, and updated again once the new one read the feed (2026-11-09, pengxiao).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let out = 1200;
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: [], invitations: [], relay_url: "https://relay.test" });
+    if (path === "/releases/mac/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `mac/stillfail-${out}.zip`, sha256: "ab", size: 9 });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "releases" });
+  await host.settle();
+  apply(host, values);
+  const told = v(values, 1).told;
+  assert.equal((await ask(host, core, ui, 2, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1200);
+  // Told of a release: read again, and the app told.
+  out = 1250;
+  host.socketSend("/v1/events", '{"type":"release"}');
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).told, told + 1);
+  assert.equal((await ask(host, core, ui, 3, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1250);
+  // The socket closed through the next release: none said, so read again as it opens again.
+  host.socketClose("/v1/events");
+  out = 1300;
+  await host.time.pass(SOCKET_RETRY_MS * 2, 50);
+  await host.settle();
+  apply(host, values);
+  assert.equal(host.openSockets("/v1/events"), 1);
+  assert.equal(v(values, 1).told, told + 2);
+  assert.equal((await ask(host, core, ui, 4, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1300);
+  core.close();
+});
+
 test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_fail_and_takes_its_own_feed", async () => {
   // still.fail mbui: a build of every commit, the test channel's, but not youdid.wtf
   const host = new FakeHost();
@@ -255,7 +328,7 @@ test("a capacity notice and its cancel action pass through the real core", async
 });
 
 test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", async () => {
-  // Deliberately otherwise (docs/core-ts.md, rule 6): a chat opening reads only what is held, so it asks the station
+  // Deliberately otherwise (rule 6): a chat opening reads only what is held, so it asks the station
   // nothing; what the Rust core's chat.open traced is the station's own reading, one trace from its connecting on.
   const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 1);
   const ui = core.connect();
@@ -960,6 +1033,8 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
     "GET /overview": {
       ...overview,
       sessionRuntimeChange: switchRuntime,
+      connectRuntimeChange: switchRuntime,
+      connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
         profile("p2", "claude", ["claude-opus-5-5"], true, 80),
@@ -971,8 +1046,27 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
     "GET /machine-sessions": { sessions: [{ runtime: "codex", id: "m1", cwd: "/Users/bob/src/x", updatedAt: 0 }] },
     "POST /profiles/p1/check": { state: "ok", detail: "", checkedAt: 2 },
     "POST /sessions/k1/settings": { ok: true },
+    "PUT /connects/c1": { ok: true },
   });
 }
+
+test("a disabled unchecked profile is checked only once it is enabled", async () => {
+  const p = profile("p1", "claude", ["claude-opus-5-5"], false, 0, { enabled: false });
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p] },
+    "POST /profiles/p1/check": { state: "ok", detail: "", checkedAt: 2 },
+  });
+  try {
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+    await host.settle();
+    assert.equal(stationPosted(host, "/profiles/p1/check").length, 0);
+    core.inner.data.set({ topic: "overview", station: "ws/st" }, { ...overview, profiles: [{ ...p, enabled: true }] });
+    await host.settle();
+    assert.equal(stationPosted(host, "/profiles/p1/check").length, 1);
+  } finally { core.close(); }
+});
 
 test("a_new_chat_is_made_under_the_key_its_page_had_before_it_was_made_and_its_page_reads_it_so_at_once", async () => {
   const { host, core } = await choosing();
@@ -1214,6 +1308,36 @@ test("a chat can switch runtime through its model control when its station suppo
   assert.equal(v(values, 1).draft.runtime, "codex");
   await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
   assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ runtime: "codex", model: "gpt-6-astra", effort: null, profile: null }]);
+  core.close();
+});
+
+test("a connect can switch runtime through its model control when its station supports it", async () => {
+  const { host, core } = await choosing(false, false, null, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  subscribe(core, ui, 2, { topic: "connects", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, false);
+  assert.ok(v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"), "the other runtime's models are offered");
+  assert.equal(v(values, 2).items[0].runtimeChanges, true);
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect:c1", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect:c1" });
+  const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
+  assert.deepEqual(put, [{ bind: { model: "gpt-6-astra", effort: "", profile: null, runtime: "codex" } }]);
+  core.close();
+});
+
+test("a connect stays on its runtime on a station from before", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, true);
+  assert.ok(!v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"));
   core.close();
 });
 
@@ -2097,7 +2221,7 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   await ask(host, core, ui, 4, "changelog.seen", {});
   answersOf(host, values);
   assert.equal(v(values, 2).news, undefined);
-  // Read once at each start (the TS core reads it then and as the cloud's socket opens: docs/core-ts.md).
+  // Read once at each start (the TS core reads it then and as the cloud's socket opens).
   assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
   core.close();
 });
@@ -2313,6 +2437,8 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:feishu" });
   flow.go(topic, ui, "feishuWay");
   await ask(host, core, ui, 4, "connect.flow.register", form);
+  const registrationRequest = stationPosted(host, "/feishu/registrations")[0];
+  assert.deepEqual([registrationRequest.bind.runtime, registrationRequest.bind.model, registrationRequest.mode], ["codex", "gpt-6-astra", "multi-session"], "the station has the chosen settings before the scan");
   view = flow.value(topic);
   assert.equal(view.step, "feishuScan");
   assert.equal(view.feishu.registration.id, "r1");
@@ -2335,6 +2461,44 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   view = flow.value(topic);
   assert.deepEqual([view.step, view.feishu.connect, view.feishu.creating], ["done", "codex-bot", false]);
   assert.equal(host.requests.filter((r) => r.method === "DELETE").length, 0, "a bot made is not let go of");
+  core.close();
+});
+
+test("connect_wizard_offers_comma_where_its_station_has_it_and_adds_a_connect_of_the_line_comma_shows", async () => {
+  const { host, core } = await choosing();
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/comma/connects") return { id: "comma" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const topic = connectTopic("comma");
+  const form = { station: "ws/st", form: "comma" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  const flow = core.inner.forms.connects;
+  withFeishu(core, []);
+  assert.deepEqual(flow.value(topic).platforms, ["slack", "feishu"], "a station from before the Comma connect does not offer it");
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), comma: true });
+  assert.deepEqual(flow.value(topic).platforms, ["slack", "feishu", "comma"]);
+  flow.go(topic, ui, "commaBind");
+  let view = flow.value(topic);
+  assert.deepEqual([view.step, view.platform, view.back, view.number, view.total], ["commaBind", "comma", "platform", 2, 3]);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "connect-new:comma", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:comma" });
+  flow.go(topic, ui, "commaLine");
+  flow.edit(topic, ui, { comma: { line: "tailcat 1.2.3.4 4750" } });
+  assert.equal(flow.value(topic).comma.ready, false);
+  assert.throws(() => flow.begin(topic, ui, "create", {}, false), "not a line Comma shows");
+  flow.edit(topic, ui, { comma: { line: " comma https://api.comma.surf salix_conn_abc12345 " } });
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.back, view.comma.ready], ["commaLine", "commaBind", true]);
+  const shaped = present.decorate(topic, structuredClone(view), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  await ask(host, core, ui, 4, "connect.flow.create", form);
+  const sent = stationPosted(host, "/comma/connects");
+  assert.deepEqual([sent.length, sent[0].line, sent[0].bind.runtime, sent[0].bind.model], [1, "comma https://api.comma.surf salix_conn_abc12345", "codex", "gpt-6-astra"]);
+  assert.equal(flow.value(topic).step, "done");
   core.close();
 });
 
@@ -2392,7 +2556,78 @@ test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_ma
   assert.equal(flow.value(connectTopic("gone")).feishu.registration.state, "waiting", "as it was started, before the overview says");
   await ask(host, core, ui, 17, "connect.flow.drop", other);
   await host.settle();
-  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), ["/feishu/registrations/r2"]);
+  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), [], "closing the form does not cancel an already opened scan");
+  core.close();
+});
+
+test("connect_wizard_rechecks_a_scan_done_before_the_register_request_finishes", async () => {
+  const { host, core } = await choosing();
+  const done = { id: "quick", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_quick", domain: "feishu" };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/feishu/registrations") return { id: done.id, url: done.url, expiresAt: done.expiresAt, overview: { ...(structuredClone(core.inner.store.get({ topic: "overview", station: "ws/st" })) as J), feishuRegistrations: [done] } };
+    if (path === "/feishu/connects") return { id: "quick-bot" };
+    return undefined;
+  });
+  withFeishu(core, []);
+  const ui = core.connect();
+  const form = { station: "ws/st", form: "quick" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  await ask(host, core, ui, 2, "connect.flow.go", { ...form, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect-new:quick", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect-new:quick" });
+  await ask(host, core, ui, 5, "connect.flow.go", { ...form, input: { to: "feishuWay" } });
+  await ask(host, core, ui, 6, "connect.flow.register", form);
+  await host.settle();
+  assert.equal(stationPosted(host, "/feishu/connects").length, 1);
+  assert.equal(core.inner.forms.connects.value(connectTopic("quick")).feishu.connect, "quick-bot");
+  core.close();
+});
+
+test("connect_wizard_rechecks_a_finished_scan_when_the_model_becomes_available", async () => {
+  const { core } = await choosing();
+  withFeishu(core, []);
+  const ui = core.connect();
+  const topic = connectTopic("late-model");
+  const selected = { valueOption: { model: "gpt-6-astra" }, value: { runtime: "codex", model: "gpt-6-astra" } };
+  let picked: { valueOption: { model: string } | null; value: { runtime: string; model: string } } = selected;
+  let ready = 0;
+  const flow = new ConnectFlows(core.inner.store, () => ({ ok: picked }), () => {}, { ready: (t) => { if (flow.ready(t)) ready++; } });
+  flow.open(topic, ui, {});
+  flow.go(topic, ui, "feishuBind");
+  flow.go(topic, ui, "feishuWay");
+  const [generation] = flow.begin(topic, ui, "register", {}, false);
+  flow.finish(topic, generation, "register", { ok: { id: "late", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000 } });
+  picked = { ...selected, valueOption: null };
+  withFeishu(core, [{ id: "late", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_late", domain: "feishu" }]);
+  assert.equal(ready, 0, "the scan finished before the model was available");
+  picked = selected;
+  core.inner.store.set(pickOf("ws/st", "late-model"), { ok: selected });
+  assert.equal(ready, 1, "the picker change causes another readiness check");
+  flow.drop(topic, ui);
+  core.close();
+});
+
+test("connect_wizard_shows_a_station_saved_scan_even_if_the_model_is_no_longer_available", async () => {
+  const { host, core } = await choosing();
+  withFeishu(core, []);
+  const ui = core.connect();
+  const topic = connectTopic("saved-scan");
+  const selected = { valueOption: { model: "gpt-6-astra" }, value: { runtime: "codex", model: "gpt-6-astra" } };
+  let picked: { valueOption: { model: string } | null; value: { runtime: string; model: string } } = selected;
+  let createRequests = 0;
+  const flow = new ConnectFlows(core.inner.store, () => ({ ok: picked }), () => {}, { ready: (t) => { if (flow.ready(t)) createRequests++; } });
+  flow.open(topic, ui, {});
+  flow.go(topic, ui, "feishuBind");
+  flow.go(topic, ui, "feishuWay");
+  const [generation] = flow.begin(topic, ui, "register", {}, false);
+  flow.finish(topic, generation, "register", { ok: { id: "saved", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000 } });
+  picked = { ...selected, valueOption: null };
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), feishuRegistrations: [{ id: "saved", url: "", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_saved", domain: "feishu" }], connects: [{ id: "bot", kind: "feishu", feishu: { appId: "cli_saved" } }] });
+  await host.settle(); // The overview's database write notifies its watchers on commit.
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).feishu.connect, createRequests], ["done", "bot", 0]);
+  flow.drop(topic, ui);
   core.close();
 });
 
@@ -2568,7 +2803,8 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [], personal: { standing: "none", devices: [] } });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [], personal: v(values, 1).personal, toConfirm: 0 });
+  assert.deepEqual(v(values, 1).personal.map((p: J) => [p.standing, p.devices]), [["none", []]]);
   core.close();
 });
 
@@ -2669,7 +2905,7 @@ test("a_phone_shows_each_chat_once_ordered_by_the_last_actual_use", async () => 
   assert.deepEqual(core.inner.adb.grants().map((g: J) => [g.id, g.chat, g.lastUsedAt]), [
     ["new", "chat-a", at - 60_000], ["other", "chat-b", at - 90_000], ["unknown", "chat-c", undefined],
   ]);
-  // (a station's word alone, nothing signed: shown, and lends nothing: docs/personal-lock.md)
+  // (a station's word alone, nothing signed: shown, and lends nothing)
   assert.deepEqual(core.inner.adb.wanted(), []);
   // The view has the title and relative time, and that time advances while the page remains open.
   core.keepTime();

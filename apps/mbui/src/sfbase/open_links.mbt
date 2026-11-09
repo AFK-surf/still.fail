@@ -1,4 +1,4 @@
-// still.fail's own links, opened in the app (ember apps/android shared/AppState.kt openLink, open, openItem;
+// still.fail's own links, opened in the app (still.fail apps/android shared/AppState.kt openLink, open, openItem;
 // app/MainActivity.kt handle): the core says what a link opens (`link.parse`, its LinkTarget: client/core-ts
 // src/shapes/schema.ts), which opens here as pages over the one in view; any other link goes to the caller's
 // `or_else` (the system's browser for a link tapped in a message).
@@ -12,6 +12,7 @@
 //   entry; alone, over the chat the link is in.
 // - `invite` (/invite#<token>): what the invitation leads to, before it is accepted, as the frame shows it.
 // - `screen` (/w/…/s/…/screen/<id>): the station's screen in the viewer (open_screen).
+// - `service` (/w/…/s/…/services/<job>): a station's web service on its own, over the page open.
 //
 // A link the system opened the app with (@hostapi.system_channel `link`: one of the app's links tapped in another app,
 // the manifest's App Links) opens as from outside, once signed in and the workspaces known. What is over the pages,
@@ -162,7 +163,7 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
       (shell.val.open_invite)(t.token)
     }
-    // a reference to another chat (web/src/chatRefs.ts), opened over this one
+    // a reference to another chat, opened over this one
     "chat" => {
       if t.chat == "" {
         return false
@@ -220,7 +221,7 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
     }
     // a station's 共享调试, as its agent asks for it (adb_devices): the page, sharing only once its person taps; a login
-    // an agent started on a station (docs/remote-login.md): its card on the station's page, marked, brought into view
+    // an agent started on a station: its card on the station's page, marked, brought into view
     "adbShare" | "login" => {
       if t.station == "" || (t.opens == "login" && t.login == "") {
         return false
@@ -245,7 +246,26 @@ fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -
       }
       open_page(Setting(route))
     }
-    // one of a station's screens, as its agent asks a person to take over (docs/remote-screens.md): the viewer over
+    // a station's web service on a page of its own (its "open on its own", /w/…/s/…/services/<job>): the service over
+    // whatever page is open, its workspace's Home under it when it is another workspace's or from outside
+    "service" => {
+      if t.service == "" || t.station == "" {
+        return false
+      }
+      let away = ws != current
+      if away {
+        pick_workspace(src, ws)
+      }
+      (shell.val.close_overlays)()
+      if outside || away {
+        (shell.val.home)()
+        if app.nav.top() != Home {
+          app.nav.replace(Home)
+        }
+      }
+      open_page(Service(address, t.service))
+    }
+    // one of a station's screens, as its agent asks a person to take over: the viewer over
     // whatever page is open (back comes back to it)
     "screen" => {
       if t.screen == "" || t.station == "" {
@@ -268,7 +288,7 @@ pub fn chat_ref(station : String, session : String) -> ChatRef {
 /// Whether `session` is one of the agents of the chat `r` shows (AppState.chatAgents): a link to an agent's own item
 /// tapped in the chat it works in.
 fn works_in(src : Source, r : ChatRef, session : String) -> Bool {
-  agent_json((src.topic)("chat", chat_params(r)).value, session) is Some(_)
+  agent_json(src.topic("chat", chat_params(r)).get().value, session) is Some(_)
 }
 
 ///|
@@ -329,7 +349,7 @@ pub fn open_item(
 }
 
 ///|
-/// One of a station's screens in the viewer (AppState.openScreen; remote/ScreenActivity.kt): `title`, the row's,
+/// One of a station's screens in the viewer (AppState.openScreen): `title`, the row's,
 /// until the core says one (screen_view.mbt).
 pub fn open_screen(station : String, screen : String, title : String?) -> Unit {
   open_page(Screen({ station, screen, title: title.unwrap_or(""), until_gone: false }))
@@ -355,7 +375,7 @@ pub fn open_slack(app : String, web : String) -> Bool {
 }
 
 ///|
-/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one of still.fail's opens here as the core
+/// A link tapped in a message (AppState.openLink): one of still.fail's opens here as the core
 /// says (open_link_in); any other is handed to the system (its browser, or the app that takes it: mbui's open_url), said
 /// when nothing took it.
 pub fn open_link(href : String) -> Unit {

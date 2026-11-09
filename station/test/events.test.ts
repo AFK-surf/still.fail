@@ -735,7 +735,7 @@ test("a stream that follows the sessions at work is told what each its viewer se
     // A client that does not know yet names the sessions too: they are not followed by name then.
     live: (key) => (named.push(key), () => {}),
   });
-  // Only the viewer's sessions (docs/multi-workspace.md).
+  // Only the viewer's sessions.
   (events as any).deps.seen = (v: any, of: any) => !("session" in of) || seen[of.session] === v.email;
   const answer = await events.open(viewer("a@x"), "zh", false, [["k", 0, 200]], [], null, true, [], true);
   assert.equal(answer.headers?.["stillfail-follows"], "running");
@@ -765,6 +765,28 @@ test("a stream from before asked nothing new: the sessions it names, as before",
   await settle();
   assert.deepEqual(named, [["k", 3]]);
   reader(answer.body as AsyncIterable<Buffer>).close();
+});
+
+test("a named live stream only receives a delayed result while its viewer can still see the session", async () => {
+  const { events } = setup(testClock().clock);
+  let visible = true;
+  let exists = true;
+  let send: (message: unknown) => void = () => {};
+  (events as any).deps.seen = () => visible;
+  (events as any).deps.sessionExists = () => exists;
+  events.follow({ live: (_key, _from, _last, tell) => { send = tell; return () => {}; } });
+  const stream = reader((await events.open(viewer("a@x"), "zh", false, [["k", 0, null]], [])).body as AsyncIterable<Buffer>);
+  try {
+    send({ type: "timeline", entries: [{ text: "visible" }] });
+    visible = false;
+    send({ type: "timeline", entries: [{ text: "hidden" }] });
+    visible = true;
+    send({ type: "timeline", entries: [{ text: "visible again" }] });
+    exists = false;
+    send({ type: "timeline", entries: [{ text: "deleted" }] });
+    await settle();
+    assert.deepEqual(stream.got.filter((e) => e.event === "live").map((e) => e.data.entries[0].text), ["visible", "visible again"]);
+  } finally { await stream.close(); }
 });
 
 test("one person's streams in two languages are read for together: once a change, the sidebar and the thread alike", async () => {
@@ -1130,4 +1152,36 @@ test("a vault's records are told to its members as they are as each is told, aga
   const again = await streams(at);
   assert.deepEqual(again.map(told), [[], ["r1"]]);
   for (const s of again) await s.close();
+});
+
+test("a session's summary read before its messages were taken is not told after the station told they were", async () => {
+  // Its agent took a message (`session-pending`, told at once) while the summary a change before asked for was still
+  // being read: told after it, that summary had the message waiting again and the turn before, and a device stood the
+  // agent back in the queue, its activity in the chat gone until the next summary came (2026-11-09).
+  const { events, readers, change } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  const read = readers.read;
+  let pending = 1;
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  let first = true;
+  readers.read = async (op: string, args: any) => {
+    if (op !== "summary") return read(op, args);
+    const snapshot = pending;
+    if (first) {
+      first = false;
+      await held;
+    }
+    return JSON.stringify({ key: args.key, pending: snapshot });
+  };
+  change({ type: "session", key: "s" });
+  await settle();
+  pending = 0;
+  change({ type: "session", key: "s", pending: 0 });
+  release();
+  await settle();
+  const told = a.got.filter((e) => e.event === "session" || e.event === "session-pending").map((e) => [e.event, e.data.pending]);
+  assert.deepEqual(told, [["session-pending", 0], ["session", 0]]);
+  await a.close();
 });

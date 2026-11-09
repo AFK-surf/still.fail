@@ -7,9 +7,9 @@ fn a11y_view(sent : Ref[Int], send_id : Ref[Int]) -> (@ui.Ctx) -> Unit {
       let send = c.id("send")
       send_id.val = send
       c.box(id=send, w=Px(80.0), h=Px(40.0), fn() { c.text("Send", wrap=false) |> ignore }) |> ignore
-      if c.clicked(send) {
+      c.on_press(send, fn() {
         sent.val += 1
-      }
+      })
       let back = c.id("back")
       c.box(id=back, w=Px(40.0), h=Px(40.0), label="Back", fn() {  }) |> ignore
       c.text("Hello there", wrap=false) |> ignore

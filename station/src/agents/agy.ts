@@ -1,5 +1,5 @@
 // Antigravity CLI driver: one `agy acp` per session, spoken to in ACP (acp.ts) with one ACP session in it. See
-// docs/agy.md. Beside what ACP says:
+//. Beside what ACP says:
 // - its files (sign-in, settings, conversations) are in the profile's, `--gemini-dir`: none of the machine's ~/.gemini;
 // - the station's instructions are appended to its system prompt (`_meta.antigravity.systemPrompt.append` of
 //   session/new and session/load, which initialize says it takes);

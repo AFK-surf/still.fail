@@ -1,4 +1,4 @@
-// An agent's request to debug its person's phone as a card (docs/adb-share.md, 2026-10-29: as a vault request's): what
+// An agent's request to debug its person's phone as a card (2026-10-29: as a vault request's): what
 // is asked in its title, the agent's reason under it, and at its foot 允许 as the one solid button, 拒绝 beside it, and
 // how long it is allowed a choice beside them that starts at the longest (`adb.decide` on the chat's station). Only the
 // viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went. What it
@@ -42,10 +42,9 @@ pub fn phone_card(
 }
 
 ///|
-/// Whether this device is outside the person's own lock, or remembers another than the cloud has.
-fn adb_outside(view : Json?) -> Bool {
-  let standing = text(field(view, "personal"), "standing")
-  standing == "outside" || standing == "replaced"
+/// A request as the core has it (`adbShare`'s `grants`): whose it is, and what stands in its way.
+fn phone_row(core : Core, request : String) -> Json? {
+  items((core.topic)("adbShare", Map([])).get().value, "grants").iter().find_first(fn(g) { text(Some(g), "id") == request })
 }
 
 ///|
@@ -53,14 +52,19 @@ fn adb_outside(view : Json?) -> Bool {
 /// and 查看步骤 (`how`) in 允许's place.
 fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, lasts : String, how : () -> Unit) -> Unit {
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
-  let lacks = match adb_ready(c) {
+  let row = phone_row(core, request)
+  // (a station from before signatures: allowed, nothing would lend)
+  let lacks = if flag(row, "oldStation") {
+    Some(tr("android-misc.personal.updateStation"))
+  } else if flag(row, "join") {
+    // (no lock of the person's own on this device: not allowed here until it has one, its page a tap away)
+    Some(tr("android-misc.personal.open"))
+  } else { match adb_ready(c) {
     AdbLacks(step) => Some(step)
     // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
-    AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
-    // (on a person's own lock it does not know: allowed, it could sign nothing; joined on its page)
-    AdbLends if adb_outside((core.topic)("adbShare", Map([])).value) => Some(tr("android-misc.adb.ask.personal"))
+    AdbLends if !flag((core.topic)("adbShare", Map([])).get().value, "on") => Some(tr("android-misc.adb.step.on"))
     _ => None
-  }
+  } }
   // (up to its owner's 默认最长授权, starting at the longest)
   let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
   let scope = match vault_picked.get("phone/" + request) {
@@ -101,15 +105,11 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   }
   @sf.ask_buttons(c, fn() {
     if lacks is Some(_) {
-      if @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary) {
-        how()
-      }
-    } else if @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
-      decide(true)
+      @sf.button(c, if flag(row, "join") { tr("android-misc.personal.open") } else { tr("android-misc.adb.ask.how") }, key="phone/" + request + "/how", tone=Primary, on_press=how)
+    } else {
+      @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under, on_press=fn() { decide(true) })
     }
-    if @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under) {
-      decide(false)
-    }
+    @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under, on_press=fn() { decide(false) })
     // (nothing to allow yet: no length to choose)
     if scopes.length() < 2 || lacks is Some(_) {
       return
@@ -178,7 +178,7 @@ fn phone_link_words(link : String) -> String {
 pub fn phone_link(core : Core?, station : String, said : String) -> String {
   match core {
     Some(core) => {
-      let view = adb_lend_view((core.topic)("adbShare", Map([])).value, station)
+      let view = adb_lend_view((core.topic)("adbShare", Map([])).get().value, station)
       if flag(view, "sharing") && text(view, "station") == station && text(view, "phase") == "offered" && text(view, "adb") != "" {
         text(view, "adb")
       } else {
@@ -193,9 +193,10 @@ pub fn phone_link(core : Core?, station : String, said : String) -> String {
 /// Where a request's 查看步骤 takes the person: settings' 共享调试 while the phone's switch is off (it is turned on
 /// there), else the 共享调试 of the chat's station (`station`), which says what is next for it, pairing with it too
 /// (2026-10-30: it opened settings' page, which has nothing of any station, its pairing nowhere to be found).
-pub fn phone_steps(core : Core?, station : String) -> Route {
+pub fn phone_steps(core : Core?, station : String, request? : String = "") -> Route {
   match core {
-    Some(core) if flag((core.topic)("adbShare", Map([])).value, "on") => AdbShare(station)
+    Some(core) if flag(phone_row(core, request), "join") => PersonalLock
+    Some(core) if flag((core.topic)("adbShare", Map([])).get().value, "on") => AdbShare(station)
     _ => AdbShare("")
   }
 }

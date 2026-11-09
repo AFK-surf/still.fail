@@ -79,7 +79,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
   let base = fixture("")
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "accounts" =>
           {
@@ -107,7 +107,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
           vc.vaults_asked = true
           { value: None, error: None, version: 0 }
         }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -258,7 +258,7 @@ test "a request decided in its chat: its card closes on screen to how it went, n
   let (nx, ny) = t.find("不存").unwrap()
   tap_now(t, "不存")
   assert_eq(calls.filter(fn(n) { n.has_prefix("vault.") }), ["vault.deny"])
-  // decided: how it went in its place, the room going to it as what else changes does (docs/list-motion.md)
+  // decided: how it went in its place, the room going to it as what else changes does (mbui's view/list_motion.mbt)
   t.run_for(turn_most_ms)
   assert_true(t.find("未存入 测试服务登录") is Some(_))
   t.press_at(nx, ny)

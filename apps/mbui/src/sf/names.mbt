@@ -1,5 +1,5 @@
 // A folder's names as a viewer reads them (web/ui viewer/names.ts): in their numbers' order (the playlist), and the
-// subtitle beside a video. Plain functions over names (zdrive's Playlist.kt and SideSubtitles.kt, as Android had them).
+// subtitle beside a video. Plain functions over names (as Android had them).
 
 ///|
 /// The playable names of a folder in the order a person would watch them: numbers as numbers (E2 before E10).
@@ -29,15 +29,6 @@ pub fn next_in(current : String, list : Array[String]) -> String? {
   match list.search(current) {
     Some(at) => list.get(at + 1)
     None => list.iter().find_first(fn(n) { compare_natural(n, current) > 0 })
-  }
-}
-
-///|
-/// What comes before `current` in `list`, or None at its start (or when it is not in it).
-pub fn prev_in(current : String, list : Array[String]) -> String? {
-  match list.search(current) {
-    Some(at) if at > 0 => list.get(at - 1)
-    _ => None
   }
 }
 
@@ -107,12 +98,6 @@ pub fn extension_of(name : String) -> String {
     Some(i) => name.view(start_offset=i + 1).to_owned().to_lower()
     None => ""
   }
-}
-
-///|
-/// Whether `name` is a subtitle this player reads (SubRip, WebVTT, ASS/SSA).
-pub fn is_subtitle(name : String) -> Bool {
-  subtitle_extensions.contains(extension_of(name))
 }
 
 ///|

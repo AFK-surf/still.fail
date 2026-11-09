@@ -8,17 +8,125 @@
 /// `value` with `ops` (a `delta` message's array) applied.
 pub fn apply_delta(value : Json, ops : Array[Json]) -> Json {
   let mut v = value
-  for op in ops {
-    match op {
+  let mut i = 0
+  while i < ops.length() {
+    match ops[i] {
       Object(o) =>
         match o.get("path") {
-          Some(Array(path)) => v = apply_op(v, o, path, 0)
+          Some(Array(path)) => {
+            // Patches of one list's items in a row (a station's state on each of its 1400 rows) go together: the list
+            // copied and its keys read once, not once a patch (35 ms a delta of 1400 on a Mac, 160 of 3000).
+            let run = patch_run(ops, i, o)
+            if run > 1 {
+              v = at_list(v, path, 0, fn(list) { patch_all(list, ops[i:i + run], o) })
+              i += run
+              continue
+            }
+            v = apply_op(v, o, path, 0)
+          }
           _ => ()
         }
       _ => ()
     }
+    i += 1
   }
   v
+}
+
+///|
+/// How many ops from `at` (`first`, its own) are keyed patches at the same path by the same key: 0 when it is none.
+fn patch_run(ops : Array[Json], at : Int, first : Map[String, Json]) -> Int {
+  guard first.get("patch") is Some(_) && first.get("drop") is None && first.get("key") is Some(Array(_)) else {
+    return 0
+  }
+  let key = first.get("key")
+  let path = first.get("path")
+  let mut n = 1
+  while at + n < ops.length() {
+    guard ops[at + n] is Object(o) &&
+      o.get("patch") is Some(_) &&
+      o.get("drop") is None &&
+      o.get("key") == key &&
+      o.get("path") == path else {
+      break
+    }
+    n += 1
+  }
+  n
+}
+
+///|
+/// `node` with the list at `path` (from `depth`) made by `f`, the arrays and objects along it copied; as it was when
+/// the path goes through what is not there, as apply_op skips a keyed op then.
+fn at_list(node : Json, path : Array[Json], depth : Int, f : (Array[Json]) -> Json) -> Json {
+  if depth == path.length() {
+    return match node {
+      Array(list) => f(list)
+      _ => node
+    }
+  }
+  match node {
+    Array(a) =>
+      match index_of(path[depth]) {
+        Some(i) if i < a.length() => {
+          let c = a.copy()
+          c[i] = at_list(a[i], path, depth + 1, f)
+          Json::array(c)
+        }
+        _ => node
+      }
+    Object(m) =>
+      match path[depth] {
+        String(k) =>
+          match m.get(k) {
+            Some(inner) => {
+              let c = m.copy()
+              c[k] = at_list(inner, path, depth + 1, f)
+              Json::object(c)
+            }
+            None => node
+          }
+        _ => node
+      }
+    _ => node
+  }
+}
+
+///|
+/// The list with each of `run`'s patches applied in turn, as apply_keyed applies them one by one: each to the first
+/// item with its key. The items' keys are read once, and again only after a patch changed one.
+fn patch_all(list : Array[Json], run : ArrayView[Json], first : Map[String, Json]) -> Json {
+  let fields = match first.get("key") {
+    Some(Array(f)) => f
+    _ => return Json::array(list)
+  }
+  let out = list.copy()
+  let index : Map[String, Int] = {}
+  let mut stale = true
+  for op in run {
+    guard op is Object(o) && o.get("patch") is Some(k) else { continue }
+    if stale {
+      index.clear()
+      for i, item in out {
+        let key = key_of(item, fields).stringify()
+        if !index.contains(key) {
+          index[key] = i
+        }
+      }
+      stale = false
+    }
+    match (index.get(k.stringify()), o.get("ops")) {
+      (Some(i), Some(Array(ops))) => {
+        let was = out[i]
+        out[i] = apply_delta(was, ops)
+        if key_of(out[i], fields) != key_of(was, fields) {
+          stale = true
+        }
+      }
+      _ => ()
+    }
+  }
+  Json::array(out)
 }
 
 ///|

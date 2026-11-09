@@ -1,4 +1,4 @@
-// Cursor as a runtime end to end (docs/cursor.md), on a dev cloud (cloud/test/dev.ts), a real station and the owner's
+// Cursor as a runtime end to end, on a dev cloud (cloud/test/dev.ts), a real station and the owner's
 // real core, against the real Cursor: a chat on a Cursor profile answers through the station's tools (its instructions
 // and the stillfail MCP server reached), a message sent while a command runs goes into the turn by the SDK's steer (the
 // command not run again), each turn's usage is kept, and the station started again takes the session up (the agent

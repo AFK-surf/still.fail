@@ -9,12 +9,12 @@ test "a screen's JSON: its topics by name and params, its calls answered, its pa
     #| "calls": [{"call": "draft.get", "params": {"key": "b"}, "ok": "B"}, {"call": "draft.get", "params": {"key": "a"}, "ok": "A"}]}
     ,
   )
-  assert_eq((src.topic)("notify", {}).value, Some({ "on": true }))
+  assert_eq(src.topic("notify", {}).get().value, Some({ "on": true }))
   let chat : Map[String, Json] = { "station": Json::string("ws1/st1"), "session": Json::string("s-c1") }
-  assert_eq(text((src.topic)("chat", chat).value, "title"), "整理发布清单")
+  assert_eq(text(src.topic("chat", chat).get().value, "title"), "整理发布清单")
   // another chat's: none (a page that waits for it, as over a core that has not said it yet)
   chat["session"] = Json::string("s-c2")
-  assert_true((src.topic)("chat", chat).value is None)
+  assert_true(src.topic("chat", chat).get().value is None)
   let got : Array[Result[Json, Json]] = []
   (src.call)("draft.get", { "key": "a" }, fn(r) { got.push(r) })
   // another's params: the first answer by its name

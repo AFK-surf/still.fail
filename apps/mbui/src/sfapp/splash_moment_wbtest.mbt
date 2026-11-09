@@ -11,17 +11,17 @@ fn splash_src(accounts : @signals.Signal[Bool]) -> Source {
   let base = fixture("home")
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "workspaces" {
         { value: None, error: None, version: 0 }
       } else if name == "accounts" {
         if accounts.get() {
-          { ..(base.topic)(name, params), version: 1 }
+          { ..base.topic(name, params).get().snapshot(), version: 1 }
         } else {
           { value: None, error: None, version: 0 }
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

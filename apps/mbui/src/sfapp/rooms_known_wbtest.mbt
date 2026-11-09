@@ -1,5 +1,5 @@
 // The room a press has (mbui's Tester::room_faults and hover_only_faults, rooms.mbt; still.fail's rules 1 and 2,
-// docs/architecture.md: room, what takes presses 44×44 at least; apart, no two such rooms overlapping; hover, what only
+// room, what takes presses 44×44 at least; apart, no two such rooms overlapping; hover, what only
 // a resting pointer shows reached by a hold too) on the same screens and windows the corner rule is held on
 // (corners_wbtest.mbt, each screen opened once for all), in Chinese. Each rule's faults, all screens in all windows,
 // keep to the bar here: one more fails, and one less until the bar comes down to it. Every fault is printed
@@ -10,7 +10,7 @@
 /// showed the chats' list, its fixture naming no page, and shows the notifications page now: the chats' list's 10 room
 /// and 7 apart gone from it, the settings' list's 21 apart beside it in the wide windows come, the ones every settings
 /// screen there has: its rows 32 high, 34 apart. The same day the pages' rows the library's: 2 apart fewer. And a
-/// capsule in a smooth corner standing as a circle reads it (smooth.mbt round_like): a tablet's composer on the tape
+/// capsule in a smooth corner standing as a circle reads it (capsule_in): a tablet's composer on the tape
 /// 6 lower, the chat's list showing more of the message at its top, its time under its words as every message's: 1
 /// apart more. (2026-10-27: a chat row's state line and the marks in it parts of the row, only pointed at,
 /// not targets of their own: 2090 room fewer. The same day one room for the hit test, a finger's and a pointer's,
@@ -48,8 +48,10 @@
 /// panel's accounts open over it a screen of its own (chat-model-accounts), what chat-model-pop has under it: its bar's
 /// agent key in the wide windows, 4 more, 223. 千恋＊万花's thirty looks of the card to share swept as its others are
 /// (share-card-senren-…), each over a new chat's composer laid out Medium on a tablet: its three chips, 90 more, 313.
-/// 归档建议 made once (2026-11-03): 4 fewer, 309. The chats' lists made once (2026-11-03): one fewer, 308. Back on 0.1.7190's chat page (#3975): 306.)
-let rooms_known : Map[String, Int] = { "room": 306, "apart": 0, "hover": 0 }
+/// 归档建议 made once (2026-11-03): 4 fewer, 309. The chats' lists made once (2026-11-03): one fewer, 308. Back on 0.1.7190's chat page (#3975): 306. The reader's
+/// layout as nodes of the window's tree (reader-layout): 4 fewer, 302. 连接 and a connect's page made once (2026-11-09):
+/// 5 fewer, 297.)
+let rooms_known : Map[String, Int] = { "room": 297, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

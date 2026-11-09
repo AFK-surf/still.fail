@@ -1,4 +1,4 @@
-// Signed releases for tests (docs/release-signing.md): a key of the tests' own, which only the stations made in tests
+// Signed releases for tests (scripts/release-sign.ts): a key of the tests' own, which only the stations made in tests
 // take (given as `trusted`), and feeds signed by it as scripts/release-sign.ts signs them.
 import { createPublicKey, generateKeyPairSync, sign } from "node:crypto";
 import { type Build, keyId } from "../src/updates/signed.ts";

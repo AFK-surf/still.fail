@@ -1,8 +1,8 @@
-// A menu of the presenters' (menu_popover's: the library's dropdown, kit's dropdown_menu and menu_panel, in the web's
+// A menu of the presenters' (the library's dropdown, kit's dropdown_menu and menu_panel, in the web's
 // look) as nodes of the window's tree: a modal layer over the window, nothing under it dimmed, its small panel beside
 // what opened it (where it was drawn as it opened: under it, `offset` off, lined up `along` it, over it where there is
 // not the room under: View::beside), grown out of that side as it comes (pop_in), gone at once as it closes (as the
-// presenters let go of a menu the frame it closes: menu_popover); its rows as menu_row draws them (as high as the screen's pick row at least, its icon or a choice's check in
+// presenters let go of a menu the frame it closes); its rows as menu_row draws them (as high as the screen's pick row at least, its icon or a choice's check in
 // a column before its words where one has one, a danger's in red, one not to be chosen faint), headings and lines
 // between parts; what it holds scrolling where it is taller than the window leaves it. Its rows are one roving group, the
 // one with the focus lit: Up and Down move the focus along them (not round), Home and End to the ends, letters typed
@@ -183,7 +183,7 @@ pub fn menu_node(
       |> ignore
       // (what opened it, where it is drawn: what its panel goes beside)
       let at = anchor(layer)
-      // (a column before every item's words where one has an icon or is one of a choice: menu_popover's dropdown)
+      // (a column before every item's words where one has an icon or is one of a choice: the web's dropdown)
       let iconed = fn() { content().iter().any(fn(x) { x is Some(i) && i.chosen is None && i.icon != "" }) }
       let lead = fn() { iconed() || content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) }) }
       let gap = fn() { if lead() && !iconed() { chooser_gap } else { menu_gap } }
@@ -251,7 +251,7 @@ pub fn menu_node(
             // anew there; a row's words, icon, check and whether it can be chosen read again as they change, the row the
             // same, its focus kept)
             b.each(fn() { content().mapi(fn(i, x) { (i, menu_kind(x)) }) }, fn(k) { k }, fn(cell, k) {
-              let (i, kind) = @signals.untracked(fn() { k.get() })
+              let (i, kind) = k.untracked()
               let item = fn() {
                 match content().get(i) {
                   Some(Some(item)) => item
@@ -316,6 +316,7 @@ let menu_none : MenuItem = {
 /// A row of a menu (menu_row's look) in `b`: what `item()` is now, the `i`th; lit while it has the focus (its ground
 /// the pointer's or the keyboard's where that is shown or the pointer is on it); the pointer moving onto it gives it the
 /// focus, unseen; pressed, `go`. Its words, icon, check and whether it can be chosen as the item has them now. The row.
+#callsite(autofill(loc))
 fn menu_row_node(
   b : @view.View,
   item : () -> MenuItem,
@@ -327,10 +328,11 @@ fn menu_row_node(
   current : @signals.Signal[Int],
   stop : () -> Int,
   extra : MenuExtra,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let t = theme()
   let off = fn() { item().disabled }
-  b.box(fn(r) {
+  b.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
@@ -386,7 +388,7 @@ fn menu_row_node(
           }
         }
         col.each(fn() { if mark() == "" { [] } else { [mark()] } }, fn(m) { m }, fn(slot, m) {
-          let name = @signals.untracked(fn() { m.get() })
+          let name = m.untracked()
           if name == "\u{1}check" {
             icon_node(slot, "check", 14.0, By(fn() { library_theme().p.text })) |> ignore
           } else {
@@ -480,16 +482,18 @@ pub(all) struct MenuExtra {
 let menu_no_extra : MenuExtra = { note: "", value: "", mark: None }
 
 ///|
-/// A heading among a menu's items (menu_popover's heading_look): its words (`label()`) as far in as its rows' words
+/// A heading among a menu's items: its words (`label()`) as far in as its rows' words
 /// (`past()`: past the columns before them where there are: a check's or an icon's, a mark's), small and muted, 6 over and
 /// 4 under it.
+#callsite(autofill(loc))
 fn menu_heading_node(
   b : @view.View,
   label : () -> String,
   past : () -> Double,
   reach : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
-  b.box(fn(h) {
+  b.box(made_for=loc, fn(h) {
     h.padding(By(fn() { (text_in + past() + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
     h.box(fn(w) {
       w
@@ -505,8 +509,9 @@ fn menu_heading_node(
 ///|
 /// A line between parts of a menu (menu_rule): the words' ink faintly, 1 high, 6 over and under it, as wide as its rows'
 /// grounds.
-fn menu_rule_node(b : @view.View, reach : Double) -> Unit {
-  b.box(fn(r) {
+#callsite(autofill(loc))
+fn menu_rule_node(b : @view.View, reach : Double, loc~ : SourceLoc) -> Unit {
+  b.box(made_for=loc, fn(r) {
     r.padding(Is((reach, 6.0, reach, 6.0))) |> ignore
     r.box(fn(l) { l.height(Is(Some(1.0))).ground(By(fn() { @ui.alpha(@ui.tree_theme().fg, 0.12) })) |> ignore }) |> ignore
   })
@@ -574,8 +579,9 @@ fn view_along(a : @ui.Along) -> @view.Along {
 
 ///|
 /// What a menu goes beside at a place in the window (x, y, w, h: a point where w and h are 0), made in `layer`.
-pub fn fixed_anchor(layer : @view.View, at : (Double, Double, Double, Double)) -> @view.View {
-  layer.box(fn(a) {
+#callsite(autofill(loc))
+pub fn fixed_anchor(layer : @view.View, at : (Double, Double, Double, Double), loc~ : SourceLoc) -> @view.View {
+  layer.box(made_for=loc, fn(a) {
     let (x, y, w, h) = at
     a.width(Is(Some(w))).height(Is(Some(h))).offset(Is((x, y))) |> ignore
   })

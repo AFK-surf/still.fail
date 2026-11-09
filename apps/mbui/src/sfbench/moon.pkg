@@ -4,12 +4,17 @@ import {
   "stillfail/sf",
   "stillfail/sfkept",
   "stillfail/sfapp",
+  "mbui/wasmrt",
 }
 
 options(
   "is-main": true,
+  targets: { "wasm_shell.mbt": [ "wasm" ] },
   link: {
     "js": { "format": "iife" },
+    // (its instructions counted, run by mbui's native shell: scripts/instrbench.sh; what the shell calls of it,
+    // wasm_shell.mbt)
+    "wasm": { "exports": ["mbw_string", "mbw_bytes", "film_text_length", "film_text_unit"], "export-memory-name": "memory" },
     "native": {
       "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
     },

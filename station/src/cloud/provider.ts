@@ -1,5 +1,5 @@
 // Which control plane a station is enrolled in, and how each one is spoken to: still.fail cloud (the default, as it
-// always was) or Comma (docs/cloud.md, "Control planes"). Only names, paths and signing tags differ; the scheme is one:
+// always was) or Comma ("Control planes"). Only names, paths and signing tags differ; the scheme is one:
 // Ed25519 over "<tag>:<origin>:<station>:<ts>[:<sha256 of the body>]" with the station's key, in x-<prefix>-* headers.
 // cloud.json says which (`provider`, absent: still.fail).
 
@@ -19,7 +19,7 @@ export type ProviderSpec = {
   readonly enrollPath: string;
   /// The enrollment proof's prefixes, tried in order: the next only when the control plane refuses the signature.
   readonly enrollPrefixes: readonly string[];
-  /// POST, signed as enrollment: joins one more workspace, staying in those it is in (docs/multi-workspace.md).
+  /// POST, signed as enrollment: joins one more workspace, staying in those it is in.
   readonly joinPath: string;
   /// The presence WebSocket.
   readonly connectPath: string;

@@ -2,7 +2,7 @@
 // over everything, a dialog) holds an entry of the browser's history of its own, the page's address with `stillfailLayer`
 // (how many layers deep) added to the router's state, so the router sees the same page. Back leaves that entry and the
 // layers over where it lands close; a layer closed another way (its ×, the scrim) goes back off its entry itself.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "preact/compat";
 
 interface Layer { depth: number; close: () => void; gone: boolean }
 
@@ -90,10 +90,4 @@ export function useBackClose(open: boolean, close: () => void) {
     const layer = hold(() => latest.current());
     return () => release(layer);
   }, [open]);
-}
-
-/** Runs a navigation once a back of our own (a layer closed by hand) has landed. */
-export function afterBack(go: () => void) {
-  if (pending) void pending.done.then(go);
-  else go();
 }
