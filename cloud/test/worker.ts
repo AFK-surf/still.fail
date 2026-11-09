@@ -198,6 +198,35 @@ export class Directory extends ProductionDirectory {
   }
 }
 
+/**
+ * A socket's opening whose answer from the Directory is late: the Directory has counted it, the object has not heard
+ * so yet. `hold` before it opens, `held` once the answer waits here, `go` lets it through.
+ */
+class LateOpening {
+  #gate: Promise<void> | null = null;
+  #go: (() => void) | null = null;
+  #arrived: (() => void) | null = null;
+  #here = new Promise<void>((resolve) => (this.#arrived = resolve));
+  hold() {
+    this.#gate = new Promise<void>((resolve) => (this.#go = resolve));
+  }
+  held() {
+    return this.#here;
+  }
+  go() {
+    this.#go?.();
+    this.#gate = null;
+  }
+  async through<T>(answer: Promise<T>): Promise<T> {
+    const value = await answer;
+    if (this.#gate) {
+      this.#arrived?.();
+      await this.#gate;
+    }
+    return value;
+  }
+}
+
 /** Where the sockets open (directory.ts `sockets`), as a deploy of DIRECTORY_SOCKETS sets it, for the whole isolate. */
 function socketsAt(where: "objects" | "primary") {
   sockets.where = () => where;
@@ -221,12 +250,38 @@ export class Station extends ProductionStation {
   handBackNow() {
     this.handBack();
   }
+  #late = new LateOpening();
+  holdOpening() {
+    this.#late.hold();
+  }
+  openingHeld() {
+    return this.#late.held();
+  }
+  letOpen() {
+    this.#late.go();
+  }
+  protected override connected(station: string, version: string | null) {
+    return this.#late.through(super.connected(station, version));
+  }
 }
 
 export class Account extends ProductionAccount {
   /** What the constructor does as a deploy that rolls the sockets back starts it. */
   handBackNow() {
     this.handBack();
+  }
+  #late = new LateOpening();
+  holdOpening() {
+    this.#late.hold();
+  }
+  openingHeld() {
+    return this.#late.held();
+  }
+  letOpen() {
+    this.#late.go();
+  }
+  protected override opened(sub: string) {
+    return this.#late.through(super.opened(sub));
   }
   expire(id: string, kind: "idle" | "absolute") {
     const account = this.ctx.storage.kv.get<any>("account");

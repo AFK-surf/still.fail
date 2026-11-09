@@ -335,7 +335,8 @@ export class Directory extends DurableObject<Env> {
 
   async #sendAll(kind: "account" | "station", key: string): Promise<void> {
     for (;;) {
-      const group = this.#rows("SELECT id, body, tries FROM outbox WHERE kind = ? AND key = ? AND next_at <= ? ORDER BY id", kind, key, nowSeconds());
+      // All that waits for it, what failed before with what is new, so it never hears a later change before an earlier one.
+      const group = this.#rows("SELECT id, body, tries FROM outbox WHERE kind = ? AND key = ? ORDER BY id", kind, key);
       if (group.length === 0) return;
       const bodies = group.map((r) => JSON.parse(r.body as string) as Delivery);
       const tried = group.some((r) => (r.tries as number) > 0);
@@ -390,7 +391,9 @@ export class Directory extends DurableObject<Env> {
    * close from before a later open.
    */
   #opened(kind: "account" | "station", key: string): number {
-    const gen = ((this.#one("SELECT MAX(gen) AS gen FROM live")?.gen as number | null) ?? 0) + 1;
+    // Never one given before: a close or an answer from before a later open must not take the later one's row.
+    const gen = (this.ctx.storage.kv.get<number>("opened") ?? 0) + 1;
+    this.ctx.storage.kv.put("opened", gen);
     this.#run("INSERT INTO live (kind, key, gen) VALUES (?, ?, ?) ON CONFLICT (kind, key) DO UPDATE SET gen = excluded.gen", kind, key, gen);
     return gen;
   }

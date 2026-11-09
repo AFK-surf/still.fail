@@ -11,9 +11,13 @@ import type { Env } from "./env";
 type Attachment = { station: string; at: number; gen: number; dropped?: boolean };
 
 export class Station extends DurableObject<Env> {
-  /** Sockets opening now, and whether it was told something meanwhile (what it read as it opened may be older). */
+  /**
+   * Sockets opening now (the Directory counts them already: `fetch`), and whether it was told something meanwhile (what
+   * it read as it opened may be older), with the frames that were for its socket.
+   */
   #opening = 0;
   #toldMeanwhile = false;
+  #framesMeanwhile: string[] = [];
   /** How many times it was let go while this object lives: an answer read before one is not kept after it. */
   #letGo = 0;
 
@@ -51,8 +55,11 @@ export class Station extends DurableObject<Env> {
     this.#opening++;
     let said: { frame: string | null; gen: number };
     try {
-      if (this.#opening === 1) this.#toldMeanwhile = false;
-      said = await this.#directory().stationConnected(station, header(request, "version"));
+      if (this.#opening === 1) {
+        this.#toldMeanwhile = false;
+        this.#framesMeanwhile = [];
+      }
+      said = await this.connected(station, header(request, "version"));
     } finally {
       this.#opening--;
     }
@@ -66,17 +73,27 @@ export class Station extends DurableObject<Env> {
     this.ctx.acceptWebSocket(pair[1]);
     pair[1].serializeAttachment({ station, at: Date.now(), gen: said.gen } satisfies Attachment);
     pair[1].send(said.frame);
+    for (const frame of this.#framesMeanwhile) this.#send(frame);
     if (this.#toldMeanwhile) await this.#sendState(station);
     if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS); // timer: a heartbeat's check, the station's pings
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
+  /** The Directory notes its socket opening, and says what to tell it first (a test makes its answer late). */
+  protected async connected(station: string, version: string | null): Promise<{ frame: string | null; gen: number }> {
+    return this.#directory().stationConnected(station, version);
+  }
+
   /** What the Directory tells it (directory.ts #deliver): sent on its socket; whether it holds one. */
   async deliver(station: string, body: Delivery): Promise<{ live: boolean }> {
-    if (this.#opening > 0) this.#toldMeanwhile = true;
+    // One opening is told as it opens, and is a socket already to the Directory, which would else stop telling it.
+    if (this.#opening > 0) {
+      this.#toldMeanwhile = true;
+      this.#framesMeanwhile.push(...(body.frames ?? []));
+    }
     if (body.state && !(await this.#sendState(station, body.frame))) return { live: false };
     for (const frame of body.frames ?? []) this.#send(frame);
-    return { live: this.#open().length > 0 };
+    return { live: this.#open().length > 0 || this.#opening > 0 };
   }
 
   /** Its state as the Directory has it now (`told` with a delivery, else asked), sent; in no workspace now, it is let go (false). */

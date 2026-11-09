@@ -143,6 +143,65 @@ test("a delivery that fails is tried again and gets there; the answer of a revoc
   }
 });
 
+test("what failed before goes with what is new, in order: an account let in and then not, with the first not heard, is not let in", async () => {
+  const h = await harness();
+  try {
+    const { tokens, bob } = await setUp(h);
+    const admin = h.as(tokens.alice, "admin");
+    const dir = await directory(h);
+    await dir.failTo(`account ${bob}`);
+    await admin("POST", `/v1/admin/users/${bob}/beta`, { on: true });
+    await h.settled();
+    assert.equal(((await dir.waiting()) as unknown[]).length, 1);
+    await dir.failTo();
+    await admin("POST", `/v1/admin/users/${bob}/beta`, { on: false });
+    await h.settled();
+    assert.deepEqual(await dir.waiting(), [], "both went, the earlier first");
+    await dir.retry();
+    assert.equal((await h.as(tokens.bob, "beta")("GET", "/v1/me")).status, 403);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a change told while a socket opens, the Directory's answer still on its way, reaches that socket, which is told from then on", async () => {
+  const h = await harness();
+  try {
+    const { tokens, alice, w, station, bob } = await setUp(h);
+    const carol = await h.login("carol");
+    await alice("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["carol@example.test"] });
+
+    const account = await h.object("ACCOUNTS", bob);
+    await account.holdOpening();
+    const opening = listen(h, tokens.bob.access_token);
+    await account.openingHeld();
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
+    await h.settled();
+    await account.letOpen();
+    const device = await opening;
+    assert.deepEqual(await device.take(), [{ type: "workspaces" }, { type: "workspace", id: w }]);
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "Hut" });
+    assert.deepEqual(await device.take(), [{ type: "workspaces" }, { type: "workspace", id: w }], "still counted as holding a socket");
+
+    // A station's: a member removed as it connects is revoked on the socket that opens, and in its state.
+    const object = await h.object("STATIONS", station.id);
+    await object.holdOpening();
+    const connecting = connect(h, station);
+    await object.openingHeld();
+    assert.equal((await alice("DELETE", `/v1/workspaces/${w}/members/${carol.subject}`)).status, 200);
+    await h.settled();
+    await object.letOpen();
+    const presence = await connecting;
+    const frames = await presence.take();
+    assert.ok(frames.some((f) => f.type === "revoke" && f.id === carol.subject), "the revocation");
+    assert.ok(frames.at(-1).type === "state" && frames.at(-1).revocations.some((r: any) => r.id === carol.subject), "its state as it is now");
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "Home" });
+    assert.equal((await presence.take()).at(-1).workspace_name, "Home", "still counted as holding a socket");
+  } finally {
+    await h.close();
+  }
+});
+
 test("what an object keeps is told whether or not it holds a socket: a station let go stops being one, a test channel let in", async () => {
   const h = await harness();
   try {

@@ -33,6 +33,9 @@ export type Live = boolean | "limited" | "not_beta";
 export class Account extends DurableObject<Env> {
   /** How many times it was told whether it is let into the test channel while this object lives (`beta`). */
   #betaTold = 0;
+  /** Events sockets opening now (the Directory counts them already: `events`), and what it was told for them meanwhile. */
+  #opening = 0;
+  #toldMeanwhile: string[] = [];
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -308,16 +311,20 @@ export class Account extends DurableObject<Env> {
       this.ctx.storage.kv.put("beta", body.beta);
     }
     const open = this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
-    for (const ws of open) {
-      for (const frame of body.frames ?? []) {
-        try {
-          ws.send(frame);
-        } catch {
-          // Closing already; its device reconnects and reads it all again.
-        }
+    for (const ws of open) this.#send(ws, body.frames ?? []);
+    // One opening is told as it opens, and is a socket already to the Directory, which would else stop telling it.
+    if (this.#opening > 0) this.#toldMeanwhile.push(...(body.frames ?? []));
+    return { live: open.length > 0 || this.#opening > 0 };
+  }
+
+  #send(ws: WebSocket, frames: string[]): void {
+    for (const frame of frames) {
+      try {
+        ws.send(frame);
+      } catch {
+        // Closing already; its device reconnects and reads it all again.
       }
     }
-    return { live: open.length > 0 };
   }
 
   /**
@@ -330,12 +337,28 @@ export class Account extends DurableObject<Env> {
     if (!this.session(this.data(), claims)) return denied();
     if (header(request, "channel") === "beta" && !(await this.beta(claims.sub))) return reply({ error: "not_beta" }, 403);
     if (!this.charge()) return limited();
-    const gen = await this.env.DIRECTORY.getByName("primary").seen(claims.sub);
-    this.ctx.storage.kv.put("events-gen", gen);
+    this.#opening++;
+    let gen: number;
+    try {
+      gen = await this.opened(claims.sub);
+    } catch (error) {
+      if (--this.#opening === 0) this.#toldMeanwhile = [];
+      throw error;
+    }
+    this.#opening--;
+    // The latest opening's, whichever answer came last.
+    this.ctx.storage.kv.put("events-gen", Math.max(gen, this.ctx.storage.kv.get<number>("events-gen") ?? 0));
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1]);
     pair[1].serializeAttachment({ sub: claims.sub });
+    this.#send(pair[1], this.#toldMeanwhile);
+    if (this.#opening === 0) this.#toldMeanwhile = [];
     return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": header(request, "protocol") ?? EVENTS_PROTOCOLS[0] } });
+  }
+
+  /** The Directory notes a socket opening here, and says which opening it is (a test makes its answer late). */
+  protected async opened(sub: string): Promise<number> {
+    return this.env.DIRECTORY.getByName("primary").seen(sub);
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
