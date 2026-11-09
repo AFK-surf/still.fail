@@ -489,18 +489,21 @@ const missingOriginIndex = (error: unknown): boolean => {
   return /^no such (?:table|index): (?:main\.)?(?:cc_index_meta|cc_sessions|cc_session_rows|cc_session_dirty|cc_order_dispatch|cc_session_order|thread_sessions_session)$/.test(message);
 };
 
+const preparedOriginIndexAvailable = (s: Store): boolean => {
+  // A missing thread has a NULL surface in cc_session_rows. Older schemas that also permit a real thread with a
+  // NULL surface cannot distinguish those cases in the partial index, so they retain the original check.
+  const surface = s.db.prepare(`SELECT "notnull" AS required FROM pragma_table_info('threads') WHERE name = 'surface'`).get();
+  if (surface?.required !== 1) return false;
+  return s.db.prepare("SELECT version FROM cc_index_meta WHERE id = 1").get()?.version === CC_INDEX_VERSION;
+};
+
 export function namingOriginProbe(s: Store): (session: string) => boolean {
   const lookup = s.db.prepare(HAS_NAMING_ORIGIN);
   const original = (session: string) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
   let possible: ReturnType<DatabaseSync["prepare"]>;
   let prepared: ReturnType<DatabaseSync["prepare"]>;
   try {
-    // A missing thread has a NULL surface in cc_session_rows. Older schemas that also permit a real thread with a
-    // NULL surface cannot distinguish those cases in the partial index, so they retain the original check.
-    const surface = s.db.prepare(`SELECT "notnull" AS required FROM pragma_table_info('threads') WHERE name = 'surface'`).get();
-    if (surface?.required !== 1) return original;
-    const version = s.db.prepare("SELECT version FROM cc_index_meta WHERE id = 1").get();
-    if (version?.version !== CC_INDEX_VERSION) return original;
+    if (!preparedOriginIndexAvailable(s)) return original;
     possible = s.db.prepare(HAS_NAMING_ORIGIN_POSSIBLE);
     prepared = s.db.prepare(HAS_NAMING_ORIGIN_PREPARED);
   } catch (error) {
@@ -534,10 +537,50 @@ export const LATEST_NAMING_ORIGIN = `SELECT (SELECT t.id FROM thread_sessions m
   ) ORDER BY COALESCE(e.at, 0) DESC, t.created_at DESC, t.id DESC LIMIT 1) AS id
   FROM json_each(?1) requested`;
 
+// Classify the requested members together, keeping their array positions even when a session is repeated.
+export const LATEST_NAMING_ORIGIN_POSSIBLE = `SELECT requested.key AS ordinal FROM json_each(?1) requested
+  CROSS JOIN cc_sessions c ON c.session=requested.value CROSS JOIN sessions live ON live.key=c.session
+  WHERE c.complete=1 AND EXISTS (SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session
+    WHERE session=c.session LIMIT 1 OFFSET 8)`;
+
+// The copy index orders by the last entry, not the last message. Sort a bounded set in naming order and retain the
+// original batch query when there are more external origins; the index is useful here only for a live, ready member.
+export const LATEST_NAMING_ORIGIN_PREPARED = `WITH candidates AS MATERIALIZED (
+    SELECT thread FROM cc_session_rows INDEXED BY cc_session_order
+    WHERE session=?1 AND surface != 'ember' LIMIT 9
+  ) SELECT (SELECT COUNT(*) FROM candidates) AS count,
+    CASE WHEN (SELECT COUNT(*) FROM candidates)<9 THEN (SELECT t.id FROM candidates r
+      CROSS JOIN threads t ON t.id=r.thread LEFT JOIN thread_state st ON st.thread=t.id
+      LEFT JOIN entries e ON e.thread=t.id AND e.n=st.said_n AND e.kind='message'
+      ORDER BY COALESCE(e.at,0) DESC,t.created_at DESC,t.id DESC LIMIT 1) END AS id`;
+
 export function latestNamingOrigins(s: Store, sessions: string[]): number[] {
   if (sessions.length === 0) return [];
-  return all(s, LATEST_NAMING_ORIGIN, JSON.stringify(sessions), STILLFAIL_SURFACE)
-    .flatMap((row) => row.id === null ? [] : [row.id as number]);
+  const original = (keys: string[]) => all(s, LATEST_NAMING_ORIGIN, JSON.stringify(keys), STILLFAIL_SURFACE);
+  // The fast and fallback reads, including liveness and index readiness, must share the old query's one snapshot.
+  s.db.exec("SAVEPOINT latest_naming_origins");
+  try {
+    if (!preparedOriginIndexAvailable(s)) return original(sessions).flatMap((row) => row.id === null ? [] : [row.id as number]);
+    const possible = new Set(s.db.prepare(LATEST_NAMING_ORIGIN_POSSIBLE).all(JSON.stringify(sessions))
+      .map((row) => row.ordinal as number));
+    const prepared = s.db.prepare(LATEST_NAMING_ORIGIN_PREPARED);
+    const ids: (number | null)[] = new Array(sessions.length).fill(null);
+    const pending: string[] = [], positions: number[] = [];
+    for (let i=0; i<sessions.length; i++) {
+      const session = sessions[i]!;
+      if (possible.has(i) && ccSessionReady(s.db, session)) {
+        const candidate = prepared.get(session) as { count: number; id: number | null };
+        if (candidate.count < 9) { ids[i] = candidate.id; continue; }
+      }
+      pending.push(session); positions.push(i);
+    }
+    if (pending.length) for (const [i, row] of original(pending).entries()) ids[positions[i]!] = row.id as number | null;
+    return ids.filter((id): id is number => id !== null);
+  } catch (error) {
+    if (missingOriginIndex(error) || (error instanceof Error && error.message.startsWith("copy destination index version ")))
+      return original(sessions).flatMap((row) => row.id === null ? [] : [row.id as number]);
+    throw error;
+  } finally { s.db.exec("RELEASE latest_naming_origins"); }
 }
 
 /// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
