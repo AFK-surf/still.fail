@@ -1,5 +1,6 @@
 // Painting: the laid-out tree becomes a flat list of instances (60 floats
-// each) that every renderer draws with one shader:
+// each) that every renderer draws with one shader (some in strips, a
+// ground's middle flat, where that pays: src/host/bands.h):
 //   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
 //   36-39) · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
