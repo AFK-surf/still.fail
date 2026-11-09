@@ -199,6 +199,23 @@ test "its line gone with the answer that came out of its avatar, the agent still
 }
 
 ///|
+test "its line stays after a post saying how far it got, the agent still at work: only an answer that ends the turn takes its place" {
+  // (2026-11-09 the user: 「agent 发完消息 activity 不出现」, its line gone for the rest of the turn after a progress post)
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock, words="看下进度")
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  fix_clock_set(clock, clock.val + fix_answer_ms)
+  t.draw()
+  t.run_for(emit_all_ms())
+  assert_true(em.current is None)
+  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  assert_true(rd.running.length() > 0)
+  assert_true(rd.answered.is_empty())
+  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  emit_restore()
+}
+
+///|
 test "activity: an agent given words it has yet to take is at work: its line there as they wait for it" {
   // Queued (the station has the words, its agent not yet taken them; or a summary read before it took them says so):
   // its line went, and came back as it took them, each time words were sent (2026-11-09).

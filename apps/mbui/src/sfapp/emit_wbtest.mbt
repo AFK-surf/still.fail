@@ -3,7 +3,7 @@
 
 ///|
 /// The fixture's chat open, its clock the test's; words sent and taken by the station (its agent then at work).
-fn emit_core(clock : Ref[Double]) -> @ui.Tester {
+fn emit_core(clock : Ref[Double], words~ : String = "看一下列表") -> @ui.Tester {
   new_run()
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -12,7 +12,7 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
-  t.type_text("看一下列表")
+  t.type_text(words)
   tap_send(t)
   // the station has it: in the chat, its agent at work
   fix_clock_set(clock, clock.val + fix_deliver_ms)

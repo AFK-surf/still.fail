@@ -13,9 +13,10 @@ priv struct SentMoves {
 }
 
 ///|
-fn send_at_pace(deliver : Double, answer : Double, end : Double) -> SentMoves raise {
+fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double = -1.0) -> SentMoves raise {
   new_run()
   fix_pace.val = (deliver, answer, end)
+  fix_sent_for.val = sent
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -47,7 +48,7 @@ fn send_at_pace(deliver : Double, answer : Double, end : Double) -> SentMoves ra
   let way : Map[String, Double] = {}
   let turns : Map[String, Int] = {}
   let down : Map[String, Double] = {}
-  let end_at = t.time() + deliver + answer + (if end > 0.0 { end } else { 0.0 }) + 3000.0
+  let end_at = t.time() + deliver + (if sent > 0.0 { sent } else { 0.0 }) + answer + (if end > 0.0 { end } else { 0.0 }) + 3000.0
   while t.time() < end_at {
     t.frame()
     let seen : Map[String, Double] = {}
@@ -119,6 +120,35 @@ test "words sent at any pace of the station: the list goes up only, never down a
   }
   for b in bad {
     println("SENDSTEADY " + b)
+  }
+  assert_eq(bad.length(), 0)
+}
+
+///|
+test "words sent, the station slow to take them or the chat to reach them: the list goes up only, never down and back" {
+  // (正在发送 shows once they have been on their way a while (sending_shows_ms); taken, the outbox row is `sent`, its
+  // time under it, till the chat's entries reach its message: 2026-11-09 the user, 「发消息会跳动」「跟发送中的状态有关」)
+  let bad : Array[String] = []
+  for deliver in [0.0, 300.0, 790.0, 810.0, 1500.0] {
+    for sent in [-1.0, 0.0, 100.0, 600.0, 1200.0] {
+      for answer in [0.0, 1400.0] {
+        let at = "deliver \{deliver} sent \{sent} answer \{answer}"
+        let s = send_at_pace(deliver, answer, fix_turn_end_ms, sent~) catch {
+          e => {
+            let said = e.to_string()
+            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
+            continue
+          }
+        }
+        if s.turns > 0 || s.down >= 1.0 {
+          bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
+        }
+      }
+    }
+  }
+  for b in bad {
+    println("SENDSLOW " + b)
   }
   assert_eq(bad.length(), 0)
 }

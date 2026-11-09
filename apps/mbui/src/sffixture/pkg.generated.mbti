@@ -228,6 +228,8 @@ pub let fix_replied : Map[Int32, String]
 
 pub fn fix_runtime_of(String) -> String
 
+pub let fix_sent_for : @ref.Ref[Double]
+
 pub let fix_serial : @ref.Ref[Int32]
 
 pub let fix_service_css : String

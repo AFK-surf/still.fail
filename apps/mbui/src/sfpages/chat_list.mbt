@@ -160,10 +160,11 @@ pub fn chat_list(
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             let came = rd.rows.came(keys[i])
             // (a turn begun and over between two ticks, nothing of it coming out: no room, unseen, chat_tick)
-            let unseen = match rd.linger.get(a.key) {
-              Some(l) => l.unseen
-              None => false
-            }
+            let unseen = rd.answered_unseen.contains(a.key) ||
+              (match rd.linger.get(a.key) {
+                Some(l) => l.unseen
+                None => false
+              })
             let ri = if unseen {
               c.box(style=@ui.style(h=S0, clip=true, opacity=O0), fn() {
                 activity_row(c, src, here, a, em, rk, leaving, came)
