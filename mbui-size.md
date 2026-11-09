@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d2e401bf4](https://github.com/AFK-surf/still.fail/commit/d2e401bf4c1346d44c0064e9b2a08d1077ffea46) mbui: the chat's untested ways tested, and its lis | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.46 | 173.41 |
 | [c0c46191c](https://github.com/AFK-surf/still.fail/commit/c0c46191cd5346687858f65c836751d438e42609) mbui: a row back the other way soon after it stood | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.32 | 160.2 |
 | [829615271](https://github.com/AFK-surf/still.fail/commit/82961527108a4d028fc8d8c709d659302878482b) mbui: a chat's row looks its chat up once as its k | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.8 | 168.9 |
 | [735603acd](https://github.com/AFK-surf/still.fail/commit/735603acd9aa8dd799a94470d14b88bd2ffcb803) mbui: what a frame of headers alone asks of the ke | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.59 | 170.59 |
