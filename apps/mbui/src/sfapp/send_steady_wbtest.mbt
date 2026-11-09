@@ -29,16 +29,17 @@ fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double 
     None => 844.0
   }
   // (words drawn once only: another of the same, the agent's name on its line say, is not the one followed)
-  let once = fn() {
+  let once = fn(said : Array[(String, Double, Double, Double, Double, Double)]) {
     let n : Map[String, Int] = {}
-    for w in t.words_said() {
+    for w in said {
       n[w.0] = n.get(w.0).unwrap_or(0) + 1
     }
     n
   }
   let before : Map[String, Double] = {}
-  let counts = once()
-  for w in t.words_said() {
+  let said = t.words_said()
+  let counts = once(said)
+  for w in said {
     if w.2 + w.4 < field && w.2 > 0.0 && counts.get(w.0) == Some(1) {
       before[w.0] = w.2
     }
@@ -52,8 +53,10 @@ fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double 
   while t.time() < end_at {
     t.frame()
     let seen : Map[String, Double] = {}
-    let counts = once()
-    for w in t.words_said() {
+    // (the frame's words read once, not twice: a tenth or so of this file's time, run at each of CI's rates)
+    let said = t.words_said()
+    let counts = once(said)
+    for w in said {
       if before.contains(w.0) && counts.get(w.0) == Some(1) {
         seen[w.0] = w.2
       }
