@@ -232,11 +232,11 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
                   k => k
                 }
               }
-              if @sf.choice_row(c, "method/" + cid, false, text(cv, "title"), note=text(cv, "hint"), lead=fn() {
-                  @sf.provider_logo(c, runtime, kind, 18.0, text(tile, "mark"))
-                }) {
+              @sf.choice_row(c, "method/" + cid, false, text(cv, "title"), note=text(cv, "hint"), lead=fn() {
+                @sf.provider_logo(c, runtime, kind, 18.0, text(tile, "mark"))
+              }, on_press=fn() {
                 edit([("method", str(cid))])
-              }
+              })
             }
           })
         })
@@ -264,9 +264,9 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               line=18.0,
             )
             |> ignore
-            if @sf.button(c, tr("android-settings.login.restart"), key="login-restart") {
+            @sf.button(c, tr("android-settings.login.restart"), key="login-restart", on_press=fn() {
               drop_login(core, station, n)
-            }
+            })
           } else {
             login_steps(
               c,
@@ -345,9 +345,9 @@ fn connect_form(
     label(tr("web-mobile.profiles.region"))
     group_box(fn() {
       for r in regions {
-        if @sf.choice_row(c, "region/" + text(Some(r), "id"), text(Some(r), "id") == text(d, "region"), text(Some(r), "label")) {
+        @sf.choice_row(c, "region/" + text(Some(r), "id"), text(Some(r), "id") == text(d, "region"), text(Some(r), "label"), on_press=fn() {
           edit([("region", str(text(Some(r), "id")))])
-        }
+        })
       }
     })
   }
@@ -356,9 +356,9 @@ fn connect_form(
     label(tr("web-mobile.profiles.protocol"))
     group_box(fn() {
       for p in protocols {
-        if @sf.choice_row(c, "protocol/" + text(Some(p), "id"), text(Some(p), "id") == text(d, "protocol"), text(Some(p), "label")) {
+        @sf.choice_row(c, "protocol/" + text(Some(p), "id"), text(Some(p), "id") == text(d, "protocol"), text(Some(p), "label"), on_press=fn() {
           edit([("protocol", str(text(Some(p), "id")))])
-        }
+        })
       }
     })
   }
@@ -384,7 +384,7 @@ fn connect_form(
   }
   let submitting = is_doing(core, ["profile.flow.submit"], [("station", station), ("form", form)])
   c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
-    if @sf.button(c, text(d, "submitLabel"), key="profile-submit", tone=Primary, busy=submitting || flag(d, "pending"), disabled=!flag(d, "canSubmit")) {
+    @sf.button(c, text(d, "submitLabel"), key="profile-submit", tone=Primary, busy=submitting || flag(d, "pending"), disabled=!flag(d, "canSubmit"), on_press=fn() {
       c.blur()
       (core.call)("profile.flow.submit", obj([("station", str(station)), ("form", str(form))]), fn(r) {
         match r {
@@ -396,7 +396,7 @@ fn connect_form(
           Err(_) => ()
         }
       })
-    }
+    })
   })
   |> ignore
   if text(d, "usesLine") != "" {
@@ -416,25 +416,25 @@ fn pick_group(c : @ui.Ctx, g : Json?, pick : (String) -> Unit) -> Unit {
     rows_card(c, fn() {
       for p in items(g, "providers") {
         let pv = Some(p)
-        if list_row(c, key="provider/" + text(pv, "id"), fn() {
-            @sf.provider_logo(
-              c,
-              match text(pv, "runtime") {
-                "" => "claude"
-                r => r
-              },
-              match text(pv, "kind") {
-                "" => "api-provider"
-                k => k
-              },
-              18.0,
-              text(pv, "mark"),
-            )
-            row_title(c, text(pv, "name"))
-            chevron(c)
-          }) {
+        list_row(c, key="provider/" + text(pv, "id"), fn() {
+          @sf.provider_logo(
+            c,
+            match text(pv, "runtime") {
+              "" => "claude"
+              r => r
+            },
+            match text(pv, "kind") {
+              "" => "api-provider"
+              k => k
+            },
+            18.0,
+            text(pv, "mark"),
+          )
+          row_title(c, text(pv, "name"))
+          chevron(c)
+        }, on_press=fn() {
           pick(text(pv, "id"))
-        }
+        })
       }
     })
   })
@@ -551,40 +551,40 @@ fn account_blocks(c : @ui.Ctx, core : Core, ev : Json?) -> Array[() -> Unit] {
       // the stations it is signed in on: one borrowing it has nothing of its own to set
       for m in items(ev, "members").filter(fn(m) { text(Some(m), "role") != "user" }) {
         let mv = Some(m)
-        if list_row(c, key="account-member/" + text(mv, "station") + "/" + text(mv, "profileId"), fn() {
-            c.box(w=Fill(1.0), fn() {
-              c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-                presence_dot(
-                  c,
-                  if !flag(mv, "online") {
-                    "offline"
-                  } else if !flag(mv, "usable") {
-                    "error"
-                  } else {
-                    tone_dot(text(mv, "checkTone"))
-                  },
-                )
-                c.text(text(mv, "title"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
-              })
-              |> ignore
-              c.text(
-                if flag(mv, "online") {
-                  text(mv, "about")
+        list_row(c, key="account-member/" + text(mv, "station") + "/" + text(mv, "profileId"), fn() {
+          c.box(w=Fill(1.0), fn() {
+            c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+              presence_dot(
+                c,
+                if !flag(mv, "online") {
+                  "offline"
+                } else if !flag(mv, "usable") {
+                  "error"
                 } else {
-                  tr("android-settings.profiles.stationOffline")
+                  tone_dot(text(mv, "checkTone"))
                 },
-                size=t.t.meta,
-                color=t.p.muted,
-                w=Fill(1.0),
-                line=18.0,
               )
-              |> ignore
+              c.text(text(mv, "title"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
             })
             |> ignore
-            chevron(c)
-          }) {
+            c.text(
+              if flag(mv, "online") {
+                text(mv, "about")
+              } else {
+                tr("android-settings.profiles.stationOffline")
+              },
+              size=t.t.meta,
+              color=t.p.muted,
+              w=Fill(1.0),
+              line=18.0,
+            )
+            |> ignore
+          })
+          |> ignore
+          chevron(c)
+        }, on_press=fn() {
           (core.push)(Profile(text(mv, "station"), text(mv, "profileId")))
-        }
+        })
       }
     })
   })
@@ -654,9 +654,9 @@ pub fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?)
       }
       match opt_text(install, "action") {
         Some(action) =>
-          if wide_button(c, "install-runtime", action, true, busy~) {
+          wide_button(c, "install-runtime", action, true, busy~, on_press=fn() {
             act(core, action, "software.update", obj([("station", str(station)), ("id", str(runtime))]))
-          }
+          })
         None => ()
       }
     })

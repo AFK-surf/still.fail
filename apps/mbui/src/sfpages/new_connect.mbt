@@ -438,9 +438,9 @@ fn nc_models(c : @ui.Ctx, src : Source, core : Core, f : NcFlow, v : Json?) -> U
   let runtimes = strings(field(pick, "valueOption"), "runtimes")
   @sf.field(c, @sf.t("web-pages.profiles.models"), hint=if runtimes.length() > 1 { @sf.t("web-pages.connect.bothRuntimes") } else { "" }, fn() {
     if items(pick, "options").length() == 0 {
-      if cd_link(c, "nc-no-models/" + f.form, @sf.t("web-pages.connect.noModels")) {
+      cd_link(c, "nc-no-models/" + f.form, @sf.t("web-pages.connect.noModels"), on_press=fn() {
         (core.push)(Profiles(f.station))
-      }
+      })
     } else {
       model_triple(c, src, f.station, "connect-new:" + f.form)
     }
@@ -464,9 +464,9 @@ fn nc_team(c : @ui.Ctx, core : Core, f : NcFlow, v : Json?, close : () -> Unit) 
       if teams.length() == 0 {
         c.box(style=nc_manual_line, fn() {
           c.text(@sf.t("web-pages.connect.noToken"), style=nc_meta) |> ignore
-          if cd_text_button(c, "nc-manual/" + f.form, @sf.t("web-pages.connect.manualApp")) {
+          cd_text_button(c, "nc-manual/" + f.form, @sf.t("web-pages.connect.manualApp"), on_press=fn() {
             nc_go(core, f, "manual", close)
-          }
+          })
         })
         |> ignore
       }
@@ -501,9 +501,9 @@ fn nc_team(c : @ui.Ctx, core : Core, f : NcFlow, v : Json?, close : () -> Unit) 
     @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus", reach=@sf.button_start_reach(), on_press=fn() {
       nc_edit(core, f, obj([("adding", Json::boolean(true))]))
     }) |> ignore
-    if cd_text_button(c, "nc-manual-short/" + f.form, @sf.t("web-pages.connect.manualShort")) {
+    cd_text_button(c, "nc-manual-short/" + f.form, @sf.t("web-pages.connect.manualShort"), on_press=fn() {
       nc_go(core, f, "manual", close)
-    }
+    })
   })
   |> ignore
 }
@@ -640,9 +640,9 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
   let lark = flag(fe, "lark")
   c.box(style=nc_hint_line, flow=true, fn() {
     c.text(@sf.t("web-pages.connect.feishu.appHint"), style=desk_muted) |> ignore
-    if cd_link(c, "nc-console/" + f.form, @sf.t("web-pages.connect.feishu.openConsole")) {
+    cd_link(c, "nc-console/" + f.form, @sf.t("web-pages.connect.feishu.openConsole"), on_press=fn() {
       (core.open_link)(if lark { "https://open.larksuite.com/app" } else { "https://open.feishu.cn/app" })
-    }
+    })
   })
   |> ignore
   // (the fields echo what is typed; the core has it a moment later)

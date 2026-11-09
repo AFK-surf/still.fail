@@ -500,9 +500,9 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
   c.box(style=sa_look, fn() {
     // its avatar (appAvatar: 136, the settings' corner, on the neutral ground behind its colour): pressed, a picture
     let aid = c.id(d.key + "/avatar")
-    if hit(c, aid) {
+    c.on_press(aid, fn() {
       upload()
-    }
+    })
     let ground = match @sf.hex_color(d.color) {
       Some(v) => v
       None => t.p.neutral_bg
@@ -557,14 +557,14 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
           None => d.upload_bg
         }
         if d.colour_set && recommended != "" && recommended.to_lower() != d.color.to_lower() {
-          if cd_text_button(c, d.key + "/recommended", @sf.t("web-pages.slackApp.recommended")) {
+          cd_text_button(c, d.key + "/recommended", @sf.t("web-pages.slackApp.recommended"), on_press=fn() {
             d.colour_set = false
             colour(recommended)
             match find(d.picked) {
               Some(a) => draw(a, recommended)
               None => ()
             }
-          }
+          })
         }
       })
       |> ignore
@@ -589,9 +589,9 @@ fn sa_avatar_picker(c : @ui.Ctx, d : SaDraft, all : Array[@sf.AppAvatar], width 
     c.box(style=sa_picker_row, flow=true, line_gap=gap, fn() {
       for a in all {
         let tid = c.id(d.key + "/avatar/" + a.id)
-        if hit(c, tid) {
+        c.on_press(tid, fn() {
           pick(a)
-        }
+        })
         let ground = @sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)
         let on = d.picked == a.id
         let tb = c.box(
@@ -635,19 +635,21 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
   c.box(style=sa_perms, fn() {
     c.box(style=sa_perms_line, fn() {
       let pid = c.id(d.key + "/perms")
-      if hit(c, pid) {
+      c.on_press(pid, fn() {
         d.perms = !d.perms
-      }
+      })
       let said = @sf.t("web-pages.slackApp.permissions", args=[("on", on.to_string()), ("all", every.length().to_string())])
       let pb = c.box(style=sa_perms_summary, id=pid, fn() {
         @sf.icon(c, if d.perms { "chevron-down" } else { "chevron-right" }, size=cd_icon, color=t.p.muted) |> ignore
         c.text(said, style=sa_perms_said) |> ignore
       })
       c.semantics(pb, Button, id=pid, label=said, expanded=d.perms)
-      if on < every.length() && cd_text_button(c, d.key + "/perms-all", @sf.t("web-pages.slackApp.allOn")) {
-        for g in every {
-          d.groups[g] = true
-        }
+      if on < every.length() {
+        cd_text_button(c, d.key + "/perms-all", @sf.t("web-pages.slackApp.allOn"), on_press=fn() {
+          for g in every {
+            d.groups[g] = true
+          }
+        })
       }
     })
     |> ignore
@@ -662,12 +664,12 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
         c.box(style=sa_perm_section, fn() {
           c.box(style=sa_perm_head, fn() {
             c.text(text(sv, "title"), style=sa_perm_title) |> ignore
-            if cd_text_button(c, d.key + "/perm-section/" + text(sv, "title"), @sf.t(if all { "web-pages.settings.members.none" } else { "web-pages.settings.members.all" })) {
+            cd_text_button(c, d.key + "/perm-section/" + text(sv, "title"), @sf.t(if all { "web-pages.settings.members.none" } else { "web-pages.settings.members.all" }), on_press=fn() {
               for g in groups {
                 let id = text(Some(g), "id")
                 d.groups[id] = flag(Some(g), "fixed") || !all
               }
-            }
+            })
           })
           |> ignore
           let mut i = 0

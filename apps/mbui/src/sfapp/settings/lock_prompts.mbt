@@ -95,10 +95,10 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
       }
       note(c, tr("web-pages.security.pairNote"))
       c.box(style=pair_deny_room, fn() {
-        if wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false) {
+        wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false, on_press=fn() {
           close()
           deny()
-        }
+        })
       })
       |> ignore
     })

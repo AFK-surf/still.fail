@@ -1243,7 +1243,7 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
 /// words on the line of what rows say at their ends, its ground under the hand reaching out past them to the card's
 /// edge (row_end; sf/page.mbt: 文字按钮). `title_cut` and `value_cut` say when either is a summary that
-/// may be shortened on its line, rather than words expected to fit whole. True on the frame it is pressed.
+/// may be shortened on its line, rather than words expected to fit whole. `on_press`: what pressing it does, as it is let go (press_does).
 pub fn link_row(
   c : @ui.Ctx,
   key : String,
@@ -1277,7 +1277,7 @@ pub fn link_row(
   value_cut? : Bool = false,
   tile? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
   let acts = acts || adds
@@ -1562,7 +1562,6 @@ pub fn link_row(
     c.semantics(b, Link, id~, label=title, expanded?=folds)
   }
   press_does(c, id, goes, on_press)
-  goes && c.clicked(id)
 }
 
 ///|
@@ -1735,7 +1734,7 @@ fn row_lead(c : @ui.Ctx, look : Look, f : () -> Unit) -> Unit {
 /// `trail` (a button of its own, which takes its own press) before a check at its end where it is the one chosen
 /// (turning while `busy`); the rest of the row takes the press, lit under the pointer or a finger's press (narrow: a
 /// card's row; wide: the web's list row), not while `disabled` (its words faint) or busy. `ink`: its label's own (red
-/// for one that takes something away). Said to be `label`. True on the frame it is pressed; `c.lit(c.id(key))` says it
+/// for one that takes something away). Said to be `label`. `on_press`: what pressing it does, as it is let go; `c.lit(c.id(key))` says it
 /// is pointed at.
 pub fn choice_row(
   c : @ui.Ctx,
@@ -1751,7 +1750,7 @@ pub fn choice_row(
   disabled? : Bool = false,
   busy? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let th = theme()
   let id = c.id(key)
   let goes = !disabled && !busy
@@ -1833,7 +1832,6 @@ pub fn choice_row(
     row.unwrap()
   }
   c.semantics(b, Button, id~, label~, selected=chosen, disabled~)
-  goes && c.clicked(id)
 }
 
 ///|
@@ -2065,7 +2063,7 @@ let card_foot_first : Ref[Bool] = Ref(false)
 ///|
 /// What a part does, at its heading's end (wide: the web's quiet button with its mark; narrow: SectionHeader's
 /// trailing words in the link's ink, room round them for a finger), a spinner in its place while it is `busy`; `bad`:
-/// one that takes something away (删除), in the red. True on the frame it is pressed.
+/// one that takes something away (删除), in the red. `on_press`: what pressing it does, as it is let go (press_does).
 pub fn action(
   c : @ui.Ctx,
   key : String,
@@ -2074,13 +2072,14 @@ pub fn action(
   busy? : Bool = false,
   disabled? : Bool = false,
   bad? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   match look() {
-    Wide => button(c, label, key~, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~)
+    Wide => button(c, label, key~, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~, on_press?)
     Narrow => {
       if busy {
         spinner(c, size=spinner_inline) |> ignore
-        return false
+        return
       }
       let id = if disabled { 0 } else { c.id(key) }
       let b = c.box(style=pg_action, id~, fn() {
@@ -2090,19 +2089,26 @@ pub fn action(
         }
       })
       c.semantics(b, Button, id~, label~)
-      id != 0 && c.clicked(id)
+      press_does(c, id, id != 0, on_press)
     }
   }
 }
 
 ///|
 /// A button of a mark alone (a page's head's: rename, check again, ⋯), said to be `label`: as wide as the screen's
-/// hand needs (a finger's 44, a pointer's 32). True on the frame it is pressed.
-pub fn icon_action(c : @ui.Ctx, icon : String, key : String, label : String, disabled? : Bool = false) -> Bool {
+/// hand needs (a finger's 44, a pointer's 32). `on_press`: what pressing it does, as it is let go (press_does).
+pub fn icon_action(
+  c : @ui.Ctx,
+  icon : String,
+  key : String,
+  label : String,
+  disabled? : Bool = false,
+  on_press? : () -> Unit,
+) -> Unit {
   if native_input() is Finger {
-    icon_button(c, icon, key~, size=touch_target, icon_size=touch_glyph, round=true, label~, disabled~)
+    icon_button(c, icon, key~, size=touch_target, icon_size=touch_glyph, round=true, label~, disabled~, on_press?)
   } else {
-    icon_button(c, icon, key~, label~, disabled~)
+    icon_button(c, icon, key~, label~, disabled~, on_press?)
   }
 }
 
@@ -2448,7 +2454,7 @@ pub fn own_head(
             None => ()
           }
           match rename {
-            Some(f) => if icon_action(c, "edit", "own-head-rename", rename_label) { f() }
+            Some(f) => icon_action(c, "edit", "own-head-rename", rename_label, on_press=f)
             None => ()
           }
         })

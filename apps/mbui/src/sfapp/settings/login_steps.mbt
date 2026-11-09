@@ -68,7 +68,7 @@ let code_finish_h : Double = 30.0
 let code_finish_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Bg, wrap=false)
 
 ///|
-/// A step's button: true on the frame after it was pressed. `more`: other ways of doing the step, seldom used, in a ⋯
+/// A step's button; `on_press`, what pressing it does, as it is let go. `more`: other ways of doing the step, seldom used, in a ⋯
 /// at its end (sf/align.mbt: what is used least goes into the row's ⋯): a round one as high, on the grey.
 fn step_button_of(
   c : @ui.Ctx,
@@ -77,7 +77,8 @@ fn step_button_of(
   solid : Bool,
   external? : Bool = false,
   more? : Array[@sf.MenuItem] = [],
-) -> Bool {
+  on_press~ : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   c.box(style=if more.is_empty() { step_room } else { step_room_row }, fn() {
@@ -97,13 +98,11 @@ fn step_button_of(
         @motion.ripple(c, mid, settings_button_h / 2.0, ink=@sf.alpha(t.p.text, 0.1))
       })
       c.semantics(b, Button, id=mid, label=@sf.t("common.login.otherWays"))
-      if c.clicked(mid) {
-        @sf.menu(more.map(fn(i) { Some(i) }), from=Of(mid), along=End)
-      }
+      c.on_press(mid, fn() { @sf.menu(more.map(fn(i) { Some(i) }), from=Of(mid), along=End) })
     }
   })
   |> ignore
-  c.clicked(id)
+  c.on_press(id, on_press)
 }
 
 ///|
@@ -171,12 +170,12 @@ fn login_steps(
   } else if state == "needs_approval" && url != "" && user_code == "" {
     // no code: the page only asks to confirm (Cursor's)
     c.text(tr("android-settings.login.cursorNote"), style=step_note) |> ignore
-    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied, external=true, more=elsewhere) {
+    step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied, external=true, more=elsewhere, on_press=fn() {
       confirm_claude_auth(provider == "Claude", fn() {
         login_state.copied[k] = true
         (core.open_link)(url)
       })
-    }
+    })
   } else if state == "needs_approval" && url != "" {
     c.box(style=code_box, fn() {
       mono(c, user_code, size=device_code_size, line=device_code_line)
@@ -194,32 +193,33 @@ fn login_steps(
     |> ignore
     // OpenCode's and Kimi's pages have the code in their address: only compared there, not copied
     let filled = provider == "OpenCode" || provider == "Kimi"
-    if step_button_of(
-        c,
-        "login-open",
-        tr(
-          if filled {
-            "android-settings.login.openPage"
-          } else if copied {
-            "android-settings.login.reopen"
-          } else {
-            "android-settings.login.copyOpen"
-          },
-        ),
-        !copied,
-        external=filled,
-        more=elsewhere,
-      ) {
-      confirm_claude_auth(provider == "Claude", fn() {
-        if !filled {
-          // (the press's, or the confirm's after it: on the clipboard and felt as it is pressed)
-          @hostapi.clipboard_set(user_code)
-          @ui.haptic(KeyboardTap)
-        }
-        login_state.copied[k] = true
-        (core.open_link)(url)
-      })
-    }
+    step_button_of(
+      c,
+      "login-open",
+      tr(
+        if filled {
+          "android-settings.login.openPage"
+        } else if copied {
+          "android-settings.login.reopen"
+        } else {
+          "android-settings.login.copyOpen"
+        },
+      ),
+      !copied,
+      external=filled,
+      more=elsewhere,
+      on_press=fn() {
+        confirm_claude_auth(provider == "Claude", fn() {
+          if !filled {
+            // (the press's, or the confirm's after it: on the clipboard and felt as it is pressed)
+            @hostapi.clipboard_set(user_code)
+            @ui.haptic(KeyboardTap)
+          }
+          login_state.copied[k] = true
+          (core.open_link)(url)
+        })
+      },
+    )
   } else if state == "needs_code" && url != "" {
     // what to do said once, then its two steps in the order they are done, the next one solid: its page, then the
     // code it gives in the field (完成 in its end)
@@ -233,12 +233,12 @@ fn login_steps(
     let key = "login-code/" + k
     let field = field_of(key)
     let typed = field.text().trim(chars=" \n").to_owned() != ""
-    if step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed, external=true, more=elsewhere) {
+    step_button_of(c, "login-open", tr("android-settings.login.openPage"), !copied && !typed, external=true, more=elsewhere, on_press=fn() {
       confirm_claude_auth(provider == "Claude", fn() {
         login_state.copied[k] = true
         (core.open_link)(url)
       })
-    }
+    })
     c.box(style=code_field_room, fn() {
       c.box(style=code_field, fn() {
         let mut code = ""
@@ -270,12 +270,12 @@ fn login_steps(
         |> ignore
         if code != "" {
           let go = c.id("login-finish")
-          if c.clicked(go) {
+          c.on_press(go, fn() {
             login_state.error.remove(k)
             field.set("")
             c.blur()
             send(code)
-          }
+          })
           c.box(style=code_finish, id=go, fn() {
             c.text(tr("android-settings.login.finishShort"), style=code_finish_words) |> ignore
             // LoginCards.kt: its ripple in the page's colour (ripple(color = C.bg))

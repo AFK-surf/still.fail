@@ -130,7 +130,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
       // its mark: its managers pick it, by what it is called (图标)
       let mid = c.id("station-mark/" + address)
       if manager {
-        if hit(c, mid) {
+        c.on_press(mid, fn() {
           open_mark_pick(core, name, text(s, "emoji"), text(s, "icon"), @sf.t("android-settings.station.emojiWhat"), fn(
             emoji,
             icon,
@@ -142,7 +142,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
               done,
             )
           })
-        }
+        })
       }
       let mb = c.box(
         style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter),
@@ -271,45 +271,44 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
 fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
   let address = text(s, "station")
   let key = "station-more/" + address
-  if !@sf.icon_action(c, "more", key, @sf.t("common.more")) {
-    return
-  }
-  let mid = c.id(key)
-  let remove = fn() {
-    confirm(
-      @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
-      @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
-      @sf.t("web-pages.settings.stations.removeAction"),
-      danger=true,
-      // back to the list at once (the page of a station going has nothing to show), its answer said there
-      fn() {
-        (core.pop)()
-        @settings.act(
-          core,
-          @sf.t("web-pages.settings.stations.remove"),
-          "workspace.removeStation",
-          obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
-          done=@sf.t("android-settings.station.removed"),
-        )
-      },
+  @sf.icon_action(c, "more", key, @sf.t("common.more"), on_press=fn() {
+    let mid = c.id(key)
+    let remove = fn() {
+      confirm(
+        @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
+        @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
+        @sf.t("web-pages.settings.stations.removeAction"),
+        danger=true,
+        // back to the list at once (the page of a station going has nothing to show), its answer said there
+        fn() {
+          (core.pop)()
+          @settings.act(
+            core,
+            @sf.t("web-pages.settings.stations.remove"),
+            "workspace.removeStation",
+            obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
+            done=@sf.t("android-settings.station.removed"),
+          )
+        },
+      )
+    }
+    @sf.menu(
+      [
+        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
+        if flag(s, "online") {
+          Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
+            @settings.act(core, @sf.t("web-pages.settings.stations.restartWhat"), "station.restart",
+              obj([("station", str(address))]), done=@sf.t("web-pages.settings.stations.restarting"))
+          }))
+        } else {
+          None
+        },
+        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
+      ],
+      from=Of(mid),
+      along=End,
     )
-  }
-  @sf.menu(
-    [
-      Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
-      if flag(s, "online") {
-        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
-          @settings.act(core, @sf.t("web-pages.settings.stations.restartWhat"), "station.restart",
-            obj([("station", str(address))]), done=@sf.t("web-pages.settings.stations.restarting"))
-        }))
-      } else {
-        None
-      },
-      Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
-    ],
-    from=Of(mid),
-    along=End,
-  )
+  })
 }
 
 ///|
@@ -514,9 +513,9 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
             @sf.t("web-pages.drive.title"),
             count=roots.length(),
             actions=fn() {
-              if @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder") {
+              @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder", on_press=fn() {
                 @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
-              }
+              })
             },
             fn() {
               @sf.group(c, fn() {
@@ -1171,9 +1170,9 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
   let actions : (() -> Unit)? = match cost {
     Some(value) if on && manager =>
       Some(fn() {
-        if @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy) {
+        @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy, on_press=fn() {
           station_cold_custom(core, address, value)
-        }
+        })
       })
     _ => None
   }

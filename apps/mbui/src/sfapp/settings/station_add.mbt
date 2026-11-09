@@ -237,16 +237,18 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
               None
             })
             |> ignore
-          } else if @sf.choice_row(c, "join/" + id, match chosen {
+          } else {
+            @sf.choice_row(c, "join/" + id, match chosen {
                 Some(ch) => text(Some(ch), "station") == id
                 None => false
               }, text(v, "name"), note=text(v, "line"), disabled=!(!busy && !flag(v, "needsLock")), lead?=if marked {
                 Some(mark)
               } else {
                 None
-              }) {
-            adding.picked.set(id)
-            adding.error.set("")
+              }, on_press=fn() {
+                adding.picked.set(id)
+                adding.error.set("")
+              })
           }
         })
       }
@@ -289,10 +291,10 @@ fn join_chosen(core : Core, here : Here, rows : Array[Json]) -> (Json?, Bool) {
 fn join_buttons(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json]) -> Unit {
   let ws = here.workspace
   let (chosen, busy) = join_chosen(core, here, rows)
-  if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
+  @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close", on_press=fn() {
     @sf.close_presented()
-  }
-  if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
+  })
+  @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None, on_press=fn() {
     match chosen {
       Some(s) => {
         adding.error.set("")
@@ -321,7 +323,7 @@ fn join_buttons(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json]) -> Un
       }
       None => ()
     }
-  }
+  })
 }
 
 ///|
@@ -403,11 +405,13 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
     (None, _) => {
       let busy = is_doing(core, ["workspace.enroll"], [("account", here.sub), ("workspace", here.workspace)])
       let name = field_of(station_name_key()).text().trim(chars=" \t\n").to_owned()
-      if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
-        c.blur()
-        @sf.close_presented()
+      if cancel {
+        @sf.button(c, tr("common.cancel"), key="add-cancel", on_press=fn() {
+          c.blur()
+          @sf.close_presented()
+        })
       }
-      if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
+      @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "", on_press=fn() {
         c.blur()
         adding.error.set("")
         (core.call)(
@@ -420,15 +424,17 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
             }
           },
         )
-      }
+      })
     }
     (Some(_), Some(_)) =>
-      if @sf.button(c, tr("common.done"), key="add-done", tone=Primary) {
+      @sf.button(c, tr("common.done"), key="add-done", tone=Primary, on_press=fn() {
         done()
-      }
+      })
     (Some(_), None) =>
-      if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
-        @sf.close_presented()
+      if cancel {
+        @sf.button(c, tr("common.cancel"), key="add-cancel", on_press=fn() {
+          @sf.close_presented()
+        })
       }
   }
 }
@@ -442,10 +448,10 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
 fn command_box(c : @ui.Ctx, core : Core, words : String, reach? : @ui.Style) -> Unit {
   let t = @sf.theme()
   let id = c.id("command-copy")
-  if hit(c, id) {
+  c.on_press(id, fn() {
     c.copy_text(words)
     (core.say)(tr("common.copied"))
-  }
+  })
   c.box(
     style=reach.unwrap_or(@ui.style()),
     dir=Row,
@@ -535,9 +541,9 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           )
           let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).get().value
           if flag(joinable, "offered") && items(joinable, "items").length() > 0 {
-            if tap_text(c, "first-existing", tr("web-pages.settings.stations.firstExisting"), size=14.0) {
+            tap_text(c, "first-existing", tr("web-pages.settings.stations.firstExisting"), size=14.0, on_press=fn() {
               open_add_station(core, here, [], existing=true)
-            }
+            })
           }
         }
       }

@@ -43,22 +43,25 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           if is_made && i == cur {
             @sf.pill(c, @sf.t("android-misc.bar.current"), tone=Accented)
           }
-          if is_made && i != cur && @sf.action(c, "bar-use/" + i.to_string(), @sf.t("android-misc.bar.use")) {
-            @settings.save_bars(core, made, i)
+          if is_made && i != cur {
+            @sf.action(c, "bar-use/" + i.to_string(), @sf.t("android-misc.bar.use"), on_press=fn() {
+              @settings.save_bars(core, made, i)
+            })
           }
-          if sets.length() > 1 &&
-            @sf.action(c, "bar-delete/" + i.to_string(), @sf.t("android-misc.bar.delete"), bad=true) {
-            if !is_made {
-              @settings.bar_adding.set(false)
-            } else {
-              let left : Array[Array[String]] = []
-              for k, x in made {
-                if k != i {
-                  left.push(x)
+          if sets.length() > 1 {
+            @sf.action(c, "bar-delete/" + i.to_string(), @sf.t("android-misc.bar.delete"), bad=true, on_press=fn() {
+              if !is_made {
+                @settings.bar_adding.set(false)
+              } else {
+                let left : Array[Array[String]] = []
+                for k, x in made {
+                  if k != i {
+                    left.push(x)
+                  }
                 }
+                @settings.save_bars(core, left, if cur > i || cur >= left.length() { if cur - 1 < 0 { 0 } else { cur - 1 } } else { cur })
               }
-              @settings.save_bars(core, left, if cur > i || cur >= left.length() { if cur - 1 < 0 { 0 } else { cur - 1 } } else { cur })
-            }
+            })
           }
         },
         fn() {

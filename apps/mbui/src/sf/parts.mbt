@@ -40,7 +40,7 @@ pub(all) enum Tone {
 /// narrow, as tall as a bar's tools among them (viewer_bar's: 32); an icon before its words if given, a spinner in its
 /// place while `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
 /// (foot_across); `hint`, what pressing it does in more words, over it while it is pointed at (a Button in a Tip);
-/// `on_press`, what pressing it does, as it is let go (press_does). True on the frame after it was pressed.
+/// `on_press`, what pressing it does, as it is let go (press_does).
 pub fn button(
   c : @ui.Ctx,
   label : String,
@@ -53,14 +53,14 @@ pub fn button(
   reach? : @ui.Style,
   hint? : String = "",
   on_press? : () -> Unit,
-) -> Bool {
-  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~, on_press?).0
+) -> Unit {
+  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~, on_press?) |> ignore
 }
 
 ///|
 /// What pressing `id` does (`on_press`), where it takes presses now (`live`): done as the press is let go on it (a tap,
 /// a click, Enter or Space, Activate), outside any build, at its moment (Ctx::on_press), not read by the build after.
-fn press_does(c : @ui.Ctx, id : Int, live : Bool, on_press : (() -> Unit)?) -> Unit {
+pub fn press_does(c : @ui.Ctx, id : Int, live : Bool, on_press : (() -> Unit)?) -> Unit {
   match on_press {
     Some(f) if live => c.on_press(id, f)
     _ => ()
@@ -86,7 +86,7 @@ fn button_part(
   active? : Bool = false,
   expanded? : Bool,
   on_press? : () -> Unit,
-) -> (Bool, Int) {
+) -> Int {
   let t = theme()
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
@@ -254,7 +254,7 @@ fn button_part(
   if live {
     tip(c, "sf-btn/" + key + label + "/tip", id, hint)
   }
-  (live && c.clicked(id), b)
+  b
 }
 
 ///|
@@ -337,7 +337,7 @@ pub fn icon_button(
   label? : String = "",
   shortcut? : String = "",
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let t = theme()
   // (drawn its own size with a finger too: a finger reaches it from round it, mbui's press_reach)
   let ink = ink.unwrap_or(t.p.text)
@@ -381,7 +381,6 @@ pub fn icon_button(
     c.semantics(b, Button, id~, label~, disabled~)
     tip(c, "ib/" + key + icon, id, label, shortcut~)
   }
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -398,7 +397,7 @@ pub fn chip(
   inner? : Bool = false,
   said? : String = "",
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
@@ -435,7 +434,6 @@ pub fn chip(
       tip(c, "sf-chip/" + key + "/tip", id, said)
     }
   }
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -816,7 +814,7 @@ pub fn menu_item(
   at_top? : Bool = false,
   at_foot? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let t = theme()
   let id = c.id(if key == "" { "sf-mi/" + label } else { key })
   press_does(c, id, true, on_press)
@@ -897,7 +895,6 @@ pub fn menu_item(
     },
   )
   |> ignore
-  c.clicked(id)
 }
 
 ///|
@@ -3176,20 +3173,14 @@ let radio_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Fg")
 // Asking before (parts.tsx Confirm; parts.css.ts dialogAlert, dialogError)
 
 ///|
-/// What a confirm reports: whether it is open now, and whether its action was pressed this frame.
-pub(all) struct Confirmed {
-  open : Bool
-  confirmed : Bool
-}
-
-///|
 /// Asks before something that cannot be undone (parts.tsx Confirm: an alert dialog, a press outside does not close
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
 /// 13 red, 12 over the buttons, it stays open), an optional red `warning`, then `cancel` (its words alone) and `action`
 /// (solid red, the primary's when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back
 /// and `cancel` close it.
 /// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already);
-/// `on_confirm`: what its action does, as it is pressed (press_does).
+/// `on_confirm`: what its action does, as it is pressed (press_does); `on_close`: what closing it does (`cancel`
+/// pressed, Escape, the back), as it is.
 pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
@@ -3204,10 +3195,10 @@ pub fn confirm_dialog(
   warning? : String = "",
   scrim? : Int64,
   on_confirm? : () -> Unit,
-) -> Confirmed {
-  let mut confirmed = false
-  let mut closed = false
-  let d = @kit.dialog(
+  on_close? : () -> Unit = fn() {  },
+) -> Unit {
+  c.with_dismissed(fn(_) { on_close() }, fn() {
+  @kit.dialog(
     c,
     key,
     open,
@@ -3243,17 +3234,14 @@ pub fn confirm_dialog(
         c.box(style=confirm_error_at, fn() { c.text(error, style=confirm_error) |> ignore }) |> ignore
       }
       c.box(style=confirm_foot.then(dialog_corner_foot(dialog_pad)), fn() {
-        if button(c, cancel, key=key + "/cancel", tone=Ghost) {
-          closed = true
-        }
-        if button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~, on_press?=on_confirm) {
-          confirmed = true
-        }
+        button(c, cancel, key=key + "/cancel", tone=Ghost, on_press=on_close)
+        button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~, on_press?=on_confirm)
       })
       |> ignore
     },
   )
-  { open: d.value && !closed, confirmed }
+  |> ignore
+  })
 }
 
 ///|
@@ -3376,7 +3364,7 @@ pub(all) enum PanelTone {
 ///|
 /// Words to press in a small panel (PanelButton): a small pill, 24 high, 10 in, its words 12 and 500; a ground only
 /// while pointed at (`Filled`: the accent's pale ground always, the accent at 20% pointed at: the web's 22%, the scale's
-/// nearest). True on the frame after it was pressed.
+/// nearest). `on_press`: what pressing it does, as it is let go (press_does).
 pub fn panel_button(
   c : @ui.Ctx,
   key : String,
@@ -3384,7 +3372,7 @@ pub fn panel_button(
   tone? : PanelTone = Plainly,
   disabled? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let id = c.id(key)
   press_does(c, id, !disabled, on_press)
   let hot = !disabled && c.lit(id)
@@ -3405,13 +3393,12 @@ pub fn panel_button(
   @motion.reshape(c, b, "sf-pbtn/shape/" + key, by=words, spec=button_reshape)
   @motion.layout(c, words_at, "sf-pbtn/words/" + key, by=words, spec=button_reshape)
   c.semantics(b, Button, id~, label=words, disabled~)
-  !disabled && c.clicked(id)
 }
 
 ///|
 /// An icon to press in a small panel (PanelIconButton: close, stop, a step): a 24 circle, the muted ink, the hover's
-/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner). True
-/// on the frame after it was pressed.
+/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner).
+/// `on_press`: what pressing it does, as it is let go (press_does).
 pub fn panel_icon_button(
   c : @ui.Ctx,
   key : String,
@@ -3420,7 +3407,7 @@ pub fn panel_icon_button(
   disabled? : Bool = false,
   cornered? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let p = theme().p
   let id = c.id(key)
   press_does(c, id, !disabled, on_press)
@@ -3431,7 +3418,6 @@ pub fn panel_icon_button(
   })
   c.semantics(b, Button, id~, label~, disabled~)
   tip(c, "pib/" + key, id, label)
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -3609,7 +3595,7 @@ pub fn chooser(
     })
   }
   if as_button {
-    let (_, node) = button_part(
+    let node = button_part(
       c,
       words,
       key~,

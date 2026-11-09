@@ -552,14 +552,7 @@
       "src/sfpages/workspace_page.mbt": 2,
       "src/sfpages/xshare.mbt": 1
     },
-    "click-read": {
-      "src/sf/page.mbt": 3,
-      "src/sf/parts.mbt": 6,
-      "src/sfapp/settings/core.mbt": 1,
-      "src/sfapp/settings/login_steps.mbt": 3,
-      "src/sfapp/settings/station_mark.mbt": 2,
-      "src/sfpages/settings_list.mbt": 1
-    }
+    "click-read": {}
   },
   "excused": {
     "frame-request": {},

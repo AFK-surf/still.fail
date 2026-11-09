@@ -486,9 +486,9 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Lo
         match look {
           Wide => @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id, on_press=go) |> ignore
           Narrow =>
-            if tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink()) {
+            tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink(), on_press=fn() {
               go()
-            }
+            })
         }
         // dropped from under ⋯ (its menu), asked again first; it stays in Slack
         if !dropping {

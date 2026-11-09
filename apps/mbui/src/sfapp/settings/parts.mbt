@@ -223,12 +223,7 @@ pub fn wide_head(
         c.text(back, size=t.t.meta, color=if c.lit(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
       })
       |> ignore
-      if hit(c, id) {
-        match on_back {
-          Some(f) => f()
-          None => (core.pop)()
-        }
-      }
+      c.on_press(id, on_back.unwrap_or(fn() { (core.pop)() }))
     }
     c.box(style=title_line, fn() {
       c.box(style=if about == "" { title_words } else { title_about }, fn() {
@@ -462,9 +457,9 @@ fn place_page(
                   "add-connect" => tr("android-misc.bar.action.connects")
                   _ => ""
                 }
-                if head_pill(c, key, label) {
+                head_pill(c, key, label, on_press=fn() {
                   run(Of(c.id(key)))
-                }
+                })
               }
               None => ()
             }
@@ -491,20 +486,21 @@ fn place_page(
             // its ＋, named as what it adds (PlusButton)
             match primary {
               Some((key, run)) =>
-                if nav_button(
-                    c,
-                    key,
-                    "plus",
-                    size=20.0,
-                    said=match key {
-                      "add-station" => tr("android-misc.bar.action.stations")
-                      "add-profile" => tr("android-misc.bar.action.profiles")
-                      "add-connect" => tr("android-misc.bar.action.connects")
-                      _ => ""
-                    },
-                  ) {
-                  run(Of(c.id(key)))
-                }
+                nav_button(
+                  c,
+                  key,
+                  "plus",
+                  size=20.0,
+                  said=match key {
+                    "add-station" => tr("android-misc.bar.action.stations")
+                    "add-profile" => tr("android-misc.bar.action.profiles")
+                    "add-connect" => tr("android-misc.bar.action.connects")
+                    _ => ""
+                  },
+                  on_press=fn() {
+                    run(Of(c.id(key)))
+                  },
+                )
               None => ()
             }
           })
@@ -786,8 +782,8 @@ priv enum Foot {
 ///|
 /// A card on the page: 12 in from the sides, 10 under it, its words 20 in; round by the ladder's card
 /// corner, whatever stands in its corners concentric with it (`foot`: what stands in its foot corners); tapped when
-/// `key` is given. True on the frame after a tap.
-fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words) -> Bool {
+/// `key` is given, `on_press` what tapping it does, as it is let go (@sf.press_does).
+fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words, on_press? : () -> Unit) -> Unit {
   let id = if key == "" { 0 } else { c.id(key) }
   let ground = match foot {
     Words => card_ground
@@ -806,7 +802,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words
     |> ignore
   })
   |> ignore
-  id != 0 && hit(c, id)
+  @sf.press_does(c, id, id != 0, on_press)
 }
 
 ///|
@@ -923,10 +919,10 @@ let list_ground_in_pane : @ui.Style = @ui.style(w=Full, p=@sf.room_of(@sf.corner
 
 ///|
 /// A row of a list card: its ground concentric with the card's (LIST_ROW_CORNER), what it holds
-/// CARD_PAD less LIST_PAD in all round (20 from the card's edges, as a card's words), 12 apart; tapped when `key` is given. True on
-/// the frame after a tap. `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
+/// CARD_PAD less LIST_PAD in all round (20 from the card's edges, as a card's words), 12 apart; tapped when `key` is given, `on_press`
+/// what tapping it does, as it is let go (@sf.press_does). `piece`: the row a block of the page's list of its own, a piece of its card (card_piece:
 /// whether it is the card's first row, its last).
-fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool)) -> Bool {
+fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, Bool), on_press? : () -> Unit) -> Unit {
   let id = if key == "" { 0 } else { c.id(key) }
   let row = fn(style : @ui.Style) {
     // (one that is tapped as high as a press's room at least, whatever it holds)
@@ -943,7 +939,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
     None => row(if wide.val { wide_list_line } else { list_line })
     Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
   }
-  id != 0 && hit(c, id)
+  @sf.press_does(c, id, id != 0, on_press)
 }
 
 ///|
@@ -1342,7 +1338,8 @@ fn wide_button(
   busy? : Bool = false,
   enabled? : Bool = true,
   danger? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let ground = if !primary {
@@ -1378,7 +1375,7 @@ fn wide_button(
     }
   })
   |> ignore
-  enabled && !busy && hit(c, id)
+  @sf.press_does(c, id, enabled && !busy, on_press)
 }
 
 ///|
@@ -1405,7 +1402,7 @@ let press_corner : Double = 8.0
 let press_room : @ui.Style = @ui.css("p=S1")
 
 ///|
-/// Words that do something when tapped. True on the frame after a tap.
+/// Words that do something when tapped (`on_press`, as the tap is let go: @sf.press_does).
 pub fn tap_text(
   c : @ui.Ctx,
   key : String,
@@ -1414,7 +1411,8 @@ pub fn tap_text(
   size? : Double = 15.0,
   said? : String = "",
   room? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let id = c.id(key)
   // `room`: 4 round its words, what it takes (BarSettings.kt's 设为当前, 删除: padding(4) inside what is tapped)
   let b = c.box(style=if room { press_room } else { @ui.style() }, id~, fn() {
@@ -1433,12 +1431,12 @@ pub fn tap_text(
   if said != "" {
     c.semantics(b, Button, id~, label=said)
   }
-  hit(c, id)
+  @sf.press_does(c, id, true, on_press)
 }
 
 ///|
-/// A round button in a bar: its icon alone, 34 round. True on the frame after a tap.
-fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String = "") -> Bool {
+/// A round button in a bar: its icon alone, 34 round; `on_press`, what tapping it does, as it is let go.
+fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String = "", on_press? : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   // (34 round, off the scale; rippled over its circle: NavButton's clip(CircleShape).clickable; `said` what it is to a
@@ -1448,7 +1446,7 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, s
     @motion.ripple(c, id, 17.0)
   })
   |> ignore
-  hit(c, id)
+  @sf.press_does(c, id, true, on_press)
 }
 
 ///|
@@ -1529,10 +1527,10 @@ pub fn mono(
 let centre_column : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
-/// A page head's own action in the wide frame (ui.tsx Button with Plus): the library's button, its ＋ and words. True on
-/// the frame after a press.
-fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
-  @sf.button(c, label, key~, icon="plus")
+/// A page head's own action in the wide frame (ui.tsx Button with Plus): the library's button, its ＋ and words;
+/// `on_press`, what pressing it does.
+fn head_pill(c : @ui.Ctx, key : String, label : String, on_press~ : () -> Unit) -> Unit {
+  @sf.button(c, label, key~, icon="plus", on_press~)
 }
 
 ///|

@@ -658,11 +658,11 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             none = false
             @sf.panel_group(c, label=k.0, fn() {
               for i in hidden {
-                if adder_row(c, i, rail_label(src, i)) {
+                adder_row(c, i, rail_label(src, i), on_press=fn() {
                   let next = kept.copy()
                   next.push(i)
                   rail_keep(src, w.id, next)
-                }
+                })
               }
             })
           }
@@ -677,9 +677,9 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon, its ＋ at its end.
-/// True on the frame after it was pressed.
-fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
+/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon, its ＋ at its end; `on_press`,
+/// what pressing it does, as it is let go.
+fn adder_row(c : @ui.Ctx, place : String, label : String, on_press~ : () -> Unit) -> Unit {
   @sf.menu_item(
     c,
     label,
@@ -687,6 +687,7 @@ fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
     panel=true,
     icon=rail_icon(place),
     end="plus",
+    on_press~,
   )
 }
 
