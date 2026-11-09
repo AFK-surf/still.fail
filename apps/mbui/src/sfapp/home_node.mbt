@@ -49,6 +49,9 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     // (in view while it is the page on top: what changes under another page is as it is as it is come back to)
     watched: fn() { app.nav.top() is Home },
   }
+  // (what is left up long asked with the lists from the start, not once they have come: the first page waits for
+  // both, app.mbt's page_ready)
+  @sfbase.long_jobs_read(v, src, workspace)
   // (a search the app starts with open: sfpages' search.mbt)
   @sfpages.search_start_now()
   // (while the app's first page waits for what it shows: drawn at none, the splash in its place, as the old views are)

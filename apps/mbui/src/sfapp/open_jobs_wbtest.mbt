@@ -111,3 +111,41 @@ test "what is left up long, a long name and where it is: cut short on their line
   let past = t.glyph_clips().filter(fn(g) { g.0.1 > 40.0 && g.0.1 < 200.0 && g.0.2 > sx && g.0.0 < sx + sw && g.0.0 > 40.0 })
   assert_eq(past.length(), 0)
 }
+
+///|
+test "what is left up long is waited for by the first page: there with the list, not slid in under it" {
+  new_run()
+  let client = @core.Client::new(fn(_) { () })
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name != "longJobs" {
+        return (base.topic_read)(name, params)
+      }
+      let sub = client.follow_topic(name, params~)
+      { value: sub.value, error: sub.error, version: sub.version }
+    },
+    waits: fn(name, params) {
+      if name == "longJobs" {
+        client.follow_topic(name, params~).waiting
+      } else {
+        (base.waits)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.frame()
+  t.run_for(@sf.local_ms)
+  // (the list answered, what is under it not yet: the page not shown)
+  assert_true(!words_seen(t, "整理发布清单"))
+  guard client.peek_topic("longJobs", params={ "scope": "ws1" }) is Some(sub) else { fail("no longJobs reader") }
+  client.receive_json({ "id": Json::number(sub.id.to_double()), "value": @sffixture.long_screens_view() })
+  t.draw()
+  let row = "Willow · 整理发布清单 · 3 小时"
+  assert_true(words_seen(t, row), msg="shown with the list")
+  let (_, y0) = t.drawn_of(row).unwrap()
+  t.run_for(@ui.move_most_ms)
+  let (_, y1) = t.drawn_of(row).unwrap()
+  assert_true((y1 - y0).abs() < 0.5, msg="moved from \{y0} to \{y1}")
+}

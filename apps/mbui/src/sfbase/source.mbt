@@ -216,6 +216,23 @@ fn topic_held(name : String, params : Map[String, Json]) -> Bool {
 }
 
 ///|
+/// Whether a reader holds topic `name` with `params` now without its answer yet (a value or why not); false while none
+/// holds it. It asks nothing of the core and acquires nothing: what waits on a page's own read (Home's first page on
+/// what it shows under its list) opens no subscription of its own, and waits on nothing a page not made does not ask.
+pub fn held_unanswered(name : String, params : Map[String, Json]) -> Bool {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  @signals.untracked(fn() {
+    followed_topics.val.iter().any(fn(t) {
+      t.key == key &&
+      t.holder.watched() && {
+        let s = t.holder.get()
+        s.value is None && s.error is None
+      }
+    })
+  })
+}
+
+///|
 /// The topics a reader holds now (topic_held's), each once, by the source that follows it: what a page that opens
 /// another in its place hands over (open_handing_held).
 fn topics_held() -> Array[(Source, String, Map[String, Json])] {

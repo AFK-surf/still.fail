@@ -453,6 +453,22 @@ pub fn long_jobs(src : Source, w : Workspace) -> Int {
 }
 
 ///|
+/// What is left up long in the workspace in view (the `longJobs` topic) held by node `v` from when it is made, asked
+/// with the chats' list it shows under (Home's) rather than once that list has come: Home's first page waits for both
+/// (held_unanswered).
+pub fn long_jobs_read(v : @view.View, src : Source, workspace : () -> Workspace?) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace() {
+        Some(w) => src.topic("longJobs", { "scope": Json::string(w.id) }).get().value is Some(_)
+        None => false
+      }
+    },
+    fn(_) { () },
+  )
+}
+
+///|
 /// How one left up long (a row of the `longJobs` topic) is stopped: the core's call, its params and what they name
 /// (for `core_doing`): a job's `job.stop`, a simulator's or a view's as its `stop` says (`screen.close`,
 /// `screen.endView`).

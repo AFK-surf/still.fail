@@ -1017,6 +1017,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         Some(fix_presets_of(text(Some(Json::object(params)), "station")))
       }
     "newChat" | "pick" => fixture_new_topic(f, name)
+    // none left up long, as the core answers it (the first page waits for it); decide_fixture.mbt's modes say theirs
+    "longJobs" if !decide_mode(f.mode) => Some({ "groups": [], "lit": false, "ids": [] })
     _ =>
       match decide_fixture_topic(f, name, params) {
         Some(v) => v
