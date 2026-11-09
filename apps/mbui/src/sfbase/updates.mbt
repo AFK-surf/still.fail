@@ -34,7 +34,6 @@ pub fn update_reset() -> Unit {
   update_pending.set(None)
   update.available.set(None)
   update.asked = false
-  update_again_n.val = 0
   update_told.val = -1
   update.checking.set(false)
   update.source = None
@@ -445,18 +444,43 @@ pub fn update_first(src : Source) -> Unit {
 pub let update_again_ms : Double = 60.0 * 60.0 * 1000.0
 
 ///|
-// kept across runs: put back by update_reset
-let update_again_n : Ref[Int] = Ref(0)
-
-///|
-/// Asked again each update_again_ms the app stays signed in, in every frame (signed_in_frame, beside update_first): as
-/// a check as it is shown again, nothing said unless a newer build is found.
-pub fn update_again(c : @ui.Ctx, src : Source) -> Unit {
-  let n = update_again_n.val
-  if @kit.after(c, "update-again/\{n}", true, update_again_ms, later=true) {
-    update_again_n.val = n + 1
-    c.tell("update-again", fn() { update_check(src, false) })
+/// Signed in, in node `v` (the shell's): asked once (update_first) as it is made; again each update_again_ms from
+/// then while it stays, as a check as it is shown again, nothing said unless a newer build is found; and again each
+/// time the core says a newer build may be out (update_told), at that moment.
+pub fn updates_node(v : @view.View, src : Source) -> Unit {
+  update_first(src)
+  let off : Ref[() -> Unit] = Ref(fn() {  })
+  let again : Ref[(Double) -> Unit] = Ref(fn(_) {  })
+  again.val = fn(from) {
+    let at = from + update_again_ms
+    off.val = v.at_moment(at, fn() {
+      update_check(src, false)
+      (again.val)(at)
+    }, later=true)
   }
+  (again.val)(v.logic_at())
+  v.owns(fn() { (off.val)() }) |> ignore
+  v.reacts(
+    fn() {
+      if update_asks() {
+        src.topic("releases", {}).get().value.map(fn(r) { count(Some(r), "told") })
+      } else {
+        None
+      }
+    },
+    fn(told) {
+      match told {
+        Some(n) if n != update_told.val => {
+          let first = update_told.val < 0
+          update_told.val = n
+          if !first {
+            update_check(src, false)
+          }
+        }
+        _ => ()
+      }
+    },
+  )
 }
 
 ///|
@@ -760,31 +784,9 @@ let update_going : @ui.Style = @ui.css("w=Full pt=S2")
 let update_bar_room : @ui.Style = @ui.css("w=Full pb=S1_5")
 
 ///|
-/// The core's word that a newer build may be out (the `releases` topic's `told`) as last heard (-1: none yet).
+/// The core's word that a newer build may be out (the `releases` topic's `told`: still.fail cloud said a release is out,
+/// or its socket opened again) as last heard (-1: none yet). Asked again each time it says so (updates_node): the build
+/// got ready is the newest, not one heard of before (one put in as the app quits or while it is away, then another as
+/// the newer one asks: 2026-11-09, pengxiao, 「不会用最新的版本，而是会连续更新好几次」).
 // kept across runs: put back by update_reset
 let update_told : Ref[Int] = Ref(-1)
-
-///|
-/// Asked again each time the core says a newer build may be out (still.fail cloud said a release is out, or its socket
-/// opened again), in every frame beside update_first: the build got ready is the newest, not one heard of before (one
-/// put in as the app quits or while it is away, then another as the newer one asks: 2026-11-09, pengxiao, 「不会用最新
-/// 的版本，而是会连续更新好几次」).
-pub fn update_on_release(c : @ui.Ctx, src : Source) -> Unit {
-  if !update_asks() {
-    return
-  }
-  let v = src.topic("releases", {}).get().value
-  if v is None {
-    return
-  }
-  let told = count(v, "told")
-  if told != update_told.val {
-    c.tell("update-release", fn() {
-      let first = update_told.val < 0
-      update_told.val = told
-      if !first {
-        update_check(src, false)
-      }
-    })
-  }
-}

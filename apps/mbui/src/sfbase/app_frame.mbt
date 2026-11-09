@@ -280,24 +280,38 @@ pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, B
 let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a == b })
 
 ///|
-/// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
-/// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
-pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
-  let badge = match field(marks, "badge") {
-    Some(Number(_, ..)) => count(marks, "badge")
-    _ =>
-      match field(marks, "workspaces") {
-        Some(Object(m)) => m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") })
-        _ => 0
+/// Signed in, the workspace `ws()` in view, in node `v`: the number on the app's icon (the desktop app's followBadge),
+/// the core's badge, else what is wrong and what waits in every workspace; put there as it changes, at that change's
+/// moment.
+pub fn badge_node(v : @view.View, src : Source, ws : () -> String?) -> Unit {
+  v.reacts(
+    fn() {
+      match ws() {
+        Some(id) => {
+          let marks = src.topic("workspaceMarks", { "workspace": Json::string(id) }).get().value
+          match field(marks, "badge") {
+            _ if marks is None => None
+            Some(Number(_, ..)) => Some(count(marks, "badge"))
+            _ =>
+              match field(marks, "workspaces") {
+                Some(Object(m)) => Some(m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") }))
+                _ => Some(0)
+              }
+          }
+        }
+        None => None
       }
-  }
-  if marks is Some(_) && badge != badge_told.get() {
-    c.after_build("badge", fn() {
-      badge_told.set(badge)
-      @ui.set_badge(badge)
-    })
-  }
+    },
+    fn(badge) {
+      match badge {
+        Some(n) if n != @signals.untracked(fn() { badge_told.get() }) => {
+          badge_told.set(n)
+          @ui.set_badge(n)
+        }
+        _ => ()
+      }
+    },
+  )
 }
 
 ///|

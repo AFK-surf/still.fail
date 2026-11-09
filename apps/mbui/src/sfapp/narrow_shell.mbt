@@ -62,6 +62,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // (on the window's ground, as the old view whole is (app_state_tree's): what no page covers, a page sliding, shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
+  signed_in_node(v, src)
   // back at the stack's root while the shell takes it (narrow_takes_back), a node of the window's tree's: before the
   // pages, what they and what is over them say takes back (a page's own stack, a menu, a sheet) taking it first; whose
   // it is said at the cause that changes it (a tab of the bar pressed), done as it is done (sfbase's back_step then)
@@ -214,8 +215,9 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barre
 }
 
 ///|
-/// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: what is
-/// told as the frame ends, the icon's number, links, updates, what was shared in, whether the first page waits.
+/// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: the drive's
+/// entries kept, what is told as the frame ends, a link given, what was shared in, whether the first page waits. (What
+/// is said as it changes is the shell's nodes': signed_in_node.)
 fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // The folder and its player both need the same entries. Keep them while moving between the two and when
   // replacing one film with the next, until the new page has its own reader.
@@ -231,29 +233,16 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     _ => ()
   }
-  // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
-  c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
   // (a person's act taken as an old view builds (a row pressed: its change is that build's), done with it: where it
   // left from let go where it went nowhere; where the app is noted as it changes, app_state_tree)
   c.after_build("history", fn() { @sfbase.history_settled() })
   // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
   // frame's builds are over: a build let go of follows no workspace)
   c.after_build("notices", fn() { notices_frame(src, w) })
-  // the core and the workspace links are opened against, as the frame ends (links.mbt)
-  c.after_build("links", fn() { links_frame(src, w) })
-  // the number on the app's icon (app_frame.mbt)
-  badge_frame(c, src, w)
   // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
   if !link_later.is_empty() {
     c.tell("links-given", fn() { links_given(src) })
   }
-  // a newer build of the app asked for once (updates.mbt)
-  // (asked once, with the app's version: nothing a build changes)
-  update_first(src)
-  // and again while it stays open (one never shown again asks no more otherwise)
-  update_again(c, src)
-  // and as soon as a release may be out
-  update_on_release(c, src)
   // what another app shared in (share.mbt)
   share_in_frame(c)
   // files being kept on the device, said once kept (keep.mbt)
@@ -262,6 +251,29 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
   first_hide(first_waiting.val)
+}
+
+///|
+/// Signed in, in the shell's node `v` (every tier's): what is said as the app's state changes, at that change's moment,
+/// whatever frames are drawn. As the workspace in view or a new chat on top changes, where the app is attended to
+/// (attend; as the app is shown or put away, its own hook) and the workspace links open against (links_frame); the
+/// number on the app's icon (badge_node); a newer build asked for (updates_node).
+fn signed_in_node(v : @view.View, src : Source) -> Unit {
+  let ws = fn() { workspace_in_view(src).0 }
+  v.reacts(fn() { (ws().map(fn(w) { w.id }), app.nav.top() is NewChat) }, fn(now) {
+    match now {
+      (Some(id), new_chat) => attend(src, id, new_chat)
+      (None, _) => ()
+    }
+  })
+  v.reacts(fn() { ws().map(fn(w) { w.id }) }, fn(id) {
+    match @signals.untracked(ws) {
+      Some(w) if id is Some(_) => links_frame(src, w)
+      _ => ()
+    }
+  })
+  badge_node(v, src, fn() { ws().map(fn(w) { w.id }) })
+  updates_node(v, src)
 }
 
 ///|
