@@ -722,6 +722,9 @@ export class Mesh {
   readonly #atDialling = new Set<string>();
   /// By address: the addresses a dial on the main endpoint was given when it went unanswered (`#dialAll`).
   readonly #unansweredAt = new Map<string, string>();
+  /// The addresses whose one connection on the main endpoint was let go unanswered (`#choose`): the next dial goes on
+  /// each relay's own endpoint beside it (`#dialAll`).
+  readonly #lostMain = new Set<string>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -1347,9 +1350,16 @@ export class Mesh {
         // way the station heard first: a station in WSL with mirrored networking says the Windows machine's own
         // addresses, its answers to the Windows app there going back into WSL; that app's dials waited out
         // CONNECT_TIMEOUT_MS on them for hours while the phone came through a relay (2026-11-03).
-        if (straight.length === 0 || this.#unansweredAt.get(addr) !== straight.join(" ")) return dial;
+        const unanswered = straight.length > 0 && this.#unansweredAt.get(addr) === straight.join(" ");
+        // Its one connection let go for its pings going unanswered: dialled again on each other relay's own endpoint
+        // as well, the requests going on whichever answers. Its path went through a relay that lost half of what went
+        // and took 2–6 s a round trip from where the device is, and iroh dialled it there again: devices in China let
+        // their links to stations in Tokyo go every 15–40 s for an evening, while Shenzhen's relay reached them in
+        // 0.4 s (2026-11-09).
+        const lost = this.#lostMain.delete(addr);
+        if (!unanswered && !lost) return dial;
         main.push(dial);
-        pinned = this.#waysFor(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+        pinned = (unanswered ? this.#waysFor(addr) : this.#pinnable(addr)).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
       } else {
         pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
         // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not
@@ -1644,10 +1654,12 @@ export class Mesh {
       const best = this.#best(addr, this.#takeable(addr, up.filter((w) => w.link !== cur)));
       if (best !== null) this.#promote(addr, best, "lost");
       else if (cur !== null && mine !== undefined && mine.missed >= DEAD_PINGS && this.#mainOn(addr)) {
-        // Its one connection: the station has not answered on it DEAD_PINGS times (iroh keeps the connection up across
-        // its paths, so this is the station, not the way): let go, and the station dialled anew.
+        // Its one connection: the station has not answered on it DEAD_PINGS times: let go, and the station dialled
+        // anew. iroh keeps the connection up across its paths, but not off one that only loses most of what goes: the
+        // dial goes on each other relay's own endpoint too (`#dialAll`).
         const credentials = cur.credentials;
         this.dropLink(addr);
+        this.#lostMain.add(addr);
         this.#env.runner.fork(Effect.ignore(this.link(addr, credentials, undefined, undefined, "again"), { log: "Unhandled", message: "link opened" }));
       }
       return;
