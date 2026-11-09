@@ -801,6 +801,7 @@ jobs:
           bash apps/mbui/scripts/moon-mtimes.sh
           bash .github/mac-release-prebuild.sh ready
       - uses: ./.github/actions/setup
+      - run: bash .github/mac-release-prebuild.sh packages
       - uses: actions/cache@v4
         with:
           path: apps/mbui/out/mac/AppIcon-*
