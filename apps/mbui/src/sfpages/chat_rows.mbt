@@ -39,8 +39,8 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   let turn = lead == "need"
   let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
   // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end; let go (the core
-  // says so at once), on screen the card stays, saying so, 忽略 no longer pressed, and out of sight it is the line
-  // saying it was let go, as a post's answered options are (Turns::in_turn)
+  // says so at once), on screen or not, the card goes as its room closes and the line saying it was let go fades in
+  // after it, as a post's answered options do (Turns::in_turn; need_card_wbtest.mbt)
   let asking = match here.view.state_ask {
     Some(seq) if turn => Some(seq)
     _ => None

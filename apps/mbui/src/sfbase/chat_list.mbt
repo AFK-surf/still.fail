@@ -1967,13 +1967,15 @@ pub fn list_frame(
       break
     }
   }
-  // rows came at the top (the page before): what is in view stays where it is, and nothing glides for it
-  let older_came = rd.head != "" && head != rd.head && rd.placed
-  if older_came {
+  // rows came or went over it (the page before, the spinner over it gone with the chat's last page): what is in view
+  // stays where it is, and nothing glides for it (the spinner's going told too: the rows were otherwise put a row on,
+  // what was in view jumping up by a row's height, go_older_wbtest.mbt)
+  if rd.head != "" && rd.placed {
     for i, e in list {
       if e.id() == rd.head {
         if i != rd.head_at {
-          c.list_moved(key, rd.head_at, i - rd.head_at)
+          let n = i - rd.head_at
+          c.list_moved(key, if n > 0 { rd.head_at } else { i }, n)
         }
         break
       }
