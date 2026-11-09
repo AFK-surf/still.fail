@@ -271,16 +271,11 @@ pub fn icon_inks_node(
     .width(Is(Some(size)))
     .height(Is(Some(size)))
     .shapes(By(fn() {
-      match icon_numbers(name) {
-        Some(d) => {
-          let out : Array[@ui.Shape] = []
-          for p in inks(v) {
-            out.push_iter(icon_shapes(icon_data_parts(d, p.0), size / 24.0, p.1).iter())
-          }
-          out
-        }
-        None => []
+      let out : Array[@ui.Shape] = []
+      for p in inks(v) {
+        out.push_iter(icon_parts_shapes(name, p.0, size, p.1).iter())
       }
+      out
     }))
     |> ignore
   })

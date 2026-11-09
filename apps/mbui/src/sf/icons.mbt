@@ -23,6 +23,11 @@ struct DrawnShapes {
 let icons_made : Map[(String, Double, Int64), DrawnShapes] = {}
 
 ///|
+/// Icons' parts drawn, by name, parts, size and ink (`icon_parts_shapes`): what breathes or lights in steps drawn in
+/// each step's ink found again, not cut from the icon's numbers anew each step.
+let parts_made : Map[(String, Array[Int], Double, Int64), Array[@ui.Shape]] = {}
+
+///|
 /// The pictures drawn, by key, width, scale and tint (picture.mbt draw_drawable), as icons_made.
 let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = {}
 
@@ -34,6 +39,7 @@ fn init {
     made.clear()
     shapes_made.clear()
     icons_made.clear()
+    parts_made.clear()
     pictures_made.clear()
     tiles_made.clear()
     copied_at.clear()
@@ -293,6 +299,27 @@ pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double
     }
   }
   c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+}
+
+///|
+/// Of icon `name`, its parts `parts` `size` across in `ink` (none where there is no such icon): made once for each, the
+/// same shapes after (which no one changes). Past 256 of them all go, to be made again as they are asked for.
+fn icon_parts_shapes(name : String, parts : Array[Int], size : Double, ink : Int64) -> Array[@ui.Shape] {
+  let key = (name, parts, size, ink)
+  match parts_made.get(key) {
+    Some(s) => s
+    None => {
+      let s = match icon_numbers(name) {
+        Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, ink)
+        None => []
+      }
+      if parts_made.length() >= 256 {
+        parts_made.clear()
+      }
+      parts_made[(name, parts.copy(), size, ink)] = s
+      s
+    }
+  }
 }
 
 ///|
