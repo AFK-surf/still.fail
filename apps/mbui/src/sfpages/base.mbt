@@ -230,7 +230,6 @@ using @settings {
   build_version,
   error_text,
   has,
-  hit,
   is_doing,
   join,
   key_actions,

@@ -67,13 +67,13 @@ fn key_ask_sheet(core : Core, r : Json) -> Unit {
       c.text(text(rv, "workspaceName") + " · " + text(rv, "vaultName"), style=key_ask_where) |> ignore
       c.box(style=key_ask_buttons, fn() {
         let giving = is_doing(core, ["vault.addDevice"], on)
-        if wide_button(c, "vault-key-give", tr("web-pages.vault.promptGive"), true, busy=giving) {
+        wide_button(c, "vault-key-give", tr("web-pages.vault.promptGive"), true, busy=giving, on_press=fn() {
           act(core, tr("web-pages.vault.addDeviceWhat"), "vault.addDevice", obj([("workspace", str(ws)), ("vault", str(vault)), ("device", str(device))]), done=tr("web-pages.vault.addedDevice"))
-        }
-        if wide_button(c, "vault-key-later", tr("web-pages.vault.promptLater"), false, enabled=!giving) {
+        })
+        wide_button(c, "vault-key-later", tr("web-pages.vault.promptLater"), false, enabled=!giving, on_press=fn() {
           close()
           hide()
-        }
+        })
       })
       |> ignore
     })

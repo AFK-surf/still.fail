@@ -329,7 +329,7 @@ pub fn settings_search(c : @ui.Ctx) -> Unit {
       |> ignore
     })
     |> ignore
-    if held &&
+    if held {
       @sf.icon_button(
         c,
         "close",
@@ -338,9 +338,11 @@ pub fn settings_search(c : @ui.Ctx) -> Unit {
         icon_size=l.band_icon,
         round=true,
         label=@sf.t("android-misc.drive.pick.filterClear"),
-      ) {
-      settings_search_field.set("")
-      settings_search_field.focus()
+        on_press=fn() {
+          settings_search_field.set("")
+          settings_search_field.focus()
+        },
+      )
     }
   })
   |> ignore
@@ -604,9 +606,9 @@ pub fn settings_side_rows(
         draw()
       }
       c.semantics(b, Link, id~, label=row.title)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         open(row.route)
-      }
+      })
     }
   }
 }

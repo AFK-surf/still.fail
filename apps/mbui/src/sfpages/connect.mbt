@@ -203,77 +203,76 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
   let up = text(conn, "state") == "connected" || text(conn, "state") == "reconnecting"
   let slack_url = if up { text(field(conn, "workspace"), "url") } else { "" }
   let console = text(field(cv, "feishu"), "console")
-  if !@sf.icon_action(c, "more", "connect-more/" + me, @sf.t("common.more")) {
-    return
-  }
-  let mid = c.id("connect-more/" + me)
-  let delete = fn() {
-    let sessions = text_number(cv, "sessions")
-    confirm(
-      @sf.t("web-pages.archive.deleteConfirm", args=[("title", text(cv, "name"))]),
-      if sessions > 0 {
-        @sf.t(cd_kind_key("web-pages.connect.deleteBodySessions", cv), args=[("n", sessions.to_string())])
-      } else {
-        @sf.t(cd_kind_key("web-pages.connect.deleteBody", cv))
-      },
-      @sf.t("web-pages.connect.delete"),
-      danger=true,
-      // back to the list at once: its row turns there until the station has dropped it
-      fn() {
-        (core.pop)()
-        cd_act(core, station, id, @sf.t("web-pages.connect.delete"), "connect.delete", [], done=@sf.t("web-pages.connect.deleted"))
-      },
-    )
-  }
-  let items : Array[@sf.MenuItem?] = [
-    Some(
-      @sf.menu_item_of(@sf.t("web-pages.connect.reconnect"), icon="refresh", disabled=reconnecting, fn() {
-        cd_act(core, station, id, @sf.t("web-pages.connect.reconnect"), "connect.reconnect", [], done=@sf.t("web-pages.connect.reconnected"))
-      }),
-    ),
-  ]
-  // (a Comma connect's line is made again in Comma: there is no token of its own to replace here)
-  if !comma {
-    items.push(Some(
-      @sf.menu_item_of(@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" }), icon="key", fn() {
-        if feishu {
-          cd_secret_dialog(core, station, cv)
+  @sf.icon_action(c, "more", "connect-more/" + me, @sf.t("common.more"), on_press=fn() {
+    let mid = c.id("connect-more/" + me)
+    let delete = fn() {
+      let sessions = text_number(cv, "sessions")
+      confirm(
+        @sf.t("web-pages.archive.deleteConfirm", args=[("title", text(cv, "name"))]),
+        if sessions > 0 {
+          @sf.t(cd_kind_key("web-pages.connect.deleteBodySessions", cv), args=[("n", sessions.to_string())])
         } else {
-          cd_token_dialog(core, station, cv)
-        }
-      }),
-    ))
-  }
-  if !feishu && !comma && slack_url != "" {
-    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.openSlack"), icon="external", fn() { (core.open_link)(slack_url) })))
-  }
-  if feishu && console != "" {
-    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.feishu.openConsole"), icon="external", fn() { (core.open_link)(console) })))
-  }
-  items.push(None)
-  items.push(
-    Some(
-      if flag(cv, "enabled") {
-        @sf.menu_item_of(@sf.t("web-pages.profiles.disable"), icon="power", disabled=saving, fn() {
-          cd_switching[me] = true
-          cd_put(core, station, id, obj([("enabled", Json::boolean(false))]), done=@sf.t(cd_kind_key("web-pages.connect.disabled", cv)))
-        })
-      } else {
-        @sf.menu_item_of(@sf.t("web-pages.connect.enable"), icon="power", disabled=saving, fn() {
-          cd_switching[me] = true
-          cd_put(core, station, id, obj([("enabled", Json::boolean(true))]), done=@sf.t("web-pages.connect.enabled"))
-        })
-      },
-    ),
-  )
-  items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.changeOwner"), icon="user", fn() { cd_owner_dialog(core, here, station, cv) })))
-  // (to another station of its workspace, which runs it from then on; a station from before cannot)
-  if flag(cv, "moves") {
-    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.move"), icon="arrow-right", fn() { cd_station_dialog(core, here, station, cv, true) })))
-  }
-  items.push(None)
-  items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.delete"), icon="trash", danger=true, delete)))
-  @sf.menu(items, from=Of(mid), along=End)
+          @sf.t(cd_kind_key("web-pages.connect.deleteBody", cv))
+        },
+        @sf.t("web-pages.connect.delete"),
+        danger=true,
+        // back to the list at once: its row turns there until the station has dropped it
+        fn() {
+          (core.pop)()
+          cd_act(core, station, id, @sf.t("web-pages.connect.delete"), "connect.delete", [], done=@sf.t("web-pages.connect.deleted"))
+        },
+      )
+    }
+    let items : Array[@sf.MenuItem?] = [
+      Some(
+        @sf.menu_item_of(@sf.t("web-pages.connect.reconnect"), icon="refresh", disabled=reconnecting, fn() {
+          cd_act(core, station, id, @sf.t("web-pages.connect.reconnect"), "connect.reconnect", [], done=@sf.t("web-pages.connect.reconnected"))
+        }),
+      ),
+    ]
+    // (a Comma connect's line is made again in Comma: there is no token of its own to replace here)
+    if !comma {
+      items.push(Some(
+        @sf.menu_item_of(@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" }), icon="key", fn() {
+          if feishu {
+            cd_secret_dialog(core, station, cv)
+          } else {
+            cd_token_dialog(core, station, cv)
+          }
+        }),
+      ))
+    }
+    if !feishu && !comma && slack_url != "" {
+      items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.openSlack"), icon="external", fn() { (core.open_link)(slack_url) })))
+    }
+    if feishu && console != "" {
+      items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.feishu.openConsole"), icon="external", fn() { (core.open_link)(console) })))
+    }
+    items.push(None)
+    items.push(
+      Some(
+        if flag(cv, "enabled") {
+          @sf.menu_item_of(@sf.t("web-pages.profiles.disable"), icon="power", disabled=saving, fn() {
+            cd_switching[me] = true
+            cd_put(core, station, id, obj([("enabled", Json::boolean(false))]), done=@sf.t(cd_kind_key("web-pages.connect.disabled", cv)))
+          })
+        } else {
+          @sf.menu_item_of(@sf.t("web-pages.connect.enable"), icon="power", disabled=saving, fn() {
+            cd_switching[me] = true
+            cd_put(core, station, id, obj([("enabled", Json::boolean(true))]), done=@sf.t("web-pages.connect.enabled"))
+          })
+        },
+      ),
+    )
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.changeOwner"), icon="user", fn() { cd_owner_dialog(core, here, station, cv) })))
+    // (to another station of its workspace, which runs it from then on; a station from before cannot)
+    if flag(cv, "moves") {
+      items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.move"), icon="arrow-right", fn() { cd_station_dialog(core, here, station, cv, true) })))
+    }
+    items.push(None)
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.delete"), icon="trash", danger=true, delete)))
+    @sf.menu(items, from=Of(mid), along=End)
+  })
 }
 
 ///|
@@ -615,25 +614,24 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
 }
 
 ///|
-/// Words to press beside a row's (the ui's 13 muted); whether it
-/// was pressed.
-fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = false) -> Bool {
+/// Words to press beside a row's (the ui's 13 muted); `on_press`, what pressing them does, as it is let go.
+fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = false, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=cd_text_button_box, id=if disabled { 0 } else { id }, disabled~, fn() {
     c.rich([@ui.span(label, underline=true)], style=if c.hovered(id) { cd_text_button_lit } else { cd_text_button_words })
     |> ignore
   })
   c.semantics(b, Button, id~, label~, disabled~)
-  !disabled && hit(c, id)
+  @sf.press_does(c, id, !disabled, Some(on_press))
 }
 
 ///|
-/// A link in its words (underlined); whether it was pressed.
-fn cd_link(c : @ui.Ctx, key : String, label : String) -> Bool {
+/// A link in its words (underlined); `on_press`, what pressing it does, as it is let go.
+fn cd_link(c : @ui.Ctx, key : String, label : String, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=cd_link_box, id~, fn() { c.rich([@ui.span(label, underline=true)], style=cd_link_words) |> ignore })
   c.semantics(b, Link, id~, label~)
-  hit(c, id)
+  c.on_press(id, on_press)
 }
 
 ///|

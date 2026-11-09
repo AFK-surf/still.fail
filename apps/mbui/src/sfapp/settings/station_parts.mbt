@@ -279,9 +279,9 @@ fn adb_lock_first(c : @ui.Ctx, core : Core, p : Json?) -> Unit {
   let said = obj([("sub", str(sub))])
   let doing = is_doing(core, ["adb.personalOpen", "adb.personalJoin", "adb.personalCode", "adb.personalForget", "adb.personalRestart"], [])
   let primary = fn(key : String, words : String, call : String) {
-    if @sf.button(c, words, key~, tone=Primary, busy=doing, disabled=doing) {
+    @sf.button(c, words, key~, tone=Primary, busy=doing, disabled=doing, on_press=fn() {
       act(core, words, call, said)
-    }
+    })
   }
   match text(p, "standing") {
     "outside" => {
@@ -295,9 +295,9 @@ fn adb_lock_first(c : @ui.Ctx, core : Core, p : Json?) -> Unit {
         }
         // (no device of theirs to be found: only then)
         if state == "none" || state == "failed" {
-          if @sf.button(c, tr("android-misc.personal.restart"), key="adb-lock-restart", tone=Ghost, disabled=doing) {
+          @sf.button(c, tr("android-misc.personal.restart"), key="adb-lock-restart", tone=Ghost, disabled=doing, on_press=fn() {
             act(core, tr("android-misc.personal.restart"), "adb.personalRestart", said)
-          }
+          })
           c.text(tr("android-misc.personal.restart.note"), style=@sf.ask_note) |> ignore
         }
       })
@@ -437,27 +437,29 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
           // lent for chats' grants: not this page's to stop (its adb.stop ends only a lending its switch made, 2026-10-30:
           // the switch did nothing), so no switch, and settings' 共享调试, where its switch and the grants are, a tap away
           if granted {
-            if list_row(c, key="adb-manage", fn() {
-                row_title(c, tr("android-misc.adb.title"))
-                let adb = text(view, "adb")
-                doing_mark(c, text(view, "phase") != "offered" || adb == "" || adb == "connecting", None)
-                c.text(tr("android-misc.adb.manage"), style=adb_go) |> ignore
-              }) {
+            list_row(c, key="adb-manage", fn() {
+              row_title(c, tr("android-misc.adb.title"))
+              let adb = text(view, "adb")
+              doing_mark(c, text(view, "phase") != "offered" || adb == "" || adb == "connecting", None)
+              c.text(tr("android-misc.adb.manage"), style=adb_go) |> ignore
+            }, on_press=fn() {
               (core.push)(AdbShare(""))
-            }
-          } else if list_row(c, key="adb-switch", fn() {
+            })
+          } else {
+            list_row(c, key="adb-switch", fn() {
               row_title(c, tr("android-misc.adb.title"))
               let adb = text(view, "adb")
               doing_mark(c, there && (text(view, "phase") != "offered" || adb == "" || adb == "connecting"), None)
               // (the library's switch, as every switch's look; the row takes the press, its mark of what is on its way
               // beside it)
               @sf.switch_look(c, "adb-switch", there)
-            }) {
-            if there {
-              act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
-            } else {
-              adb_lend(address, name)
-            }
+            }, on_press=fn() {
+              if there {
+                act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
+              } else {
+                adb_lend(address, name)
+              }
+            })
           }
           // how it stands, a row of its own (what the station says of it is as long as it is)
           let stopped = if !sharing { text(view, "message") } else { "" }
@@ -511,17 +513,17 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
           blocks.push(fn() {
             list_card(c, fn() {
               let busy = step.doing != "" && is_doing(core, [step.doing], [])
-              if list_row(c, key=if step.act != "" && !busy { "adb-next" } else { "" }, fn() {
-                  row_lines(c, step.title, step.sub, wrap_title=true, wrap_sub=true, end=fn() {
-                    if step.doing != "" && (busy || failed_of(core, [step.doing], []) is Some(_)) {
-                      doing_mark(c, busy, failed_of(core, [step.doing], []))
-                    } else if step.go != "" {
-                      c.text(step.go, style=adb_go) |> ignore
-                    }
-                  })
-                }) {
+              list_row(c, key=if step.act != "" && !busy { "adb-next" } else { "" }, fn() {
+                row_lines(c, step.title, step.sub, wrap_title=true, wrap_sub=true, end=fn() {
+                  if step.doing != "" && (busy || failed_of(core, [step.doing], []) is Some(_)) {
+                    doing_mark(c, busy, failed_of(core, [step.doing], []))
+                  } else if step.go != "" {
+                    c.text(step.go, style=adb_go) |> ignore
+                  }
+                })
+              }, on_press=fn() {
                 adb_do(core, step.act, station=address)
-              }
+              })
             })
           })
         }
@@ -567,13 +569,13 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             if reader {
               // (where it is in Accessibility, and why it may be grey: a phone's makers put an app's services
               // apart, 2026-10-30: 「跳转的无障碍看不到自动填的选项」)
-              if list_row(c, key="adb-reader", fn() {
-                  row_lines(c, tr("android-misc.adb.reader.title"), tr("android-misc.adb.reader.note"), wrap_sub=true, end=fn() {
-                    c.text(tr("android-misc.adb.reader.turnOn"), style=adb_go) |> ignore
-                  })
-                }) {
+              list_row(c, key="adb-reader", fn() {
+                row_lines(c, tr("android-misc.adb.reader.title"), tr("android-misc.adb.reader.note"), wrap_sub=true, end=fn() {
+                  c.text(tr("android-misc.adb.reader.turnOn"), style=adb_go) |> ignore
+                })
+              }, on_press=fn() {
                 adb_ask("adb.open", obj([("what", str("reader"))]))
-              }
+              })
             }
             if grant {
               let busy = is_doing(core, ["adb.grant"], [])
@@ -684,9 +686,9 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
     // a setting, so with the switch at the page's top, not after the lists (2026-11-06, 左子健: 设置不要放在列表后面啊)
     let lasts_row = fn() {
       let lasts = if text(view, "lasts") == "hour" { "hour" } else { "chat" }
-      if @sf.link_row(c, "adb-lasts", tr("android-misc.adb.lasts"), note=tr("android-settings.vault.lasts." + lasts), tail=fn() {
-          doing_mark(c, is_doing(core, ["adb.setLasts"], []), failed_of(core, ["adb.setLasts"], []))
-        }) {
+      @sf.link_row(c, "adb-lasts", tr("android-misc.adb.lasts"), note=tr("android-settings.vault.lasts." + lasts), tail=fn() {
+        doing_mark(c, is_doing(core, ["adb.setLasts"], []), failed_of(core, ["adb.setLasts"], []))
+      }, on_press=fn() {
         @sf.pick(
           tr("android-misc.adb.lasts"),
           ["hour", "chat"].map(fn(l) { @sf.choice(l, tr("android-settings.vault.lasts." + l), note=tr("android-settings.vault.lasts." + l + "Detail")) }),
@@ -698,7 +700,7 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
           },
           from=Of(c.id("adb-lasts")),
         )
-      }
+      })
     }
     if !flag(phone, "supported") {
       keys.push("lasts")
@@ -771,9 +773,9 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
                   })
                   if step.act != "" {
                     @sf.card_foot(c, fn() {
-                      if @sf.button(c, step.go, key="adb-phone-next", tone=Primary) {
+                      @sf.button(c, step.go, key="adb-phone-next", tone=Primary, on_press=fn() {
                         adb_do(core, step.act, station=next_at)
-                      }
+                      })
                     })
                   }
                 })
@@ -810,11 +812,11 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
             let session = text(g, "session")
             let opens = station != "" && session != ""
             let title = text(g, "chatTitle")
-            if @sf.link_row(c, "adb-request/" + text(g, "id"), if title == "" { @sf.t("android-chat.new.title") } else { title }, note=text(g, "reason"), note_cut=true, goes=opens, strong=true, title_after=fn() {
-                @sf.pill(c, tr("web-main.attention.entry"), tone=Amber)
-              }) {
+            @sf.link_row(c, "adb-request/" + text(g, "id"), if title == "" { @sf.t("android-chat.new.title") } else { title }, note=text(g, "reason"), note_cut=true, goes=opens, strong=true, title_after=fn() {
+              @sf.pill(c, tr("web-main.attention.entry"), tone=Amber)
+            }, on_press=fn() {
               (core.open_chat)(station, session, "")
-            }
+            })
           }
         })
       })
@@ -852,13 +854,13 @@ fn adb_settings(c : @ui.Ctx, core : Core, _here : Here) -> Unit {
           // (narrow, 收回 by its title alone, the line under it as wide as the row: when it was used, and why it was asked;
           // 2026-11-06 左子健: 不要 title 和 description 都被右边操作给挤压; wide, the library's link_row has it by the
           // row's side)
-          if @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, goes=station != "" && session != "", control=fn() {
-              if @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy) {
-                act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
-              }
-            }) {
+          @sf.link_row(c, "adb-chat/" + station + "/" + request, if title == "" { @sf.t("android-chat.new.title") } else { title }, note=if text(g, "reason") == "" { when } else { when + " · " + text(g, "reason") }, note_cut=true, goes=station != "" && session != "", control=fn() {
+            @sf.button(c, tr("android-misc.adb.chats.revoke"), key="adb-revoke/" + station + "/" + request, tone=Ghost, busy~, disabled=busy, on_press=fn() {
+              act(core, tr("android-misc.adb.chats.revoke"), "adb.revoke", obj([("station", str(station)), ("request", str(request))]))
+            })
+          }, on_press=fn() {
             (core.open_chat)(station, session, "")
-          }
+          })
         }
       })
     })

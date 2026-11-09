@@ -680,12 +680,6 @@ pub fn route_of(name : String) -> Route? {
 }
 
 ///|
-/// Whether the thing `id` was tapped (what it changed is drawn in the next frame, which a handled click asks for).
-pub fn hit(c : @ui.Ctx, id : Int) -> Bool {
-  c.clicked(id)
-}
-
-///|
 /// The number `s` writes (digits only), else `or_else`.
 fn int_of(s : String, or_else : Int) -> Int {
   if s == "" {

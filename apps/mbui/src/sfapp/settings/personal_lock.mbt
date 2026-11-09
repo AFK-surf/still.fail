@@ -44,9 +44,9 @@ fn confirm_row(c : @ui.Ctx, core : Core, view : Json?, blocks : Array[() -> Unit
       c.box(style=personal_confirm_box, fn() {
         @sf.card_lines(c, fill("android-misc.personal.toConfirm", [("n", n.to_string())]), note=tr("android-misc.personal.toConfirm.note"))
         @sf.card_foot(c, fn() {
-          if @sf.button(c, tr("android-misc.personal.confirm"), key="personal-confirm-do", tone=Primary, busy=doing, disabled=doing) {
+          @sf.button(c, tr("android-misc.personal.confirm"), key="personal-confirm-do", tone=Primary, busy=doing, disabled=doing, on_press=fn() {
             act(core, tr("android-misc.personal.confirm"), "adb.personalConfirm", obj([]))
-          }
+          })
         })
       })
       |> ignore
@@ -127,8 +127,10 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
               row_lines(c, if name == "" { tr("android-misc.personal.me") } else { name }, if me { tr("android-misc.personal.me") } else { "" }, wrap_sub=true)
             })
             |> ignore
-            if !me && @sf.button(c, tr("android-misc.personal.remove"), key="personal-remove/" + key, tone=Ghost, busy=doing, disabled=doing) {
-              act(core, tr("android-misc.personal.remove"), "adb.personalRemove", obj([("sub", said), ("key", str(key))]))
+            if !me {
+              @sf.button(c, tr("android-misc.personal.remove"), key="personal-remove/" + key, tone=Ghost, busy=doing, disabled=doing, on_press=fn() {
+                act(core, tr("android-misc.personal.remove"), "adb.personalRemove", obj([("sub", said), ("key", str(key))]))
+              })
             }
           })
           |> ignore
@@ -136,9 +138,11 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
       "outside" => {
         let state = text(field(view, "pair"), "state")
         if state == "" || state == "none" || state == "failed" || state == "done" {
-          if @sf.link_row(c, "personal-join/" + sub, tr("android-misc.personal.open"), note=if state == "" { tr("android-misc.personal.outside.note") } else { "" }, lacks=true) && !doing {
-            (core.call)("adb.personalJoin", obj([("sub", said)]), fn(_) {  })
-          }
+          @sf.link_row(c, "personal-join/" + sub, tr("android-misc.personal.open"), note=if state == "" { tr("android-misc.personal.outside.note") } else { "" }, lacks=true, on_press=fn() {
+            if !doing {
+              (core.call)("adb.personalJoin", obj([("sub", said)]), fn(_) {  })
+            }
+          })
         }
         if state != "" && state != "done" {
           list_row(c, key="personal-pair/" + sub, fn() {
@@ -148,9 +152,11 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
         }
         // (no device of theirs to be found: only then)
         if state == "none" || state == "failed" {
-          if @sf.link_row(c, "personal-restart/" + sub, tr("android-misc.personal.restart"), note=tr("android-misc.personal.restart.note"), lacks=false) && !doing {
-            act(core, tr("android-misc.personal.restart"), "adb.personalRestart", obj([("sub", said)]))
-          }
+          @sf.link_row(c, "personal-restart/" + sub, tr("android-misc.personal.restart"), note=tr("android-misc.personal.restart.note"), lacks=false, on_press=fn() {
+            if !doing {
+              act(core, tr("android-misc.personal.restart"), "adb.personalRestart", obj([("sub", said)]))
+            }
+          })
         }
       }
       "replaced" => {
@@ -158,14 +164,18 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
           c.box(style=fill_words, fn() { row_lines(c, tr("android-misc.personal.replaced"), tr("android-misc.personal.replaced.note"), wrap_sub=true) }) |> ignore
         })
         |> ignore
-        if @sf.link_row(c, "personal-forget/" + sub, tr("android-misc.personal.forget"), lacks=false) && !doing {
-          act(core, tr("android-misc.personal.forget"), "adb.personalForget", obj([("sub", said)]))
-        }
+        @sf.link_row(c, "personal-forget/" + sub, tr("android-misc.personal.forget"), lacks=false, on_press=fn() {
+          if !doing {
+            act(core, tr("android-misc.personal.forget"), "adb.personalForget", obj([("sub", said)]))
+          }
+        })
       }
       _ =>
-        if @sf.link_row(c, "personal-open/" + sub, tr("android-misc.personal.open"), note=tr("android-misc.personal.open.note"), lacks=true) && !doing {
-          act(core, tr("android-misc.personal.open"), "adb.personalOpen", obj([("sub", said)]))
-        }
+        @sf.link_row(c, "personal-open/" + sub, tr("android-misc.personal.open"), note=tr("android-misc.personal.open.note"), lacks=true, on_press=fn() {
+          if !doing {
+            act(core, tr("android-misc.personal.open"), "adb.personalOpen", obj([("sub", said)]))
+          }
+        })
     }
   })
 }

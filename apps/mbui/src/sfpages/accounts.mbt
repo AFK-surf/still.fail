@@ -209,14 +209,14 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
       c.box(style=pf_state, fn() {
         c.text(join([text(p, "checkLine"), when], " · "), style=pf_check_words) |> ignore
         let checking = is_doing(core, ["profile.check"], on)
-        if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking || (has(p, "enabled") && !flag(p, "enabled"))) {
+        @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking || (has(p, "enabled") && !flag(p, "enabled")), on_press=fn() {
           @settings.act(core, @sf.t("web-pages.profiles.recheck"), "profile.check", obj([("station", str(address)), ("id", str(id))]))
           // (its allowance read again with it: how much is left, as of now)
           let q = field(p, "quota")
           if q is Some(Object(_)) && text(q, "state") != "unsupported" {
             @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
           }
-        }
+        })
         if checking {
           @sf.spinner(c, size=pf_spin) |> ignore
         }
@@ -306,59 +306,58 @@ fn profile_menu(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
   let keyed = ["api-provider", "anthropic-api", "opencode-go"].contains(text(access, "kind")) && !flag(access, "login")
   let can_disable = keyed && has(p, "enabled")
   let key = "profile-more/" + address + "/" + id
-  if !@sf.icon_action(c, "more", key, @sf.t("common.more")) {
-    return
-  }
-  let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
-  let remove = fn() {
-    let (title, words) = if machine {
-      (
-        @sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]),
-        @sf.t("web-pages.profiles.disableBody", args=[("name", "still.fail"), ("runtime", @settings.runtime_label(text(p, "runtime")))]),
-      )
-    } else {
-      (@sf.t("web-pages.archive.deleteConfirm", args=[("title", text(p, "name"))]), @sf.t("web-pages.profiles.deleteBody", args=[("name", "still.fail")]))
-    }
-    confirm(title, words, item, danger=true, fn() {
-      // gone from here at once: the list shows it until the station has dropped it
-      place_pick.remove(place_key(here.workspace, "profiles"))
-      (core.pop)()
-      @settings.act(
-        core,
-        item,
-        "profile.delete",
-        obj([("station", str(address)), ("id", str(id))]),
-        done=if machine { @sf.t("web-pages.profiles.disabled") } else { @sf.t("web-pages.profiles.deleted") },
-      )
-    })
-  }
-  let items : Array[@sf.MenuItem?] = []
-  if !machine {
-    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
-  }
-  if can_disable {
-    let enabled = flag(p, "enabled")
-    let label = if enabled { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.connect.enable") }
-    let change = fn() {
-      @settings.act(
-        core,
-        label,
-        "profile.put",
-        obj([("station", str(address)), ("id", str(id)), ("input", obj([("enabled", Json::boolean(!enabled))]))]),
-        done=if enabled { @sf.t("web-pages.profiles.disabled") } else { @sf.t("web-pages.connect.enabled") },
-      )
-    }
-    items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
-      if enabled {
-        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+  @sf.icon_action(c, "more", key, @sf.t("common.more"), on_press=fn() {
+    let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
+    let remove = fn() {
+      let (title, words) = if machine {
+        (
+          @sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]),
+          @sf.t("web-pages.profiles.disableBody", args=[("name", "still.fail"), ("runtime", @settings.runtime_label(text(p, "runtime")))]),
+        )
       } else {
-        change()
+        (@sf.t("web-pages.archive.deleteConfirm", args=[("title", text(p, "name"))]), @sf.t("web-pages.profiles.deleteBody", args=[("name", "still.fail")]))
       }
-    })))
-  }
-  items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
-  @sf.menu(items, from=Of(c.id(key)), along=End)
-  ignore(here)
+      confirm(title, words, item, danger=true, fn() {
+        // gone from here at once: the list shows it until the station has dropped it
+        place_pick.remove(place_key(here.workspace, "profiles"))
+        (core.pop)()
+        @settings.act(
+          core,
+          item,
+          "profile.delete",
+          obj([("station", str(address)), ("id", str(id))]),
+          done=if machine { @sf.t("web-pages.profiles.disabled") } else { @sf.t("web-pages.profiles.deleted") },
+        )
+      })
+    }
+    let items : Array[@sf.MenuItem?] = []
+    if !machine {
+      items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
+    }
+    if can_disable {
+      let enabled = flag(p, "enabled")
+      let label = if enabled { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.connect.enable") }
+      let change = fn() {
+        @settings.act(
+          core,
+          label,
+          "profile.put",
+          obj([("station", str(address)), ("id", str(id)), ("input", obj([("enabled", Json::boolean(!enabled))]))]),
+          done=if enabled { @sf.t("web-pages.profiles.disabled") } else { @sf.t("web-pages.connect.enabled") },
+        )
+      }
+      items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
+        if enabled {
+          confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+        } else {
+          change()
+        }
+      })))
+    }
+    items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+    @sf.menu(items, from=Of(c.id(key)), along=End)
+    ignore(here)
+  })
 }
 
 // ── what to do first ────────────────────────────────────────────────────
@@ -688,9 +687,9 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
     c,
     @sf.t("web-pages.profiles.quota"),
     actions=fn() {
-      if @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing, disabled=has(p, "enabled") && !flag(p, "enabled")) {
+      @sf.action(c, "profile-quota/" + address + "/" + id, @sf.t("web-pages.profiles.refresh"), icon="refresh", busy=refreshing, disabled=has(p, "enabled") && !flag(p, "enabled"), on_press=fn() {
         @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
-      }
+      })
     },
     fn() {
       @sf.group(c, fn() {
@@ -780,10 +779,10 @@ fn profile_usage(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?, en
       @sf.t("web-pages.profiles.usage")
     },
     actions=fn() {
-      if @sf.action(c, "profile-usage-all/" + address, @sf.t("web-pages.profiles.usageAll"), icon="chart") {
+      @sf.action(c, "profile-usage-all/" + address, @sf.t("web-pages.profiles.usageAll"), icon="chart", on_press=fn() {
         @sfbase.history_push()
         app.nav.push(Setting(Usage))
-      }
+      })
     },
     fn() {
       match item {

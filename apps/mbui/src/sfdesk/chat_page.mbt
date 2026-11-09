@@ -372,10 +372,8 @@ fn chat_bar(
               rows
             }
             let in_bars = bar_chat(src, r, view.agents, info, rows, more, jobs, screen, if archivable { Some(archive) } else { None })
-            if !in_bars &&
-              archivable &&
-              @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
-              archive()
+            if !in_bars && archivable {
+              @sf.icon_button(c, "archive", key="chat-archive", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive", on_press=archive)
             }
             // (in the system's bars where the chat's actions are: their own buttons, or rows of the short column's "…",
             // bar_chat)
@@ -412,7 +410,7 @@ fn chat_bar(
   // over the messages: their scroll bar keeps clear of it
   c.floats_over(bar_row)
   // a chat keeping watch, archived once asked (the core's words)
-  let asked = @sf.confirm_dialog(
+  @sf.confirm_dialog(
     c,
     "archive-confirm/" + chat_key(r),
     chat_own.archive_asking == chat_key(r),
@@ -420,17 +418,15 @@ fn chat_bar(
     text(field(chat, "watch"), "ask"),
     @sf.t("web-pages.chat.archive"),
     cancel=@sf.t("common.cancel"),
+    on_confirm=fn() {
+      chat_own.archive_asking = ""
+      match v {
+        Some(view) => archive(src, w, r, view)
+        None => ()
+      }
+    },
+    on_close=fn() { chat_own.archive_asking = "" },
   )
-  if asked.confirmed {
-    chat_own.archive_asking = ""
-    match v {
-      // (once the frame's builds are over)
-      Some(view) => c.tell("chat/archive", fn() { archive(src, w, r, view) })
-      None => ()
-    }
-  } else if chat_own.archive_asking == chat_key(r) && !asked.open {
-    chat_own.archive_asking = ""
-  }
 }
 
 ///|
