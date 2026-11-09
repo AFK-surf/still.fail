@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyOps, type Op } from "../src/delta.ts";
+import { applyKeyed, type AnyOp } from "../src/collections.ts";
 import { CoreError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Output } from "../src/output.ts";
@@ -428,6 +429,28 @@ test("a_keyed_subscriber_gets_keyed_ops_and_the_others_the_old_ones", async () =
   assert.deepEqual(keyed, { id: 10, delta: [{ path: [], key: ["id"], move: "t30", before: "t0" }] });
   assert.equal(c2, 2);
   assert.ok(Array.isArray(old.delta) || "value" in old);
+});
+
+test("a_subscriber_from_another_of_its_subscriptions_gets_its_first_value_as_what_changed_from_that_ones", async () => {
+  const { host, store, pass } = setup();
+  const rows = (limit: number): Topic => ({ topic: "chatRows", station: "ws/st", limit });
+  const list = Array.from({ length: 100 }, (_, i) => ({ id: `t${i}`, title: `chat ${i}` }));
+  store.subscribe(1, 10, rows(50), true);
+  store.set(rows(50), { ok: list.slice(0, 50) });
+  await pass(COALESCE_MS * 2);
+  const [[, first]] = host.takeEmitted() as [number, { value: unknown }][];
+  // (more of them asked: a new subscription from the first, which the client holds till it answers)
+  store.subscribe(1, 11, rows(100), true, 10);
+  store.set(rows(100), { ok: list });
+  await pass(COALESCE_MS * 2);
+  const [[c, more]] = host.takeEmitted() as [number, { id: number; delta: AnyOp[]; from: number }][];
+  assert.equal(c, 1);
+  assert.equal(more.id, 11);
+  assert.equal(more.from, 10);
+  assert.deepEqual(applyKeyed(first.value, more.delta), list);
+  // (one not keyed, or from one it does not have: whole)
+  store.subscribe(1, 12, rows(100), true, 99);
+  assert.deepEqual(host.takeEmitted(), [[1, value(12, list)]]);
 });
 
 test("what_the_store_keeps_is_frozen_all_through_in_tests", async () => {

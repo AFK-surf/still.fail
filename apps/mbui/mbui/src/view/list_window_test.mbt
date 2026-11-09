@@ -195,6 +195,40 @@ test "scrolls_window near_foot: asked as it is scrolled to within so many of its
 }
 
 ///|
+test "scrolls_window near_foot: a page more come in as it is asked (a source that answers at once) is far from its foot by its own blocks, not asked again before it is laid out" {
+  let asked = Ref(0)
+  let on = @signals.signal(false)
+  let keys : Ref[@signals.Signal[Array[Int]]?] = Ref(None)
+  let c = window_case(
+    near_foot=(
+      1.5,
+      fn() { on.get() && keys.val.map_or(false, fn(k) { k.get().length() < 60 }) },
+      fn() {
+        asked.val = asked.val + 1
+        match keys.val {
+          Some(k) => {
+            let n = @signals.untracked(fn() { k.get().length() })
+            k.set(Array::makei(n + 10, fn(i) { i }))
+          }
+          None => ()
+        }
+      },
+    ),
+  )
+  keys.val = Some(c.keys)
+  // (at its foot, its last laid out; then left where it is, as a hand leaves it: not put past its foot, which keeps it
+  // there as that goes on)
+  c.scroll.put(10000.0)
+  c.tree.frame(390.0, 844.0) |> ignore
+  c.scroll.put(c.scroll.at(c.tree))
+  c.tree.frame(390.0, 844.0) |> ignore
+  on.set(true)
+  c.tree.frame(390.0, 844.0) |> ignore
+  // (ten more, counted 80 each till laid out: 800 past where it shows, more than a screen and a half of 100)
+  assert_eq((asked.val, @signals.untracked(fn() { c.keys.get().length() })), (1, 20))
+}
+
+///|
 test "Scroll::tucks: put as the block is first laid out so its foot is at the top, its foot keeping the room to go there with fewer than it is tall" {
   let c = window_case(tucks=1)
   c.keys.set([0, 1])

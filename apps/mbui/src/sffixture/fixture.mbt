@@ -5,7 +5,9 @@
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
 // read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
 // scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept);
-// "home-share" (one of them shared and pictured from its row's menu, and in Slack).
+// "home-share" (one of them shared and pictured from its row's menu, and in Slack); "long-paged" (a long account's
+// chats, two hundred days of them, given a page at a time as the core gives them: firstRows, its `limit` and `more`;
+// scripts/instrbench.sh's `paged`).
 
 ///|
 pub(all) struct Fixture {
@@ -580,7 +582,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     { "daysAgo": 1, "at": 0, "label": "昨天", "items": keep(yesterday) },
     { "daysAgo": 4, "at": 0, "label": "星期三", "items": keep(earlier) },
   ]
-  if f.mode == "long" {
+  if f.mode == "long" || f.mode == "long-paged" {
     // weeks more, six chats a day, every word made up
     let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
     // (each with what leads it, as the core would say: none for words of their own)
@@ -592,7 +594,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       ("要你帮忙看一眼", "", ""),
       ("已经交给评审", "", ""),
     ]
-    for d in 0..<40 {
+    for d in 0..<(if f.mode == "long-paged" { 200 } else { 40 }) {
       let items = Array::makei(6, fn(k) {
         let n = d * 6 + k + 11
         let (said, lead, rest) = states[(d + k) % 6]
@@ -607,6 +609,36 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     }
   }
   days
+}
+
+///|
+/// The first `limit` rows of `days`, in their days, and how many more there are (the core's views.ts firstRows).
+fn first_rows(days : Array[Json], limit : Int) -> (Array[Json], Int) {
+  let mut left = limit
+  let mut more = 0
+  let out : Array[Json] = []
+  for d in days {
+    let its = items(Some(d), "items")
+    if left <= 0 {
+      more += its.length()
+      continue
+    }
+    if its.length() <= left {
+      out.push(d)
+    } else {
+      match d {
+        Object(m) => {
+          let v = m.copy()
+          v["items"] = Json::array(its[:left].to_array())
+          out.push(Json::object(v))
+        }
+        _ => out.push(d)
+      }
+      more += its.length() - left
+    }
+    left -= if its.length() < left { its.length() } else { left }
+  }
+  (out, more)
 }
 
 ///|
@@ -640,7 +672,19 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let mine = params.get("mine") is Some(True)
   let watching = params.get("watching") is Some(True)
   let days = if scope == "ws1" && f.mode != "empty" && !watching {
-    let all = fixture_days(f)
+    // (a long account's made once, as a core keeps its chats: what each page asks costs it no more)
+    let all = if f.mode == "long-paged" {
+      match paged_days.val {
+        Some(d) => d
+        None => {
+          let d = fixture_days(f)
+          paged_days.val = Some(d)
+          d
+        }
+      }
+    } else {
+      fixture_days(f)
+    }
     if mine {
       // the viewer's: those they are in
       all.map(fn(d) {
@@ -685,7 +729,12 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     days
   }
   let empty = days.iter().all(fn(d) { items(Some(d), "items").length() == 0 })
-  Some({
+  // (its first `limit` rows and how many more it has, as the core's firstRows gives them)
+  let (days, more) = match params.get("limit") {
+    Some(Number(n, ..)) if f.mode == "long-paged" => first_rows(days, n.to_int())
+    _ => (days, 0)
+  }
+  let chats : Json = {
     "me": { "email": "lin@example.com" },
     "stations": if scope == "ws1" { stations } else { [] },
     "loading": false,
@@ -708,8 +757,59 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     } else {
       { "online": 1, "dim": 0, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
     },
-  })
+  }
+  match chats {
+    Object(m) if more > 0 => m["more"] = Json::number(more.to_double())
+    _ => ()
+  }
+  if f.mode == "long-paged" {
+    // (as the core's message comes to the app, more of a list asked from what it has: the rows it had kept as they
+    // were, those new read from their text)
+    match chats {
+      Object(m) =>
+        m["days"] = Json::array(
+          items(Some(chats), "days").map(fn(d) {
+            match d {
+              Object(dm) => {
+                let v = dm.copy()
+                v["items"] = Json::array(items(Some(d), "items").map(paged_row))
+                Json::object(v)
+              }
+              _ => d
+            }
+          }),
+        )
+      _ => ()
+    }
+    Some(chats)
+  } else {
+    Some(chats)
+  }
 }
+
+///|
+// kept across runs: let go of as a fixture is made (fixture)
+/// A long-paged account's rows as the app has had them, by their keys.
+let paged_rows : Map[String, Json] = {}
+
+///|
+/// Row `r` as the app has it: as it had it, else read from its text.
+fn paged_row(r : Json) -> Json {
+  let key = text(Some(r), "station") + "\u{1}" + text(Some(r), "id")
+  match paged_rows.get(key) {
+    Some(had) => had
+    None => {
+      let read = @json.parse(r.stringify()) catch { _ => r }
+      paged_rows[key] = read
+      read
+    }
+  }
+}
+
+///|
+// kept across runs: let go of as a fixture is made (fixture)
+/// A long-paged account's days, made once.
+let paged_days : Ref[Array[Json]?] = Ref(None)
 
 ///|
 ///|
@@ -1142,6 +1242,8 @@ pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Sou
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_answers.clear()
+  paged_days.val = None
+  paged_rows.clear()
   fixture_preview(mode)
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },

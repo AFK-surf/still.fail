@@ -109,6 +109,7 @@ pub fn chats_topic(src : Source, scope : String) -> Topic {
 pub fn chat_limits_reset() -> Unit {
   chat_limits.clear()
   chat_limits_was.clear()
+  chats_read_last.val = []
 }
 
 ///|
@@ -133,11 +134,14 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
     jsons,
     match was {
       Some(w) => w.read
-      None => []
+      // (a list asked anew, more of its rows: its rows as the list asked before had them, the same JSON where the
+      // core's delta kept them, taken as they were made)
+      None => chats_read_last.val
     },
     chat_row_key,
     chat_item,
   )
+  chats_read_last.val = read
   // (each row's JSON to what was made of it, in the order the days hold them; as its station's state makes it)
   let stations = stations_said(v)
   let at = Ref(0)
@@ -152,6 +156,11 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
   })
   { view, read }
 })
+
+///|
+// kept across runs: let go of by reset (chat_limits_reset)
+/// The rows chats_read made last, of whichever list: what a list asked anew is made from.
+let chats_read_last : Ref[Array[(Json, ChatItem)]] = Ref([])
 
 ///|
 /// A row's key in the list, as the core keys them (client/core-ts collections.ts: `station` and `id`).

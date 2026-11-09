@@ -294,9 +294,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   })
   match near_foot {
     Some((screens, wanting, ask)) => {
+      // (how far its foot is by its own blocks' tops as its keys are now, those not laid out yet as tall as `est`: not
+      // the room last laid out, which a page more come in has not reached yet, so that it is not asked again for it
+      // before it is laid out, nor at once again, page after page, by a source that answers as it is asked)
       let near = @signals.computed(fn(_) {
         guard self.laid_size_told() is Some((_, vh)) && vh > 0.0 else { return false }
-        s.reach() - at() < screens * vh
+        let foot = match laid.get().last() {
+          Some(b) => b.top + b.h
+          None => 0.0
+        }
+        foot + foot_room() + s.tuck_room.get() - vh - at() < screens * vh
       }, same=fn(a, b) { a == b })
       self.reacts(fn() { (near.get() && wanting(), keys().length()) }, fn(now) {
         if now.0 {

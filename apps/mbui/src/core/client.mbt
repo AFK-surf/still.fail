@@ -1,6 +1,6 @@
 // One UI client of the still.fail core, over whatever carries the protocol's JSON:
-// `{id, call, params}` and `{id, subscribe, keyed}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`
-// and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
+// `{id, call, params}` and `{id, subscribe, keyed, from?}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`,
+// `{id, delta, from}` and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
 // changes with every message for it, so a view can tell what changed since its last frame without comparing values;
 // and a signal of its changes (mbui/signals) set as each comes, and as it ends: what reads the topic in a computed
 // follows it from here, the core's change pushed on to it, not looked for as it is read.
@@ -32,6 +32,12 @@ pub struct Sub {
   priv mut retiring : Bool
   /// The core generation that produced the value currently kept in this subscription.
   priv mut value_generation : Int
+  /// Asked as more of what another of its subscriptions has (`from_of`), till its first value: that one's id, its
+  /// first value coming as what changed from that one's (the core's store.ts `#firstFrom`), not the whole of it again.
+  priv mut from : Int?
+  /// Let go of while one asked from it waits for its first value: kept till then, as the core's delta to it reads it,
+  /// its readers told it ended.
+  priv mut ending : Bool
 }
 
 ///|
@@ -292,7 +298,8 @@ fn Client::subscribe_as(self : Client, topic : String, params : Map[String, Json
       let key = t.stringify()
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation }
+      let from = self.from_of(t)
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation, from, ending: false }
       self.subs[id] = s
       self.by_key[look] = s
       self.ask(s)
@@ -303,6 +310,22 @@ fn Client::subscribe_as(self : Client, topic : String, params : Map[String, Json
       s
     }
   }
+}
+
+///|
+/// Of topic `t` with a `limit` (the first rows of a list, more of them asked now), a subscription to it that has a
+/// value with other params alike but its limit: what its first value comes as what changed from.
+fn Client::from_of(self : Client, t : Json) -> Int? {
+  guard t is Object(want) && want.get("limit") is Some(_) else { return None }
+  let mut best : Sub? = None
+  for _, s in self.subs {
+    guard !s.ending && s.value is Some(_) && s.topic is Object(has) && has.length() == want.length() else { continue }
+    let alike = want.iter().all(fn(kv) { kv.0 == "limit" || has.get(kv.0) == Some(kv.1) })
+    if alike && has.get("limit") is Some(_) && (best is None || best.map_or(0, fn(b) { b.id }) < s.id) {
+      best = Some(s)
+    }
+  }
+  best.map(fn(s) { s.id })
 }
 
 ///|
@@ -351,6 +374,10 @@ fn Client::ask(self : Client, s : Sub) -> Unit {
     "subscribe": s.topic,
     "keyed": Json::boolean(true),
   }
+  match s.from {
+    Some(f) => m["from"] = Json::number(f.to_double())
+    None => ()
+  }
   (self.send)(Json::object(m).stringify())
 }
 
@@ -391,14 +418,34 @@ pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
 }
 
 ///|
+/// `s`'s first value come: the one it was asked from let go of, if it is waiting for that.
+fn Client::came_from(self : Client, s : Sub) -> Unit {
+  guard s.from is Some(f) else { return }
+  s.from = None
+  match self.subs.get(f) {
+    Some(o) if o.ending && !self.subs.values().any(fn(x) { x.from == Some(f) }) => {
+      self.subs.remove(f)
+      (self.send)(({ "id": Json::number(f.to_double()), "unsubscribe": true } : Json).stringify())
+    }
+    _ => ()
+  }
+}
+
+///|
 /// End a subscription once no reader holds it.
 fn Client::end_subscription(self : Client, s : Sub) -> Unit {
   if self.subs.get(s.id) is Some(current) && physical_equal(current, s) {
     self.end_sub_wait(s.id)
     s.clear_retirement_watch()
-    self.subs.remove(s.id)
     self.by_key.remove(s.look)
     s.changed(ended=true)
+    // (one asked from it still waiting for its first value, which comes as what changed from this one's: kept till
+    // then, Client::came_from)
+    if self.subs.values().any(fn(o) { o.from == Some(s.id) }) {
+      s.ending = true
+      return
+    }
+    self.subs.remove(s.id)
     let m : Map[String, Json] = {
       "id": Json::number(s.id.to_double()),
       "unsubscribe": Json::boolean(true),
@@ -712,6 +759,13 @@ fn Client::take(self : Client, msg : Json) -> Unit {
     _ => return
   }
   match self.subs.get(id) {
+    Some(s) if s.ending =>
+      // (let go of, kept as what one asked from it reads: its value as the core has it)
+      match (m.get("value"), m.get("delta"), s.value) {
+        (Some(v), _, _) => s.value = Some(v)
+        (_, Some(Array(ops)), Some(v)) => s.value = Some(apply_delta(v, ops))
+        _ => ()
+      }
     Some(s) => {
       if m.get("waiting") is Some(True) && s.value is None && s.error is None {
         // (no value of it yet: what shows it shows what is to come, the core's wait for it going on)
@@ -731,12 +785,24 @@ fn Client::take(self : Client, msg : Json) -> Unit {
           s.error = None
         }
         (_, Some(Array(ops)), _) =>
-          match s.value {
-            Some(v) => s.value = Some(apply_delta(v, ops))
-            None => return
+          match (s.value, m.get("from")) {
+            (Some(v), _) => s.value = Some(apply_delta(v, ops))
+            // its first value, as what changed from what another of its subscriptions has
+            (None, Some(Number(f, ..))) =>
+              match self.subs.get(f.to_int()).bind(fn(o) { o.value }) {
+                Some(v) => s.value = Some(apply_delta(v, ops))
+                None => {
+                  // (that one not had: asked again, whole)
+                  s.from = None
+                  self.ask(s)
+                  return
+                }
+              }
+            (None, _) => return
           }
         _ => return
       }
+      self.came_from(s)
       s.waiting = false
       s.value_generation = self.generation
       match self.timing {
@@ -850,9 +916,14 @@ pub fn Client::restarted(self : Client) -> Unit {
     self.end_call_wait(c.0)
     (c.1)(Err(err))
   }
+  // (a new core has none of them: those let go of are gone, each asked whole)
+  for s in self.subs.values().filter(fn(s) { s.ending }).to_array() {
+    self.subs.remove(s.id)
+  }
   let subs = self.subs.values().to_array()
   subs.sort_by_key(fn(s) { s.id })
   for s in subs {
+    s.from = None
     self.ask(s)
   }
   match self.focus {
