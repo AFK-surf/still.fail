@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [febf598ae](https://github.com/AFK-surf/still.fail/commit/febf598aed4f00abe4454788bc734e2b45976e40) mbui: how fast a held finger goes worked out only  | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.06 | 45.75 | 93.52 | 124.57 |
 | [87876e5e9](https://github.com/AFK-surf/still.fail/commit/87876e5e968298405ae7202753539dec8618af46) mbui: a shape's bands kept for the same outlines i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
 | [79d9fe67b](https://github.com/AFK-surf/still.fail/commit/79d9fe67b372469b06b33c823159f172086ceb14) A device refused for the lock is told its person's | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
 | [7cfa246bc](https://github.com/AFK-surf/still.fail/commit/7cfa246bcbd63a27753e3160e957aeee637743dc) mbui: whether a decoration on the resident clock i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
