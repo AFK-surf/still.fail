@@ -18,6 +18,10 @@ pub let counters : FixedArray[Int32]
 
 pub fn measured_height(Node, Double) -> Double
 
+pub fn measured_width(Node, Double) -> Double
+
+pub fn performing() -> Bool
+
 pub fn relayout(Node) -> Unit
 
 // Errors

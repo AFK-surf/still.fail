@@ -194,8 +194,9 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     // (each node's drawn down the window as its looks and theirs over it have it, y -> a * y + b; how opaque; what
     // of the window its holders' clips leave it; its row's top as drawn, where it is in a list's row, or in what a node of
     // the tree scrolls (View::scrolls): there the one node it holds, drawn moved by how far it is scrolled alone (Node's
-    // scroll_off), so what is in it measured from that node's top has the scroll taken out and nothing else: worked out
-    // from what holds it, which comes before it)
+    // scroll_off), so what is in it measured from that node's top has the scroll taken out, but for where a page's
+    // list's scroll was put for what came out another height over what shows (Tree::scroll_corrected), what shows held
+    // where it was by it: worked out from what holds it, which comes before it)
     let k = self.count
     let ya = Array::make(k, 1.0)
     let yb = Array::make(k, 0.0)
@@ -231,7 +232,9 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           c_bot[i] = dmin(c_bot[i], top + ya[p] * pn.fh)
         }
         if pn.kind == kind_list || pn.tree_scrolls {
-          row_at[i] = ya[i] * n.y + yb[i]
+          // (less how far its scroll was put for what came out another height over what shows: what is under that moved
+          // down in it as far, held where it was)
+          row_at[i] = ya[i] * (n.y + pn.tree_corrected) + yb[i]
           in_row[i] = true
           set_out[i] = match self.lists.get(pn.id) {
             Some({ causes: Some(c), .. }) if pn.kind == kind_list => c.start

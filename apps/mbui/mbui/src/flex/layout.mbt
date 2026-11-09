@@ -448,6 +448,25 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
+/// How wide `node` comes to with no bound on its width, `height` tall where that is known (undef: as tall as it comes
+/// to), as its subtree stands since the last compute(): measured only, as measured_height is.
+pub fn measured_width(node : Node, height : Double) -> Double {
+  let b = box_of(node.style, undef, height)
+  let h = or_else(b.h, height)
+  size_node(node, undef, h, undef, h, undef, h, false)
+}
+
+///|
+/// Whether the room a node is told (its `room`'s measure, layout_flex) is the room it is laid out in, not one it is
+/// measured in first.
+pub fn performing() -> Bool {
+  performing_now.val
+}
+
+///|
+let performing_now : Ref[Bool] = { val: false }
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {
@@ -1104,12 +1123,15 @@ fn layout_flex(
       } else {
         Undefined
       }
+      let was_performing = performing_now.val
+      performing_now.val = perform
       let (changed, _) = m(
         if known(avail_inner_w) { avail_inner_w } else { 0.0 },
         wm,
         if known(avail_inner_h) { avail_inner_h } else { 0.0 },
         hm,
       )
+      performing_now.val = was_performing
       if changed > 0.0 {
         node.pre_gen = -1
         node.cache_n = 0

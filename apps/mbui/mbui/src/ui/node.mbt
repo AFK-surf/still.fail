@@ -95,6 +95,9 @@ struct Node {
   /// a node of the window's tree's, put among the frame's for the corner rule (corners.mbt with_tree_nodes), that
   /// scrolls what it holds up and down (Tree::scrolls_now): as a list does, what is in it lies under its top and foot
   mut tree_scrolls : Bool
+  /// how far its scroll was put in all for what came out another height over what shows (Tree::scroll_corrected): no
+  /// move of it, what shows held where it was (sizes_steady.mbt takes the scroll out but for this)
+  mut tree_corrected : Double
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -420,6 +423,7 @@ fn Node::new() -> Node {
     sem_hid: false,
     island: None,
     tree_scrolls: false,
+    tree_corrected: 0.0,
     floats: false,
     scroller: 0,
     scroller_inner: false,
@@ -610,6 +614,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sem_hid = false
   self.island = None
   self.tree_scrolls = false
+  self.tree_corrected = 0.0
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false
