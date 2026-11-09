@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0757499ca](https://github.com/AFK-surf/still.fail/commit/0757499ca5381dcc1f55f0b4a5910135f160bf8c) mbui: the order and what takes input worked out wh | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.73 | 93.06 | 156.81 |
 | [56601c3b1](https://github.com/AFK-surf/still.fail/commit/56601c3b119a46306a0fa0623792c34e6a9fe274) Locks through the stations, not the cloud: read, t | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.73 | 93.06 | 156.81 |
 | [b443cafbd](https://github.com/AFK-surf/still.fail/commit/b443cafbda59c37823d84d081e780878e8617b6b) mbui: no pairs or iterators made for each node pla | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [90e201981](https://github.com/AFK-surf/still.fail/commit/90e20198115d774d5dc5412459e8e09b85a386f1) app: what shares a chat in one 分享… of its menu (#5 | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
