@@ -112,6 +112,10 @@ test "a row changed since it was kept drawn anew, as it is now" {
   third.set("the third row")
   at.put(30.0)
   t.draw()
+  // (the list drawn again for it: the rows kept said in its group by their own groups' headers, drawn out in their
+  // places)
+  assert_true(ride_drawn.val > 0, msg="its other rows drawn as kept")
+  assert_true(ride_groups.values().any(fn(g) { g.heads }), msg="the list's group holds its rows' headers")
   let kept = t.drawn_text()
   assert_eq(kept, ride_fresh(30.0, third), msg="its words as they are now")
 }

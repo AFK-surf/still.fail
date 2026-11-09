@@ -257,11 +257,16 @@ pub fn Damage::next(
 
 ///|
 /// Group `id` of a host's (@hostapi.group_set: `n` instances in `inst`) kept, as far as it reaches wherever it is
-/// moved, for a header of it to be compared.
+/// moved, for a header of it to be compared: a header it holds (a list's rows kept, in the list's group, each in one
+/// place of it) as far as its own group reaches, moved where it says.
 pub fn Damage::group_set(self : Damage, id : Int, inst : FixedArray[Double], n : Int) -> Unit {
   let r = Rect::none()
   for k in 0..<n {
-    reach(inst, k, r, cut=false)
+    if kind_at(inst, k) == 13 {
+      self.reach_of(inst, k, r)
+    } else {
+      reach(inst, k, r, cut=false)
+    }
   }
   self.groups[id] = r
 }
