@@ -451,7 +451,7 @@ fn Scroll::held_dy(self : Scroll, tree : Tree, at : Int, t : Double) -> Double {
   let d = -self.where_at(t) + self.past_moved(t)
   let n = tree.nodes[at]
   if tree.rows_grid > 0.0 && n.list_rows {
-    let y = n.flex.top + off_of(n).1
+    let y = n.flex.top + off_y(n)
     tree.rows_placed(at, y + d) - tree.rows_placed(at, y)
   } else if tree.pixel_grid > 0.0 {
     let g = tree.pixel_grid
