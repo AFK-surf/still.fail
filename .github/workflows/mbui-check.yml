@@ -261,7 +261,10 @@ jobs:
         fps: [""]
         include:
           - { group: 1/4, fps: "120" }
-          - { group: 2/4, fps: "120" }
+          # (the second's too: 288 s of its pages and 299 s in all on a branch, 2026-11-09, 42635671188; 268 s on main,
+          # its time spread over many files' frames at 120, no one test's to take out)
+          - { group: 2/4, fps: "120", part: 1/2 }
+          - { group: 2/4, fps: "120", part: 2/2 }
           - { group: 3/4, fps: "120" }
           # (the fourth's pages at 120 in two halves: 315 s and stopped at its five minutes in one, 2026-11-09)
           - { group: 4/4, fps: "120", part: 1/2 }
