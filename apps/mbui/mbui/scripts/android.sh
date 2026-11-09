@@ -236,9 +236,11 @@ case "${1:-build}" in
       echo "creating $AVD from $PKG"
       echo no | $(ls -d $SDK/cmdline-tools/*/bin | tail -1)/avdmanager create avd -n $AVD -k "$PKG" -d pixel_7 >/dev/null
     fi
+    # (EMU_FLAGS: the emulator's own besides, still.fail's idle memory's: its data wiped, a small data partition)
     if ! $ADB devices | grep -q "^$SERIAL"; then
+      mkdir -p $OUT
       nohup $SDK/emulator/emulator -avd $AVD -port $PORT -no-window -no-audio -no-boot-anim \
-        -gpu swiftshader_indirect -no-snapshot >$OUT/emu.log 2>&1 &
+        -gpu swiftshader_indirect -no-snapshot ${EMU_FLAGS:-} >$OUT/emu.log 2>&1 &
     fi
     $ADB -s $SERIAL wait-for-device
     # booted: init's own word as the system sets sys.boot_completed (its actions for it, on the log from the boot's

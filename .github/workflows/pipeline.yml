@@ -605,6 +605,9 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
+      # (what it weighs and takes once idle: mbui-size.yml, after this run)
+      - uses: actions/upload-artifact@v4
+        with: { name: "mbui-apk-${{ github.sha }}", path: "${{ runner.temp }}/release/android/*.apk", retention-days: 1, compression-level: 0 }
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

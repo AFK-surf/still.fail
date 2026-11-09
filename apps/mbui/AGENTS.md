@@ -155,6 +155,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   every run (its `compare` sets two checkouts' runs side by side). It says numbers, each kind's and weighted, never a
   verdict: what they say of the change is weighed and told as it is (the user, 2026-11-09). A device's or the native
   build's time (`scripts/appbench.sh`) is what a frame takes there.
+- What the builds weigh (the web's `app.js` raw, gzip and brotli, the APK, the Mac app) and the memory the Mac and
+  Android apps take once idle are recorded, never a gate (the user, 2026-11-09): `.github/workflows/mbui-size.yml`
+  after each pipeline run on main that built them (`scripts/size.sh`, `scripts/idlemem.sh`), a line per commit on the
+  branch `mbui-size`. A change meant to make the app smaller or lighter says those numbers before and after.
 - A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
   not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
 - A PR that has not met what it must to merge is not waited on: no watching its CI, go on with the next step.
