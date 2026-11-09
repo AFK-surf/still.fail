@@ -204,3 +204,21 @@ test "a hang as JSON: its rule, times from its start, each contributor's kind an
   assert_true(j.contains("\"trigger\":\"stall\""), msg=j)
   assert_true(j.contains("\"kind\":\"frame\"") && j.contains("\"build_ms\":50") && j.contains("\"why\":\"built a.mbt:1\""), msg=j)
 }
+
+///|
+test "many short parts of a kind, each under 1 ms (0.1 at least), summed: what a burst of messages went on is kept" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let told : Array[Hang] = []
+  hangs_told(Some(fn(h) { told.push(h) }))
+  view_event_said(fn() {  }, fn() {
+    for _ in 0..<200 {
+      @hostapi.work_part(fn() { "core topic chat delta" }, fn() { clock.val += 0.3 })
+    }
+  }, what="messages")
+  assert_eq(told.length(), 1)
+  assert_eq(told[0].contributors[0].notes.length(), 1)
+  let (part, ms) = told[0].contributors[0].notes[0]
+  assert_eq(part, "core topic chat delta")
+  assert_true(ms > 59.9 && ms < 60.1, msg=ms.to_string())
+}

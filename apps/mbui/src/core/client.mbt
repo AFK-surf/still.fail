@@ -887,9 +887,13 @@ pub fn Client::perf_name(self : Client, msg : Json) -> String {
 }
 
 ///|
-/// No call's name kept any more (the record turned off).
+/// No name kept of a call nothing more comes of (the record turned off): a call still answering keeps its own, for what
+/// its progress is in a hang (`progress ?` once each summary forgot them all, 2026-11-10).
 pub fn Client::perf_forget(self : Client) -> Unit {
-  self.perf_calls.clear()
+  let gone = self.perf_calls.keys().filter(fn(id) { !self.calls.contains(id) }).to_array()
+  for id in gone {
+    self.perf_calls.remove(id)
+  }
 }
 
 ///|
