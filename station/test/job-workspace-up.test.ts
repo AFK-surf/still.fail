@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { openJobs } from "../src/read/jobs.ts";
 import { makeStore, seenBy } from "../src/read/store.ts";
 import { JOBS_UP } from "../src/store/rows.ts";
+import { WORKSPACE_UP_JOBS } from "../src/store/workspace-up-jobs.ts";
 import { Store } from "../src/store/store.ts";
 
 const viewer = (home: boolean) => ({ sub: "a@example.test", email: "a@example.test", name: "A", role: "member",
@@ -98,17 +99,18 @@ test("job lists keep JavaScript workspace visibility for unusual stored identiti
   } finally { s.close(); }
 });
 
-test("job selection and workspace visibility share the reader's snapshot", () => {
+for (const ready of [false, true]) test(`job selection and workspace visibility share the reader's snapshot (prepared ${ready})`, () => {
   const dir = mkdtempSync(join(tmpdir(), "job-workspace-up-"));
   const path = join(dir, "stillfail.db"), s = Store.open(path), writer = new DatabaseSync(path);
   try {
     session(s, "a", "A"); session(s, "b", "B");
     job(s, "ja", "a", "running", null); job(s, "jb", "b", "running", null);
+    if (!ready) s.db.exec("UPDATE workspace_up_meta SET ready=0");
     let changed = false;
     const observed = new Proxy(s.db, { get(target, property) {
       if (property === "prepare") return (sql: string) => {
         const statement = target.prepare(sql);
-        if (!sql.startsWith("SELECT j.* FROM jobs j LEFT JOIN sessions")) return statement;
+        if (!sql.startsWith("SELECT j.* FROM jobs j LEFT JOIN sessions") && sql !== WORKSPACE_UP_JOBS) return statement;
         return new Proxy(statement, { get(stmt, method) {
           if (method === "all") return (...args: any[]) => {
             const rows = stmt.all(...args);

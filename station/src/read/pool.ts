@@ -23,6 +23,7 @@ import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
 import { SessionBindingsBuilder } from "./session-bindings-builder.ts";
 import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
 import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
+import { WorkspaceUpJobsBuilder } from "./workspace-up-jobs-builder.ts";
 import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
 import { CcIndexBuilder } from "./cc-index-builder.ts";
 import { CardPostsBuilder, ClosedCardsBuilder, PeopleSinceBuilder } from "./card-posts-builder.ts";
@@ -135,6 +136,8 @@ export class Readers {
   private sessionBindings: SessionBindingsBuilder | null = null;
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
+  private workspaceUpJobs: WorkspaceUpJobsBuilder | null = null;
+  private preparingWorkspaceUpJobs = false;
   /// Reads of the same old session share one unattended preparation, including during handover.
   private preparingUpJobs = new Set<string>();
   private widgetSources: WidgetSourcesBuilder | null = null;
@@ -212,6 +215,12 @@ export class Readers {
             void this.prepareSessionUpJobs([session]).catch((error) => {
               if (!this.closed) log.warn("readers", "preparing a session's up jobs failed", { error: (error as Error).message });
             }).finally(() => this.preparingUpJobs.delete(session));
+          }
+          if (answer.prepareWorkspaceUpJobs && !this.preparingWorkspaceUpJobs) {
+            this.preparingWorkspaceUpJobs = true;
+            void this.prepareWorkspaceUpJobs().catch((error) => {
+              if (!this.closed) log.warn("readers", "preparing workspace up jobs failed", { error: (error as Error).message });
+            }).finally(() => { this.preparingWorkspaceUpJobs = false; });
           }
           asked.resolve(answer.text);
         }
@@ -349,6 +358,13 @@ export class Readers {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     this.sessionUpJobs ??= new SessionUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
     return this.covered(this.sessionUpJobs.ready(sessions, signal), signal);
+  }
+
+  /// Prepare old up jobs without holding the reader that supplied a fallback answer.
+  prepareWorkspaceUpJobs(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.workspaceUpJobs ??= new WorkspaceUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.workspaceUpJobs.ready(["all"], signal), signal);
   }
 
   /// Prepare only old threads whose widget sources a delivery needs.
@@ -706,6 +722,7 @@ export class Readers {
     if (this.sessionBindings !== null) void this.sessionBindings.close();
     if (this.archiveMarks !== null) void this.archiveMarks.close();
     if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
+    if (this.workspaceUpJobs !== null) void this.workspaceUpJobs.close();
     if (this.widgetSources !== null) void this.widgetSources.close();
     if (this.cardPosts !== null) void this.cardPosts.close();
     if (this.closedCards !== null) void this.closedCards.close();
