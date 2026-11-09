@@ -36,7 +36,7 @@ jobs:
           GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
           AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
-          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
           APNS_JSON: ${{ secrets.APNS_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}

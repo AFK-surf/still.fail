@@ -1,5 +1,5 @@
 #!/bin/bash
-# The desktop job's native parts and Moon build, started while it restores the tools and packages they do not need.
+# The desktop job's native parts, Moon build and core bytecode, started while it restores what they do not need.
 # `ready` means the Moon toolchain and _build cache have been restored and source mtimes set. `wait` reports failures
 # before the usual release script signs or publishes anything; that script still does its own up-to-date build.
 set -eu
@@ -51,7 +51,9 @@ case "${1:-}" in
     [ ! -f "$exe" ] || [ ! "$A/out/core/aarch64-apple-darwin/libmbui_core.a" -nt "$exe" ] || touch "$A/src/stillfail/core_engine.m"
     export MOON_HOME="$RUNNER_TOOL_CACHE/moon-ci"
     export PATH="$MOON_HOME/bin:$PATH" APP=stillfail MODE=release
-    bash "$MBUI_DIR/scripts/mac.sh" build
+    # The app's wrapper builds core.hbc beside the app. Leaving it until mac-app.sh bundled the app added 26 s after
+    # the compile and let a successful build time out during cleanup (42588746155, 2026-11-09).
+    bash "$A/scripts/mac.sh" build
     ;;
   *) echo "usage: $0 start|ready|wait" >&2; exit 2 ;;
 esac
