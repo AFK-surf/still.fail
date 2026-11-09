@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [cbcff387d](https://github.com/AFK-surf/still.fail/commit/cbcff387d28d7225739ad0383db1da794fd7bfd7) mbui: a list window tells only the rows that come  | 1.73 | 2.31 | 9.61 | 28.14 | 33.49 | 25.12 | 45.93 | 92.91 | 147.16 |
 | [541192be2](https://github.com/AFK-surf/still.fail/commit/541192be278e41b968f11c1cd699fab0219bc61c) mbui: the reader's keys are the keymap's actions,  | 1.73 | 2.31 | 9.62 | 28.14 | 33.49 | 25.12 | 45.93 | 93.14 | 133.53 |
 | [c1c5a1b0f](https://github.com/AFK-surf/still.fail/commit/c1c5a1b0f0bd25823209dab601ffdf216353c636) mbui: 60/120 帧下逐帧判平滑度（MBUI_TEST_MOTION），先在 CI 计数 ( | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.55 | 147.47 |
 | [9da9d3e4a](https://github.com/AFK-surf/still.fail/commit/9da9d3e4a64943cb9c3c0bec47a2bb86426207d1) mbui: where the old views are placed worked out ag | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.28 | 181.3 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [90e201981](https://github.com/AFK-surf/still.fail/commit/90e20198115d774d5dc5412459e8e09b85a386f1) app: what shares a chat in one 分享… of its menu (#5 | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [bbd8dfb56](https://github.com/AFK-surf/still.fail/commit/bbd8dfb56ccf3cec8327cb3f0f12542896a1f896) mbui: a film's flight under the chat's bar on 小屏,  | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [f4874d328](https://github.com/AFK-surf/still.fail/commit/f4874d32855e3ca64bc80e4dfbc61f3a6409f83f) mbui: an agent's line gives its place to its answe | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
-| [70d70273b](https://github.com/AFK-surf/still.fail/commit/70d70273b99aa83c5d937c10b1b416ad3fb495da) app: 快捷键 lets a person choose how the composer sen | 1.72 | 2.29 | 9.53 | 28.02 | 33.2 | 25.03 | 45.72 | 93.06 | 156.81 |
