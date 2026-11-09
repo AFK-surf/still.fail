@@ -7,15 +7,9 @@ import { test } from "node:test";
 import { PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
+import { withoutUseReader } from "./vault-no-reader.ts";
 
-// These tests hold the actual SQLite file open on two connections; no use-history worker is needed.
-function withoutUseReader(db: DatabaseSync): DatabaseSync {
-  return new Proxy(db, { get(target, key) {
-    if (key === "location") return () => null;
-    const value = Reflect.get(target, key, target);
-    return typeof value === "function" ? value.bind(target) : value;
-  } });
-}
+// These tests hold the actual SQLite file open on two connections; no use-history worker is needed (withoutUseReader).
 
 test("a one-use grant spent during handover stays spent on the new station", () => {
   const dir = mkdtempSync(join(tmpdir(), "vault-restore-spend-")), path = join(dir, "stillfail.db");

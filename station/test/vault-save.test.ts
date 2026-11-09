@@ -20,6 +20,7 @@ import { vaultTools } from "../src/vault/tool.ts";
 import { VaultStore } from "../src/vault/store.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 import { isFor } from "../src/api/events.ts";
+import { withoutUseReader } from "./vault-no-reader.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
 const VAULT = "v_01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -104,7 +105,8 @@ function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] 
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
     extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
-  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: connection, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
+  // (a database in a file: the use index's work on this connection, no reader's process beside it; ./vault-no-reader.ts)
+  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: withoutUseReader(connection), vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
   return { db, hub, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
 }
 

@@ -67,6 +67,13 @@ decide() {
   # to mbui (apps/mbui/mbui).
   mbui=false
   if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
+  # The station's tests (check-station: scripts/check.sh's station-tests, in slices on Linux runners): for a change to
+  # what they read, as check.sh says it (its station_paths, read from there: said once), to the check itself, or to
+  # CI's own files (which make every check run whole: pipeline.yml).
+  station_tests=false
+  station_paths=$(sed -n "s/^ *station_paths='\(.*\)'\$/\1/p" "$(dirname "${BASH_SOURCE[0]}")/check.sh")
+  [ -n "$station_paths" ] || { echo "scripts/plan.sh: no station_paths in scripts/check.sh" >&2; exit 1; }
+  if has "$station_paths" || has '^scripts/check\.sh$' || has_but '^\.github/' '^\.github/workflows/(mbui-|preview\.yml$)'; then station_tests=true; fi
   # Exercise the GitHub-hosted web and Mac release paths, without secrets or publishing, when their CI changes.
   release_smoke=false
   if [ "${GITHUB_REF:-}" != refs/heads/main ] && { [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ] || has '^(\.github/workflows/pipeline\.yml$|\.github/deploy\.sh$|\.github/actions/(setup|natives|mbui-moonbit)/|scripts/release\.sh$)'; }; then release_smoke=true; fi
@@ -85,6 +92,7 @@ print() {
     echo "win_beta=$win_beta"
     echo "windows_natives=$windows_natives"
     echo "mbui=$mbui"
+    echo "station_tests=$station_tests"
     echo "release_smoke=$release_smoke"
   }
 }
