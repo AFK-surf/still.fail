@@ -20,12 +20,12 @@ import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
-import { bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read } from "../src/views/lock.ts";
+import { bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read, signerOf } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
-import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
+import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
-import { ME, PHONE, elsewhere, genesis, grant, pipe, rig } from "./lock-rig.ts";
-import { Status, stationReplies } from "./station-fixture.ts";
+import { ME, PHONE, elsewhere, genesis, grant, pipe, rig, withoutMesh } from "./lock-rig.ts";
+import { Status, started, stationReplies } from "./station-fixture.ts";
 
 const random = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) b[i] = (Math.random() * 256) | 0;
@@ -785,6 +785,21 @@ test("a device joins its person's own lock face to face: the code shown on a dev
   assert.equal(personal.chain("s1")!.devices.has(KEY), true);
   assert.equal(asked, 1, "and not again as it is let in");
   assert.equal(checkChain(right.ok.approved.chains.s1!, "s1")!.devices.has(KEY), true, "it brings the whole lock to pin");
+});
+
+test("a new device asking into its person's own lock makes the key it signs the workspaces' locks with: without one, the device that approves it puts it in none", async () => {
+  const s = await started(undefined, 0, undefined, (x) => void (x.host.appKeys = true));
+  const inner = s.core.inner;
+  inner.mesh = () => withoutMesh(PHONE);
+  inner.adb.personal = () => new PersonalLock({ host: s.host, runner: inner.runner, device: () => Effect.succeed(PHONE), label: () => "new", changed: () => {}, cloud: () => Effect.succeed({ entries: [] }) });
+  assert.equal(Effect.runSync(Signer.load(s.host)), null, "a device new to every lock keeps no such key");
+  const out: unknown[] = [];
+  inner.runner.fork(Effect.map(Effect.result(personalBegin(inner, ["s1"])), (r) => out.push(r)));
+  for (let i = 0; i < 100 && out.length === 0; i++) await s.host.time.pass(10);
+  assert.equal((out[0] as { _tag: string })?._tag, "Success", JSON.stringify(out));
+  const made = Effect.runSync(Signer.load(s.host));
+  assert.ok(made, "made as it asks");
+  assert.equal(signerOf(inner), made.id, "and what its hello says (sign_key)");
 });
 
 test("a device not on the lock shows no code for it, and someone else's lock is not asked here", async () => {
