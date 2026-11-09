@@ -18,6 +18,7 @@
 /// The rates what moves on by the clock is drawn at below the display's own (frames a second), each a 120 Hz display's
 /// frames evenly (40 a 60 Hz display's in twos, as 30); a motion that needs more than the first is drawn at every frame
 /// of the display's.
+// kept across runs: a table, never written
 let pace_rates : FixedArray[Double] = [60.0, 40.0, 30.0, 20.0, 15.0]
 
 ///|
